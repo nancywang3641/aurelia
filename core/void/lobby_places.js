@@ -184,8 +184,12 @@
             };
             return true;
         };
-        let tries = 0;
+        let tries = 0, cancelled = false;
+        // 還沒搬進來就換走了（快速連點別的地點）：停掉等待、叫它關。
+        //   不然它晚一步生出來，會被塞進這個窗格——那時窗格已經是下一個地點的了。搬進來之後 place 會換成正式的收法。
+        c._pvRestore = () => { cancelled = true; try { close && close(); } catch (e) {} };
         const tick = () => {
+            if (cancelled) return;
             if (place()) return;
             if (++tries > 40) { c.innerHTML = '<div class="lb-pv-fail">面板沒開起來</div>'; return; }
             // 🚨 用 setTimeout 不用 requestAnimationFrame：等的是「DOM 生出來沒」不是畫面，
@@ -237,11 +241,9 @@
     // 🚨 只存「是誰」，不存圖。頭像是 base64 大圖，寫進 localStorage 會啃掉全站共用的 5MB
     //    （這個專案為了同一件事壞過四次）。圖留在 IDB，這裡只放引用。
     function _guestSet(v) {
-        try {
-            if (v) localStorage.setItem(GUEST_KEY, JSON.stringify({ src: v.src, key: v.key, name: v.name }));
-            else localStorage.removeItem(GUEST_KEY);
-            return true;
-        } catch (e) { console.warn('[LobbyPlaces] 看板娘存不下來', e); return false; }
+        if (v) return win.AUI.lsSet(GUEST_KEY, JSON.stringify({ src: v.src, key: v.key, name: v.name }), '請進家裡的看板娘');
+        try { localStorage.removeItem(GUEST_KEY); } catch (e) {}
+        return true;
     }
 
     // 目前請進來的那位 → 組成跟 staff 同形狀的對話對象（setTalkTarget 吃這個形狀）
@@ -276,7 +278,19 @@
     // 🚨 頭像逐張從 IDB 撈、面板關掉就停：一次把整庫 base64 塞進 DOM 是相簿當初 OOM 的原因。
     function _mountHomeGuest(c) {
         let alive = true;
-        c._pvRestore = () => { alive = false; };
+        // 🚨 c 是地點視圖共用的那個窗格，每次 go('app') 都會再進來這裡：監聽要在收掉時拿掉。
+        //    以前一直疊上去，點一下跑好幾次——偶數個時一個請進來、下一個當成「再點一次＝請他離開」又清掉。
+        const onClick = (e) => {
+            const out = e.target.closest('.lb-guest-out');
+            if (out) { _guestSet(null); if (_paint) _paint('myhome', 'app'); return; }
+            const b = e.target.closest('.lb-guest-c');
+            if (!b) return;
+            const pick = { src: b.dataset.src, key: b.dataset.key, name: b.dataset.name };
+            const same = (() => { const g = _guestGet(); return g && g.src === pick.src && g.key === pick.key; })();
+            _guestSet(same ? null : pick);        // 再點一次同一個人＝請他離開（不用特地去按那顆）
+            if (_paint) _paint('myhome', 'app');
+        };
+        c._pvRestore = () => { alive = false; c.removeEventListener('click', onClick); };
 
         const render = async () => {
             const cur = _guestGet();
@@ -315,16 +329,7 @@
             })();
         };
 
-        c.addEventListener('click', (e) => {
-            const out = e.target.closest('.lb-guest-out');
-            if (out) { _guestSet(null); if (_paint) _paint('myhome', 'app'); return; }
-            const b = e.target.closest('.lb-guest-c');
-            if (!b) return;
-            const pick = { src: b.dataset.src, key: b.dataset.key, name: b.dataset.name };
-            const same = (() => { const g = _guestGet(); return g && g.src === pick.src && g.key === pick.key; })();
-            _guestSet(same ? null : pick);        // 再點一次同一個人＝請他離開（不用特地去按那顆）
-            if (_paint) _paint('myhome', 'app');
-        });
+        c.addEventListener('click', onClick);
 
         render();
     }

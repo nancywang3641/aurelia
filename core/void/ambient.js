@@ -105,7 +105,7 @@
 
     function toggleLobbyBgm() {
         bgmEnabled = !bgmEnabled;
-        localStorage.setItem('aurelia_bgm_enabled', bgmEnabled);
+        AUI.lsSet('aurelia_bgm_enabled', String(bgmEnabled), '大廳音樂的開關');
         const audio = getLobbyBgmEl();
         const btn = document.getElementById('lobby-bgm-toggle');
         if (!audio || !btn) return;

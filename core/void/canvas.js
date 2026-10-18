@@ -6,6 +6,10 @@
     'use strict';
 
     function _bridge() { return window.VoidTerminal && window.VoidTerminal._bridge; }
+    // 面板 JS 的錯誤訊息是 AI 寫的程式丟出來的，可能帶 < 或引號：塞進 HTML 前先轉義
+    function _escErr(e) {
+        return String((e && e.message) || e || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
 
     // LobbyPanelAPI (LP)：注入進每個面板 JS 的 context 物件
     function _makeLobbyPanelAPI() {
@@ -184,7 +188,8 @@ LINE:[用角色風格說一句話，10-20字]`;
                 fn(content, LP);
             } catch(e) {
                 console.error('[LobbyPanel] JS 執行錯誤:', e);
-                content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;"><i class="fa-solid fa-triangle-exclamation"></i> 面板 JS 錯誤: ${e.message}</div>`;
+                // 用 insertAdjacentHTML 追加：innerHTML += 會把整個面板重建一次，JS 前半段已經綁好的監聽全部掉光
+                content.insertAdjacentHTML('beforeend', `<div style="color:#fc8181;font-size:11px;padding:8px;"><i class="fa-solid fa-triangle-exclamation"></i> 面板 JS 錯誤: ${_escErr(e)}</div>`);
             }
         }
         // 重綁所有 onclick，讓閉包函數在有 LP 的作用域內執行
@@ -298,7 +303,7 @@ LINE:[用角色風格說一句話，10-20字]`;
                         fn(content, lines, _closeLobbyCanvas, LP2);
                     } catch(e) {
                         console.error('[VNBlock] JS 執行錯誤:', e);
-                        content.innerHTML += `<div style="color:#fc8181;font-size:11px;padding:8px;"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</div>`;
+                        content.insertAdjacentHTML('beforeend', `<div style="color:#fc8181;font-size:11px;padding:8px;"><i class="fa-solid fa-triangle-exclamation"></i> ${_escErr(e)}</div>`);
                     }
                 }
                 _rewireOnclicks(content, LP2);

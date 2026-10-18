@@ -64,7 +64,7 @@
     // 這兩個 key 每次點擊都會讀 → 讀不到（沙箱/隱私模式擋 localStorage）也不能讓事件處理器炸掉
     const _mem = {};
     function _get(k) { try { const v = localStorage.getItem(k); return v === null ? _mem[k] : v; } catch (_) { return _mem[k]; } }
-    function _set(k, v) { _mem[k] = v; try { localStorage.setItem(k, v); } catch (_) {} }
+    function _set(k, v) { _mem[k] = v; window.AUI.lsSet(k, v, '介面音效的設定'); }   // 寫不進去：這次開著的頁面照 _mem 走，並跳一句說沒存到
 
     function isOn() { return _get('lobby_ui_sfx_on') !== '0'; }
     function setOn(on) { _set('lobby_ui_sfx_on', on ? '1' : '0'); }

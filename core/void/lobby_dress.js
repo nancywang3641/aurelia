@@ -13,7 +13,7 @@
     const S = _b.S;
 
     // ── 右鍵角色→下拉單 ──
-    function _closeActorMenu() { S.menuEl?.remove(); S.menuEl = null; }
+    function _closeActorMenu() { S.menuEl?.remove(); S.menuEl = null; document.removeEventListener('pointerdown', _menuOutside); }
     function _openActorMenu(a, cx, cy) {
         _b.closeWins();
         const rr = S.root.getBoundingClientRect();
@@ -48,7 +48,8 @@
             _closeActorMenu();
             window.VoidTerminal?.recompactNpcMemory?.(a.key, a.name);
         });
-        setTimeout(() => document.addEventListener('pointerdown', _menuOutside, { once: true }), 0);
+        // 🚨 不用 once：點在選單裡（標題、空白處）也會把那一次用掉，之後點外面就關不掉。一直聽，選單收掉時才拿掉
+        setTimeout(() => { if (S.menuEl === menu) document.addEventListener('pointerdown', _menuOutside); }, 0);
     }
     function _menuOutside(e) { if (S.menuEl && !S.menuEl.contains(e.target)) _closeActorMenu(); }
     // 裝扮室面板
@@ -189,7 +190,7 @@
         try { const o = JSON.parse(localStorage.getItem(DRESS_GEN_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
     }
     function _dressGenSave(patch) {
-        try { localStorage.setItem(DRESS_GEN_KEY, JSON.stringify(Object.assign(_dressGenCfg(), patch))); } catch (e) {}
+        AUI.lsSet(DRESS_GEN_KEY, JSON.stringify(Object.assign(_dressGenCfg(), patch)), '裝扮室上次選的畫圖設定');
     }
     function _imgMgr() { return window.OS_IMAGE_MANAGER || (window.parent || window).OS_IMAGE_MANAGER || null; }
     // 頭像 prompt → 小人 prompt：[Avatar] 規範的「(表情, 服裝, 簡單背景)」括號組拆開，

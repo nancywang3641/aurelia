@@ -293,14 +293,15 @@
     }
     function bindSettings(box) {
         box.querySelector('.lset-npcdec')?.addEventListener('change', (e) => {
-            try { localStorage.setItem('npc_decide_on', e.target.checked ? '1' : '0'); } catch (_) {}
+            // 沒存成功就不重掛：重掛照舊值讀回來，等於白閃一次
+            if (!window.AUI.lsSet('npc_decide_on', e.target.checked ? '1' : '0', '「書咖的丹自己決定去哪」的開關')) return;
             if (S.scene === 'cafe') _b.remount();
         });
         box.querySelector('.lset-npcfb')?.addEventListener('change', (e) => { window.NPC_DECIDE?.setFallback(e.target.checked); });
         box.querySelector('.lset-num')?.addEventListener('change', (e) => {
             const v = Math.max(DEC_MINS_MIN, Math.min(DEC_MINS_MAX, parseInt(e.target.value, 10) || 3));
             e.target.value = v;
-            try { localStorage.setItem('npc_decide_mins', String(v)); } catch (_) {}
+            window.AUI.lsSet('npc_decide_mins', String(v), '「多久想一次下一步」的分鐘數');
             // 已經在等的那一次也跟著縮短（改長不動它，免得她改完要等很久才看到效果）
             S.npcs.forEach(n => { if (n._dec && n._dec.waitT > v * 60000) n._dec.waitT = v * 60000 * (0.8 + Math.random() * 0.4); });
         });

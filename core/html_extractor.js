@@ -13,6 +13,28 @@
 
     const STYLE_ID = 'ue-styles-v12-1';
 
+    // 只捲 el 自己所在的那一格（最近一層真的捲得動的祖先），block 同 scrollIntoView 的 start / center / end / nearest。
+    //   scrollIntoView 會連外層一起捲：酒館整頁、正在滑入的面板、overflow:hidden 的父層都會被程式拖動。
+    function _scrollInBox(el, block) {
+        const view = (el.ownerDocument && el.ownerDocument.defaultView) || window;
+        let box = el.parentElement;
+        while (box) {
+            const oy = view.getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box) return;
+        const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+        let top;
+        if (block === 'end') top = box.scrollTop + (r.bottom - b.bottom);
+        else if (block === 'center') top = box.scrollTop + (r.top - b.top) - (b.height - r.height) / 2;
+        else if (block === 'nearest') {
+            if (r.top >= b.top && r.bottom <= b.bottom) return;
+            top = box.scrollTop + (r.top < b.top ? (r.top - b.top) : (r.bottom - b.bottom));
+        } else top = box.scrollTop + (r.top - b.top);
+        box.scrollTo({ top: top });
+    }
+
     const UniversalExtractor = {
         activeTab: '', isVisible: false,
         originalFormParent: null, originalFormSibling: null, // 用於記錄輸入框原本的家
@@ -68,6 +90,8 @@
             const vnBg = this._getVnBgImage();
             overlay.style.backgroundImage = vnBg || 'none';
 
+            // 重複呼叫 show()（面板開著又被叫一次）：輸入框還在舊的 #ue-input-area 裡，下面整個重建會把它一起拆掉 → 先搬回家
+            this._restoreFormSheld(doc);
             overlay.innerHTML = `
                 <div id="ue-root-wrapper">
                     <div id="ue-toolbar">
@@ -99,7 +123,7 @@
             };
 
             // 執行 DOM 劫持：把 form_sheld 搬過來（#chat 模式下跳過）
-            const _mountSelector = window.extension_settings?.['多功能面板系統']?.mount?.selector || '#sheld';
+            const _mountSelector = window.AureliaUIUtils?.getExtensionSettings?.()?.mount?.selector || '#sheld';   // 擴展設定唯一的讀法在 ui_utilities
             const formSheld = doc.getElementById('form_sheld');
             if (formSheld && _mountSelector !== '#chat') {
                 this.originalFormParent = formSheld.parentNode;
@@ -114,6 +138,18 @@
             this.scanAndRender();
         },
 
+        // 把劫持來的 #form_sheld 搬回原本的家（hide 與重複 show 共用；story_extractor 有一支一樣的）。
+        //   原本的鄰居已經不在原處就接在最後面，別讓 insertBefore 丟錯、輸入框卡在要被清掉的面板裡
+        _restoreFormSheld(doc) {
+            try {
+                const formSheld = doc.getElementById('form_sheld');
+                const home = this.originalFormParent, sib = this.originalFormSibling;
+                if (formSheld && home) home.insertBefore(formSheld, (sib && sib.parentNode === home) ? sib : null);
+            } catch (e) { console.warn('[Extractor] 還原 #form_sheld 失敗', e); }
+            this.originalFormParent = null;
+            this.originalFormSibling = null;
+        },
+
         hide() {
             const win = window.parent || window;
             const doc = win.document || document;
@@ -121,12 +157,7 @@
 
             if (overlay) {
                 // 面板關閉時，把 form_sheld 丟回原本的 DOM 樹
-                const formSheld = doc.getElementById('form_sheld');
-                if (formSheld && this.originalFormParent) {
-                    this.originalFormParent.insertBefore(formSheld, this.originalFormSibling);
-                    this.originalFormParent = null;
-                    this.originalFormSibling = null;
-                }
+                this._restoreFormSheld(doc);
 
                 overlay.classList.remove('show');
                 this.isVisible = false;
@@ -159,7 +190,7 @@
             const push = () => {
                 chat.scrollTop = chat.scrollHeight;
                 const mes = doc.querySelector('#chat .mes.last_mes');
-                if (mes && mes.scrollIntoView) { try { mes.scrollIntoView({ block: 'end' }); } catch (e) {} }
+                if (mes) { try { _scrollInBox(mes, 'end'); } catch (e) {} }
             };
             push();
             // 第一階段：等最後一樓的 DOM 長出來（懶渲染觸發）
@@ -453,7 +484,16 @@
                         }
                     } catch (e) { iframe.style.height = '600px'; }
                 };
-                iframe.onload = () => { adjustHeight(); try { if (window.ResizeObserver) new ResizeObserver(adjustHeight).observe(iframe.contentWindow.document.body); } catch(e){} };
+                // 跟 story_extractor 的 fixIframes 同一套：沒有 ResizeObserver 就定時量；已經載完的 iframe 不會再發 load，直接補跑一次
+                //   （以前這份沒補：插進來之前就載完的 iframe 一直沒被量，高度停在預設值）
+                iframe.onload = () => {
+                    adjustHeight();
+                    try {
+                        if (window.ResizeObserver) new ResizeObserver(() => adjustHeight()).observe(iframe.contentWindow.document.body);
+                        else setInterval(adjustHeight, 500);
+                    } catch(e){}
+                };
+                try { if (iframe.contentWindow && iframe.contentWindow.document.readyState === 'complete') iframe.onload(); } catch (e) {}
             });
         },
 

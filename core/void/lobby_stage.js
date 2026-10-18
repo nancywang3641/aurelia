@@ -570,8 +570,11 @@
         // 🔒 廣場鎖上：通往廣場的門整扇不存在（書咖／大廳的底部大門）。房間的出口不走這裡——
         //    它在 enterRoom 就改好目的地了，濾掉的話會變成一間沒有門的房間。
         //    占卜小屋、帽匠工坊也不濾：它們唯一的門就是通往廣場那扇，鎖上時由過門判定改送回進門前的場景。
-        const doors = (SC.doors || []).map(d => Object.assign({}, d))
-            .filter(d => !(d.to === 'city' && S.scene !== 'room' && S.scene !== 'tarot' && S.scene !== 'workshop' && _cityLocked()));
+        //    🚨 先套完存檔座標再濾：存檔的門照「整份門清單」的序號存。以前濾完才套，大廳鎖著時存的
+        //       [交易所門] 在解鎖後會套到第 0 扇（通往廣場那扇）上，兩扇門座標錯位。
+        const allDoors = (SC.doors || []).map((d, i) => Object.assign({}, d, { _i: i }));
+        const _doorGated = d => d.to === 'city' && S.scene !== 'room' && S.scene !== 'tarot' && S.scene !== 'workshop';   // 廣場上鎖時會被濾掉的那種
+        const _doorOff = d => _doorGated(d) && _cityLocked();
         let baseOverride = null, maskOverride = null;
         try {
             const saved = SC.cfgKey ? JSON.parse(localStorage.getItem(SC.cfgKey) || 'null') : null;   // 動態場景沒 cfgKey＝不存擺設
@@ -600,9 +603,16 @@
                 if (saved.baseOverride) baseOverride = saved.baseOverride;
                 if (saved.maskOverride) maskOverride = saved.maskOverride;
                 // doorsV 版本閘：場景門的「去向/配置」改版後，舊存檔的門座標整組作廢（防蓋到新門上）
-                if (Array.isArray(saved.doors) && (saved.doorsV || 1) === (SC.doorsV || 1)) saved.doors.forEach((sd, i) => {
-                    if (doors[i] && sd) { doors[i].x = sd.x; doors[i].y = sd.y; doors[i].w = sd.w; doors[i].h = sd.h; }
-                });
+                // 存檔長度＝整份 → 照序號套；舊版在廣場上鎖時存的只有沒被濾掉的那幾扇 → 依序對回那幾扇
+                if (Array.isArray(saved.doors) && (saved.doorsV || 1) === (SC.doorsV || 1)) {
+                    const lockedList = allDoors.filter(d => !_doorGated(d));
+                    const target = saved.doors.length === allDoors.length ? allDoors
+                        : saved.doors.length === lockedList.length ? lockedList : [];
+                    saved.doors.forEach((sd, i) => {
+                        const D = target[i];
+                        if (D && sd) { D.x = sd.x; D.y = sd.y; D.w = sd.w; D.h = sd.h; }
+                    });
+                }
                 if (saved.points) {
                     if (saved.points.yingZone) points.yingZone = saved.points.yingZone;
                     if (saved.points.npcZone) points.npcZone = saved.points.npcZone;
@@ -618,7 +628,9 @@
                 }
             }
         } catch (e) {}
-        return { layout, points, doors, baseOverride, maskOverride };
+        const doors = allDoors.filter(d => !_doorOff(d));
+        const doorsOff = allDoors.filter(_doorOff);   // 這次被濾掉的門：擺設存檔時照原座標一起寫回，序號才對得上
+        return { layout, points, doors, doorsOff, baseOverride, maskOverride };
     }
 
     const S = {
@@ -663,7 +675,8 @@
         if (img) img.classList.toggle('lstage-plot-off', !!off);
     }
     function setPlot(id, occupied) {
-        try { const all = _plots(); all[id] = !!occupied; localStorage.setItem(PLOTS_KEY, JSON.stringify(all)); } catch (e) {}
+        const all = _plots(); all[id] = !!occupied;
+        AUI.lsSet(PLOTS_KEY, JSON.stringify(all), '空地蓋房的狀態');
         (CFG?.layout || []).forEach((o, i) => {
             if (o.plot === id || o.plotFrame === id) _applyPlotVis(o, S.objEls?.[i]);
         });
@@ -1361,7 +1374,7 @@
             const dropped = arr.slice(0, arr.length - keepLast);
             localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr.slice(-keepLast)));
             return dropped;
-        } catch (e) { return []; }
+        } catch (e) { _npcHistFail(e); return []; }
     }
     function popNpcHistoryTail(key, role) {
         try {
@@ -1370,7 +1383,7 @@
                 arr.pop();
                 localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
             }
-        } catch (e) {}
+        } catch (e) { _npcHistFail(e); }
     }
 
     // ── 對話框顯隱＋像素立繪（VN風：平常收起、對話才浮出）──
@@ -1583,6 +1596,7 @@
         room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
         city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
         exchange:{ name: '白兔先生', badge: '交易所', ph: '走近白兔先生，兌換屬於你的一席之地...' },
+        tarot:   { name: '紫薇老師', badge: '占卜小屋', ph: '和紫薇老師聊聊，或點占卜桌入座占卜...' },
         workshop:{ name: '帽匠',   badge: '奇想工坊', ph: '和帽匠聊聊，或點中央的造物儀開始做東西...' },
     };
     function _applySceneHeader() {
@@ -2027,6 +2041,7 @@
         };
         const box = document.createElement('div');
         box.className = 'lstage-citymap';
+        const closeMap = _regOnce(() => box.remove());
         box.innerHTML =
             '<div class="lcm-title"><i class="fa-solid fa-map-location-dot"></i> ' +
               (locked ? '快轉——點地圖上的地標' : '快轉——點地圖上任何地方') +
@@ -2083,7 +2098,7 @@
             hs.style.width = Math.round(o.w * s * K) + 'px';
             hs.style.height = Math.round(o.h * s * K) + 'px';
             hs.innerHTML = '<span>' + d.label + '</span>';
-            hs.addEventListener('click', (e) => { e.stopPropagation(); box.remove(); d.go(); });
+            hs.addEventListener('click', (e) => { e.stopPropagation(); closeMap(); d.go(); });
             map.appendChild(hs);
         });
         // 點空地＝傳送到廣場的該點（落點若在牆裡,掛載後的遮罩檢查會自動彈到最近可走處）
@@ -2092,19 +2107,18 @@
             map.addEventListener('click', (e) => {
                 const r = map.getBoundingClientRect();
                 const x = Math.round((e.clientX - r.left) / K), y = Math.round((e.clientY - r.top) / K);
-                box.remove();
+                closeMap();
                 jump('city', { x, y });
             });
         }
-        box.querySelector('.lcm-close').addEventListener('click', () => box.remove());
+        box.querySelector('.lcm-close').addEventListener('click', closeMap);
         box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => {
-            box.remove();
+            closeMap();
             const P = PLACES.find(p => p.id === b.dataset.go);
             if (P && !P.scene && P.open) { P.open(); return; }   // chip:true 那種：沒有場景，直接開面板
             jump(b.dataset.go);
         }));
         S.root.appendChild(box);
-        _regWin(() => box.remove());
     }
 
     // ── 🔮 占卜面板（小屋裡點紫薇）：塔羅 app 本來就吃容器，直接掛進浮窗、面板一行都不用改 ──
@@ -2142,7 +2156,7 @@
         const savedGoHome = PS ? PS.goHome : undefined;
         // 掛在 .lobby-left（同世界門）：放進 .lstage-root 會被它的獨立堆疊脈絡壓在對話框底下
         const host = document.querySelector('.lobby-left') || S.root;
-        const close = () => {
+        const close = _regOnce(() => {
             box.remove();
             _tarotWin = null;
             // 關窗＝人也退場（沒在對話卻留一張立繪會很怪）；開聊那條會自己再掛一次
@@ -2150,7 +2164,7 @@
             try { host.classList.remove('void-dock-open'); } catch (e) {}
             if (PS) { if (savedGoHome === undefined) delete PS.goHome; else PS.goHome = savedGoHome; }
             else if (window.PhoneSystem && window.PhoneSystem.__tarotShim) delete window.PhoneSystem;
-        };
+        });
         _tarotWin = close;
         if (PS) PS.goHome = close;
         else window.PhoneSystem = { goHome: close, __tarotShim: true };
@@ -2158,7 +2172,6 @@
         box.querySelector('.lstage-tw-close').addEventListener('click', close);
         host.appendChild(box);
         host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所）
-        _regWin(close);
         try { window.OS_TAROT?.launch?.(box.querySelector('.lstage-tw-body')); }
         catch (e) { box.querySelector('.lstage-tw-body').innerHTML = '<div style="padding:24px;color:#c88">占卜面板載入失敗</div>'; }
     }
@@ -2176,16 +2189,15 @@
         const box = document.createElement('div');
         box.className = 'lstage-wswin';
         const host = document.querySelector('.lobby-left') || S.root;
-        const close = () => {
+        const close = _regOnce(() => {
             box.remove();
             _wsWin = null;
             if (!S.talkTarget) host.querySelector('.lstage-talk-portrait')?.remove();
             try { host.classList.remove('void-dock-open'); } catch (e) {}
-        };
+        });
         _wsWin = close;
         host.appendChild(box);
         host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所）
-        _regWin(close);
         if (window.LobbyWorkshop) window.LobbyWorkshop.mount(box, { onClose: close });
         else box.innerHTML = '<div class="lws-fail">造物工坊面板載入失敗</div>';
     }
@@ -2202,16 +2214,15 @@
         const box = document.createElement('div');
         box.className = 'lstage-wswin lstage-cafewin';
         const host = document.querySelector('.lobby-left') || S.root;
-        const close = () => {
+        const close = _regOnce(() => {
             box.remove();
             _wsWin = null;
             if (!S.talkTarget) host.querySelector('.lstage-talk-portrait')?.remove();
             try { host.classList.remove('void-dock-open'); } catch (e) {}
-        };
+        });
         _wsWin = close;
         host.appendChild(box);
         host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所/帽匠）
-        _regWin(close);
         if (window.OS_STUDIO && window.OS_STUDIO.launch) {
             window.OS_STUDIO.launch(box, mode);
             // 創作室的返回鈕是把它自己那層移除 → 盒子空了就等於她按了返回，把浮窗一起收掉
@@ -2305,7 +2316,7 @@
                   '<input type="checkbox" class="lset-chk" data-k="theater"' + (localStorage.getItem('lobby_theater_on') !== '0' ? ' checked' : '') + '></label>' +
                 '<div class="lset-hint">兩個 NPC 偶爾會湊在一起聊天，點頭頂泡泡或右上「小劇場」可以偷聽。</div>' +
                 '<div class="lset-row"><span class="lset-tx">出現頻率</span>' +
-                  '<span class="ltheater-freq' + (localStorage.getItem('lobby_theater_on') === '0' ? ' off' : '') + '">' +
+                  '<span class="ltheater-freq' + (localStorage.getItem('lobby_theater_on') === '0' ? ' off' : '') + '" data-freqrow>' +
                     ['low:低','mid:中','high:高'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_theater_freq')||'mid'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-freq="'+v+'">'+t+'</button>'; }).join('') +
                   '</span></div>' +
                 '<div class="lset-row"><span class="lset-tx">城市天氣</span>' +
@@ -2328,18 +2339,20 @@
             box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
                 const k = e.target.dataset.k;
                 if (k === 'lore') {
-                    try { localStorage.setItem('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0'); } catch (_) {}
+                    // 沒存成功就不重掛：重掛會照舊值讀回來，等於白閃一次
+                    if (!AUI.lsSet('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0', '「讀取角色卡世界書」的開關')) return;
                     _closeLobbySettings();
                     unmount(); tryMount();
                 } else if (k === 'story') {
-                    try { localStorage.setItem('lobby_npc_see_current_story', e.target.checked ? '1' : '0'); } catch (_) {}
+                    AUI.lsSet('lobby_npc_see_current_story', e.target.checked ? '1' : '0', '「大廳 NPC 看你當前劇情」的開關');
                 } else if (k === 'theater') {
-                    try { localStorage.setItem('lobby_theater_on', e.target.checked ? '1' : '0'); } catch (_) {}
-                    const fr = box.querySelector('.ltheater-freq'); if (fr) fr.classList.toggle('off', !e.target.checked);
+                    AUI.lsSet('lobby_theater_on', e.target.checked ? '1' : '0', '「NPC 小劇場」的開關');
+                    // 灰掉「出現頻率」那列；只寫 .ltheater-freq 會抓到排在前面的音效音量那列
+                    const fr = box.querySelector('[data-freqrow]'); if (fr) fr.classList.toggle('off', !e.target.checked);
                 } else if (k === 'revealfx') {
-                    try { localStorage.setItem('aurelia_reveal_fx', e.target.checked ? '1' : '0'); } catch (_) {}
+                    AUI.lsSet('aurelia_reveal_fx', e.target.checked ? '1' : '0', '「演出動畫」的開關');
                 } else if (k === 'cafe') {
-                    try { localStorage.setItem('cafe_offline_visits', e.target.checked ? '1' : '0'); } catch (_) {}
+                    AUI.lsSet('cafe_offline_visits', e.target.checked ? '1' : '0', '「書咖離線訪客」的開關');
                 } else if (k === 'uisfx') {
                     window.VoidUiSfx?.setOn(e.target.checked);
                     const vr = box.querySelector('[data-volrow]'); if (vr) vr.classList.toggle('off', !e.target.checked);
@@ -2353,11 +2366,11 @@
                 window.VoidUiSfx?.play('click');   // 改完馬上放一聲，不用關掉設置去試
             }));
             box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(btn => btn.addEventListener('click', () => {
-                try { localStorage.setItem('lobby_theater_freq', btn.dataset.freq); } catch (_) {}
+                AUI.lsSet('lobby_theater_freq', btn.dataset.freq, '小劇場的出現頻率');
                 box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(b => b.classList.toggle('on', b === btn));
             }));
             box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(btn => btn.addEventListener('click', () => {
-                try { localStorage.setItem('lobby_weather_v1', btn.dataset.wx); } catch (_) {}
+                AUI.lsSet('lobby_weather_v1', btn.dataset.wx, '城市天氣的設定');
                 _wxSetting = btn.dataset.wx;   // 快取同步→下一幀立即生效
                 S._wxRoll = null;              // 切回自動時重擲
                 box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(b => b.classList.toggle('on', b === btn));
@@ -2508,14 +2521,15 @@
         if (!left || !panel.win) return;
         const dropPortrait = () => { if (!S.talkTarget) left.querySelector('.lstage-talk-portrait')?.remove(); };
         let seen = !!left.querySelector(panel.win);
+        const closer = _regOnce(() => { obs.disconnect(); try { panel.close && panel.close(); } catch (e) {} dropPortrait(); });
         const obs = new MutationObserver(() => {
             if (left.querySelector(panel.win)) { seen = true; return; }
             if (!seen) return;
             obs.disconnect();
             dropPortrait();
+            _unregWin(closer);   // 面板自己關了：退出互斥圈，免得之後開別的窗又替它叫一次 close
         });
         obs.observe(left, { childList: true, subtree: true });
-        _regWin(() => { obs.disconnect(); try { panel.close && panel.close(); } catch (e) {} dropPortrait(); });
     }
     function _mountHotspots(isStatic) {
         S.hotspots = []; S.hsNear = null;
@@ -2570,7 +2584,7 @@
         try {
             const seenKey = 'lstage_hs_seen_' + S.scene;
             if (S.hotspots.length && !localStorage.getItem(seenKey)) {
-                localStorage.setItem(seenKey, '1');
+                AUI.lsSet(seenKey, '1', '「第一次進來家具亮一下」的紀錄');
                 const list = S.hotspots.slice();
                 list.forEach(h => _hsLight(h, true, 'is-flash'));
                 setTimeout(() => list.forEach(h => _hsLight(h, false, 'is-flash')), 2400);
@@ -2852,7 +2866,16 @@
     //    各小窗把自己的 close 函式 regWin() 進互斥圈；誰要開窗先 closeWins() 全關（含自己的舊窗）。
     const _winClosers = [_closeLobbySettings, _closeStorePanel];   // 裝扮室三小窗在 lobby_dress.js 自己 regWin
     function _regWin(fn) { _winClosers.push(fn); return fn; }
-    function _closeWins() { _winClosers.forEach(fn => { try { fn(); } catch (e) {} }); }
+    function _unregWin(fn) { const i = _winClosers.indexOf(fn); if (i >= 0) _winClosers.splice(i, 1); }
+    // 每開一次就登記一次的窗（快轉地圖、占卜、工坊、點家具開的面板）走這支：收掉時順手退出互斥圈、只收一次。
+    //   以前直接 _regWin(close)：自己按 ✕ 關掉後 close 還留在圈裡，之後每開別的窗就再跑一遍
+    //   （拿掉別的面板掛上的 void-dock-open、收掉別人的立繪），圈子也只增不減。
+    function _regOnce(fn) {
+        let done = false;
+        const once = () => { _unregWin(once); if (done) return; done = true; fn(); };
+        return _regWin(once);
+    }
+    function _closeWins() { _winClosers.slice().forEach(fn => { try { fn(); } catch (e) {} }); }   // 複本：_regOnce 的會邊跑邊把自己拿掉
 
     window.LobbyStage = {
         tryMount, unmount,

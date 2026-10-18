@@ -74,8 +74,8 @@
                 if (has === on) { _rxState = on; return; }  // 現況已正確 → 不寫
             }
         } catch (e) {}
-        _rxState = on;
-        await th.updateTavernRegexesWith(rx => {
+        _rxState = on;   // 先記著：寫入會讓酒館重載聊天、又觸發一輪套用，那一輪要看到「這個狀態已經在寫」
+        try { await th.updateTavernRegexesWith(rx => {
             const out = (rx || []).filter(r => r && r.script_name !== RX_NAME);
             if (on) out.push({
                 id: th.uuidv4 ? th.uuidv4() : ('vn_free_rx_' + Math.random().toString(36).slice(2)),
@@ -91,7 +91,8 @@
                 markdownOnly: false, promptOnly: true, substituteRegex: 0
             });
             return out;
-        }, { type: 'global' });
+        }, { type: 'global' }); }
+        catch (e) { _rxState = null; throw e; }   // 寫失敗就忘掉：以前記著 on，之後每次都當成寫好了、永遠不再試
     }
 
     // 撥 VN 指令的總綱與通話那組。回 false＝做不了（缺自由版總綱），呼叫端就不動歷史表情格正則。
@@ -117,22 +118,32 @@
 
     // 把 VN 指令／正則調成當前卡該有的樣子（切模式、換卡、進出視差都走這；狀態沒變就不寫）
     // force=true → 略過記憶直接重算：換卡/開機用。
-    let _applying = false;
+    let _running = null;   // 正在套用的那一輪
+    let _next = null;      // 排在它後面的那一輪（套用中又被叫的全部併進這一輪）
     let _lastEff = null;   // 上次真的套用完的實際模式；沒變就不用再算（世界門每則訊息會戳這支一次）
-    async function applyForCurrent(force) {
-        if (_applying) return;
+    function applyForCurrent(force) {
+        // 套用中又被叫（例如換卡那輪還在寫正則，她剛好切了模式）：以前直接忽略，切的那次 VN 總綱就沒跟上。
+        //   改成排一輪在後面、照那時的最新狀態重算；呼叫端等到那一輪做完。
+        if (_running) {
+            if (!_next) _next = _running.then(() => { _next = null; return applyForCurrent(true); });
+            return _next;
+        }
+        _running = _applyOnce(force).finally(() => { _running = null; });
+        return _running;
+    }
+    async function _applyOnce(force) {
         const free = _effectiveFree();
         if (!force && _lastEff === free) return;
         const VR = win.OS_VN_RULES || window.OS_VN_RULES;
         if (!VR || !VR.apply) return;   // 開機早期還沒載入：不記 _lastEff，下次再來
-        _applying = true;
         try {
             const ok = _applyRules(VR, free);
             if (ok && !_isStandalone()) await _setHistoryRegex(free);
             _lastEff = free;
         } catch (e) {
             console.warn('[VN自由模式] 套用失敗:', e);
-        } finally { _applying = false; }
+            try { win.AUI?.toast?.('自由模式沒有切換完整，下次換聊天時會再試一次', { type: 'error' }); } catch (_) {}
+        }
     }
 
     function isFree(id) {
@@ -144,7 +155,7 @@
         const cur = _storyId();
         const target = id || cur;
         if (!target) { console.warn('[VN自由模式] 拿不到當前卡片，略過'); return false; }
-        try { localStorage.setItem(_key(target), on ? '1' : '0'); } catch (e) {}
+        if (!win.AUI.lsSet(_key(target), on ? '1' : '0', '這張卡的自由模式設定')) return false;   // 沒存成功就不切：切了重整又會變回去
         if (target === cur) await applyForCurrent(true);
         return true;
     }

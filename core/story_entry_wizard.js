@@ -275,7 +275,7 @@
             // 進入故事 = 到「啟程」輸入幕;整條流程不再露出舊閱讀面板
             $('#sew-enter').onclick = () => {
                 this._screen(root, 'embark');
-                setTimeout(() => { try { $('#sew-embark-input').focus(); } catch (e) { } }, 60);
+                setTimeout(() => { try { $('#sew-embark-input').focus({ preventScroll: true }); } catch (e) { } }, 60);   // 換幕還在滑的時候 focus 會把外層捲歪
             };
             // 退回預覽要重畫：離開預覽那一幕時已經把卡片面板(iframe)拆掉了，不重畫就只剩純文字
             $('#sew-embark-back').onclick = () => { this._renderPreview(root); this._screen(root, 'preview'); };
@@ -287,7 +287,7 @@
                 const ta = document.getElementById('send_textarea');
                 const btn = document.getElementById('send_but');
                 const txt = ($('#sew-embark-input').value || '').trim();
-                if (!txt) { $('#sew-embark-input').focus(); return; }
+                if (!txt) { $('#sew-embark-input').focus({ preventScroll: true }); return; }
                 if (ta && btn) {
                     try {
                         ta.value = txt;

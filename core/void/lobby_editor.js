@@ -813,7 +813,9 @@
                 return rec;
             }),
             points: _b.CFG.points,
-            doors: _b.CFG.doors.map(D => ({ x: D.x, y: D.y, w: D.w, h: D.h })),
+            // 整份門清單照原序號存（廣場上鎖時被濾掉的門照它原本的座標一起寫），讀回時序號才對得上
+            doors: _b.CFG.doors.concat(_b.CFG.doorsOff || []).sort((a, b) => (a._i || 0) - (b._i || 0))
+                .map(D => ({ x: D.x, y: D.y, w: D.w, h: D.h })),
             doorsV: _b.SCENES[_b.S.scene].doorsV || 1,   // 門版本：場景門改版後舊存檔門座標作廢
         };
         if (_b.CFG.baseOverride) data.baseOverride = _b.CFG.baseOverride;

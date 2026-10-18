@@ -202,7 +202,7 @@
         },
 
         saveTheme() {
-            localStorage.setItem(THEME_STORAGE_KEY, this.currentTheme);
+            AUI.lsSet(THEME_STORAGE_KEY, this.currentTheme, '劇情面板的淺色／黑金設定');
         },
 
         toggleTheme() {
@@ -285,6 +285,8 @@
                 }
             }
 
+            // 重複呼叫 show()（面板開著又被叫一次）：輸入框還在舊面板裡，下一行清空會把它一起拆掉 → 先搬回家
+            this._restoreFormSheld();
             iframeContainer.innerHTML = '';
 
             const rootWrapper = document.createElement('div');
@@ -365,7 +367,7 @@
 
             // DOM 劫持：把酒館主聊天的輸入框搬進來（mount 在 #chat 時不搬，跟 html_extractor 行為一致）
             try {
-                const _mountSelector = window.extension_settings?.['多功能面板系統']?.mount?.selector || '#sheld';
+                const _mountSelector = window.AureliaUIUtils?.getExtensionSettings?.()?.mount?.selector || '#sheld';   // 擴展設定唯一的讀法在 ui_utilities
                 const formSheld = document.getElementById('form_sheld');
                 if (formSheld && _mountSelector !== '#chat') {
                     this.originalFormParent = formSheld.parentNode;
@@ -834,7 +836,8 @@
                         } else { setInterval(adjustHeight, 500); }
                     } catch(e){}
                 };
-                if (iframe.contentWindow && iframe.contentWindow.document.readyState === 'complete') iframe.onload();
+                // 已經載完的 iframe 不會再發 load：直接補跑一次。跨網域的 iframe 讀 document 會丟錯，別讓它打斷後面幾個
+                try { if (iframe.contentWindow && iframe.contentWindow.document.readyState === 'complete') iframe.onload(); } catch (e) {}
             });
         },
 
@@ -879,6 +882,21 @@
             } catch (e) { console.warn('[StoryExtractor] 停止面板媒體失敗', e); }
         },
 
+        // 把劫持來的 #form_sheld 搬回原本的家（hide 與重複 show 共用；html_extractor 有一支一樣的）。
+        //   原本的鄰居已經不在原處就接在最後面，別讓 insertBefore 丟錯、輸入框卡在要被清掉的面板裡
+        _restoreFormSheld() {
+            try {
+                const formSheld = document.getElementById('form_sheld');
+                const home = this.originalFormParent, sib = this.originalFormSibling;
+                if (formSheld && home) {
+                    home.insertBefore(formSheld, (sib && sib.parentNode === home) ? sib : null);
+                    console.log('[StoryExtractor] 已還原 #form_sheld');
+                }
+            } catch (e) { console.warn('[StoryExtractor] 還原 #form_sheld 失敗', e); }
+            this.originalFormParent = null;
+            this.originalFormSibling = null;
+        },
+
         hide() {
             // reentry guard：hideVnPanel 內呼叫 StoryExtractor.hide()，而 hide() 內又會
             // 經 _maybeHideVnPanel → hideVnPanel 回呼 → 無限遞迴卡頓
@@ -900,15 +918,7 @@
             } catch (e) {}
 
             // 還原 #form_sheld 回原本的家（最先做，避免後續 DOM 操作把它連帶清掉）
-            try {
-                const formSheld = document.getElementById('form_sheld');
-                if (formSheld && this.originalFormParent) {
-                    this.originalFormParent.insertBefore(formSheld, this.originalFormSibling);
-                    this.originalFormParent = null;
-                    this.originalFormSibling = null;
-                    console.log('[StoryExtractor] 已還原 #form_sheld');
-                }
-            } catch (e) { console.warn('[StoryExtractor] 還原 #form_sheld 失敗', e); }
+            this._restoreFormSheld();
 
             const _maybeHideVnPanel = () => {
                 const pageGame = document.getElementById('page-game');

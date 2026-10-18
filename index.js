@@ -393,14 +393,16 @@ function loadCSS(path) {
     });
 }
 
-// 載入模組工具
+// 載入模組工具（本機）
+//   🚨 失敗回 false、不 reject：以前一支載不到就 reject，外層 for 迴圈整個中斷、後面的模組和手機全沒載，
+//      畫面上連 🏰 都沒有。CDN 那條一直是 resolve(false) 繼續往下載，兩邊對齊；載不到的最後統一跳一句（_reportLoadFails）。
 async function loadModule(conf) {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
         const s = document.createElement('script');
         s.src = conf.path + _AURELIA_CACHE_BUST;
         s.async = false;
-        s.onload = () => { window.PANEL_COMMUNICATION.modulesLoaded[conf.key] = true; resolve(); };
-        s.onerror = () => { console.error(`載入失敗: ${conf.name}`); reject(new Error(`Load failed: ${conf.name}`)); };
+        s.onload = () => { window.PANEL_COMMUNICATION.modulesLoaded[conf.key] = true; resolve(true); };
+        s.onerror = () => { console.error(`載入失敗: ${conf.name}`); try { s.remove(); } catch (e) {} resolve(false); };
         document.head.appendChild(s);
     });
 }
@@ -410,10 +412,17 @@ function loadPhoneScript(path) {
     return new Promise((resolve) => {
         const s = document.createElement('script');
         s.src = PHONE_BASE_PATH + path + _AURELIA_CACHE_BUST;
-        s.onload = () => resolve();
-        s.onerror = () => { console.error(`[PhoneOS] 缺失腳本: ${path}`); resolve(); }; 
+        s.onload = () => resolve(true);
+        s.onerror = () => { console.error(`[PhoneOS] 缺失腳本: ${path}`); resolve(false); };
         document.head.appendChild(s);
     });
+}
+
+// 有模組怎樣都載不到：其他照常跑，但要讓她知道少了東西（只寫在 console 的話，她只會看到某個功能點了沒反應）
+function _reportLoadFails(names) {
+    if (!names.length) return;
+    console.error('[Aurelia] 這幾支沒載到：', names.join('、'));
+    try { window.AUI?.toast?.('有 ' + names.length + ' 個功能沒載入成功，重新整理頁面再試一次', { type: 'error' }); } catch (e) {}
 }
 
 // CDN 並行載入器：一次插入全部 <script>，async=false → 平行下載、依插入順序執行(保留依賴順序)
@@ -445,20 +454,11 @@ function _loadBatchOrdered(list) {
     return Promise.all(list.map(item => _loadOne(item, 0)));
 }
 
-// 讀取設置
+// 讀取設置：讀法只有一份，在 core/ui_utilities.js（AureliaUIUtils.getExtensionSettings），這裡只補掛載點的預設。
+//   呼叫時模組都載完了（只有 smartToggle 會叫）；以前這裡自己抄一份，跟兩個抽取器各讀各的，重整後掛載點對不上
 function getExtensionSettings() {
-    if (typeof window.extension_settings === 'undefined') window.extension_settings = {};
-    let settings = window.extension_settings['多功能面板系統'];
-    if (!settings) {
-        try {
-            const saved = localStorage.getItem('extension_settings');
-            if (saved) settings = JSON.parse(saved)['多功能面板系統'];
-        } catch (e) {}
-    }
-    if (!settings) {
-        settings = { mount: { selector: '#sheld', placement: 'bottom' } };
-    }
-    return settings;
+    const settings = window.AureliaUIUtils?.getExtensionSettings?.() || null;
+    return settings || { mount: { selector: '#sheld', placement: 'bottom' } };
 }
 
 // 🔥 核心：監聽酒館消息 (已移除金錢與物品解析，僅保留成就解鎖)
@@ -574,18 +574,22 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_chat_tidy.css');      // 聊天記錄整理
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_photo_viewer.css');   // 點圖放大看   // 全站提示條/對話窗（取代原生 alert/confirm/prompt）
 
+        const loadFails = [];
         if (_AURELIA_EXT_NAME) {
-            // 本機：維持原樣(本地讀檔極快、且已驗證穩定，不動)
-            for (const conf of MODULE_LOAD_ORDER) await loadModule(conf);
+            // 本機：逐支串行載(本地讀檔極快)；載不到的記下來、繼續載下一支
+            for (const conf of MODULE_LOAD_ORDER) { if (!(await loadModule(conf))) loadFails.push(conf.name); }
             console.log('[System] 正在掛載手機模組...');
-            for (const file of PHONE_FILES) await loadPhoneScript(file);
+            for (const file of PHONE_FILES) { if (!(await loadPhoneScript(file))) loadFails.push(file); }
         } else {
             // CDN：並行下載、依序執行 → 解決 130 個檔排隊造成的數秒延遲
             console.log('[System] CDN 並行載入核心模組...');
-            await _loadBatchOrdered(MODULE_LOAD_ORDER.map(c => ({ src: c.path + _AURELIA_CACHE_BUST, key: c.key })));
+            const coreOk = await _loadBatchOrdered(MODULE_LOAD_ORDER.map(c => ({ src: c.path + _AURELIA_CACHE_BUST, key: c.key })));
+            coreOk.forEach((ok, i) => { if (!ok) loadFails.push(MODULE_LOAD_ORDER[i].name); });
             console.log('[System] CDN 並行載入手機模組...');
-            await _loadBatchOrdered(PHONE_FILES.map(f => ({ src: PHONE_BASE_PATH + f + _AURELIA_CACHE_BUST })));
+            const phoneOk = await _loadBatchOrdered(PHONE_FILES.map(f => ({ src: PHONE_BASE_PATH + f + _AURELIA_CACHE_BUST })));
+            phoneOk.forEach((ok, i) => { if (!ok) loadFails.push(PHONE_FILES[i]); });
         }
+        _reportLoadFails(loadFails);
         
         // 延遲執行：確保 PhoneSystem 和各個 App 模組都載入完畢後再註冊圖標
         setTimeout(() => {
@@ -767,7 +771,7 @@ function setupEventBridge() {
         }
 
         function updateControlCenterTitle() {
-            if (!window.AureliaControlCenter || !window.AureliaControlCenter.setChatTitle) return;
+            if (!window.AureliaControlCenter || !window.AureliaControlCenter.setChatTitle) return false;
             if (window.SillyTavern && window.SillyTavern.getContext) {
                 const ctx = window.SillyTavern.getContext();
                 if (ctx.chatId) {
@@ -775,23 +779,32 @@ function setupEventBridge() {
                     let fileName = fullPath.split(/[\\/]/).pop();
                     let finalName = fileName.replace(/\.jsonl?$/i, '').replace(/\.json$/i, '');
                     window.AureliaControlCenter.setChatTitle(finalName);
-                    return;
+                    return true;
                 }
             }
+            return false;
         }
 
+        // 換聊天／載角色／存檔事件：酒館事件橋可能晚幾秒才接上（tryBridgeEventSource 在重試），接上那一刻才掛
+        let hooked = false;
+        const hookEvents = () => {
+            if (!hooked && window.eventSource && window.eventOn) {
+                const refresh = () => setTimeout(updateControlCenterTitle, 200);
+                window.eventOn('chat_id_changed', refresh);
+                window.eventOn('character_loaded', refresh);
+                window.eventOn('chat_saved', refresh);
+                hooked = true;
+            }
+            return hooked;
+        };
+        hookEvents();
         updateControlCenterTitle();
-        
+
+        // 每秒補一次，直到標題寫上去、事件也掛好為止；之後靠事件＋點擊更新。以前這個計時器永遠不清，每秒白跑一次
         const retryTimer = setInterval(() => {
-            updateControlCenterTitle();
-        }, 1000); 
-        
-        if (window.eventSource) {
-            const refresh = () => setTimeout(updateControlCenterTitle, 200);
-            window.eventOn('chat_id_changed', refresh);
-            window.eventOn('character_loaded', refresh);
-            window.eventOn('chat_saved', refresh);
-        }
+            const ok = updateControlCenterTitle();
+            if (hookEvents() && ok) clearInterval(retryTimer);
+        }, 1000);
 
         window.addEventListener('click', () => setTimeout(updateControlCenterTitle, 200));
 

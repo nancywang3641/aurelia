@@ -182,13 +182,13 @@
                 item.onclick = (e) => {
                     e.stopPropagation();
                     if (item.dataset.layout) {
-                        localStorage.setItem('aurelia_layout_mode', item.dataset.layout);
+                        AUI.lsSet('aurelia_layout_mode', item.dataset.layout, '大廳版面的設定');
                         _b().applyLayoutMode();
                         _renderDropdown(); // 重新渲染以更新打勾狀態
                     } else if (item.dataset.name) {
                         inputEl.value = item.dataset.name;
                         dropdown.style.display = 'none';
-                        inputEl.focus();
+                        inputEl.focus({ preventScroll: true });
                     }
                 };
             });
@@ -206,8 +206,8 @@
             }
         }, { capture: true });
 
-        // 自動 Focus 輸入框
-        setTimeout(() => inputEl.focus(), 300);
+        // 自動 Focus 輸入框（preventScroll：登入畫面還在進場時 focus 會把外層容器捲歪）
+        setTimeout(() => inputEl.focus({ preventScroll: true }), 300);
     }
 
     async function renderSessionManager(container, currentId, tab) {

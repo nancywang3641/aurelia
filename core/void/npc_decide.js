@@ -24,12 +24,12 @@
     function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
     function getKey() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem(KEY_LS) || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) !== '0'; } catch (e) { return true; } }
-    function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
+    function setOn(on) { return window.AUI.lsSet(ON_LS, on ? '1' : '0', 'NPC 自己決定去哪的開關'); }
     // Jev 用不了（沒填鑰匙、額度用完、沒回應）時要不要改問副模型：她怕 Jev 漲價把額度用光後，
     //   丹不聲不響改成每幾分鐘叫一次副模型（她自己的帳單）。預設開＝跟以前一樣；關掉＝問不到 Jev 就站著。
     const FALLBACK_LS = 'npc_decide_fallback';
     function getFallback() { try { return localStorage.getItem(FALLBACK_LS) !== '0'; } catch (e) { return true; } }
-    function setFallback(on) { try { localStorage.setItem(FALLBACK_LS, on ? '1' : '0'); } catch (e) {} }
+    function setFallback(on) { return window.AUI.lsSet(FALLBACK_LS, on ? '1' : '0', '「Jev 不能用時改問副模型」的開關'); }
 
     // 照機率抽一個；機率全 0 就回 null
     function _draw(probs) {

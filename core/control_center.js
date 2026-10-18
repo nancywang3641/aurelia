@@ -209,7 +209,8 @@
                     // #page-game 模板預設 hidden，只有 switchPage 會揭開——少這行劇本會在隱藏頁裡播（面板全黑）
                     if (window.VN_PLAYER && window.VN_PLAYER.switchPage) window.VN_PLAYER.switchPage('page-game');
                     try { window.VN_Core.earlybirdFromText(p.content); } catch (e) {}  // 頭像早鳥：先開生
-                    window.VN_Core._startWithLoader(p.content, null);   // 載入→loading 等全部圖片→開播
+                    // replay：這裡播的都不是剛生好的這一輪（小劇場、地圖番外、書架接著讀的那章），最新這輪還沒插的插圖別插進來
+                    window.VN_Core._startWithLoader(p.content, null, { replay: true });   // 載入→loading 等全部圖片→開播
                 }
             }, delay);
         }
@@ -409,11 +410,7 @@
     const PANEL_H_MIN = 30, PANEL_H_MAX = 100;
     function _readPanelHeight() {
         try {
-            let st = window.extension_settings && window.extension_settings['多功能面板系統'];
-            if (!st) {
-                const saved = localStorage.getItem('extension_settings');
-                if (saved) st = JSON.parse(saved)['多功能面板系統'];
-            }
+            const st = window.AureliaUIUtils?.getExtensionSettings?.() || null;   // 擴展設定唯一的讀法在 ui_utilities
             const v = st && st.panelHeight;
             if (v == null || v === '') return PANEL_H_MAX;
             const n = Math.round(Number(v));

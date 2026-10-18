@@ -1168,7 +1168,7 @@ const IRIS_IDLE = [
                 lstageBtn.addEventListener('click', () => {
                     if (!window.LobbyStage) return;
                     const on = window.LobbyStage.isOn();
-                    try { localStorage.setItem('lobby_stage_on', on ? '0' : '1'); } catch(e) {}
+                    AUI.lsSet('lobby_stage_on', on ? '0' : '1', '大廳舞台模式的開關');
                     _syncLobbyMain();
                     _syncLstageBtn();
                 });
@@ -1442,7 +1442,7 @@ const IRIS_IDLE = [
 
         const ta = textEl.querySelector('textarea');
         if (ta) ta.value = currentText;   // 直接給值，不經 HTML 轉義（原文裡的 & 才不會變樣）
-        if (ta) { ta.style.height = Math.max(60, ta.scrollHeight) + 'px'; ta.focus(); }
+        if (ta) { ta.style.height = Math.max(60, ta.scrollHeight) + 'px'; ta.focus({ preventScroll: true }); }   // 不讓 focus 把歷史清單外層捲走
 
         textEl.querySelector('.hist-edit-confirm-btn').addEventListener('click', () => { history[index].content = ta.value; renderHistoryList(); debouncedSave(); });
         textEl.querySelector('.hist-edit-cancel-btn').addEventListener('click', () => renderHistoryList());
@@ -1463,12 +1463,14 @@ const IRIS_IDLE = [
         return [{ tag: 'SYS', text: 'LUNA-VII 敘事協議就緒 ▸ 等待靈感導入' }, { tag: 'SYS', text: '視差書咖待機中' }];
     }
     let _feedDimTimer = null;
+    // 頻道訊息是 AI 寫的：清單和泡泡都要轉義，同一支（以前只有清單轉，帶 < 的訊息在泡泡裡把版面弄壞）
+    const _feedEsc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     function _paintFeed(fresh) {
         const box = document.getElementById('lb-feed');
         if (!box) return;
         const log = _feedLog();
         const last = log[log.length - 1];
-        const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const esc = _feedEsc;
         const icon = (tag) => (String(tag).toUpperCase() === 'ECHO' ? 'fa-wave-square' : 'fa-tower-broadcast');
         const now = box.querySelector('.lb-feed-now');
         now.querySelector('.lb-feed-ic').className = 'fa-solid ' + icon(last.tag) + ' lb-feed-ic';
@@ -1491,12 +1493,10 @@ const IRIS_IDLE = [
     }
 
     function addFeedEntry(tag, text) {
-        try {
-            const log = _feedLog();
-            log.push({ tag: String(tag || 'SYS').toUpperCase(), text: String(text || '').trim() });
-            while (log.length > FEED_LOG_MAX) log.shift();
-            localStorage.setItem(FEED_LOG_KEY, JSON.stringify(log));
-        } catch (e) {}
+        const log = _feedLog();
+        log.push({ tag: String(tag || 'SYS').toUpperCase(), text: String(text || '').trim() });
+        while (log.length > FEED_LOG_MAX) log.shift();
+        AUI.lsSet(FEED_LOG_KEY, JSON.stringify(log), '世界頻道的訊息');
         _paintFeed(true);
         const layer = document.getElementById('void-bubble-layer');
         if (!layer) { window.VoidUiSfx?.play('ping'); return; }
@@ -1504,7 +1504,7 @@ const IRIS_IDLE = [
         const item = document.createElement('div');
         item.className = 'void-bubble';
         item.style.cssText = `--bc:${pal.c}; --bc-rgb:${pal.r}; background: rgba(228,232,245,0.96) !important; color:#1A1C28 !important; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.5);`;
-        item.innerHTML = `<div class="void-bubble-tag">${tag.toUpperCase()}</div><div class="void-bubble-text">${text}</div>`;
+        item.innerHTML = `<div class="void-bubble-tag">${_feedEsc(tag.toUpperCase())}</div><div class="void-bubble-text">${_feedEsc(text)}</div>`;
         layer.appendChild(item);
         window.VoidUiSfx?.play('ping');
         // 超過 7 條時移除最舊的
@@ -1770,7 +1770,7 @@ const IRIS_IDLE = [
         try { const V = window.VN_Core; if (V && V._enterTheater) V._enterTheater(ch.storyId, ch.storyTitle); else if (V && V._setStoryId) V._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
         window._lobbyPendingChapter = ch;
         if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
-        else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(ch.content, null);
+        else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(ch.content, null, { replay: true });   // 小劇場不是最新這輪：別把還沒插的插圖插進來
     }
     // 重看存著的劇本（小機培養室）：同一套 ephemeral 播，不叫模型、不存章節、不記大廳回顧
     VoidTerminal.playSavedScene = function (saved) {
@@ -1890,7 +1890,7 @@ ${sections}`;
         try { const a = JSON.parse(localStorage.getItem(THEATER_LOG_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
     }
     function _thlWrite(arr) {
-        try { localStorage.setItem(THEATER_LOG_KEY, JSON.stringify(arr || [])); } catch (e) {}
+        return AUI.lsSet(THEATER_LOG_KEY, JSON.stringify(arr || []), '小劇場的紀錄');
     }
     // 對外統一 API（lobby_stage 歷史 UI 也走這個 → 同一份 localStorage）
     VoidTerminal.theaterLog = {
@@ -2475,7 +2475,13 @@ ${sections}`;
 
         } catch (e) {
             const isAbort = e?.name === 'AbortError' || /abort/i.test(e?.message || '');
-            if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') IRIS_STATE.history.pop();
+            // 跟上面「回覆是錯誤」那條同一套收尾：撤掉剛推進去的那句（NPC 推在他自己的軌道上，不是瀅瀅那條）、
+            //   留著原文給重試鈕。以前一律 pop 瀅瀅的、也沒記原文 → 跟 NPC 講話出錯時，打的字就這樣不見了
+            if (npcTarget) window.LobbyStage.popNpcHistoryTail(npcTarget.key, 'user');
+            else if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') IRIS_STATE.history.pop();
+            lastFailedInput = text;
+            const retryBtn = document.getElementById('iris-retry-btn');
+            if (retryBtn) retryBtn.classList.add('visible');
             if (isAbort) {
                 // 使用者主動停止：靜默處理，思考中文字換成已停止提示
                 const txtBox = document.getElementById('iris-text');
@@ -2483,6 +2489,7 @@ ${sections}`;
             } else {
                 console.error("[VoidTerminal Chat Error]", e);
                 if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);
+                else if (npcTarget) playIrisSequence(`[Nar|(${npcTarget.name}的身影微微晃動了一下，像訊號不良的殘影。)]\n[Char|${npcTarget.name}|error|「抱歉……剛剛走神了，能再說一次嗎？」]`);
                 else playIrisSequence(`[Nar|(空間產生劇烈波動)]\n[Char|瀅瀅|error|「抱歉，委託人，我的腦袋突然一片空白，請等我重整一下靈感。」]`);
             }
         } finally {

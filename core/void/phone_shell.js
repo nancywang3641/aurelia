@@ -67,7 +67,10 @@
     let _savedGoHome = null;   // app 內部「返回」會呼叫 PhoneSystem.goHome，開 app 時暫借、回主畫面/關閉時還原
     let _leaveApp = null;      // 需要善後的 app 離開時 → 存回呼，清空前先跑
 
-    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    // 引號也要轉：這支有放進屬性裡的（網址格的 value="…"、色票的 data-css="…"），網址或字體名裡有個 " 就把屬性截斷
+    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    // 本機設定一律走 AUI.lsSet：空間滿了不會整條斷掉，而且會跳一句說哪個沒存到
+    function _lsSet(key, val, what) { return (win.AUI || window.AUI).lsSet(key, val, what); }
 
     function _restoreGoHome() {
         if (_savedGoHome !== null && win.PhoneSystem) { win.PhoneSystem.goHome = _savedGoHome; }
@@ -114,8 +117,9 @@
         try { const l = JSON.parse(win.localStorage.getItem(USER_THEMES_KEY)); return Array.isArray(l) ? l : []; } catch (e) { return []; }
     }
     function _saveUserThemes(list) {
-        try { win.localStorage.setItem(USER_THEMES_KEY, JSON.stringify(list || [])); } catch (e) {}
+        const ok = _lsSet(USER_THEMES_KEY, JSON.stringify(list || []), '自己做的手機主題');
         _injectUserThemeCss();
+        return ok;
     }
     // 🚨 手機那個外殼（金屬邊框、側邊按鍵）不給她做的主題碰：那是「這支手機」本身，不是介面。
     //    她第一次生了一套紅色的，整支手機的邊框跟著變紅，她的說法是「不知道為啥會紅紅的」。
@@ -156,7 +160,7 @@
         const t = _loadTheme();
         t.themeId = _themeById(id).id;
         THEME_OWNED.forEach(function (k) { delete t[k]; });
-        try { win.localStorage.setItem(THEME_KEY, JSON.stringify(t)); } catch (e) {}
+        _lsSet(THEME_KEY, JSON.stringify(t), '手機主題');
         // 🚨 class 要自己掛一次：_applyTheme 沒有手機殼就直接跳出去了，而系統面板可以在
         //    完全沒開過手機的情況下全屏開著（跟這支最後面那段「載入時先套一次」同一個道理）。
         _applyThemeClass(t.themeId);
@@ -166,7 +170,7 @@
     function _saveTheme(patch) {
         const t = Object.assign(_loadTheme(), patch);
         Object.keys(patch).forEach(function (k) { if (patch[k] === '' || patch[k] == null) delete t[k]; });   // 空 = 還原預設
-        win.localStorage.setItem(THEME_KEY, JSON.stringify(t));
+        _lsSet(THEME_KEY, JSON.stringify(t), '手機樣式');
         _applyTheme();
     }
     function _applyTheme() {
@@ -236,7 +240,7 @@
     function _saveIconFolder(v) {
         const t = _loadTheme();
         if (v) t.iconFolder = v; else delete t.iconFolder;
-        win.localStorage.setItem(THEME_KEY, JSON.stringify(t));
+        _lsSet(THEME_KEY, JSON.stringify(t), '圖示的圖庫資料夾');
         _applyTheme();
     }
 
@@ -358,7 +362,7 @@
         return MOODS[0];
     }
     function _saveMood(em) {
-        try { win.localStorage.setItem(MOOD_KEY, JSON.stringify({ day: _todayKey(), em: em, text: _loadMoodText() })); } catch (e) {}
+        _lsSet(MOOD_KEY, JSON.stringify({ day: _todayKey(), em: em, text: _loadMoodText() }), '今天的心情');
     }
     // 拍立得下面那行字：她自己寫的優先，沒寫過才用心情的預設句。
     // 跟心情一樣綁日期 —— 這是「今天的拍立得」，不是一句掛在那裡不會變的簽名。
@@ -370,13 +374,12 @@
         return '';
     }
     function _saveMoodText(t) {
-        try {
-            const m = JSON.parse(win.localStorage.getItem(MOOD_KEY)) || {};
-            const same = m.day === _todayKey();
-            win.localStorage.setItem(MOOD_KEY, JSON.stringify({
-                day: _todayKey(), em: (same && m.em) || MOODS[0], text: String(t || '')
-            }));
-        } catch (e) {}
+        let m = {};
+        try { m = JSON.parse(win.localStorage.getItem(MOOD_KEY)) || {}; } catch (e) {}
+        const same = m.day === _todayKey();
+        _lsSet(MOOD_KEY, JSON.stringify({
+            day: _todayKey(), em: (same && m.em) || MOODS[0], text: String(t || '')
+        }), '拍立得底下那行字');
         _paintMood();
     }
     async function _editMoodText() {
@@ -521,7 +524,7 @@
             b.addEventListener('click', function () {
                 const t2 = _loadTheme();
                 if (b.dataset.iconcolor === '1') t2.iconColorful = true; else delete t2.iconColorful;
-                try { win.localStorage.setItem(THEME_KEY, JSON.stringify(t2)); } catch (e) {}
+                _lsSet(THEME_KEY, JSON.stringify(t2), '圖示的配色');
                 _applyTheme(); _renderSettings(c);
             });
         });
@@ -551,14 +554,16 @@
     function _icHTML(a) { return a.icon ? '<i class="fa-solid ' + a.icon + '"></i>' : _esc(a.emoji || ''); }
     const INSTALLED_KEY = 'aurelia_phone_apps';   // 與 app_store.js 同 key：[{id,name,emoji,iconUrl}]
     function _loadInstalled() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
-    function _saveInstalled(list) { try { win.localStorage.setItem(INSTALLED_KEY, JSON.stringify(list || [])); } catch (e) {} }
+    function _saveInstalled(list) { return _lsSet(INSTALLED_KEY, JSON.stringify(list || []), '已安裝的 app 清單'); }
     function _cacheInstalled(meta) { try { var l = _loadInstalled().filter(function (m) { return m && m.id !== meta.id; }); l.push({ id: meta.id, name: meta.name || 'App', emoji: meta.emoji || '', icon: meta.icon || '', iconUrl: meta.iconUrl || '' }); _saveInstalled(l); } catch (e) {} }
 
     // 使用者 app 啟動：點開才從 OS_DB 撈 HTML，丟給 AppRuntime 跑成 iframe
     function _userAppGo(id) {
         return function (container) {
             if (!container) return;
-            try { var _o = JSON.parse(win.localStorage.getItem('aurelia_app_opened')) || {}; _o[id] = Date.now(); win.localStorage.setItem('aurelia_app_opened', JSON.stringify(_o)); } catch (e) {}   // 最近使用時間(給應用工坊顯示)
+            var _o = {};
+            try { _o = JSON.parse(win.localStorage.getItem('aurelia_app_opened')) || {}; } catch (e) {}
+            _o[id] = Date.now(); _lsSet('aurelia_app_opened', JSON.stringify(_o), 'app 最近打開的時間');   // 最近使用時間(給應用工坊顯示)
             container.innerHTML = '<div class="aps-loading">載入中…</div>';
             const dbp = (win.OS_DB && win.OS_DB.getPhoneApp) ? win.OS_DB.getPhoneApp(id) : Promise.resolve(null);
             Promise.resolve(dbp).then(function (rec) {
@@ -652,7 +657,7 @@
             seen: Array.isArray(l.seen) ? l.seen : []   // 🧩 這幾個組件已經決定過要不要上桌面（見 _seedWidgets）
         };
     }
-    function _saveLayout(l) { try { win.localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); } catch (e) {} }
+    function _saveLayout(l) { return _lsSet(LAYOUT_KEY, JSON.stringify(l), '手機桌面的擺法'); }
     function _has(id) { return APPS.some(function (a) { return a.id === id; }); }
     function _dockApps(L) {
         L = L || _loadLayout();
@@ -1402,8 +1407,7 @@
             if (!t || !t.id) return false;
             const list = _loadUserThemes().filter(function (x) { return x.id !== t.id; });
             list.push({ id: String(t.id), name: String(t.name || '我的主題'), swatch: String(t.swatch || ''), vars: t.vars || {} });
-            _saveUserThemes(list);
-            return true;
+            return _saveUserThemes(list);   // 沒存成功要回 false：呼叫端（創作室、小機）才不會報「存好了」
         },
         removeUserTheme: function (id) {
             _saveUserThemes(_loadUserThemes().filter(function (x) { return x.id !== id; }));

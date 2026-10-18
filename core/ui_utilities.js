@@ -8,16 +8,29 @@
 (function() {
     'use strict';
 
-    // 🔥 獲取設置的輔助函數，確保能讀到開關狀態
-    function getExtensionSettings() {
-        let settings = window.extension_settings && window.extension_settings['多功能面板系統'];
+    // 🔧 擴展設定（掛載點、訊息收合、面板高度…）只有這一份讀法：index.js、控制中心、兩個抽取器、loader_core 都叫這支
+    //    （對外是 AureliaUIUtils.getExtensionSettings）。跟設置頁 os_settings 的 loadTavernExtSettings 同一套：
+    //    酒館沒把 extension_settings 掛在 window 上，設置頁存檔時退回寫本機的 'extension_settings'；
+    //    所以記憶體有就用，沒有就讀本機那份、讀到順手放回記憶體。以前有幾份只看記憶體，重整後就判斷錯掛載點。
+    //    回傳 null＝她從沒存過設定，預設值由各呼叫端自己給。
+    function readExtensionSettings() {
+        if (typeof window.extension_settings === 'undefined') window.extension_settings = {};
+        let settings = window.extension_settings['多功能面板系統'];
         if (!settings) {
             try {
                 const saved = localStorage.getItem('extension_settings');
-                if (saved) settings = JSON.parse(saved)['多功能面板系統'];
+                const parsed = saved ? JSON.parse(saved) : null;
+                if (parsed && parsed['多功能面板系統']) {
+                    settings = parsed['多功能面板系統'];
+                    window.extension_settings['多功能面板系統'] = settings;
+                }
             } catch (e) {}
         }
-        return settings || { messageCollapse: true };
+        return settings || null;
+    }
+    // 🔥 獲取設置的輔助函數，確保能讀到開關狀態
+    function getExtensionSettings() {
+        return readExtensionSettings() || { messageCollapse: true };
     }
 
     // ========================
@@ -75,7 +88,8 @@
             const icon = document.getElementById('aurelia-floating-icon');
 
             if (leftSendForm && icon) {
-                if (icon.parentElement === leftSendForm) return;
+                // 已經在輸入列裡：只要把它亮回來。視窗縮到手機寬時 _hideDomIcons 藏過它，放大回桌機寬走的是這條
+                if (icon.parentElement === leftSendForm) { icon.style.display = 'flex'; return; }
 
                 icon.className = '';
                 icon.innerHTML = '<i class="fa-solid fa-chess-rook"></i>';
@@ -178,8 +192,16 @@
     // ========================
     // 2. 訊息折疊功能 (Message Collapser)
     // ========================
+    // 收合記憶照「聊天室＋樓層」存。以前只用樓層號：A 聊天室收起第 3 樓，B 聊天室的第 3 樓也跟著收起來
+    function collapseKey(mesId) {
+        let chatId = '';
+        try { chatId = String(window.SillyTavern?.getContext?.()?.chatId || ''); } catch (e) {}
+        return 'mes-collapse-' + (chatId ? chatId + '-' : '') + mesId;
+    }
+
     const MessageCollapser = {
-        processedIds: new Set(),
+        // 🚨 不再用樓層號記「處理過了」：那份紀錄沒人清，換聊天室後同樣的樓層號全被當成處理過，新聊天室一顆收合鈕都沒有。
+        //    改看那則訊息上有沒有收合鈕（addCollapseButton 裡那條檢查），換聊天室、關掉再打開都會重新加。
         observer: null,
 
         init() {
@@ -188,10 +210,9 @@
                 this.processExistingMessages();
                 this.startObserver();
             }, 1000);
-            
+
             // 暴露給外部重新初始化 (例如切換聊天室時)
             window.reinitializeCollapseFeature = () => {
-                this.processedIds.clear();
                 this.processExistingMessages();
             };
         },
@@ -213,9 +234,7 @@
             // 跳過系統消息或已處理的消息
             if (msgElement.classList.contains('smallSysMes')) return;
             const mesId = msgElement.getAttribute('mesid');
-            if (!mesId || this.processedIds.has(mesId)) return;
-
-            this.processedIds.add(mesId);
+            if (!mesId) return;
 
             // 尋找標題列 (名字的地方)
             const chName = msgElement.querySelector('.ch_name');
@@ -257,8 +276,9 @@
             const isHiddenMsg = msgElement.getAttribute('is_hidden') === 'true' || msgElement.classList.contains('is_hidden');
             
             // 讀取記憶狀態
-            const storageKey = `mes-collapse-${mesId}`;
-            let storedState = localStorage.getItem(storageKey);
+            const storageKey = collapseKey(mesId);
+            let storedState = null;
+            try { storedState = localStorage.getItem(storageKey); } catch (e) {}
             let isCollapsed = false;
 
             if (storedState === null) {
@@ -269,7 +289,7 @@
             }
 
             // 執行折疊/展開邏輯
-            const toggle = (collapsed) => {
+            const toggle = (collapsed, save) => {
                 const block = msgElement.querySelector('.mes_block');
                 const avatar = msgElement.querySelector('.mesAvatarWrapper');
                 
@@ -292,25 +312,28 @@
                     btn.innerHTML = collapsed ? '﹀' : '︿';
                 }
                 
-                // 保存狀態
-                localStorage.setItem(storageKey, collapsed);
+                // 保存狀態（只有她自己按的才寫；載入時照記憶套回去不用再寫一次）
+                if (save) window.AUI.lsSet(storageKey, String(collapsed), '這則訊息的收合狀態');
             };
 
             // 初始狀態應用
-            if (isCollapsed) toggle(true);
+            if (isCollapsed) toggle(true, false);
 
             // 綁定點擊
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 e.preventDefault();
                 isCollapsed = !isCollapsed;
-                toggle(isCollapsed);
+                toggle(isCollapsed, true);
             });
         },
 
         startObserver() {
             const chat = document.getElementById('chat');
             if (!chat) return;
+
+            // 設定裡關掉再打開會再走一次 init：舊的先拔掉，不然每開一次多掛一個、每則新訊息被處理好幾遍
+            if (this.observer) this.observer.disconnect();
 
             // 監聽新消息加入
             this.observer = new MutationObserver((mutations) => {
@@ -351,7 +374,9 @@
             MessageCollapser.init();
             console.log('✅ UI 工具箱已啟動 (CSS已成功抽離至 aurelia_core.css)');
         },
-        reinitializeCollapse: () => MessageCollapser.init()
+        reinitializeCollapse: () => MessageCollapser.init(),
+        collapseKey,   // 某一樓的收合記憶存在哪個 key（設定關掉收合時清記憶要用同一把）
+        getExtensionSettings: readExtensionSettings   // 擴展設定唯一的讀法（見最上面那支）；沒存過回 null
     };
 
     // 樣式工具箱：供所有模組使用相同的大廳背景更新邏輯

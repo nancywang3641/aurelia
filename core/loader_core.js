@@ -73,27 +73,11 @@
     // ========================
     const ConfigManager = {
         getExtensionSettings() {
-            // 簡單的設置讀取邏輯
-            const key = CORE_CONFIG.EXTENSION_NAME;
-            if (!window.extension_settings) window.extension_settings = {};
-            
-            // 1. 內存
-            if (window.extension_settings[key]) return window.extension_settings[key];
-            
-            // 2. LocalStorage
-            try {
-                const saved = localStorage.getItem(CORE_CONFIG.STORAGE_KEYS.EXTENSION_SETTINGS);
-                if (saved) {
-                    const parsed = JSON.parse(saved);
-                    if (parsed[key]) {
-                        window.extension_settings[key] = parsed[key];
-                        return parsed[key];
-                    }
-                }
-            } catch (e) { console.error('讀取設置失敗', e); }
-            
-            // 3. 默認值
-            return { enabled: true, version: VERSION.toString() };
+            // 讀法只有一份，在 ui_utilities（AureliaUIUtils.getExtensionSettings）。
+            //   以前這裡自己讀、而且拿 EXTENSION_NAME（多了「(精簡版)」）當 key，跟設置頁存的 '多功能面板系統' 對不上，永遠只拿到預設值。
+            //   這支比 ui_utilities 早載，所以在呼叫當下才去問它
+            const st = window.AureliaUIUtils?.getExtensionSettings?.() || null;
+            return st || { enabled: true, version: VERSION.toString() };
         },
         
         getConfig(key) {
