@@ -357,6 +357,10 @@
         if (queued) return fa('fa-hourglass-half') + '排好了，幾分鐘內就起來';
         if (!st) return fa('fa-moon') + '還沒醒過';
         if (st.pending) return fa('fa-house') + when(st.at) + '・交給宿舍的他了，等他起來';
+        // 撞到會員額度上限：伺服器那邊停到重置時間（status 多一格 parked 整句），宿舍那條停著時 error 是「額度到上限（…前先不叫）」開頭。
+        //   這不是沒叫起來，是刻意先不叫，別寫成「可能還沒登入」嚇她
+        var pk = st.parked || (/^額度到上限/.test(st.error || '') ? String(st.error).split('：')[0] : '');
+        if (pk) return fa('fa-hourglass-half') + '上次醒來：' + when(st.at) + '・' + esc(pk);
         var where = st.where === 'pc' ? '在宿舍' : st.where === 'vps' ? '在伺服器上' : '';
         var what = st.code === 0 ? where + '顧完了' : st.code === 124 ? '顧太久被叫停了' : st.where === 'pc' ? '在宿舍沒顧成' : '沒叫起來（可能還沒登入）';
         return fa(st.code === 0 ? 'fa-circle-check' : 'fa-triangle-exclamation') + '上次醒來：' + when(st.at) + '・' + what;
