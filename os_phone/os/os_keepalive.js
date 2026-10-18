@@ -32,7 +32,7 @@
     }
     function setCfg(patch) {
         const next = Object.assign(cfg(), patch || {});
-        try { localStorage.setItem(CFG_KEY, JSON.stringify(next)); } catch (e) {}
+        win.AUI.lsSet(CFG_KEY, JSON.stringify(next), '後台守候的設定');   // 空間滿了會自己跳提示；apply 照存著的那份走
         apply();
         return next;
     }
@@ -200,6 +200,11 @@
             _pipVideo.className = 'ka-hidden-media';
             _pipVideo.muted = true;
             _pipVideo.setAttribute('playsinline', '');
+            // 用小窗自己的 ✕ 關掉不會經過 pipToggle：重畫的計時器要在這裡停，不然關了之後還一直每秒畫下去
+            _pipVideo.addEventListener('leavepictureinpicture', function () {
+                if (_pipTimer) { clearInterval(_pipTimer); _pipTimer = null; }
+                try { _pipVideo.pause(); } catch (e) {}
+            });
             d.body.appendChild(_pipVideo);
         }
         _pipSince = Date.now();

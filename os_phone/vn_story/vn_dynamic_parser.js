@@ -169,6 +169,21 @@
             const feedTag = (tpl && tpl.tagId) || '';
             const FEED = () => window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED) || null;
             const TOOLS = () => window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS) || null;
+            // scope:'chat' 的鑰匙：跟手機 app 那份（core/void/app_runtime 注入的 window.getChatId）同一個取法，
+            //   同一個面板在劇情裡和手機 app 裡存的才是同一份。以前這裡只問 getCurrentChatId，
+            //   PWA 拿不到就是 null（存進不分聊天的那格），手機 app 那邊卻存在這個故事底下，兩邊各一份。
+            const chatKey = function () {
+                const P = window.parent || window;
+                try {
+                    const ST = P.SillyTavern;
+                    if (ST && typeof ST.getCurrentChatId === 'function') { const id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); }
+                    const c = ST && ST.getContext && ST.getContext();
+                    if (c && c.chatId != null && c.chatId !== '') return String(c.chatId);
+                    if (ST && ST.chatId != null) return String(ST.chatId);
+                } catch (e) {}
+                try { const AD = P.OS_AVS_ADAPTER; const sid = AD && AD.getStoryId && AD.getStoryId(); if (sid) return String(sid); } catch (e) {}
+                return '_nochat';
+            };
             return {
                 md: function(text) {
                     if (!text) return '';
@@ -188,7 +203,7 @@
                     const stitched = [];
                     let buf = null;
                     (lines || []).forEach(function(raw){
-                        const line = (raw || '').trim();
+                        const line = String(raw || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');   // 容錯：全形分隔符／方括號→半形（預覽、手機 app、注入酒館那三份都有）
                         if (!line) return;
                         if (buf !== null) {
                             buf += '\n\n' + line;
@@ -265,8 +280,40 @@
                 badge: function() {},
                 notify: function() { return Promise.resolve(false); },
                 onWake: function() {},
-                dbSave: async function(k, v, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.saveAppData(shareAppId, k, v, cid); } catch (e) { return false; } },
-                dbLoad: async function(k, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; var cid = null; if (scope === 'chat') { try { var ST = window.parent && window.parent.SillyTavern; cid = (ST && ST.getCurrentChatId) ? ST.getCurrentChatId() : null; } catch (e) {} } return await DB.getAppData(shareAppId, k, cid); } catch (e) { return null; } },
+                dbSave: async function(k, v, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; return await DB.saveAppData(shareAppId, k, v, scope === 'chat' ? chatKey() : null); } catch (e) { return false; } },
+                // 讀 scope:'chat'：這把讀不到就照手機 app 那份退去讀 _nochat；再讀不到才看以前劇情裡（PWA）存進不分聊天那格的舊資料
+                dbLoad: async function(k, scope) { try { var DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; if (scope !== 'chat') return await DB.getAppData(shareAppId, k, null); var cid = chatKey(); var v = await DB.getAppData(shareAppId, k, cid); if (v == null && cid !== '_nochat') v = await DB.getAppData(shareAppId, k, '_nochat'); if (v == null) v = await DB.getAppData(shareAppId, k, null); return v; } catch (e) { return null; } },
+                // 手機 app（app_runtime）和注入酒館的那兩份都有這兩支；劇情裡這份以前漏了，面板一呼叫就報「不是函式」。做法照手機 app 那份
+                toChat: function(text, opts) {
+                    try {
+                        if (window.__IS_PREVIEW) return false;
+                        opts = opts || {};
+                        const d = (window.parent || window).document || document;
+                        const ta = d.querySelector('#send_textarea'), btn = d.querySelector('#send_but');
+                        if (!ta) return false;   // 手機版網頁沒有酒館的輸入框
+                        ta.value = String(text == null ? '' : text);
+                        ta.dispatchEvent(new Event('input', { bubbles: true }));
+                        try { ta.focus({ preventScroll: true }); } catch (e) {}
+                        if (opts.send && btn) btn.click();
+                        return true;
+                    } catch (e) { console.error('[VN Parser] st.toChat 失敗', e); return false; }
+                },
+                toSystem: function(text) {
+                    try {
+                        if (window.__IS_PREVIEW) return false;
+                        text = String(text == null ? '' : text);
+                        if (!text) return false;
+                        const ST = (window.parent || window).SillyTavern;
+                        const ctx = ST && ST.getContext && ST.getContext();
+                        if (!ctx || !ctx.chat || !ctx.addOneMessage) return false;
+                        const ts = (typeof ctx.getMessageTimeStamp === 'function') ? ctx.getMessageTimeStamp() : new Date().toISOString();
+                        const msg = { name: 'System', is_user: false, is_system: true, mes: text, send_date: ts, extra: {} };
+                        ctx.chat.push(msg);
+                        ctx.addOneMessage(msg, { scroll: true });
+                        try { if (typeof ctx.saveChat === 'function') ctx.saveChat(); } catch (e) {}
+                        return true;
+                    } catch (e) { console.error('[VN Parser] st.toSystem 失敗', e); return false; }
+                },
                 setImage: async function(el, prompt, type, provider) {
                     if (!el || !prompt) return;
                     type = type || 'scene';

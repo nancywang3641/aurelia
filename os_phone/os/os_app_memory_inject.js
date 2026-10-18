@@ -601,11 +601,13 @@
             try { msgs = (await th.getChatMessages('0-' + lastId)) || []; } catch (e) {}
             var text = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
             // AI 整理產出的「舊亂id→統一id」對應表（微信右上「＋」→「整理聊天室」存的，按 tavern chatId 隔離）；套上去同房只剩一筆
+            //   哪一格要問聊天 app 自己（wxApp.roomKey，寫表那邊用的同一把）：以前這裡用 _appChatId，拿不到聊天 id 時兩邊退到不同格，整理過的套不進來
+            var _roomKey = (win.wxApp && typeof win.wxApp.roomKey === 'function') ? win.wxApp.roomKey() : null;
             var remap = {};
-            try { var _allRemap = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_id_remap')) || '{}'); remap = _allRemap[_appChatId()] || {}; } catch (e) {}
+            try { var _allRemap = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_id_remap')) || '{}'); remap = (_roomKey && _allRemap[_roomKey]) || {}; } catch (e) {}
             // 整理過的正確聊天室名字（正文 AI 把代號寫進名字時）：給它看修好的，不然它看到「代號｜代號」會一直照抄
             var fixNames = {};
-            try { var _allFix = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_fix')) || '{}'); fixNames = (_allFix[_appChatId()] || {}).names || {}; } catch (e) {}
+            try { var _allFix = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_fix')) || '{}'); fixNames = ((_roomKey && _allFix[_roomKey]) || {}).names || {}; } catch (e) {}
             // 🚨🚨 每個代號的名字＝它第一次出現時的名字（之後只有 [Rename: …] 能改），跟聊天 app 取房名同一條規矩。
             //    以前是「最後一次寫的名字」：AI 寫錯一次（09-27：新開一個「304养老院」卻借了大群的 group_001），
             //    這張表下一輪就告訴它「304养老院｜group_001」，它照抄，之後大群、跟羅德的私聊全塞進同一個代號——
@@ -648,11 +650,12 @@
 
     function _safeParse(s) { try { return JSON.parse(s); } catch (e) { return s; } }
     function _flatten(v) { if (v == null) return ''; if (typeof v === 'string') return v.trim(); try { return JSON.stringify(v); } catch (e) { return String(v); } }
-    // ⚠️ chatId 要跟 app 端 window.getChatId() 同源（酒館問聊天室、PWA 問當前故事），否則 chat-scope 的 saveData/dbSave 對不上抓不到
+    // ⚠️ chatId 要跟 app 端 window.getChatId()（core/void/app_runtime 注入的那支）一模一樣：酒館問聊天室、PWA 問當前故事，都沒有就是 _nochat。
+    //   以前這裡少了 ST.chatId 那步、最後退空字串：app 存在 _nochat 底下的資料這裡一筆都讀不到。劇情裡面板那份（vn_dynamic_parser）也是同一個順序
     function _appChatId() {
-        try { var ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { var id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } var c = ST && ST.getContext && ST.getContext(); if (c && c.chatId != null && c.chatId !== '') return String(c.chatId); } catch (e) {}
+        try { var ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { var id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } var c = ST && ST.getContext && ST.getContext(); if (c && c.chatId != null && c.chatId !== '') return String(c.chatId); if (ST && ST.chatId != null) return String(ST.chatId); } catch (e) {}
         try { var AD = win.OS_AVS_ADAPTER; var sid = AD && AD.getStoryId && AD.getStoryId(); if (sid) return String(sid); } catch (e) {}
-        return '';
+        return '_nochat';
     }
 
     // 開了「記憶回傳酒館」的創作室 app 各自存了什麼：[{ id, name, entries }]（共用面板，她在 app 裡加的那幾筆）或 [{ id, name, body }]（純應用存的那份）
@@ -662,7 +665,23 @@
         if (!_enabled()) return out;
         if (!win.OS_DB || !win.OS_DB.getAllPhoneApps) return out;
         const curCid = _appChatId();
-        const apps = (await win.OS_DB.getAllPhoneApps()) || [];
+        // 每一輪組提示詞都會跑這裡：先看哪幾個 app 開了「記憶回傳酒館」，只把那幾個讀出來。
+        //   以前整個手機 app 倉庫全讀（每筆帶整頁 html），app 一多每輪都白讀一大包；一個都沒開就整個不碰資料庫
+        const onIds = [];
+        try {
+            for (let k = 0; k < localStorage.length; k++) {
+                const key = localStorage.key(k);
+                if (key && key.indexOf('os_app_mem_plugin_') === 0 && localStorage.getItem(key) === '1') onIds.push(key.slice('os_app_mem_plugin_'.length));
+            }
+        } catch (e) {}
+        if (!onIds.length) return out;
+        let apps;
+        if (win.OS_DB.getPhoneApp) {
+            // 開關的鑰匙是字串；萬一哪個 app 的 id 是數字存進去的，用數字再找一次
+            const _get = function (id) { return win.OS_DB.getPhoneApp(id).then(function (r) { return r || (/^\d+$/.test(id) ? win.OS_DB.getPhoneApp(Number(id)) : null); }).catch(function () { return null; }); };
+            apps = (await Promise.all(onIds.map(_get))).filter(Boolean);
+            apps.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });   // 跟 getAllPhoneApps 一樣新的在前（MAX_APPS 截的是同一批）
+        } else apps = (await win.OS_DB.getAllPhoneApps()) || [];
         if (!apps.length) return out;
 
         // 模板表查 isBlock：isBlock 的走共用面板那條（vnpanel 桶），其餘走 app 自己的桶
@@ -697,6 +716,13 @@
             try {
                 if (win.OS_DB.getAppDataByApp) {
                     const rows = (await win.OS_DB.getAppDataByApp(app.id, curCid)) || [];
+                    // app 那邊讀 scope:'chat' 時，這個聊天沒有的那把會退去讀 _nochat 那份當起點（dbLoad）：這裡也照樣補上，回傳的才是 app 畫面上那份
+                    if (curCid !== '_nochat') {
+                        const have = {};
+                        rows.forEach(function (r) { if (r.scope !== 'global') have[r.key] = 1; });
+                        const base = (await win.OS_DB.getAppDataByApp(app.id, '_nochat')) || [];
+                        base.forEach(function (r) { if (r.scope === 'chat:_nochat' && !have[r.key]) rows.push(r); });
+                    }
                     rows.forEach(function (r) { const t = _flatten(r.value); if (t) parts.push(t); });
                 }
             } catch (e) {}
@@ -705,13 +731,19 @@
                 const preG = 'aurelia_appdata_' + app.id + '_';
                 const preChatAny = preG + 'chat_';
                 const preChatCur = preG + 'chat_' + (curCid || '') + '_';
-                for (let k = 0; k < localStorage.length; k++) {
-                    const key = localStorage.key(k);
-                    if (!key || key.indexOf(preG) !== 0) continue;
-                    if (key.indexOf(preChatAny) === 0 && key.indexOf(preChatCur) !== 0) continue;   // 別的 chat 的→跳
+                const preChatBase = preG + 'chat__nochat_';   // app 的 loadData 在這個聊天沒有那把時退去讀的起點（同上）
+                const keys = [];
+                for (let k = 0; k < localStorage.length; k++) keys.push(localStorage.key(k));
+                const haveCur = {};
+                keys.forEach(function (key) { if (key && key.indexOf(preChatCur) === 0) haveCur[key.slice(preChatCur.length)] = 1; });
+                keys.forEach(function (key) {
+                    if (!key || key.indexOf(preG) !== 0) return;
+                    if (key.indexOf(preChatAny) === 0 && key.indexOf(preChatCur) !== 0) {
+                        if (!(key.indexOf(preChatBase) === 0 && !haveCur[key.slice(preChatBase.length)])) return;   // 別的 chat 的→跳（_nochat 起點那份、這個聊天還沒有的除外）
+                    }
                     const t = _flatten(_safeParse(localStorage.getItem(key)));
                     if (t) parts.push(t);
-                }
+                });
             } catch (e) {}
             if (!parts.length) continue;
             let body = parts.join('\n').trim();
@@ -879,10 +911,10 @@
         buildAppMemoryBlock: buildAppMemoryBlock,   // PWA：_buildStandaloneContext 的 app_memory 那一格取這份
         injectAppData: injectAppData,
         isEnabled: _enabled,
-        setEnabled: function (v) { try { localStorage.setItem(FLAG_KEY, v ? '1' : '0'); } catch (e) {} },
+        setEnabled: function (v) { return win.AUI.lsSet(FLAG_KEY, v ? '1' : '0', '手機記憶回傳的開關'); },
         // 插件每-app 開關（展廳 UI 之後接這兩個）
         isPluginEnabled: _pluginEnabled,
-        setPluginEnabled: function (appId, v) { try { localStorage.setItem('os_app_mem_plugin_' + appId, v ? '1' : '0'); } catch (e) {} }
+        setPluginEnabled: function (appId, v) { return win.AUI.lsSet('os_app_mem_plugin_' + appId, v ? '1' : '0', '「記憶回傳酒館」的開關'); }
     };
     init();
 })();

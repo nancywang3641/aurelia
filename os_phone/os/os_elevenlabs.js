@@ -147,10 +147,10 @@
             try { const s = localStorage.getItem(STORAGE_KEY); if (s) return { ...DEFAULT_CONFIG, ...JSON.parse(s) }; } catch (e) {}
             return { ...DEFAULT_CONFIG };
         },
-        // 只改給的欄位（上次抓的聲音清單不會被設置頁的保存蓋掉）
+        // 只改給的欄位（上次抓的聲音清單不會被設置頁的保存蓋掉）；沒存成回 null（已經跳過提示了）
         saveConfig(patch) {
             const next = { ...this.getConfig(), ...(patch || {}) };
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+            if (!win.AUI.lsSet(STORAGE_KEY, JSON.stringify(next), '雲端語音設定')) return null;
             return next;
         },
         hasKey() { return !!this.getConfig().apiKey; },

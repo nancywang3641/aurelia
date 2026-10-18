@@ -115,7 +115,7 @@
             ta.value = tx;
             ov.querySelector('.dsh-copybox-x').onclick = function () { ov.remove(); };
             ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
-            setTimeout(function () { try { ta.focus(); ta.select(); ta.setSelectionRange(0, tx.length); } catch (e) {} }, 30);
+            setTimeout(function () { try { ta.focus({ preventScroll: true }); ta.select(); ta.setSelectionRange(0, tx.length); } catch (e) {} }, 30);
             try { cb && cb('請按 Ctrl+C'); } catch (e) {}
         };
         const viaExec = function () {
@@ -124,7 +124,7 @@
                 ta.value = tx;
                 ta.className = 'dsh-offscreen';
                 d.body.appendChild(ta);
-                ta.focus(); ta.select();
+                ta.focus({ preventScroll: true }); ta.select();   // 藏在畫面外的那格：不擋的話整頁會被捲過去找它
                 let ok = false;
                 try { ok = d.execCommand('copy'); } catch (e) {}
                 ta.remove();

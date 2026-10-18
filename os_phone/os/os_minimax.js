@@ -74,6 +74,21 @@
     let _isPlaying = false;
     let _isIntentionalStop = false;
     let _currentBlobUrl = null;
+    // 第幾次叫念：快速點下一句時，上一句的合成可能比這一句晚回來，晚回來的看到號碼不是自己就不碰播放器
+    // （不然會把這一句的音源換成舊台詞）。stop() 也會換號，停了之後才回來的那句不會再自己響起來
+    let _playSeq = 0;
+
+    // 等音檔緩衝好再播（不然第一個字會被吃掉）；音檔壞掉或被換掉時 canplay 永遠不會來，要接 error 才不會一直卡著
+    function _waitCanPlay(audio, blobUrl) {
+        return new Promise((resolve, reject) => {
+            const ok = () => { audio.removeEventListener('error', bad); resolve(); };
+            const bad = () => { audio.removeEventListener('canplay', ok); reject(new Error('音檔讀不出來')); };
+            audio.addEventListener('canplay', ok, { once: true });
+            audio.addEventListener('error', bad, { once: true });
+            audio.src = blobUrl;
+            audio.load();
+        });
+    }
 
     // --- 重播快取（Blob 物件，不受 revokeObjectURL 影響，供免費重播使用）---
     let _replayBlob = null;
@@ -157,11 +172,10 @@
         '哼':     'snorts',       '咂嘴':   'lip-smacking','哼唱':  'humming',
         '嘶嘶声': 'hisses',       '呃':     'emm',        '喷嚏':   'sneezes',
         '口哨':   'whistles',
-        // 繁體
+        // 繁體（吸鼻子、咂嘴、哼唱簡繁同字，上面已經有）
         '笑聲':   'laughs',       '輕笑':   'chuckle',    '正常換氣':'breath',
         '喘氣':   'pant',         '吸氣':   'inhale',     '呼氣':   'exhale',
-        '倒吸氣': 'gasps',        '吸鼻子': 'sniffs',     '嘆氣':   'sighs',
-        '咂嘴':   'lip-smacking', '哼唱':   'humming',    '嘶嘶聲': 'hisses',
+        '倒吸氣': 'gasps',        '嘆氣':   'sighs',      '嘶嘶聲': 'hisses',
         '噴嚏':   'sneezes',
     };
     // 英文語氣詞白名單（直接透傳，不清除）
@@ -210,9 +224,9 @@
             return { ...DEFAULT_CONFIG };
         },
 
-        /** 儲存設定 */
+        /** 儲存設定：存成回 true，沒存成回 false（已經跳過提示了） */
         saveConfig(data) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...DEFAULT_CONFIG, ...data }));
+            return win.AUI.lsSet(STORAGE_KEY, JSON.stringify({ ...DEFAULT_CONFIG, ...data }), '語音設定');
         },
 
         /** 是否正在播放 */
@@ -249,6 +263,7 @@
 
         /** 停止當前播放 */
         stop() {
+            _playSeq++;
             if (!_isPlaying) return;
             _isIntentionalStop = true;
             const audio = getAudioEl();
@@ -282,7 +297,9 @@
          */
         async play(text, voiceId, options = {}) {
             this.stop();
+            const seq = ++_playSeq;
             await new Promise(r => setTimeout(r, 50));
+            if (seq !== _playSeq) return false;
 
             const cfg = this.getConfig();
             if (!cfg.groupId || !cfg.apiKey) {
@@ -317,6 +334,7 @@
                         textForTts.slice(0, 20));
                     blob = await _callTtsApi(textForTts, voiceId, options, cfg);
                 }
+                if (seq !== _playSeq) return false;   // 等合成的時候已經換下一句（或按了停）
 
                 // 存入重播快取（Blob 物件不受 revokeObjectURL 影響）
                 _replayBlob = blob;
@@ -337,16 +355,14 @@
                     if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
                 };
                 // 等音訊緩衝就緒再播，避免第一個字被吃掉
-                await new Promise(resolve => {
-                    audio.addEventListener('canplay', resolve, { once: true });
-                    audio.src = blobUrl;
-                    audio.load();
-                });
+                await _waitCanPlay(audio, blobUrl);
+                if (seq !== _playSeq) return false;
                 await audio.play();
                 console.log('[OS_MINIMAX] ✅ 播放中 →', voiceId, options.emotion || '');
                 return true;
 
             } catch (error) {
+                if (seq !== _playSeq) return false;   // 被下一句換掉而中斷的，不算失敗，狀態也歸下一句管
                 console.error('[OS_MINIMAX] ❌ TTS 失敗:', error.message);
                 _isPlaying = false;
                 return false;
@@ -462,7 +478,9 @@
 
             // 快取命中：從 Blob 建新 URL，不打 API
             this.stop();
+            const seq = ++_playSeq;
             await new Promise(r => setTimeout(r, 50));
+            if (seq !== _playSeq) return false;
             _isPlaying = true;
             _isIntentionalStop = false;
             try {
@@ -480,15 +498,13 @@
                     _isPlaying = false;
                     if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
                 };
-                await new Promise(resolve => {
-                    audio.addEventListener('canplay', resolve, { once: true });
-                    audio.src = blobUrl;
-                    audio.load();
-                });
+                await _waitCanPlay(audio, blobUrl);
+                if (seq !== _playSeq) return false;
                 await audio.play();
                 console.log('[OS_MINIMAX] ♻️ 重播快取 →', voiceId);
                 return true;
             } catch(error) {
+                if (seq !== _playSeq) return false;
                 console.error('[OS_MINIMAX] ❌ 重播失敗:', error.message);
                 _isPlaying = false;
                 return false;

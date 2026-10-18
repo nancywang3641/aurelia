@@ -389,14 +389,14 @@
             const r = Object.assign({}, all[use] || {}, patch || {});
             Object.keys(r).forEach(k => { if (r[k] === '' || r[k] == null) delete r[k]; });
             if (Object.keys(r).length) all[use] = r; else delete all[use];
-            try { localStorage.setItem(this._ROUTES_KEY, JSON.stringify(all)); } catch (e) {}
+            win.AUI.lsSet(this._ROUTES_KEY, JSON.stringify(all), '「每個地方用什麼」的設定');   // 空間滿了會自己跳提示
             return r;
         },
         // 畫風包 [{ id, name, pos, neg, ref }]；ref＝底圖在 OS_DB 圖庫的編號
         getStyles: function() {
             try { const v = JSON.parse(localStorage.getItem(this._STYLES_KEY) || '[]'); return Array.isArray(v) ? v.filter(s => s && s.id) : []; } catch (e) { return []; }
         },
-        setStyles: function(list) { try { localStorage.setItem(this._STYLES_KEY, JSON.stringify(list || [])); } catch (e) {} },
+        setStyles: function(list) { return win.AUI.lsSet(this._STYLES_KEY, JSON.stringify(list || []), '畫風包'); },   // 存成回 true
         // 這一列選了畫風嗎：沒選回 null（照舊）；選「不加」回空的一包
         styleFor: function(use) {
             const r = this.getRoutes()[use];
@@ -1193,8 +1193,13 @@
                 : this._buildComfyWorkflow(posText, negText, 'char', _pvOpts, cfg);
             if (!wf) throw new Error('工作流解析失敗（自訂工作流 JSON 格式不對）');
             // PWA/手機：瀏覽器直連 ComfyUI（不吞錯，讓真正原因往上拋給卡片顯示）
+            //   跟正式生圖同一個 180 秒上限：以前傳 null 進去，ComfyUI 一直沒出圖就每秒問一次、永遠問下去
             if (this._comfyDirectBrowser()) {
-                return await this._genComfyuiBrowserDirect(wf, url, null);
+                const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 180000) : null;
+                try { return await this._genComfyuiBrowserDirect(wf, url, _ac); }
+                catch (e) { if (e && e.name === 'AbortError') throw new Error('生成逾時(180秒)，ComfyUI 一直沒出圖'); throw e; }
+                finally { if (_timer) clearTimeout(_timer); }
             }
             const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
             // 注意：不吞錯，把真正原因往上拋給卡片顯示
@@ -1564,9 +1569,12 @@
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'novelai', type: type }); } catch (e) {}   // 📊 長期用量帳
             // 這一列選了某個 NAI 預設就用它那幾欄（_resolveConn 拼好的一份），不動全域設定——大廳換裝那種「暫時換掉再換回來」在並行時會互相蓋
             const cfg = options._naiCfg || this.config.novelai;
+            // 退到 Pollinations 時照樣帶這張要的尺寸、種子、負詞（以前空手退過去，一律變 512×512、負詞全掉）。
+            //   只挑兩邊意思一樣的那幾格：NAI 自己的連線、模型不帶過去
+            const _polOpts = { width: options.width, height: options.height, seed: options.seed, negativePrompt: options.negativePrompt, extraNegative: options.extraNegative };
             if (!cfg.token) {
                 console.warn('[ImageManager] NAI token 未設定，回退 Pollinations');
-                return this._genPollinations(prompt, type);
+                return this._genPollinations(prompt, type, _polOpts);
             }
 
             // Mutex：等待前一個 NAI 請求完成後才開始，避免 429 Concurrent lock
@@ -1797,7 +1805,7 @@
                 }
                 // 死物（背景／物品）仍回退：那類圖 Pollinations 出得堪用，
                 // 而且背景缺圖會整片黑，比畫風不一致嚴重。
-                return this._genPollinations(prompt, type);
+                return this._genPollinations(prompt, type, _polOpts);
             }
         },
 
@@ -1932,12 +1940,9 @@
         },
 
         saveConfig: function() {
-            try {
-                localStorage.setItem('os_image_config', JSON.stringify(this.config));
-                console.log('[ImageManager] 配置已保存');
-            } catch(e) {
-                console.error('[ImageManager] 保存配置失敗:', e);
-            }
+            const ok = win.AUI.lsSet('os_image_config', JSON.stringify(this.config), '圖片設定');   // 空間滿了跳提示，以前只寫在 console
+            if (ok) console.log('[ImageManager] 配置已保存');
+            return ok;
         }
     };
 

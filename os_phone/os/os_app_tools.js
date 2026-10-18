@@ -18,7 +18,7 @@
     function _db() { return win.OS_DB || window.OS_DB; }
     function _cid() { try { const d = _db(); const c = d && d.currentChatId ? d.currentChatId() : null; return c == null ? null : String(c); } catch (e) { return null; } }
     function _ls(k, def) { try { const v = JSON.parse(win.localStorage.getItem(k)); return v == null ? def : v; } catch (e) { return def; } }
-    function _lsSet(k, v) { try { win.localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+    function _lsSet(k, v, what) { return win.AUI.lsSet(k, JSON.stringify(v), what); }   // 空間滿了會跳「○○沒存下來」
     function _s(v) { return String(v == null ? '' : v).trim(); }
 
     // ── 故事時鐘 ──
@@ -90,7 +90,7 @@
         if (JSON.stringify(m[String(appId)]) === JSON.stringify(next)) { if (!Object.keys(m).length) delete all[sc]; return; }   // 沒變就不寫、不重畫
         if (next !== undefined) m[String(appId)] = next; else delete m[String(appId)];
         if (!Object.keys(m).length) delete all[sc];
-        _lsSet(BADGE_KEY, all);
+        _lsSet(BADGE_KEY, all, '桌面紅點');
         try { if (win.VoidPhoneShell && win.VoidPhoneShell.paintBadges) win.VoidPhoneShell.paintBadges(); } catch (e) {}
     }
 
@@ -126,10 +126,13 @@
     function setWakeCfg(appId, patch) {
         const all = _ls(WAKE_KEY, {});
         const cur = all[String(appId)] || {};
+        const wasOn = !!cur.on;
         Object.keys(patch || {}).forEach(function (k) { cur[k] = patch[k]; });
-        if (patch && patch.on) cur.last = cur.last || Date.now();   // 剛打開：從現在起算，不要一開就來
+        // 從關到開：從現在起算，不要一開就來。以前寫 cur.last || now，關掉前留下的舊 last 會被沿用，
+        //   隔很久再打開，下一分鐘就被叫醒。本來就開著、只是改間隔或機率的，照舊的節奏走
+        if (patch && patch.on && !wasOn) cur.last = Date.now();
         all[String(appId)] = cur;
-        _lsSet(WAKE_KEY, all);
+        return _lsSet(WAKE_KEY, all, '「自己動」的設定');
     }
     // 這個 app 有沒有寫「自己動」那段（沒寫的，詳情頁不給那組設定——開了也不會動）
     //   st.onWake（創作室）或 window.stOnWake（自己寫的 app）；創作室包出來的頁面本身帶著 st.onWake 的轉接那行，先拿掉再看
@@ -197,7 +200,7 @@
     function setPromptBundle(appId, bundleId) {
         const all = _ls(PBUNDLE_KEY, {});
         if (bundleId) all[String(appId)] = String(bundleId); else delete all[String(appId)];
-        _lsSet(PBUNDLE_KEY, all);
+        return _lsSet(PBUNDLE_KEY, all, '應用指定的提示詞包');
     }
     //    指名的那一包不在了（她刪掉了）就回空字串，不要拿別包頂替。
     function promptBundleText(appId) {

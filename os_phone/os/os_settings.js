@@ -90,14 +90,11 @@
     if (!_regHelp()) setTimeout(_regHelp, 1500);
 
     console.log('[PhoneOS] 載入系統設置模塊 (V6.0.0 Aurelia Style & Sync & Reset)...');
+    // 樣式在 css/os_settings.css（酒館 loadCSS、PWA <link>）。以前這裡會把 #os-settings-css 換成 appStyle，
+    // 可是 appStyle 早就抽走了，哪天頁面上剛好有那個 id 整支設定就會在這行斷掉，所以拿掉
 
-    // 定義系統級樣式 (全面替換為 Aurelia 咖啡流金風格)
-
-    const targetDoc = (window.parent && window.parent.document) ? window.parent.document : document;
-    if (!targetDoc.getElementById('os-settings-css')) {
-    } else {
-        targetDoc.getElementById('os-settings-css').innerHTML = appStyle;
-    }
+    // 寫 localStorage 一律走這支：空間滿了不丟例外、會跳「○○沒存下來」，回 true／false 給呼叫的地方決定要不要報成功
+    const _lsSet = (key, value, what) => (window.parent || window).AUI.lsSet(key, value, what);
 
     const LLM_STORAGE_KEY = 'os_global_config';
     const SEC_LLM_STORAGE_KEY = 'os_secondary_llm_config';
@@ -110,7 +107,7 @@
         try { const v = JSON.parse(localStorage.getItem(CAPI_PACKS_KEY) || '[]'); return Array.isArray(v) ? v.filter(p => p && p.id) : []; }
         catch (e) { return []; }
     }
-    function _capiPacksSave(list) { try { localStorage.setItem(CAPI_PACKS_KEY, JSON.stringify(list || [])); } catch (e) {} }
+    function _capiPacksSave(list) { return _lsSet(CAPI_PACKS_KEY, JSON.stringify(list || []), '底詞包'); }
     function _capiEsc(x) { return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     // 下拉的選項：底詞格裡現在的字剛好等於哪一包，就停在那一包
     function _capiPackOptionsHTML(currentText, pickId) {
@@ -135,7 +132,7 @@
         try { const v = JSON.parse(localStorage.getItem(IMG_NODE_KINDS[kind].key) || '[]'); return Array.isArray(v) ? v.filter(n => n && n.id) : []; }
         catch (e) { return []; }
     }
-    function _imgNodesSave(kind, list) { try { localStorage.setItem(IMG_NODE_KINDS[kind].key, JSON.stringify(list || [])); } catch (e) {} }
+    function _imgNodesSave(kind, list) { return _lsSet(IMG_NODE_KINDS[kind].key, JSON.stringify(list || []), '節點清單'); }
     function _imgNodeMatches(kind, node, cur) {
         return Object.keys(IMG_NODE_KINDS[kind].fields).every(f => _nodeVal(node[f]) === _nodeVal(cur[f]));
     }
@@ -255,7 +252,7 @@
         } catch (e) { return []; }
     }
     function saveChannels(list) {
-        try { localStorage.setItem(LLM_CHANNELS_KEY, JSON.stringify(Array.isArray(list) ? list : [])); } catch (e) {}
+        return _lsSet(LLM_CHANNELS_KEY, JSON.stringify(Array.isArray(list) ? list : []), '我的通道');
     }
     function loadRoutes() {
         let saved = {};
@@ -265,7 +262,7 @@
         return out;
     }
     function saveRoutes(routes) {
-        try { localStorage.setItem(LLM_ROUTES_KEY, JSON.stringify(routes || {})); } catch (e) {}
+        return _lsSet(LLM_ROUTES_KEY, JSON.stringify(routes || {}), '「哪件事走哪個模型」');
     }
 
     // 某件事實際該用哪組設定。指到已經被刪掉的通道就退回預設（不要整個不能跑）。
@@ -317,7 +314,7 @@
         return VISION_MODES.indexOf(v) >= 0 ? v : 'off';
     }
     function setVisionMode(v) {
-        try { localStorage.setItem(VISION_MODE_KEY, VISION_MODES.indexOf(v) >= 0 ? v : 'off'); } catch (e) {}
+        return _lsSet(VISION_MODE_KEY, VISION_MODES.indexOf(v) >= 0 ? v : 'off', '看圖設定');
     }
 
     // 給畫面用：這件事現在實際走誰（顯示名字）
@@ -548,14 +545,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     }
     
     // --- 讀取 Minimax 語音設置 ---
+    //   語音模組在就直接問它（預設值只有它那一份）；以前這裡自己寫一份預設是 speech-01-turbo，
+    //   沒存過設定的人一打開設置頁按保存，就從實際在用的 02 被降成 01
     function loadMinimaxConfig() {
+        const MM = (window.parent || window).OS_MINIMAX;
+        if (MM && typeof MM.getConfig === 'function') return MM.getConfig();
         let saved = localStorage.getItem(MINIMAX_STORAGE_KEY);
         let config = {
             enabled: false,
             groupId: '',
             apiKey: '',
             provider: 'cn',
-            speechModel: 'speech-01-turbo',
+            speechModel: 'speech-02-turbo',   // 跟 os_minimax.js 的 DEFAULT_CONFIG 一樣
             defaultSpeed: 1.0,
             defaultLanguageBoost: '',
             voiceProfiles: []
@@ -564,19 +565,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         return config;
     }
 
+    // 回 true＝四份都存進去了。任一份存不進去（空間滿了）回 false，呼叫的地方就不報「已保存」；
+    // 寫不進去不丟例外，所以下面同步給生圖模組那段照樣做（生圖模組手上那份跟畫面一致，重整後才會回到存著的舊值）
     function saveConfig(llmData, secLlmData, imgData, minimaxData) {
-        localStorage.setItem(LLM_STORAGE_KEY, JSON.stringify(llmData));
-        localStorage.setItem(SEC_LLM_STORAGE_KEY, JSON.stringify(secLlmData));
-        localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(imgData));
-        
+        let ok = _lsSet(LLM_STORAGE_KEY, JSON.stringify(llmData), '主模型設定');
+        ok = _lsSet(SEC_LLM_STORAGE_KEY, JSON.stringify(secLlmData), '副模型設定') && ok;
+        ok = _lsSet(IMG_STORAGE_KEY, JSON.stringify(imgData), '圖片設定') && ok;
+
         if (minimaxData) {
-            localStorage.setItem(MINIMAX_STORAGE_KEY, JSON.stringify(minimaxData));
+            // 跟語音模組存的是同一把鑰匙：它在就交給它存（以前這裡先寫一次、它又寫一次），不在才自己寫
             const win2 = window.parent || window;
-            if (win2.OS_MINIMAX && typeof win2.OS_MINIMAX.saveConfig === 'function') {
-                win2.OS_MINIMAX.saveConfig(minimaxData);
-            }
+            if (win2.OS_MINIMAX && typeof win2.OS_MINIMAX.saveConfig === 'function') ok = win2.OS_MINIMAX.saveConfig(minimaxData) && ok;
+            else ok = _lsSet(MINIMAX_STORAGE_KEY, JSON.stringify(minimaxData), '語音設定') && ok;
         }
-        
+
         const win = window.parent || window;
         if (win.OS_IMAGE_MANAGER) {
             // 三桶 + legacy mirror（serviceLiving / service = 頭像桶 serviceChar）。同步 ON 時 serviceInanimate 已＝serviceChar
@@ -614,6 +616,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
             console.log('[OS設置] ✅ 圖片管理器配置已更新, 死物桶:', win.OS_IMAGE_MANAGER.config.serviceInanimate, '頭像桶:', win.OS_IMAGE_MANAGER.config.serviceChar, '插圖桶:', win.OS_IMAGE_MANAGER.config.serviceScene);
         }
+        return ok;
     }
 
     // 🏷️ 角色外觀登記表編輯器：列出當前世界 avatar_cache 每個角色的「頭像生成詞」(=##角色名##佔位展開來源)，
@@ -757,7 +760,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         Object.assign(W.extension_settings[TAVERN_EXT_KEY], patch);
         if (typeof W.saveSettingsDebounced === 'function') W.saveSettingsDebounced();
         else if (typeof W.saveSettings === 'function') W.saveSettings();
-        else { try { W.localStorage.setItem('extension_settings', JSON.stringify(W.extension_settings)); } catch (e) {} }
+        else _lsSet('extension_settings', JSON.stringify(W.extension_settings), '酒館擴展設定');
     }
 
     function launchApp(container, mode) {
@@ -875,7 +878,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
                 const _JT = win2.VN_Image && win2.VN_Image._joinTags;
                 if (!_JT) { setStatus('生圖模組（vn_config.js）尚未載入，請先進一次 VN 再回來', true); return; }
-                let fullPrompt = _JT(document.getElementById('sprite-tpl-prefix').value, finalPrompt, document.getElementById('sprite-tpl-suffix').value);
+                // 跟劇情裡自動生立繪（VN_Image.getSprite）同一條：前綴沒寫 pants 時，照外觀補一句下身，兩邊構圖才一樣
+                const _pfx = document.getElementById('sprite-tpl-prefix').value;
+                const _lw = (!/pants/i.test(_pfx) && win2.VN_Image && typeof win2.VN_Image._lowerWear === 'function') ? win2.VN_Image._lowerWear(finalPrompt) : '';
+                let fullPrompt = _JT(_pfx, finalPrompt, _lw, document.getElementById('sprite-tpl-suffix').value);
                 setStatus('為「' + name + '」生立繪中（5–30 秒）...');
                 document.getElementById('sprite-preview').innerHTML = '<span style="color:var(--os-ink-soft);font-size:11px;">生成中...</span>';
                 enableBtn('sprite-removebg-btn', false);
@@ -896,7 +902,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     //    → 判斷收在 VN_Image._spriteRaw 一份，三條立繪路徑共用（拿不到就退回原本的寫法）。
                     const _svc = _spSvc;
                     const _spriteRawFor = function (sv) {
-                        const VI = win2.VN_Image || win.VN_Image;
+                        const VI = win2.VN_Image || window.VN_Image;   // 這裡沒有 win（以前寫 win.VN_Image，win2 上沒有時會直接拋錯）
                         return (VI && typeof VI._spriteRaw === 'function') ? VI._spriteRaw(sv) : !_useNAI;
                     };
                     // 立繪 base 比例（可調，「立繪比例」下拉，預設 512×896；鎧甲/壯角色選寬一點）
@@ -1169,23 +1175,25 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const suffixEl = document.getElementById('sprite-tpl-suffix');
                 const negEl = document.getElementById('sprite-tpl-neg');
                 if (!prefixEl || !suffixEl) return;
-                prefixEl.value = localStorage.getItem(LS_PFX) || DEF_PREFIX;
-                suffixEl.value = localStorage.getItem(LS_SFX) || DEF_SUFFIX;
-                prefixEl.onchange = () => localStorage.setItem(LS_PFX, prefixEl.value);
-                suffixEl.onchange = () => localStorage.setItem(LS_SFX, suffixEl.value);
+                // 只有「沒存過」才顯示預設；她清空存起來的＝不要前綴，劇情裡自動生立繪（VN_Image._spriteTpl）也是這樣認。
+                //   以前這裡用 ||，清空後框裡又冒出預設，這邊生的帶前綴、劇情裡生的不帶，同一個人兩種構圖
+                prefixEl.value = localStorage.getItem(LS_PFX) ?? DEF_PREFIX;
+                suffixEl.value = localStorage.getItem(LS_SFX) ?? DEF_SUFFIX;
+                prefixEl.onchange = () => _lsSet(LS_PFX, prefixEl.value, '立繪前綴');
+                suffixEl.onchange = () => _lsSet(LS_SFX, suffixEl.value, '立繪後綴');
                 if (negEl) {
                     negEl.value = localStorage.getItem(LS_NEG) || '';   // 空＝現狀，使用者自己填
-                    negEl.onchange = () => localStorage.setItem(LS_NEG, negEl.value);
+                    negEl.onchange = () => _lsSet(LS_NEG, negEl.value, '立繪負詞');
                 }
                 const sizeEl = document.getElementById('sprite-base-size');
                 if (sizeEl) {
                     sizeEl.value = localStorage.getItem('os_sprite_size') || '512x896';
-                    sizeEl.onchange = () => localStorage.setItem('os_sprite_size', sizeEl.value);
+                    sizeEl.onchange = () => _lsSet('os_sprite_size', sizeEl.value, '立繪比例');
                 }
                 const ratioEl = document.getElementById('sprite-upscale-ratio');
                 if (ratioEl) {
                     ratioEl.value = localStorage.getItem(LS_RATIO) || '1.5';
-                    ratioEl.onchange = () => localStorage.setItem(LS_RATIO, ratioEl.value);
+                    ratioEl.onchange = () => _lsSet(LS_RATIO, ratioEl.value, '立繪精緻度');
                 }
                 // 高清修復：ComfyUI 直連專屬，依當前來源顯示/隱藏
                 const _win2 = window.parent || window;
@@ -1199,7 +1207,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (ratioEl) ratioEl.style.display = (_svc === 'comfyui_direct') ? '' : 'none';   // 精緻度倍率也 ComfyUI 專屬：非 ComfyUI 藏起來、固定小圖 512×896
                 if (hiresEl) {
                     hiresEl.checked = localStorage.getItem(LS_HIRES) === '1';
-                    hiresEl.onchange = () => localStorage.setItem(LS_HIRES, hiresEl.checked ? '1' : '0');
+                    hiresEl.onchange = () => _lsSet(LS_HIRES, hiresEl.checked ? '1' : '0', '立繪高清修復');
                 }
                 document.getElementById('sprite-tpl-reset').onclick = () => {
                     prefixEl.value = DEF_PREFIX;
@@ -2861,7 +2869,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         if (!gone) return;
                         if (!(await AUI.confirm('刪掉通道「' + (gone.name || '未命名') + '」？指到它的項目會退回預設。', { danger: true }))) return;
                         list.splice(idx, 1);
-                        saveChannels(list);
+                        if (!saveChannels(list)) return;   // 通道沒刪成，指到它的項目也別動
                         const routes = loadRoutes();
                         Object.keys(routes).forEach(function (k) { if (routes[k] === gone.id) delete routes[k]; });
                         saveRoutes(routes);
@@ -3174,7 +3182,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try {
                 const saved = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
                 saved.customApi = Object.assign({}, saved.customApi || {}, { basePrompt: text });
-                localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(saved));
+                _lsSet(IMG_STORAGE_KEY, JSON.stringify(saved), '圖片設定');
             } catch (e) {}
             try {
                 const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
@@ -3253,7 +3261,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try {
                 const saved = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
                 saved[K.cfgKey] = Object.assign({}, saved[K.cfgKey] || {}, patch);
-                localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(saved));
+                _lsSet(IMG_STORAGE_KEY, JSON.stringify(saved), '圖片設定');
             } catch (e) {}
             try {
                 const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
@@ -3400,7 +3408,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const cfg = raw ? JSON.parse(raw) : {};
                 cfg.comfyuiDirect = Object.assign({}, cfg.comfyuiDirect || {}, { presets: _cfdList() });
                 cfg.novelai = Object.assign({}, cfg.novelai || {}, { naiPresets: _naiList() });
-                localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(cfg));
+                if (!_lsSet(IMG_STORAGE_KEY, JSON.stringify(cfg), '預設包')) return;   // 跟以前寫失敗時一樣：生圖那份也先別換
                 const M = _IM();
                 if (M && M.config) {
                     M.config.comfyuiDirect = Object.assign({}, M.config.comfyuiDirect || {}, { presets: _cfdList() });
@@ -3416,7 +3424,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const _tabGroups = { novelai: [elNaiGroup], comfyui_direct: [elCfdGroup], tavern_sd: [elTavGroup], custom_api: [elCapiGroup], pollinations: [elPolGroup, elImgPolPrompts] };
         window._switchImgTab = (tab) => {
             imgTab = IMG_TABS.indexOf(tab) >= 0 ? tab : 'style';
-            try { localStorage.setItem('os_img_settings_tab', imgTab); } catch (e) {}
+            _lsSet('os_img_settings_tab', imgTab, '圖片設置停在哪一頁');
             container.querySelectorAll('.img-conn-tabs .img-srctab').forEach(b => b.classList.toggle('active', b.dataset.imgtab === imgTab));
             const st = container.querySelector('#img-tab-style');
             if (st) st.hidden = (imgTab !== 'style');
@@ -3520,7 +3528,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 _renderImgStyles();
             } else if (t.classList.contains('img-use-sprite-size')) {
                 // 立繪比例跟立繪工作室那格是同一個設定
-                try { localStorage.setItem('os_sprite_size', t.value); } catch (err) {}
+                _lsSet('os_sprite_size', t.value, '立繪比例');
                 const studio = document.getElementById('sprite-base-size');
                 if (studio) studio.value = t.value;
             }
@@ -3615,7 +3623,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 q('.img-style-f-cancel').onclick = () => close(null);
                 q('.img-style-f-save').onclick = () => {
                     const name = q('.img-style-f-name').value.trim();
-                    if (!name) { q('.img-style-f-name').focus(); return; }
+                    if (!name) { q('.img-style-f-name').focus({ preventScroll: true }); return; }
                     close({ name: name, pos: q('.img-style-f-pos').value.trim(), neg: q('.img-style-f-neg').value.trim(), refFile: refFile, refCleared: refCleared });
                 };
             });
@@ -3628,7 +3636,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const id = 'st_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
                 let ref = '';
                 if (v.refFile && _dbw() && _dbw().saveImage) { try { ref = await _dbw().saveImage(STYLE_IMG_PREFIX + id, v.refFile); } catch (e) { AUI.toastr.warning('底圖存不進去：' + ((e && e.message) || e)); } }
-                M.setStyles(M.getStyles().concat([{ id: id, name: v.name, pos: v.pos, neg: v.neg, ref: ref }]));
+                if (!M.setStyles(M.getStyles().concat([{ id: id, name: v.name, pos: v.pos, neg: v.neg, ref: ref }]))) {
+                    // 清單沒存成（已經跳過提示了）：剛存的底圖沒有人指著，順手拿掉
+                    if (ref && _dbw() && _dbw().deleteCharImage) { try { await _dbw().deleteCharImage(ref); } catch (e) {} }
+                    return;
+                }
                 _renderImgStyles(); _renderImgUses(); _renderRoomBlock();
             },
             async edit(id) {
@@ -3652,9 +3664,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const routes = M.getRoutes();
                 const used = _styleUsedBy(id);
                 if (!(await AUI.confirm('刪掉畫風「' + cur.name + '」？' + (used.length ? '\n用它的地方（' + used.join('、') + '）會改成不加畫風。' : ''), { danger: true }))) return;
+                // 先把清單存掉：沒存成（已經跳過提示了）就什麼都別動，不然清單還指著一張已經刪掉的底圖
+                if (!M.setStyles(list.filter(x => x.id !== id))) return;
                 try { const G = (window.parent || window).OS_ROOM_GEN || window.OS_ROOM_GEN; if (G && G.getRoute && G.getRoute().style === id) G.setRoute({ style: '' }); } catch (e) {}
                 if (cur.ref && _dbw() && _dbw().deleteCharImage) { try { await _dbw().deleteCharImage(cur.ref); } catch (e) {} }
-                M.setStyles(list.filter(x => x.id !== id));
                 M.USES.forEach(u => { if ((routes[u.id] || {}).style === id) M.setRoute(u.id, { style: '' }); });
                 _renderImgStyles(); _renderImgUses(); _renderRoomBlock();
             },
@@ -3726,7 +3739,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const _w = window.parent || window;
             try {
                 if (!String(v || '').trim() || v === _trioDefault()) _w.localStorage.removeItem('os_trio_tpl');
-                else _w.localStorage.setItem('os_trio_tpl', v);
+                else _lsSet('os_trio_tpl', v, '一次生三種的模板');
             } catch (e) {}
         };
         window._trioTplReset = () => {
@@ -3749,7 +3762,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try {
                 const i = String(v || '').indexOf('|');
                 const o = (i > 0) ? { src: String(v).slice(0, i), key: String(v).slice(i + 1) } : {};
-                _w.localStorage.setItem('wg_sprite_pack_v1', JSON.stringify(o));
+                _lsSet('wg_sprite_pack_v1', JSON.stringify(o), '世界門旅人畫風');
             } catch (e) {}
         };
 
@@ -3854,7 +3867,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!r.style && styleOf[u.id]) patch.style = styleOf[u.id];
                 if (Object.keys(patch).length) M.setRoute(u.id, patch);
             });
-            try { localStorage.setItem('os_img_routes_migrated', '1'); } catch (e) {}
+            _lsSet('os_img_routes_migrated', '1', '圖片設定');
             console.log('[圖片設置] 舊設定已轉成每個地方一列');
         };
 
@@ -3911,7 +3924,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         if (domSelect) foundModel = domSelect.value;
                     }
                     if (foundModel) {
-                        elModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
+                        elModel.innerHTML = `<option value="${_capiEsc(foundModel)}" selected>${_capiEsc(foundModel)}</option>`;
                         status.innerText = `已同步 (系統): ${foundModel}`;
                     } else {
                         throw new Error("無法讀取酒館模型");
@@ -3924,14 +3937,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _fmt = (container.querySelector('#os-api-format') || {}).value || 'openai';
                     // Gemini 原生格式：清單在 /v1beta/models?key=，名字是 models/xxx
                     if (_fmt === 'gemini') {
-                        const base = url.replace(/\/chat\/completions$/, '').replace(/\/v1beta.*$/, '').replace(/\/v1$/, '').replace(/\/$/, '');
+                        const base = window.OS_API.nativeBase('gemini', url);   // 跟送生成同一套剝法
                         const res = await fetch(base + '/v1beta/models?key=' + encodeURIComponent(key), { method: 'GET', headers: { 'x-goog-api-key': key } });
                         if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
                         const data = await res.json();
                         const models = (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
                         if (!models.length) throw new Error("API 返回了空列表");
-                        elModel.innerHTML = '';
-                        models.forEach(id => { elModel.innerHTML += `<option value="${id}">${id}</option>`; });
+                        // 一次組好再指派（一項一項 += 每次都整個選單重建，幾百個模型會很慢）；名字是站方給的，要轉義
+                        elModel.innerHTML = models.map(id => `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`).join('');
                         status.innerText = `成功獲取 (${models.length})`;
                         return;
                     }
@@ -3947,11 +3960,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     let models = data.data || data.models || [];
                     
                     if (models.length > 0) {
-                        elModel.innerHTML = '';
-                        models.forEach(m => { 
-                            const id = m.id || m;
-                            elModel.innerHTML += `<option value="${id}">${id}</option>`; 
-                        });
+                        elModel.innerHTML = models.map(m => { const id = m.id || m; return `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`; }).join('');
                         status.innerText = `成功獲取 ${models.length} 個模型`;
                     } else {
                         throw new Error("API 返回了空列表");
@@ -3979,7 +3988,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         if (domSelect) foundModel = domSelect.value;
                     }
                     if (foundModel) {
-                        secModel.innerHTML = `<option value="${foundModel}" selected>${foundModel}</option>`;
+                        secModel.innerHTML = `<option value="${_capiEsc(foundModel)}" selected>${_capiEsc(foundModel)}</option>`;
                         status.innerText = `副模型已同步 (系統): ${foundModel}`;
                     } else {
                         throw new Error("無法讀取酒館模型");
@@ -3995,14 +4004,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const _fmt = isSync ? ((container.querySelector('#os-api-format') || {}).value || 'openai') : ((container.querySelector('#sec-api-format') || {}).value || 'openai');
                     // Gemini 原生格式：清單在 /v1beta/models?key=，名字是 models/xxx
                     if (_fmt === 'gemini') {
-                        const base = url.replace(/\/chat\/completions$/, '').replace(/\/v1beta.*$/, '').replace(/\/v1$/, '').replace(/\/$/, '');
+                        const base = window.OS_API.nativeBase('gemini', url);   // 跟送生成同一套剝法
                         const res = await fetch(base + '/v1beta/models?key=' + encodeURIComponent(key), { method: 'GET', headers: { 'x-goog-api-key': key } });
                         if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
                         const data = await res.json();
                         const models = (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
                         if (!models.length) throw new Error("API 返回了空列表");
-                        secModel.innerHTML = '';
-                        models.forEach(id => { secModel.innerHTML += `<option value="${id}">${id}</option>`; });
+                        secModel.innerHTML = models.map(id => `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`).join('');
                         status.innerText = `副模型列表更新成功 (${models.length})`;
                         return;
                     }
@@ -4018,11 +4026,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     let models = data.data || data.models || [];
                     
                     if (models.length > 0) {
-                        secModel.innerHTML = ''; 
-                        models.forEach(m => { 
-                            const id = m.id || m;
-                            secModel.innerHTML += `<option value="${id}">${id}</option>`; 
-                        });
+                        secModel.innerHTML = models.map(m => { const id = m.id || m; return `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`; }).join('');
                         status.innerText = `副模型列表更新成功 (${models.length})`;
                     } else {
                         throw new Error("API 返回空列表");
@@ -4040,7 +4044,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         btnSave.onclick = () => {
             try {
                 const layoutMode = container.querySelector('#os-layout-mode')?.value || 'auto';
-                localStorage.setItem('aurelia_layout_mode', layoutMode);
+                const _layoutOk = _lsSet('aurelia_layout_mode', layoutMode, '版面設定');   // 沒存成也照樣往下存其他的，最後不報「已保存」
                 // ⚠️ 只在 PWA(獨立)版才套 iOS 安全區下移；酒館裡 ST 已處理過、再套會重複往下推 → 一律移除
                 const isStandalone = !(window.parent || window).SillyTavern;
                 const targetDocs = [document];
@@ -4211,26 +4215,27 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     groupId:              mmGroupId.value.trim(),
                     apiKey:               mmApiKey   ? mmApiKey.value.trim()      : '',
                     provider:             mmProvider ? mmProvider.value          : 'cn',
-                    speechModel:          mmModel    ? mmModel.value             : 'speech-01-turbo',
+                    speechModel:          mmModel    ? mmModel.value             : 'speech-02-turbo',
                     defaultSpeed:         mmSpeed    ? parseFloat(mmSpeed.value) : 1.0,
                     defaultLanguageBoost: mmLangBoost ? mmLangBoost.value        : '',
                     voiceProfiles,
                     myVoices:             Array.isArray(_mmPrev.myVoices) ? _mmPrev.myVoices : []   // 「抓我的聲音」存的，整份覆蓋時別弄丟
                 } : null;
 
-                saveConfig(llmData, secLlmData, imgData, minimaxData);
+                let _saveOk = saveConfig(llmData, secLlmData, imgData, minimaxData) && _layoutOk;
                 {
                     const VW = window.parent || window;
-                    if (VW.OS_ELEVENLABS) VW.OS_ELEVENLABS.saveConfig({
+                    if (VW.OS_ELEVENLABS) _saveOk = !!VW.OS_ELEVENLABS.saveConfig({
                         apiKey:  (container.querySelector('#el-api-key')?.value || '').trim(),
                         modelId: container.querySelector('#el-model')?.value || 'eleven_v4'
-                    });
-                    if (VW.OS_VOICE_CAST) VW.OS_VOICE_CAST.saveRoster({ entries: castEntries });
+                    }) && _saveOk;
+                    if (VW.OS_VOICE_CAST) _saveOk = !!VW.OS_VOICE_CAST.saveRoster({ entries: castEntries }) && _saveOk;
                 }
                 // ComfyUI 頁的下拉選回「目前的設定」時讀的是這份 → 換成剛存的，不然會載回開面板時的舊值
                 imgConfig.comfyuiDirect = imgData.comfyuiDirect;
                 // 刪掉的 NAI 預設縮圖／Vibe：清單存進去了才從圖庫刪（沒按保存就離開的話，清單還在、圖也還在）
-                try { window._naiFlushDeletes && window._naiFlushDeletes(); } catch (e) {}
+                //   空間滿了沒存進去也一樣：存檔裡的清單還指著那些圖，先別刪
+                if (_saveOk) { try { window._naiFlushDeletes && window._naiFlushDeletes(); } catch (e) {} }
 
                 // 換產圖器後：依新 service 自動翻頭像規則三條目的開關（VN 指令；只撥開關，不寫內容）
                 try { (window.parent || window).OS_AVATAR_RULES_INJECTOR?.syncAvatarRuleEntries?.(); } catch (e) {}
@@ -4241,6 +4246,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                 // VN 設置由外部模組統一存入 vn_cfg_v4
                 if (window.VN_SETTINGS_PANEL) window.VN_SETTINGS_PANEL.save(container);
+                if (!_saveOk) { status.innerText = '有幾項沒存下來（本機空間滿了）'; return; }
                 btnSave.innerText = "已保存 ✓";
                 status.innerText = "設置已生效";
                 setTimeout(() => { btnSave.innerText = "保存所有設定"; }, 2000);
@@ -4319,6 +4325,32 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         const data = await res.json();
                         replyText = data?.choices?.[0]?.message?.content || data?.content || JSON.stringify(data);
                     }
+                } else if (cfg.apiFormat === 'gemini' || cfg.apiFormat === 'anthropic') {
+                    // 照「請求格式」送，網址與 body 跟 OS_API.chat 那兩條原生格式同一套（根網址、body 都直接借它的）：
+                    //   以前一律打 /chat/completions，選了 Gemini／Claude 原生的站測試必失敗、實際卻能用
+                    if (!cfg.url) throw new Error('請先填寫 API 地址');
+                    const msgs = [{ role: 'user', content: 'Hi' }];
+                    const base = win.OS_API.nativeBase(cfg.apiFormat, cfg.url);
+                    let res;
+                    if (cfg.apiFormat === 'gemini') {
+                        const gUrl = base + '/v1beta/models/' + encodeURIComponent(String(modelVal || '')) + ':generateContent?key=' + encodeURIComponent(String(cfg.key || ''));
+                        res = await fetch(gUrl, {
+                            method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(cfg.key || '') },
+                            body: JSON.stringify(win.OS_TO_GEMINI_BODY(msgs, { maxTokens: 50 }))
+                        });
+                    } else {
+                        const aUrl = base + '/v1/messages';
+                        res = await fetch(aUrl, {
+                            method: 'POST', headers: win.OS_API.authHeaders(aUrl, cfg.key, { json: true, anthropic: true }),
+                            body: JSON.stringify(win.OS_TO_ANTHROPIC_BODY(msgs, { model: modelVal, maxTokens: 50 }))
+                        });
+                    }
+                    const data = await res.json().catch(() => null);
+                    if (!res.ok) throw new Error(`HTTP ${res.status}: ` + ((data && data.error && (data.error.message || JSON.stringify(data.error))) || res.statusText));
+                    replyText = (cfg.apiFormat === 'gemini'
+                        ? ((data?.candidates?.[0]?.content?.parts) || []).filter(p => p && !p.thought).map(p => p.text || '').join('')
+                        : ((data?.content) || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(''))
+                        || JSON.stringify(data);
                 } else {
                     if (!cfg.url) throw new Error('請先填寫 API 地址');
                     let targetUrl = cfg.url.replace(/\/$/, '');
@@ -4349,7 +4381,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         btnTest.onclick = async () => {
             btnTest.style.opacity = '0.5'; btnTest.textContent = '測試中...';
             await runApiTest(
-                { useSystemApi: elSystemApi.checked, stProfileId: elStProfile.value, url: elUrl.value.trim(), key: elKey.value.trim() },
+                { useSystemApi: elSystemApi.checked, stProfileId: elStProfile.value, url: elUrl.value.trim(), key: elKey.value.trim(),
+                  apiFormat: (container.querySelector('#os-api-format') || {}).value || 'openai' },
                 elModel.value,
                 container.querySelector('#os-test-result')
             );
@@ -4363,7 +4396,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const testUrl = isSecSync ? elUrl.value.trim() : secUrl.value.trim();
             const testKey = isSecSync ? elKey.value.trim() : secKey.value.trim();
             await runApiTest(
-                { useSystemApi: secSystemApi.checked, stProfileId: secStProfile.value, url: testUrl, key: testKey },
+                { useSystemApi: secSystemApi.checked, stProfileId: secStProfile.value, url: testUrl, key: testKey,
+                  // 同步主模型時格式跟主模型走（跟保存時一樣）
+                  apiFormat: (container.querySelector(isSecSync ? '#os-api-format' : '#sec-api-format') || {}).value || 'openai' },
                 secModel.value,
                 container.querySelector('#sec-test-result')
             );
@@ -4454,7 +4489,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             save() {
                 const row = container.querySelector('#img-nai-preset-name-row');
                 if (row) row.style.display = 'block';
-                container.querySelector('#img-nai-preset-name-input')?.focus();
+                container.querySelector('#img-nai-preset-name-input')?.focus({ preventScroll: true });
             },
             confirmSave() {
                 const nameInput = container.querySelector('#img-nai-preset-name-input');
@@ -4907,7 +4942,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             save() {
                 const row = container.querySelector('#img-scene-spec-name-row');
                 if (row) row.style.display = 'block';
-                container.querySelector('#img-scene-spec-name-input')?.focus();
+                container.querySelector('#img-scene-spec-name-input')?.focus({ preventScroll: true });
             },
             confirmSave() {
                 const nameInput = container.querySelector('#img-scene-spec-name-input');
@@ -5097,7 +5132,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (chat) {
                         chat.querySelectorAll('.mes').forEach(msg => {
                             const mesid = msg.getAttribute('mesid');
-                            if (mesid) { try { W.localStorage.removeItem(`mes-collapse-${mesid}`); } catch (e) {} }
+                            if (mesid) { try { W.localStorage.removeItem(UI.collapseKey(mesid)); } catch (e) {} }   // 收合記憶的 key 帶聊天室（ui_utilities 的 collapseKey），清的時候要用同一把
                             const block = msg.querySelector('.mes_block');
                             if (block) {
                                 Array.from(block.children).forEach(child => {
@@ -5143,7 +5178,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const url = (elUrl && elUrl.value || '').trim();
                 const token = (elTok && elTok.value || '').trim();
                 if (!url || !token) { say('網址跟通行碼都要填。'); return; }
-                win.OS_RELAY.setCfg({ url: url, token: token, on: true });
+                if (!win.OS_RELAY.setCfg({ url: url, token: token, on: true })) { say('沒存下來（本機空間滿了）。'); return; }
                 say('測試中…');
                 try {
                     await win.OS_RELAY.test();
@@ -5154,7 +5189,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 }
             };
             const off = q('relay-off-btn');
-            if (off) off.onclick = () => { win.OS_RELAY.setCfg({ on: false }); say('關掉了，回覆改回手機自己跑。'); };
+            if (off) off.onclick = () => { if (win.OS_RELAY.setCfg({ on: false })) say('關掉了，回覆改回手機自己跑。'); };
         })();
 
         // ── 一般分頁裡的小分頁：面板／素材／上下文／後台 ──
@@ -5261,7 +5296,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 elState.className = 'push-state' + (kind ? ' ' + kind : '');
             };
             const load = () => { try { return JSON.parse(localStorage.getItem(LS) || '{}'); } catch (_) { return {}; } };
-            const save = c => { try { localStorage.setItem(LS, JSON.stringify(c)); } catch (_) {} };
+            const save = c => _lsSet(LS, JSON.stringify(c), '通知設定');
 
             // 貼整條聊天用的網址也行，剝到主機就好
             const norm = raw => {
@@ -5431,7 +5466,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             setStatus('正在匯入...', 'rgba(26,28,40,0.25)');
             try {
                 const result = await BACKUP.importLocal(file);
-                setStatus(`匯入完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項` + (result.favVoices ? `、收藏的語音 ${result.favVoices} 段` : ''), 'rgba(26,28,40,0.25)');
+                setStatus(`匯入完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項` + (result.favVoices ? `、收藏的語音 ${result.favVoices} 段` : '')
+                    + (result.lsFailed ? `；另有 ${result.lsFailed} 項設定沒存下來（本機空間滿了）` : ''), result.lsFailed ? '#fc8181' : 'rgba(26,28,40,0.25)');
             } catch(e) { setStatus('匯入失敗：' + e.message, '#fc8181'); }
             e.target.value = '';
         });
@@ -5505,7 +5541,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 b.textContent = '還原中…';
                 try {
                     const res = await BACKUP.applyData(await BACKUP.cloudGet(b.dataset.id));
-                    if (await AUI.confirm('還原好了（聊天 ' + res.chats + '、劇情 ' + res.vn + '、世界書 ' + res.worldbook + '、設定 ' + res.localStorage + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + '）。重新整理才看得到，現在重新整理？', { okText: '重新整理', title: '從雲端還原' })) location.reload();
+                    if (await AUI.confirm('還原好了（聊天 ' + res.chats + '、劇情 ' + res.vn + '、世界書 ' + res.worldbook + '、設定 ' + res.localStorage + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + '）' + (res.lsFailed ? '，另有 ' + res.lsFailed + ' 項設定沒存下來（本機空間滿了）' : '') + '。重新整理才看得到，現在重新整理？', { okText: '重新整理', title: '從雲端還原' })) location.reload();
                 } catch (e2) { AUI.alert('還原沒成功：' + e2.message); }
                 b.textContent = '還原';
             });

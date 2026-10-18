@@ -424,7 +424,7 @@
                 // 不接但補一句：當成他傳來的訊息寫進同一份記錄，微信那邊也看得到、標成未讀
                 if (note) {
                     rec.messages.push({ type: 'msg', isMe: false, content: note, sender: contact.name, senderName: contact.name, timestamp: Date.now(), _afterMissed: true, _viaCall: true });
-                    rec.unread = true; rec.lastTime = Date.now();
+                    rec.unread = true; rec.lastTime = '剛剛';   // 那格是聊天列表上顯示的字（跟聊天 app 收到新訊息同一個寫法），寫毫秒數會印出一串數字
                 }
                 await OS_DB.saveApiChat(contact.id, rec);
             }

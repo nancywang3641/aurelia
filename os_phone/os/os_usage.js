@@ -137,17 +137,24 @@
         const db = await open();
         if (!db) return;   // 庫壞掉：這批就當沒記過，別卡著也別重試到天荒地老
         try {
-            // 先把要碰到的那幾天讀出來，疊完再一次寫回去（一天一筆，讀寫都很小）
+            // 那幾天的彙總：讀、疊、寫回都在同一個 readwrite 交易裡（一天一筆，讀寫都很小）。
+            //   以前先用唯讀交易讀、另開一個交易寫：切背景那次 flush 跟計時器那次（或兩個分頁）同時跑時，
+            //   兩邊讀到同一份舊的、各疊各的，後寫的蓋掉先寫的，那幾通就少算了。同一個交易裡 IndexedDB 會讓後一個排隊等
             const dayIds = Array.from(new Set(batch.map(e => e.day)));
-            const olds = await Promise.all(dayIds.map(id => getOne(db, S_DAYS, id)));
-            const map = {};
-            dayIds.forEach((id, i) => { map[id] = olds[i] || blankDay(id); });
-            batch.forEach(e => { try { foldInto(map[e.day], e); } catch (err) {} });
 
             await new Promise((resolve) => {
                 const tx = db.transaction([S_DAYS, S_CALLS], 'readwrite');
                 const sd = tx.objectStore(S_DAYS), sc = tx.objectStore(S_CALLS);
-                dayIds.forEach(id => { try { sd.put(map[id]); } catch (err) {} });
+                dayIds.forEach(id => {
+                    try {
+                        const r = sd.get(id);
+                        r.onsuccess = () => {
+                            const day = r.result || blankDay(id);
+                            batch.forEach(e => { if (e.day === id) { try { foldInto(day, e); } catch (err) {} } });
+                            try { sd.put(day); } catch (err) {}
+                        };
+                    } catch (err) {}
+                });
                 batch.forEach(e => { try { sc.put(e); } catch (err) {} });
                 tx.oncomplete = resolve;
                 tx.onerror = () => { console.warn('[OS_USAGE] 這批沒寫進去', tx.error); resolve(); };

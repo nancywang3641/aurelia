@@ -99,6 +99,14 @@
     }
     win.OS_TO_GEMINI_BODY = _toGeminiBody;
 
+    // 原生格式（Gemini／Claude）的根網址：她填的可能帶 /v1、/v1beta…、/chat/completions、/messages、結尾斜線，一律剝到根。
+    //   送生成、設置頁的測試和拉模型清單都用這一支（OS_API.nativeBase），以前四處各剝各的，結尾斜線的剝法還不一樣
+    function _nativeBase(fmt, url) {
+        let s = String(url || '').replace(/\/+$/, '').replace(/\/chat\/completions$/, '');
+        s = (fmt === 'gemini') ? s.replace(/\/v1beta.*$/, '') : s.replace(/\/messages$/, '');
+        return s.replace(/\/v1$/, '').replace(/\/+$/, '');
+    }
+
     // OpenAI 形狀的 messages → Anthropic 原生（POST /v1/messages）body。
     //   為什麼要這條：Anthropic 的 OpenAI 相容入口不支援緩存（官方文件明寫），要省錢只能走原生、自己標 cache_control。
     //   開頭連著的 system 收成 system；中間冒出來的 system 不搬到最前面（順序會亂、開頭也會跟著變），當成 user 那邊的字留在原位。
@@ -248,6 +256,7 @@
         _apiLogFire('end', rec);
     }
     // token 估算：優先用酒館 tokenizer；PWA/取不到 → 粗估(CJK≈1字1token、其餘≈4字1token)。非阻塞。
+    //   🚨 控制台記錄、用量、劇情監視器（_lastCtx）都用這一支估：以前 chat 裡另算一份「字數×0.5」，同一通兩個面板數字不一樣
     async function _estTok(text) {
         const s = String(text || '');
         if (!s) return 0;
@@ -255,8 +264,18 @@
             const ST = win.SillyTavern || (win.parent && win.parent.SillyTavern);
             if (ST && typeof ST.getTokenCountAsync === 'function') return await ST.getTokenCountAsync(s);
         } catch (e) {}
+        return _estTokRough(s);
+    }
+    function _estTokRough(text) {
+        const s = String(text || '');
         const cjk = (s.match(/[㐀-鿿豈-﫿぀-ヿ]/g) || []).length;
         return cjk + Math.ceil((s.length - cjk) / 4);
+    }
+    // _lastCtx 的回覆 token：先放粗估，酒館 tokenizer 算完再換掉（跟記錄那筆 outTok 同一個數）
+    function _ctxRecvTok(ctx, text) {
+        ctx.recvTokens = _estTokRough(text);
+        _estTok(text).then(n => { ctx.recvTokens = n; }).catch(() => {});
+        return ctx;
     }
     // 🧳 隔離開關（微信 → 那間 → 聊天設置）：從別的故事借過來的人，不該讀到「你這本」的
     //    世界書與劇情。她的話：「要不要吃當前世界書和當前歷史上下文」。
@@ -1009,6 +1028,8 @@
     // --- 3. OS API 主對象 ---
     win.OS_API = {
 
+        nativeBase: _nativeBase,   // 原生格式的根網址（見 _nativeBase）：設置頁測試、拉清單跟送生成同一套剝法
+
         // 🔑 自己填網址那幾條的請求標頭。Anthropic 官方（api.anthropic.com）不認網頁直接連：
         //    沒帶 anthropic-dangerous-direct-browser-access 會被 CORS 擋成「Failed to fetch」，帶了才回正常的錯誤或結果。
         //    chat/completions 收 Bearer＝API 金鑰；/models 是原生介面，Bearer 會被當成登入憑證退回，要換 x-api-key。
@@ -1167,8 +1188,9 @@
          * @param {string} storyText   - 已提取的 <content> 劇情文本
          * @param {function} onFinish  - callback(enhancedText) 回傳插入了 [Scene|] 的增強版文本
          * @param {function} [onError] - callback(err) 錯誤處理
+         * @param {object} [options]   - { task }：下面分流那段讀的（以前沒宣告這個參數，讀它就拋錯被 try 吞掉，分流永遠不生效；目前沒有人呼叫這支）
          */
-        analyzeSceneInserts: function(storyText, onFinish, onError) {
+        analyzeSceneInserts: function(storyText, onFinish, onError, options) {
             const imgCfg   = (win.OS_SETTINGS?.getImageConfig?.()) || {};
             const sceneCfg = imgCfg.sceneGen || {};
 
@@ -1473,20 +1495,11 @@
             let totalChars = 0;
             try {
                 // 兼容陣列 content：抽 text 部分計算 token；圖片不計入文字字數但會在送 API 時算 token
-                const fullPromptString = messages.map(m => {
-                    if (typeof m.content === 'string') return m.content;
-                    if (Array.isArray(m.content)) {
-                        return m.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
-                    }
-                    return '';
-                }).join('\n');
+                //   跟記錄那筆 inTok 同一份字、同一支估法（_msgsText＋_estTok），兩個面板才會是同一個數
+                const fullPromptString = _msgsText(messages);
                 totalChars = fullPromptString.length;
-                if (win.SillyTavern && typeof win.SillyTavern.getTokenCountAsync === 'function') {
-                    totalTokens = await win.SillyTavern.getTokenCountAsync(fullPromptString);
-                } else {
-                    totalTokens = Math.ceil(totalChars * 0.5);
-                }
-            } catch(e) { totalTokens = Math.ceil(totalChars * 0.5) || 0; }
+                totalTokens = await _estTok(fullPromptString);
+            } catch(e) { totalTokens = 0; }
 
             try {
                 const typeLabel = config._isSecondary ? "副模型 (Secondary)" : "主模型 (Primary)";
@@ -1888,8 +1901,7 @@
                 } else if (_isAnthropicFmt) {
                     // ── Claude 原生格式：POST /v1/messages（緩存斷點在 _toAnthropicBody 標好）。串流先不做，整篇回來再給 ──
                     //   網址填 https://api.anthropic.com 或 …/v1 都行；中轉站填它給的根網址。
-                    const _base = String(config.url || '').replace(/\/chat\/completions$/, '').replace(/\/messages$/, '').replace(/\/v1$/, '').replace(/\/+$/, '');
-                    const _aUrl = _base + '/v1/messages';
+                    const _aUrl = _nativeBase('anthropic', config.url) + '/v1/messages';
                     const _aBody = _toAnthropicBody(cleanMessages, { model: config.model, temperature, maxTokens, top_p, effort: config.reasoningEffort,
                         thinkingSummary: !!options.showThinking && _thinksAnyway(config.model) });   // 小機那條要看他在想什麼
                     const _aResp = await fetch(_aUrl, {
@@ -1909,8 +1921,7 @@
                     // ── Gemini 原生格式：POST /v1beta/models/{model}:generateContent ──
                     //   接 Gemini CLI 的公益站（例如 gcli 那類）走 OpenAI 相容格式時不吃 Google 的安全欄位，R18 整段被過濾回空；
                     //   原生格式的 safetySettings 它會照轉，跟酒館用 Google 來源送過去的一樣。串流先不做，整篇回來再給。
-                    const _base = String(config.url || '').replace(/\/chat\/completions$/, '').replace(/\/v1beta.*$/, '').replace(/\/v1$/, '').replace(/\/+$/, '');
-                    const _gUrl = _base + '/v1beta/models/' + encodeURIComponent(String(config.model || '')) + ':generateContent?key=' + encodeURIComponent(String(config.key || ''));
+                    const _gUrl = _nativeBase('gemini', config.url) + '/v1beta/models/' + encodeURIComponent(String(config.model || '')) + ':generateContent?key=' + encodeURIComponent(String(config.key || ''));
                     const _gBody = _toGeminiBody(cleanMessages, { temperature, maxTokens, top_p, thinking: !!config.enableThinking, budget: parseInt(config.thinkingBudget) || 0 });
                     const _gResp = await fetch(_gUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(config.key || '') },
@@ -1963,11 +1974,11 @@
                         }
 
                         fullText = cleanRawOutput(acc, _keepFences);
-                        win.OS_API._lastCtx = {
+                        win.OS_API._lastCtx = _ctxRecvTok({
                             sendTokens: totalTokens, sendChars: totalChars,
-                            recvChars: acc.length, recvTokens: Math.ceil(acc.length * 0.5),
+                            recvChars: acc.length, recvTokens: 0,
                             msgCount: cleanMessages.length, updatedAt: Date.now()
-                        };
+                        }, acc);
                         if (onFinish) onFinish(fullText);
                         return;   // ← 提前返回，跳過下方的非串流邏輯
                     }
@@ -2004,15 +2015,14 @@
 
 
                 const recvChars = fullText.length;
-                const recvTokens = Math.ceil(recvChars * 0.5);
-                win.OS_API._lastCtx = {
+                win.OS_API._lastCtx = _ctxRecvTok({
                     sendTokens: typeof totalTokens === 'number' ? totalTokens : 0,
                     sendChars:  totalChars,
-                    recvTokens: recvTokens,
+                    recvTokens: 0,
                     recvChars:  recvChars,
                     msgCount:   cleanMessages.length,
                     updatedAt:  Date.now()
-                };
+                }, fullText);
 
                 console.log("🧹 [OS_API] 最終清洗文本:", fullText.substring(0, 100).replace(/\n/g, ' ') + "...");
 
@@ -2621,7 +2631,10 @@
                 // 只送在場的人的規則（scanText＝這次輸入＋最近幾章）；角色卡設成「想靠近」的人照送。見 os_avs_rules getActiveContext
                 let _leanKeep = [];
                 try { _leanKeep = ((await win.OS_STORY_THREADS?.leanList?.()) || {}).near || []; } catch (e) {}
-                const _avsRulesCtx = win.OS_AVS_RULES?.getActiveContext?.(_avsRead(), null, { sceneText: String(scanText || ''), keep: _leanKeep });
+                // 只認這本故事用得到的變數包（綁這本的＋全域的）：不傳的話規則窗口、「想靠近」生的條件規則（worldId 是空的）別本故事也會送
+                let _avsPackIds = null;
+                try { _avsPackIds = (await win.OS_AVS_RULES?.activePackIds?.()) || null; } catch (e) {}
+                const _avsRulesCtx = win.OS_AVS_RULES?.getActiveContext?.(_avsRead(), _avsPackIds, { sceneText: String(scanText || ''), keep: _leanKeep });
                 if (_avsRulesCtx) {
                     lore = lore ? lore + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
                     _lorePre = _lorePre ? _lorePre + '\n\n---\n\n' + _avsRulesCtx : _avsRulesCtx;
@@ -3115,8 +3128,9 @@
         startStandaloneStory: async function(sessionPayload) {
             console.log("[OS_API_ENGINE] 啟動獨立劇情:", sessionPayload);
 
-            localStorage.setItem('vn_current_story_id', sessionPayload.entityId);
-            localStorage.setItem('vn_current_story_title', sessionPayload.title);
+            // 目前是哪個故事沒存下來就別往下開：章節會記在新故事底下，畫面卻還停在舊的那個
+            if (!win.AUI.lsSet('vn_current_story_id', sessionPayload.entityId, '目前的故事')
+                || !win.AUI.lsSet('vn_current_story_title', sessionPayload.title, '目前的故事')) return;
 
             if (win.OS_DB && typeof win.OS_DB.saveVnChapter === 'function') {
                 await win.OS_DB.saveVnChapter({

@@ -71,12 +71,12 @@
             let n = 0;
             r.residents.forEach(x => { if (x && x.id && !list.some(y => y && y.id === x.id)) { list.push(x); n++; } });
             cfg.residents = list;
-            localStorage.setItem('os_claude_room_config', JSON.stringify(cfg));
+            if (!win.AUI.lsSet('os_claude_room_config', JSON.stringify(cfg), '還原的小機名冊')) return 0;   // 名冊沒寫進去，對話接回來也沒人認
             let convs = [];
             try { convs = JSON.parse(localStorage.getItem('xiaoji_convs') || '[]') || []; } catch (e) {}
             (r.convs || []).forEach(c => { if (c && c.id && !convs.some(y => y && y.id === c.id)) convs.push(c); });
-            localStorage.setItem('xiaoji_convs', JSON.stringify(convs));
-            Object.keys(r.active || {}).forEach(k => { if (localStorage.getItem(k) === null) localStorage.setItem(k, r.active[k]); });
+            win.AUI.lsSet('xiaoji_convs', JSON.stringify(convs), '還原的小機對話');
+            Object.keys(r.active || {}).forEach(k => { if (localStorage.getItem(k) === null) win.AUI.lsSet(k, r.active[k], '還原的小機對話'); });
             return n;
         },
         skip(store, e) { return store === 'app_data' && /^xiaoji_vec::/.test(String((e && e.id) || '')); },
@@ -144,7 +144,7 @@
     function getSettings() {
         try { return JSON.parse(localStorage.getItem(LSKEY) || '{}'); } catch(e) { return {}; }
     }
-    function saveSettings(s) { localStorage.setItem(LSKEY, JSON.stringify(s)); }
+    function saveSettings(s) { return win.AUI.lsSet(LSKEY, JSON.stringify(s), '備份設定'); }
     // 10-04 拿掉 Gist：以前存在這裡的 GitHub 金鑰與 Gist 編號清掉，不要留一把沒在用的金鑰在瀏覽器裡
     try { const _o = getSettings(); if (_o.token || _o.gistId) { delete _o.token; delete _o.gistId; saveSettings(_o); } } catch (e) {}
 
@@ -265,11 +265,12 @@
             if (Array.isArray(d.fav_voices)) restored.favVoices = await FAV.restore(d.fav_voices);
         }
 
-        // LocalStorage 恢復
+        // LocalStorage 恢復：一項寫不進去照樣接著寫下一項（不中斷），寫不進去的數目回給畫面講（lsFailed）
         if (data.localStorage && opts.restoreSettings !== false) {
+            restored.lsFailed = 0;
             Object.entries(data.localStorage).forEach(([k, v]) => {
-                try { localStorage.setItem(k, v); restored.localStorage++; }
-                catch (e) { console.warn('[OS_BACKUP] 還原設定失敗（空間不夠？）:', k, e); }
+                if (win.AUI.lsSet(k, v, '還原的設定')) restored.localStorage++;
+                else restored.lsFailed++;
             });
         }
 
@@ -348,7 +349,8 @@
         const st = await storageStatus();
         if (!st.supported || st.ratio < 0.8) return;
         const _d = new Date(), today = _d.getFullYear() + '-' + (_d.getMonth() + 1) + '-' + _d.getDate();
-        try { if (localStorage.getItem(WARN_KEY) === today) return; localStorage.setItem(WARN_KEY, today); } catch (e) {}
+        try { if (localStorage.getItem(WARN_KEY) === today) return; } catch (e) {}
+        win.AUI.lsSet(WARN_KEY, today, '空間提醒');
         const A = win.AUI || window.AUI;
         // 「系統/備份」那一頁只有 PWA 有；酒館版沒有那頁，就只指相簿
         let pwa = false; try { pwa = !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) {}
@@ -395,7 +397,7 @@
     }
     function autoSave(patch) {
         const a = Object.assign(autoGet(), patch || {});
-        try { localStorage.setItem(AUTO_KEY, JSON.stringify(a)); } catch (e) {}
+        win.AUI.lsSet(AUTO_KEY, JSON.stringify(a), '自動備份的設定');
         return a;
     }
     // 托管伺服器那組（「回覆交給伺服器跑」填的）；網址與通行碼都有才算
@@ -459,7 +461,7 @@
     function ghSave(patch) {
         const g = Object.assign(ghGet(), patch || {});
         g.repo = _repoOf(g.repo); g.token = String(g.token || '').trim();
-        try { localStorage.setItem(GH_KEY, JSON.stringify(g)); } catch (e) {}
+        win.AUI.lsSet(GH_KEY, JSON.stringify(g), '備份用的倉庫和金鑰');
         return g;
     }
     // 現在選的那個地方填好了沒
@@ -595,7 +597,7 @@
             // 開著卻三天以上沒成功：一天講一次
             if (a.lastAt && Date.now() - a.lastAt > 3 * DAY && a.lastErr) {
                 const _d = new Date(), today = _d.getFullYear() + '-' + (_d.getMonth() + 1) + '-' + _d.getDate();
-                try { if (localStorage.getItem('os_backup_fail_day') !== today) { localStorage.setItem('os_backup_fail_day', today);
+                try { if (localStorage.getItem('os_backup_fail_day') !== today) { win.AUI.lsSet('os_backup_fail_day', today, '備份提醒');
                     const A = win.AUI || window.AUI; if (A && A.toast) A.toast('自動備份已經 ' + Math.floor((Date.now() - a.lastAt) / DAY) + ' 天沒成功：' + a.lastErr, { type: 'warn' }); } } catch (e) {}
             }
             return;
@@ -616,7 +618,7 @@
             + '手機版的資料只存在這支手機的瀏覽器裡，清掉或換手機就沒了。要現在匯出一份嗎？',
             { title: '備份', okText: '匯出', cancelText: '之後再說', danger: false });   // 句子裡有「清掉」會被判成危險、按鈕變紅
         if (ok) { try { await exportLocal(); } catch (e) {} }
-        else { try { localStorage.setItem(REMIND_KEY, String(Date.now() + 3 * DAY)); } catch (e) {} }
+        else win.AUI.lsSet(REMIND_KEY, String(Date.now() + 3 * DAY), '「之後再說」');
     }
     try { setTimeout(() => { _autoBoot().catch(() => {}); }, 20000); } catch (e) {}
     try {

@@ -3739,6 +3739,8 @@
             await _storySyncNow();
             try { AUI.toastr && AUI.toastr.info('已還原成整理前的聊天室', '聊天室整理'); } catch (e) {}
         },
+        // 聊天室整理那兩張表（wx_room_id_remap／wx_room_fix）這個故事用哪一格：注入酒館那邊（os_app_memory_inject）讀表要用同一把，別自己算
+        roomKey: function() { return _wxRemapChatId(); },
         // 「＋」選單用：這個故事整理過才擺「還原整理」
         storyTidyHasRemap: function() {
             const f = _loadRoomFix();

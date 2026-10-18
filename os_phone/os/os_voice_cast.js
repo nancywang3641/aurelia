@@ -91,33 +91,29 @@
             } catch (e) { return migrate(); }
         },
 
-        /** 存名單（只改給的欄位）＋把兩個舊開關跟 Minimax 音色檔案推回去 */
+        /** 存名單（只改給的欄位）＋把兩個舊開關跟 Minimax 音色檔案推回去；沒存成回 null（已經跳過提示了） */
         saveRoster(patch) {
             const cur = this.getRoster();
             const next = { ...cur, ...(patch || {}) };
             next.on = !!next.on;
             next.others = next.others === 'none' ? 'none' : 'local';
             next.entries = (next.entries || []).map(cleanEntry).filter(e => e.label && e.voiceId);
-            localStorage.setItem(KEY, JSON.stringify(next));
-            this._applyFlags(next);
-            return next;
+            if (!win.AUI.lsSet(KEY, JSON.stringify(next), '角色配音名單')) return null;   // 名單沒存成，舊開關也別跟著推
+            return this._applyFlags(next) ? next : null;
         },
 
         _applyFlags(r) {
             const localOn = !!(r.on && r.others === 'local');
-            try {
-                const tts = readJson(TTS_KEY);
-                tts.enabled = localOn;
-                localStorage.setItem(TTS_KEY, JSON.stringify(tts));
-            } catch (e) {}
+            const tts = readJson(TTS_KEY);
+            tts.enabled = localOn;
+            let ok = win.AUI.lsSet(TTS_KEY, JSON.stringify(tts), '本機語音開關');
             const T = TTS();
             if (T && T.config) T.config.enabled = localOn;
-            try {
-                const mm = readJson(MM_KEY);
-                mm.enabled = !!r.on;
-                mm.voiceProfiles = r.entries.filter(e => e.src === 'minimax').map(e => ({ label: e.label, id: e.voiceId, aliases: e.aliases.slice() }));
-                localStorage.setItem(MM_KEY, JSON.stringify(mm));
-            } catch (e) {}
+            const mm = readJson(MM_KEY);
+            mm.enabled = !!r.on;
+            mm.voiceProfiles = r.entries.filter(e => e.src === 'minimax').map(e => ({ label: e.label, id: e.voiceId, aliases: e.aliases.slice() }));
+            ok = win.AUI.lsSet(MM_KEY, JSON.stringify(mm), '語音設定') && ok;
+            return ok;
         },
 
         isOn() { return this.getRoster().on; },

@@ -38,7 +38,8 @@
         (function setupComfyDirect(){
             const cfd = (imgConfig && imgConfig.comfyuiDirect) || ((window.parent || window).OS_IMAGE_MANAGER && (window.parent || window).OS_IMAGE_MANAGER.config && (window.parent || window).OS_IMAGE_MANAGER.config.comfyuiDirect) || {};
             const lorasBox = container.querySelector('#img-cfd-loras');
-            function escAttr(s){ return String(s == null ? '' : s).replace(/"/g, '&quot;'); }
+            // 屬性和選項文字都用這支（檔名、包名可能帶 & 或 <），所以四種都要轉，不能只轉引號
+            function escAttr(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
             // 模型類型（標準/Flux）：切換 Flux 欄位 + 依類型過濾模型下拉（checkpoint vs UNet）
             let lastModels = null;
             function curType(){ const t = container.querySelector('#img-cfd-type'); return (t && t.value) || 'checkpoint'; }
@@ -409,6 +410,11 @@
                 // 面板若被塞進 iframe，兩個 window 各有一份 localStorage；讀這些鍵的人散在大廳與手機 app → 兩邊都寫
                 const stores = [window.localStorage];
                 try { if (_w && _w !== window && _w.localStorage) stores.push(_w.localStorage); } catch(e) {}
+                // 寫不進去（空間滿了）要記在 res 上，畫面才會說「存不進本機空間」；以前別的鍵寫失敗是靜靜吞掉
+                const put = function(st, key, val){
+                    try { st.setItem(key, val); return true; }
+                    catch(e) { res.ok = false; res.err = res.err || (e && e.message) || String(e); return false; }
+                };
 
                 // ① 正在改的包＋圖片設置「畫風」頁每一列選的包（os_img_routes 記的是 comfy:名字）
                 if (_editing === oldName) { _editing = newName; _fillEditSel(); }
@@ -418,7 +424,7 @@
                         const o = JSON.parse(raw); if (!o || typeof o !== 'object') return;
                         let hit = false;
                         Object.keys(o).forEach(function(k){ if (o[k] && o[k].conn === 'comfy:' + oldName) { o[k].conn = 'comfy:' + newName; hit = true; } });
-                        if (hit) { st.setItem('os_img_routes', JSON.stringify(o)); res.touched = true; }
+                        if (hit && put(st, 'os_img_routes', JSON.stringify(o))) res.touched = true;
                     } catch(e) {}
                 });
 
@@ -451,7 +457,7 @@
                         try {
                             const raw = st.getItem(key); if (!raw) return;
                             const o = JSON.parse(raw); if (!o || typeof o !== 'object') return;
-                            if (fn(o)) { st.setItem(key, JSON.stringify(o)); res.touched = true; }
+                            if (fn(o) && put(st, key, JSON.stringify(o))) res.touched = true;
                         } catch(e) {}
                     });
                 };
@@ -460,7 +466,7 @@
                 patch('wg_sprite_pack_v1',   function(o){ if (o.src !== 'novelai' && o.key === oldName) { o.key = newName; return true; } return false; });   // 世界門：旅人立姿
                 // 包租婆整房生圖的畫風包：這個鍵存的是純字串不是 JSON
                 stores.forEach(function(st){
-                    try { if (st.getItem('aurelia_room_style_preset') === oldName) { st.setItem('aurelia_room_style_preset', newName); res.touched = true; } } catch(e) {}
+                    try { if (st.getItem('aurelia_room_style_preset') === oldName && put(st, 'aurelia_room_style_preset', newName)) res.touched = true; } catch(e) {}
                 });
 
                 // ⑤ 這張設定頁上兩個「用名字當 value」的下拉是開面板時一次組好的 → 不同步就會停在舊名，
@@ -499,7 +505,7 @@
                     inp.className = 'cfd-pack-name-input';
                     inp.value = oldName;
                     host.appendChild(inp);
-                    inp.focus(); inp.select();
+                    inp.focus({ preventScroll: true }); inp.select();
                     let done = false;
                     const finish = function(commit){
                         if (done) return; done = true;
@@ -527,7 +533,7 @@
                 saveNew: function(){
                     const ni = container.querySelector('#img-cfd-preset-newname');
                     const name = ni && ni.value.trim();
-                    if (!name) { AUI.alert('請先輸入新預設包名稱'); if (ni) ni.focus(); return; }
+                    if (!name) { AUI.alert('請先輸入新預設包名稱'); if (ni) ni.focus({ preventScroll: true }); return; }
                     cfdPresets.push(buildCfdPreset(name));
                     if (ni) ni.value = '';
                     renderPresetGrid();

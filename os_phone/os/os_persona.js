@@ -24,14 +24,15 @@
     function loadLocalPersonas() {
         try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; }
     }
+    // 存成回 true；空間滿了回 false（AUI.lsSet 已經跳「○○沒存下來」）
     function saveLocalPersonas(list) {
-        localStorage.setItem(LS_KEY, JSON.stringify(list));
+        return win.AUI.lsSet(LS_KEY, JSON.stringify(list), '人設清單');
     }
     function loadCurrentId() {
         return localStorage.getItem(LS_CUR) || null;
     }
     function saveCurrentId(id) {
-        localStorage.setItem(LS_CUR, id);
+        return win.AUI.lsSet(LS_CUR, id, '目前用的人設');
     }
 
     // ── 建立與酒館的通訊橋樑 (還原 V5.0) ──
@@ -52,22 +53,21 @@
     function syncFromST() {
         if (isStandalone()) return;
         try {
+            const pu = win.power_user || win.parent?.power_user;
             const userBlock = doc.querySelector('#user_avatar_block .avatar-container.selected');
             if (userBlock) {
                 const nameEl = userBlock.querySelector('.ch_name.flex1');
                 if (nameEl?.textContent.trim()) CURRENT_PERSONA.name = nameEl.textContent.trim();
                 const avatarEl = userBlock.querySelector('[data-avatar-id]');
-                if (avatarEl) {
-                    const id = avatarEl.getAttribute('data-avatar-id');
-                    if (id) { CURRENT_PERSONA.id = id; CURRENT_PERSONA.avatar = `/thumbnail?type=persona&file=${id}`; }
-                }
+                const id = avatarEl ? avatarEl.getAttribute('data-avatar-id') : '';
+                if (id) { CURRENT_PERSONA.id = id; CURRENT_PERSONA.avatar = `/thumbnail?type=persona&file=${id}`; }
                 const descEl = userBlock.querySelector('.ch_description');
-                if (descEl) {
-                    let d = descEl.textContent.trim().replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim();
-                    if (d && !d.includes('無使用者角色描述')) CURRENT_PERSONA.desc = d;
-                }
+                let d = descEl ? descEl.textContent.trim().replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim() : '';
+                if (d.includes('無使用者角色描述')) d = '';
+                // 畫面上讀不到就問酒館存的那份；都沒有＝這個人設本來就沒寫描述，要清空，不能沿用上一個人設的
+                if (!d && id && pu?.persona_descriptions?.[id]) d = String(pu.persona_descriptions[id].description || '').replace(/<[^>]+>/g, '').trim();
+                CURRENT_PERSONA.desc = d;
             }
-            const pu = win.power_user || win.parent?.power_user;
             if (pu?.personas) {
                 if (!CURRENT_PERSONA.name || CURRENT_PERSONA.name === 'User') {
                     if (pu.persona_selected && pu.personas[pu.persona_selected]) {
@@ -259,7 +259,7 @@
                 el.classList.add('active');
                 const nameEl = el.querySelector('.ps-name');
                 if (nameEl && !nameEl.querySelector('.fa-circle-check')) {
-                    nameEl.innerHTML += ' <i class="fa-solid fa-circle-check" style="color:#1A1C28; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(26,28,40,0.30);" title="當前使用中"></i>';
+                    nameEl.insertAdjacentHTML('beforeend', ' <i class="fa-solid fa-circle-check" style="color:#1A1C28; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(26,28,40,0.30);" title="當前使用中"></i>');
                 }
             });
         });
@@ -326,7 +326,7 @@
         if (!await AUI.confirm('確定要刪除這個設定嗎？')) return;
         let list = loadLocalPersonas();
         list = list.filter(x => x.id !== id);
-        saveLocalPersonas(list);
+        if (!saveLocalPersonas(list)) return;   // 沒刪成（已經跳過提示了），清單照舊
         if (loadCurrentId() === id && list.length > 0) {
             API.switchPersona(list[0].id, null);
         } else {
@@ -448,7 +448,7 @@
             }
         }
 
-        saveLocalPersonas(list);
+        if (!saveLocalPersonas(list)) return;   // 沒存下來（頭像是本機上傳的話最容易撐爆）：編輯頁留著，打的字還在
         closeEditModal();
         refreshList();
         // 大廳右上角的人設頭像跟著換（它只在下拉窗關掉時才自己重讀）
@@ -490,7 +490,7 @@
         // 🔥 完全還原 V5.0 的切換邏輯
         switchPersona: function(personaId, personaName) {
             if (isStandalone()) {
-                saveCurrentId(personaId);
+                if (!saveCurrentId(personaId)) return;   // 沒存下來就別切（清單畫的是存著的那個）
                 const list = loadLocalPersonas();
                 const found = list.find(p => p.id === personaId);
                 if (found) CURRENT_PERSONA = { ...found };

@@ -356,29 +356,36 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     const ALICE_KEY   = 'os_alice_persona';
     const RABBIT_KEY  = 'os_rabbit_persona';
 
+    // 寫進本機一律走 AUI.lsSet：提示詞可能很長，空間滿了不丟例外、會跳「○○沒存下來」；
+    // 各支 save 回 true／false，有「已保存」提示的地方看這個決定要不要報成功
+    function _lsSet(key, value, what) { return win.AUI.lsSet(key, value, what); }
+    // 塞進 textarea／文字裡的字：& 也要轉，不然內容裡本來寫的 &lt; 會被當成 < 讀回去、存回去就變了
+    function _escText(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function _escAttr(s) { return _escText(s).replace(/"/g, '&quot;'); }
+
     function loadEntries() {
         try { return JSON.parse(localStorage.getItem(ENTRIES_KEY)) || []; } catch(e) { return []; }
     }
-    function saveEntries(arr) { localStorage.setItem(ENTRIES_KEY, JSON.stringify(arr)); }
+    function saveEntries(arr) { return _lsSet(ENTRIES_KEY, JSON.stringify(arr), '提示詞條目'); }
     function loadIris()     { return localStorage.getItem(IRIS_KEY)   || ''; }
-    function saveIris(v)    { localStorage.setItem(IRIS_KEY, v); }
+    function saveIris(v)    { return _lsSet(IRIS_KEY, v, '大廳人設補充'); }
     function loadCheshire() { return localStorage.getItem(CHESS_KEY)  || ''; }
-    function saveCheshire(v){ localStorage.setItem(CHESS_KEY, v); }
+    function saveCheshire(v){ return _lsSet(CHESS_KEY, v, '大廳人設補充'); }
     function loadAlice()    { return localStorage.getItem(ALICE_KEY)  || ''; }
-    function saveAlice(v)   { localStorage.setItem(ALICE_KEY, v); }
+    function saveAlice(v)   { return _lsSet(ALICE_KEY, v, '大廳人設補充'); }
     // 白兔補充人設：大廳對話與交易所估值點評共用同一份（改一次兩邊都吃）
     function loadRabbit()   { return localStorage.getItem(RABBIT_KEY) || ''; }
-    function saveRabbit(v)  { localStorage.setItem(RABBIT_KEY, v); }
+    function saveRabbit(v)  { return _lsSet(RABBIT_KEY, v, '大廳人設補充'); }
     // 紫薇補充人設：只吃「在小屋裡跟她聊天」那條；翻牌解讀是 tarot_pythia，兩邊各自獨立
     const ZHIWEI_KEY = 'os_zhiwei_persona';
     function loadZhiwei()   { return localStorage.getItem(ZHIWEI_KEY) || ''; }
-    function saveZhiwei(v)  { localStorage.setItem(ZHIWEI_KEY, v); }
+    function saveZhiwei(v)  { return _lsSet(ZHIWEI_KEY, v, '大廳人設補充'); }
     const HATTER_KEY = 'os_hatter_persona';
     function loadHatter()   { return localStorage.getItem(HATTER_KEY) || ''; }
-    function saveHatter(v)  { localStorage.setItem(HATTER_KEY, v); }
+    function saveHatter(v)  { return _lsSet(HATTER_KEY, v, '大廳人設補充'); }
     const WORLD_KEY = 'os_lobby_world';
     function loadWorld()    { return localStorage.getItem(WORLD_KEY)  || ''; }
-    function saveWorld(v)   { localStorage.setItem(WORLD_KEY, v); }
+    function saveWorld(v)   { return _lsSet(WORLD_KEY, v, '大廳世界觀補充'); }
 
     // ================================================================
     // 三、公開 API
@@ -498,7 +505,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             return list;
         } catch(e) { return []; }
     }
-    function saveBundles(list) { localStorage.setItem(BUNDLE_KEY, JSON.stringify(list)); }
+    function saveBundles(list) { return _lsSet(BUNDLE_KEY, JSON.stringify(list), '預設包'); }
 
     // promptKey 匹配：bundle.panels 包含對應前綴
     function bundleMatchesKey(bundle, promptKey, opts) {
@@ -581,7 +588,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
 
     const UCOT_KEY = 'os_universal_cot';
     function loadUniversalCot() { return localStorage.getItem(UCOT_KEY) || ''; }
-    function saveUniversalCot(v) { localStorage.setItem(UCOT_KEY, v); }
+    function saveUniversalCot(v) { return _lsSet(UCOT_KEY, v, '全域思考鏈'); }
 
     win.OS_PROMPTS = {
         get: function(key, opts) {   // opts.wxGroup：聊天路線這一間是不是群（分私聊／群聊的包靠它）
@@ -663,17 +670,20 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     function loadUnifiedOrder() {
         const bundleIds = loadBundles().map(b => b.id);
         let saved = [];
-        try { saved = JSON.parse(localStorage.getItem(ORDER_KEY) || '[]') || []; } catch(e) {}
+        const raw = localStorage.getItem(ORDER_KEY) || '[]';
+        try { saved = JSON.parse(raw) || []; } catch(e) {}
         // 只保留有效 bundle ID（過濾掉舊格式的 sys keys / entry IDs）
         const validSet = new Set(bundleIds);
         saved = saved.filter(id => validSet.has(id));
         // 新增的 bundle 補到末尾
         const missing = bundleIds.filter(id => !saved.includes(id));
         if (missing.length) saved.push(...missing);
-        localStorage.setItem(ORDER_KEY, JSON.stringify(saved));
+        // 有變才寫：每組一次提示詞都會讀這份，空間滿的時候每讀一次就寫失敗一次
+        const next = JSON.stringify(saved);
+        if (next !== raw) _lsSet(ORDER_KEY, next, '預設包順序');
         return saved;
     }
-    function saveUnifiedOrder(order) { localStorage.setItem(ORDER_KEY, JSON.stringify(order)); }
+    function saveUnifiedOrder(order) { return _lsSet(ORDER_KEY, JSON.stringify(order), '預設包順序'); }
 
     // ── 渲染預設包內部拖拉列表（sys 佔位 + 條目）──
     function renderBundleInner(bundleBodyEl, bundleId) {
@@ -716,7 +726,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                     <span class="pm-bi-desc">${slotDef?.desc || ''}</span>`;
             } else {
                 row.innerHTML = `<span class="pm-bi-handle">⠿</span>
-                    <span class="pm-bi-label">${entry?.name || '(已刪除)'}</span>
+                    <span class="pm-bi-label">${_escText(entry?.name || '(已刪除)')}</span>
                     <button class="pm-bi-rm" title="移出">✕</button>`;
                 row.querySelector('.pm-bi-rm').onclick = ev => {
                     ev.stopPropagation();
@@ -821,12 +831,12 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         modal.innerHTML = `
             <div class="pm-bmodal-hd">
                 <button class="pm-bmodal-back">‹</button>
-                <span class="pm-bmodal-title"><i class="fa-solid fa-box"></i> ${(bundle.name || '(未命名包)').replace(/</g,'&lt;')}</span>
+                <span class="pm-bmodal-title"><i class="fa-solid fa-box"></i> ${_escText(bundle.name || '(未命名包)')}</span>
                 <button class="pm-bundle-save pm-bmodal-sv">保存</button>
             </div>
             <div class="pm-bmodal-body">
                 <div class="pm-bundle-name-row">
-                    <input class="pm-bundle-name-input" type="text" placeholder="預設包名稱" value="${(bundle.name||'').replace(/"/g,'&quot;')}">
+                    <input class="pm-bundle-name-input" type="text" placeholder="預設包名稱" value="${_escAttr(bundle.name||'')}">
                 </div>
                 <div class="pm-panel-row"><span class="pm-panel-row-label">適用面板：</span>${cbRows}</div>
                 <div class="pm-panel-row pm-wx-scope-row" ${bPanels.includes('wx') ? '' : 'hidden'}><span class="pm-panel-row-label">聊天室：</span>${scopeRows}</div>
@@ -849,8 +859,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             bl[bi].name   = newName;
             bl[bi].panels = [...modal.querySelectorAll('.pm-panel-check:checked')].map(cb => cb.dataset.panel);
             bl[bi].wxScope = modal.querySelector('.pm-wx-scope-check:checked')?.value || 'all';
-            saveBundles(bl);
-            modal.querySelector('.pm-bmodal-title').innerHTML = '<i class="fa-solid fa-box"></i> ' + newName.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+            if (!saveBundles(bl)) return;   // 沒存下來（已經跳過提示了），不報已保存
+            modal.querySelector('.pm-bmodal-title').innerHTML = '<i class="fa-solid fa-box"></i> ' + _escText(newName);
             renderUnified(bodyEl);
             const btn = modal.querySelector('.pm-bmodal-sv');
             btn.textContent = '已保存 ✓'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28';
@@ -876,13 +886,13 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 <span class="pm-gcot-badge">${cotVal.trim() ? '已設定' : '未設定'} · 所有未配置面板的 fallback</span>
             </div>
             <div class="pm-gcot-body">
-                <textarea class="pm-gcot-ta" placeholder="在此輸入通用 CoT 指令…">${cotVal.replace(/</g,'&lt;')}</textarea>
+                <textarea class="pm-gcot-ta" placeholder="在此輸入通用 CoT 指令…">${_escText(cotVal)}</textarea>
                 <button class="pm-gcot-save"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
             </div>`;
         gcot.querySelector('.pm-gcot-head').onclick = () => gcot.querySelector('.pm-gcot-body').classList.toggle('open');
         gcot.querySelector('.pm-gcot-save').onclick = () => {
             const val = gcot.querySelector('.pm-gcot-ta').value;
-            saveUniversalCot(val);
+            if (!saveUniversalCot(val)) return;
             gcot.querySelector('.pm-gcot-badge').textContent = (val.trim() ? '已設定' : '未設定') + ' · 所有未配置面板的 fallback';
             const btn = gcot.querySelector('.pm-gcot-save');
             btn.textContent = '✓ 已保存'; btn.style.background = '#6b8e23'; btn.style.color = '#1A1C28'; 
@@ -965,7 +975,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 item.innerHTML = `<div class="pm-uni-head">
                     <span class="pm-uni-handle">⠿</span>
                     <input type="checkbox" class="pm-bundle-toggle" ${bundle.enabled !== false ? 'checked' : ''}>
-                    <span class="pm-uni-label"><i class="fa-solid fa-box"></i> ${bundle.name || '(未命名包)'}</span>
+                    <span class="pm-uni-label"><i class="fa-solid fa-box"></i> ${_escText(bundle.name || '(未命名包)')}</span>
                     <div class="pm-panel-chips">${chips}</div>
                     <button class="pm-icon-btn pm-bundle-edit"><i class="fa-solid fa-pen"></i></button>
                     <button class="pm-icon-btn del pm-bundle-del"><i class="fa-solid fa-trash-can"></i></button>
@@ -982,8 +992,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 item.querySelector('.pm-bundle-del').onclick = async ev => {
                     ev.stopPropagation();
                     if (!await AUI.confirm(`刪除預設包「${bundle.name||'(未命名)'}」？（條目不會被刪除）`)) return;
-                    saveBundles(loadBundles().filter(b => b.id !== id));
-                    saveUnifiedOrder(loadUnifiedOrder().filter(oid => oid !== id));
+                    if (saveBundles(loadBundles().filter(b => b.id !== id))) saveUnifiedOrder(loadUnifiedOrder().filter(oid => oid !== id));
                     renderUnified(body);
                 };
             }
@@ -1000,7 +1009,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             const nb = { id: 'bundle_' + Date.now() + '_' + Math.random().toString(36).slice(2,6), name: '新預設包', panels: ['vn_story'], items: DEFAULT_SYS_ITEMS(), enabled: true };
             // 先取 order（此時還未存新 bundle，loadUnifiedOrder 不會自動加入它）
             const cur = loadUnifiedOrder();
-            const bl = loadBundles(); bl.push(nb); saveBundles(bl);
+            const bl = loadBundles(); bl.push(nb);
+            if (!saveBundles(bl)) return;   // 沒存下來（已經跳過提示了）就別打開一個不存在的包
             cur.push(nb.id); saveUnifiedOrder(cur);
             renderUnified(body);
             setTimeout(() => openBundleModal(nb.id, body), 30);
@@ -1028,8 +1038,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 <button class="pm-bundle-save pm-emodal-sv">保存</button>
             </div>
             <div class="pm-bmodal-body pm-entry-edit">
-                <input class="pm-entry-name-input" type="text" placeholder="條目名稱" value="${(entry.name||'').replace(/"/g,'&quot;')}">
-                <textarea class="pm-entry-ta" placeholder="輸入條目內容...">${(entry.content||'').replace(/</g,'&lt;')}</textarea>
+                <input class="pm-entry-name-input" type="text" placeholder="條目名稱" value="${_escAttr(entry.name||'')}">
+                <textarea class="pm-entry-ta" placeholder="輸入條目內容...">${_escText(entry.content||'')}</textarea>
             </div>`;
 
         const close = () => modal.classList.remove('open');
@@ -1039,7 +1049,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             if (idx < 0) return close();
             list[idx].name    = modal.querySelector('.pm-entry-name-input').value.trim() || '(未命名)';
             list[idx].content = modal.querySelector('.pm-entry-ta').value;
-            saveEntries(list);
+            if (!saveEntries(list)) return;   // 沒存下來就留在編輯頁，打的字還在
             const btn = modal.querySelector('.pm-emodal-sv');
             btn.textContent = '已保存 ✓';
             setTimeout(() => { close(); btn.textContent = '保存'; onSaved?.(); }, 500);
@@ -1064,7 +1074,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             card.className = 'pm-staging-entry';
             card.innerHTML = `<div class="pm-staging-head">
                 <input type="checkbox" class="pm-entry-toggle" ${entry.enabled !== false ? 'checked' : ''}>
-                <span class="pm-staging-name">${entry.name || '(未命名)'}</span>
+                <span class="pm-staging-name">${_escText(entry.name || '(未命名)')}</span>
                 <button class="pm-icon-btn pm-st-edit"><i class="fa-solid fa-pen"></i> 編輯</button>
                 <button class="pm-icon-btn del pm-st-del"><i class="fa-solid fa-trash-can"></i></button>
             </div>`;
@@ -1101,7 +1111,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         hd.querySelector('.pm-add-btn').onclick = () => {
             const entries = loadEntries();
             entries.push({ id: genId(), name: '新條目', content: '', enabled: true, order: entries.length });
-            saveEntries(entries);
+            if (!saveEntries(entries)) return;
             renderStaging(list, () => renderLibrary(body));
             setTimeout(() => openEntryModal(entries[entries.length-1].id, list, () => renderLibrary(body)), 30);
         };
@@ -1109,6 +1119,17 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
     }
 
     // ── 匯出匯入邏輯 ──
+    // 大廳每個人的補充人設和世界觀：匯出、匯入都照這張表，之後加人只要加一列（以前只帶最早那兩位，後來加的人和世界觀匯出就不見）
+    const PERSONA_IO = [
+        ['iris',     loadIris,     saveIris],
+        ['cheshire', loadCheshire, saveCheshire],
+        ['alice',    loadAlice,    saveAlice],
+        ['rabbit',   loadRabbit,   saveRabbit],
+        ['zhiwei',   loadZhiwei,   saveZhiwei],
+        ['hatter',   loadHatter,   saveHatter],
+        ['world',    loadWorld,    saveWorld],
+    ];
+
     function exportPrompts() {
         const data = {
             version: 1,
@@ -1116,10 +1137,9 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             entries: loadEntries(),
             bundles: loadBundles(),
             order: loadUnifiedOrder(),
-            iris: loadIris(),
-            cheshire: loadCheshire(),
             globalCot: loadUniversalCot()
         };
+        PERSONA_IO.forEach(([k, load]) => { data[k] = load(); });
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -1156,11 +1176,11 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 <div class="pm-staging-entry" style="margin-bottom:8px; border-color:rgba(var(--os-ink-rgb), 0.15);">
                     <div class="pm-staging-head">
                         <input type="checkbox" class="st-block-cb" data-idx="${idx}" checked style="width:16px; height:16px; accent-color:var(--os-ink);">
-                        <span class="pm-staging-name" style="color:var(--os-ink);">${b.title}</span>
+                        <span class="pm-staging-name" style="color:var(--os-ink);">${_escText(b.title)}</span>
                         <button class="pm-icon-btn" onclick="this.parentElement.nextElementSibling.classList.toggle('open')"><i class="fa-solid fa-eye"></i> 預覽</button>
                     </div>
                     <div class="pm-staging-body" style="padding:0 10px 10px; display:none;">
-                        <textarea class="pm-entry-ta" readonly style="height:100px; color:var(--os-ink-soft); border-color:rgba(var(--os-ink-rgb), 0.15);">${b.content.replace(/</g, '&lt;')}</textarea>
+                        <textarea class="pm-entry-ta" readonly style="height:100px; color:var(--os-ink-soft); border-color:rgba(var(--os-ink-rgb), 0.15);">${_escText(b.content)}</textarea>
                     </div>
                 </div>
             `;
@@ -1185,7 +1205,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                     enabled: true
                 });
             });
-            saveEntries(entries);
+            if (!saveEntries(entries)) return;   // 沒存下來（已經跳過提示了），視窗留著
             AUI.alert(`成功匯入 ${checkedBoxes.length} 個條目！請在「條目庫」中查看。`);
             modal.classList.remove('open');
             refreshCallback();
@@ -1202,6 +1222,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                 
                 // 1. 判斷是否為 PhoneOS 原生備份檔
                 if (data.type === "os_prompts") {
+                    let ok = true;
                     if (await AUI.confirm('匯入的資料要怎麼放？\n合併：原有資料都留著，同名的換成匯入的。\n完全覆蓋：現有資料全部換成匯入的。', { okText: '合併', cancelText: '完全覆蓋', danger: false, dismissible: false })) {
                         const curEntries = loadEntries();
                         const curBundles = loadBundles();
@@ -1211,28 +1232,27 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
 
                         const entryMap = Object.fromEntries(curEntries.map(e => [e.id, e]));
                         newEntries.forEach(e => entryMap[e.id] = e);
-                        saveEntries(Object.values(entryMap));
+                        ok = saveEntries(Object.values(entryMap)) && ok;
 
                         const bundleMap = Object.fromEntries(curBundles.map(b => [b.id, b]));
                         newBundles.forEach(b => bundleMap[b.id] = b);
-                        saveBundles(Object.values(bundleMap));
+                        ok = saveBundles(Object.values(bundleMap)) && ok;
 
                         const addedOrder = (data.order || []).filter(id => !curOrder.includes(id));
-                        saveUnifiedOrder([...curOrder, ...addedOrder]);
+                        ok = saveUnifiedOrder([...curOrder, ...addedOrder]) && ok;
 
-                        if (data.iris) saveIris(data.iris);
-                        if (data.cheshire) saveCheshire(data.cheshire);
-                        if (data.globalCot) saveUniversalCot(data.globalCot);
+                        PERSONA_IO.forEach(([k, , save]) => { if (data[k]) ok = save(data[k]) && ok; });
+                        if (data.globalCot) ok = saveUniversalCot(data.globalCot) && ok;
                     } else {
-                        if(data.entries) saveEntries(data.entries);
-                        if(data.bundles) saveBundles(data.bundles);
-                        if(data.order) saveUnifiedOrder(data.order);
-                        if(data.iris !== undefined) saveIris(data.iris);
-                        if(data.cheshire !== undefined) saveCheshire(data.cheshire);
-                        if(data.globalCot !== undefined) saveUniversalCot(data.globalCot);
+                        if(data.entries) ok = saveEntries(data.entries) && ok;
+                        if(data.bundles) ok = saveBundles(data.bundles) && ok;
+                        if(data.order) ok = saveUnifiedOrder(data.order) && ok;
+                        PERSONA_IO.forEach(([k, , save]) => { if (data[k] !== undefined) ok = save(data[k]) && ok; });
+                        if(data.globalCot !== undefined) ok = saveUniversalCot(data.globalCot) && ok;
                     }
-                    AUI.alert('提示詞匯入成功！');
                     refreshCallback();
+                    if (!ok) { AUI.alert('有些提示詞沒存下來（本機空間滿了），先清出一些空間再匯入一次。'); return; }
+                    AUI.alert('提示詞匯入成功！');
                     return;
                 }
                 

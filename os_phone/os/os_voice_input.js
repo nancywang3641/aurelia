@@ -36,7 +36,7 @@
     function setConfig(patch) {
         const prev = getConfig();
         const next = Object.assign({}, prev, patch || {});
-        try { win.localStorage.setItem(CFG_KEY, JSON.stringify(next)); } catch (e) { console.warn('[VoiceInput] 設定存不進去', e); }
+        if (!win.AUI.lsSet(CFG_KEY, JSON.stringify(next), '語音輸入設定')) return prev;   // 沒存成：轉字方式其實沒換，別去放掉正在用的那個
         // 換掉本機模型：把它佔的記憶體放掉（下載的檔案留著，換回來不用重下載）
         if (next.engine !== prev.engine) { const old = ENGINES[prev.engine]; if (old && old.unload) old.unload(); }
         if (next.language !== prev.language && next.engine === prev.engine) {
@@ -391,10 +391,7 @@
                 }
             };
             w.onerror = (e) => {
-                const msg = (e && e.message) || '語音引擎當掉了';
-                Object.values(this._pending).forEach((p) => p.reject(new Error(msg)));
-                this._pending = {};
-                this.unload();
+                this.unload((e && e.message) || '語音引擎當掉了');
             };
             return w;
         },
@@ -428,12 +425,15 @@
             if (this._ready) return Promise.resolve();
             if (onProgress) this._progress = onProgress;
             if (this._preparing) return this._preparing;
-            this._worker = this._spawn();
-            this._preparing = this._call({ cmd: 'init', cfg: Object.assign({}, SV, { language: getConfig().language }) })
-                .then(() => { this._ready = true; })
-                .catch((e) => { this.unload(); throw e; })
-                .finally(() => { this._preparing = null; this._progress = null; });
-            return this._preparing;
+            // 記住這一輪是哪個 worker：準備到一半被放掉（換語言、換轉字方式）又重新 prepare 時，
+            // 舊這輪晚到的收尾不能把新的 worker 關掉、也不能清掉新的 _preparing
+            const w = this._worker = this._spawn();
+            const p = this._call({ cmd: 'init', cfg: Object.assign({}, SV, { language: getConfig().language }) })
+                .then(() => { if (this._worker !== w) throw new Error('語音引擎準備到一半被放掉了'); this._ready = true; })
+                .catch((e) => { if (this._worker === w) this.unload(); throw e; })
+                .finally(() => { if (this._preparing === p) { this._preparing = null; this._progress = null; } });
+            this._preparing = p;
+            return p;
         },
 
         async transcribe(blob) {
@@ -443,10 +443,17 @@
             return r;
         },
 
-        unload() {
+        // worker 關掉後不會再回訊息：還在等的（準備中、轉字中）要一起退回，不然 prepare 永遠卡著同一個不會結束的 Promise
+        unload(reason) {
             if (this._worker) { try { this._worker.terminate(); } catch (e) {} }
             this._worker = null;
             this._ready = false;
+            const pending = Object.values(this._pending);
+            this._pending = {};
+            const err = new Error(reason || '語音引擎已經放掉了，再按一次會重新載入');
+            pending.forEach((p) => p.reject(err));
+            this._preparing = null;
+            this._progress = null;
         },
 
         async clearCache() {

@@ -122,6 +122,8 @@
             }
             throw new Error('transformers.js 載入失敗（CDN 都連不上 / 被 CSP 擋 / 格式不對）：' + (lastErr?.message || lastErr));
         })();
+        const p = _tfModP;
+        p.catch(() => { if (_tfModP === p) _tfModP = null; });   // 跟 _pipes 一樣：載失敗下次重試，不要一直拿同一個壞掉的 promise
         return _tfModP;
     }
 

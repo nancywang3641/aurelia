@@ -24,7 +24,7 @@
         } catch(e) { entries = []; }
     }
     function saveToStorage() {
-        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES))); } catch(e) {}
+        win.AUI.lsSet(STORAGE_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES)), '思考過程記錄');   // 空間滿了會跳提示（以前靜靜吞掉）
     }
     loadFromStorage();
 

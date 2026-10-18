@@ -30,6 +30,23 @@
         el.textContent = msg || '';
         el.classList.toggle('is-error', !!isErr);
     }
+    // 把 el 捲到看得到：只捲離它最近那層會捲的框。scrollIntoView 會連外層一起捲，
+    //   設置頁還在滑入時會卡在兩頁中間，overflow:hidden 的父層也會被它捲歪
+    function scrollInBox(el) {
+        const view = el.ownerDocument.defaultView;
+        let box = el.parentElement;
+        while (box && box !== el.ownerDocument.body) {
+            const oy = view.getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box || box === el.ownerDocument.body) return;
+        const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+        let d = 0;   // 跟 block:'nearest' 一樣：已經整個看得到就不動，露出上緣或下緣不夠的那邊
+        if (r.top < b.top) d = r.top - b.top;
+        else if (r.bottom > b.bottom) d = Math.min(r.bottom - b.bottom, r.top - b.top);
+        if (d) box.scrollTo({ top: box.scrollTop + d });
+    }
 
     // ── 下拉選單裡有哪些聲音 ──
     function elVoices() { const E = EL(); return (E && E.getConfig().voices) || []; }
@@ -236,6 +253,7 @@
 
         // ── 總開關、沒在名單上的人：當場生效 ──
         const syncHidden = (r) => {
+            if (!r) return;   // 沒存下來（已經跳過提示了）
             const mmEn = q('mm-enabled'); if (mmEn) mmEn.checked = !!r.on;
             const vt = container.querySelector('#vtts-enabled'); if (vt) vt.checked = !!(r.on && r.others === 'local');
         };
@@ -258,7 +276,7 @@
             list.appendChild(card);
             go('cast');
             card.querySelector('.vcast-label')?.focus({ preventScroll: true });
-            card.scrollIntoView({ block: 'nearest' });
+            scrollInBox(card);
             return card;
         };
         const addBtn = q('vcast-add-btn');
@@ -311,7 +329,7 @@
                     return { id: v.voice_id, name: (v.voice_name || d || v.voice_id) };
                 };
                 const mine = [].concat(data.voice_cloning || [], data.voice_generation || []).filter(v => v && v.voice_id).map(pick);
-                if (MM()) MM().saveConfig({ ...MM().getConfig(), myVoices: mine });
+                if (MM() && !MM().saveConfig({ ...MM().getConfig(), myVoices: mine })) { say(mmMineRes, `抓到 ${mine.length} 個，可是沒存下來`, true); return; }
                 paintMmMine();
                 refreshCardSelects(container);
                 say(mmMineRes, mine.length ? `抓到 ${mine.length} 個` : '帳號裡沒有自己複製或設計的聲音');

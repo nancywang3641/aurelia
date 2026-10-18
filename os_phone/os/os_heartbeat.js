@@ -11,7 +11,7 @@
 //   第二道才是「你剛聊完他不會馬上插話」。過了門檻再擲一次機率，沒中就等下一輪。
 // 設定存在那間聊天室自己的資料上（wx_chat_settings 的「他會主動找我」）：
 //   chat.hbOn（開關）、chat.hbMins（多久一次，分鐘）、chat.hbChance（機率 %）
-//   chat.hbLast（上次他主動的時間）
+//   chat.hbLast（上次他主動的時間）、chat.hbAhead（離開時預約了哪幾則，回來取消後拿它把 hbLast 退回來）
 // 對外：OS_HEARTBEAT.tickNow() / scheduleAhead() / clearAhead() / defaults()
 // ----------------------------------------------------------------
 (function () {
@@ -155,7 +155,12 @@
         console.log('[心跳] ' + (chat.name || chat.id) + ' 要主動找她了');
         return await new Promise(function (resolve) {
             win.WX_API.chat(messages, apiConfig, null,
-                function (text) { win.wxApp.applyIncoming(chat, text).then(function () { resolve(true); }); },
+                function (text) {
+                    win.wxApp.applyIncoming(chat, text).then(function () { resolve(true); }, function (e) {
+                        console.warn('[心跳] 回覆收不進聊天室:', (e && e.message) || e);   // 沒接住的話這一輪永遠等不到結束
+                        resolve(false);
+                    });
+                },
                 function (err) { console.warn('[心跳] 生成失敗:', err); resolve(false); },
                 {
                     task: 'heartbeat',
@@ -219,6 +224,7 @@
             let at = cd.at, k = 0;
             // 不是好友的一次只排一則（排好幾則就是連送好幾次好友申請）
             const perMax = _notFriends(cd.chat) ? 1 : PER_CHAT_MAX;
+            const prevLast = cd.chat.hbLast || 0, ats = [];
             while (at <= limit && k < perMax) {
                 if (k > 0 && !roll(cfgOf(cd.chat).chance)) { at += gapMs; k++; continue; }
                 const messages = await buildPayload(cd.chat, k);
@@ -236,10 +242,17 @@
                         notify: { title: cd.chat.name || '微信', body: notifyBody(cd.chat), useResult: true, url: './', tag: 'hb-' + cd.chat.id }
                     });
                     cd.chat.hbLast = at;   // 排了就當它會發生，免得回來又排一次
+                    ats.push(at);
                     n++;
                 } catch (e) { console.warn('[心跳] 預約失敗:', (e && e.message) || e); break; }
                 at += gapMs;
                 k++;
+            }
+            // 記下推之前的時間和排了哪幾則：回到 app 取消預約時要退回來（clearAhead）。
+            // 上次的還沒退（中間頁面重開過）就接著記，推之前的時間留最早那個
+            if (ats.length) {
+                const old = cd.chat.hbAhead;
+                cd.chat.hbAhead = { prev: old ? (old.prev || 0) : prevLast, ats: ((old && old.ats) || []).concat(ats) };
             }
             try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(cd.chat.id, cd.chat); } catch (e) {}
         }
@@ -251,13 +264,39 @@
     async function clearAhead() {
         const R = win.OS_RELAY;
         if (!R || !R.enabled()) return;
+        let ok = false;
         try {
-            await fetch(R.base() + '/v1/schedule/clear', {
+            const r = await fetch(R.base() + '/v1/schedule/clear', {
                 method: 'POST',
                 headers: { 'Authorization': 'Bearer ' + String(R.cfg().token || ''), 'Content-Type': 'application/json' },
                 body: JSON.stringify({ kind: KIND })
             });
+            ok = r.ok;
+            if (!ok) console.warn('[心跳] 取消預約失敗: HTTP ' + r.status);
         } catch (e) { console.warn('[心跳] 取消預約失敗:', (e && e.message) || e); }
+        if (!ok) return;   // 沒取消成功的話伺服器那幾則照樣會跑，時間先別退，免得手機這邊又叫一次
+        if (R.dropWaiting) R.dropWaiting(KIND);   // 取消掉的那幾則不會有結果了，手上的待收清單也劃掉
+        await _restoreAhead();
+    }
+
+    // 預約時把 hbLast 推到最後一則預約的時間；取消掉之後要退回來，
+    // 不然回到 app 以後要等那個未來的時間再過一輪才會開口（排了 12 小時就沉默 12 小時以上）。
+    // 已經到點的那幾則伺服器跑過了，算他找過她：退到其中最晚那則，沒有就退回推之前的時間
+    async function _restoreAhead() {
+        const chats = _chats();
+        const now = Date.now();
+        for (const id in chats) {
+            const chat = chats[id];
+            const rec = chat && chat.hbAhead;
+            if (!rec) continue;
+            delete chat.hbAhead;
+            if ((chat.hbLast || 0) > now) {
+                let back = rec.prev || 0;
+                (rec.ats || []).forEach(function (t) { if (t <= now && t > back) back = t; });
+                chat.hbLast = back;
+            }
+            try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(id, chat); } catch (e) {}
+        }
     }
 
     let _timer = null;

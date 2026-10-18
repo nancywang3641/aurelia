@@ -9,13 +9,16 @@
 // 設定：設置 → 系統 →「回覆交給伺服器跑」，存在 localStorage 'aurelia_relay_cfg'
 //   { on, url, token }。網址與通行碼都是她自己填的格子，不內建任何站。
 // 🚨 伺服器不存她的 API key：每次請求由這裡把上游設定帶上去，用完就丟。
-// 對外：OS_RELAY.enabled() / submit(job) / collect() / onResult(app, fn) / test()
+// 對外：OS_RELAY.enabled() / submit(job) / collect() / onResult(app, fn) / test() / dropWaiting(kind)
 // ----------------------------------------------------------------
 (function () {
     const win = window.parent || window;
     const CFG_KEY = 'aurelia_relay_cfg';
-    const PEND_KEY = 'aurelia_relay_pending';   // 送出去還沒收回來的：{id: {app, chatId, at}}
+    const PEND_KEY = 'aurelia_relay_pending';   // 送出去還沒收回來的：{id: {app, chatId, at, runAt, kind, unclaimed}}
     const TIMEOUT = 20000;
+    // 到點超過這麼久、伺服器清單裡還是沒有的，就不會再來了（被取消、別台收走、或伺服器過期清掉）。
+    // 伺服器那邊上游最多等 5 分鐘，抓寬一點
+    const STALE_MS = 15 * 60 * 1000;
 
     const _handlers = {};
     let _collecting = false;
@@ -24,9 +27,10 @@
         try { const o = JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; }
         catch (e) { return {}; }
     }
+    // 沒存成回 null（設置頁看這個決定要不要往下測試）
     function setCfg(patch) {
         const next = Object.assign(cfg(), patch || {});
-        try { localStorage.setItem(CFG_KEY, JSON.stringify(next)); } catch (e) {}
+        if (!win.AUI.lsSet(CFG_KEY, JSON.stringify(next), '「回覆交給伺服器跑」的設定')) return null;
         return next;
     }
     function base() {
@@ -61,7 +65,16 @@
         try { const o = JSON.parse(localStorage.getItem(PEND_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; }
         catch (e) { return {}; }
     }
-    function savePending(o) { try { localStorage.setItem(PEND_KEY, JSON.stringify(o || {})); } catch (e) {} }
+    function savePending(o) { return win.AUI.lsSet(PEND_KEY, JSON.stringify(o || {}), '還沒收回來的回覆清單'); }
+    // 這筆該在什麼時候跑完：預約的看預約時間，其他看送出時間
+    function _dueAt(e) { return (e && (e.runAt || e.at)) || 0; }
+    // 還有沒有值得一直去問的：預約在未來的不算（到點伺服器會推通知，回到 app 自然會收）；
+    // 一直沒人認領的問到 UNCLAIMED_POLL 次就不再追著問，留給下次回到 app 時收
+    const UNCLAIMED_POLL = 20;
+    function _hasDue() {
+        const p = pending(), now = Date.now();
+        return Object.keys(p).some(function (id) { return _dueAt(p[id]) <= now && (p[id].unclaimed || 0) < UNCLAIMED_POLL; });
+    }
 
     // job = { app, chatId, title, upstream:{url,key,body}, notify:{title,body,url} }
     async function submit(job) {
@@ -70,11 +83,22 @@
         const id = r && r.id;
         if (id) {
             const p = pending();
-            p[id] = { app: job.app || '', chatId: job.chatId || '', at: Date.now() };
+            p[id] = { app: job.app || '', chatId: job.chatId || '', at: Date.now(), runAt: job.runAt ? job.runAt * 1000 : 0, kind: job.kind || '' };
             savePending(p);
             if (!job.runAt) startPolling();   // 預約的（心跳）不用一直問，到點自然會推
         }
         return id;
+    }
+
+    // 伺服器那邊還沒跑的預約整批取消了（心跳回到 app 時）：手上那幾筆也劃掉，不然會一直等一個不會來的結果
+    function dropWaiting(kind) {
+        const p = pending(), now = Date.now();
+        let n = 0;
+        Object.keys(p).forEach(function (id) {
+            if ((!kind || p[id].kind === kind) && (p[id].runAt || 0) > now) { delete p[id]; n++; }
+        });
+        if (n) savePending(p);
+        return n;
     }
 
     // 回到 app 時把跑完的結果收回來，交給登記的 app 處理
@@ -84,22 +108,47 @@
         let done = 0;
         try {
             const list = (await api('/v1/jobs')).jobs || [];
-            for (const row of list) {
+            const listed = {};
+            list.forEach(function (row) { listed[row.id] = true; });
+            // 上次拿回來卻沒有人認領的（那時聊天 app 還沒載好）：伺服器一拿過就不再列在清單裡，要指名再拿一次
+            const p0 = pending();
+            const ids = list.map(function (row) { return row.id; })
+                .concat(Object.keys(p0).filter(function (id) { return p0[id].unclaimed && !listed[id]; }));
+            for (const id of ids) {
                 let full = null;
-                try { full = await api('/v1/job/' + row.id, { timeout: 30000 }); } catch (e) { continue; }
+                try { full = await api('/v1/job/' + id, { timeout: 30000 }); }
+                catch (e) {
+                    if (!listed[id] && /沒有這個工作/.test((e && e.message) || '')) { const p = pending(); delete p[id]; savePending(p); }
+                    continue;
+                }
                 const p = pending();
-                const mine = p[row.id] || {};
+                const mine = p[id] || {};
                 const app = full.app || mine.app || '';
                 const fn = _handlers[app];
-                try {
-                    if (typeof fn === 'function') await fn(full);
-                    else console.warn('[Relay] 沒有人認領這個結果：' + app);
-                } catch (e) { console.warn('[Relay] 處理結果失敗:', e); }
-                delete p[row.id];
+                if (typeof fn !== 'function') {
+                    // 還沒有人認領（那支 app 還沒載好）：先別劃掉、別叫伺服器丟，下次收的時候再拿一次
+                    console.warn('[Relay] 還沒有人認領這個結果，下次再收：' + app);
+                    if (p[id]) { p[id].unclaimed = (p[id].unclaimed || 0) + 1; savePending(p); }
+                    continue;
+                }
+                try { await fn(full); }
+                catch (e) {
+                    // 交出去才出錯的不重來：可能已經收了一半（訊息、轉帳、朋友圈），再跑一次會變兩份
+                    console.warn('[Relay] 處理結果失敗:', e);
+                    if (win.AUI) win.AUI.toast('有一則伺服器跑好的回覆沒收進來' + (full.title ? '（' + full.title + '）' : ''), { type: 'error' });
+                }
+                delete p[id];
                 savePending(p);
-                try { await api('/v1/job/' + row.id + '/ack', { method: 'POST' }); } catch (e) {}
+                try { await api('/v1/job/' + id + '/ack', { method: 'POST' }); } catch (e) {}
                 done++;
             }
+            // 到點很久了伺服器清單裡還是沒有的（取消了、別台收走了、伺服器過期清掉了）：劃掉，不然輪詢永遠停不下來
+            const p = pending(), now = Date.now();
+            let pruned = 0;
+            Object.keys(p).forEach(function (id) {
+                if (!listed[id] && !p[id].unclaimed && _dueAt(p[id]) + STALE_MS < now) { delete p[id]; pruned++; }
+            });
+            if (pruned) savePending(p);
         } catch (e) {
             console.warn('[Relay] 收結果失敗:', (e && e.message) || e);
         } finally { _collecting = false; }
@@ -123,9 +172,9 @@
         _pollStep = 0;
         const tick = async function () {
             _pollTimer = null;
-            if (!enabled() || !Object.keys(pending()).length) return;
+            if (!enabled() || !_hasDue()) return;
             try { await collect(); } catch (e) {}
-            if (!Object.keys(pending()).length) return;
+            if (!_hasDue()) return;
             const wait = POLL_STEPS[Math.min(_pollStep++, POLL_STEPS.length - 1)];
             _pollTimer = setTimeout(tick, wait);
         };
@@ -149,9 +198,9 @@
         });
         win.addEventListener('focus', function () { setTimeout(collect, 400); });
     } catch (e) {}
-    setTimeout(function () { if (enabled()) { collect(); if (Object.keys(pending()).length) startPolling(); } }, 3000);
+    setTimeout(function () { if (enabled()) { collect(); if (_hasDue()) startPolling(); } }, 3000);
 
-    win.OS_RELAY = { cfg: cfg, setCfg: setCfg, enabled: enabled, base: base, submit: submit, collect: collect, onResult: onResult, test: test, pending: pending, startPolling: startPolling, stopPolling: stopPolling };
+    win.OS_RELAY = { cfg: cfg, setCfg: setCfg, enabled: enabled, base: base, submit: submit, collect: collect, onResult: onResult, test: test, pending: pending, dropWaiting: dropWaiting, startPolling: startPolling, stopPolling: stopPolling };
     if (win !== window) window.OS_RELAY = win.OS_RELAY;
     console.log('📡 [Relay] 請求托管已載入' + (enabled() ? '（開著）' : '（沒開）'));
 })();
