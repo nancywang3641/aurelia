@@ -189,7 +189,7 @@
                     const f = [input, cancelBtn, okBtn].filter(Boolean);
                     const i = f.indexOf(document.activeElement);
                     ev.preventDefault();
-                    f[(i + (ev.shiftKey ? f.length - 1 : 1)) % f.length].focus();
+                    f[(i + (ev.shiftKey ? f.length - 1 : 1)) % f.length].focus({ preventScroll: true });
                 }
             };
             okBtn.onclick = (ev) => { ev.stopPropagation(); close(okVal()); };
@@ -208,7 +208,7 @@
             void mask.offsetWidth;
             mask.classList.add('on');
             try {
-                if (input) { input.focus(); input.select(); }
+                if (input) { input.focus({ preventScroll: true }); input.select(); }
                 else (danger && cancelBtn ? cancelBtn : okBtn).focus({ preventScroll: true });
             } catch (e) {}
         });
@@ -341,5 +341,40 @@
     })();
     function kbReset() { _kbReset(); }
 
-    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset };
+    // 💾 寫 localStorage：AUI.lsSet(key, 字串, '提示詞') → true / false
+    //   整站共用約 5MB，滿了 setItem 會丟 QuotaExceeded：裸寫會讓整條流程斷在那一行、後面步驟都不做；
+    //   包空 catch 又是靜靜沒存到，重整才發現不見。一律走這支：不往外丟，回傳成不成功，
+    //   失敗時跳一句「○○沒存下來」（十秒內只跳一次，免得一批寫入洗版），console 列出最大的幾個 key 方便查是誰吃掉空間。
+    //   呼叫端拿 false 決定要不要往下走：「已保存」這類提示要等它回 true 才報。
+    let _lsWarnAt = 0;
+    function _lsFull(e) {
+        return !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014 || /quota/i.test(e.message || ''));
+    }
+    function _lsTop(n) {
+        const out = [];
+        try {
+            for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                out.push([k, (localStorage.getItem(k) || '').length]);
+            }
+        } catch (e) {}
+        return out.sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, len]) => k + ' ' + Math.round(len / 1024) + 'KB').join('、');
+    }
+    function lsSet(key, value, what) {
+        try {
+            localStorage.setItem(key, value);
+            return true;
+        } catch (e) {
+            const full = _lsFull(e);
+            console.warn('[AUI.lsSet] ' + key + ' 寫不進去' + (full ? '（本機空間滿了，最大的幾個：' + _lsTop(8) + '）' : '') + '：', e);
+            const now = Date.now();
+            if (now - _lsWarnAt > 10000) {
+                _lsWarnAt = now;
+                toast((full ? '本機儲存空間滿了，' : '') + (what ? what + '沒存下來' : '這次的修改沒存下來'), { type: 'error' });
+            }
+            return false;
+        }
+    }
+
+    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset, lsSet };
 })();
