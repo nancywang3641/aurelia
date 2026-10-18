@@ -36,9 +36,10 @@
 
     // ── 存取 ────────────────────────────────────────────────────────────
     function _loadMine() { try { return JSON.parse(win.localStorage.getItem(STORE_KEY)) || []; } catch (e) { return []; } }
-    function _saveMine(list) { try { win.localStorage.setItem(STORE_KEY, JSON.stringify(list || [])); } catch (e) {} }
+    // 寫不進去 lsSet 會跳「○○沒存下來」（以前空 catch，存不下也不會知道）；回 true／false
+    function _saveMine(list) { return win.AUI.lsSet(STORE_KEY, JSON.stringify(list || []), '桌面組件'); }
     function _loadCfg() { try { return JSON.parse(win.localStorage.getItem(CFG_KEY)) || {}; } catch (e) { return {}; } }
-    function _saveCfg(m) { try { win.localStorage.setItem(CFG_KEY, JSON.stringify(m || {})); } catch (e) {} }
+    function _saveCfg(m) { return win.AUI.lsSet(CFG_KEY, JSON.stringify(m || {}), '桌面組件的設定'); }
     function cfgOf(id) { return _loadCfg()[id] || {}; }
     function setCfg(id, patch) {
         const m = _loadCfg();
@@ -167,11 +168,9 @@
             title: '拍立得', placeholder: MOOD_WORDS[i], hint: '留空就回到今天的心情那句。', okText: '寫上去'
         });
         if (v === null) return;
-        try {
-            win.localStorage.setItem(MOOD_KEY, JSON.stringify({
-                day: _todayKey(), em: (m.day === _todayKey() && m.em) || MOODS[0], text: String(v).trim()
-            }));
-        } catch (e) {}
+        if (!A.lsSet(MOOD_KEY, JSON.stringify({
+            day: _todayKey(), em: (m.day === _todayKey() && m.em) || MOODS[0], text: String(v).trim()
+        }), '拍立得上寫的那句')) return;
         repaintAll();
         try { if (win.VoidPhoneShell && win.VoidPhoneShell.repaintMood) win.VoidPhoneShell.repaintMood(); } catch (e) {}
     }

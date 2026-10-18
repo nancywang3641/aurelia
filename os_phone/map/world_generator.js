@@ -322,14 +322,12 @@ ${(win.MAP_ICONS && win.MAP_ICONS.promptList()) || ''}
 
                 const json = extractJSON(responseText);
                 if (!json) {
-                    // 流式可能還沒完整，先觀望（streaming 多次回呼，最後一次才完整）
-                    if (responseText && responseText.length > 100 && responseText.includes('}')) {
-                        // 看起來收完了卻還抽不到 JSON → 失敗
-                        processed = true;
-                        console.error('[WorldGen] 解析失敗，原始輸出:', responseText.substring(0, 500));
-                        if (progressCb) progressCb('error', 'AI 沒吐出合法 JSON');
-                        resolve(false);
-                    }
+                    // 完成回呼只會來一次（逐字的內容走 onChunk，這裡傳 null）：抽不到就是失敗。
+                    //   以前當成「還在串流」只 return 等下一次，AI 拒答或回很短時畫面永遠卡在生成中
+                    processed = true;
+                    console.error('[WorldGen] 解析失敗，原始輸出:', String(responseText || '').substring(0, 500));
+                    if (progressCb) progressCb('error', responseText ? 'AI 沒吐出合法 JSON' : 'AI 沒有回覆');
+                    resolve(false);
                     return;
                 }
                 processed = true;

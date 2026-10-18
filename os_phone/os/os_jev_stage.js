@@ -36,14 +36,14 @@
     function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
     function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) !== '0'; } catch (e) { return true; } }
-    function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
+    function setOn(on) { return win.AUI.lsSet(ON_LS, on ? '1' : '0', '立繪什麼時候收交給決策模型的開關'); }
     function getLog() { try { return JSON.parse(localStorage.getItem(LOG_LS) || '[]'); } catch (e) { return []; } }
     function _push(entry) {
         const log = getLog().filter(e => e.key !== entry.key);
         log.unshift(entry);
         if (log.length > LOG_MAX) log.length = LOG_MAX;
         try { localStorage.setItem(LOG_LS, JSON.stringify(log)); }
-        catch (e) { try { localStorage.setItem(LOG_LS, JSON.stringify(log.slice(0, 5))); } catch (e2) {} }
+        catch (e) { win.AUI.lsSet(LOG_LS, JSON.stringify(log.slice(0, 5)), '立繪什麼時候收的判斷記錄'); }   // 縮到 5 筆還存不下才提示
     }
     function clearLog() { try { localStorage.removeItem(LOG_LS); } catch (e) {} }
     function _clean(s) { return String(s || '').replace(/<[^>]+>/g, ' ').replace(/#[A-Za-z0-9_\-&]+#/g, '').replace(/\s+/g, ' ').trim(); }
@@ -142,7 +142,7 @@
             } catch (e) {
                 last = (e && e.name === 'AbortError') ? '逾時' : String((e && e.message) || e);
             } finally { clearTimeout(timer); }
-            await new Promise(r => setTimeout(r, 2500 * (i + 1)));
+            if (i < 3) await new Promise(r => setTimeout(r, 2500 * (i + 1)));   // 最後一次失敗就直接報，不再白睡一輪
         }
         throw new Error(last || '沒有回應');
     }

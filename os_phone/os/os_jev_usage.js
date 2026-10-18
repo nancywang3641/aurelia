@@ -23,7 +23,7 @@
     function _save(o) {
         const days = Object.keys(o).sort();
         while (days.length > KEEP_DAYS) delete o[days.shift()];
-        try { localStorage.setItem(LS, JSON.stringify(o)); } catch (e) {}
+        win.AUI.lsSet(LS, JSON.stringify(o), '決策模型的用量記錄');   // 不丟例外：記帳不准擋路
     }
     function _num(v) { const n = Number(v); return isFinite(n) ? n : 0; }
 

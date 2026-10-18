@@ -32,6 +32,13 @@
         return r.ok;
     }
 
+    // 其他本機設定的寫入：走 AUI.lsSet（不丟例外，空間滿了自己跳「○○沒存下來」），回 true／false
+    //   以前這些是 setItem 包空 catch，寫不進去也不會知道
+    function _lsSet(key, value, what) {
+        const A = (window.parent && window.parent.AUI) || window.AUI;
+        return A.lsSet(key, value, what);
+    }
+
     // ── 自由書籍常數 & 歷史助手 ──────────────────────────────────
     const FREE_SCRIPT_WID        = '__free_script__';
     const FREE_SCRIPT_HISTORY_KEY = 'vn_free_history';
@@ -66,12 +73,10 @@
         if (!title) return;                                   // 沒命名就不收藏，只進歷史
         const list = _getPresets().filter(p => p && p.title !== title);   // 同名覆蓋
         list.unshift({ title, request, savedAt: Date.now() });
-        try { localStorage.setItem(GEN_PRESETS_KEY, JSON.stringify(list)); }
-        catch(e) { console.warn('[書架] 開場白存不下來（本機空間滿了？）', e); }
+        _lsSet(GEN_PRESETS_KEY, JSON.stringify(list), '收藏的開場白');
     }
     function _delPreset(title) {
-        try { localStorage.setItem(GEN_PRESETS_KEY, JSON.stringify(_getPresets().filter(p => p && p.title !== title))); }
-        catch(e) {}
+        _lsSet(GEN_PRESETS_KEY, JSON.stringify(_getPresets().filter(p => p && p.title !== title)), '刪掉收藏開場白這一步');
     }
 
     function _getFreeHistory() {
@@ -83,11 +88,11 @@
         const key = (request || '').slice(0, 40);
         const deduped = list.filter(h => (h.request || '').slice(0, 40) !== key);
         deduped.unshift({ id: 'fh_' + Date.now(), title, request, ts: Date.now() });
-        try { localStorage.setItem(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(deduped.slice(0, 30))); } catch(e) {}
+        _lsSet(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(deduped.slice(0, 30)), '過往開場紀錄');
     }
     function _deleteFreeHistory(id) {
         const list = _getFreeHistory().filter(h => h.id !== id);
-        try { localStorage.setItem(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(list)); } catch(e) {}
+        _lsSet(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(list), '刪掉過往開場這一步');
     }
 
     // ── HTML 轉義 ─────────────────────────────────────────────────
@@ -192,9 +197,8 @@
                     const rulesKey = 'avs_condition_rules'; // ✅ 已修正為正確的 AVS 規則鍵值
                     const allRules = JSON.parse(localStorage.getItem(rulesKey) || '[]');
                     const filtered = allRules.filter(r => r.worldId !== w.id);
-                    localStorage.setItem(rulesKey, JSON.stringify(filtered));
-                    console.log(`[DelWorld] 已刪條件規則 ${allRules.length - filtered.length} 條`);
-                } catch(e) {}
+                    if (_lsSet(rulesKey, JSON.stringify(filtered), '刪掉這本書的條件規則這一步')) console.log(`[DelWorld] 已刪條件規則 ${allRules.length - filtered.length} 條`);
+                } catch(e) { console.warn('[DelWorld] 條件規則讀不出來，沒動', e); }
             }
 
             if (typeof afterDelete === 'function') afterDelete();
@@ -633,7 +637,7 @@ status = "正常"`;
             const keyword = input.value.trim();
             const lore    = getCheckedLore();
             if (!keyword && !lore) {
-                input.focus();
+                input.focus({ preventScroll: true });
                 input.style.borderColor = 'var(--qbs-bad-line)';
                 setTimeout(() => { input.style.borderColor = 'var(--qbk-line)'; }, 1500);
                 return;
@@ -654,7 +658,7 @@ status = "正常"`;
             shelves.forEach(s => s.style.display = 'flex');
             render();
         };
-        setTimeout(() => input.focus(), 50);
+        setTimeout(() => input.focus({ preventScroll: true }), 50);   // 面板剛滑進來：別把外層一起捲歪
     }
 
     // ── 自由書籍封面（獨立渲染路徑）──────────────────────────────
@@ -759,7 +763,7 @@ status = "正常"`;
             innerView.style.display = 'flex';
             _renderPresets();
             _renderFreeHistory();
-            setTimeout(() => reqInput?.focus(), 150);
+            setTimeout(() => reqInput?.focus({ preventScroll: true }), 150);
         };
         panel.querySelector('#qb-free-inner-close').onclick = () => {
             innerView.style.display = 'none';
@@ -796,7 +800,7 @@ status = "正常"`;
                 chip.onclick = (ev) => {
                     if (ev.target === del) { _delPreset(p.title); _renderPresets(); return; }
                     if (titleInput) titleInput.value = p.title;
-                    if (reqInput) { reqInput.value = p.request || ''; reqInput.focus(); }
+                    if (reqInput) { reqInput.value = p.request || ''; reqInput.focus({ preventScroll: true }); }
                 };
                 listEl.appendChild(chip);
             });
@@ -837,7 +841,7 @@ status = "正常"`;
                     if (!h) return;
                     if (titleInput) titleInput.value = h.title || '';
                     if (reqInput)   reqInput.value   = h.request || '';
-                    reqInput?.focus();
+                    reqInput?.focus({ preventScroll: true });
                 };
             });
             listEl.querySelectorAll('.qb-free-hist-del').forEach(btn => {
@@ -855,7 +859,7 @@ status = "正常"`;
             if (!request) {
                 reqInput.style.borderColor = 'var(--qbs-bad-line)';
                 setTimeout(() => { reqInput.style.borderColor = 'var(--qbs-cool-line)'; }, 1500);
-                reqInput?.focus();
+                reqInput?.focus({ preventScroll: true });
                 return;
             }
 
@@ -959,8 +963,9 @@ status = "正常"`;
         try {
             const meta = _storyIndex()[r.sid] || {};
             window.VN_Core?._setStoryId?.(r.sid, r.title);
-            if (meta.worldId) { try { localStorage.setItem('vn_current_world_id', meta.worldId); } catch (e) {} }
-            if (Array.isArray(meta.wbPacks)) { try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(meta.wbPacks)); } catch (e) {} }
+            // 書和世界書寫不進去就停：下面切世界書、開播都照這兩格認書，寫一半會接到別本書（提示 lsSet 會跳）
+            if (meta.worldId && !_lsSet('vn_current_world_id', meta.worldId, '這次選的書')) return;
+            if (Array.isArray(meta.wbPacks) && !_lsSet('vn_active_wb_packs', JSON.stringify(meta.wbPacks), '這本書掛的世界書')) return;
             try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch (e) {}
             try { window.AureliaControlCenter?.setChatTitle?.(r.title); } catch (e) {}
 
@@ -1028,7 +1033,7 @@ status = "正常"`;
                 <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));">${_wIcon(w)}</div>
                 <div style="font-size:24px;font-weight:900;color:var(--qbk-ink);
                             letter-spacing:3px;text-shadow:none;
-                            margin-bottom:14px;font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${w.title}</div>
+                            margin-bottom:14px;font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${_escHtml(w.title || '')}</div>
                 
                 ${!isCard ? `
                 <div style="font-size:13px;color:var(--qbk-ink);line-height:2;font-style:italic;
@@ -1156,7 +1161,7 @@ status = "正常"`;
                                         </div>
                                     </div>
                                     <div class="qb-greet-text" data-idx="${i}" style="font-size:14px;color:var(--qbk-ink);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
-                                        ${_escHtml(g).replace(/\{\{\s*user\s*\}\}/gi, currentUserName).replace(/\{\{\s*char\s*\}\}/gi, w.title)}
+                                        ${_escHtml(g).replace(/\{\{\s*user\s*\}\}/gi, () => _escHtml(currentUserName)).replace(/\{\{\s*char\s*\}\}/gi, () => _escHtml(w.title || ''))}
                                     </div>
                                     <textarea class="qb-greet-editor" data-idx="${i}" style="display:none;flex:1;min-height:200px;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);font-size:13px;line-height:1.8;padding:12px;resize:vertical;font-family:inherit;outline:none;"></textarea>
                                     <div class="qb-greet-save-row" data-idx="${i}" style="display:none;justify-content:flex-end;gap:8px;margin-top:10px;">
@@ -1391,7 +1396,7 @@ status = "正常"`;
                         if (radio) radio.checked = true;
                         if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();   // 寫第一句時背後不該還有卡片 BGM 在響
                         embarkView.style.display = 'flex';
-                        setTimeout(() => { try { panel.querySelector('#qb-user-reply')?.focus(); } catch (e) { } }, 40);
+                        setTimeout(() => { try { panel.querySelector('#qb-user-reply')?.focus({ preventScroll: true }); } catch (e) { } }, 40);
                     };
                 });
                 panel.querySelector('#qb-embark-back').onclick = () => { embarkView.style.display = 'none'; };
@@ -1649,7 +1654,7 @@ status = "正常"`;
                 try { return JSON.parse(localStorage.getItem(_RULES_KEY) || '[]'); } catch(e) { return []; }
             }
             function _persistRules(rules) {
-                try { localStorage.setItem(_RULES_KEY, JSON.stringify(rules)); } catch(e) {}
+                return _lsSet(_RULES_KEY, JSON.stringify(rules), '開場白的取代規則');
             }
             function _addRule(find, repl) {
                 const rules = _loadRules();
@@ -1658,7 +1663,7 @@ status = "正常"`;
                 if (existing !== -1) { rules[existing].repl = repl; }
                 else { rules.unshift({ find, repl }); }
                 if (rules.length > 30) rules.length = 30;  // 最多 30 條
-                _persistRules(rules);
+                return _persistRules(rules);
             }
             function _deleteRule(find) {
                 _persistRules(_loadRules().filter(r => r.find !== find));
@@ -1725,8 +1730,8 @@ status = "正常"`;
                     innerView.querySelectorAll('.qb-greet-text').forEach(el => {
                         const i = parseInt(el.dataset.idx);
                         el.innerHTML = _escHtml(w.greetings[i])
-                            .replace(/\{\{\s*user\s*\}\}/gi, currentUserName)
-                            .replace(/\{\{\s*char\s*\}\}/gi, w.title);
+                            .replace(/\{\{\s*user\s*\}\}/gi, () => _escHtml(currentUserName))
+                            .replace(/\{\{\s*char\s*\}\}/gi, () => _escHtml(w.title || ''));
                     });
                     // 若有正在編輯的框也同步
                     innerView.querySelectorAll('.qb-greet-editor').forEach(el => {
@@ -1734,9 +1739,9 @@ status = "正常"`;
                         if (el.style.display !== 'none') el.value = w.greetings[i];
                     });
                     // 儲存這條規則
-                    _addRule(find, repl);
+                    const ruleSaved = _addRule(find, repl);   // 存不下來 lsSet 會跳提示，這裡就不說「已儲存」
                     _renderRules();
-                    if (replMsg) { replMsg.textContent = `已取代 ${count} 個開場白，規則已儲存`; replMsg.style.color = 'var(--qbs-good)'; }
+                    if (replMsg) { replMsg.textContent = ruleSaved ? `已取代 ${count} 個開場白，規則已儲存` : `已取代 ${count} 個開場白（規則沒存下來）`; replMsg.style.color = 'var(--qbs-good)'; }
                 } else {
                     if (replMsg) { replMsg.textContent = '未找到匹配文字'; replMsg.style.color = 'var(--qbs-warn)'; }
                 }
@@ -1748,7 +1753,7 @@ status = "正常"`;
                 replaceBtn.onclick = () => {
                     replacePanel.style.display = 'flex';
                     _renderRules();
-                    setTimeout(() => { try { findInput?.focus(); } catch (e) { } }, 30);
+                    setTimeout(() => { try { findInput?.focus({ preventScroll: true }); } catch (e) { } }, 30);
                 };
                 innerView.querySelector('#qb-greet-replace-close').onclick = closeRepl;
                 replacePanel.onclick = (e) => { if (e.target === replacePanel) closeRepl(); };   // 點遮罩收掉
@@ -1798,12 +1803,15 @@ status = "正常"`;
                 if (w.cardImport) {
                     const sel = panel.querySelector('input[name="qb-greeting"]:checked');
                     const idx = sel ? parseInt(sel.value) : 0;
-                    const chosenGreeting = (idx >= 0 && greetings && greetings[idx]) ? greetings[idx] : '';
+                    // 讀 w.greetings 不讀開頭抓的 greetings：「取代」會把 w.greetings 換成新陣列，
+                    //   抓舊參照的話按「與TA相遇」送出去的是取代前的開場白
+                    const chosenGreeting = (idx >= 0 && Array.isArray(w.greetings) && w.greetings[idx]) ? w.greetings[idx] : '';
                     const userReply = (panel.querySelector('#qb-user-reply')?.value || '').trim();
 
-                    localStorage.setItem('vn_current_world_id', w.id);
+                    // 書和世界書寫不進去就不往下開：後面建聊天室、切世界書都照這兩格認書（提示 lsSet 會跳）
+                    if (!_lsSet('vn_current_world_id', w.id, '這次選的書')) return;
                     localStorage.removeItem('vn_pending_first_mes');
-                    try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
+                    if (!_lsSet('vn_active_wb_packs', JSON.stringify(w.wbPacks || []), '這本書掛的世界書')) return;
                     try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}     // 這一刻＝建立聊天室
                     // 🚨 一定要等：這支會撥 VN 指令的總綱開關（固定版/自由版二選一）。
                     //    以前沒 await，切換還在寫 IDB，prompt 就已經組好送出 →
@@ -1843,10 +1851,10 @@ status = "正常"`;
                 }
 
                 // ── 一般世界路徑：踏入＝直接開這個世界的故事（挑任務那層殼已拆）───────────────────────
-                try { localStorage.setItem('vn_active_wb_packs', JSON.stringify(w.wbPacks || [])); } catch(e) {}
+                if (!_lsSet('vn_active_wb_packs', JSON.stringify(w.wbPacks || []), '這本書掛的世界書')) return;
                 // 這條路以前沒寫 vn_current_world_id，留著上一次 dive 的舊值 →
-                //   「這本書」的設定（立繪模式、AVS 條件規則的 worldId）全部認錯書。
-                try { localStorage.setItem('vn_current_world_id', w.id); } catch(e) {}
+                //   「這本書」的設定（立繪模式、AVS 條件規則的 worldId）全部認錯書。寫不進去一樣停在這裡
+                if (!_lsSet('vn_current_world_id', w.id, '這次選的書')) return;
                 // 🚨 故事線的 id 要在這裡就生出來（＝酒館建立聊天室的那一刻）。
                 //    下面的變數包初始化、AVS、記憶、手機資料都按 storyId 分艙，
                 //    晚一步生就會全部寫進「上一本書」的桶裡。

@@ -854,7 +854,8 @@
         root.appendChild(bar);
 
         const st = { mode: 'add', pts: [], undo: [], img: null, iw: 0, ih: 0, edit: null, orig: null, dirty: false, busy: false };
-        _ctx.block = { root: root, over: over, cap: cap, tip: tip, bar: bar };
+        const blk = { root: root, over: over, cap: cap, tip: tip, bar: bar };
+        _ctx.block = blk;
 
         // 圖片像素 ↔ 舞台座標：房間圖在舞台上鋪在 (ox, oy, vb寬*s, vb高*s) 那一塊
         function toImg(p) { return [(p[0] - f.ox) / (vb[0] * f.s) * st.iw, (p[1] - f.oy) / (vb[1] * f.s) * st.ih]; }
@@ -947,8 +948,11 @@
             try { _mountFabs(root); } catch (e) {}
         }
         function onKey(ev) {
+            // 沒按「存好了／取消」就離開（換房、回走廊、關掉 app）的話 end() 不會跑：
+            //   圈擋路的畫面已經不在了就自己拆掉，不再吃掉別處的 Enter 和退格
+            if (!cap.isConnected || !_ctx || _ctx.block !== blk) { win.removeEventListener('keydown', onKey, true); return; }
             const t = ev.target && ev.target.tagName;
-            if (t === 'INPUT' || t === 'TEXTAREA') return;
+            if (t === 'INPUT' || t === 'TEXTAREA' || (ev.target && ev.target.isContentEditable)) return;
             if (ev.key === 'Enter') { ev.preventDefault(); closeShape(); }
             else if (ev.key === 'Escape') { ev.preventDefault(); if (st.pts.length) { st.pts = []; paint(); } }
             else if (ev.key === 'Backspace') { ev.preventDefault(); undo(); }
@@ -1103,7 +1107,7 @@
         card.appendChild(l2); card.appendChild(content); card.appendChild(bar);
         sheet.appendChild(card);
         root.appendChild(sheet);
-        try { name.focus(); } catch (e) {}
+        try { name.focus({ preventScroll: true }); } catch (e) {}   // 小窗一開就 focus：別把後面的舞台一起捲歪
 
         const close = function () { try { sheet.remove(); } catch (e) {} };
         drop.onclick = function () {

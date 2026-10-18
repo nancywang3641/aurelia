@@ -82,18 +82,21 @@
     function getShards() {
         return parseInt(localStorage.getItem(KEY_SHARDS) || '0', 10);
     }
+    // 寫進去才算數：空間滿了 lsSet 自己跳「碎片餘額沒存下來」，回 false 讓呼叫端別報成功
+    //   （以前裸 setItem，一丟錯整支中斷：買了東西卻沒記到）
     function setShards(n) {
-        localStorage.setItem(KEY_SHARDS, Math.max(0, Math.floor(n)));
+        return win.AUI.lsSet(KEY_SHARDS, String(Math.max(0, Math.floor(n))), '碎片餘額');
     }
     function addShards(n) {
-        setShards(getShards() + n);
+        if (!setShards(getShards() + n)) return false;
         console.log(`[OS_404_STORE] 💎 +${n} shards → 餘額 ${getShards()}`);
         scheduleSyncToLorebook();
+        return true;
     }
     function spendShards(n) {
         const cur = getShards();
         if (cur < n) return false;
-        setShards(cur - n);
+        if (!setShards(cur - n)) return false;
         console.log(`[OS_404_STORE] 💸 -${n} shards → 餘額 ${getShards()}`);
         scheduleSyncToLorebook();
         return true;
@@ -107,7 +110,7 @@
         catch(e) { return {}; }
     }
     function saveItemsState(state) {
-        localStorage.setItem(KEY_ITEMS, JSON.stringify(state));
+        return win.AUI.lsSet(KEY_ITEMS, JSON.stringify(state), '黑市道具');
     }
     function getItemState(id) {
         const s = getItemsState();
@@ -125,12 +128,17 @@
         if (state[id] && state[id].owned) {
             return { ok: false, msg: '已購買' };
         }
-        if (!spendShards(item.price)) {
-            return { ok: false, msg: `碎片不足（需要 ${item.price}，現有 ${getShards()}）` };
+        const before = getShards();
+        if (before < item.price) {
+            return { ok: false, msg: `碎片不足（需要 ${item.price}，現有 ${before}）` };
         }
+        if (!spendShards(item.price)) return { ok: false, msg: '碎片沒扣成，這次沒買' };
 
         state[id] = { owned: true, active: false };
-        saveItemsState(state);
+        if (!saveItemsState(state)) {
+            setShards(before);   // 道具沒記上：碎片退回去，不能扣了錢卻沒東西
+            return { ok: false, msg: '道具沒記上，碎片已退回' };
+        }
         scheduleSyncToLorebook();
         console.log(`[OS_404_STORE] ✅ 購買: ${item.name}`);
         return { ok: true };
@@ -149,7 +157,7 @@
         }
 
         state[id].active = !state[id].active;
-        saveItemsState(state);
+        if (!saveItemsState(state)) return { ok: false, msg: '沒存下來' };
         scheduleSyncToLorebook();
         const status = state[id].active ? '啟用' : '停用';
         console.log(`[OS_404_STORE] 🔄 ${item.name} → ${status}`);
@@ -219,8 +227,8 @@ ${JSON.stringify({ shards, items: itemsState })}`;
             if (!jsonMatch) return false;
 
             const backup = JSON.parse(jsonMatch[1].trim());
-            if (typeof backup.shards === 'number') localStorage.setItem(KEY_SHARDS, Math.max(0, backup.shards));
-            if (backup.items && typeof backup.items === 'object') localStorage.setItem(KEY_ITEMS, JSON.stringify(backup.items));
+            if (typeof backup.shards === 'number' && !setShards(backup.shards)) return false;
+            if (backup.items && typeof backup.items === 'object' && !saveItemsState(backup.items)) return false;
 
             console.log(`[OS_404_STORE] 🔄 從 Lorebook 恢復：${backup.shards} 碎片`);
             return true;
@@ -298,16 +306,24 @@ ${JSON.stringify({ shards, items: itemsState })}`;
                 return { ok: false, msg: '柴郡沒有回應...' };
             }
 
-            // 逐一 markRedeemed
-            let totalShards = 0;
-            for (const r of results) {
-                const ach = pending.find(a => a.name === r.name);
-                if (!ach) continue;
-                const shards = Math.max(0, parseInt(r.shards) || 0);
-                await win.OS_ACHIEVEMENT.markRedeemed(ach.id, shards, 'shards', r.comment);
-                addShards(shards);
-                totalShards += shards;
-            }
+            // 對成就跟白兔那份（os_pt.evaluateAchievementsPT）同一套：名字一樣 → 洗掉空白標點再比 → 筆數一樣時照順序對；
+            //   每個成就只配一次。以前只照名字 find，模型把同一個成就列兩次就發兩次碎片、標兩次已兌換。
+            //   單筆不封頂（白兔那邊有封頂）——碎片給多少是玩法，照提示詞的 10～200 讓柴郡自己估
+            const _nk = (s) => String(s || '').replace(/[\s「」『』""''、，。,.!！?？:：]/g, '').toLowerCase();
+            const used = new Set(), picks = [];
+            results.forEach((r, i) => {
+                if (!r) return;
+                let a = pending.find(x => !used.has(x) && x.name === r.name)
+                    || pending.find(x => !used.has(x) && _nk(x.name) === _nk(r.name));
+                if (!a && results.length === pending.length && pending[i] && !used.has(pending[i])) a = pending[i];
+                if (!a) return;
+                used.add(a);
+                picks.push({ a: a, shards: Math.max(0, parseInt(r.shards) || 0), comment: r.comment });
+            });
+            const totalShards = picks.reduce((s, p) => s + p.shards, 0);
+            // 先入帳、成功了才把成就標成已兌換（跟白兔那份同順序）：入帳失敗的話成就留著，下次再估
+            if (totalShards > 0 && !addShards(totalShards)) return { ok: false, msg: '碎片沒存下來，成就先留著，下次再找柴郡' };
+            for (const p of picks) await win.OS_ACHIEVEMENT.markRedeemed(p.a.id, p.shards, 'shards', p.comment);
 
             console.log(`[OS_404_STORE] 評估完成，共兌換 ${totalShards} 碎片`);
             return { ok: true, results, totalShards };

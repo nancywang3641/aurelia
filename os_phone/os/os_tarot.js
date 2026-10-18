@@ -37,7 +37,7 @@
         { id: 'ar14', name: 'XIV. Temperance (節制)' }, { id: 'ar15', name: 'XV. The Devil (惡魔)' },
         { id: 'ar16', name: 'XVI. The Tower (高塔)' }, { id: 'ar17', name: 'XVII. The Star (星星)' },
         { id: 'ar18', name: 'XVIII. The Moon (月亮)' }, { id: 'ar19', name: 'XIX. The Sun (太陽)' },
-        { id: 'ar20', name: 'XX. Judgement (審判)' }, { id: 'ar21', name: 'XX1. The World (世界)' }
+        { id: 'ar20', name: 'XX. Judgement (審判)' }, { id: 'ar21', name: 'XXI. The World (世界)' }
     ];
 
     // 小阿爾克那映射
@@ -472,7 +472,7 @@
                     ${card.isReversed ? '<div class="tr-history-rev-tag">(逆位)</div>' : ''}
                 </div>
             `;
-            snapContainer.innerHTML += cardHtml;
+            snapContainer.insertAdjacentHTML('beforeend', cardHtml);   // 追加不重建前面幾張
         });
         
         log.appendChild(snapContainer);

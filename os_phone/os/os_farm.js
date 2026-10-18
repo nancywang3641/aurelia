@@ -27,6 +27,11 @@
     var ASSET = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/farm/';
     var STORE_KEY = 'aurelia_farm_v1';
     var LAB_KEY = 'aurelia_farm_lab_v1';
+    // 存這台：走 AUI.lsSet（不丟例外，空間滿了自己跳「後院的進度沒存下來」）。以前是空 catch，存不進去也不會知道
+    function saveLocal(obj) {
+        var A = (window.parent && window.parent.AUI) || window.AUI;
+        return A.lsSet(STORE_KEY, JSON.stringify(obj), '後院的進度');
+    }
     var OWNER = '我';                   // 這塊地是她的；阿洛和丹之後在 VPS 各有一塊，排行榜上比
     // 走的人是她自己＝大廳裡「你」那個小人：裝扮室換過就是那個樣子，沒換過是剪影（大廳沒載到也用剪影）
     var LOBBY_MC = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_mc_';
@@ -149,7 +154,7 @@
         var Cloud = window.FarmCloud;
         // 存在這台；雲端存檔開著的話順便送上去（停手一下才送）
         function save() {
-            try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+            saveLocal(state);
             if (Cloud) Cloud.changed(state);
         }
         function toast(text) {
@@ -185,7 +190,7 @@
                 }).then(function (doc) {
                     if (!doc || !doc.state || session !== mine) return;
                     var c = root.parentNode;
-                    try { localStorage.setItem(STORE_KEY, JSON.stringify(doc.state)); } catch (e) {}
+                    saveLocal(doc.state);
                     end('drop');
                     if (c) launch(c, { raw: doc.state, note: pullNote });
                 }).catch(function () { if (session === mine && pullNote) toast(pullNote); });
@@ -209,7 +214,7 @@
             clearInterval(watch);
             if (scene) scene.destroy();
             scene = null;
-            if (how === 'local') { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {} }
+            if (how === 'local') { saveLocal(state); }
             else if (how !== 'drop') { save(); if (Cloud) Cloud.flush(); }
             window.removeEventListener('pagehide', onHide);
             document.removeEventListener('visibilitychange', onHide);
@@ -241,7 +246,7 @@
         // 玩到一半另一台裝置存過了：這台手上這份不能再蓋上去，換成最新的重開
         if (Cloud) Cloud.setOnNewer(function (remote) {
             var c = root.parentNode;
-            try { localStorage.setItem(STORE_KEY, JSON.stringify(remote)); } catch (e) {}
+            saveLocal(remote);
             end('drop');
             if (c) launch(c, { raw: remote, note: pullNote || '另一台裝置剛存過這塊田，換成最新的了' });
         });
@@ -289,7 +294,7 @@
             return window.FarmCloud ? window.FarmCloud.openSync(mine) : { raw: mine };
         }).then(function (pick) {
             if (!root.isConnected) return;
-            if (pick.raw) try { localStorage.setItem(STORE_KEY, JSON.stringify(pick.raw)); } catch (e) {}
+            if (pick.raw) saveLocal(pick.raw);
             start(root, pick.raw, pick.note);
         }).catch(function (e) {
             root.innerHTML = '<div class="farm-loading is-error"><i class="fa-solid fa-triangle-exclamation"></i><span>後院的檔案沒載到（' + String(e && e.message || e) + '）。</span>' +

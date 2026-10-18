@@ -60,8 +60,9 @@
     function isBackdropAuto() {
         try { return localStorage.getItem(BACKDROP_AUTO_KEY) === '1'; } catch (e) { return false; }
     }
+    // 回 true／false：存不下來時 lsSet 自己跳提示，設置頁拿它決定要不要報「已儲存」
     function setBackdropAuto(v) {
-        try { localStorage.setItem(BACKDROP_AUTO_KEY, v ? '1' : '0'); } catch (e) {}
+        return win.AUI.lsSet(BACKDROP_AUTO_KEY, v ? '1' : '0', '小地圖自動補底圖的開關');
     }
 
     // PROMPT 模板（用戶提供的場景地圖規範 + 補一些避撞區域提示）

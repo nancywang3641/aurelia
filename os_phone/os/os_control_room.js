@@ -218,9 +218,13 @@
             if (downEl) downEl.classList.add('hidden');
             if (cards) cards.classList.remove('cr-dim');
 
+            // 啟動中＝按下啟動後兩分鐘內；燈和字都照這個判斷。
+            //   以前字只看「按過啟動」，沒起來的話燈已經熄了、字還一直寫「啟動中…」
+            const starting = (key) => !!this._starting[key] && (Date.now() - this._starting[key]) < 120000;
+            const startFailed = (key) => !!this._starting[key] && !starting(key);
             const dot = (up, key) => {
                 if (up) { this._starting[key] = 0; return 'up'; }
-                if (this._starting[key] && (Date.now() - this._starting[key]) < 120000) return 'starting';   // 啟動中（兩分鐘窗口）
+                if (starting(key)) return 'starting';
                 return 'down';
             };
 
@@ -251,7 +255,8 @@
                         ? `運作中，${cur.voices || 0} 個音色隨叫隨到`
                         : '運作中，語音隨叫隨到';
                 } else {
-                    iv.textContent = this._starting.voice ? '啟動中…（載入語音模型要一陣子）' : '未啟動';
+                    iv.textContent = starting('voice') ? '啟動中…（載入語音模型要一陣子）'
+                        : (startFailed('voice') ? '兩分鐘了還沒起來，再按一次啟動試試' : '未啟動');
                 }
             }
 
@@ -278,7 +283,8 @@
                 }
             } else {
                 if (ic) ic.textContent = (st.comfy?.installed === false) ? '還沒安裝'
-                    : (this._starting.comfy ? '啟動中…（第一次要 30~60 秒）' : '未啟動');
+                    : (starting('comfy') ? '啟動中…（第一次要 30~60 秒）'
+                        : (startFailed('comfy') ? '兩分鐘了還沒起來，再按一次啟動試試' : '未啟動'));
                 if (vramWrap) vramWrap.classList.add('hidden');
             }
 

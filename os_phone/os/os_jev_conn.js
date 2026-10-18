@@ -19,11 +19,14 @@
 
     function _read(k) { try { return (localStorage.getItem(LS[k]) || '').trim(); } catch (e) { return ''; } }
     function get() { return { url: _read('url'), model: _read('model'), key: _read('key') }; }
+    // 回 true＝這次每一格都存進去了；存不下來 lsSet 會跳「決策模型的設定沒存下來」
     function set(patch) {
+        let ok = true;
         Object.keys(patch || {}).forEach(k => {
             if (!LS[k]) return;
-            try { localStorage.setItem(LS[k], String(patch[k] == null ? '' : patch[k]).trim()); } catch (e) {}
+            if (!win.AUI.lsSet(LS[k], String(patch[k] == null ? '' : patch[k]).trim(), '決策模型的設定')) ok = false;
         });
+        return ok;
     }
     function ready() { const c = get(); return !!(c.url && c.model && c.key); }
 

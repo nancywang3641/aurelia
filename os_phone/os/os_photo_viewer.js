@@ -422,11 +422,13 @@
             root.classList.add('opv-fadeout');
         }
         root.classList.remove('opv-on');
-        setTimeout(_destroy, 300);
+        // 只收「這一個」：關到一半又點開下一張時 S 已經換成新的，晚到的計時器不能把它也關掉
+        const closing = S;
+        setTimeout(() => _destroy(closing), 300);
     }
 
-    function _destroy() {
-        if (!S) return;
+    function _destroy(only) {
+        if (!S || (only && S !== only)) return;
         clearTimeout(S.tapTimer);
         doc.removeEventListener('keydown', _key, true);
         if (S.root.parentNode) S.root.parentNode.removeChild(S.root);

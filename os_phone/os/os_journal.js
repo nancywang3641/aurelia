@@ -121,8 +121,9 @@
     function _npcPickMap() {
         try { const o = JSON.parse(localStorage.getItem(NPC_PICK_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
     }
+    // 回 true／false：存不下來 lsSet 自己跳提示，按鈕就不翻成「已設好」
     function _saveNpcPickMap(m) {
-        try { localStorage.setItem(NPC_PICK_KEY, JSON.stringify(m || {})); } catch (e) {}
+        return win.AUI.lsSet(NPC_PICK_KEY, JSON.stringify(m || {}), '書咖常客的來源');
     }
 
     function _shortChatId(chatId) {
@@ -196,12 +197,19 @@
         catch (e) { return ''; }
     }
 
+    // 一共幾章：看每筆大總結自己記的第幾章（最新那筆最大）。
+    //   briefs 只帶最近 5 筆，以前拿它的長度當章數，超過 5 章一律顯示「第 5 章」；舊資料沒記章數才退回數筆數
+    function _chapterCount(story) {
+        const bs = (story && story.briefs) || [];
+        return bs.reduce((n, b) => Math.max(n, Number(b && b.count) || 0), bs.length);
+    }
+
     function _renderCard(story, idx, isActive) {
         const coverIdx = _coverFor(story.cardName + story.chatId);
         const title = story.storyTitle || story.cardName || '未命名故事線';
         const subtitle = story.storyTitle && story.cardName !== story.storyTitle ? story.cardName : '';
         const firstBrief = story.briefs[0]?.brief || '';
-        const chapters = story.briefs.length;
+        const chapters = _chapterCount(story);
         const chars = story.characters.length;
         const date = _fmtDate(story.briefs[0]?.ts);
         return `
@@ -304,14 +312,14 @@
             </div>
 
             <div class="jrnl-volume" aria-hidden="true">
-                <div class="jrnl-volume-main">共 ${story.briefs.length} 章</div>
+                <div class="jrnl-volume-main">共 ${_chapterCount(story)} 章</div>
                 <div class="jrnl-volume-sub">${story.characters.length} 名角色 · ${_fmtDate(latestTs)}</div>
             </div>
 
             <div class="jrnl-d-section jrnl-sec-story">
                 <div class="jrnl-d-section-head">
                     <h3>劇情時間軸</h3>
-                    <span class="jrnl-d-count">共 ${story.briefs.length} 章</span>
+                    <span class="jrnl-d-count">共 ${_chapterCount(story)} 章</span>
                 </div>
                 <ol class="jrnl-timeline">${timelineHtml}</ol>
             </div>
@@ -531,7 +539,7 @@
             if (sortMode === 'oldest') {
                 arr.sort((a, b) => (a.briefs[0]?.ts || 0) - (b.briefs[0]?.ts || 0));
             } else if (sortMode === 'chapters') {
-                arr.sort((a, b) => b.briefs.length - a.briefs.length);
+                arr.sort((a, b) => _chapterCount(b) - _chapterCount(a));
             }
             // newest 已是 default 排序
             return arr;
@@ -643,7 +651,7 @@
                     const on = m[active.cardName] === active.chatId;
                     if (on) delete m[active.cardName];
                     else m[active.cardName] = active.chatId;
-                    _saveNpcPickMap(m);
+                    if (!_saveNpcPickMap(m)) return;
                     _sfx('book_stamp');
                     _syncPinBtns(!on);
                 };
@@ -720,10 +728,13 @@
                 });
             }
 
-            const close = () => modal.remove();
+            const close = () => { modal.remove(); document.removeEventListener('keydown', onKey); };   // 按 ✕、點外面關也要拆鍵盤監聽，不然開一次多一個
             modal.querySelector('.jrnl-cm-close').onclick = close;
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-            const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+            const onKey = (e) => {
+                if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }   // 被下一個彈窗直接換掉的
+                if (e.key === 'Escape') close();
+            };
             document.addEventListener('keydown', onKey);
         }
 
@@ -749,11 +760,14 @@
             container.appendChild(modal);
             // 把 markdown table + 【標題】轉成 HTML（內容 escape 過、不會被當 HTML 注入）
             modal.querySelector('.jrnl-modal-body').innerHTML = _renderMd(content);
-            const close = () => modal.remove();
+            const close = () => { modal.remove(); document.removeEventListener('keydown', onKey); };
             modal.querySelector('.jrnl-modal-close').onclick = close;
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
             // ESC 關閉
-            const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+            const onKey = (e) => {
+                if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }
+                if (e.key === 'Escape') close();
+            };
             document.addEventListener('keydown', onKey);
         }
 
@@ -789,7 +803,7 @@
             const modal = document.createElement('div');
             modal.className = 'jrnl-modal';
             _tagModalDesk(modal, editMode ? 'kedit' : 'kview');
-            const close = () => modal.remove();
+            const close = () => { modal.remove(); document.removeEventListener('keydown', onKey); };
             if (editMode) {
                 modal.innerHTML = `
                     <div class="jrnl-modal-card">
@@ -846,7 +860,10 @@
                 modal.querySelector('.jrnl-modal-close').onclick = close;
             }
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-            const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+            const onKey = (e) => {
+                if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }
+                if (e.key === 'Escape') close();
+            };
             document.addEventListener('keydown', onKey);
         }
 
@@ -858,7 +875,7 @@
             const modal = document.createElement('div');
             modal.className = 'jrnl-modal';
             _tagModalDesk(modal, 'kview');
-            const close = () => modal.remove();
+            const close = () => { modal.remove(); document.removeEventListener('keydown', onKey); };
             modal.innerHTML = `
                 <div class="jrnl-modal-card">
                     <div class="jrnl-modal-head">
@@ -908,7 +925,10 @@
                 } catch (e) { status.textContent = '清除失敗：' + (e.message || e); go.disabled = false; }
             };
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
-            const onKey = (e) => { if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onKey); } };
+            const onKey = (e) => {
+                if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }
+                if (e.key === 'Escape') close();
+            };
             document.addEventListener('keydown', onKey);
         }
 

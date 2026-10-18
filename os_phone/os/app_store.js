@@ -16,9 +16,10 @@
     const OPENED_KEY = 'aurelia_app_opened';         // {id: timestamp} —— 最近使用，phone_shell 開 app 時寫
     function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function _loadList() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
-    function _saveList(list) { try { win.localStorage.setItem(INSTALLED_KEY, JSON.stringify(list)); } catch (e) {} }
+    // 寫不進去 lsSet 會跳「○○沒存下來」；回 true／false（安裝那裡拿它決定要不要報「已安裝到桌面」）
+    function _saveList(list) { return win.AUI.lsSet(INSTALLED_KEY, JSON.stringify(list), '桌面上的應用清單'); }
     function _loadOpened() { try { return JSON.parse(win.localStorage.getItem(OPENED_KEY)) || {}; } catch (e) { return {}; } }
-    function _markOpened(id) { try { var m = _loadOpened(); m[id] = Date.now(); win.localStorage.setItem(OPENED_KEY, JSON.stringify(m)); } catch (e) {} }
+    function _markOpened(id) { var m = _loadOpened(); m[id] = Date.now(); win.AUI.lsSet(OPENED_KEY, JSON.stringify(m), '最近用過的應用'); }
     function _relTime(ts) {
         if (!ts) return '尚未使用';
         var d = Date.now() - ts, m = 60000, h = 3600000, day = 86400000;
@@ -182,9 +183,10 @@
         rec.id = id;
         const list = _loadList().filter(function (m) { return m.id !== id; });
         list.push({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
-        _saveList(list);
+        const listSaved = _saveList(list);
         _markOpened(id);
         if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: id, name: rec.name, emoji: rec.emoji, icon: rec.icon || '', iconUrl: rec.iconUrl || '' });
+        if (!listSaved) { _go(c, 'mine'); return; }   // 桌面清單沒存成（提示已跳）：不報「已安裝到你的桌面」，重整後圖標會不見
         _showSuccess(c, rec.name);
     }
     async function _uninstall(id, c) {
@@ -261,7 +263,7 @@
             }),
             mkRow('fa-face-smile', '換圖標', async function () {
                 const em = await AUI.prompt('新圖標 emoji（單一符號）', _appEm(a)); if (em == null) return;
-                a.emoji = (em.trim() || a.emoji).slice(0, 2); await win.OS_DB.savePhoneApp(a); _syncMeta(a);
+                a.emoji = (em.trim() || a.emoji || '').slice(0, 2); await win.OS_DB.savePhoneApp(a); _syncMeta(a);   // 沒挑過圖標的 app 沒有 emoji 欄，空白送出別丟錯
                 if (titleEl) titleEl.innerHTML = _appIcHTML(a) + ' ' + _esc(a.name || '應用');
             })
         ]);
@@ -358,18 +360,26 @@
                     ? '資料、VN 組件與劇情裡的版本會一起移除。'
                     : '桌面圖標與資料會一起刪除。'), { okText: '卸載' });
                 if (!ok) return;
-                _uninstall(a.id, c); _go(c, 'mine');
+                // 先回清單頁，再等卸載跑完（它最後會再畫一次清單；renderMine 只認最新那次，不會疊兩份）
+                _go(c, 'mine');
+                try { await _uninstall(a.id, c); }
+                catch (e) { console.error('[AppStore] 卸載失敗', e); _toast(c, '「' + (a.name || '這個應用') + '」沒有卸載乾淨，再試一次'); renderMine(c); }
             }, { danger: true, noChev: true })
         ]);
 
         _go(c, 'appdetail');
     }
 
+    // 第幾次畫清單：等 DB 的時候又叫了一次（例如卸載途中先切頁、卸載完再畫），只讓最新那次動手，
+    //   不然舊的那次回來會把卸載前的清單、殘留資料那條再疊一份上去
+    let _mineGen = 0;
     async function renderMine(c) {
         const list = c.querySelector('#as-mine-list'); if (!list) return;
+        const gen = ++_mineGen;
         list.innerHTML = '<div class="ws-empty">載入中…</div>';
         let apps = [], appsOk = false;
         try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; appsOk = true; } catch (e) { appsOk = false; }
+        if (gen !== _mineGen) return;
         const opened = _loadOpened();
         list.innerHTML = '';
         _appendHidden(c, list);   // 從桌面拿掉的（長按圖標按「−」）排最上面，可以放回去
@@ -378,7 +388,7 @@
         } else {
             apps.forEach(function (a) { list.appendChild(_mineRow(c, a, opened)); });
         }
-        _appendMaintenance(c, list, apps, appsOk);   // 殘留資料清理入口（有孤兒才顯示）；即使一個 app 都沒裝也能清
+        _appendMaintenance(c, list, apps, appsOk, gen);   // 殘留資料清理入口（有孤兒才顯示）；即使一個 app 都沒裝也能清
     }
 
     // ── 不在桌面上的：主畫面長按圖標按「−」拿掉的（內建的也算），一條一條，按「放回桌面」就回去 ──
@@ -411,7 +421,7 @@
     }
 
     // ── 殘留資料清理入口：掃到「已卸載卻留著資料」的孤兒就在底部顯示一條，點了確認後全清 ──
-    async function _appendMaintenance(c, list, apps, appsOk) {
+    async function _appendMaintenance(c, list, apps, appsOk, gen) {
         // 🛡️ 安裝清單沒讀成功就別掃：否則 installedSet 為空 → 把在裝的 app 全誤判成孤兒、一鍵刪光（資料災難）
         if (!appsOk) return;
         // 已安裝＝OS_DB ∪ localStorage 雙來源聯集（兩邊可能漂移，取聯集才不會誤刪在裝的）
@@ -420,6 +430,7 @@
         try { _loadList().forEach(function (m) { installed.add(String(m.id)); }); } catch (e) {}
         let orphans = [];
         try { orphans = await _scanOrphans(installed); } catch (e) { return; }
+        if (gen && gen !== _mineGen) return;   // 掃的時候清單已經重畫了：交給新的那次
         if (!orphans.length) return;   // 沒孤兒就不顯示、不打擾
         const g = document.createElement('div');
         g.className = 'ws-act-group';

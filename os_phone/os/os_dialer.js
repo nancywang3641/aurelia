@@ -61,7 +61,8 @@
     // 說話人前綴：行首整組方括號，但控制標記（後面接 | 或直接收尾的）不算
     const _NAME_PREFIX_RE = new RegExp('^\\s*\\[(?!\\s*(?:' + _CTRL_WORDS + ')\\s*[|｜\\]])[^\\]]+\\]\\s*', 'gim');
 
-    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    // 也轉引號：data-id="…" 這種屬性也走這支，id 裡有 " 會把屬性截斷
+    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function _avatarBg(c) {
         // 通訊錄頭像存 avatarId(進 OS_DB) → 先用首字佔位，圖庫之後再接
         return (c.name || '?').trim().slice(0, 1);
@@ -362,8 +363,6 @@
     // 最後一行是 [掛斷] 就代表他講完自己收線（也可以寫成 [掛斷|最後那句話]）。
     const _HANGUP_RE = new RegExp('^\\s*[\\[［【]\\s*(?:' + _HANGUP_WORDS + ')\\s*(?:[|｜]\\s*([^\\]］】]*))?\\s*[\\]］】]\\s*$', 'i');
     function _sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
-    // 一句話「講完」大概要多久：字數估，夾在 0.5～2.2 秒之間，太快像洗版、太慢像當機
-    function _gapFor(text) { return Math.max(500, Math.min(2200, 380 + String(text || '').length * 75)); }
     function _splitSpeech(raw) {
         const out = { lines: [], hangup: false };
         String(raw == null ? '' : raw).split(/\r?\n+/).forEach(function (ln) {
@@ -407,7 +406,7 @@
             '<div class="dlr-call dlr-call-dialing">'
           +   '<div class="dlr-call-ava">' + _esc(_avatarBg(contact)) + '</div>'
           +   '<div class="dlr-call-name">' + _esc(contact.name) + '</div>'
-          +   '<div class="dlr-call-num">' + _esc(_num(contact.id)) + '</div>'
+          +   (_hideNum ? '' : '<div class="dlr-call-num">' + _esc(_num(contact.id)) + '</div>')   // 從微信撥的不顯示號碼（跟撥號中那頁同一個規矩）
           +   '<div class="dlr-call-status">' + _esc(statusText) + '</div>'
           +   (note ? '<div class="dlr-call-note">傳了訊息給你：<span>' + _esc(_cut(note, 40)) + '</span></div>' : '')
           +   '<button class="dlr-hang" id="dlr-hang" type="button">結束</button>'
@@ -539,7 +538,7 @@
         const inp = _root && _root.querySelector('#dlr-say');
         if (inp) inp.disabled = !on;
         _updateSayBtn();
-        if (on && inp) { try { inp.focus(); } catch (e) {} }
+        if (on && inp) { try { inp.focus({ preventScroll: true }); } catch (e) {} }   // 通話畫面剛換上來就 focus：別把外層一起捲
     }
     // 送出鍵一鍵兩用：輸入框有字＝「送」；已經送過幾句、框空著＝「說完了」，按下去不必等那幾秒。
     // 她原本問要不要加一顆 hold 按鈕，這樣就不用多一顆 —— 同一顆鈕看狀況換字。
@@ -606,7 +605,7 @@
 
     function _VI() { return _w('OS_VOICE_INPUT'); }
     function _vmLoadPref() { try { return win.localStorage.getItem(_VM_KEY) === '1'; } catch (e) { return false; } }
-    function _vmSavePref(on) { try { win.localStorage.setItem(_VM_KEY, on ? '1' : '0'); } catch (e) {} }
+    function _vmSavePref(on) { _w('AUI').lsSet(_VM_KEY, on ? '1' : '0', '電話打字／說話的選擇'); }
     function _vmPhase(phase, text) {
         _vm.phase = phase;
         const box = _root && _root.querySelector('#dlr-listen');

@@ -398,7 +398,7 @@
         for (let i = 0; i < chain.length; i++) {
             const v = String(vars[chain[i]] || '').trim();
             if (!v || /^transparent$/i.test(v)) continue;
-            if (/rgba\([^)]*,\s*0?\.[0-4]\d*\s*\)/i.test(v)) continue;   // 太透明，看得到底下那層
+            if (/rgba\([^)]*,\s*(?:0?\.[0-4]\d*|0)\s*\)/i.test(v)) continue;   // 太透明，看得到底下那層（全透明的 rgba(…,0) 也算）
             const rgb = _toRgb(v);
             if (rgb) return rgb;
         }
@@ -596,7 +596,8 @@
             if (!V || !V.saveUserTheme) { say('手機殼還沒載入', true); return; }
             const nm = ($('.pth-name').value || '').trim();
             if (nm) _pending.name = nm.slice(0, 8);
-            V.saveUserTheme(_pending);
+            // 存不進去（本機空間滿）會回 false、提示手機殼那邊已經跳了：別換上一套重整就不見的主題、也別說存好了
+            if (V.saveUserTheme(_pending) === false) { say('這套沒存下來，本機空間滿了', true); return; }
             if (V.useTheme) V.useTheme(_pending.id);
             say('存好了，已經換上這套');
         });

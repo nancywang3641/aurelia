@@ -281,7 +281,7 @@
         if (laid || !P.appIds || !P.hideWidget) return;
         setTimeout(function () {
             P.appIds().forEach(function (id) { if (KEEP_APPS.indexOf(id) < 0) P.hideWidget(id); });
-            try { localStorage.setItem(LAID_KEY, '1'); } catch (e) {}
+            win.AUI.lsSet(LAID_KEY, '1', '桌面收好的記號');
         }, 2500);
     }
     function boot() {

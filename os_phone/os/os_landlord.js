@@ -29,8 +29,9 @@
 
     function _db() { return win.OS_DB || window.OS_DB; }
     function _now() { try { return Date.now(); } catch (e) { return 0; } }
-    // 以「天」為刻度(本地日期)，跟書咖同一招
-    function _dayNum(ts) { return Math.floor(ts / 86400000); }
+    // 以「天」為刻度(本地日期)，跟書咖 os_cafe._dayNum 同一個算法：本地午夜換日。
+    //   以前這裡直接拿 UTC 除，註解寫本地、實際是 UTC，台灣要早上 8 點才換日（收租、看房都晚 8 小時）
+    function _dayNum(ts) { return Math.floor((ts - new Date(ts).getTimezoneOffset() * 60000) / 86400000); }
 
     // 還沒蓋公寓＝一戶都沒有(招租入口也跟著關)。蓋一層才長出那層的出租戶。
     function _defaultState() {

@@ -271,16 +271,14 @@ ${facilityText}
             win.OS_API.chat(messages, win.OS_SETTINGS.getConfig(), null, async (responseText) => {
                 if (processed) return;
                 const json = extractJSON(responseText);
+                processed = true;
                 if (!json) {
-                    if (responseText && responseText.length > 200 && responseText.includes('}')) {
-                        processed = true;
-                        console.error('[Schedule] 解析失敗，原始輸出:', responseText.substring(0, 500));
-                        if (progressCb) progressCb('error', 'AI 沒吐合法 JSON');
-                        resolve(false);
-                    }
+                    // 完成回呼只會來一次：抽不到就是失敗（以前只 return 等「下一次」，回得短就永遠卡在生成中）
+                    console.error('[Schedule] 解析失敗，原始輸出:', String(responseText || '').substring(0, 500));
+                    if (progressCb) progressCb('error', responseText ? 'AI 沒吐合法 JSON' : 'AI 沒有回覆');
+                    resolve(false);
                     return;
                 }
-                processed = true;
 
                 if (!json.schedules || typeof json.schedules !== 'object') {
                     if (progressCb) progressCb('error', 'JSON 缺 schedules 欄');

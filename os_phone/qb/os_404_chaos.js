@@ -173,10 +173,11 @@
 
         const penaltySelect = document.getElementById('chaos-penalty-select');
         if (penaltySelect) {
+            // 整串組好一次指派（以前先指派再 += 一項＝整個 select 重建兩次）；自己打的狀態可能有 < & 這類字，轉義
+            const _escOpt = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             penaltySelect.innerHTML = DB_PENALTIES.map((pen, index) => `
-                <option value="${index}">${pen}</option>
-            `).join('');
-            penaltySelect.innerHTML += `<option value="custom">[自定義] 我是魔鬼，我要自己打字...</option>`;
+                <option value="${index}">${_escOpt(pen)}</option>
+            `).join('') + `<option value="custom">[自定義] 我是魔鬼，我要自己打字...</option>`;
             
             if (selectedPenalty < DB_PENALTIES.length) {
                 penaltySelect.value = selectedPenalty;
@@ -353,9 +354,10 @@
 5. ${tonePrompt} (使用 [Sys|柴郡|「台詞」] 發布無情嘲笑)`;
 
         // 呼叫 TavernHelper 發送
+        //   按鈕拿在 try 外面：送失敗時 catch 要把它還原，不然一直停在「發送中...」按不動
+        const btn = (mode === 'start') ? document.querySelector('.btn-start') : document.querySelector('.btn-inject');
+        const originalText = btn ? btn.textContent : '';
         try {
-            const btn = (mode === 'start') ? document.querySelector('.btn-start') : document.querySelector('.btn-inject');
-            const originalText = btn.textContent;
             btn.textContent = "發送中...";
             btn.disabled = true;
 
@@ -382,6 +384,7 @@
             }
         } catch (e) {
             console.error("發送任務失敗:", e);
+            if (btn) { btn.textContent = originalText; btn.disabled = false; }
             AUI.alert("發送失敗，請查看控制台。");
         }
     }

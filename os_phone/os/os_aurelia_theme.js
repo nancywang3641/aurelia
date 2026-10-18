@@ -414,13 +414,14 @@
                 if (prop.kind === 'add') {
                     if (P.getUserThemes().some(function (t) { return _fold(t.name) === _fold(a.name); })) return _stale(prop, '在那之後已經有同名的一套了，沒有再存');
                     const id = 'u' + Date.now().toString(36);
-                    P.saveUserTheme({ id: id, name: a.name, swatch: a.swatch, vars: a.vars });
+                    // 只認明確的 false（存不進去）：沙盒裡的假手機殼不回值，照舊當成功
+                    if (P.saveUserTheme({ id: id, name: a.name, swatch: a.swatch, vars: a.vars }) === false) return { ok: false, text: '本機空間滿了，這套沒存下來' };
                     prop.tid = id;
                     if (prop.use) { prop.prevActive = P.currentThemeId(); P.useTheme(id); }
                 } else if (prop.kind === 'edit') {
                     const t = P.getUserThemes().find(function (x) { return x.id === prop.tid; });
                     if (!t || t.name !== b.name || !_sameVars(t.vars, b.vars)) return _stale(prop, '這一套在提出之後被改過了，這張作廢，沒有蓋掉');
-                    P.saveUserTheme({ id: t.id, name: a.name, swatch: a.swatch || t.swatch, vars: a.vars });
+                    if (P.saveUserTheme({ id: t.id, name: a.name, swatch: a.swatch || t.swatch, vars: a.vars }) === false) return { ok: false, text: '本機空間滿了，這套沒存下來' };
                     if (P.currentThemeId() === t.id) P.useTheme(t.id);   // 正在用的重新套一次
                 } else {
                     if (P.currentThemeId() !== (b.id || P.currentThemeId())) return _stale(prop, '在那之後已經換過別套了，這張作廢');
@@ -487,7 +488,7 @@
                 } else if (prop.kind === 'edit') {
                     const t = P.getUserThemes().find(function (x) { return x.id === prop.tid; });
                     if (!t || !_sameVars(t.vars, a.vars)) return { ok: false, text: LATER };
-                    P.saveUserTheme({ id: t.id, name: b.name, swatch: b.swatch || t.swatch, vars: b.vars });
+                    if (P.saveUserTheme({ id: t.id, name: b.name, swatch: b.swatch || t.swatch, vars: b.vars }) === false) return { ok: false, text: '本機空間滿了，這套沒存下來' };
                     if (P.currentThemeId() === t.id) P.useTheme(t.id);
                 } else {
                     if (P.currentThemeId() !== prop.tid) return { ok: false, text: LATER };

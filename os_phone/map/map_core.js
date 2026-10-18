@@ -230,6 +230,16 @@
 
     // === 3. 核心邏輯 ===
 
+    // 情報員開場那句（[Char|情報員|表情|「…」]）交給大廳的對話框播。
+    //   以前叫的是不存在的 AureliaControlCenter.playIrisSequence（對外公開的是 VoidTerminal.playSequence），
+    //   有先檢查所以一直靜靜跳過、從來沒播過。
+    //   只播寫了 Char／Nar 標籤的：沒標籤的散字 playSequence 會整段算成瀅瀅說的
+    function _playToLobby(text) {
+        if (!text || !/\[(Char|Nar)\|/.test(text)) return;
+        const VT = win.VoidTerminal || window.VoidTerminal;
+        if (VT && typeof VT.playSequence === 'function') VT.playSequence(text);
+    }
+
     // 🔥 生成全地圖隨機事件 - 使用 AI 生成
     async function generateWorldEvents(force = false) {
         // 🔒 防止重複執行
@@ -334,9 +344,7 @@ ${facilityText}
 
                 cleanText = cleanText.trim();
                 // 🔥 調用大廳介面播放敘事
-                if (cleanText && win.AureliaControlCenter && win.AureliaControlCenter.playIrisSequence) {
-                    win.AureliaControlCenter.playIrisSequence(cleanText);
-                }
+                _playToLobby(cleanText);
 
                 // 🔥 如果 AI 生成失敗，使用後備模板
                 if (events.length === 0) {
@@ -506,7 +514,9 @@ ${facilityText}
         // 跟著故事時鐘（沒有才真實時間），跟排程、圖片地圖同一個「現在」
         const SE = win.SCHEDULE_ENGINE;
         const hour = (SE && typeof SE.now === 'function' ? SE.now() : new Date()).getHours();
-        const isNight = hour >= 18 || hour < 6;
+        // 夜晚＝19 點到隔天 4 點：跟全城圖（map_image 的夜晚＋凌晨）、排程（晚上＋午夜＋凌晨）同一條線。
+        //   以前這裡 18～5 點算夜，18 點全城圖還是黃昏、5 點已經是早晨，底圖卻先換成夜景
+        const isNight = hour >= 19 || hour < 5;
         return isNight 
             ? 'https://nancywang3641.github.io/aurelia/district/AURELIA-NIGHT.jpg' 
             : 'https://nancywang3641.github.io/aurelia/district/AURELIA-DAY.jpg';
@@ -625,6 +635,8 @@ ${facilityText}
         const homeLayer = document.getElementById('am-home-layer');
         const innerLayer = document.getElementById('am-inner-layer');
         const title = document.getElementById('am-main-title');
+        // 地圖畫面已經被別的 app 清掉（STATE.container 還留著舊的那格）→ 沒東西可畫，下次打開地圖會整份重建
+        if (!bg || !homeLayer || !innerLayer || !title) return;
 
         // 全頁底色維持奧瑞亞固定圖（就算 marker 模式也保留作氛圍底色）
         bg.style.backgroundImage = `url('${getHomeBackground()}')`;
@@ -1119,7 +1131,7 @@ ${facilityText}
     function _mapSaveSettings() {
         const scenemapBackdrop = document.getElementById('scenemap-backdrop-auto');
         if (scenemapBackdrop && win.SCENE_MAP_ENGINE && typeof win.SCENE_MAP_ENGINE.setBackdropAuto === 'function') {
-            win.SCENE_MAP_ENGINE.setBackdropAuto(scenemapBackdrop.checked);
+            if (win.SCENE_MAP_ENGINE.setBackdropAuto(scenemapBackdrop.checked) === false) return;   // 沒存成：提示已跳，不報成功
         }
         if (AUI.toastr) AUI.toastr.success('設置已儲存', 'Map');
         closeModal();
@@ -1708,6 +1720,17 @@ ${facilityText}
         return { url: SP.toDataUrl(res.svg), pos };
     }
 
+    // 「探索此地」鈕的字與能不能按一起改：還在掃描（中途換到別的設施又回來）就維持「掃描中」不給按，
+    //   其他時候一律放開。以前這裡只換字、沒解 disabled，掃描失敗一次後鈕就永遠按不動
+    const SCAN_BUSY_HTML = '<span><i class="fa-solid fa-satellite-dish"></i></span> 掃描中...';
+    function _setScanBtn(html) {
+        const b = document.getElementById('am-scan-btn');
+        if (!b) return;
+        if (STATE._scanning) { b.innerHTML = SCAN_BUSY_HTML; b.disabled = true; return; }
+        b.innerHTML = html;
+        b.disabled = false;
+    }
+
     function renderScanResults() {
         const resultsDiv = document.getElementById('am-scan-results');
         const charGrid = document.getElementById('am-char-grid');
@@ -1808,9 +1831,9 @@ ${facilityText}
             // 只有常駐排程角色 / sceneMap 不算掃過（探索此地是去抽路人，跟 landmark 無關）
             const reallyScanned = (STATE.introSegments && STATE.introSegments.length > 0)
                 || STATE.generatedChars.some(c => !c.isResident && !c.isLive);
-            document.getElementById('am-scan-btn').innerHTML = reallyScanned
+            _setScanBtn(reallyScanned
                 ? '<span>↻</span> 重新掃描'
-                : '<span><i class="fa-solid fa-magnifying-glass"></i></span> 探索此地';
+                : '<span><i class="fa-solid fa-magnifying-glass"></i></span> 探索此地');
             // 🎭 小劇場鈕：在場 ≥2 位（VN 即時角色不算）才亮
             const theaterBtn = document.getElementById('am-theater-btn');
             if (theaterBtn) theaterBtn.classList.toggle('on', STATE.generatedChars.filter(c => c && c.name && !c.isLive).length >= 2);
@@ -1820,7 +1843,7 @@ ${facilityText}
         } else {
             _clearAnimationTimers(); // 沒角色就把舊定時器收乾淨
             resultsDiv.classList.remove('active');
-            document.getElementById('am-scan-btn').innerHTML = '<span><i class="fa-solid fa-magnifying-glass"></i></span> 探索此地';
+            _setScanBtn('<span><i class="fa-solid fa-magnifying-glass"></i></span> 探索此地');
             const theaterBtn = document.getElementById('am-theater-btn');
             if (theaterBtn) theaterBtn.classList.remove('on');
         }
@@ -2210,13 +2233,12 @@ ${facilityText}
             return Array.isArray(list) ? list : [];
         } catch (e) { return []; }
     }
+    // 回 true／false：空間滿了 lsSet 會跳提示，接著要報「整理好了」的地方拿這個擋
     function _mapTheaterSaveList(list) {
-        try {
-            let all = {};
-            try { all = JSON.parse(localStorage.getItem(MAP_THEATER_LOG_KEY) || '{}'); } catch (e) {}
-            all[_mapTheaterChatId()] = (list || []).slice(0, 10);
-            localStorage.setItem(MAP_THEATER_LOG_KEY, JSON.stringify(all));
-        } catch (e) { console.warn('[MapTheater] 記事存檔失敗', e); }
+        let all = {};
+        try { all = JSON.parse(localStorage.getItem(MAP_THEATER_LOG_KEY) || '{}'); } catch (e) {}
+        all[_mapTheaterChatId()] = (list || []).slice(0, 10);
+        return win.AUI.lsSet(MAP_THEATER_LOG_KEY, JSON.stringify(all), '地圖小劇場的記事');
     }
     function _saveMapTheaterBrief(entry) {
         const list = _mapTheaterList();
@@ -2247,7 +2269,7 @@ ${facilityText}
             const clean = String(seg || '').replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
             if (!clean || clean.length < 10 || clean.startsWith('{"error') || clean.includes('請求失敗') || clean.includes('请求失败')) return { ok: false, msg: '整理失敗，記事未動' };
             keep.push({ fac: '', pair: '往期綜述', brief: clean, ts: olds[olds.length - 1].ts || Date.now(), merged: true });
-            _mapTheaterSaveList(keep);
+            if (!_mapTheaterSaveList(keep)) return { ok: false, msg: '整理好了但存不下來，記事未動' };
             return { ok: true, msg: '已把 ' + olds.length + ' 條往期併成一段綜述' };
         } catch (e) { return { ok: false, msg: '整理失敗，記事未動' }; }
     }
@@ -2308,7 +2330,7 @@ ${facilityText}
             win._lobbyPendingChapter = ch;
             try { win.PhoneSystem?.goHome?.(); } catch (e) {}   // 先收掉地圖面板（從 VN 末尾開的話面板還蓋在 VN 上面）
             if (win.AureliaControlCenter && win.AureliaControlCenter.showVnPanel) win.AureliaControlCenter.showVnPanel('autoload');
-            else if (win.VN_Core && win.VN_Core._startWithLoader) win.VN_Core._startWithLoader(content, null);
+            else if (win.VN_Core && win.VN_Core._startWithLoader) win.VN_Core._startWithLoader(content, null, { replay: true });   // 番外不是最新這輪：別把還沒插的插圖插進來
             if (btn) { btn.disabled = false; btn.innerHTML = '<span><i class="fa-solid fa-masks-theater"></i></span> 小劇場'; }
         } catch (e) {
             console.warn('[MapTheater] 小劇場生成失敗:', e);
@@ -2346,8 +2368,17 @@ ${facilityText}
     async function scanForCharacters() {
         if (blockIfPreview('探索此地')) return;
         const btn = document.getElementById('am-scan-btn');
-        btn.innerHTML = '<span><i class="fa-solid fa-satellite-dish"></i></span> 掃描中...';
+        STATE._scanning = true;
+        btn.innerHTML = SCAN_BUSY_HTML;
         btn.disabled = true;
+        // 這一趟沒成功（模型回錯、組上下文失敗）：放開鈕、讓她看得到，不然鈕一直停在「掃描中」
+        const _scanFailed = (err) => {
+            console.error('[Map] 探索失敗:', err);
+            STATE._scanning = false;
+            STATE._scanBusyUntil = Date.now() + 8000;
+            _setScanBtn('<span><i class="fa-solid fa-rotate-right"></i></span> 探索失敗，再試一次');
+            if (AUI.toastr) AUI.toastr.error('探索沒有成功，再按一次試試', 'Map');
+        };
 
         const fac = STATE.activeFacility;
         STATE._scanBusyUntil = Date.now() + 120000;   // 掃描忙碌窗：生成期間擋住過期清空（上限2分鐘防呆，收尾時縮短）
@@ -2397,15 +2428,20 @@ ${facilityText}
                     try { await win.SCENE_PAINTER.loadLibrary(); } catch (e) {}
                 }
                 const _sp = _SME.buildScenePrompt(_zid, _fk);   // 把 <scene-map> 生成規則拼進同一次呼叫
-                if (_sp) prompt += '\n\n' + _sp;
+                // 小地圖規則單獨用時，最後一句是「只輸出 <scene-map> 包裹的內容」，跟探索要的 [NPC]／[📖]／[🔍] 打架：
+                //   拼進來時拿掉那句，改說兩種寫在同一份回覆
+                if (_sp) prompt += '\n\n' + _sp.replace(/\s*只輸出 <scene-map>[^\n]*\s*$/, '') +
+                    '\n\n上面探索要的 [NPC]、[📖]、[🔍] 標籤照常寫，<scene-map>…</scene-map> 區塊接在它們後面，同一份回覆一起輸出。';
             }
             const messages = await win.OS_API.buildContext(prompt, 'map_scan');
             // 🔍 探索此地走副模型（Rae：主模型等太久）——工具型生成(路人/環境/小地圖)不需要主模型品質；
             //   舊環境沒 chatSecondary 才退回主模型
             const _dispatch = (typeof win.OS_API.chatSecondary === 'function')
-                ? (onFin) => win.OS_API.chatSecondary(messages, null, onFin, null, { task: 'map' })
-                : (onFin) => win.OS_API.chat(messages, (win.OS_SETTINGS.getConfigFor ? win.OS_SETTINGS.getConfigFor('map') : win.OS_SETTINGS.getConfig()), null, onFin, null, { task: 'map' });
+                ? (onFin) => win.OS_API.chatSecondary(messages, null, onFin, _scanFailed, { task: 'map' })
+                : (onFin) => win.OS_API.chat(messages, (win.OS_SETTINGS.getConfigFor ? win.OS_SETTINGS.getConfigFor('map') : win.OS_SETTINGS.getConfig()), null, onFin, _scanFailed, { task: 'map' });
             _dispatch(async (txt) => {
+                txt = String(txt || '');
+                if (!txt.trim()) { _scanFailed('模型回了空白'); return; }
                 let chars = [];
                 let intro = [];
                 let discoveries = [];
@@ -2471,10 +2507,8 @@ ${facilityText}
                 cleanText = cleanText.trim();
                 
                 // 🔥 將剩下純對話交給大廳播放
-                if (cleanText && win.AureliaControlCenter && win.AureliaControlCenter.playIrisSequence) {
-                    win.AureliaControlCenter.playIrisSequence(cleanText);
-                }
-                
+                _playToLobby(cleanText);
+
                 STATE.generatedChars = chars;   // 可以為空：封閉場景（無限流副本之類）沒人就沒人，不硬塞路人
                 STATE.introSegments = intro.length > 0 ? intro : ["四周靜悄悄的，暫時沒有值得注意的動靜。"];
 
@@ -2484,8 +2518,8 @@ ${facilityText}
                     try { await win.OS_DB?.saveMapFacilityData?.(_zid, _fk, { characters: chars, intro: intro }); } catch (e) {}
                 }
 
-                renderScanResults();
-                btn.disabled = false;
+                STATE._scanning = false;
+                renderScanResults();   // 換字、放開鈕都在這裡
 
                 // 🗺️ 同一份回覆裡的 <scene-map> → 解析＋補底板圖＋存檔；🔍 小發現轉成地標同形狀併進
                 //    sceneMap.landmarks（isDiscovery 標記），跟場景圖走同一條持久化管道——
@@ -2524,9 +2558,7 @@ ${facilityText}
                 STATE._scanBusyUntil = Date.now() + 8000;   // 收尾：留 8 秒尾巴蓋過事件 debounce，之後照常放行過期清空
             });
         } catch (e) {
-            btn.innerHTML = '失敗';
-            btn.disabled = false;
-            STATE._scanBusyUntil = Date.now() + 8000;
+            _scanFailed(e);
         }
     }
 
@@ -2563,7 +2595,8 @@ ${facilityText}
         if (blockIfPreview('搭話')) return;
         const char = STATE.generatedChars[idx];
         const prompt = `[System: Interaction]\n{{user}} 正在與 ${char.name} (${char.role}) 搭話。\n地點: ${STATE.activeFacility.name}`;
-        if (win.TavernHelper) win.TavernHelper.createChatMessages([{ role: 'system', content: prompt }]);
+        // 欄位叫 message（酒館助手只認這個；傳 content 插進去的是空訊息）
+        if (win.TavernHelper) win.TavernHelper.createChatMessages([{ role: 'system', message: prompt }]);
         exitMap();
     }
 

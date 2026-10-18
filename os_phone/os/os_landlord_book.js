@@ -791,7 +791,7 @@
         card.appendChild(note);
         go.onclick = async function () {
             const q = String(inp.value || '').trim();
-            if (!q) { inp.focus(); return; }
+            if (!q) { inp.focus({ preventScroll: true }); return; }
             go.disabled = true; inp.disabled = true;
             note.className = 'llb-msg'; note.textContent = '設計師正在畫…';
             try {

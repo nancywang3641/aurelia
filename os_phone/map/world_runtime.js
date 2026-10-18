@@ -23,6 +23,15 @@
     let isPreview = false;           // 是否處於預覽模式
     let onWorldChanged = null;       // 給 map_core 訂閱重新渲染
 
+    // 通知地圖重畫。重畫出錯只記下來、不往外丟：
+    //   以前 switchTo 是在「讀 DB」的 try 裡面叫重畫，地圖畫面已被別的 app 清掉時重畫丟錯，
+    //   被當成讀 DB 失敗 → currentWorld 清成 null，已經生成的世界顯示「尚未生成」，再按一次就把原本的蓋掉
+    function _notify() {
+        if (!onWorldChanged) return;
+        try { onWorldChanged(currentWorld); }
+        catch (e) { console.error('[WorldRuntime] 地圖重畫失敗（世界資料沒動）:', e); }
+    }
+
     function buildAurealisWorld() {
         if (!win.AUREALIS_DATA) {
             console.warn('[WorldRuntime] AUREALIS_DATA 尚未載入');
@@ -72,7 +81,7 @@
     function _useAurealisFor(worldId, why) {
         currentWorld = buildAurealisWorld();
         console.log('[WorldRuntime] 🏛️ 這段聊天用奧瑞亞地圖（' + why + '）');
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
         return currentWorld;
     }
 
@@ -92,7 +101,7 @@
             currentWorldId = AUREALIS_ID;
             currentWorld = buildAurealisWorld();
             console.log('[WorldRuntime] 切換到預設世界（奧瑞亞）');
-            if (onWorldChanged) onWorldChanged(currentWorld);
+            _notify();
             return currentWorld;
         }
 
@@ -130,7 +139,7 @@
                     }
                     console.log('[WorldRuntime] ✅ 從 OS_DB 載入世界:', saved.name,
                         saved.schedules ? `(含 ${Object.keys(saved.schedules).length} 個角色排程)` : '(無排程)');
-                    if (onWorldChanged) onWorldChanged(currentWorld);
+                    _notify();
                     return currentWorld;
                 }
             } catch (e) {
@@ -149,7 +158,7 @@
         // 沒資料 → 等使用者初始化
         currentWorld = null;
         console.log('[WorldRuntime] ⚠️ 此世界尚未生成，等待初始化:', worldId);
-        if (onWorldChanged) onWorldChanged(null);
+        _notify();
         if (here === null && !isPreview && worldId === realChatId) _recheckLater(worldId);
         return null;
     }
@@ -189,7 +198,7 @@
                 console.error('[WorldRuntime] 存 OS_DB 失敗:', e);
             }
         }
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
         return true;
     }
 
@@ -250,7 +259,7 @@
         recomputeLiveStates();
         try { await cleanOrphanDynamics(); } catch (e) {}
         await persistFullWorld();
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
         return true;
     }
 
@@ -262,7 +271,7 @@
         recomputeLiveStates();
         try { await cleanOrphanDynamics(); } catch (e) {}
         await persistFullWorld();
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
         console.log('[WorldRuntime] 🗑️ patch 移除 (msgId:', id, ')');
         return true;
     }
@@ -368,7 +377,7 @@
         delete currentWorld.liveStates[name];
         delete currentWorld.liveStates[charName]; // 雙保險：未 normalize 的 key 也清
         await persistLiveStates();
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
     }
 
     async function clearAllLiveStates() {
@@ -377,7 +386,7 @@
         currentWorld.statePatches = {}; // 同步清空快照，否則重算會還原
         try { await cleanOrphanDynamics(); } catch (e) {}
         await persistFullWorld();
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
     }
 
     async function cleanExpiredLiveStates() {
@@ -392,7 +401,7 @@
         });
         if (cleaned > 0) {
             await persistLiveStates();
-            if (onWorldChanged) onWorldChanged(currentWorld);
+            _notify();
             // 順便清掉沒人用的動態地點
             try { await cleanOrphanDynamics(); } catch (e) {}
         }
@@ -473,7 +482,7 @@
 
         // 持久化
         await persistFullWorld();
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
         console.log('[WorldRuntime] 🌀 新增動態地點:', name, '→', sceneId);
         return sceneId;
     }
@@ -501,7 +510,7 @@
                 delete currentWorld.zones[DYNAMIC_ZONE_ID];
             }
             await persistFullWorld();
-            if (onWorldChanged) onWorldChanged(currentWorld);
+            _notify();
             console.log('[WorldRuntime] 🧹 清理動態地點:', cleaned, '筆');
         }
         return cleaned;
@@ -548,7 +557,7 @@
             currentWorld.schedules = schedules;
             currentWorld.scheduleMeta = meta || null;
             console.log('[WorldRuntime] 📋 奧瑞亞排程已存記憶體（不持久化）');
-            if (onWorldChanged) onWorldChanged(currentWorld);
+            _notify();
             return true;
         }
         currentWorld.schedules = schedules;
@@ -561,7 +570,8 @@
                     zones: currentWorld.zones,
                     schedules: currentWorld.schedules,
                     scheduleMeta: currentWorld.scheduleMeta,
-                    liveStates: currentWorld.liveStates || {}
+                    liveStates: currentWorld.liveStates || {},
+                    statePatches: currentWorld.statePatches || {}   // 整筆 put：漏了這欄存一次就把快照清掉（跟 persistFullWorld 同一份欄位）
                 });
                 console.log('[WorldRuntime] 📋 排程已存進 OS_DB');
             } catch (e) {
@@ -569,7 +579,7 @@
                 return false;
             }
         }
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
         return true;
     }
 
@@ -589,7 +599,7 @@
         if (currentWorld.isDefault) {
             // 奧瑞亞純記憶體
             console.log('[WorldRuntime] 🗺️ 奧瑞亞 sceneMap 已存記憶體（不持久化）');
-            if (onWorldChanged) onWorldChanged(currentWorld);
+            _notify();
             return true;
         }
         if (win.OS_DB && typeof win.OS_DB.saveWorldData === 'function') {
@@ -600,7 +610,8 @@
                     zones: currentWorld.zones,
                     schedules: currentWorld.schedules,
                     scheduleMeta: currentWorld.scheduleMeta,
-                    liveStates: currentWorld.liveStates || {}
+                    liveStates: currentWorld.liveStates || {},
+                    statePatches: currentWorld.statePatches || {}   // 整筆 put：漏了這欄存一次就把快照清掉（跟 persistFullWorld 同一份欄位）
                 });
                 console.log(`[WorldRuntime] 🗺️ sceneMap 已存（${zoneId}/${facKey}）`);
             } catch (e) {
@@ -608,7 +619,7 @@
                 return false;
             }
         }
-        if (onWorldChanged) onWorldChanged(currentWorld);
+        _notify();
         return true;
     }
 

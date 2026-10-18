@@ -30,7 +30,8 @@
     function markSeen(ids) {
         var a = seen();
         ids.forEach(function (id) { if (a.indexOf(id) < 0) a.push(id); });
-        try { localStorage.setItem(SEEN_KEY, JSON.stringify(a.slice(-60))); } catch (e) {}
+        var A = (window.parent && window.parent.AUI) || window.AUI;   // 存不下 lsSet 自己跳提示（以前空 catch：做完的單子會一直重跳）
+        A.lsSet(SEEN_KEY, JSON.stringify(a.slice(-60)), '看過的打工單子');
     }
     function ago(sec) {
         var m = Math.max(0, Math.round((Date.now() / 1000 - sec) / 60));

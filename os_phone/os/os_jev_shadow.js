@@ -32,14 +32,14 @@
     function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
     function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) === '1'; } catch (e) { return false; } }
-    function setOn(on) { try { localStorage.setItem(ON_LS, on ? '1' : '0'); } catch (e) {} }
+    function setOn(on) { return win.AUI.lsSet(ON_LS, on ? '1' : '0', '記憶影子比對的開關'); }
     function getLog() { try { return JSON.parse(localStorage.getItem(LOG_LS) || '[]'); } catch (e) { return []; } }
     function _push(entry) {
         const log = getLog();
         log.unshift(entry);
         if (log.length > LOG_MAX) log.length = LOG_MAX;
         try { localStorage.setItem(LOG_LS, JSON.stringify(log)); }
-        catch (e) { try { localStorage.setItem(LOG_LS, JSON.stringify(log.slice(0, 5))); } catch (e2) {} }
+        catch (e) { win.AUI.lsSet(LOG_LS, JSON.stringify(log.slice(0, 5)), '記憶影子比對的記錄'); }   // 縮到 5 筆還存不下才提示
     }
     function clearLog() { try { localStorage.removeItem(LOG_LS); } catch (e) {} }
     function _short(s) { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > TXT_MAX ? s.slice(0, TXT_MAX) + '…' : s; }
@@ -64,7 +64,7 @@
             } catch (e) {
                 last = (e && e.name === 'AbortError') ? '逾時' : String((e && e.message) || e);
             } finally { clearTimeout(timer); }
-            await new Promise(r => setTimeout(r, 2500));
+            if (i < 2) await new Promise(r => setTimeout(r, 2500));   // 最後一次失敗就直接報，不再白睡一輪
         }
         throw new Error(last || '沒有回應');
     }
