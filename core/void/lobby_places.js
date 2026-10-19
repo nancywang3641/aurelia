@@ -292,6 +292,8 @@
         };
         c._pvRestore = () => { alive = false; c.removeEventListener('click', onClick); };
 
+        // 故事角色的名字是模型取的（頭像庫裡的名冊）：塞進 HTML／屬性前轉義
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const render = async () => {
             const cur = _guestGet();
             const cands = await _guestCandidates();
@@ -300,17 +302,17 @@
                 '<div class="lb-guest">' +
                   '<div class="lb-guest-now">' +
                     (cur
-                      ? '<span class="lb-guest-now-t">現在站在家裡的是 <b>' + cur.name + '</b></span>' +
+                      ? '<span class="lb-guest-now-t">現在站在家裡的是 <b>' + esc(cur.name) + '</b></span>' +
                         '<button class="lb-guest-out" type="button">請他離開</button>'
                       : '<span class="lb-guest-now-t">家裡現在沒有人。挑一個請進來。</span>') +
                   '</div>' +
                   '<div class="lb-guest-grid">' +
                     cands.map(x =>
                       '<button class="lb-guest-c' + (cur && cur.src === x.src && cur.key === x.key ? ' is-cur' : '') + '"' +
-                        ' type="button" data-src="' + x.src + '" data-key="' + String(x.key).replace(/"/g, '&quot;') + '"' +
-                        ' data-name="' + String(x.name).replace(/"/g, '&quot;') + '">' +
+                        ' type="button" data-src="' + x.src + '" data-key="' + esc(x.key) + '"' +
+                        ' data-name="' + esc(x.name) + '">' +
                         '<span class="lb-guest-pic"' + (x.portrait ? ' style="background-image:url(' + x.portrait + ')"' : '') + '></span>' +
-                        '<span class="lb-guest-n">' + x.name + '</span>' +
+                        '<span class="lb-guest-n">' + esc(x.name) + '</span>' +
                       '</button>').join('') +
                   '</div>' +
                 '</div>';

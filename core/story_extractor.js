@@ -7,6 +7,11 @@
     'use strict';
 
     const STYLE_ID = 'se-styles-v1';
+
+    // 外來的純文字塞回 HTML 前轉義：五個都轉
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
     const THEME_STORAGE_KEY = 'story_extractor_theme';
     const THEMES = {
         light: 'light',
@@ -491,7 +496,8 @@
 
             Array.from(tempDiv.childNodes).forEach(node => {
                 if (node.nodeType === Node.TEXT_NODE) {
-                    if (node.textContent.trim()) textBuffer.push(node.textContent);
+                    // 文字節點的 textContent 是「解開後的字」（畫面上的 &lt;img…&gt; 到這裡變回 <img…>），下面會整段當 HTML 塞回去 → 先轉義
+                    if (node.textContent.trim()) textBuffer.push(_esc(node.textContent));
                 } else if (node.nodeType === Node.ELEMENT_NODE) {
                     const tagName = node.tagName.toUpperCase();
                     if (['SCRIPT', 'STYLE'].includes(tagName)) return;

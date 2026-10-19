@@ -1348,7 +1348,7 @@ const IRIS_IDLE = [
 
             item.innerHTML = `
                 <input type="checkbox" class="hist-item-check">
-                <span class="hist-role-badge" style="${badgeStyle}">${roleLabel}</span>
+                <span class="hist-role-badge" style="${badgeStyle}">${_aiEsc(roleLabel)}</span>
                 <div class="hist-item-body"><div class="hist-item-text" style="color:#3A3F5C;">${safeText}</div></div>
                 <div class="hist-item-actions">
                     <button class="hist-icon-btn edit" title="編輯此條" style="color:rgba(26,28,40,0.72);"><i class="fa-solid fa-pen"></i></button>
@@ -1692,7 +1692,8 @@ const IRIS_IDLE = [
 
         if (IRIS_STATE.isTyping) {
             clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
-            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${IRIS_STATE.fullText}</span>`;
+            // 旁白是模型寫的（[Nar|…]）：轉義再放進斜體那層，帶 <img onerror> 的字只會照字顯示
+            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(IRIS_STATE.fullText)}</span>`;
             else textContent.innerText = IRIS_STATE.fullText;
             
             if (nextInd) {
@@ -1728,7 +1729,7 @@ const IRIS_IDLE = [
         IRIS_STATE.timer = setInterval(() => {
             if (i < IRIS_STATE.fullText.length) {
                 let partial = IRIS_STATE.fullText.substring(0, i + 1);
-                if (msg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${partial}</span>`;
+                if (msg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(partial)}</span>`;   // 先切字再轉義，&amp; 不會被切成半個
                 else textContent.innerText = partial;
                 i++;
             } else {
@@ -2182,7 +2183,7 @@ ${sections}`;
         const box = document.getElementById('iris-text');
         const nameBox = document.getElementById('iris-name-tag');
         if (nameBox) nameBox.style.display = 'none';
-        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : (npcTarget ? `(${npcTarget.name}想了想...)` : '(瀅瀅咬著羽毛筆思索中...)')}</span>`;
+        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : (npcTarget ? `(${_aiEsc(npcTarget.name)}想了想...)` : '(瀅瀅咬著羽毛筆思索中...)')}</span>`;   // 書卡客人的名字來自角色卡：轉義
 
         if (!window.OS_API) {
             playIrisSequence("[Nar|(系統斷線：無法連接到 LUNA-VII 認知引擎)]\n[Char|瀅瀅|error|「抱歉，委託人，我好像找不到這段劇情的靈感了（無網路連線）。」]");

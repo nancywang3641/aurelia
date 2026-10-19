@@ -11,6 +11,8 @@
     if (!LS || !LS._b) { console.warn('[LobbyDress] LobbyStage 橋不存在，裝扮室停用'); return; }
     const _b = LS._b;
     const S = _b.S;
+    // 角色名字（書卡客人、常客、世界門旅人都是模型或角色卡給的）、生圖接口回來的網址：塞進 HTML 前轉義，五個都轉
+    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
 
     // ── 右鍵角色→下拉單 ──
     function _closeActorMenu() { S.menuEl?.remove(); S.menuEl = null; document.removeEventListener('pointerdown', _menuOutside); }
@@ -20,7 +22,7 @@
         const menu = document.createElement('div');
         menu.className = 'lstage-actor-menu';
         const isPlayer = (a.key === 'player');   // 玩家不給「跟隨我」（跟自己很怪）
-        menu.innerHTML = '<div class="lam-title">' + (a.name || '角色') + '</div>' +
+        menu.innerHTML = '<div class="lam-title">' + _esc(a.name || '角色') + '</div>' +
             (a.onProfile ? '<button class="lam-item" data-act="idcard"><i class="fa-solid fa-id-card"></i> 身分卡</button>' : '') +   // 🌌 世界門旅人掛 onProfile 才出現
             '<button class="lam-item" data-act="dress"><i class="fa-solid fa-shirt"></i> 裝扮室</button>' +
             (isPlayer ? '' : '<button class="lam-item" data-act="follow"><i class="fa-solid fa-person-walking-arrow-right"></i> ' + (a.follow ? '取消跟隨' : '跟隨我') + '</button>') +
@@ -60,7 +62,7 @@
         box.className = 'lstage-dress';
         const hasSkin = !!_b.skins()[a.key];
         box.innerHTML =
-            '<div class="lsd-title"><i class="fa-solid fa-shirt"></i> 裝扮室 — ' + (a.name || '角色') + '</div>' +
+            '<div class="lsd-title"><i class="fa-solid fa-shirt"></i> 裝扮室 — ' + _esc(a.name || '角色') + '</div>' +
             '<div class="lsd-hint">單張圖＝站立像+走路彈跳；走路圖＝3×4格圖（第1列朝下、第2列朝左、第3列朝右、第4列朝上，每列3幀）</div>' +
             '<button class="lep-btn" data-act="img"><i class="fa-solid fa-image"></i> 換單張立姿圖</button>' +
             '<button class="lep-btn" data-act="sheet"><i class="fa-solid fa-person-walking"></i> 換走路圖（3×4）</button>' +
@@ -162,7 +164,7 @@
             root = box = document.createElement('div');
             box.className = 'lstage-dress lstage-history';
             box.innerHTML =
-                '<div class="lsd-title"><i class="fa-solid fa-comment-dots"></i> 對話紀錄 — ' + (a.name || '角色') + '<span class="lsh-count"></span></div>' +
+                '<div class="lsd-title"><i class="fa-solid fa-comment-dots"></i> 對話紀錄 — ' + _esc(a.name || '角色') + '<span class="lsh-count"></span></div>' +
                 '<div class="lsh-list"></div>' +
                 '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空（徹底遺忘）</button>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
@@ -277,7 +279,7 @@
             '<div class="lgp-box">' +
                 '<div class="lgp-title">' + (isSheet ? '走路圖調框（3×4）' : '單張立姿預覽') + '</div>' +
                 (isSheet
-                    ? '<div class="lgp-sheetwrap"><img class="lgp-img lgp-sheetimg" src="' + dataUrl + '"><canvas class="lgp-grid"></canvas></div>' +
+                    ? '<div class="lgp-sheetwrap"><img class="lgp-img lgp-sheetimg" src="' + _esc(dataUrl) + '"><canvas class="lgp-grid"></canvas></div>' +
                       '<div class="lgp-sliders">' +
                         _lgpSlider('上', 'top', 0, 40, 0) + _lgpSlider('下', 'bottom', 60, 100, 100) +
                         _lgpSlider('左', 'left', 0, 40, 0) + _lgpSlider('右', 'right', 60, 100, 100) +
@@ -287,7 +289,7 @@
                       '</div>' +
                       '<div class="lgp-reslabel">套用後（重切＋翻轉）</div>' +
                       '<canvas class="lgp-result"></canvas>'
-                    : '<img class="lgp-img" src="' + dataUrl + '">') +
+                    : '<img class="lgp-img" src="' + _esc(dataUrl) + '">') +
                 '<div class="lgp-hint">' + (isSheet ? '紅格對準每格角色含腳；某列朝向錯就按「翻轉列」左右鏡像（右列常可鏡像自左列）' : '看去背乾不乾淨、有沒有缺手缺腳再套用') + '</div>' +
                 '<div class="lgp-btns">' +
                     '<button class="lep-btn lgp-apply"><i class="fa-solid fa-check"></i> 套用</button>' +

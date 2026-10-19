@@ -13,6 +13,22 @@
 
     const STYLE_ID = 'ue-styles-v12-1';
 
+    // 外來的純文字（樓層裡的字、表格格子）塞回 HTML 前轉義：五個都轉
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    // 外來、但本來就帶格式的 HTML（模型煉出來的狀態面板＋模型寫的值）：過 AUI.safeHtml，會跑的拿掉、格式照留。
+    //   先包一層再消毒、消完拆掉那層：酒館有 DOMPurify，開頭就是 <style> 的那段會被它當成 head 的東西丟掉
+    function _safeHtml(html) {
+        const A = window.AUI || (window.parent && window.parent.AUI);
+        if (!A || !A.safeHtml) return _esc(html);
+        const t = document.createElement('template');
+        t.innerHTML = A.safeHtml('<div data-ue-safe="1">' + String(html == null ? '' : html) + '</div>');
+        const w = t.content.querySelector('div[data-ue-safe]');
+        if (w) w.replaceWith(...Array.from(w.childNodes));
+        return t.innerHTML;
+    }
+
     // 只捲 el 自己所在的那一格（最近一層真的捲得動的祖先），block 同 scrollIntoView 的 start / center / end / nearest。
     //   scrollIntoView 會連外層一起捲：酒館整頁、正在滑入的面板、overflow:hidden 的父層都會被程式拖動。
     function _scrollInBox(el, block) {
@@ -398,7 +414,11 @@
             //    把這一頁改回 block+自然高，#ue-content-area 本身就會捲；並擋掉面板根的固定高/max-height(讓內容完整長出來)。
             const _panelFix = `#tab-pane-aurelia_state_panel.active{display:block;flex:0 0 auto;height:auto;min-height:100%;}`
                 + `#tab-pane-aurelia_state_panel>.custom-status-panel,#tab-pane-aurelia_state_panel .custom-status-panel{height:auto;max-height:none;}`;
-            html = `<style>${_panelFix}\n${activeTpl.cssContent || ''}</style>${html}`;
+            // 🧼 模板是模型煉的、值是模型寫的（煉丹本來就規定純 CSS、不跑 JS）：照格式畫，onerror／script 這類會跑的拿掉。
+            //    CSS 不會跑程式，只擋「</style> 後面接一段 HTML」跳出去的寫法
+            html = _safeHtml(html);
+            const _css = String(activeTpl.cssContent || '').replace(/<\/style/gi, '<\\/style');
+            html = `<style>${_panelFix}\n${_css}</style>${html}`;
             // 🔬 本輪更新了什麼：面板右上角一顆小鈕，點了跳小窗（10-13 她：以前摺在最底下不美觀）；鈕和小窗是 os_avs 那份，PWA 資料中心同一份
             const _AV = win.OS_AVS;
             if (_AV && _AV.updatesBtnHtml) html = _AV.updatesBtnHtml() + html;
@@ -513,8 +533,9 @@
                     .map(l => l.split('|').map(s => s.trim()).filter(s => s));
                 if (!headers.length || !rows.length) return;
 
-                const thead = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-                const tbody = rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('');
+                // 格子是從 innerText 拿的「字」（&lt;img…&gt; 在這裡已經被解回 <img…>）：塞回去要再轉義，不然會長成真的標籤
+                const thead = `<tr>${headers.map(h => `<th>${_esc(h)}</th>`).join('')}</tr>`;
+                const tbody = rows.map(r => `<tr>${r.map(c => `<td>${_esc(c)}</td>`).join('')}</tr>`).join('');
                 const tableHtml = `<table class="ue-md-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
                 el.outerHTML = tableHtml;
             });
