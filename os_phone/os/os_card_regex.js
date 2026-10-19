@@ -165,9 +165,14 @@
 
     // 整份 HTML 文件 → iframe（內嵌 <script>／外部字體要在自己的文件裡才跑得動，同酒館做法）
     //   開頭先放酒館助手替身（見上），卡片自己的腳本才找得到那些函式。
+    //   不是整份文件的（一段 <div>／<style>）會直接塞進畫面：卡片作者的版型＋正文抓進來的字，過 AUI.safeHtml
+    //   （照格式顯示、<img onerror>／onclick／javascript: 拿掉；酒館本身顯示正則結果也是先消毒再放）。
     function _wrapCard(html) {
         const c = _cleanCard(html);
-        if (!_isFullDoc(c)) return c;
+        if (!_isFullDoc(c)) {
+            const A = win.AUI || window.AUI;
+            return (A && A.safeHtml) ? A.safeHtml(c) : c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
         return '<iframe class="vn-regex-card" scrolling="no" srcdoc="' +
             _withStandIn(c).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"></iframe>';
     }

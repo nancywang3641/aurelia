@@ -360,7 +360,8 @@ ${d.usageDesc || ''}
             const scopeBadge = snap.scope && snap.scope !== 'all' && snap.scope !== 'auto'
                 ? `[${humanizeScopeKeys([snap.scope])}] `
                 : '';
-            const noteText = (scopeBadge + (snap.note || '(無備註)')).replace(/</g, '&lt;');
+            // 也放進 title="…"：只轉 < 的話備註帶雙引號就跳出屬性、長出 onmouseover（快照跟著組件存、匯出匯入會帶著走）
+            const noteText = _b._sgcEsc(scopeBadge + (snap.note || '(無備註)'));
             item.innerHTML = `
                 <span class="h-time">${formatSnapTime(snap.ts)}</span>
                 <span class="h-note" title="${noteText}">${noteText}</span>

@@ -7,6 +7,13 @@
     console.log('[PhoneOS] 載入 AVS 變數工坊系統 (V1.2)...');
     const win = window.parent || window; // 🔥 絕對保留雙通向核心
 
+    // 外來文字（模型抽的狀態值、模型取的檔案名、煉丹爐 AI 寫的面板）進畫面前用這三支：
+    //   _avsEsc＝純文字（名字、數值、錯誤訊息）；_avsSafe＝本來就帶格式的面板 HTML（AUI.safeHtml：會跑的拿掉、版面留著）；
+    //   _avsStyle＝塞進 <style> 的面板 CSS（帶 </style> 會跳出去長標籤）
+    function _avsEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    function _avsSafe(h) { const A = win.AUI || window.AUI; return (A && A.safeHtml) ? A.safeHtml(h) : _avsEsc(h); }
+    function _avsStyle(css) { return String(css == null ? '' : css).replace(/<\/style/gi, '<\\/style'); }
+
     // --- 樣式定義 ---
 
     if (!document.getElementById('avs-app-css')) {
@@ -603,7 +610,7 @@
             setTimeout(() => closeFurnaceModal(container), 1200);
         } catch (e) {
             console.error('[AVS Furnace Refine]', e);
-            if (log) log.innerHTML = `微調失敗：${e.message}`;
+            if (log) log.innerHTML = `微調失敗：${_avsEsc(e && e.message)}`;   // 接口錯誤可能夾著伺服器回的字
         } finally {
             if (btn) btn.disabled = false;
         }
@@ -641,7 +648,7 @@
             const card = document.createElement('div');
             card.className = 'avs-card';
             card.innerHTML = `
-                <strong style="color:var(--os-ink);">${pack.name}</strong>
+                <strong style="color:var(--os-ink);">${_avsEsc(pack.name)}</strong>
                 <p style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.25);">${pack.variables.length} 個項目${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
                 <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `<i class="fa-solid fa-lock"></i> <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(var(--os-ink-rgb), 0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `<i class="fa-solid fa-globe"></i> <span style="color:#c9920f;">全域 · 所有卡共用 <i class="fa-solid fa-triangle-exclamation"></i></span>`}</div>
                 <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
@@ -666,7 +673,7 @@
                 const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
                 const _avCore = (win.VN_PLAYER || win.VN_Core) || {};
                 const _avMem = Object.assign({}, _avCore._avatarMemCache || {}, _avCore._faceMemCache || {});   // 預覽用記憶體頭像(best-effort)；一次生三種的自拍頭像蓋過全身立繪
-                let previewHtml = _avsRenderTemplate(activeTpl.htmlContent || '', previewState, pack.variables || [], fmt, _avMem);
+                let previewHtml = _avsSafe(_avsRenderTemplate(activeTpl.htmlContent || '', previewState, pack.variables || [], fmt, _avMem));   // 面板是煉丹爐 AI 寫的（也可能是沿用／還原來的）
 
                 const scopeId = `pack-tpl-preview-${activeTpl.id}`;
                 let scopedCssText = '';
@@ -681,7 +688,7 @@
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <span style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.68);"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:var(--os-ink);">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
                     </div>
-                    ${scopedCssText ? `<style>${scopedCssText}</style>` : ''}
+                    ${scopedCssText ? `<style>${_avsStyle(scopedCssText)}</style>` : ''}
                     <div class="avs-pv-tabs">
                         <button class="avs-pv active" data-pv="phone" title="手機（外框約 390）">手機</button>
                         <button class="avs-pv" data-pv="center" title="中間（外框約 1000）">中間</button>
@@ -1204,7 +1211,11 @@
         return cur;
     }
     function _avsRenderTemplate(html, state, packVars, fmt, avatarMap) {
-        const f = fmt || (v => String(v == null ? '' : v));
+        // 填進面板的值（角色名、欄位名、欄位值、頭像網址）都是模型抽的：一律轉義成純文字再放（屬性裡、字裡都安全，畫面上的字不變）
+        //   面板本身（html）是 AI 寫的版型，由呼叫端整份過 AUI.safeHtml（對外的 renderTemplate 已經包好）
+        const _fmt0 = fmt || (v => String(v == null ? '' : v));
+        const f = v => _avsEsc(_fmt0(v));
+        const _js = v => _avsEsc(JSON.stringify(v));
         const _AV = avatarMap || {};
         const _TPX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';   // 透明 1px：沒頭像時用，避免破圖 icon
         let out = String(html || '');
@@ -1243,8 +1254,8 @@
                     : { [entityKey]: entityValRaw };                              // 這個實體「實際擁有」的欄位(攤平)
                 const entityVal = { ...entTpl, ...flatReal };                     // 範本當底 + 實體(舊「形象」巢狀也攤平)
                 let block = innerTpl;
-                block = block.split('{{@key}}').join(entityKey);
-                block = block.split('{{@avatar}}').join(_AV[entityKey] || _TPX);   // 角色頭像：用角色名去頭像庫撈，沒有就透明
+                block = block.split('{{@key}}').join(_avsEsc(entityKey));
+                block = block.split('{{@avatar}}').join(_avsEsc(_AV[entityKey] || _TPX));   // 角色頭像：用角色名去頭像庫撈，沒有就透明
                 // {{#fields}}…{{/fields}}：逐欄位自動展開「這個實體實際有的欄位」→ 異質角色各畫各的、跑團新增欄位也自動出現、永不漏
                 //   列裡用 {{@label}}=欄位名、{{@value}}=欄位值。模板不必寫死欄位名（治「卡片只剩固定幾列、多的角色被切」）
                 block = block.replace(/\{\{#fields\}\}([\s\S]*?)\{\{\/fields\}\}/g, (mm, rowTpl) => {
@@ -1252,23 +1263,23 @@
                     for (const [fk, fv] of Object.entries(flatReal)) {
                         if (fv && typeof fv === 'object' && !Array.isArray(fv)) continue;   // 巢狀物件不適合當單列(略過)
                         const val = (fv === null || fv === undefined || fv === '') ? '—'
-                            : Array.isArray(fv) ? fv.map(x => (x && typeof x === 'object') ? Object.values(x).join('·') : f(x)).join('、')
+                            : Array.isArray(fv) ? fv.map(x => (x && typeof x === 'object') ? _avsEsc(Object.values(x).join('·')) : f(x)).join('、')
                             : f(fv);
-                        rows += rowTpl.split('{{@label}}').join(fk).split('{{@value}}').join(val);
+                        rows += rowTpl.split('{{@label}}').join(_avsEsc(fk)).split('{{@value}}').join(val);
                     }
                     return rows;
                 });
                 for (const [ak, av] of Object.entries(entityVal)) {
-                    const sv = (av && typeof av === 'object') ? JSON.stringify(av) : f(av);
+                    const sv = (av && typeof av === 'object') ? _js(av) : f(av);
                     block = block.split(`{{${ak}}}`).join(sv);
                 }
                 // 剩餘 {{x}} / {{x.y}}：用點記法在「原始(未攤平)實體」上找 → 相容 AI 生的巢狀佔位符(如 {{形象.體型}})，找不到才 —
                 block = block.replace(/\{\{([^{}]+)\}\}/g, (mm, expr) => {
                     const key = String(expr).trim();
-                    if (key === '@key') return entityKey;
-                    if (key === '@avatar') return _AV[entityKey] || _TPX;
+                    if (key === '@key') return _avsEsc(entityKey);
+                    if (key === '@avatar') return _avsEsc(_AV[entityKey] || _TPX);
                     const val = _avsGetByPath(entityValRaw, key);
-                    return (val === undefined || val === null) ? '—' : (typeof val === 'object' ? JSON.stringify(val) : f(val));
+                    return (val === undefined || val === null) ? '—' : (typeof val === 'object' ? _js(val) : f(val));
                 });
                 blocks += block;
             }
@@ -1300,7 +1311,7 @@
             const val = _avsGetByPath(state, key);
             if (val === undefined || val === null) return mm;
             if (Array.isArray(val)) return _avsListText(val);   // 點記法取到清單(如 {{MC財富與交易.交易日誌}})→逐行,別吐 JSON
-            return (typeof val === 'object') ? JSON.stringify(val) : f(val);
+            return (typeof val === 'object') ? _js(val) : f(val);
         });
         // 3. 殘留佔位符 → —
         //    🚨 這行是「面板欄位不顯示」的黑洞：模板寫死的鍵名一旦跟資料對不上
@@ -1402,11 +1413,14 @@
             try { rendered = _avsRenderTemplate(marked, state, packVars, fmt, avMap); } catch (e) { continue; }
             const box = document.createElement('template');
             box.innerHTML = rendered;
+            // 🚨 挑節點、包外殼都在 <template> 自己那份惰性文件裡做：搬進主頁面的 fragment 會讓 <img onerror> 當場載入、跑起來
+            const idoc = box.content.ownerDocument || document;
             const walker = document.createTreeWalker(box.content, NodeFilter.SHOW_COMMENT);
             let start = null;
-            while (walker.nextNode()) { if (walker.currentNode.data === 'avs-one:' + hitKey) { start = walker.currentNode; break; } }
+            const mark = 'avs-one:' + _avsEsc(hitKey);   // 記號裡的名字是轉義過才填進去的
+            while (walker.nextNode()) { if (walker.currentNode.data === mark) { start = walker.currentNode; break; } }
             if (!start) continue;
-            const picked = document.createDocumentFragment();
+            const picked = idoc.createDocumentFragment();
             for (let n = start.nextSibling; n && !(n.nodeType === 8 && n.data === '/avs-one'); n = n.nextSibling) picked.appendChild(n.cloneNode(true));
             // 外面那幾層：只要外殼（class、屬性），裡面別的區塊一律不帶
             let shell = picked;
@@ -1416,9 +1430,9 @@
                 c.appendChild(shell);
                 shell = c;
             }
-            const wrap = document.createElement('div');
+            const wrap = idoc.createElement('div');
             wrap.appendChild(shell);
-            return { css: _avsScopeCss(tpl.cssContent || '', scopeSel), html: wrap.innerHTML };
+            return { css: _avsStyle(_avsScopeCss(tpl.cssContent || '', scopeSel)), html: _avsSafe(wrap.innerHTML) };
         }
         return null;
     }
@@ -1658,7 +1672,8 @@
 
     function refreshFurnacePackSelect(container) {
         const select = container.querySelector('#furnace-pack-select');
-        select.innerHTML = currentPacks.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+        // 檔案名多半是模型取的；新版 Chrome 的 <option> 裡放 <img onerror> 也會跑
+        select.innerHTML = currentPacks.map(p => `<option value="${_avsEsc(p.id)}">${_avsEsc(p.name)}</option>`).join('');
     }
 
     // 🌍 當前世界觀：煉丹的參考素材是「這個世界長什麼樣」，不是使用者人設。
@@ -2230,8 +2245,8 @@
         const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
         const _avCore2 = (win.VN_PLAYER || win.VN_Core) || {};
         const avMem = Object.assign({}, _avCore2._avatarMemCache || {}, _avCore2._faceMemCache || {});   // 一次生三種的自拍頭像蓋過全身立繪
-        stage.innerHTML = '<style>' + scoped + '</style>' +
-            _avsRenderTemplate(tpl.htmlContent || '', state, pack.variables || [], fmt, avMem);
+        stage.innerHTML = '<style>' + _avsStyle(scoped) + '</style>' +
+            _avsSafe(_avsRenderTemplate(tpl.htmlContent || '', state, pack.variables || [], fmt, avMem));   // 面板是 AI 寫的：版面、貼紙的 data-wsk-i 都留著，會跑的拿掉
 
         const root = stage.querySelector('.custom-status-panel') || stage.firstElementChild;
         if (root) root.style.position = 'relative';
@@ -2405,15 +2420,15 @@
         if (matched.length === 0) { wrap.style.display = 'none'; return; }
         wrap.style.display = 'block';
         list.innerHTML = matched.map(p => `
-            <div data-preset-id="${p.id}" style="
+            <div data-preset-id="${_avsEsc(p.id)}" style="
                 display:flex;align-items:flex-start;gap:8px;
                 background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.18);
                 border-radius:6px;padding:9px 10px;cursor:pointer;
                 transition:background 0.15s;" class="furnace-preset-card">
                 <div style="flex:1;font-size:12px;color:rgba(var(--os-ink-rgb), 0.78);line-height:1.5;">
-                    ${p.suggestion}
+                    ${_avsEsc(p.suggestion)}
                 </div>
-                <button data-del-preset="${p.id}" style="
+                <button data-del-preset="${_avsEsc(p.id)}" style="
                     background:none;border:none;color:rgba(26,28,40,0.20);cursor:pointer;
                     font-size:13px;padding:0 2px;flex-shrink:0;"
                     title="刪除建議">✕</button>
@@ -2724,7 +2739,7 @@
                 if (!_issues.length) setTimeout(() => closeFurnaceModal(container), 1500);   // 有問題就留著視窗，別讓警告一閃而過
             } catch (e) {
                 console.error('[AVS Furnace]', e);
-                log.innerHTML = `炸鍋了：${e.message}`;
+                log.innerHTML = `炸鍋了：${_avsEsc(e && e.message)}`;   // 接口錯誤可能夾著伺服器回的字
             } finally {
                 btn.disabled = false;
             }
@@ -2959,7 +2974,8 @@
     win.OS_AVS = {
         launch: launchApp,
         updatesBtnHtml, openUpdates, bindUpdatesBtn,   // 🔬 狀態面板右上角「本輪更新」鈕＋小窗（資訊中心／資料中心共用）
-        renderTemplate: _avsRenderTemplate,   // 共用渲染引擎：給 vn_inspect 資訊中心共用，保證兩邊一致
+        // 共用渲染引擎：給 vn_inspect 資訊中心、酒館資訊中心共用，保證兩邊一致。對外這份已經消毒好（值轉義＋面板過 AUI.safeHtml），拿去直接放
+        renderTemplate: function (html, state, packVars, fmt, avatarMap) { return _avsSafe(_avsRenderTemplate(html, state, packVars, fmt, avatarMap)); },
         renderEntityCard: _avsRenderEntityCard,   // 只畫某一個角色那張卡(async)：劇情雙擊立繪的角色卡用
         auditTemplate: _auditTemplate,
         classifyObjVar: _classifyObjVar,      // 煉丹前 object 型變數分類＋欄位清單（劇情目標還是 {} 時也要列得出欄位）        // 出爐即校驗：模板接不接得到資料（煉丹後自動跑，也可單獨驗一張舊面板）

@@ -334,14 +334,15 @@
                     : '';
                 keysHtml = `<div class="wb-entry-keys-wrap${hitBySearch ? ' open' : ''}">${chips}${moreBtn}</div>`;
             }
-            const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${e.order}</span>` : '';
+            // 奧瑞亞格式匯入是整條原樣收（別人匯出的檔也是），id／order／content 都可能不是程式自己寫的 → 轉義再放
+            const orderLabel = (e.order && parseInt(e.order) !== 0) ? `<span class="wb-entry-order">Order: ${escHtml(e.order)}</span>` : '';
             const _roleIcon = '<i class="fa-solid ' + (['fa-gear', 'fa-user', 'fa-robot'][_entryRole(e)] || 'fa-gear') + '"></i>';
             const depthLabel = (_entryDepth(e) !== null) ? `<span class="wb-entry-depth">@D${_roleIcon}${_entryDepth(e)}</span>` : '';
 
             return `
-            <div class="wb-entry${e.enabled ? '' : ' disabled'}" data-id="${e.id}">
+            <div class="wb-entry${e.enabled ? '' : ' disabled'}" data-id="${escHtml(e.id)}">
                 <label class="wb-toggle">
-                    <input type="checkbox" class="wb-toggle-chk" data-id="${e.id}" ${e.enabled ? 'checked' : ''} />
+                    <input type="checkbox" class="wb-toggle-chk" data-id="${escHtml(e.id)}" ${e.enabled ? 'checked' : ''} />
                     <span class="wb-toggle-slider"></span>
                 </label>
                 <div class="wb-entry-info">
@@ -350,13 +351,13 @@
                         ${orderLabel}${depthLabel}
                     </div>
                     <div class="wb-entry-meta">
-                        <span>${e.content.length} 字</span>
+                        <span>${String(e.content == null ? '' : e.content).length} 字</span>
                     </div>
                     ${keysHtml}
                 </div>
                 <div style="display:flex; gap:2px; flex-shrink:0;">
-                    <button class="wb-entry-edit" data-id="${e.id}" title="編輯"><i class="fa-solid fa-pen"></i></button>
-                    <button class="wb-entry-del" data-id="${e.id}" title="刪除"><i class="fa-solid fa-trash-can"></i></button>
+                    <button class="wb-entry-edit" data-id="${escHtml(e.id)}" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                    <button class="wb-entry-del" data-id="${escHtml(e.id)}" title="刪除"><i class="fa-solid fa-trash-can"></i></button>
                 </div>
             </div>`;
         }).join('');

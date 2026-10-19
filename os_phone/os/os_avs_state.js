@@ -23,6 +23,11 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
+    // 放進 onclick="…('這裡')" 的字（欄位名多半是模型取的）：先照 JS 字串轉，再照屬性轉。
+    //   只做 esc 不夠：屬性裡的 &#39; 會先被解回 '，名字帶單引號就跳出字串、後面接什麼都會跑
+    function _jsArg(s) {
+        return esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
+    }
 
     // ── 建檔畫面的「常用追蹤項」（使用者自己存的快捷，跨世界共用、不隨聊天室走）──
     //    只是一串短句，量很小 → 直接 localStorage，不動 OS_DB schema（升版加 store 會 deadlock）
@@ -202,7 +207,7 @@
     const TYPE_OPTIONS = ['string', 'number', 'enum', 'list', 'object'];
     function renderFieldEdit(name, type, desc, isNew) {
         const dataName = isNew ? '__new__' : name;
-        const safe = esc(dataName).replace(/'/g, '&#39;');
+        const safe = _jsArg(dataName);
         return `<div class="avs-st-field-edit" data-edit-name="${esc(dataName)}">
             <div class="avs-st-fe-row"><span class="avs-st-fe-label">名稱</span>
                 <input class="avs-input" data-edit-key="name" ${isNew ? 'data-edit-focus placeholder="例：體力 / 心情 / 任務" value=""' : `value="${esc(name)}" disabled`} /></div>
@@ -227,8 +232,8 @@
                     ${desc ? `<div class="avs-st-field-desc">${esc(desc)}</div>` : ''}
                 </div>
                 <div class="avs-st-field-acts">
-                    <button class="avs-st-field-act" onclick="window.OS_AVS_STATE.startEditField('${esc(name).replace(/'/g, '&#39;')}')" title="編輯"><i class="fa-solid fa-pen"></i></button>
-                    <button class="avs-st-field-act danger" onclick="window.OS_AVS_STATE.deleteFieldConfirm('${esc(name).replace(/'/g, '&#39;')}')" title="刪除">×</button>
+                    <button class="avs-st-field-act" onclick="window.OS_AVS_STATE.startEditField('${_jsArg(name)}')" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                    <button class="avs-st-field-act danger" onclick="window.OS_AVS_STATE.deleteFieldConfirm('${_jsArg(name)}')" title="刪除">×</button>
                 </div></div>`;
         }).join('');
         if (_editingFieldName === '__new__') html += renderFieldEdit('', 'string', '', true);

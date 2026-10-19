@@ -205,13 +205,13 @@
             const keys = (e.keys || []).filter(Boolean);
             const tags = keys.length ? keys.map(k => `<span class="swb-tag">${_sgcEsc(k)}</span>`).join('') : '<span class="swb-tag muted">常駐</span>';
             const sum = _sgcEsc(String(e.content || '').replace(/\s+/g, ' ').trim().slice(0, 80)) || '（無內容）';
-            return `<div class="swb-card swb-entrycard" data-uid="${e.uid}">
+            return `<div class="swb-card swb-entrycard" data-uid="${_sgcEsc(e.uid)}">
                 <div class="swb-card-main">
                     <div class="swb-card-title">${_sgcEsc(e.comment || '(無標題)')}</div>
                     <div class="swb-card-sum">${sum}</div>
                     <div class="swb-tags">${tags}</div>
                 </div>
-                <label class="sgc-switch swb-card-tog" title="啟用／停用"><input type="checkbox" class="sgc-switch-input" data-en="${e.uid}"${e.enabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
+                <label class="sgc-switch swb-card-tog" title="啟用／停用"><input type="checkbox" class="sgc-switch-input" data-en="${_sgcEsc(e.uid)}"${e.enabled ? ' checked' : ''}><span class="sgc-switch-slider"></span></label>
                 <span class="swb-chev"><i class="fa-solid fa-chevron-right"></i></span>
             </div>`;
         }).join('');

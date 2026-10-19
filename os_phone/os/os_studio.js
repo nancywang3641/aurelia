@@ -1620,7 +1620,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const end = m === 'end';        // 🏁 章末：真實 VN 會把對話框收掉，只剩收尾鈕組與右上三顆
         const gs = m === 'settings';    // ⚙ 設定視窗：暗幕蓋在整個畫面上
         const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-phone,#vn-panel-controls,#top-badge{display:none;}' : '';
-        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${css || ''}</style></head><body>
+        // 主題 CSS 是模型或小機寫的：帶 </style> 會跳出 <style> 長出標籤（小機截圖那個 iframe 沒關沙盒）→ 先拆掉
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${String(css || '').replace(/<\/style/gi, '<\\/style')}</style></head><body>
 <div id="game-bg"></div>
 <div id="top-badge">黃昏 南城舊巷</div>
 <button id="btn-home">⌂ 返回</button>
@@ -2279,7 +2280,12 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
         s = s.replace(/\n/g, '<br>');
         s = s.replace(/(<br>\s*){3,}/g, '<br><br>');
-        return s;
+        return _studioSafe(s);   // 上面只拿掉 <script> 那幾種，<img onerror>、<svg onload>、javascript: 連結照樣會跑 → 最後整段過消毒（粗體換行照留）
+    }
+    // 模型寫的、匯入的 HTML 要照格式顯示時一律過這支（AUI.safeHtml：會跑的拿掉、格式留著）；沒有 AUI（不該發生）就整段當純文字
+    function _studioSafe(html) {
+        const A = win.AUI || window.AUI;
+        return (A && A.safeHtml) ? A.safeHtml(html) : _sgcEsc(html);
     }
 
     function safeStreamHtml(raw) {
@@ -2351,14 +2357,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const safeHtml = seg.content
                 .replace(/<(script|iframe|object|embed|meta|link)[^>]*>[\s\S]*?<\/\1>/gi, '')
                 .replace(/<(script|iframe|object|embed|meta|link)[^>]*\/?>/gi, '');
-            wrap.innerHTML = safeHtml;
+            wrap.innerHTML = _studioSafe(safeHtml);   // 上面的正則擋不住 <img onerror> 這類，最後再過一次消毒
             bubble.appendChild(wrap);
 
         } else if (seg.type === 'genimg') {
             bubble.classList.add('genimg-bubble');
             bubble.innerHTML = `<div style="display:flex;align-items:center;gap:8px;">
                 <div class="os-studio-spinner"></div>
-                <span style="color:rgba(26,28,40,0.72);font-size:12px;">生成圖片中… ${seg.content.slice(0,40)}</span>
+                <span style="color:rgba(26,28,40,0.72);font-size:12px;">生成圖片中… ${_sgcEsc(seg.content.slice(0,40))}</span>
             </div>`;
             // 非同步生圖，完成後替換內容
             (async () => {
@@ -2367,13 +2373,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                     if (!imgMgr?.generate) throw new Error('找不到圖片引擎');
                     const url = await imgMgr.generate(seg.content, 'scene', { use: 'app' });
                     if (url) {
-                        bubble.innerHTML = `<img src="${url}" alt="generated" />
-                            <div style="font-size:10px;color:rgba(26,28,40,0.72);margin-top:4px;padding:0 4px;">${seg.content.slice(0,60)}</div>`;
+                        bubble.innerHTML = `<img src="${_sgcEsc(url)}" alt="generated" />
+                            <div style="font-size:10px;color:rgba(26,28,40,0.72);margin-top:4px;padding:0 4px;">${_sgcEsc(seg.content.slice(0,60))}</div>`;
                     } else {
                         bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> 圖片生成失敗</span>`;
                     }
                 } catch(e) {
-                    bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> ${e.message}</span>`;
+                    bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> ${_sgcEsc(e && e.message)}</span>`;
                 }
             })();
 
@@ -3050,21 +3056,24 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             md(text) {
                 if (!text) return '';
                 text = String(text).replace(/\\n/g, '\n');   // AI 常寫「字面 \n」當換行：先轉真換行（劇情裡、手機 app 裡那兩份都有這步，預覽漏了）
+                // 轉出來的 HTML 一律過 AUI.safeHtml（它有 DOMPurify 會先過）：手機版網頁沒載 DOMPurify，以前沒 showdown 那條更是原樣回傳
+                const _A = (window.parent && window.parent.AUI) || window.AUI;
+                const _clean = (h) => (_A && _A.safeHtml) ? _A.safeHtml(h) : h;
                 try {
                     const P = window.parent, S = (P && P.showdown) || window.showdown;
                     if (S) {
                         const h = new S.Converter({ simpleLineBreaks: true, tables: true, strikethrough: true }).makeHtml(text);
                         const D = (P && P.DOMPurify) || window.DOMPurify;
-                        return D ? D.sanitize(h) : h;
+                        return (_A && _A.safeHtml) ? _A.safeHtml(h) : (D ? D.sanitize(h) : h);
                     }
                 } catch (e) {}
                 // 沒有 showdown（手機版網頁沒載）：照劇情裡那份（vn_dynamic_parser 的 st.md），換行要變 <br>，不然整段擠成一行
-                return text
+                return _clean(text
                     .replace(new RegExp('[*][*](.+?)[*][*]', 'g'), (_, p1) => '<b>' + p1 + '</b>')
                     .replace(new RegExp('[*](.+?)[*]', 'g'), (_, p1) => '<i>' + p1 + '</i>')
                     .replace(new RegExp('[`](.+?)[`]', 'g'), (_, p1) => '<code>' + p1 + '</code>')
                     .replace(/\n/g, '<br>')
-                    .replace(/(<br>\s*){3,}/g, '<br><br>');
+                    .replace(/(<br>\s*){3,}/g, '<br><br>'));
             },
             parse() {
                 // 跟劇情裡那份（vn_dynamic_parser 的 st.parse）同一套：AI 把一筆 [Tag|…] 拆成好幾段時先縫回一行，忘了收尾的 ] 幫它補上
@@ -3211,7 +3220,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             + '<scr' + 'ipt>(function(){'
             + 'var container=document.getElementById("app-root");var lines=[];'
             + 'var st={'
-            +   'md:function(t){if(!t)return "";t=String(t).replace(/\\\\n/g,"\\n");try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return D?D.sanitize(h):h;}}catch(e){}return String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";}).replace(/\\n/g,"<br>").replace(/(<br>\\s*){3,}/g,"<br><br>");},'   // 沒有 showdown（手機版網頁）時照劇情裡那份：換行→<br>
+            +   'md:function(t){if(!t)return "";t=String(t).replace(/\\\\n/g,"\\n");var A=null;try{A=(window.parent&&window.parent.AUI)||window.AUI;}catch(e){}var C=function(h){return (A&&A.safeHtml)?A.safeHtml(h):h;};try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return (A&&A.safeHtml)?A.safeHtml(h):(D?D.sanitize(h):h);}}catch(e){}return C(String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";}).replace(/\\n/g,"<br>").replace(/(<br>\\s*){3,}/g,"<br><br>"));},'   // 沒有 showdown（手機版網頁）時照劇情裡那份：換行→<br>；兩條都過上層的 AUI.safeHtml（手機版沒 DOMPurify）
             +   'parse:function(){return {};},'
             +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
             +   'callAI:async function(s,o){try{return window.callAI?await window.callAI(s,o):"";}catch(e){return "";}},'
@@ -3346,13 +3355,17 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         var rxBold = new RegExp('[*][*](.+?)[*][*]', 'g');
         var rxItalic = new RegExp('[*](.+?)[*]', 'g');
         var rxCode = new RegExp('[\`](.+?)[\`]', 'g');
-        return String(text)
+        var out = String(text)
           .replace(/\\\\n/g, '\\n')   // 字面換行符 → 真換行（對齊 story st.md；此註解勿寫反斜線,這是模板字串、會變真換行斬斷註解）
           .replace(rxBold, function(_, p1){ return '<b>' + p1 + '</b>'; })
           .replace(rxItalic, function(_, p1){ return '<i>' + p1 + '</i>'; })
           .replace(rxCode, function(_, p1){ return '<code>' + p1 + '</code>'; })
           .replace(/\\n/g, '<br>')
           .replace(/(<br>\\s*){3,}/g, '<br><br>');
+        // 傳進來的是劇情或模型寫的字：照格式顯示、會跑的拿掉（奧瑞亞的 AUI.safeHtml；沒有就退回酒館的 DOMPurify）
+        var A = null, D = null;
+        try { A = ctx.AUI; D = ctx.DOMPurify; } catch(e){}
+        return (A && A.safeHtml) ? A.safeHtml(out) : ((D && D.sanitize) ? D.sanitize(out) : out);
       },
       parse: function(){
         // 跟劇情裡那份同一套：一筆記錄被 AI 拆成好幾段時先縫回一行，忘了收尾的右方括號幫它補上
@@ -4400,14 +4413,14 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             const data = displayData;
             const varsHtml = (data.vars || []).map(v => `
                 <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
-                    <span style="color:#1A1C28; font-weight:bold;">${v.key}</span>
-                    <span style="color:rgba(26,28,40,0.72); font-size:11px;">類型: ${v.type} | 預設: ${v.default}</span>
+                    <span style="color:#1A1C28; font-weight:bold;">${_sgcEsc(v.key)}</span>
+                    <span style="color:rgba(26,28,40,0.72); font-size:11px;">類型: ${_sgcEsc(v.type)} | 預設: ${_sgcEsc(v.default)}</span>
                 </div>
             `).join('');
 
             previewMain.innerHTML = `
                 <div class="studio-card">
-                    <div class="studio-card-title"><i class="fa-solid fa-dice"></i> [${data.id || '未知ID'}] ${data.name || '未命名變數包'}</div>
+                    <div class="studio-card-title"><i class="fa-solid fa-dice"></i> [${_sgcEsc(data.id || '未知ID')}] ${_sgcEsc(data.name || '未命名變數包')}</div>
                     <div style="font-size:13px; color:#1A1C28;">${varsHtml}</div>
                 </div>
             `;

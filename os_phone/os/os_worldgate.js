@@ -718,13 +718,17 @@
     // 🚨規則寫了不等於模型照做。這幾樣漏進來都是全域災難:!important 會蓋到酒館、外連在別人那邊載不到、
     //   script 會直接在面板裡跑。所以規則歸規則,出口再剝一次。
     function _cleanPanelHtml(s) {
-        return String(s || '')
+        const h = String(s || '')
             .replace(/<(script|style|iframe|object|embed)[\s\S]*?<\/\1>/gi, '')
             .replace(/<\/?(?:script|style|iframe|object|embed|link|meta)[^>]*>/gi, '')
             .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
             .replace(/\s(?:src|href|xlink:href)\s*=\s*"(?:https?:)?\/\/[^"]*"/gi, '')
             .replace(/\s(?:src|href|xlink:href)\s*=\s*'(?:https?:)?\/\/[^']*'/gi, '')
             .trim();
+        // 上面的正則擋不住 <img/onerror=…>（屬性前面是斜線不是空白）、javascript: 連結這類 → 最後過一次 AUI.safeHtml
+        //   （tmp/wg_panel_parse_test 把這支切出來在 node 裡跑，那裡沒有 win／window → 先判斷有沒有）
+        const A = (typeof win !== 'undefined' && win && win.AUI) || (typeof window !== 'undefined' && window.AUI) || null;
+        return (A && A.safeHtml) ? A.safeHtml(h) : h;
     }
     // 🎨 顏色對比：規則裡寫了背景色，文字色就必須跟它分得開。
     //   prompt 裡早就有這條（還註明是實測最常壞的一項），但結束畫面是一次性生成、
@@ -3744,7 +3748,7 @@
             const t = x.t, i = x.i;
             return '<div class="wgt-person' + (t.recruited ? ' on' : '') + '">' +
                 '<span class="wgt-p-main" data-prof="' + i + '">' +
-                    '<span class="wgt-p-nm">' + _esc(t.name) + (t.age ? '<i>' + t.age + '</i>' : '') + '</span>' +
+                    '<span class="wgt-p-nm">' + _esc(t.name) + (t.age ? '<i>' + _esc(t.age) + '</i>' : '') + '</span>' +
                     '<span class="wgt-p-job">' + _esc(t.job || (t.home ? '奧瑞亞的人' : '旅人')) + '</span>' +
                 '</span>' +
                 (t.recruited

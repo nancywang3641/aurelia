@@ -529,7 +529,8 @@
     function _doc(css, bg) {
         const AI = _AI();
         return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' + PV_BASE + PV_BG[bg === 'dark' ? 'dark' : 'light']
-            + '\n' + ((AI && AI.BASE_CSS) || '') + '\n' + ((AI && AI.boost) ? AI.boost(css || '') : (css || '')) + '</style></head><body>'
+            // 小機寫的 CSS 原樣進 <style>：帶 </style> 就跳出去長出 <img onerror>，截圖那幾個 iframe 沒關沙盒、同源 → 先把 </style 拆掉
+            + '\n' + ((AI && AI.BASE_CSS) || '') + '\n' + ((AI && AI.boost) ? AI.boost(css || '') : (css || '')).replace(/<\/style/gi, '<\\/style') + '</style></head><body>'
             + PV_ROWS.map(function (m) { return '<div class="pbub-row pbub-' + m[0] + '"><div class="pbub-avatar"></div><div class="pbub-wrap"><div class="pbub-bubble">' + m[1] + '</div></div></div>'; }).join('')
             + '</body></html>';
     }
