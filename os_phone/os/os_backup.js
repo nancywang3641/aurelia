@@ -146,7 +146,7 @@
         'studio_panel_type_'          // 創作室每個對話選的面板類型
     ];
 
-    // 全量備份收的 IndexedDB 倉庫：OS_DB 除了圖片（images 存的是二進位，JSON 裝不下）以外全部
+    // 全量備份收的 IndexedDB 倉庫：OS_DB 除了圖片（images 存的是二進位，另外一張一張轉，見下面 IMG）以外全部
     //   🚨 OS_DB 新增倉庫時這裡也要加一列，不然備份不到
     const FULL_STORES = [
         'var_packs', 'ui_templates', 'vn_chapters', 'api_chats', 'wb_posts', 'lobby_history',
@@ -199,7 +199,8 @@
     // ⭐ 收藏的語音（房間長按語音泡泡「收藏語音」，10-06）：清單在 app_data（room_fav_voice::global::<住戶 id>），
     //   聲音在 images 倉庫（aud_fav_…，二進位，上面那條「圖片不收」本來會漏掉）。她：「收藏語音可以跟備份走吧」
     //   → 只收清單上點名的那幾段，轉成 base64 放在 db.fav_voices，跟著清單那塊（手機 app）走；
-    //   還原時這台沒有的才寫回 images（同 OS_DB.saveImage 的格式 {id, data: Blob}）。其他圖片照舊不收。
+    //   還原時這台沒有的才寫回 images（同 OS_DB.saveImage 的格式 {id, data: Blob}）。
+    //   10-20 起本機完整匯出勾「帶圖片」時整個 images 倉庫都帶（下面 IMG），這段只剩雲端那條和沒勾的時候用。
     const FAV = {
         PRE: 'room_fav_voice::',
         ids(appData) {
@@ -235,6 +236,76 @@
                     await _putStore('images', { id: v.id, data: new Blob([bytes], { type: v.type || 'audio/mpeg' }) });
                     n++;
                 } catch (err) { console.warn('[OS_BACKUP] 收藏的語音沒還原成：', v.id, err); }
+            }
+            return n;
+        }
+    };
+    // 🖼 images 倉庫跟著本機完整匯出走（10-20）：好友頭像、聊天背景、聊天傳的照片和語音、朋友圈／記事本照片、
+    //   畫風參考圖、NAI 縮圖與 vibe、角色圖鑑（她角色的長相，重生要花錢、也生不回一模一樣的）。
+    //   以前一張都不收，而「格式化」會整個刪掉 → 還原後聊天照片變灰框、頭像回預設（整條跑過實測）。
+    //   不帶的只有：手機 app 生的圖（img_gen_）沒被任何資料用到的那些（貼文刪了留下的孤兒）。雲端那條不帶（太大）。
+    //   🚨 iPhone 匯出要省記憶體：一張一張讀、一張轉完就包成小 Blob，不先把全部圖組成一整個大字串（見 exportLocal）。
+    //   還原時這台沒有的才寫回（跟收藏語音同一套）。設置頁有「帶圖片」的勾，手機撐不住可以取消。
+    const IMG = {
+        GEN: /^img_gen_/,
+        async keys() {
+            try {
+                if (!win.OS_DB) return [];
+                const db = await win.OS_DB.init();
+                return await new Promise((res) => {
+                    const q = db.transaction('images', 'readonly').objectStore('images').getAllKeys();   // 只拿鑰匙，不讀圖
+                    q.onsuccess = () => res((q.result || []).map(String));
+                    q.onerror = () => res([]);
+                });
+            } catch (e) { return []; }
+        },
+        // 要帶哪幾張：refText＝備份裡其他資料轉成的文字，img_gen_ 有在裡面出現才帶
+        pick(keys, refText) {
+            const used = new Set((String(refText || '').match(/img_gen_[A-Za-z0-9_]+/g) || []));
+            return keys.filter(k => !IMG.GEN.test(k) || used.has(k));
+        },
+        async _b64(blob) {
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+            return btoa(bin);
+        },
+        _unb64(b64, type) {
+            const bin = atob(b64), bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new Blob([bytes], { type: type || '' });
+        },
+        // 一筆轉成能寫進 JSON 的樣子：裡面的 Blob（通常是 .data）換成 { __blob: base64, type }
+        async pack(entry) {
+            const walk = async (v, depth) => {
+                if (v instanceof Blob) return { __blob: await IMG._b64(v), type: v.type || '' };
+                if (!v || typeof v !== 'object' || depth > 3) return v;
+                const o = Array.isArray(v) ? [] : {};
+                for (const k of Object.keys(v)) o[k] = await walk(v[k], depth + 1);
+                return o;
+            };
+            return walk(entry, 0);
+        },
+        unpack(v, depth) {
+            depth = depth || 0;
+            if (!v || typeof v !== 'object' || depth > 4) return v;
+            if (typeof v.__blob === 'string') return IMG._unb64(v.__blob, v.type);
+            const o = Array.isArray(v) ? [] : {};
+            Object.keys(v).forEach(k => { o[k] = IMG.unpack(v[k], depth + 1); });
+            return o;
+        },
+        async restore(list) {
+            let n = 0;
+            for (let i = 0; i < (list || []).length; i++) {
+                const v = list[i];
+                list[i] = null;   // 寫完一張就放掉，大檔還原時記憶體不要一直疊
+                const id = v && v.id;
+                if (id == null) continue;
+                try {
+                    if (await _getOne('images', id)) continue;   // 這台已經有
+                    await _putStore('images', IMG.unpack(v));
+                    n++;
+                } catch (err) { console.warn('[OS_BACKUP] 這張圖沒還原成：', id, err); }
             }
             return n;
         }
@@ -304,7 +375,7 @@
                 out.stores = {};
                 for (const name of FULL_STORES) out.stores[name] = await _getStore(name);
                 out.xiaoji_roster = XJ.roster();
-                out.fav_voices = await FAV.collect(out.stores.app_data);
+                if (!opts.images) out.fav_voices = await FAV.collect(out.stores.app_data);   // 帶圖片時收藏的語音已經在 images 裡，不重複帶
             }
         } catch(e) { console.warn('[OS_BACKUP] DB 收集部分失敗:', e); }
         return out;
@@ -368,6 +439,7 @@
             }
             if (d.xiaoji_roster) { try { restored.xiaoji = XJ.restore(d.xiaoji_roster); } catch (e) { console.warn('[OS_BACKUP] 小機名冊沒還原成:', e); } }
             if (Array.isArray(d.fav_voices)) restored.favVoices = await FAV.restore(d.fav_voices);
+            if (Array.isArray(d.images)) restored.images = await IMG.restore(d.images);
         }
 
         // LocalStorage 恢復：一項寫不進去照樣接著寫下一項（不中斷），寫不進去的數目回給畫面講（lsFailed）
@@ -383,11 +455,34 @@
     }
 
     // ── 本地匯出入 ────────────────────────────────────────────────────
-    async function exportLocal() {
-        const data = await collectAll();
+    // opts.images：帶不帶 images 倉庫（沒給就照設置頁那個勾，預設帶）。回檔案大小（KB）；帶了幾張圖在 OS_BACKUP.lastExport
+    const IMG_SLOT = '__AURELIA_IMAGES_SLOT__';
+    let lastExport = null;
+    async function exportLocal(opts = {}) {
+        const withImages = (typeof opts.images === 'boolean') ? opts.images : getSettings().exportImages !== false;
+        const data = await collectAll({ images: withImages });
+        if (withImages) data.db.images = IMG_SLOT;
         const content = JSON.stringify(data, null, 2);
-        const sizeKB = Math.round(new Blob([content]).size / 1024);
-        const blob = new Blob([content], { type: 'application/json' });
+        let parts = [content], nImg = 0;
+        if (withImages) {
+            // 圖片一張一張讀、一張轉完就包成小 Blob 丟進 parts，字串馬上可以放掉；
+            //   以前那種「整份 JSON.stringify 成一個字串」帶上圖會是幾十上百 MB 的單一字串，iPhone 會撐爆記憶體整頁重開
+            const cut = content.indexOf('"' + IMG_SLOT + '"');
+            parts = [content.slice(0, cut), '['];
+            const keys = IMG.pick(await IMG.keys(), content);
+            for (const k of keys) {
+                try {
+                    const e = await _getOne('images', k);
+                    if (!e) continue;
+                    parts.push(new Blob([(nImg ? ',' : '') + JSON.stringify(await IMG.pack(e))]));
+                    nImg++;
+                } catch (err) { console.warn('[OS_BACKUP] 這張圖讀不出來，沒帶：', k, err); }
+            }
+            parts.push(']', content.slice(cut + IMG_SLOT.length + 2));
+        }
+        const blob = new Blob(parts, { type: 'application/json' });
+        const sizeKB = Math.round(blob.size / 1024);
+        lastExport = { kb: sizeKB, images: withImages ? nImg : null };
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'aurelia-full-backup-' + new Date().toISOString().slice(0, 10) + '.json';
@@ -413,7 +508,7 @@
     function afterRestore(res, title) {
         res = res || {};
         const msg = '還原好了（聊天 ' + (res.chats || 0) + '、劇情 ' + (res.vn || 0) + '、世界書 ' + (res.worldbook || 0) + '、設定 ' + (res.localStorage || 0)
-            + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + '）'
+            + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + (res.images ? '、圖片和語音 ' + res.images : '') + '）'
             + (res.lsFailed ? '，另有 ' + res.lsFailed + ' 項設定沒存下來（本機空間滿了）' : '') + '。';
         try { sessionStorage.setItem(RESTORED_KEY, JSON.stringify({ title: title || '還原', msg: msg })); } catch (e) {}
         location.reload();
@@ -789,6 +884,8 @@
     win.OS_BACKUP = {
         _xj: XJ,
         _fav: FAV,
+        _img: IMG,
+        get lastExport() { return lastExport; },
         PARTS, autoGet, autoSave, relayOf, ghGet, ghSave, destReady, cloudBackup, cloudList, cloudGet, collectParts,
         getSettings,
         saveSettings,

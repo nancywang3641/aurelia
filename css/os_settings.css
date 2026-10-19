@@ -382,6 +382,9 @@
 
 /* ── 設置→備份：這台裝置上的空間（用量條／資料有沒有受保護／各佔多少）── */
 .bk-scan-btn { padding: 4px 12px; font-size: 11px; cursor: pointer; margin: 0; flex-shrink: 0; }
+/* 匯出鈕底下「帶圖片」那個勾 */
+.bk-opt { display: flex; align-items: center; gap: 6px; margin-top: 8px; font-size: 12px; color: rgba(var(--os-ink-rgb), 0.72); cursor: pointer; }
+.bk-opt input { width: 15px; height: 15px; margin: 0; accent-color: var(--os-ink); }
 .bk-usage { font-size: 12px; color: rgba(var(--os-ink-rgb), 0.72); }
 .bk-usage-nums { display: flex; align-items: baseline; gap: 6px; font-variant-numeric: tabular-nums; }
 .bk-usage-nums b { font-size: 22px; font-weight: 800; color: var(--os-ink); }

@@ -59,6 +59,7 @@
             ss_2144: { title: '獨立插圖副模型', body: '插圖另開一通副模型（用副模型接口）、只吃下方規範、不背 AVS/記憶；開了上面的搭便車插圖就停。' },
             ss_2188: { title: '角色頭像快取', body: '備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。' },
             bk_storage: { title: '這台裝置上的空間', body: '奧瑞亞的資料（劇情、聊天、圖片）都存在這台裝置的瀏覽器裡，瀏覽器會給一個上限。佔最多的通常是圖片。用到一半橘色、八成紅色。空間吃緊時，瀏覽器可能把整個站的資料一起清掉，不只是圖；「受保護」之後它就不會自己動手。不管有沒有受保護，定期匯出一份完整備份最保險。' },
+            bk_export_img: { title: '帶圖片', body: '聊天裡傳的照片和語音、好友頭像、聊天背景、朋友圈和記事本的照片、角色圖鑑、畫風參考圖會一起放進備份檔，換手機或格式化之後還原都回得來。圖片多的話檔案會大很多；如果手機匯出到一半整頁重開，取消這個勾再匯出一次（文字的部分照樣完整）。雲端自動備份不帶圖片。劇情插圖和立繪在另一個圖庫，不在備份裡。' },
             ss_2250: { title: '已存立繪', body: '純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。' },
             ss_2272: { title: '語音轉文字', body: '微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。' },
             ss_2308: { title: 'Group ID (必填)', body: '登入 Minimax 平台後，在帳號設定頁面可找到 Group ID。' },
@@ -2535,6 +2536,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-label" title="匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。"><i class="fa-solid fa-floppy-disk"></i> 本地全量備份${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2549') : ''}</div>
                             <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;"><i class="fa-solid fa-upload"></i> 匯出完整備份 JSON</div>
+                            <label class="bk-opt"><input type="checkbox" id="bk-export-img" checked><span>帶圖片</span>${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('bk_export_img') : ''}</label>
                             <div class="btn-test" id="bk-import-btn" style="margin-top:8px;"><i class="fa-solid fa-download"></i> 從本地 JSON 還原</div>
                             <input type="file" id="bk-file-input" accept=".json" style="display:none;" />
                         </div>
@@ -5446,13 +5448,20 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         _paintUsage();
 
         const btnExport = container.querySelector('#bk-export-btn');
+        // 🖼 「帶圖片」：預設勾；手機匯出到一半整頁重開（記憶體撐不住）時她可以取消再匯一次。記在這台（備份設定）
+        const chkImg = container.querySelector('#bk-export-img');
+        if (chkImg && BACKUP) {
+            chkImg.checked = BACKUP.getSettings().exportImages !== false;
+            chkImg.addEventListener('change', () => { const s = BACKUP.getSettings(); s.exportImages = chkImg.checked; BACKUP.saveSettings(s); });
+        }
         if (btnExport) btnExport.addEventListener('click', async () => {
             if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
             setBtnLoading(btnExport, '準備中...');
             setStatus('正在打包資料...', 'rgba(26,28,40,0.25)');
             try {
-                const sizeKB = await BACKUP.exportLocal();
-                setStatus('匯出完成（' + sizeKB + ' KB），請儲存至安全位置', 'rgba(26,28,40,0.25)');
+                const sizeKB = await BACKUP.exportLocal({ images: chkImg ? chkImg.checked : undefined });
+                const L = BACKUP.lastExport;
+                setStatus('匯出完成（' + sizeKB + ' KB' + (L && L.images ? '，含圖片和語音 ' + L.images + ' 張' : '') + '），請儲存至安全位置', 'rgba(26,28,40,0.25)');
             } catch(e) { setStatus('匯出失敗：' + e.message, '#fc8181'); }
             setBtnDone(btnExport, '匯出完整備份 JSON');
         });
