@@ -77,13 +77,14 @@
             return p.id === 'keyu' ? '要等你電腦開著才來' : '出差版來，最慢五分鐘';
         }
         function jobRow(j) {
-            var size = j.sizeName + '・' + j.pay + 'G';
+            // 單子整張是伺服器傳回來的（住戶寫的那句、交代的話、名字、數字）：每一格照字轉掉再放
+            var size = esc(j.sizeName) + '・' + esc(j.pay) + 'G';
             var badge, cls = '';
             if (j.status === 'waiting') { badge = fa('fa-hourglass-half') + '等他來'; cls = 'is-wait'; }
             else if (j.status === 'working') { badge = fa('fa-person-digging') + '在做了'; cls = 'is-work'; }
             else if (j.status === 'done') { badge = fa('fa-circle-check') + '做完了'; cls = 'is-done'; }
             else { badge = fa('fa-rotate-left') + (j.why === 'cancel' ? '取消了' : '退錢了'); cls = 'is-back'; }
-            var line = j.status === 'done' ? (j.note ? '「' + esc(j.note) + '」' : '') + '<small>做了 ' + j.done + ' 件・用掉打工體力 ' + j.used + '/' + j.stamina + '</small>'
+            var line = j.status === 'done' ? (j.note ? '「' + esc(j.note) + '」' : '') + '<small>做了 ' + esc(j.done) + ' 件・用掉打工體力 ' + esc(j.used) + '/' + esc(j.stamina) + '</small>'
                 : (j.ask ? '交代：' + esc(j.ask) : '沒交代，看哪裡需要');
             var cancel = j.status === 'waiting' ? '<button type="button" class="fh-cancel" data-fh="cancel" data-id="' + esc(j.id) + '">' + fa('fa-xmark') + '取消</button>' : '';
             // 做完的（兩小時內，伺服器才帶得到那一串）：從頭再演一次他怎麼做的

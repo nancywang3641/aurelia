@@ -55,16 +55,17 @@
                 rows.push(got ? Object.assign({ slot: o.slot, name: o.name }, got) : { name: o.name, empty: true });
             });
             var ranked = rows.filter(function (r) { return !r.empty; }).sort(function (a, b) { return b.net - a.net; });
+            // 阿洛、丹那兩行和偷吃、打工的數字是伺服器傳回來的：照字轉掉再放（數字轉了還是同一個數字）
             var rank = '<div class="fd-rank">' + ranked.map(function (r, i) {
-                var bite = bites ? '<span>偷吃 ' + (bites[r.slot] || 0) + ' 口</span>' : '';
-                if (wages && !r.me) bite += '<span>打工 +' + (wages[r.slot] || 0) + 'G</span>';
+                var bite = bites ? '<span>偷吃 ' + esc(bites[r.slot] || 0) + ' 口</span>' : '';
+                if (wages && !r.me) bite += '<span>打工 +' + esc(wages[r.slot] || 0) + 'G</span>';
                 // 別人那行：走進他家做客（偷吃一口、看他顧田）
                 var go = !r.me && opts.onVisit ? '<button type="button" class="fd-visit" data-visit="' + esc(r.slot) + '" data-name="' + esc(r.name) + '">' + fa('fa-person-walking') + '去他家</button>' : '<i></i>';
-                return '<div class="fd-rank-row' + (r.me ? ' is-me' : '') + '"><b>' + (i + 1) + '</b><strong>' + esc(r.name) + '</strong><span>淨賺 ' + money(r.net) + '</span><span>收成 ' + r.harvested + '</span><span>枯死 ' + r.dead + '</span>' + bite + go + '</div>';
+                return '<div class="fd-rank-row' + (r.me ? ' is-me' : '') + '"><b>' + (i + 1) + '</b><strong>' + esc(r.name) + '</strong><span>淨賺 ' + money(r.net) + '</span><span>收成 ' + esc(r.harvested) + '</span><span>枯死 ' + esc(r.dead) + '</span>' + bite + go + '</div>';
             }).join('') + rows.filter(function (r) { return r.empty; }).map(function (r) {
                 return '<div class="fd-rank-row is-empty"><b>–</b><strong>' + esc(r.name) + '</strong><span class="fd-wait">' + (loading ? '讀取中…' : '還沒有地，雲端存檔開著才看得到') + '</span></div>';
             }).join('') +
-                (wages ? '<div class="fd-rank-row is-empty"><b>–</b><strong>克語</strong><span class="fd-wait">沒有地，只來打工</span><span>打工 +' + (wages.keyu || 0) + 'G</span></div>' : '') +
+                (wages ? '<div class="fd-rank-row is-empty"><b>–</b><strong>克語</strong><span class="fd-wait">沒有地，只來打工</span><span>打工 +' + esc(wages.keyu || 0) + 'G</span></div>' : '') +
                 '</div>';
             var hist = sh.history && sh.history.length ? '<ul class="fd-days">' + sh.history.map(function (r, i) {
                 var bad = window.FarmShip ? window.FarmShip.eventLines(r).filter(function (e) { return e.bad; }).length : 0;

@@ -159,13 +159,16 @@
         renderLists();
     }
 
+    // 任務卡和狀態可能是「AI 生成素材」模型寫的、或她自己打的：放進畫面前轉掉（夾帶的 <img onerror> 不會跑，< & 照樣顯示）
+    const _esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
     function renderLists() {
         const taskContainer = document.getElementById('chaos-task-container');
         if (taskContainer) {
             taskContainer.innerHTML = DB_TASKS.map((task, index) => `
                 <div class="chaos-task-item ${selectedTasks.has(index) ? 'selected' : ''}" onclick="OS_CHAOS.toggleTask(${index})">
                     <input type="checkbox" class="chaos-task-checkbox" ${selectedTasks.has(index) ? 'checked' : ''} onclick="event.stopPropagation(); OS_CHAOS.toggleTask(${index})">
-                    <span class="chaos-task-text">${task}</span>
+                    <span class="chaos-task-text">${_esc(task)}</span>
                 </div>
             `).join('');
             taskContainer.scrollTop = taskContainer.scrollHeight;

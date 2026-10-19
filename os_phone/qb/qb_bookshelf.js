@@ -103,6 +103,10 @@
             .replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;');
     }
+    // style="background:url('這裡')" 的網址（封面可能是匯入的、生圖接口回的）：CSS 字串裡的 \ 和 ' 先轉，再照屬性轉
+    function _cssUrl(s) {
+        return _escHtml(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ''));
+    }
 
     // ── 書籍刪除確認彈窗 ──────────────────────────────────────────
     function _confirmDeleteWorld(w, afterDelete) {
@@ -126,7 +130,7 @@
                 border-radius:10px;padding:24px 28px;max-width:340px;width:90%;
                 box-shadow:0 12px 40px var(--qbs-shadow);color:var(--qbk-ink);font-family:'Noto Sans TC',sans-serif;
             ">
-                <div style="font-size:15px;font-weight:700;margin-bottom:8px;"><i class="fa-solid fa-book"></i> 刪除《${cardName}》</div>
+                <div style="font-size:15px;font-weight:700;margin-bottom:8px;"><i class="fa-solid fa-book"></i> 刪除《${_escHtml(cardName)}》</div>
                 <div style="font-size:12px;color:var(--qbk-ink);margin-bottom:18px;line-height:1.6;">
                     請選擇刪除範圍：
                 </div>
@@ -144,7 +148,7 @@
                         <span>
                             <strong style="font-size:13px;color:var(--qbs-bad);">完整清除</strong>
                             <div style="font-size:11px;color:var(--qbk-ink-dim);margin-top:2px;">
-                                書籍${hasVarPack ? '、追蹤欄位' : ''}、世界書條目（分類「${cardName}」）
+                                書籍${hasVarPack ? '、追蹤欄位' : ''}、世界書條目（分類「${_escHtml(cardName)}」）
                             </div>
                         </span>
                     </label>
@@ -607,11 +611,11 @@ status = "正常"`;
                     } else {
                         wbList.innerHTML = entries.map(e => `
                             <label style="display:flex;align-items:flex-start;gap:8px;padding:5px 2px;cursor:pointer;border-bottom:1px solid var(--qbk-line);">
-                                <input type="checkbox" data-id="${e.id}" data-content="${encodeURIComponent(e.content || '')}"
+                                <input type="checkbox" data-id="${_escHtml(e.id)}" data-content="${encodeURIComponent(e.content || '')}"
                                     style="margin-top:2px;accent-color:var(--qbk-accent);flex-shrink:0;">
                                 <span style="font-size:11px;color:var(--qbk-ink);line-height:1.5;">
-                                    <span style="color:var(--qbk-accent);">${e.title || '未命名'}</span>
-                                    ${e.keys ? `<span style="color:var(--qbk-ink-faint);font-size:10px;"> · ${e.keys.slice(0,30)}</span>` : ''}
+                                    <span style="color:var(--qbk-accent);">${_escHtml(e.title || '未命名')}</span>
+                                    ${e.keys ? `<span style="color:var(--qbk-ink-faint);font-size:10px;"> · ${_escHtml(e.keys.slice(0,30))}</span>` : ''}
                                 </span>
                             </label>
                         `).join('');
@@ -816,7 +820,7 @@ status = "正常"`;
                 return;
             }
             listEl.innerHTML = hist.map(h => `
-                <div class="qb-free-hist-item" data-id="${h.id}" style="
+                <div class="qb-free-hist-item" data-id="${_escHtml(h.id)}" style="
                     background:var(--qbs-soft);border:1px solid var(--qbs-cool-line);
                     border-radius:6px;padding:10px 12px;cursor:pointer;
                     transition:background 0.15s,border-color 0.15s;position:relative;"
@@ -825,7 +829,7 @@ status = "正常"`;
                     ${h.title ? `<div style="font-size:11px;color:var(--qbs-cool);font-weight:bold;margin-bottom:4px;letter-spacing:1px;">${_escHtml(h.title)}</div>` : ''}
                     <div style="font-size:12px;color:var(--qbk-ink);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${_escHtml(h.request || '')}</div>
                     <div style="font-size:10px;color:var(--qbs-cool-dim);margin-top:4px;">${new Date(h.ts).toLocaleDateString('zh-TW')}</div>
-                    <button class="qb-free-hist-del" data-id="${h.id}" style="
+                    <button class="qb-free-hist-del" data-id="${_escHtml(h.id)}" style="
                         position:absolute;top:6px;right:6px;
                         background:var(--qbs-bad-line);border:none;color:#fff;
                         font-size:10px;width:18px;height:18px;border-radius:50%;
@@ -1013,7 +1017,7 @@ status = "正常"`;
         const currentUserName = window.OS_PERSONA?.getName ? window.OS_PERSONA.getName() : 'User';
 
         panel.innerHTML = `
-            <div style="position:absolute;inset:0;background:url('${w.cover}') center/cover;"></div>
+            <div style="position:absolute;inset:0;background:url('${_cssUrl(w.cover)}') center/cover;"></div>
             <div style="position:absolute;inset:0;background:linear-gradient(180deg,
                 rgba(240,243,250,0) 0%,rgba(240,243,250,0) 25%,
                 rgba(240,243,250,0.82) 55%,rgba(240,243,250,0.98) 100%);"></div>

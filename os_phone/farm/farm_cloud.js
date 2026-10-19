@@ -243,7 +243,7 @@
         var hm = at ? ('0' + at.getHours()).slice(-2) + ':' + ('0' + at.getMinutes()).slice(-2) : '';
         if (s.kind === 'busy') return fa('fa-cloud-arrow-up') + esc(s.msg || '同步中…');
         if (s.kind === 'offline' || s.kind === 'error') return fa('fa-triangle-exclamation') + esc(s.msg);
-        if (s.kind === 'ok' || s.kind === 'idle') return fa('fa-circle-check') + '已同步' + (s.rev ? '・第 ' + s.rev + ' 版' : '') + (hm ? '・' + hm : '');
+        if (s.kind === 'ok' || s.kind === 'idle') return fa('fa-circle-check') + '已同步' + (s.rev ? '・第 ' + esc(s.rev) + ' 版' : '') + (hm ? '・' + hm : '');   // 版號是伺服器回的
         return '';
     }
     // opts：{ app, onConnected() }；回傳 { open, close, destroy, paintButtons(root) }
