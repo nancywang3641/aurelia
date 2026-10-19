@@ -67,7 +67,9 @@
     //   每條 intent 在 wx_core 那邊都已經改講人話了，這裡負責接住三種漏網的：
     //   ①舊資料裡存著協議原文的 ②沒被任何 intent 認出來的 ③模型直接照協議寫的。
     //   她的原話：「不能把格式搞出來，拍給你就是他出現了格式樣式，這就不對」。
-    function sysText(raw) {
+    // 系統通知那行的字：模型寫的、物品名、人名都有，回傳前一律轉成純文字（以前原樣塞進 innerHTML，[系統: <img onerror>] 會跑）
+    function sysText(raw) { return _attr(_sysTextRaw(raw)); }
+    function _sysTextRaw(raw) {
         let t = String(raw == null ? '' : raw).trim();
         const hadPrefix = /^\[\s*(?:系統|系统|System|Notice)\s*[:：]/i.test(t);
         t = t.replace(/^\[\s*(?:系統|系统|System|Notice)\s*[:：]\s*/i, '').trim();
@@ -341,7 +343,7 @@
                 if (_tl) return this._toolFold(_tl, msg, animClass, opacityStyle, dataAttr, chatId, msgIndex);
                 return `<div class="wx-system-notice ${animClass}" style="${opacityStyle}" ${dataAttr}>${sysText(displayContent)}</div>`;
             }
-            if (msg.type === 'time') return `<div class="wx-time-stamp ${animClass}" style="${opacityStyle}" ${dataAttr}>${msg.content}</div>`;
+            if (msg.type === 'time') return `<div class="wx-time-stamp ${animClass}" style="${opacityStyle}" ${dataAttr}>${_attr(msg.content)}</div>`;
             
             let html = msg.content || "";
             // 處理統一格式的系統消息：[系統: Accept/Return 物品名|ID] 或 [系統: Accept/Return 金額|ID]
@@ -402,7 +404,7 @@
                 // 支援 img_ (Settings) 和 avt_ (Contacts) 兩種前綴
                 if (avatarUrl.startsWith('img_') || avatarUrl.startsWith('avt_')) {
                     avatarStyle = `background-image: url('${defaultUrl}');`;
-                    dbDataAttr = `data-db-bg="${avatarUrl}" class="wx-bubble-avatar db-load-target"`;
+                    dbDataAttr = `data-db-bg="${_attr(avatarUrl)}" class="wx-bubble-avatar db-load-target"`;
                 } else {
                     avatarStyle = `background-image: url('${_cssUrl(avatarUrl)}')`;
                     dbDataAttr = `class="wx-bubble-avatar"`;
@@ -425,7 +427,7 @@
             //    擺在這裡是因為頭像要等上面那段算完才拿得到。
             if (msg.isLoading) {
                 const _tAvatar = /class="/.test(dbDataAttr) ? dbDataAttr.replace('class="', 'class="pbub-avatar ') : `${dbDataAttr} class="pbub-avatar"`;
-                const _tWho = (safeChat.isGroup && msg.sender) ? `<div class="wx-group-name">${msg.sender}</div>` : '';
+                const _tWho = (safeChat.isGroup && msg.sender) ? `<div class="wx-group-name">${_attr(msg.sender)}</div>` : '';
                 return `<div class="wx-msg-row you pbub-row pbub-other ${animClass}" style="${opacityStyle}" data-loading="true"><div style="${avatarStyle}" ${_tAvatar}></div><div class="pbub-wrap wx-bubble-wrap">${_tWho}<div class="wx-bubble-content pbub-bubble wx-typing-indicator"><div class="wx-typing-dots-wrap"><span></span><span></span><span></span></div></div></div></div>`;
             }
 
@@ -439,7 +441,7 @@
             
             let nameHTML = "";
             if (safeChat.isGroup && !msg.isMe && msg.sender) {
-                nameHTML = `<div class="wx-group-name">${msg.sender}</div>`;
+                nameHTML = `<div class="wx-group-name">${_attr(msg.sender)}</div>`;
             }
             
             // 引用回覆的灰塊：照微信擺在泡泡內、正文下面。解析與 HTML 跟 VN 手機共用 OS_API.chatQuote
@@ -481,7 +483,12 @@
             let _autoN = 0;
             const autoRef = (kind) => 'auto_' + kind + '_' + (msgIndex == null ? 'x' : msgIndex) + '_' + (_autoN++);
             const app = "(window.parent.wxApp || window.wxApp)"; const safeId = String(chatId);
-            html = html.replace(tagRe(MSG_TAG.TRANSFER), (match, tag, content) => {
+            // 🧼 標籤換成的卡片是程式組的（裡面的字各自轉過），標籤外面的字是模型或對方寫的原文：
+            //   卡片先寄放成 <span data-wxc="n"></span>，最後整段過 AUI.safeHtml（粗體換行照留，<script>、on*、javascript: 拿掉）再把卡片放回去。
+            //   🚨以前整段原樣塞進泡泡，AI 回覆裡一個 <img src=x onerror=…> 就會在她的頁面上跑。
+            const _cards = [];
+            const _rep = (re, fn) => { html = html.replace(re, function () { return '<span data-wxc="' + (_cards.push(String(fn.apply(null, arguments))) - 1) + '"></span>'; }); };
+            _rep(tagRe(MSG_TAG.TRANSFER), (match, tag, content) => {
                 // 解析新格式：[转账: 价格|指定人物|備註|Tnx_ID]
                 // 兼容舊格式：[转账: 价格|備註|Tnx_ID] 或 [转账: 价格|Txn_ID]
                 let amount = '0', targetName = '', memo = '', txnId = '';
@@ -540,8 +547,8 @@
                 const status = STATIC ? '' : (_card ? _card.status : localStorage.getItem(uniqueId));
                 let state = '';   // ''＝待收、is-ok＝已收款、is-back＝已退還／已過期（顏色在 wx_theme.js 的 .wx-tf-card）
                 let icon = "¥";
-                let title = targetName ? `轉帳給${targetName}` : "轉帳給朋友";
-                let sub = memo || "微信轉帳";
+                let title = targetName ? `轉帳給${_attr(targetName)}` : "轉帳給朋友";
+                let sub = memo ? _attr(memo) : "微信轉帳";
                 let clickAction = `onclick="${app}.openTransfer('${_jsArg(amount)}', '${_jsArg(uniqueId)}', this, ${isMe ? 1 : 0})"`;   // 帶上是不是自己發的：自己轉出去的不能自己收
                 
                 if (isMe) {
@@ -576,8 +583,8 @@
                 // 劇情手機：不能點，改掛單號與金額——後面那行「收下了／退回」要靠它找回這一張（markTransfer）
                 //   拿掉 " 是跟 vn_phone 找卡那邊對好的（它查的時候也先拿掉 "），其他字照常轉
                 if (STATIC) clickAction = `data-tf-id="${_attr(String(txnId).replace(/"/g, ''))}" data-tf-amt="${_attr(String(amount).replace(/"/g, ''))}"`;
-                return `<div class="wx-tf-card ${state}" ${clickAction}><div class="wx-tf-row"><div class="wx-tf-icon">${icon}</div><div class="wx-tf-text"><div class="wx-tf-title">${title}</div><div class="wx-tf-sub">${sub}${(!isMe && !status) ? ' ¥' + amount : ''}</div></div></div></div>`; });
-            html = html.replace(tagRe(MSG_TAG.GIFT), (m, t, content) => {
+                return `<div class="wx-tf-card ${state}" ${clickAction}><div class="wx-tf-row"><div class="wx-tf-icon">${icon}</div><div class="wx-tf-text"><div class="wx-tf-title">${title}</div><div class="wx-tf-sub">${sub}${(!isMe && !status) ? ' ¥' + _attr(amount) : ''}</div></div></div></div>`; });
+            _rep(tagRe(MSG_TAG.GIFT), (m, t, content) => {
                 // 解析新格式：[Gift: emoji+物品名|備註|Gft_ID] 或舊格式 [Gift: 物品名-价格]
                 let giftName = '', memo = '', giftId = '', price = "心意無價";
                 const parts = content.split(/[|｜]/).map(s => s.trim()).filter(s => s);
@@ -611,7 +618,7 @@
                 let name = giftName;
                 const emojiMatch = giftName.match(/^([\uD800-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u27FF])/);
                 if (emojiMatch) {
-                    icon = emojiMatch[0];
+                    icon = _attr(emojiMatch[0]);
                     name = giftName.replace(icon, '').trim();
                 }
                 
@@ -656,30 +663,30 @@
                     }
                 }
                 if (STATIC) clickAction = '';
-                return `<div class="wx-gift-card-blue ${extraClass}" style="opacity:${opacity}" ${clickAction}><div class="wx-gift-top"><div class="wx-gift-icon-gold">${icon}</div><div class="wx-gift-title-text">${memo || '送你一份心意'}</div></div><div class="wx-gift-footer">${statusLabel}</div></div>`;
+                return `<div class="wx-gift-card-blue ${extraClass}" style="opacity:${opacity}" ${clickAction}><div class="wx-gift-top"><div class="wx-gift-icon-gold">${icon}</div><div class="wx-gift-title-text">${memo ? _attr(memo) : '送你一份心意'}</div></div><div class="wx-gift-footer">${statusLabel}</div></div>`;
             });
             // 🛵 外送單（wx_takeout.js）：狀態記在這間的卡片帳本，卡片自己會照時間往前走
             const _TO = win.WX_TAKEOUT || window.WX_TAKEOUT;
             if (_TO && STATIC) {
                 const _toSender = (msg && (msg.sender || msg.senderName)) || '';
-                html = html.replace(tagRe(MSG_TAG.TAKEOUT_ASK), (m, t, content) => _TO.staticCard('ask', content, !!isMe, _toSender));
-                html = html.replace(tagRe(MSG_TAG.TAKEOUT), (m, t, content) => _TO.staticCard('order', content, !!isMe, _toSender));
+                _rep(tagRe(MSG_TAG.TAKEOUT_ASK), (m, t, content) => _TO.staticCard('ask', content, !!isMe, _toSender));
+                _rep(tagRe(MSG_TAG.TAKEOUT), (m, t, content) => _TO.staticCard('order', content, !!isMe, _toSender));
             } else if (_TO) {
                 const _toSender = (msg && (msg.sender || msg.senderName)) || '';
-                html = html.replace(tagRe(MSG_TAG.TAKEOUT_ASK), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'ask', content: content, alias: autoRef('toa') }));
-                html = html.replace(tagRe(MSG_TAG.TAKEOUT), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'order', content: content, alias: autoRef('to') }));
+                _rep(tagRe(MSG_TAG.TAKEOUT_ASK), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'ask', content: content, alias: autoRef('toa') }));
+                _rep(tagRe(MSG_TAG.TAKEOUT), (m, t, content) => _TO.cardHTML({ chatId: safeId, msgIndex: msgIndex, isMe: !!isMe, sender: _toSender, mode: 'order', content: content, alias: autoRef('to') }));
             }
             // 圖片走三個手機 app 共用的管道；ref 帶 chatId，訊息位置由 .wx-msg-row 的 data-msg-idx 補上
-            html = html.replace(tagRe(MSG_TAG.IMAGE), (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), STATIC ? { app: 'vn_phone' } : { app: 'wx', ref: safeId }) : content; });
+            _rep(tagRe(MSG_TAG.IMAGE), (m, t, content) => { const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE; return PI ? PI.render(content.trim(), STATIC ? { app: 'vn_phone' } : { app: 'wx', ref: safeId }) : _attr(content); });
             // 📞 通話記錄：一個電話圖示加一句話，裝在泡泡裡（微信原生就是這樣）。
             //    她填的備註原樣顯示，沒填就寫「通話已結束」。
-            html = html.replace(tagRe(MSG_TAG.CALL), (m, t, txt) => {
+            _rep(tagRe(MSG_TAG.CALL), (m, t, txt) => {
                 const note = String(txt || '').replace(/['"]/g, '').trim();
                 return '<span class="wx-call-rec"><i class="fa-solid fa-phone"></i>'
-                    + (note || '通話已結束') + '</span>';
+                    + (note ? _attr(note) : '通話已結束') + '</span>';
             });
             // 🎙 語音：她自己錄的（msg.voiceAudio）秒數是真的、點下去播真的聲音；其他語音照字數估秒數、點下去看字
-            html = html.replace(tagRe(MSG_TAG.VOICE), (m, t, txt) => {
+            _rep(tagRe(MSG_TAG.VOICE), (m, t, txt) => {
                 const cleanTxt = txt.replace(/['"]/g, '').trim();
                 const real = !!(msg && msg.voiceAudio);
                 const _said = (win.OS_VN_FOREIGN && win.OS_VN_FOREIGN.splitTail) ? win.OS_VN_FOREIGN.splitTail(cleanTxt).orig : cleanTxt;   // 外語語音後面的翻譯不算秒數
@@ -691,7 +698,7 @@
                     : `onclick="${app}.toggleVoice(this, '${encodeURIComponent(cleanTxt)}')"`;
                 return `<div class="wx-vmsg${isMe ? ' wx-vmsg--me' : ''}" ${vClick}><div class="wx-vmsg-box wx-vmsg-len${len}"><i class="fa-solid fa-volume-high wx-vmsg-icon"></i><span class="wx-vmsg-bars"><i></i><i></i><i></i><i></i><i></i></span><span class="wx-vmsg-dur">${sec}"</span></div><div class="wx-vmsg-trans"></div></div>`;
             });
-            html = html.replace(tagRe(MSG_TAG.REDPACKET), (match, tag, content) => {
+            _rep(tagRe(MSG_TAG.REDPACKET), (match, tag, content) => {
                 // 解析內容：支持 [金額|備註|紅包ID] 或舊格式
                 let amount = '0', memo = '恭喜發財，大吉大利', packetId = '';
                 const parts = content.split(/[|｜]/).map(s => s.trim()).filter(s => s);
@@ -714,7 +721,7 @@
                 }
                 
                 if (!packetId) packetId = autoRef('rp');
-                if (STATIC) return `<div class="wx-rpc-card"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${memo}</div><div class="wx-rpc-sub">領取紅包</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
+                if (STATIC) return `<div class="wx-rpc-card"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${_attr(memo)}</div><div class="wx-rpc-sub">領取紅包</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
 
                 // 🚨 同一個單號長在不同則訊息上＝不同的紅包（模型很愛重用單號，重用時第二包會
                 //    讀到第一包的領取紀錄，一發出來就「已領完」）。跟轉帳一樣綁上 msgIndex，
@@ -768,12 +775,12 @@
                         else if (_list.some(function (x) { try { return x && win.WX_ME.isMine(x.name); } catch (e) { return false; } })) { rpSub = '已領取'; }
                     }
                 } catch (e) {}
-                return `<div class="wx-rpc-card ${rpDim}" onclick="${app}.openRedPacketById('${_jsArg(rpRef)}')"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${memo}</div><div class="wx-rpc-sub">${rpSub}</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
+                return `<div class="wx-rpc-card ${rpDim}" onclick="${app}.openRedPacketById('${_jsArg(rpRef)}')"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${_attr(memo)}</div><div class="wx-rpc-sub">${rpSub}</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
             });
-            html = html.replace(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; let v = 0; for (const ch of name) v = (v * 31 + ch.codePointAt(0)) % 4; return `<div class="wx-loc-card"><div class="wx-loc-map wx-loc-v${v}"><div class="wx-loc-streets"></div><div class="wx-loc-pin"><i class="fa-solid fa-location-dot"></i></div></div><div class="wx-loc-info"><div class="wx-loc-name">${name}</div><div class="wx-loc-addr">${address}</div></div></div>`; });
-            html = html.replace(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${_jsArg(content)}')"` : ''; return `<div ${vidClick} class="wx-vcard${isUrl ? ' is-link' : ''}"><div class="wx-vcard-bg"></div><div class="wx-vcard-play"></div><div class="wx-vcard-title"><i class="fa-solid fa-video"></i> ${videoTitle}</div><div class="wx-vcard-dur">00:15</div></div>`; });
-            html = html.replace(tagRe(MSG_TAG.FILE), (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${filename}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
-            html = html.replace(tagRe(MSG_TAG.STICKER), (match, tag, content) => {
+            _rep(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; let v = 0; for (const ch of name) v = (v * 31 + ch.codePointAt(0)) % 4; return `<div class="wx-loc-card"><div class="wx-loc-map wx-loc-v${v}"><div class="wx-loc-streets"></div><div class="wx-loc-pin"><i class="fa-solid fa-location-dot"></i></div></div><div class="wx-loc-info"><div class="wx-loc-name">${_attr(name)}</div><div class="wx-loc-addr">${_attr(address)}</div></div></div>`; });
+            _rep(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${_jsArg(content)}')"` : ''; return `<div ${vidClick} class="wx-vcard${isUrl ? ' is-link' : ''}"><div class="wx-vcard-bg"></div><div class="wx-vcard-play"></div><div class="wx-vcard-title"><i class="fa-solid fa-video"></i> ${_attr(videoTitle)}</div><div class="wx-vcard-dur">00:15</div></div>`; });
+            _rep(tagRe(MSG_TAG.FILE), (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${_attr(filename)}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
+            _rep(tagRe(MSG_TAG.STICKER), (match, tag, content) => {
                 content = content.trim();
                 const _w = window.parent || window;
                 let src = null;
@@ -795,14 +802,14 @@
                 }
                 return `<div class="wx-stk-fallback-box">${safeLabel}</div>`;
             });
-            html = html.replace(tagRe(MSG_TAG.WBSHARE), (match, _tag, content) => {
+            _rep(tagRe(MSG_TAG.WBSHARE), (match, _tag, content) => {
                 const parts = content.split('|');
                 const author = (parts[0] || '').trim();
                 const text   = (parts[1] || '').trim();
                 const short  = text.length > 60 ? text.substring(0, 60) + '…' : text;
-                return `<div class="wx-wb-share-card"><div class="wx-wb-share-top"><span class="wx-wb-share-logo">微博</span><span style="font-size:11px; opacity:0.8; margin-left:4px;">分享</span></div><div class="wx-wb-share-body"><div class="wx-wb-share-author">@${author}</div><div class="wx-wb-share-text">${short || '（查看原貼）'}</div></div></div>`;
+                return `<div class="wx-wb-share-card"><div class="wx-wb-share-top"><span class="wx-wb-share-logo">微博</span><span style="font-size:11px; opacity:0.8; margin-left:4px;">分享</span></div><div class="wx-wb-share-body"><div class="wx-wb-share-author">@${_attr(author)}</div><div class="wx-wb-share-text">${short ? _attr(short) : '（查看原貼）'}</div></div></div>`;
             });
-            html = html.replace(tagRe(MSG_TAG.APPSHARE), (match, _tag, content) => {
+            _rep(tagRe(MSG_TAG.APPSHARE), (match, _tag, content) => {
                 const esc = (t) => String(t || '').replace(/&/g, '&amp;').replace(/</g, '&lt;');
                 const parts = String(content || '').split('|');
                 const src = esc((parts[0] || '').trim() || 'App');
@@ -813,7 +820,7 @@
             });
             // 鏈接/網頁分享卡（跑團用、不帶網址；重用 vn_styles.css 的 .wx-link-msg）
             // 寫成「標題|網址」時後半段是真網址：不印出來，整張卡點了開那個網址（劇情手機以前就這樣，微信這邊補上）
-            html = html.replace(tagRe(MSG_TAG.LINK), (m, _tag, body) => {
+            _rep(tagRe(MSG_TAG.LINK), (m, _tag, body) => {
                 const lp = String(body || '').split(/[|｜]/);
                 const title = lp[0], lUrl = (lp[1] || '').trim();
                 const isUrl = /^(https?:\/\/|www\.)/i.test(lUrl);
@@ -822,15 +829,18 @@
                 return `<div class="wx-link-msg${isUrl ? ' clickable' : ''}"${click}><div class="wx-link-body"><div class="wx-link-title">${safe}</div><div class="wx-link-foot"><i class="fa-solid fa-link"></i> 網頁連結</div></div><div class="wx-link-thumb"><i class="fa-solid fa-globe"></i></div></div>`;
             });
             // 收款碼（假容器：程式畫 QR 樣式 SVG，跑團用、不用生圖；重用 vn_styles.css 的 .wx-receive-msg）
-            html = html.replace(tagRe(MSG_TAG.PAYCODE), (m, _tag, body) => {
+            _rep(tagRe(MSG_TAG.PAYCODE), (m, _tag, body) => {
                 const parts = String(body || '').split('|'); const amt = (parts[0] || '').trim(); const memo = (parts[1] || '').trim();
                 const isNum = /^\d+(\.\d+)?$/.test(amt);
                 const amtDisp = (isNum ? '¥' + amt : (amt || '金額任意')).replace(/&/g,'&amp;').replace(/</g,'&lt;');
                 const memoDisp = (memo || '掃碼支付給對方').replace(/&/g,'&amp;').replace(/</g,'&lt;');
                 return `<div class="wx-receive-msg"><div class="wx-receive-head"><i class="fa-solid fa-wallet"></i> 微信收款</div><div class="wx-receive-qr">${this._fakeQrSvg(body || 'qr')}</div><div class="wx-receive-amt">${amtDisp}</div><div class="wx-receive-foot">${memoDisp}</div></div>`;
             });
-            html = html.replace(/\n/g, '<br>');
-            return html;
+            // 標籤外面的字消毒、換行變 <br>，再把寄放的卡片放回去（只認原樣的佔位；寫在屬性裡的那種被轉義過，比對不到，不會放進屬性）
+            const _A = win.AUI || window.AUI;
+            const _HOLD = /<span data-wxc="(\d+)"><\/span>/g;
+            if (_A && _A.safeHtml) return _A.safeHtml(html).replace(/\n/g, '<br>').replace(_HOLD, (m, i) => _cards[+i] || '');
+            return html.split(/<span data-wxc="(\d+)"><\/span>/).map((p, k) => (k % 2) ? (_cards[+p] || '') : _attr(p).replace(/\n/g, '<br>')).join('');   // 沒有 AUI（不該發生）：整段當純文字
         },
 
         // 轉帳卡翻成已收款／已退還。字跟微信那邊的狀態一字不差（上面 processModules 的轉帳那段）。
