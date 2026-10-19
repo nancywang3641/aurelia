@@ -112,8 +112,9 @@
             //    開關跟 lobby_decider.js、npc_decide.js 讀同一格存檔；拿掉那兩支檔時，丹照舊站著（主迴圈沒人接手就走 noWander）
             const decider = r.key === 'dan' && S.scene === 'cafe' && (() => { try { return localStorage.getItem('npc_decide_on') !== '0'; } catch (e) { return true; } })();
             if (!decider && Math.random() >= r.chance) return;
-            const x = zone.x + Math.random() * zone.w;
-            const y = zone.y + Math.random() * zone.h;
+            // 隨機點落在家具或牆裡就挪到最近走得到的地方（不然一出生就卡在桌子裡，避擋路的漫步也走不出來）
+            const sp = _b.findFreeSpot(zone.x + Math.random() * zone.w, zone.y + Math.random() * zone.h);
+            const x = sp.x, y = sp.y;
             _b.addNpc({ key:r.key, name:r.name, personaFull:r.personaFull, subTitle:r.subTitle,
                      x, y, h:200, src:{ sheet:r.walk }, portrait:r.portrait,
                      noWander:true, decider, avoidBlocks:true, homeRect:zone });
@@ -233,7 +234,14 @@
             return;
         }
         if (SC.zhiwei) {   // 占卜小屋：紫薇老師坐鎮占卜桌、不漫步；同白兔那套(立繪+對話框)，另有「占卜」鈕開面板
-            const zp = CFG.points.zhiweiPos || SC.zhiwei;
+            const zp = Object.assign({}, CFG.points.zhiweiPos || SC.zhiwei);
+            // 🪑 她的高背椅在她身後：深度只看腳底線，腳要落在椅子底邊前面，不然整個人被椅子蓋住、只露出椅腳間的腳
+            //    （10-19：舊預設站位 y430、椅子底邊 y439）。她在擺設模式存過舊站位也一樣 → 生成時照椅子現在的位置挪到前面一點
+            const chair = (CFG.layout || []).find(o => /chair_zhiwei/.test(o.file || ''));
+            if (chair) {
+                const cs = chair.s || 1, cBottom = chair.y + chair.h * cs + (chair.zb || 0);
+                if (zp.x >= chair.x && zp.x <= chair.x + chair.w * cs && zp.y > chair.y && zp.y <= cBottom) zp.y = cBottom + 7;
+            }
             // 🎯 互動區綁在占卜桌上（Rae 2026-08-21 指定）：她坐在桌後，桌子的碰撞帶把人擋在 260px 外，
             //    靠 INTERACT_R 那顆圓永遠搆不到——坐在對面得繞到她正面才點得到。
             //    改成「站在桌子這塊範圍旁邊就算搆得到」＝坐下來就能點，也涵蓋桌子左右前角。

@@ -78,6 +78,9 @@
             // 🚨 沒有 mask：新底圖的地板形狀跟舊的對不上，碰撞改走 boundary 鋼索（同占卜小屋／帽匠工坊）。
             base: 'lobby_cafe_base_v3.png',
             upper: 'lobby_cafe_upper_v3.png',   // 前緣那排花圃＋台階：壓在最上層，小人走到下緣會被它擋住腳
+            // 客人出沒區（npcZone）的底線：花圃頂邊約 y805～865，腳再往下整個人就被花圃蓋住（10-19：雷伊漫步到 y914，只剩頭頂）。
+            //   她在擺設模式存過的出沒區也一樣收到這條線（_loadCfg）；她自己走過去照舊只擋腳
+            npcMaxY: 835,
             cfgKey: 'lobby_stage_layout_cafe_v4',   // v4＝沙發組拆成三件（存檔是整份覆蓋，不升版會蓋掉新佈局）
             layout: [   // ⬇ Rae 擺設模式輸出（複製數據）；改版請直接換這份
                 { file: "lobby_cafe_obj_mat_v3.png", x: 780, y: 387, w: 637, h: 383, footH: 0, s: 0.234, layer: "floor", noCollide: true },   // 長毯(中央走道，平貼地板)
@@ -272,7 +275,7 @@
             points: {
                 player: { x: 768, y: 790 },
                 arrive: { x: 768, y: 800 },   // 從門口進來的落點(小屋門在下緣中央)
-                zhiweiPos: { x: 768, y: 430 },   // 紫薇坐桌子後面(擺設模式可拖)
+                zhiweiPos: { x: 768, y: 446 },   // 紫薇站在高背椅前、桌子後面(擺設模式可拖；腳要在椅子底邊 y439 前面，不然被椅子蓋住)
                 // 可走範圍：地板那塊梯形(牆往前是外八)。角點在擺設模式可拖。
                 boundary: [
                     { x: 160, y: 330 }, { x: 1385, y: 330 },
@@ -287,7 +290,7 @@
                 { x: 700, y: 818, w: 136, h: 44, to: 'city', spawn: { x: 329, y: 600 } },
             ],
             doorsV: 1,
-            zhiwei: { x: 768, y: 430 },   // 觸發 lobby_npcs 的 if(SC.zhiwei)：紫薇老師坐鎮
+            zhiwei: { x: 768, y: 446 },   // 觸發 lobby_npcs 的 if(SC.zhiwei)：紫薇老師坐鎮
             // 🔮 占卜桌＝可點的互動點（點了開占卜面板；走近紫薇則是純聊天，兩件事分開）。
             //    obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上，不用回來改座標。
             hotspots: [
@@ -411,7 +414,9 @@
                 { file: "city/obj/planter_medium_01_day.png", x: 503, y: 916, w: 310, h: 188, footH: 86, s: 0.23 },
             ],
             points: {
-                npcZone: { x: 668, y: 968, w: 1430, h: 869 },   // 客人出沒區（Rae定版）
+                // 客人出沒區＝廣場中央（遮罩全可走）。10-19 換掉 7 月舊大地圖時定的 {668,968,1430,869}：
+                //   地板換成 1536×1024 之後那塊幾乎全在地圖外，丹、雷伊在廣場都生在地圖外、永遠看不到
+                npcZone: { x: 480, y: 150, w: 560, h: 760 },
                 player: { x: 768, y: 620 },
                 arrive: { x: 768, y: 580 },   // 從書咖/大廳出來的落點（廣場中央）
                 actorScale: 0.32,             // 🗺️ 地圖俯視小棋子（脫鉤鏡頭後≈螢幕高比例）
@@ -447,9 +452,10 @@
         'city/obj/npc_house_03.png': 'city/obj/npc_house_03_night.png',
         'city/obj/npc_house_04.png': 'city/obj/npc_house_04_night.png',
         'city/obj/tarot_hut_day.png': 'city/obj/tarot_hut_night.png',
-        'city/obj/hatter_shop_day.png': 'city/obj/hatter_shop_night.png',
+        'city/obj/hatter_shop_day.png': 'city/obj/hatter_shop_night_v2.png',   // v2（10-19）：拿掉夜版外圍那圈白邊（去背沒去乾淨的貼紙邊，夜裡整棟像描了白框；sound-files c1dd527）
         'city/obj/luna_nursery_day.png': 'city/obj/luna_nursery_night.png',
         'city/obj/city_bench_01_day.png': 'city/obj/city_bench_01_night.png',
+        'city/obj/city_bench_06_day.png': 'city/obj/city_bench_06_night.png',   // 10-19 補：原本沒畫夜版，夜裡一張白椅子；照同批長椅的白天→夜版顏色換出來（sound-files 05f8fd1）
         'city/obj/city_bench_horizontal_02_day.png': 'city/obj/city_bench_horizontal_02_night.png',
         'city/obj/city_bench_horizontal_03_day.png': 'city/obj/city_bench_horizontal_03_night.png',
         'city/obj/city_bench_horizontal_05_day.png': 'city/obj/city_bench_horizontal_05_night.png',
@@ -653,6 +659,17 @@
                 }
             }
         } catch (e) {}
+        // 出沒區要在地圖裡：存檔或預設留著舊地圖的大區域（見 SCENES.city 的 npcZone），切到地圖範圍；切完太小就用這個場景的預設
+        const _zoneInMap = z => {
+            if (!z) return null;
+            const x0 = Math.max(0, z.x), y0 = Math.max(0, z.y), x1 = Math.min(MAP_W, z.x + z.w), y1 = Math.min(MAP_H, z.y + z.h);
+            return (x1 - x0 >= 200 && y1 - y0 >= 150) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+        };
+        if (points.npcZone) points.npcZone = _zoneInMap(points.npcZone) || _zoneInMap(SC.points && SC.points.npcZone) || points.npcZone;
+        // 前緣有壓頂層的場景：出沒區別伸進被蓋住的那一帶（見 SCENES.cafe.npcMaxY）
+        if (SC.npcMaxY && points.npcZone && points.npcZone.y + points.npcZone.h > SC.npcMaxY) {
+            points.npcZone = Object.assign({}, points.npcZone, { h: Math.max(40, SC.npcMaxY - points.npcZone.y) });
+        }
         const doors = allDoors.filter(d => !_doorOff(d));
         const doorsOff = allDoors.filter(_doorOff);   // 這次被濾掉的門：擺設存檔時照原座標一起寫回，序號才對得上
         return { layout, points, doors, doorsOff, baseOverride, maskOverride };
@@ -688,6 +705,21 @@
         const feet = alpha ? [] : CFG.layout.filter(o => !o.noCollide && !o._plotOff).map(footRect);   // alphaFoot 不用腳印；noCollide 物件(城市前景)不擋路→碰撞全走遮罩
         BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
         ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha && !o.noCollide && !o._plotOff) : [];   // 只納入已載好 alpha 且沒設「不擋路」的物件（noCollide/隱藏地塊 在 alphaFoot 也生效）
+        _unstickWanderers();
+    }
+    // 隨機刷的路人（會避擋路的那種，像廣場的丹、雷伊）：擋路的形狀是陸續到的（遮罩載完、建築照圖形狀算完都比出生晚），
+    //   出生時看起來空的地方之後可能變成長椅、建築底座 → 每次擋路一變就把卡在裡面的彈到最近的地板（10-19：丹站在長椅、建築底座上）
+    //   站在櫃檯後面那種定點 NPC 沒有 avoidBlocks，不動；擺設模式不動
+    function _unstickWanderers() {
+        if (S.edit || !S.npcs) return;
+        S.npcs.forEach(n => {
+            if (!n.avoidBlocks || !blocked(n.x, n.y)) return;
+            const sp = findFreeSpot(n.x, n.y);
+            if (sp.x === n.x && sp.y === n.y) return;
+            n.x = sp.x; n.y = sp.y; n.dest = null;
+            placeActor(n);
+            if (n.tag) placeNpcExtras(n);
+        });
     }
     // ── 🏘 地塊入住狀態（NPC房：空地框↔蓋房二選一顯示；經濟③入住流程接 setPlot）──
     //    小資料走 localStorage（🚨別動 OS_DB schema——升版加 store 會 deadlock）

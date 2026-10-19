@@ -638,7 +638,9 @@
 .void-tab.mode-404 .lb-dock-btn:hover { background:rgba(0,18,4,0.9); }
 .void-tab.mode-404 .lb-dock-ic { filter:sepia(1) saturate(3) hue-rotate(80deg) brightness(0.95); }
 .void-tab.mode-404 .lb-dock-label { font-size:0; color:#9ef3b0; }
-.void-tab.mode-404 .lb-dock-label::after { content:attr(data-cn-404); font-size:11px; }
+/* 黑話多是四個字（異常紀錄、案件日誌…）：照平常的字距會在鈕裡折成兩行，整條欄變高、垂直置中往上頂到右上那排工具鈕
+   （10-19 電腦寬度量到：欄頂 y77 蓋住齒輪一半、筆那顆整個看不到）→ 不折行、字距歸零，四個字剛好一行 */
+.void-tab.mode-404 .lb-dock-label::after { content:attr(data-cn-404); font-size:11px; white-space:nowrap; letter-spacing:0; }
 @media (max-width:560px) {
     .lb-dock { right:6px; gap:6px; }
     .lb-dock-btn { width:46px; padding:5px 3px 4px; border-radius:11px; }
