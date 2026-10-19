@@ -282,7 +282,11 @@
             stage.removeEventListener('dblclick', onDbl);
             if (ro) { try { ro.disconnect(); } catch (err) {} }
             img.onload = img.onerror = null;
-            img.removeAttribute('src');
+            // 停掉還在下載的底圖：換成一張 1×1 的空白圖讓這次載入「做完」。
+            //   🚨 不能 removeAttribute('src')：舞台這時通常已經被地圖 app 從畫面拆下來（重開地圖先清容器才 mount 新的），
+            //   拆下來的 <img> 拿掉 src 後瀏覽器會一直留著它等「圖片更新」做完，連同整個地圖畫面、圓點和監聽都放不掉
+            //   （10-20 手機記憶體巡查：每開一次地圖多 148 個節點、17 個監聽，快照追到 document 抓著這些沒有 src 的 <img>）
+            img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
             stage.classList.remove('am-imap', 'dragging');
             if (active && active.stage === stage) active = null;
         }

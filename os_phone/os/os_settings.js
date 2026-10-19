@@ -764,27 +764,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         else _lsSet('extension_settings', JSON.stringify(W.extension_settings), '酒館擴展設定');
     }
 
-    function launchApp(container, mode) {
-        const llmConfig = loadLlmConfig();
-        const secLlmConfig = loadSecLlmConfig();
-        const imgConfig = loadImageConfig();
-        const minimaxConfig = loadMinimaxConfig();
-        const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
-        // 🎯 頭像那桶現在接的型號名（自訂接口那條才有）。節點只是預設組，選了之後值就在這幾格裡。
-        const _charModelName = function (cfg) { try { return String((cfg.customApi && cfg.customApi.model) || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); } catch (e) { return ''; } };
-        // 判「是不是一張圖畫得準好幾個角色的那種」＝自訂接口型號名帶 GPT、Gemini、Banana，或 Pollinations 選 NanoBanana／GPT Image。
-        //   只拿來寫說明那一行，不鎖任何東西。（10-15 她：「只有 gemini 或者 banana 才有這種準確可以一次幾個角色的準確度」）
-        const _MULTI_OK = /gpt|gemini|banana/i;
-        const _isGptChar = function (cfg) {
-            try {
-                const svc = (cfg.serviceChar || cfg.serviceLiving || cfg.service) || '';
-                if (svc === 'pollinations') return _MULTI_OK.test(String((cfg.pollinations && cfg.pollinations.model) || ''));
-                if (svc !== 'custom_api') return false;
-                return _MULTI_OK.test(_charModelName(cfg));
-            } catch (e) { return false; }
-        };
-        const tavernExt = loadTavernExtSettings();
-
+    // 設置頁切分頁、角色立繪 UI 這幾支掛在 window 上的小工具：只建一次、只碰 document，不用 launchApp 的任何東西。
+    //   🚨 一定要定義在 launchApp 外面：在 launchApp 裡面建的函式會連帶抓住那一次打開的整個作用域（所有欄位、整份設置畫面），
+    //   掛在 window 上就永遠放不掉（10-20 手機記憶體巡查：快照追到 window._switchAvatarSub 抓著第一次開的那份設置畫面）
+    function _installSettingsHelpers() {
         // 畫廊子 tab 切換 helper（含 avatar/bg 列表 lazy load）
         if (!window._switchOsGalTab) {
             window._switchOsGalTab = function(el, tabId) {
@@ -1231,6 +1214,30 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 refreshList();
             };
         }
+    }
+
+    function launchApp(container, mode) {
+        const llmConfig = loadLlmConfig();
+        const secLlmConfig = loadSecLlmConfig();
+        const imgConfig = loadImageConfig();
+        const minimaxConfig = loadMinimaxConfig();
+        const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
+        // 🎯 頭像那桶現在接的型號名（自訂接口那條才有）。節點只是預設組，選了之後值就在這幾格裡。
+        const _charModelName = function (cfg) { try { return String((cfg.customApi && cfg.customApi.model) || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); } catch (e) { return ''; } };
+        // 判「是不是一張圖畫得準好幾個角色的那種」＝自訂接口型號名帶 GPT、Gemini、Banana，或 Pollinations 選 NanoBanana／GPT Image。
+        //   只拿來寫說明那一行，不鎖任何東西。（10-15 她：「只有 gemini 或者 banana 才有這種準確可以一次幾個角色的準確度」）
+        const _MULTI_OK = /gpt|gemini|banana/i;
+        const _isGptChar = function (cfg) {
+            try {
+                const svc = (cfg.serviceChar || cfg.serviceLiving || cfg.service) || '';
+                if (svc === 'pollinations') return _MULTI_OK.test(String((cfg.pollinations && cfg.pollinations.model) || ''));
+                if (svc !== 'custom_api') return false;
+                return _MULTI_OK.test(_charModelName(cfg));
+            } catch (e) { return false; }
+        };
+        const tavernExt = loadTavernExtSettings();
+
+        _installSettingsHelpers();   // 切分頁、立繪 UI 的 window 小工具（定義在 launchApp 外面，見那支的註解）
 
         // 🔊 角色說話的聲音：總開關＋角色配音名單（OS_VOICE_CAST）＋ElevenLabs 設定
         //    以前的「Minimax／本機／全關閉」三選一拆掉了：名單上的人走他綁的雲端聲音，其他人照「沒在名單上的人」那格
@@ -5280,8 +5287,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             };
 
             // 開著設置頁的時候讓狀態自己跟上；她離開設置頁、這一塊被拆掉就停
+            //   🚨 要看容器還在不在畫面上（isConnected）：整份設置被拆下來時，容器裡的 #ka-state 還找得到，
+            //   只查它的話計時器永遠不停，還把整份設置畫面抓在記憶體裡（10-20 量到每開一次設置多 6,500 個節點、229 個監聽）
             const timer = setInterval(function () {
-                if (!container.querySelector('#ka-state')) { clearInterval(timer); return; }
+                if (!container.isConnected || !container.querySelector('#ka-state')) { clearInterval(timer); return; }
                 refresh();
             }, 2000);
         })();

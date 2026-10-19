@@ -248,20 +248,34 @@
         // 監聽 AVS 更新事件，自動刷新狀態頁
         // 🚨 已經畫著的就原地刷新（refresh 會留在她正在看的那頁、改數值時先不動）；
         //    以前一律 renderInto → 整個重掛、回首頁：按儲存／還原被踢回首頁，改到一半剛好抽完一輪就全沒了
-        win.addEventListener('AVS_VARS_UPDATED', () => {
+        // 🚨 掛在 win 上的這兩個要拆：以前每開一次變數工坊就多掛一組、關掉不拆，每組都抓著那次的整份畫面，
+        //    劇情每更新一次狀態，所有看不到的舊畫面還會跟著重畫一次（10-20 手機記憶體巡查：每開一次多 596 個節點、40 個監聽）。
+        //    同時只會有一個變數工坊 → 開新的先拆上一組；畫面被拆掉以後收到事件也順手拆掉自己
+        if (_offAvsEvents) _offAvsEvents();
+        const onVars = () => {
+            if (!container.isConnected) { off(); return; }
             const stateView = container.querySelector('#avs-view-state');
             if (!stateView || !stateView.classList.contains('active')) return;
             const S = win.OS_AVS_STATE;
             if (S && S.isHost && S.isHost(stateView) && S.refresh) S.refresh();
             else renderStateView(container);
-        });
-
+        };
         // 變數包新增/儲存後重載檔案卡列表——「開始追蹤狀態」在 os_avs_state 那頭生成完只重繪狀態視圖，
         // 檔案列表畫的是 currentPacks 快取，不收事件重載的話要關掉重開面板才看得到新卡
-        win.addEventListener('AVS_PACKS_UPDATED', () => {
-            if (container.isConnected) loadAllData(container);
-        });
+        const onPacks = () => {
+            if (!container.isConnected) { off(); return; }
+            loadAllData(container);
+        };
+        const off = () => {
+            win.removeEventListener('AVS_VARS_UPDATED', onVars);
+            win.removeEventListener('AVS_PACKS_UPDATED', onPacks);
+            if (_offAvsEvents === off) _offAvsEvents = null;
+        };
+        win.addEventListener('AVS_VARS_UPDATED', onVars);
+        win.addEventListener('AVS_PACKS_UPDATED', onPacks);
+        _offAvsEvents = off;
     }
+    let _offAvsEvents = null;   // 上一次打開變數工坊掛在 win 上的那組監聽（見 launchApp 尾端）
 
     // 🧬 共用：AI 生成 schema → 轉變數 → 存變數包 → 同步世界書 → 觸發初始填充。
     // 兩個入口共用（變數包「AI 從世界生成」按鈕 + AVS 狀態「開始追蹤狀態」按鈕）；UI 更新由各呼叫端自己做。
