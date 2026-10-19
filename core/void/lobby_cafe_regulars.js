@@ -27,6 +27,11 @@
     const SEAT_Y = 0.55;
     const HIP_AT = 0.86;        // 坐姿圖從上往下多少是屁股（對到椅面）
 
+    // 抓不到的圖換 raw 再試一次（素材庫超過 jsDelivr 的上限會隨機 403，見 lobby_stage.js 的 _sfRetry）
+    function _retry(img, onFail) {
+        const b = window.LobbyStage && window.LobbyStage._b;
+        if (b && b.sfRetry) b.sfRetry(img, onFail); else img.onerror = onFail;
+    }
     // 長條圖 → 3×4 走路圖（列：往下／往左／往右／往上；欄：跳起來／站著／跳起來）
     const _sheets = new Map();
     function _sheetOf(look) {
@@ -51,7 +56,7 @@
                     cv.toBlob(b => res(b ? URL.createObjectURL(b) : null), 'image/png');
                 } catch (e) { console.warn('[CafeRegulars] 拼走路圖失敗', look, e); res(null); }
             };
-            img.onerror = () => res(null);
+            _retry(img, () => res(null));
             img.src = LOOK_BASE + look + '.webp';
         });
         _sheets.set(look, p);
@@ -66,7 +71,7 @@
             const img = new Image();
             img.crossOrigin = 'anonymous';
             img.onload = () => res(img);
-            img.onerror = () => res(null);
+            _retry(img, () => res(null));
             img.src = SIT_BASE + look + '.webp';
         });
         _sitImgs.set(look, p);

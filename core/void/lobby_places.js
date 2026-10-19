@@ -658,8 +658,12 @@
     function _thumb(file) {
         if (_thumbs.has(file)) return _thumbs.get(file);
         const job = (async () => {
-            const r = await fetch(CDN + file, { mode: 'cors' });
-            if (!r.ok) throw new Error('HTTP ' + r.status);
+            let r = await fetch(CDN + file, { mode: 'cors' }).catch(() => null);
+            if (!r || !r.ok) {   // 素材庫超過 jsDelivr 上限會隨機 403：同一張換 raw 再抓一次（見 lobby_stage.js 的 _sfMirror）
+                const alt = window.LobbyStage?._b?.sfMirror?.(CDN + file);
+                if (alt) r = await fetch(alt, { mode: 'cors' });
+            }
+            if (!r || !r.ok) throw new Error('HTTP ' + (r ? r.status : '連不上'));
             const raw = URL.createObjectURL(await r.blob());
             try {
                 const img = new Image();

@@ -683,20 +683,22 @@
 
 /* 🎎 角落玩偶（貓／高帽＋徽章／菱形＋貓頭）：阿洛另外出的透明底小圖，貼在 CSS 框上。
    寬度用百分比、高度交給 aspect-ratio → 面板放大縮小玩偶跟著等比例走，永遠不會被拉扁。
-   位置照阿洛原圖上它們在框上的位置換算（貓在右上、略微探出上緣；另兩組坐在下緣）。 */
+   位置照阿洛原圖上它們在框上的位置換算（貓在右上、略微探出上緣；另兩組坐在下緣）。
+   🖼 這檔的素材圖走 GitHub raw 不走 jsDelivr：素材庫超過 jsDelivr 的 50MB 上限，沒快取的檔會隨機 403，
+   CSS 背景圖又接不到失敗、沒辦法換網址重抓（10-19 量到工坊介面 6 張破圖）。JS 載的圖見 lobby_stage.js 的 _sfRetry。 */
 .lws-doll { position:absolute; z-index:5; pointer-events:none;
   background-repeat:no-repeat; background-position:center bottom; background-size:contain;
   filter:drop-shadow(0 3px 6px rgba(0,0,0,.45)); }
 .lws-doll-tr { right:92px; top:-14px; width:13.2%; min-width:76px; max-width:150px; aspect-ratio:360/260;
-  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_doll_cats_v1.webp); }
+  background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_doll_cats_v1.webp); }
 .lws-doll-bl { left:2.4%; bottom:1.4%; width:13.6%; min-width:84px; max-width:158px; aspect-ratio:420/164;
-  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_doll_hat_v1.webp); }
+  background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_doll_hat_v1.webp); }
 .lws-doll-br { right:4.2%; bottom:1.2%; width:10.2%; min-width:64px; max-width:118px; aspect-ratio:400/214;
-  background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_doll_gem_v1.webp); }
+  background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_doll_gem_v1.webp); }
 
 .lws-hd { position:relative; z-index:3; flex:0 0 auto; padding:24px 22px 12px; }
 .lws-title { width:min(44%,272px); height:46px; margin:0 auto;
-  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_title_v1.webp) center / contain no-repeat; }
+  background:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_title_v1.webp) center / contain no-repeat; }
 .lws-x { position:absolute; right:26px; top:24px; width:42px; height:42px; padding:0; cursor:pointer;
   border:1px solid rgba(240,202,152,.42); border-radius:50%;
   background:radial-gradient(70% 70% at 50% 32%, #3d2242 0%, #251527 100%);
@@ -727,14 +729,14 @@
 .lws-card-bar { width:66px; height:3px; border-radius:2px; margin-top:2px;
   background:linear-gradient(90deg,#59cfe8 0 25%,#e0567f 25% 50%,#e8b355 50% 75%,#8f7ce0 75% 100%); }
 
-.lws-vn      .lws-card-art { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_icon_vn_v1.webp); }
-.lws-panel   .lws-card-art { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_icon_panel_v1.webp); }
-.lws-fx      .lws-card-art { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_icon_fx_v1.webp); }
-.lws-theme   .lws-card-art { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_icon_theme_v1.webp); }
-.lws-vn::before      { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_bg_vn_v1.webp); }
-.lws-panel::before   { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_bg_panel_v1.webp); }
-.lws-fx::before      { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_bg_fx_v1.webp); }
-.lws-theme::before   { background-image:url(https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_workshop_ui_bg_theme_v1.webp); }
+.lws-vn      .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_vn_v1.webp); }
+.lws-panel   .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_panel_v1.webp); }
+.lws-fx      .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_fx_v1.webp); }
+.lws-theme   .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_theme_v1.webp); }
+.lws-vn::before      { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_vn_v1.webp); }
+.lws-panel::before   { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_panel_v1.webp); }
+.lws-fx::before      { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_fx_v1.webp); }
+.lws-theme::before   { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_theme_v1.webp); }
 
 /* 卡片點下去那件事整個蓋上來：創作室與 VN 組件自己生覆蓋層（見 lobby_workshop.js） */
 /* 模組沒載入時的提示（浮在底部、不佔版位） */

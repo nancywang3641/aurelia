@@ -17,9 +17,10 @@
 
         .tr-container {
             width: 100%; height: 100%;
-            /* 地毯本身把外框、角飾、下緣流蘇都畫進去了 → 內距把內容推進絨布區，別壓到框和穗子 */
+            /* 地毯本身把外框、角飾、下緣流蘇都畫進去了 → 內距把內容推進絨布區，別壓到框和穗子
+               素材圖走 GitHub raw：素材庫超過 jsDelivr 的 50MB 上限會隨機 403，CSS 背景圖接不到失敗（見 lobby_stage.js 的 _sfRetry） */
             background: var(--tr-velvet)
-                        url('https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_tarot_panel_base_v1.png')
+                        url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_tarot_panel_base_v1.png')
                         center / 100% 100% no-repeat;
             color: var(--tr-text);
             font-family: 'Share Tech Mono', monospace;
@@ -170,7 +171,7 @@
         /* 選牌區的小牌＝同一張牌背（紫薇自己那副） */
         .tr-mini-card {
             width: 70px; height: 110px; flex-shrink: 0;
-            background: #16182c url('https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_tarot_card_back_v1.png')
+            background: #16182c url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_tarot_card_back_v1.png')
                         center / cover no-repeat;
             border: 1px solid rgba(168,130,60,.55); border-radius: 4px;
             cursor: pointer; transition: 0.3s;
@@ -193,7 +194,7 @@
             background-size: cover; background-position: center;
         }
         .tr-face.back {
-            background: #16182c url('https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/lobby_tarot_card_back_v1.png')
+            background: #16182c url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_tarot_card_back_v1.png')
                         center / cover no-repeat;
             border: 1px solid rgba(168,130,60,.6);
         }

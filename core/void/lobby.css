@@ -1187,6 +1187,9 @@
     .lobby-left.void-dock-open.lstage-dlg-hidden:has(.lstage-tarotwin) .lstage-talk-portrait,
     .lobby-left.void-dock-open.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait { display:none; }
     .lobby-left.void-dock-open .lstage-chat-fab { z-index:3500; }
+    /* 💬 浮鈕疊在面板右下角（約 48px 高）：書咖櫃台內容底下留一塊，最底下那排鈕才不會被它蓋住
+       （10-19 面試頁「打電話錄取」被蓋掉右半顆、只看得到「打電話錄」） */
+    .lobby-left.void-dock-open.lstage-dlg-hidden .oc-win .oc-body { padding-bottom:58px; }
     /* 交易所面板原本 z-index:80（另兩個是 3350）→ 抬齊，三個面板行為才一致 */
     .lobby-left.void-dock-open .os-pt-dock { z-index:3350; }
 

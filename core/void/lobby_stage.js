@@ -10,6 +10,31 @@
     'use strict';
 
     const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
+    // 🖼 素材庫 sound-files 早就超過 jsDelivr 的 50MB 上限：沒被快取（或快取過期）的檔會隨機回 403「Package size exceeded」，
+    //   @main 跟鎖 commit 都會（10-19 台灣節點量大廳 107 張：@main 掉 4～10 張、鎖 commit 掉 21 張；占卜屋紫薇老師整個不見、書咖椅子時有時無）。
+    //   抓不到＝同一個版本的同一張改從 GitHub raw 再拿一次（raw 沒有包大小限制、有 CORS）。
+    //   畫面上的 <img> 由下面 document 那個監聽統一接；不進畫面的 new Image()（走路圖探針、碰撞遮罩）各自掛 _sfRetry。
+    const SF_RE = /^https:\/\/(?:cdn|fastly|testingcf|gcore)\.jsdelivr\.net\/gh\/nancywang3641\/sound-files@([^/]+)\/(.+)$/;
+    function _sfMirror(url) {
+        const m = String(url || '').match(SF_RE);
+        return m ? 'https://raw.githubusercontent.com/nancywang3641/sound-files/' + m[1] + '/' + m[2] : null;
+    }
+    function _sfRetry(img, onFail) {
+        img.onerror = () => {
+            const alt = !img._sfAlt && _sfMirror(img.src);
+            if (alt) { img._sfAlt = true; img.src = alt; return; }
+            if (onFail) onFail();
+        };
+    }
+    if (!window.__AURELIA_SF_MIRROR__) {
+        window.__AURELIA_SF_MIRROR__ = true;
+        document.addEventListener('error', (e) => {   // error 不冒泡，掛捕獲階段才接得到每一張 <img>
+            const el = e.target;
+            if (!el || el.tagName !== 'IMG' || el._sfAlt) return;
+            const alt = _sfMirror(el.src);
+            if (alt) { el._sfAlt = true; el.src = alt; }
+        }, true);
+    }
     const ASSET = {
         // 底圖per場景（SCENES[].base）；素材改版一律換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
         ying:  CDN + 'lobby_ying_v2.png',    // 瀅瀅立繪(v2=Rae修圖;改版必換檔名防快取)
@@ -770,7 +795,7 @@
                 console.log('[LobbyStage] 碰撞遮罩已載入', file);
             } catch (e) { S.maskFailed = true; console.warn('[LobbyStage] 遮罩讀取失敗(退回鋼索/放行移動)', e); }
         };
-        img.onerror = () => { S.maskFailed = true; console.warn('[LobbyStage] 遮罩下載失敗(放行移動)', src); };
+        _sfRetry(img, () => { S.maskFailed = true; console.warn('[LobbyStage] 遮罩下載失敗(放行移動)', src); });
         img.src = src;
     }
     const FOOT_W = 46, FOOT_H = 18;
@@ -936,10 +961,11 @@
             if (!String(src.sheet).startsWith('data:')) probe.crossOrigin = 'anonymous';   // 要讀alpha量實寬
             probe.onload = () => {
                 a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4;
-                el.style.backgroundImage = 'url("' + src.sheet + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha
+                el.style.backgroundImage = 'url("' + probe.src + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha（probe.src＝真的拿到的那個網址，換過 raw 也對）
                 _measureSheetBounds(a, probe);
                 placeActor(a); a.el.classList.remove('lstage-loading');
             };
+            _sfRetry(probe);
             probe.src = src.sheet;
         } else {
             if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';   // 要讀alpha量範圍→掛CORS(jsdelivr有頭)
@@ -1080,10 +1106,11 @@
             if (!String(src.sheet).startsWith('data:')) probe.crossOrigin = 'anonymous';   // 要讀alpha量實寬
             probe.onload = () => {
                 a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4;
-                el.style.backgroundImage = 'url("' + src.sheet + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha
+                el.style.backgroundImage = 'url("' + probe.src + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha（probe.src＝真的拿到的那個網址）
                 _measureSheetBounds(a, probe);
                 placeActor(a); a.el.classList.remove('lstage-loading');
             };
+            _sfRetry(probe);
             probe.src = src.sheet;
         } else {
             if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';
@@ -2921,6 +2948,7 @@
             // 給 lobby_dress.js（裝扮室/歷史窗）：皮膚存取/換裝/圖片工具/NPC歷史資料
             skins: _skins, saveSkin: _saveSkin,
             swapActorSrc: _swapActorSrc, applySkin: _applySkin,
+            sfRetry: _sfRetry, sfMirror: _sfMirror,   // 素材庫的圖抓不到→換 raw 再試一次（lobby_cafe_regulars.js 的走路圖、坐姿圖；lobby_places.js 的縮圖）
             pixelify: _pixelify, askImage: _askImage,
             resolveRef, idbPut, idbDel,
             getNpcHistory, setNpcHistory,
