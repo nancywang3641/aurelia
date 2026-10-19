@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 935;                        // ← 每次部署 +1
+const CACHE_VERSION = 936;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -18,7 +18,21 @@ const SHELL_ASSETS = [
     './index.html',
     './aurelia_core.css',
     './core/void/lobby.css',
+    './core/void/lobby_stage.css',
     // css/ 模組樣式（從各 JS 抽離後的集中區）
+    //   🚨 index.html 新加 <link> 這裡也要加一列（10-19 對帳補了 13 支：手機殼、應用商城、主題、日誌、VN 特效…）
+    './css/phone_shell.css',
+    './css/app_store.css',
+    './css/os_phone_theme.css',
+    './css/os_control_room.css',
+    './css/os_journal.css',
+    './css/os_story_tools.css',
+    './css/os_exchange.css',
+    './css/vn_fx.css',
+    './css/vn_battle.css',
+    './css/vn_gallery.css',
+    './css/aurelia_theme.css',
+    './css/os_sys_chrome.css',
     './css/story_extractor.css',
     './css/story_entry_wizard.css',
     './css/html_extractor.css',

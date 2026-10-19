@@ -30,15 +30,120 @@
         'vn_current_story_id',        // [VN] 當前故事 ID
         'vn_current_story_title',     // [VN] 當前故事顯示名
         'vn_prompt_order',            // [VN] 提示詞順序
-        'wx_phone_api_config'         // 微信設定
+        'wx_phone_api_config',        // 微信設定
+        // ── 10-19 對帳補上的（全倉庫寫進 localStorage 的 key 一個一個看過）──
+        //   🚨 新功能寫進 localStorage 的東西，是她的資料或她調的設定，就加在這裡，也排進下面 PARTS 的哪一塊；
+        //      沒排進哪一塊的會自動跟著「設定」那塊走（預設不勾，因為可能有金鑰）。
+        //   不收的：快取、畫面狀態（捲到哪、開哪個分頁、預覽大小）、一次性記號、預覽暫存、十四天就丟的草稿、
+        //      紀錄檔（思考過程、決策用量、世界頻道）、這台自己的（大廳版面、後院跟伺服器對到哪一版、小機白板看玩家還是作者）、
+        //      圖片的索引（圖本體不進備份，只還原索引會變成「生過了」卻沒圖：大廳裝扮室 lobby_stage_skins_v1、朋友圈封面）
+        // 叫模型、接口（含金鑰）
+        'os_llm_channels',            // 我的通道
+        'os_llm_routes',              // 哪件事走哪個模型
+        'os_vision_mode',             // 看圖三選一
+        'os_vector_config',           // 向量記憶的接口
+        'os_voice_input_config',      // 語音轉字
+        'vn_tts_v1',                  // 本機語音（SoVITS、IndexTTS）
+        'dlr_voice_mode',             // 電話的聲音模式
+        'npc_decide_url', 'npc_decide_model', 'npc_decide_key',   // 大廳決策模型
+        'npc_decide_on', 'npc_decide_mins', 'npc_decide_fallback',
+        'jev_stage_on', 'jev_shadow_on_v2', 'jev_sfx_on',          // 決策模型管的立繪、記憶影子、音效
+        'aurelia_relay_cfg',          // 回覆交給伺服器跑（網址、通行碼）
+        'aurelia_keepalive_cfg',      // 背景保活
+        'aurelia_push_cfg',           // 手機通知的伺服器（網址、通行碼）
+        'aurelia_farm_cloud',         // 後院連伺服器（網址、通行碼）
+        // 生圖
+        'os_img_routes',              // 生圖名冊：哪個用途走哪個接口
+        'os_img_styles',              // 畫風頁
+        'os_img_capi_base_packs',     // 底詞包
+        'os_img_nai_nodes', 'os_img_capi_nodes',                    // 生圖節點清單
+        'os_sprite_tpl_prefix', 'os_sprite_tpl_suffix', 'os_sprite_tpl_neg',
+        'os_sprite_size', 'os_sprite_hires', 'os_sprite_upscale_ratio', 'os_trio_tpl',   // 立繪工作室
+        'wg_sprite_pack_v1',          // 世界門旅人畫風
+        'aurelia_room_style_preset', 'aurelia_room_route',          // 包租婆房間的畫風、接口
+        'lstage_dress_gen_v1',        // 大廳裝扮室生小人用哪個接口
+        'avs_sticker_gen_v1',         // 變數工坊的世界貼紙
+        'vn_ws_img_provider',         // 面板工坊生圖用哪個
+        // 提示詞（跟 vn_prompt_order 同一份東西）
+        'os_prompt_entries',          // 提示詞窗口的條目
+        'os_prompt_bundles',          // 提示詞預設包
+        'os_universal_cot',
+        'os_iris_persona', 'os_cheshire_persona', 'os_rabbit_persona', 'os_alice_persona',
+        'os_zhiwei_persona', 'os_hatter_persona', 'os_lobby_world',  // 大廳的人和世界觀
+        'os_vn_rules_custom',         // VN 指令自己改的
+        'sp_summary_tpl',             // 大總結的模板
+        'os_vn_extra_tags_prompt', 'os_vn_tags_keyword',            // 創作室：自訂標籤的教學
+        // 開關、偏好
+        'os_vn_rules_on', 'os_vn_rules_book_off_v1', 'os_vn_rules_phone_auto_off',
+        'os_fx_disabled', 'os_fx_groups',                           // VN 特效
+        'vn_game_settings', 'vn_ctx_limit', 'vn_reader_sum_open', 'vn_reader_sum_close',   // 遊戲內設定、摘要標籤
+        'sp_autosum_on', 'sp_autosum_every', 'sp_memtidy_on', 'sp_memtidy_every', 'sp_director_on',
+        'sp_story_threads', 'sp_summary_autohide', 'sp_summary_keep_recent',
+        'aurelia_state_runtime_enabled', 'aurelia_scene_backdrop_auto', 'aurelia_reveal_fx', 'os_app_mem_inject_enabled',
+        'aurelia_app_wake', 'aurelia_app_prompt_bundle',            // 手機 app 自己動、吃哪個提示詞包
+        'wx_avatar_ai_enabled', 'wx_avatar_ai_provider', 'wx_seeme_enabled', 'wx_theme', 'wx_dark_mode', 'wx_tp_active',
+        'wb_dark_mode', 'os_sticker_ai_lib',
+        'aurelia_bgm_enabled', 'lobby_ui_sfx_on', 'lobby_ui_sfx_vol',
+        'lobby_stage_on', 'lobby_theater_on', 'lobby_theater_freq', 'lobby_weather_v1',
+        'lobby_worldview_use_lorebook', 'lobby_npc_see_current_story', 'cafe_offline_visits',   // 大廳設置
+        'studio_active_features', 'studio_autofix', 'swb_model', 'story_extractor_theme',
+        // 劇情、書架
+        'os_persona_current',         // 現在用哪個人設
+        'vn_current_world_id',        // 現在開的是哪本書
+        'vn_story_index',             // 每篇故事屬於哪本書、掛哪些書包
+        'os_vn_gen_presets',          // 具名開場白
+        'vn_free_history',            // 過往開場紀錄
+        'aurelia_greet_replace_rules',// 開場白取代規則
+        'vn_active_wb_packs', 'vn_global_wb_packs',                 // 掛著的世界書書包
+        'avs_furnace_presets',        // [AVS] 煉丹爐預設
+        'avs_init_my_chips',          // [AVS] 常用追蹤項
+        // 手機 app
+        'aurelia_phone_apps', 'aurelia_phone_layout', 'aurelia_phone_theme',
+        'aurelia_widgets', 'aurelia_widget_cfg',                    // 手機桌面、組件
+        'os_unified_contacts',        // 手機通訊錄
+        'wx_custom_contacts_v1', 'wx_contact_tags',                 // 聊天 app 通訊錄（沒分故事的那份）
+        'wx_user_profile', 'wx_room_fix', 'wx_room_id_remap', 'wx_story_money_done',
+        'wb_accounts', 'wb_user_profile', 'wb_unfollowed',          // 微博
+        'aurelia_farm_v1',            // 後院（連了伺服器的，伺服器那份比較新時會蓋過來）
+        // 大廳
+        'lobby_city_plots_v1',        // 城裡的地塊誰住
+        'lobby_home_guest',           // 我的家請進來的人
+        'cheshire_shards', 'cheshire_items',                        // 黑市：碎片、買的東西
+        // 創作室
+        'studio_quick_chips',         // 自訂的要求
+        'vn_component_groups'         // VN 組件的分組
     ];
     // 只有本地全量匯出才收的（可能很大：書的封面、每本故事的狀態）
     const LS_FULL_ONLY_KEYS = [
-        'aurelia_custom_worlds'       // 書架上的書
+        'aurelia_custom_worlds',      // 書架上的書
+        'aurelia_phone_user_themes',  // 自己做的手機主題
+        'os_sticker_libs',            // 表情包庫
+        'wx_bubble_gallery',          // 泡泡收藏
+        'vn_theme_gallery',           // 劇情主題收藏
+        'lobby_theater_log',          // 小劇場（重看用）
+        'aurelia_map_theater_log',    // 地圖番外記事
+        'aurelia_change_log'          // 小機改東西的修改紀錄
     ];
     // 開頭符合就收（每本故事一個 key），也只在全量匯出
     const LS_BACKUP_PREFIXES = [
-        'avs_state_'                  // [AVS] 各故事的狀態數值
+        'avs_state_',                 // [AVS] 各故事的狀態數值
+        'vn_charvoices::',            // 角色的固定聲線（每本故事）
+        'vn_theme_css::',             // 劇情面板的自訂樣式（每本故事）
+        'vn_free_mode_',              // 這張卡的自由模式（酒館）
+        'wx_custom_contacts_v1__', 'wx_contact_tags__',             // 聊天 app 通訊錄、標籤（每本故事、常駐角色）
+        'wx_chat_settings_',          // 每間聊天室的設定
+        'wx_bubble_style_', 'vn_bubble_room::',                     // 每間聊天室的泡泡
+        'wx_cards_', 'wx_redpacket_', 'wx_transfer_',               // 紅包和轉帳的領取紀錄（新帳本＋舊鍵）
+        'wx_removed::',               // 刪好友的紀錄
+        'wx_seeme_memory::',          // 角色對她頭像的印象
+        'wb_unfollowed__',            // 微博取消關注（每本故事）
+        'vn_sticker_ai_lib__',        // 這本故事 AI 用哪包表情包
+        'aurelia_appdata_',           // 創作室做的 app 自己存的資料
+        'os_app_mem_plugin_',         // 各 app「記憶回傳酒館」的開關
+        'lobby_stage_layout_',        // 大廳各場景她排的擺設
+        'lstage_hist_',               // 跟大廳 NPC 的對話
+        'os_studio_parsed_',          // 創作室每個對話最後一版的面板（改過的版本靠它，不然退回初版）
+        'studio_panel_type_'          // 創作室每個對話選的面板類型
     ];
 
     // 全量備份收的 IndexedDB 倉庫：OS_DB 除了圖片（images 存的是二進位，JSON 裝不下）以外全部
@@ -369,23 +474,51 @@
     const AUTO_KEY = 'os_backup_auto';
     const PARTS = [
         { k: 'story', label: '劇情（章節、記憶、大總結、書架、人設）', stores: ['vn_chapters', 'vn_memories', 'vn_grand_summaries', 'tavern_summary', 'map_data'],
-          ls: ['aurelia_custom_worlds', 'vn_current_story_id', 'vn_current_story_title', 'os_personas'] },
-        { k: 'phone', label: '手機 app（聊天、微博、各 app 的資料、收藏的語音）', stores: ['api_chats', 'wb_posts', 'phone_apps', 'app_memory', 'app_data'] },
-        { k: 'wb', label: '世界書', worldbook: true, ls: ['os_worldbook_books'] },
+          ls: ['aurelia_custom_worlds', 'vn_current_story_id', 'vn_current_story_title', 'os_personas',
+               'os_persona_current', 'vn_current_world_id', 'vn_story_index', 'os_vn_gen_presets', 'vn_free_history',
+               'aurelia_greet_replace_rules', 'aurelia_map_theater_log'],
+          prefixes: ['vn_charvoices::', 'vn_theme_css::', 'vn_free_mode_'] },
+        { k: 'phone', label: '手機 app（聊天、微博、各 app 的資料、收藏的語音）', stores: ['api_chats', 'wb_posts', 'phone_apps', 'app_memory', 'app_data'],
+          ls: ['aurelia_phone_apps', 'aurelia_phone_layout', 'aurelia_phone_theme', 'aurelia_phone_user_themes', 'aurelia_widgets', 'aurelia_widget_cfg',
+               'os_unified_contacts', 'wx_custom_contacts_v1', 'wx_contact_tags', 'wx_user_profile', 'wx_room_fix', 'wx_room_id_remap',
+               'wx_story_money_done', 'wx_bubble_gallery', 'os_sticker_libs', 'wb_accounts', 'wb_user_profile', 'wb_unfollowed',
+               'aurelia_change_log', 'aurelia_farm_v1'],
+          prefixes: ['wx_custom_contacts_v1__', 'wx_contact_tags__', 'wx_chat_settings_', 'wx_bubble_style_', 'vn_bubble_room::',
+                     'wx_cards_', 'wx_redpacket_', 'wx_transfer_', 'wx_removed::', 'wx_seeme_memory::', 'wb_unfollowed__',
+                     'vn_sticker_ai_lib__', 'aurelia_appdata_'] },
+        { k: 'wb', label: '世界書', worldbook: true, ls: ['os_worldbook_books', 'vn_active_wb_packs', 'vn_global_wb_packs'] },
+        // 提示詞是她自己寫的東西、沒有金鑰：10-19 從「設定」那塊（預設不勾）拆出來，雲端備份預設就收
+        { k: 'prompts', label: '提示詞（條目、預設包、大廳的人設）',
+          ls: ['vn_prompt_order', 'os_prompt_entries', 'os_prompt_bundles', 'os_universal_cot', 'os_vn_rules_custom', 'sp_summary_tpl',
+               'os_vn_extra_tags_prompt', 'os_vn_tags_keyword',
+               'os_iris_persona', 'os_cheshire_persona', 'os_rabbit_persona', 'os_alice_persona', 'os_zhiwei_persona', 'os_hatter_persona', 'os_lobby_world'] },
         { k: 'avs', label: '狀態與面板', stores: ['var_packs', 'ui_templates', 'state_data'],
-          ls: ['avs_condition_rules', 'aurelia_rules_tavern', 'avs_current_state', 'avs_active_ui_templates'], prefixes: ['avs_state_'] },
-        { k: 'lobby', label: '大廳', stores: ['lobby_history', 'lobby_summary_index', 'lobby_npc_memory'] },
-        { k: 'studio', label: '創作室', stores: ['studio_chats', 'studio_drafts'] },
+          ls: ['avs_condition_rules', 'aurelia_rules_tavern', 'avs_current_state', 'avs_active_ui_templates', 'avs_furnace_presets', 'avs_init_my_chips'],
+          prefixes: ['avs_state_'] },
+        { k: 'lobby', label: '大廳', stores: ['lobby_history', 'lobby_summary_index', 'lobby_npc_memory'],
+          ls: ['lobby_city_plots_v1', 'lobby_home_guest', 'lobby_theater_log', 'cheshire_shards', 'cheshire_items'],
+          prefixes: ['lobby_stage_layout_', 'lstage_hist_'] },
+        { k: 'studio', label: '創作室', stores: ['studio_chats', 'studio_drafts'],
+          ls: ['studio_quick_chips', 'vn_component_groups', 'vn_theme_gallery'], prefixes: ['os_studio_parsed_', 'studio_panel_type_'] },
         { k: 'ach', label: '成就', achievements: true },
+        // 其他塊沒收的 LS_BACKUP_KEYS 全部歸這塊（下面那段自動補），這裡只列原本那幾個
         { k: 'settings', label: '設定（含 API 金鑰）', off: true,
           ls: ['os_global_config', 'os_secondary_llm_config', 'os_image_config', 'os_minimax_config', 'os_elevenlabs_config',
-               'os_voice_cast', 'os_vn_foreign', 'vn_cfg_v4', 'vn_prompt_order', 'wx_phone_api_config'] },
+               'os_voice_cast', 'os_vn_foreign', 'vn_cfg_v4', 'wx_phone_api_config'] },
     ];
     // FULL_STORES 之後新加的倉庫沒排進哪一塊：先跟著「手機 app」走，不要默默漏掉
     (function () {
         const claimed = [].concat.apply([], PARTS.map(p => p.stores || []));
         const phone = PARTS.find(p => p.k === 'phone');
         FULL_STORES.forEach(s => { if (claimed.indexOf(s) === -1) phone.stores.push(s); });
+    })();
+    // localStorage 的 key、前綴也一樣：沒排進哪一塊的跟著「設定」走（預設不勾，因為可能有金鑰）
+    (function () {
+        const set = PARTS.find(p => p.k === 'settings');
+        const claimed = [].concat.apply([], PARTS.map(p => p.ls || []));
+        LS_BACKUP_KEYS.concat(LS_FULL_ONLY_KEYS).forEach(k => { if (claimed.indexOf(k) === -1) set.ls.push(k); });
+        const claimedP = [].concat.apply([], PARTS.map(p => p.prefixes || []));
+        LS_BACKUP_PREFIXES.forEach(x => { if (claimedP.indexOf(x) === -1) (set.prefixes = set.prefixes || []).push(x); });
     })();
 
     function autoGet() {
