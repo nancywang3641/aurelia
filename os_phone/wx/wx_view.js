@@ -974,7 +974,7 @@
                 if (c.customAvatar) {
                     if (c.customAvatar.startsWith('img_') || c.customAvatar.startsWith('avt_')) {
                         avatarStyle = `background-image: url('${defaultUrl}');`;
-                        dataAttr = `data-db-bg="${c.customAvatar}" class="wx-avatar db-load-target"`;
+                        dataAttr = `data-db-bg="${_attr(c.customAvatar)}" class="wx-avatar db-load-target"`;
                     } else {
                         avatarStyle = `background-image: url('${_cssUrl(c.customAvatar)}')`;
                         dataAttr = `class="wx-avatar"`;
@@ -987,7 +987,8 @@
                 // 時間那格是「剛剛」這種字。以前新建聊天室、電話未接寫進去的是毫秒數，舊資料裡還留著，數字就不印
                 const _lt = (typeof c.lastTime === 'number') ? '' : (c.lastTime || '');
 
-                return `<div class="wx-chat-item" id="chat-item-${_attr(id)}" onclick="(window.parent.wxApp || window.wxApp).openChat('${_jsArg(id)}')"><div style="${avatarStyle}" ${dataAttr}>${badgeHTML}</div><div class="wx-info"><div style="display:flex; justify-content:space-between;"><span class="wx-name">${displayName}</span><span class="wx-meta">${_lt}</span></div><div class="wx-last-msg">${c.lastPreview || ''}</div></div></div>`;
+                // 名字、時間（模型寫的 [Time]）、最後一句預覽（訊息原文前 30 字）都是外來的字：一律當純文字（以前原樣塞進來，<img onerror> 會跑）
+                return `<div class="wx-chat-item" id="chat-item-${_attr(id)}" onclick="(window.parent.wxApp || window.wxApp).openChat('${_jsArg(id)}')"><div style="${avatarStyle}" ${dataAttr}>${badgeHTML}</div><div class="wx-info"><div style="display:flex; justify-content:space-between;"><span class="wx-name">${_attr(displayName)}</span><span class="wx-meta">${_attr(_lt)}</span></div><div class="wx-last-msg">${_attr(c.lastPreview || '')}</div></div></div>`;
             }).join('');
         },
 
@@ -1022,7 +1023,7 @@
                         if (c.customAvatar.startsWith('img_') || c.customAvatar.startsWith('avt_')) {
                             // 這是 DB ID，使用異步標記
                             avatarStyle = `width:38px; height:38px; margin-right:12px; background-image: url('${defaultUrl}');`;
-                            dataAttr = `data-db-bg="${c.customAvatar}" class="wx-avatar db-load-target"`;
+                            dataAttr = `data-db-bg="${_attr(c.customAvatar)}" class="wx-avatar db-load-target"`;
                         } else if (c.customAvatar.startsWith('blob:') || c.customAvatar.startsWith('data:') || c.customAvatar.startsWith('http')) {
                             // 這是標準網址
                             avatarStyle = `width:38px; height:38px; margin-right:12px; background-image: url('${_cssUrl(c.customAvatar)}')`;
@@ -1038,7 +1039,7 @@
                     // 注意：這裡將 dataAttr 注入到 div class="wx-avatar..." 結構中
                     // 👤 頭像開個人檔案、整列照舊直接進聊天——最常做的事不要多一步
                     const avatarTap = ` onclick="event.stopPropagation(); const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_jsArg(c.id)}')"`;
-                    html += `<div class="wx-contact-item" id="contact-item-${_attr(c.id)}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${_jsArg(c.id)}')"><div style="${avatarStyle}" ${dataAttr}${avatarTap}></div><div class="wx-contact-name">${c.name}</div></div>`;
+                    html += `<div class="wx-contact-item" id="contact-item-${_attr(c.id)}" ${contextAction} onclick="(window.parent.wxApp || window.wxApp).openChat('${_jsArg(c.id)}')"><div style="${avatarStyle}" ${dataAttr}${avatarTap}></div><div class="wx-contact-name">${_attr(c.name)}</div></div>`;
                 });
             } else { html += `<div class="wx-list-empty">暫無聯絡人</div>`; }
             return html;
@@ -1097,7 +1098,7 @@
             const c = chats[id] || {};
             const av = this._avatarBits(name, c.customAvatar, c.isGroup ? '' : (c.realName || ''));
             return `<div class="wx-contact-item" onclick="${'(window.parent.wxApp || window.wxApp)'}.openChat('${_jsArg(id)}')">` +
-                `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${name}</div>${right || ''}</div>`;
+                `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${_attr(name)}</div>${right || ''}</div>`;
         },
 
         // 🔒 好友申請：不是好友的人（被她拉黑、或刪過她）自己來申請加回來，新的在前
@@ -1140,7 +1141,7 @@
             const self = this;
             return names.map(function (n) {
                 const av = self._avatarBits(n, '', n);
-                return `<div class="wx-contact-item"><div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${n}</div>` +
+                return `<div class="wx-contact-item"><div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${_attr(n)}</div>` +
                     `<div class="wx-contact-side"><button class="wx-sub-btn" onclick="event.stopPropagation(); (window.parent.wxApp || window.wxApp).addFriendFromGroup('${_jsArg(n)}')">加為朋友</button></div></div>`;
             }).join('');
         },
@@ -1167,7 +1168,7 @@
                 const ids = (tags[t] || []).filter(function (i) { return chats[i] && !chats[i].wxRemoved; });
                 html += `<div class="wx-contact-item" onclick="${app}.openContactSub('c_tag', '${_jsArg(t)}')">` +
                     `<div class="wx-contact-icon icon-tags" style="margin-right:12px;"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div>` +
-                    `<div class="wx-contact-name">${t}</div><div class="wx-contact-side">${ids.length} 人</div></div>`;
+                    `<div class="wx-contact-name">${_attr(t)}</div><div class="wx-contact-side">${ids.length} 人</div></div>`;
             });
             return html;
         },
@@ -1181,14 +1182,14 @@
             const esc = _jsArg(tag);
             if (editing) {
                 const ids = this._alive(chats).filter(function (k) { return !chats[k].isGroup; });
-                let html = `<div class="wx-sub-bar"><span class="wx-sub-note">點一下加進「${tag}」，再點一下拿掉</span></div>`;
+                let html = `<div class="wx-sub-bar"><span class="wx-sub-note">點一下加進「${_attr(tag)}」，再點一下拿掉</span></div>`;
                 if (!ids.length) return html + this._emptyBox('fa-user-slash', '通訊錄還沒有人。', '');
                 html += ids.map(function (id) {
                     const on = picked.indexOf(id) >= 0;
                     const c = chats[id];
                     const av = self._avatarBits(c.name || id, c.customAvatar, c.realName || '');
                     return `<div class="wx-contact-item" onclick="${app}.tagToggle('${esc}', '${_jsArg(id)}')">` +
-                        `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${c.name || id}</div>` +
+                        `<div style="${av.style}" ${av.attr}></div><div class="wx-contact-name">${_attr(c.name || id)}</div>` +
                         `<div class="wx-contact-side"><i class="fa-solid ${on ? 'fa-circle-check wx-tag-on' : 'fa-circle'} wx-tag-mark"></i></div></div>`;
                 }).join('');
                 return html;
@@ -1196,7 +1197,7 @@
             const alive = picked.filter(function (i) { return chats[i] && !chats[i].wxRemoved; });
             let html = `<div class="wx-sub-bar"><button class="wx-sub-btn" onclick="${app}.tagEdit()">選人進來</button><span class="sp"></span>` +
                 `<button class="wx-sub-btn warn" onclick="${app}.tagDelete('${esc}')">刪掉這個標籤</button></div>`;
-            if (!alive.length) return html + this._emptyBox('fa-tag', `「${tag}」還沒有人。`, '按上面那顆「選人進來」。');
+            if (!alive.length) return html + this._emptyBox('fa-tag', `「${_attr(tag)}」還沒有人。`, '按上面那顆「選人進來」。');
             html += alive.map(function (id) { return self._personRow(id, chats[id].name || id, chats); }).join('');
             return html;
         },
@@ -1212,7 +1213,7 @@
 
             if (profile.avatar) {
                 if (profile.avatar.startsWith('img_') || profile.avatar.startsWith('avt_')) {
-                    dataAttr = `data-db-bg="${profile.avatar}" class="wx-me-avatar db-load-target"`;
+                    dataAttr = `data-db-bg="${_attr(profile.avatar)}" class="wx-me-avatar db-load-target"`;
                 } else {
                     avatarStyle = `background-image: url('${_cssUrl(profile.avatar)}')`;
                     dataAttr = `class="wx-me-avatar"`;
@@ -1307,9 +1308,9 @@
                 <div class="wx-me-header">
                     <div style="${avatarStyle}" ${dataAttr}></div>
                     <div class="wx-me-info">
-                        <div class="wx-me-name">${profile.nickname}</div>
-                        <div class="wx-me-id"><span>微信號：${wxId}</span></div>
-                        <div class="wx-me-signature">${profile.signature}</div>
+                        <div class="wx-me-name">${_attr(profile.nickname)}</div>
+                        <div class="wx-me-id"><span>微信號：${_attr(wxId)}</span></div>
+                        <div class="wx-me-signature">${_attr(profile.signature)}</div>
                     </div>
                 </div>
                 <!-- 💰 錢包：餘額直接印在格子右邊。她點開錢包的時機是「發紅包之前看夠不夠」，
@@ -1443,7 +1444,7 @@
             // 通訊錄底下的幾張子頁（跟 me_set 同一套：一個 tab 名字＝一頁）
             const SUB_TITLE = { c_new: '新的朋友', c_only: '僅聊天的朋友', c_group: '群組', c_tags: '標籤' };
             if (SUB_TITLE[activeTab]) headerTitle = SUB_TITLE[activeTab];
-            if (activeTab === 'c_tag') headerTitle = (win.wxApp && win.wxApp.currentTag) || '標籤';
+            if (activeTab === 'c_tag') headerTitle = _attr((win.wxApp && win.wxApp.currentTag) || '標籤');
             
             // 列表內容
             let listContent = '';
@@ -1466,7 +1467,7 @@
 
             if (activeId && chats[activeId]) {
                 const c = chats[activeId];
-                headerTitle = c.name + (c.isGroup ? ` (${c.members.length})` : '');
+                headerTitle = _attr(c.name) + (c.isGroup ? ` (${c.members.length})` : '');   // 聊天室名字多半是模型取的：當純文字
                 // 👤 點標題上的名字也看得到個人檔案（LINE 是點頭像或名字都行）
                 if (!c.isGroup) headerTitleAction = `onclick="const P=(window.parent.WX_PROFILE||window.WX_PROFILE); if(P)P.open('${_jsArg(activeId)}')" class="wx-header-title wx-header-title-tap"`;
                 const msgs = c.messages;

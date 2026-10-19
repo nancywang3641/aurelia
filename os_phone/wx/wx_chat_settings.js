@@ -12,6 +12,17 @@
     const win = window.parent || window;
     const doc = win.document;
 
+    // 名字、備註、世界書條目、表情包庫名多半是模型寫的或匯入的：放進 HTML（尤其 value="…"、data-*="…"）前一律轉掉，
+    //   不然一個引號就把屬性截斷，<img onerror> 這種還會跑起來。_cssUrl：塞進 style="background-image:url('這裡')" 的網址
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _cssUrl(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ''));
+    }
+
     // --- 樣式定義 (保持完整) ---
 
     if (!doc.getElementById('ws-css')) {
@@ -305,14 +316,14 @@
                             mName = c.name; // 顯示通訊錄的名字
                             if (c.avatarId) {
                                 mAvatar = ""; 
-                                dbAttr = `data-db-src="${c.avatarId}"`; // 顯示通訊錄的頭像
+                                dbAttr = `data-db-src="${_esc(c.avatarId)}"`; // 顯示通訊錄的頭像
                             }
                         }
                     }
                     list += `
                         <div class="ws-member-item">
-                            <div class="ws-member-avatar db-mem-avt" ${dbAttr} style="background-image:url('${mAvatar}')"></div>
-                            <div class="ws-member-name">${mName}</div>
+                            <div class="ws-member-avatar db-mem-avt" ${dbAttr} style="background-image:url('${_cssUrl(mAvatar)}')"></div>
+                            <div class="ws-member-name">${_esc(mName)}</div>
                         </div>
                     `;
                 });
@@ -377,14 +388,14 @@
                     <div class="ws-cell">
                         <div class="ws-label">群聊名稱</div>
                         <div class="ws-right">
-                            <input class="ws-input" id="inp-name" value="${chatName}" placeholder="未命名">
+                            <input class="ws-input" id="inp-name" value="${_esc(chatName)}" placeholder="未命名">
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
                     <div class="ws-cell">
                         <div class="ws-label">群公告</div>
                         <div class="ws-right">
-                            <input class="ws-input" id="inp-bio" value="${chatDesc}" placeholder="未設置">
+                            <input class="ws-input" id="inp-bio" value="${_esc(chatDesc)}" placeholder="未設置">
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -404,14 +415,14 @@
                     <div class="ws-cell">
                         <div class="ws-label">備註名</div>
                         <div class="ws-right">
-                            <input class="ws-input" id="inp-name" value="${chatName}" placeholder="未設定">
+                            <input class="ws-input" id="inp-name" value="${_esc(chatName)}" placeholder="未設定">
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
                     <div class="ws-cell">
                         <div class="ws-label">備註/Bio</div>
                         <div class="ws-right">
-                            <input class="ws-input" id="inp-bio" value="${chatDesc}" placeholder="未設定">
+                            <input class="ws-input" id="inp-bio" value="${_esc(chatDesc)}" placeholder="未設定">
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -444,7 +455,7 @@
             try {
                 const _stkLibs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]');
                 _stkLibs.forEach(l => {
-                    _stkLibOpts += `<option value="${l.id}"${l.id === stickerLibId ? ' selected' : ''}>${l.name}</option>`;
+                    _stkLibOpts += `<option value="${_esc(l.id)}"${l.id === stickerLibId ? ' selected' : ''}>${_esc(l.name)}</option>`;
                 });
             } catch(e) {}
             content.innerHTML = `
@@ -518,7 +529,7 @@
                     <div class="ws-cell" id="btn-forget-avatar" style="cursor:pointer;">
                         <div class="ws-label">它記得我的樣子</div>
                         <div class="ws-right">
-                            <div id="see-mem-text" class="ws-value is-clip">${seeText}</div>
+                            <div id="see-mem-text" class="ws-value is-clip">${_esc(seeText)}</div>
                             <div class="ws-arrow">›</div>
                         </div>
                     </div>
@@ -934,10 +945,10 @@
                                 const desc = groupChat.desc || groupChat.bio || '';
                                 html += `
                                     <div class="ws-memory-item">
-                                        <input type="checkbox" class="ws-memory-checkbox" data-chat-id="${groupChat.id}" ${isChecked ? 'checked' : ''}>
+                                        <input type="checkbox" class="ws-memory-checkbox" data-chat-id="${_esc(groupChat.id)}" ${isChecked ? 'checked' : ''}>
                                         <div class="ws-memory-info">
-                                            <div class="ws-memory-name">${groupChat.name || groupChat.id}</div>
-                                            ${desc ? `<div class="ws-memory-desc">${desc}</div>` : ''}
+                                            <div class="ws-memory-name">${_esc(groupChat.name || groupChat.id)}</div>
+                                            ${desc ? `<div class="ws-memory-desc">${_esc(desc)}</div>` : ''}
                                         </div>
                                     </div>
                                 `;
@@ -1023,7 +1034,7 @@
                         html += '<div class="ws-persona-section-title">從世界書選擇</div>';
                         if (books.length > 1) {
                             html += '<select class="ws-persona-book" id="ws-persona-book">'
-                                 + books.map(b => `<option value="${escapeHtml(b)}"${b === curBook ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('')
+                                 + books.map(b => `<option value="${_esc(b)}"${b === curBook ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('')
                                  + '</select>';
                         } else if (curBook) {
                             html += `<div class="ws-persona-booknote">${escapeHtml(curBook)}</div>`;
@@ -1067,8 +1078,8 @@
                                 if (content.length > 200) content = content.substring(0, 200) + '...';
                                 const comment = (entry.comment || entry.name || `條目 #${entry.uid}`).trim();
                                 const keys = (entry.keys && entry.keys.length) ? entry.keys.join(', ') : '(無關鍵字)';
-                                return `<div class="ws-persona-entry" data-entry-uid="${entry.uid}">
-                                        <input type="radio" name="persona-lorebook" class="ws-persona-entry-checkbox" value="${entry.uid}" id="persona-radio-${entry.uid}" ${isSelected ? 'checked' : ''}>
+                                return `<div class="ws-persona-entry" data-entry-uid="${_esc(entry.uid)}">
+                                        <input type="radio" name="persona-lorebook" class="ws-persona-entry-checkbox" value="${_esc(entry.uid)}" id="persona-radio-${_esc(entry.uid)}" ${isSelected ? 'checked' : ''}>
                                         <div class="ws-persona-entry-info">
                                             <div class="ws-persona-entry-name">${escapeHtml(comment)}</div>
                                             <div class="ws-persona-entry-keys">${escapeHtml(keys)}</div>
@@ -1178,8 +1189,9 @@
                                     if (content.length > 200) content = content.substring(0, 200) + '...';
                                     const comment = (entry.comment || `條目 #${entry.uid}`).trim();
                                     const keys = entry.keys?.length ? entry.keys.join(', ') : '(無關鍵字)';
-                                    html += `<div class="ws-persona-entry" data-entry-uid="${entry.uid}" data-content="${escapeHtml(entry.content||'')}">
-                                        <input type="radio" name="group-note-lorebook" class="ws-persona-entry-checkbox" value="${entry.uid}" id="group-note-radio-${entry.uid}" ${isSelected ? 'checked' : ''}>
+                                    // 屬性值一律走 _esc（escapeHtml 那支不轉引號，條目內容裡一個 " 就能在這格塞屬性進來）
+                                    html += `<div class="ws-persona-entry" data-entry-uid="${_esc(entry.uid)}" data-content="${_esc(entry.content||'')}">
+                                        <input type="radio" name="group-note-lorebook" class="ws-persona-entry-checkbox" value="${_esc(entry.uid)}" id="group-note-radio-${_esc(entry.uid)}" ${isSelected ? 'checked' : ''}>
                                         <div class="ws-persona-entry-info">
                                             <div class="ws-persona-entry-name">${escapeHtml(comment)}</div>
                                             <div class="ws-persona-entry-keys">${escapeHtml(keys)}</div>

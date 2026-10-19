@@ -441,11 +441,13 @@
             const textC  = isDark ? '#f0f0f0' : '#333';
             const subC   = isDark ? '#888'    : '#999';
 
-            // 預覽文字
+            // 預覽文字：作者、正文是模型寫的。名字當純文字；正文跟卡片上同一套（照格式顯示、會跑的拿掉）
             const preview = (post.content || '').replace(/\n/g, ' ').substring(0, 40);
+            const _A = win.AUI || window.AUI;
+            const previewSafe = (_A && _A.safeHtml) ? _A.safeHtml(preview) : _esc(preview);
             const previewHtml = `<div style="background:${isDark?'#252525':'#f8f8f8'}; border-radius:8px; padding:10px 12px; margin:12px 15px 0; font-size:13px; color:${subC}; border-left:3px solid #ff8200;">
-                <span style="color:#ff8200; font-weight:bold;">@${post.user}</span>
-                <span style="margin-left:6px;">${preview}${post.content && post.content.length > 40 ? '…' : ''}</span>
+                <span style="color:#ff8200; font-weight:bold;">@${_esc(post.user)}</span>
+                <span style="margin-left:6px;">${previewSafe}${post.content && post.content.length > 40 ? '…' : ''}</span>
             </div>`;
 
             const listHtml = contactList.map(c => {

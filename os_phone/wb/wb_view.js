@@ -9,6 +9,25 @@
 (function() {
     const win = window.parent || window;
 
+    // 微博的貼文、評論、作者、投票、影片、位置、#標籤 整篇都是模型寫的（她自己發的也是她打的字）：
+    //   _esc：名字、標題這種純文字；_rich：貼文和評論正文——照格式顯示（原本就當 HTML 畫，粗體換行照留），但 <script>、onerror、javascript: 一律拿掉；
+    //   _jsArg：塞進 onclick="…('這裡')" 的字串參數；_cssUrl：塞進 style="background-image:url('這裡')" 的網址。
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _jsArg(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
+    }
+    function _cssUrl(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ''));
+    }
+    function _rich(s) {
+        const A = win.AUI || window.AUI;
+        return (A && A.safeHtml) ? A.safeHtml(String(s)) : _esc(s);
+    }
+
     win.WB_VIEW = {
         
         getAvatar: function(name) {
@@ -73,9 +92,9 @@
                     const totalVotes = Math.floor(Math.random() * 5000) + 500;
                     let optionHtmls = options.map(opt => {
                         const percent = Math.floor(Math.random() * 80) + 10;
-                        return `<div class="wb-vote-option"><div class="wb-vote-bar-bg"><div class="wb-vote-bar-fill" style="width: ${percent}%"></div><span class="wb-vote-txt">${opt}</span><span class="wb-vote-count">${percent * 12}票</span></div></div>`;
+                        return `<div class="wb-vote-option"><div class="wb-vote-bar-bg"><div class="wb-vote-bar-fill" style="width: ${percent}%"></div><span class="wb-vote-txt">${_esc(opt)}</span><span class="wb-vote-count">${percent * 12}票</span></div></div>`;
                     }).join('');
-                    voteHtml = `<div class="wb-vote-card"><div class="wb-vote-title"><span class="wb-vote-icon">投票</span> ${title}</div>${optionHtmls}<div style="font-size:11px; color:#999; margin-top:5px;">${totalVotes} 人參與 · 已結束</div></div>`;
+                    voteHtml = `<div class="wb-vote-card"><div class="wb-vote-title"><span class="wb-vote-icon">投票</span> ${_esc(title)}</div>${optionHtmls}<div style="font-size:11px; color:#999; margin-top:5px;">${totalVotes} 人參與 · 已結束</div></div>`;
                 } else if (post.media.type === 'video') {
                     const title = post.media.title || '視頻';
                     const desc = post.media.desc || '';
@@ -83,12 +102,12 @@
                         <div class="wb-video-overlay"></div>
                         <div class="wb-play-icon"><div class="wb-play-arrow"></div></div>
                         <div class="wb-video-tag">03:45</div>
-                        <div class="wb-video-caption"><div class="wb-video-title">${title}</div>${desc ? `<div class="wb-video-desc">${desc}</div>` : ''}</div>
+                        <div class="wb-video-caption"><div class="wb-video-title">${_esc(title)}</div>${desc ? `<div class="wb-video-desc">${_esc(desc)}</div>` : ''}</div>
                     </div>`;
                 } else if (post.media.type === 'location') {
                     const name = post.media.name || '';
                     const desc = post.media.desc || '';
-                    videoHtml = `<div class="wb-loc-card"><i class="fa-solid fa-location-dot"></i><div class="wb-loc-text"><div class="wb-loc-name">${name}</div>${desc ? `<div class="wb-loc-desc">${desc}</div>` : ''}</div></div>`;
+                    videoHtml = `<div class="wb-loc-card"><i class="fa-solid fa-location-dot"></i><div class="wb-loc-text"><div class="wb-loc-name">${_esc(name)}</div>${desc ? `<div class="wb-loc-desc">${_esc(desc)}</div>` : ''}</div></div>`;
                 } else if (post.media.type === 'image' || post.media.type === 'images') {
                     // 圖片走三個手機 app 共用的管道；ref = 貼文 id｜第幾張，生完寫回 post.media
                     const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
@@ -109,9 +128,9 @@
                     const totalVotes = Math.floor(Math.random() * 5000) + 500;
                     let optionHtmls = options.map(opt => {
                         const percent = Math.floor(Math.random() * 80) + 10;
-                        return `<div class="wb-vote-option"><div class="wb-vote-bar-bg"><div class="wb-vote-bar-fill" style="width: ${percent}%"></div><span class="wb-vote-txt">${opt}</span><span class="wb-vote-count">${percent * 12}票</span></div></div>`;
+                        return `<div class="wb-vote-option"><div class="wb-vote-bar-bg"><div class="wb-vote-bar-fill" style="width: ${percent}%"></div><span class="wb-vote-txt">${_esc(opt)}</span><span class="wb-vote-count">${percent * 12}票</span></div></div>`;
                     }).join('');
-                    voteHtml = `<div class="wb-vote-card"><div class="wb-vote-title"><span class="wb-vote-icon">投票</span> ${title}</div>${optionHtmls}<div style="font-size:11px; color:#999; margin-top:5px;">${totalVotes} 人參與 · 已結束</div></div>`;
+                    voteHtml = `<div class="wb-vote-card"><div class="wb-vote-title"><span class="wb-vote-icon">投票</span> ${_esc(title)}</div>${optionHtmls}<div style="font-size:11px; color:#999; margin-top:5px;">${totalVotes} 人參與 · 已結束</div></div>`;
                     contentHtml = contentHtml.replace(voteMatch[0], '');
                 }
             }
@@ -120,7 +139,8 @@
                 const videoMatch = contentHtml.match(/\[(Video|视频|視頻)[:：]\s*(.*?)\]/i);
                 if (videoMatch) {
                     const desc = videoMatch[2].trim();
-                    videoHtml = `<div class="wb-video-card" onclick="event.stopPropagation(); window.open('https://www.bilibili.com/results?search_query=${encodeURIComponent(desc)}')"><div class="wb-video-overlay"></div><div class="wb-play-icon"><div class="wb-play-arrow"></div></div><div class="wb-video-tag">03:45</div><div style="position:absolute; bottom:10px; left:10px; color:white; font-size:12px; font-weight:bold; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${desc}</div></div>`;
+                    // encodeURIComponent 不轉 ' ( ) -：一句 '-alert(1)-' 就能從 window.open 的字串跳出去，外面再包一層 _jsArg
+                    videoHtml = `<div class="wb-video-card" onclick="event.stopPropagation(); window.open('https://www.bilibili.com/results?search_query=${_jsArg(encodeURIComponent(desc))}')"><div class="wb-video-overlay"></div><div class="wb-play-icon"><div class="wb-play-arrow"></div></div><div class="wb-video-tag">03:45</div><div style="position:absolute; bottom:10px; left:10px; color:white; font-size:12px; font-weight:bold; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${_esc(desc)}</div></div>`;
                     contentHtml = contentHtml.replace(videoMatch[0], '');
                 }
             }
@@ -136,7 +156,7 @@
                         contentHtml = contentHtml.replace(tag, '');
                     });
                     if (imgList.length > 0) {
-                        imagesHtml = `<div class="wb-img-grid" data-photo-scope style="grid-template-columns: repeat(${Math.min(3, imgList.length)}, 1fr);">${imgList.map(url => { const bg = url ? `background-image:url('${url}')` : `background:#ddd; display:flex; align-items:center; justify-content:center; color:#999; font-size:20px;`; const inner = url ? '' : '<i class="fa-solid fa-image"></i>'; return `<div class="wb-img-item" style="${bg}"${url ? ` data-photo="${url}"` : ''} onclick="event.stopPropagation(); var V = (window.parent.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER); if (V && this.dataset.photo) V.openFrom(this);">${inner}</div>`; }).join('')}</div>`;
+                        imagesHtml = `<div class="wb-img-grid" data-photo-scope style="grid-template-columns: repeat(${Math.min(3, imgList.length)}, 1fr);">${imgList.map(url => { const bg = url ? `background-image:url('${_cssUrl(url)}')` : `background:#ddd; display:flex; align-items:center; justify-content:center; color:#999; font-size:20px;`; const inner = url ? '' : '<i class="fa-solid fa-image"></i>'; return `<div class="wb-img-item" style="${bg}"${url ? ` data-photo="${_esc(url)}"` : ''} onclick="event.stopPropagation(); var V = (window.parent.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER); if (V && this.dataset.photo) V.openFrom(this);">${inner}</div>`; }).join('')}</div>`;
                     }
                 }
             }
@@ -148,7 +168,7 @@
                 contentHtml = contentHtml.replace(hashtagRegex, '').trim();
             }
             const tagsHtml = hashTags.length > 0
-                ? `<div class="wb-tags">${hashTags.map(t => `<span class="wb-tag">${t}</span>`).join('')}</div>`
+                ? `<div class="wb-tags">${hashTags.map(t => `<span class="wb-tag">${_esc(t)}</span>`).join('')}</div>`
                 : '';
 
             const appRef = "(window.parent.wbApp || window.wbApp)";
@@ -159,14 +179,14 @@
             return `
                 <div class="${cardClass}" ${clickAttr}>
                     <div class="wb-user-row">
-                        <div class="wb-avatar" style="background-image: url('${avatar}')"></div>
+                        <div class="wb-avatar" style="background-image: url('${_cssUrl(avatar)}')"></div>
                         <div class="wb-user-info">
-                            <div class="wb-username">${displayName}${post.verified ? ' <i class="fa-solid fa-circle-check wb-verified"></i>' : ''} ${deleteBtn}</div>
-                            <div class="wb-time">${this.fmtTime(post)} · 來自 PhoneOS</div>
+                            <div class="wb-username">${_esc(displayName)}${post.verified ? ' <i class="fa-solid fa-circle-check wb-verified"></i>' : ''} ${deleteBtn}</div>
+                            <div class="wb-time">${_esc(this.fmtTime(post))} · 來自 PhoneOS</div>
                         </div>
                         ${post.isMe ? '<div class="wb-me-badge">本人</div>' : ''}
                     </div>
-                    <div class="wb-text">${contentHtml.trim()}</div>
+                    <div class="wb-text">${_rich(contentHtml.trim())}</div>
                     ${tagsHtml}
                     ${voteHtml} ${videoHtml} ${imagesHtml}
                     
@@ -214,15 +234,16 @@
                     const highlightStyle = isMyComment ? 'color:#ff8200;' : '';
 
                     // 回覆按鈕：點擊後在輸入框填入 "回覆 名字: "
-                    const escapedName = cName.replace(/'/g, "\\'");
+                    //   名字是模型寫的：以前只轉了單引號，一個雙引號就把 onclick 截斷、後面接什麼都會跑。照 JS 字串＋屬性兩層轉
+                    const escapedName = _jsArg(cName);
                     const replyHtml = `<span class="wb-cmt-reply" onclick="const inp=(window.parent&&window.parent.document||document).getElementById('wb-comment-input'); if(inp){inp.value='回覆 ${escapedName}: '; inp.focus({preventScroll:true}); const btn=inp.parentElement&&inp.parentElement.nextElementSibling; if(btn)btn.classList.add('active');}">回覆</span>`;
 
                     return `
                         <div class="wb-comment-item">
-                            <div class="wb-cmt-avatar" style="background-image:url('${cAvatar}')"></div>
+                            <div class="wb-cmt-avatar" style="background-image:url('${_cssUrl(cAvatar)}')"></div>
                             <div class="wb-cmt-body">
-                                <div class="wb-cmt-user"><span style="${highlightStyle}">${displayCommentName}</span> ${delHtml}</div>
-                                <div class="wb-cmt-content">${cContent}</div>
+                                <div class="wb-cmt-user"><span style="${highlightStyle}">${_esc(displayCommentName)}</span> ${delHtml}</div>
+                                <div class="wb-cmt-content">${_rich(cContent)}</div>
                                 <div class="wb-cmt-time">剛剛 ${replyHtml}</div>
                             </div>
                         </div>`;
@@ -294,7 +315,7 @@
         renderMePage: function(isDark = false) {
             let account = { weiboNickname: 'User', realName: 'User', bio: '...', avatar: '', followers: 1024, following: 128, posts: 0 };
             if (win.WB_ACCOUNT && typeof win.WB_ACCOUNT.getCurrentAccount === 'function') account = win.WB_ACCOUNT.getCurrentAccount();
-            const avatarStyle = account.avatar ? `background-image: url('${account.avatar}')` : `background-image: url('${this.getAvatar(account.weiboNickname)}')`;
+            const avatarStyle = account.avatar ? `background-image: url('${_cssUrl(account.avatar)}')` : `background-image: url('${_cssUrl(this.getAvatar(account.weiboNickname))}')`;
             const appRef = "(window.parent.wbApp || window.wbApp)";
 
             const pageBg      = isDark ? '#111'     : '#fff';
@@ -311,9 +332,9 @@
             return `<div style="background: ${pageBg}; height: 100%; overflow-y: auto;">
                     <div style="background: linear-gradient(to bottom, #ffae00, #ff8200); padding: 40px 20px 20px 20px; color: #fff; display:flex; flex-direction:column; align-items:center;">
                         <div style="width: 70px; height: 70px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.5); ${avatarStyle}; background-size: cover; margin-bottom: 10px; background-color:#fff;"></div>
-                        <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">${account.weiboNickname}</div>
-                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">真名：${account.realName}</div>
-                        <div style="font-size: 12px; opacity: 0.8; margin-bottom: 15px; max-width:80%; text-align:center;">${account.bio}</div>
+                        <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">${_esc(account.weiboNickname)}</div>
+                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">真名：${_esc(account.realName)}</div>
+                        <div style="font-size: 12px; opacity: 0.8; margin-bottom: 15px; max-width:80%; text-align:center;">${_esc(account.bio)}</div>
                         <div style="display:flex; gap: 30px; font-size: 13px; text-align:center;">
                             <div><div style="font-weight:bold; font-size:16px;">${(win.wbApp && win.wbApp.followList) ? win.wbApp.followList().length : account.following}</div><div>關注</div></div>
                             <div><div style="font-weight:bold; font-size:16px;">${account.followers}</div><div>粉絲</div></div>

@@ -3314,7 +3314,7 @@
         get APP_CONTAINER() { return APP_CONTAINER; },
         get GLOBAL_CHATS() { return GLOBAL_CHATS; },
         
-        revealRecall: function(el, encodedContent) { const content = decodeURIComponent(encodedContent); if (el.dataset.revealed === 'true') { el.innerHTML = el.dataset.original; el.dataset.revealed = 'false'; el.style.color = ''; el.style.fontStyle = ''; } else { el.dataset.original = el.innerHTML; el.innerHTML = `[已撤回]: ${content}`; el.dataset.revealed = 'true'; el.style.color = '#fa5151'; el.style.fontStyle = 'italic'; } },
+        revealRecall: function(el, encodedContent) { const content = decodeURIComponent(encodedContent); if (el.dataset.revealed === 'true') { el.innerHTML = el.dataset.original; el.dataset.revealed = 'false'; el.style.color = ''; el.style.fontStyle = ''; } else { el.dataset.original = el.innerHTML; el.innerHTML = `[已撤回]: ${_escAttr(content)}`; el.dataset.revealed = 'true'; el.style.color = '#fa5151'; el.style.fontStyle = 'italic'; } },
         
         openRedPacketById: function(packetId) {
             const data = getRedPacketData(packetId);
@@ -3423,7 +3423,8 @@
                 if (sortedList.length === 0) {
                     listContainer.innerHTML = '<div style="text-align:center; padding:30px; color:#999; font-size:13px;">等待領取中...</div>';
                 } else {
-                    listContainer.innerHTML = sortedList.map(item => `<div class="wx-rp-item"><div class="wx-rp-item-avatar" style="background-image: url('https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(item.name)}&backgroundColor=e6e6e6')"></div><div class="wx-rp-item-info"><div class="wx-rp-item-name">${item.name}</div><div class="wx-rp-item-time">${item.time || '剛剛'}</div></div><div class="wx-rp-item-amount">${item.amount.toFixed(2)} 元</div></div>`).join('');
+                    // 領取人名字、時間是模型寫的（[系統: 誰領取了紅包…]）：當純文字
+                    listContainer.innerHTML = sortedList.map(item => `<div class="wx-rp-item"><div class="wx-rp-item-avatar" style="background-image: url('https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(item.name)}&backgroundColor=e6e6e6')"></div><div class="wx-rp-item-info"><div class="wx-rp-item-name">${_escAttr(item.name)}</div><div class="wx-rp-item-time">${_escAttr(item.time || '剛剛')}</div></div><div class="wx-rp-item-amount">${item.amount.toFixed(2)} 元</div></div>`).join('');
                 }
                 overlay.classList.add('show');
             } catch (e) {
@@ -5067,7 +5068,7 @@
         renderTabs() {
             const el = document.getElementById('wxStickerTabs'); if (!el) return;
             el.innerHTML = this._libs.map(lib =>
-                `<button class="wx-stk-tab${lib.id === this._currentLib ? ' active' : ''}" onclick="(window.parent||window).WX_STICKER.switchLib('${_jsArg(lib.id)}')">${lib.name}</button>`
+                `<button class="wx-stk-tab${lib.id === this._currentLib ? ' active' : ''}" onclick="(window.parent||window).WX_STICKER.switchLib('${_jsArg(lib.id)}')">${_escAttr(lib.name)}</button>`
             ).join('');
         },
         renderGrid(id) {
@@ -5084,7 +5085,7 @@
             const el = document.getElementById('wxStickerManage'); if (!el) return;
             const _ai = this.aiLibId();
             el.innerHTML = this._libs.length
-                ? this._libs.map(lib => `<div class="wx-stk-lib-row"><span class="wx-stk-lib-name">${lib.name}</span><span class="wx-stk-lib-count">${lib.stickers.length}張</span>` +
+                ? this._libs.map(lib => `<div class="wx-stk-lib-row"><span class="wx-stk-lib-name">${_escAttr(lib.name)}</span><span class="wx-stk-lib-count">${lib.stickers.length}張</span>` +
                     `<button class="wx-stk-ai${lib.id === _ai ? ' on' : ''}" onclick="(window.parent||window).WX_STICKER.setAiLib('${lib.id === _ai ? '' : _jsArg(lib.id)}')">${lib.id === _ai ? '角色在用這包' : '給角色用'}</button>` +
                     `<button class="wx-stk-lib-del" onclick="(window.parent||window).WX_STICKER.deleteLib('${_jsArg(lib.id)}')">✕</button></div>`).join('')
                 : '<div class="wx-stk-empty">尚無庫</div>';

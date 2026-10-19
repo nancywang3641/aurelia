@@ -8,6 +8,12 @@
     const doc = win.document;
     
     const STYLE_ID = 'wx-bubble-custom-style';
+    // 聊天室代號（模型取的）、存著的 CSS（她貼的、別人分享的）放進 HTML 前轉掉：textarea 裡一句 </textarea> 就能跳出去長出別的標籤
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
 
     // 預設樣式 (若該角色未設定，使用此樣式)
     // 🚨mode 'default'＝什麼都不注入，讓 app 自己的樣式說話。
@@ -231,7 +237,7 @@
             const on = (t) => tab === t;
 
             const html = `
-                <div class="wx-modal-title">氣泡設置 (${chatId})</div>
+                <div class="wx-modal-title">氣泡設置 (${_esc(chatId)})</div>
                 <div style="font-size:11px; text-align:center; color:#999; margin-bottom:10px;">此設定僅對本聊天室生效</div>
 
                 <div style="display:flex; border-bottom:1px solid #eee; margin-bottom:10px;">
@@ -303,7 +309,7 @@
                 </div>
 
                 <div id="panel-custom" style="display:${config.mode === 'custom' ? 'block' : 'none'};">
-                    <textarea id="inp-css" class="wx-modal-input" style="height:150px; font-family:monospace; font-size:11px; white-space:pre;">${config.customCSS}</textarea>
+                    <textarea id="inp-css" class="wx-modal-input" style="height:150px; font-family:monospace; font-size:11px; white-space:pre;">${_esc(config.customCSS)}</textarea>
                 </div>
 
                 <!-- 📚 主題庫：全域，收藏一次之後任何人的聊天室都能套。
