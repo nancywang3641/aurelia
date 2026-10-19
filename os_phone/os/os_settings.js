@@ -5463,12 +5463,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         if (fileInput) fileInput.addEventListener('change', async (e) => {
             const file = e.target.files?.[0];
             if (!file || !BACKUP) return;
-            if (!await AUI.confirm('從本地 JSON 還原將合併資料，確定繼續？')) return;
+            if (!await AUI.confirm('用這份備份還原？會跟這台現有的資料合併，同一筆以備份那份為準。還原完會自己重新整理。', { okText: '還原', title: '從備份檔還原' })) return;
             setStatus('正在匯入...', 'rgba(26,28,40,0.25)');
             try {
                 const result = await BACKUP.importLocal(file);
-                setStatus(`匯入完成：世界書 ${result.worldbook} 條、設定 ${result.localStorage} 項` + (result.favVoices ? `、收藏的語音 ${result.favVoices} 段` : '')
-                    + (result.lsFailed ? `；另有 ${result.lsFailed} 項設定沒存下來（本機空間滿了）` : ''), result.lsFailed ? '#fc8181' : 'rgba(26,28,40,0.25)');
+                BACKUP.afterRestore(result, '從備份檔還原');   // 馬上重整：開著的畫面還是舊的，不重整會被寫回去（os_backup.js 那段）
+                return;
             } catch(e) { setStatus('匯入失敗：' + e.message, '#fc8181'); }
             e.target.value = '';
         });
@@ -5538,11 +5538,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             $('#cloudbk-list').addEventListener('click', async (e) => {
                 const b = e.target.closest('[data-id]');
                 if (!b) return;
-                if (!await AUI.confirm('用這一份還原？會跟手機上現有的資料合併，同一筆以備份那份為準。', { okText: '還原', title: '從雲端還原' })) return;
+                if (!await AUI.confirm('用這一份還原？會跟手機上現有的資料合併，同一筆以備份那份為準。還原完會自己重新整理。', { okText: '還原', title: '從雲端還原' })) return;
                 b.textContent = '還原中…';
                 try {
                     const res = await BACKUP.applyData(await BACKUP.cloudGet(b.dataset.id));
-                    if (await AUI.confirm('還原好了（聊天 ' + res.chats + '、劇情 ' + res.vn + '、世界書 ' + res.worldbook + '、設定 ' + res.localStorage + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + '）' + (res.lsFailed ? '，另有 ' + res.lsFailed + ' 項設定沒存下來（本機空間滿了）' : '') + '。重新整理才看得到，現在重新整理？', { okText: '重新整理', title: '從雲端還原' })) location.reload();
+                    BACKUP.afterRestore(res, '從雲端還原');   // 以前問「現在重新整理？」可以按不要：不重整的話開著的畫面會把舊的寫回去
+                    return;
                 } catch (e2) { AUI.alert('還原沒成功：' + e2.message); }
                 b.textContent = '還原';
             });

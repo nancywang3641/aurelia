@@ -398,10 +398,33 @@
 
     async function importLocal(file, opts = {}) {
         const text = await file.text();
-        const data = JSON.parse(text);
-        if (!data.version || !data.db) throw new Error('無法識別的備份格式');
+        let data;
+        try { data = JSON.parse(text); } catch (e) { throw new Error('這個檔讀不出來，不是奧瑞亞的備份檔'); }   // 以前直接把瀏覽器的英文錯誤丟到畫面上
+        if (!data || !data.version || !data.db) throw new Error('無法識別的備份格式');
         return applyData(data, opts);
     }
+
+    // ── 還原完一律馬上重新整理（10-20 整條跑過抓到的）────────────────
+    //   開著的畫面（聊天 app、宿舍…）記憶體裡還是還原前那份；不重整的話，她在那裡的下一個動作就把舊的整份寫回去，
+    //   蓋掉剛還原的（實測：聊天室還原成備份那版，接著在那間多一行系統訊息，資料庫又變回這台原本那版）。
+    //   以前雲端那條問「現在重新整理？」可以按不要，本機檔那條連問都沒問。
+    //   不先跳窗等她按：等的那段背景的計時器（心跳、主動傳訊）一樣會寫回舊的。結果記在 sessionStorage，重整後再講
+    const RESTORED_KEY = 'os_backup_restored';
+    function afterRestore(res, title) {
+        res = res || {};
+        const msg = '還原好了（聊天 ' + (res.chats || 0) + '、劇情 ' + (res.vn || 0) + '、世界書 ' + (res.worldbook || 0) + '、設定 ' + (res.localStorage || 0)
+            + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + '）'
+            + (res.lsFailed ? '，另有 ' + res.lsFailed + ' 項設定沒存下來（本機空間滿了）' : '') + '。';
+        try { sessionStorage.setItem(RESTORED_KEY, JSON.stringify({ title: title || '還原', msg: msg })); } catch (e) {}
+        location.reload();
+    }
+    try {
+        const r = JSON.parse(sessionStorage.getItem(RESTORED_KEY) || 'null');
+        if (r) {
+            sessionStorage.removeItem(RESTORED_KEY);
+            setTimeout(() => { const A = win.AUI || window.AUI; try { if (A && A.alert) A.alert(r.msg, { title: r.title, modal: true }); } catch (e) {} }, 2500);
+        }
+    } catch (e) {}
 
     // ── 儲存空間 ────────────────────────────────────────────────────
     // 分項（掃描鈕）：文字資料算大小，圖片只算張數——圖的大小要把圖讀出來才量得到，整庫讀一遍會撐爆記憶體。
@@ -770,6 +793,7 @@
         getSettings,
         saveSettings,
         applyData,
+        afterRestore,
         exportLocal,
         importLocal,
         estimateSize,
