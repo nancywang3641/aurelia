@@ -11,6 +11,12 @@
 (function() {
     console.log('[PhoneOS] 載入賽博塔羅系統 (V6.0 Seamless Immersion)...');
     const win = window.parent || window;
+    // 她打的問題＝純文字；占卜師（模型）的回覆可能帶粗體換行，過 AUI.safeHtml：照格式顯示、夾帶的程式不會跑
+    const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const _aiHtml = (t) => {
+        const A = win.AUI || window.AUI;
+        return (A && A.safeHtml) ? A.safeHtml(String(t == null ? '' : t).replace(/\n/g, '<br>')) : _esc(t).replace(/\n/g, '<br>');
+    };
 
     // =================================================================
     // 1. 樣式定義 (Cyber Mysticism V6.0)
@@ -570,7 +576,7 @@
         if (STATE.isAnalyzing) return;
         STATE.isAnalyzing = true;
 
-        appendMessage('user', STATE.question);
+        appendMessage('user', _esc(STATE.question));
         
         // 🔥 轉移：在聊天中顯示卡牌
         renderCardsToHistory(STATE.selectedCards);
@@ -632,7 +638,7 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
         STATE.isAnalyzing = true;
 
         const currentTime = getCurrentTime();
-        appendMessage('user', text);
+        appendMessage('user', _esc(text));
         STATE.chatHistory.push({ role: 'user', content: `【當前時間】${currentTime.formatted}\n\n${text}` });
         // 提醒只加在這一輪送出的訊息裡、不寫進 chatHistory（不然每輪都疊一條，聊久了整串都是提醒）
         await streamResponse(STATE.chatHistory.concat([{ role: 'system', content: tableStateNote() }]));
@@ -660,7 +666,7 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
                     }
                 }, (final) => {
                     fullResponse = final || fullResponse;
-                    textEl.innerHTML = fullResponse.replace(/\n/g, '<br>');
+                    textEl.innerHTML = _aiHtml(fullResponse);
                     log.scrollTop = log.scrollHeight;
                     resolve();
                 }, reject, { task: 'tarot' });
@@ -673,14 +679,14 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
                 // 🚨 標記之後的內容一律砍掉：牌還沒抽，模型在標記後面接著寫的一定是幻覺出來的牌。
                 //    用程式強制「停在標記」，不靠模型自律。
                 cleanResponse = fullResponse.split('[drew a card]')[0].trim();
-                textEl.innerHTML = cleanResponse.replace(/\n/g, '<br>');
+                textEl.innerHTML = _aiHtml(cleanResponse);
                 setTimeout(() => { showDrawCardButton(); }, 300);
             }
             
             STATE.chatHistory.push({ role: 'assistant', content: cleanResponse });
 
         } catch (e) {
-            textEl.innerHTML = `<span style="color:red">連接斷開: ${e.message}</span>`;
+            textEl.innerHTML = `<span style="color:red">連接斷開: ${_esc(e && e.message)}</span>`;
             console.error(e);
         }
     }

@@ -211,7 +211,11 @@
         if (!w) return '';
         if (typeof w.html === 'function') return w.html(w);
         // 她自己做的：一段 HTML。組件很小，不給它 script —— 要跑程式的東西做成應用。
-        return '<div class="aps-w-user">' + String(w.html || '') + '</div>';
+        //   貼來的、創作室（模型）做的都算外來：過 AUI.safeHtml，畫面與 <style> 照留，onerror／script 這類會跑的拿掉。
+        //   外殼一起包進去再消毒：開頭就是 <style> 的那種，DOMPurify 會把開頭的 <style> 當成 head 的東西丟掉
+        const h = '<div class="aps-w-user">' + String(w.html || '') + '</div>';
+        const A = win.AUI || window.AUI;
+        return (A && A.safeHtml) ? A.safeHtml(h) : '<div class="aps-w-user">' + _esc(w.html) + '</div>';
     }
     // 掛上去之後要動的部分（時鐘走分針、拍立得跟著今天那句話變）
     function paint(el, w) {
@@ -290,7 +294,7 @@
         const cur = sizeKeyOf(w);
         return Object.keys(SIZES).map(function (k) {
             return '<button class="wg-sz' + (k === cur ? ' wg-sz-on' : '') + '" data-wg-size="' + k
-                 + '" data-wg-id="' + w.id + '" type="button">' + SIZES[k].name + '</button>';
+                 + '" data-wg-id="' + _esc(w.id) + '" type="button">' + SIZES[k].name + '</button>';
         }).join('');
     }
     function _row(w) {
@@ -302,11 +306,11 @@
              +     '<div class="wg-szs">' + _sizeBtns(w) + '</div>'
              +   '</div>'
              +   '<div class="wg-row-go">'
-             +     '<button class="wg-put' + (on ? ' wg-put-on' : '') + '" data-wg-put="' + w.id + '" type="button">'
+             +     '<button class="wg-put' + (on ? ' wg-put-on' : '') + '" data-wg-put="' + _esc(w.id) + '" type="button">'
              +       '<i class="fa-solid ' + (on ? 'fa-check' : 'fa-plus') + '"></i>'
              +       '<span>' + (on ? '在主畫面上' : '放到主畫面') + '</span>'
              +     '</button>'
-             +     (_isBuiltin(w.id) ? '' : '<button class="wg-del" data-wg-del="' + w.id + '" type="button" title="刪掉這個組件"><i class="fa-solid fa-trash"></i></button>')
+             +     (_isBuiltin(w.id) ? '' : '<button class="wg-del" data-wg-del="' + _esc(w.id) + '" type="button" title="刪掉這個組件"><i class="fa-solid fa-trash"></i></button>')
              +   '</div>'
              + '</div>';
     }

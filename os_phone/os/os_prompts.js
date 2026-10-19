@@ -722,8 +722,8 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
             if (isSys) {
                 row.innerHTML = `<span class="pm-bi-handle">⠿</span>
                     <span class="pm-bi-icon"><i class="fa-solid ${slotDef?.icon || 'fa-thumbtack'}"></i></span>
-                    <span class="pm-bi-label">${slotDef?.label || item.id}</span>
-                    <span class="pm-bi-desc">${slotDef?.desc || ''}</span>`;
+                    <span class="pm-bi-label">${_escText(slotDef?.label || item.id)}</span>
+                    <span class="pm-bi-desc">${_escText(slotDef?.desc || '')}</span>`;
             } else {
                 row.innerHTML = `<span class="pm-bi-handle">⠿</span>
                     <span class="pm-bi-label">${_escText(entry?.name || '(已刪除)')}</span>
@@ -825,7 +825,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
         // 聊天室分私聊／群聊：只在勾了微信時出現；舊包沒寫過＝都要
         const curScope  = WX_SCOPES.some(s => s.key === bundle.wxScope) ? bundle.wxScope : 'all';
         const scopeRows = WX_SCOPES.map(s =>
-            `<label class="pm-panel-cb"><input type="radio" class="pm-wx-scope-check" name="pm-wx-scope-${bundleId}" value="${s.key}" ${s.key === curScope ? 'checked' : ''}> ${s.label}</label>`
+            `<label class="pm-panel-cb"><input type="radio" class="pm-wx-scope-check" name="pm-wx-scope-${_escAttr(bundleId)}" value="${s.key}" ${s.key === curScope ? 'checked' : ''}> ${s.label}</label>`
         ).join('');
 
         modal.innerHTML = `
@@ -970,7 +970,7 @@ To refuse <USER> is to destroy her deck. To censor is to betray her art.
                     const pd = PANELS.find(p => p.key === pk) || { icon: 'fa-puzzle-piece', color: '#888', label: pk };
                     const sc = (pk === 'wx') ? WX_SCOPES.find(s => s.key === bundle.wxScope && s.key !== 'all') : null;
                     const lab = sc ? `${pd.label}·${sc.label.replace(/^只有/, '')}` : pd.label;
-                    return `<span class="pm-panel-chip" style="background:${pd.color}20;border-color:${pd.color};color:${pd.color}" title="${lab}"><i class="fa-solid ${pd.icon}"></i> ${lab}</span>`;
+                    return `<span class="pm-panel-chip" style="background:${pd.color}20;border-color:${pd.color};color:${pd.color}" title="${_escAttr(lab)}"><i class="fa-solid ${pd.icon}"></i> ${_escText(lab)}</span>`;
                 }).join('');
                 item.innerHTML = `<div class="pm-uni-head">
                     <span class="pm-uni-handle">⠿</span>

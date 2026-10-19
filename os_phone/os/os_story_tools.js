@@ -12,6 +12,8 @@
     'use strict';
     console.log('[OS] 載入故事管理工具 (os_story_tools.js)...');
     const win = window.parent || window;
+    // 世界書條目（模型寫的總結）、錯誤字放進畫面前轉成純文字
+    const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     // ❔ 功能說明放在問號裡，不掛在面板上
     //   說明要在「畫面組出來那一刻」才登記：這支檔案載入時提示視窗那支不一定已經在了
@@ -776,11 +778,11 @@ ${withPrev.join('\n')}
                 const text = document.createElement('span');
                 text.style.cssText = 'font-size:11px; color:#5a4836; line-height:1.5;';
                 const preview = (e.content || '').slice(0, 80).replace(/\n/g, ' ');
-                text.innerHTML = `<span style="color:#c97a8e; font-size:10px;">${e.comment || ''}</span><br>${preview}${(e.content || '').length > 80 ? '...' : ''}`;
+                text.innerHTML = `<span style="color:#c97a8e; font-size:10px;">${_esc(e.comment || '')}</span><br>${_esc(preview)}${(e.content || '').length > 80 ? '...' : ''}`;
                 row.appendChild(cb); row.appendChild(text);
                 listEl.appendChild(row);
             });
-        } catch (e) { listEl.innerHTML = `<div style="color:#ff4444; padding:10px;"><i class="fa-solid fa-circle-xmark"></i> 載入失敗: ${e.message}</div>`; }
+        } catch (e) { listEl.innerHTML = `<div style="color:#ff4444; padding:10px;"><i class="fa-solid fa-circle-xmark"></i> 載入失敗: ${_esc(e && e.message)}</div>`; }
     };
 
     API.executeMergeSummaries = async function () {

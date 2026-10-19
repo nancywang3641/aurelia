@@ -231,8 +231,8 @@
                 <span class="ps-sync-sub">(若需新增或編輯，請使用右側原生面板)</span>
             </div>
         ` + listToRender.map(p => `
-            <div class="ps-card ${p.active ? 'active' : ''}" data-id="${p.id}" data-name="${p.name}">
-                ${p.avatar ? `<img class="ps-avatar" src="${p.avatar}" onerror="this.src='https://files.catbox.moe/l5hl69.png'" />` : 
+            <div class="ps-card ${p.active ? 'active' : ''}" data-id="${esc(p.id)}" data-name="${esc(p.name)}">
+                ${p.avatar ? `<img class="ps-avatar" src="${esc(p.avatar)}" onerror="this.src='https://files.catbox.moe/l5hl69.png'" />` : 
                 `<div class="ps-avatar" style="display:flex;align-items:center;justify-content:center;font-size:24px;color:#1A1C28;"><i class="fa-solid fa-user"></i></div>`}
                 <div class="ps-info">
                     <div class="ps-name">
@@ -278,8 +278,8 @@
         const curId = loadCurrentId();
 
         listContainer.innerHTML = list.map(p => `
-            <div class="ps-card ${p.id === curId ? 'active' : ''}" data-id="${p.id}">
-                <img class="ps-avatar" src="${p.avatar || 'https://files.catbox.moe/l5hl69.png'}" onerror="this.src='https://files.catbox.moe/l5hl69.png'" />
+            <div class="ps-card ${p.id === curId ? 'active' : ''}" data-id="${esc(p.id)}">
+                <img class="ps-avatar" src="${esc(p.avatar || 'https://files.catbox.moe/l5hl69.png')}" onerror="this.src='https://files.catbox.moe/l5hl69.png'" />
                 <div class="ps-info">
                     <div class="ps-name">
                         ${esc(p.name)} 
@@ -288,8 +288,8 @@
                     <div class="ps-desc">${esc(p.desc) || '<i style="opacity:0.6">點擊編輯新增設定...</i>'}</div>
                 </div>
                 <div class="ps-actions">
-                    <button class="ps-btn-edit" data-id="${p.id}" title="編輯"><i class="fa-solid fa-pen"></i></button>
-                    ${list.length > 1 ? `<button class="ps-btn-del" data-id="${p.id}" title="刪除"><i class="fa-solid fa-trash"></i></button>` : ''}
+                    <button class="ps-btn-edit" data-id="${esc(p.id)}" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                    ${list.length > 1 ? `<button class="ps-btn-del" data-id="${esc(p.id)}" title="刪除"><i class="fa-solid fa-trash"></i></button>` : ''}
                 </div>
             </div>
         `).join('') + `

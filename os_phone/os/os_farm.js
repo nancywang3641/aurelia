@@ -297,7 +297,9 @@
             if (pick.raw) saveLocal(pick.raw);
             start(root, pick.raw, pick.note);
         }).catch(function (e) {
-            root.innerHTML = '<div class="farm-loading is-error"><i class="fa-solid fa-triangle-exclamation"></i><span>後院的檔案沒載到（' + String(e && e.message || e) + '）。</span>' +
+            // 錯誤字可能是伺服器回的（FarmCloud 的 data.error）：當純文字放
+            var why = String(e && e.message || e).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
+            root.innerHTML = '<div class="farm-loading is-error"><i class="fa-solid fa-triangle-exclamation"></i><span>後院的檔案沒載到（' + why + '）。</span>' +
                 '<button type="button" data-farm-retry>再試一次</button></div>';
             var b = root.querySelector('[data-farm-retry]');
             if (b) b.addEventListener('click', function () { launch(container); });

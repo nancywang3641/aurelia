@@ -429,7 +429,9 @@
         if (s.indexOf('<') < 0 && s.indexOf('&') < 0) return s;   // 沒有任何標籤：原樣（常見的純文字訊息省一次解析）
         try {
             const DP = window.DOMPurify || (window.parent && window.parent.DOMPurify);
-            if (DP && typeof DP.sanitize === 'function') s = String(DP.sanitize(s));
+            // FORCE_BODY：不帶的話，開頭就是 <style> 的那段會被 DOMPurify 當成 <head> 的東西整個丟掉（美化卡、AI 面板、組件常這樣寫），
+            //   酒館掉樣式、手機版（沒 DOMPurify）卻正常，兩邊長得不一樣（10-20 外來文字巡查拿酒館那份 DOMPurify 3.4.2 實測）
+            if (DP && typeof DP.sanitize === 'function') s = String(DP.sanitize(s, { FORCE_BODY: true }));
         } catch (e) {}
         const doc = (typeof document !== 'undefined') ? document : null;
         if (!doc) return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');   // 沒有 DOM 可以解析（不該發生）：整段當純文字

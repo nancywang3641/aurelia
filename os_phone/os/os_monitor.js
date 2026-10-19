@@ -7,6 +7,8 @@
 (function() {
     console.log('[PhoneOS] 載入系統診斷中心 (V3.7 Token Counter)...');
     const win = window.parent || window;
+    // 角色卡名、人設名、錯誤字都是外來的：放進畫面前轉成純文字
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
 
     // 注入樣式
@@ -90,8 +92,8 @@
 
                 let dataHtml = `
                     <div class="mon-row"><span>讀取耗時</span><span class="mon-val">${time}ms</span></div>
-                    <div class="mon-row"><span>角色名稱</span><span class="mon-val">${charName}</span></div>
-                    <div class="mon-row"><span>用戶名稱</span><span class="mon-val">${userName}</span></div>
+                    <div class="mon-row"><span>角色名稱</span><span class="mon-val">${esc(charName)}</span></div>
+                    <div class="mon-row"><span>用戶名稱</span><span class="mon-val">${esc(userName)}</span></div>
                     <div class="mon-row"><span>保留最近幾章全文</span>${summaryHtml}</div>
                     <div class="mon-row"><span>世界書大小</span><span class="mon-val">${loreLen} 字</span></div>
                     <hr style="border:0; border-top:1px solid #444; margin:5px 0;">
@@ -123,7 +125,7 @@
                 ui.setLog(preview);
 
             } catch (e) {
-                ui.updateSection('data-status', `<div class="mon-row"><span>讀取失敗</span><span class="mon-val err">${e.message}</span></div>`);
+                ui.updateSection('data-status', `<div class="mon-row"><span>讀取失敗</span><span class="mon-val err">${esc(e && e.message)}</span></div>`);
                 ui.log("錯誤: " + e.message);
             }
         } else {

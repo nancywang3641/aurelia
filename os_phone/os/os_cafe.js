@@ -68,6 +68,8 @@
     const K_STAFF2 = 'staff2'; // 雇來的員工（os_cafe_hire.js）{slots:{am,pm},duty,crewQ,diary,applicants,ad}；舊的 'staff' 是小機值班
     const OPEN_MIN = 9 * 60, CLOSE_MIN = 22 * 60;   // 客人上門的時段(分鐘):照時段陸續出現,店員一天上好幾班才各有客人
     const EV_LABEL = { devotion: '本命認證', dropout: '吃膩告別' };
+    // 模型取的品名、文案、客人的話、角色名、書單都是外來的字：放進畫面前一律轉成純文字
+    const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
     const ING_ICONS = {
         coffee: '☕', tea: '🍵', soda: '🫧',
         floral: '🌼', berry: '🫐', caramel: '🍮', spice: '🧂',
@@ -1003,14 +1005,14 @@
                 ? menu.map(m => {
                     const iconId = (m.ings || []).find(id => SPRITE_POS[id]) || (m.free ? 'receipt' : 'coffee');
                     const left = _stockNow(stock, m.id, today, nowMin), next = _stockNext(stock, m.id, today, nowMin);
-                    return '<div class="oc-menu-card" data-id="' + m.id + '"><span class="oc-drink-icon">' + _sprite(iconId) + '</span>' +
-                    '<span class="oc-menu-main"><span class="oc-menu-title">' + m.name + '</span><span class="oc-blurb">' + (m.blurb || '') + '</span>' +
-                    '<span class="oc-mini-tags">' + (m.tags || []).map(t => '<i class="oc-mini-tag">' + t + '</i>').join('') + '</span></span>' +
+                    return '<div class="oc-menu-card" data-id="' + _esc(m.id) + '"><span class="oc-drink-icon">' + _sprite(iconId) + '</span>' +
+                    '<span class="oc-menu-main"><span class="oc-menu-title">' + _esc(m.name) + '</span><span class="oc-blurb">' + _esc(m.blurb || '') + '</span>' +
+                    '<span class="oc-mini-tags">' + (m.tags || []).map(t => '<i class="oc-mini-tag">' + _esc(t) + '</i>').join('') + '</span></span>' +
                     '<span class="oc-menu-side"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
                     '<span class="oc-menu-price">' + m.price + ' PT</span><span class="oc-menu-sold">售出 ' + (m.sold || 0) + '</span></span>' +
                     '<span class="oc-menu-ops"><span class="oc-stock' + (left ? '' : ' zero') + '">現在有料 <b>' + left + '</b> 份</span>' +
                     (next ? '<span class="oc-stock oc-stock-next">等開店 <b>' + next + '</b> 份</span>' : '') +
-                    '<button class="oc-make" data-id="' + m.id + '"><i class="fa-solid fa-basket-shopping"></i> 備料</button></span></div>';
+                    '<button class="oc-make" data-id="' + _esc(m.id) + '"><i class="fa-solid fa-basket-shopping"></i> 備料</button></span></div>';
                 }).join('')
                 : '<div class="oc-empty"><i class="fa-solid fa-mug-hot"></i>菜單還是空的。<br>去「調配」研發出好東西再上架吧。</div>');
             // 🧺 備料：點了展開 1～8 份，選好看花多少，按「備」才扣
@@ -1034,14 +1036,14 @@
             body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-users"></i> 訪客手札</span><span class="oc-section-note">最近 ' + logs.length + ' 筆</span></div>' + (logs.length
                 ? logs.map(l => {
                     if (l.ev) {   // 🎬 事件卡:角色親口說的,直接攤開
-                        return '<div class="oc-item ev"><span><span class="oc-name"><i class="fa-solid fa-star"></i> ' + md(l.day) + '・' + l.name + typeTag(l) + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + l.item + '」' : '') + '</span>' +
-                            '<span class="oc-said">「' + l.line + '」</span></span></div>';
+                        return '<div class="oc-item ev"><span><span class="oc-name"><i class="fa-solid fa-star"></i> ' + md(l.day) + '・' + _esc(l.name) + typeTag(l) + '・' + (EV_LABEL[l.ev] || '') + (l.item ? '「' + _esc(l.item) + '」' : '') + '</span>' +
+                            '<span class="oc-said">「' + _esc(l.line) + '」</span></span></div>';
                     }
                     // 常客照腳本跑、沒有人設，不給「聽他說」(不叫模型)
                     const hear = !!l.key && !l.g;
-                    return '<div class="oc-item' + (hear ? ' oc-click' : '') + (l.miss ? ' miss' : '') + '" data-id="' + l.id + '"><span><span class="oc-name">' + md(l.day) + (l.t != null ? ' ' + _hm(l.t) : '') + '・' + l.name + typeTag(l) + '</span>' +
-                        '<span class="oc-blurb">' + l.line + '</span>' +
-                        (l.said ? '<span class="oc-said">「' + l.said + '」</span>' : '') + '</span>' +
+                    return '<div class="oc-item' + (hear ? ' oc-click' : '') + (l.miss ? ' miss' : '') + '" data-id="' + _esc(l.id) + '"><span><span class="oc-name">' + md(l.day) + (l.t != null ? ' ' + _hm(l.t) : '') + '・' + _esc(l.name) + typeTag(l) + '</span>' +
+                        '<span class="oc-blurb">' + _esc(l.line) + '</span>' +
+                        (l.said ? '<span class="oc-said">「' + _esc(l.said) + '」</span>' : '') + '</span>' +
                         '<span class="oc-price">' + (l.price ? '+' + l.price + ' PT ' : '') +
                         (hear ? '<i class="fa-solid fa-comment-dots oc-hear' + (l.said ? ' has' : '') + '"></i>' : '') + '</span></div>';
                 }).join('')
@@ -1053,7 +1055,7 @@
                 const l = cur.find(x => x.id === id);
                 if (!l || !l.key) return;
                 const old = el.querySelector('.oc-said');
-                if (l.said) { if (old) old.remove(); else el.querySelector('.oc-blurb')?.insertAdjacentHTML('afterend', '<span class="oc-said">「' + l.said + '」</span>'); return; }
+                if (l.said) { if (old) old.remove(); else el.querySelector('.oc-blurb')?.insertAdjacentHTML('afterend', '<span class="oc-said">「' + _esc(l.said) + '」</span>'); return; }
                 if (el.querySelector('.oc-loading')) return;
                 el.querySelector('.oc-blurb')?.insertAdjacentHTML('afterend', '<span class="oc-said oc-loading">他想了想…</span>');
                 const said = await _hearNpc(l);
@@ -1068,8 +1070,8 @@
             const books = await getBooks();
             body.innerHTML = '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-book-open"></i> 客人書單</span><span class="oc-section-note">' + books.length + ' 本收藏</span></div>' + (books.length
                 ? books.map(b =>
-                    '<div class="oc-item"><span><span class="oc-name">《' + b.title + '》</span>' +
-                    '<span class="oc-blurb">' + (b.by ? b.by + ':' : '') + (b.note || '') + '</span></span></div>').join('')
+                    '<div class="oc-item"><span><span class="oc-name">《' + _esc(b.title) + '》</span>' +
+                    '<span class="oc-blurb">' + (b.by ? _esc(b.by) + ':' : '') + _esc(b.note || '') + '</span></span></div>').join('')
                 : '<div class="oc-empty"><i class="fa-solid fa-book"></i>書架還空著。<br>之後來店裡的客人會留下他們的推薦書。</div>');
         } else if (tab === 'free') {
             _renderFree(body);
@@ -1163,9 +1165,9 @@
             const ok = r.tier === 'S' || r.tier === 'A';
             slot.innerHTML =
                 '<div class="oc-result"><span class="oc-badge ' + T.cls + '">' + T.label + '</span> ' +
-                (ok ? '✨' + r.name : picked.join(' ')) +
-                '<div class="oc-note">' + (r.why || T.note) + '</div>' +
-                (ok ? '<div class="oc-blurb">' + r.blurb + '</div><button class="oc-shelf"><i class="fa-solid fa-arrow-up-from-bracket"></i> 上架</button>' : '') +
+                (ok ? '✨' + _esc(r.name) : picked.join(' ')) +
+                '<div class="oc-note">' + (r.why ? _esc(r.why) : T.note) + '</div>' +
+                (ok ? '<div class="oc-blurb">' + _esc(r.blurb) + '</div><button class="oc-shelf"><i class="fa-solid fa-arrow-up-from-bracket"></i> 上架</button>' : '') +
                 '</div>';
             const shelfBtn = slot.querySelector('.oc-shelf');
             if (shelfBtn) shelfBtn.addEventListener('click', async () => {
@@ -1176,7 +1178,7 @@
                 }
                 menu.unshift({ id: 'free_' + Date.now(), key: 'free_' + Date.now(), name: r.name, blurb: r.blurb, tier: r.tier, price: CAFE_CFG.prices[r.tier], tags: r.tags, ings: picked.slice(), free: true, ts: Date.now(), sold: 0 });
                 await _set(K_MENU, menu);
-                shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-wand-magic-sparkles"></i>「' + r.name + '」上架了!到「菜單」頁看看。</div>';
+                shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-wand-magic-sparkles"></i>「' + _esc(r.name) + '」上架了!到「菜單」頁看看。</div>';
             });
         });
     }
@@ -1204,7 +1206,7 @@
                 fresh.unshift({ id: 'drink_' + Date.now(), key, name: named.name, blurb: named.blurb, tier, price: CAFE_CFG.prices[tier], tags, ings: ings.map(x => x.id), ts: Date.now(), sold: 0 });
                 await _set(K_MENU, fresh);
             }
-            shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-mug-hot"></i>「' + named.name + '」上架了!到「菜單」頁看看。</div>';
+            shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-mug-hot"></i>「' + _esc(named.name) + '」上架了!到「菜單」頁看看。</div>';
         });
     }
     async function _renderLab(body) {

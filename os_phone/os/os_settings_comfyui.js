@@ -80,9 +80,9 @@
                     '<button type="button" class="cfd-lora-del" title="刪除" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:18px;padding:0 4px; flex:0 0 auto;">✕</button>' +
                     '<div style="flex:1 1 100%; display:flex; gap:6px; align-items:center; padding-left:24px;">' +
                         '<span style="font-size:11px; color:rgba(26,28,40,0.7); white-space:nowrap;">模型</span>' +
-                        '<input type="number" class="cfd-lora-sm set-input" step="0.1" min="0" max="2" value="' + (L.strengthModel != null ? L.strengthModel : 1) + '" title="模型強度" style="width:60px; flex:0 0 auto;">' +
+                        '<input type="number" class="cfd-lora-sm set-input" step="0.1" min="0" max="2" value="' + escAttr(L.strengthModel != null ? L.strengthModel : 1) + '" title="模型強度" style="width:60px; flex:0 0 auto;">' +
                         '<span style="font-size:11px; color:rgba(26,28,40,0.7); white-space:nowrap; margin-left:6px;">CLIP</span>' +
-                        '<input type="number" class="cfd-lora-sc set-input" step="0.1" min="0" max="2" value="' + (L.strengthClip != null ? L.strengthClip : 1) + '" title="CLIP強度" style="width:60px; flex:0 0 auto;">' +
+                        '<input type="number" class="cfd-lora-sc set-input" step="0.1" min="0" max="2" value="' + escAttr(L.strengthClip != null ? L.strengthClip : 1) + '" title="CLIP強度" style="width:60px; flex:0 0 auto;">' +
                     '</div>';
                 row.querySelector('.cfd-lora-del').addEventListener('click', function(){ row.remove(); });
                 return row;
@@ -381,7 +381,7 @@
                 if (!cfdPresets.length) { grid.innerHTML = '<div class="cfd-pack-empty">還沒有預設包。把面板調好後，按下面「<i class="fa-solid fa-plus"></i> 從目前設定另存」。</div>'; return; }
                 grid.innerHTML = cfdPresets.map(function(p, i){
                     const thumb = p.preview
-                        ? '<img class="cfd-pack-thumb" src="' + p.preview + '">'
+                        ? '<img class="cfd-pack-thumb" src="' + escAttr(p.preview) + '">'
                         : '<div class="cfd-pack-thumb cfd-pack-thumb-empty">尚無預覽</div>';
                     return '<div class="cfd-pack-card">' +
                         thumb +
