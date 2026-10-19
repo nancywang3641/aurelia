@@ -376,5 +376,68 @@
         }
     }
 
-    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset, lsSet };
+    // 🧼 外來的 HTML 要「照格式顯示、但什麼都不准跑」時用：AUI.safeHtml(html) → 字串
+    //   外來＝AI 回覆、角色卡、世界書條目、匯入檔、住戶留言這些不是程式自己組的字。純文字就用各檔的 esc 轉義，不必走這支；
+    //   這支給「本來就允許它帶一點 HTML 格式」的地方（聊天泡泡、美化卡、AI 寫的面板）。
+    //   擋：<script>、<iframe>／<frame>、<object>／<embed>、<link>／<meta>／<base>、<form>、<template>、<noscript>、<math>、
+    //       svg 的 <foreignObject>、改 href 的 svg 動畫；所有 on* 屬性、srcdoc、formaction；
+    //       href／src／action… 值是 javascript:／vbscript:／data:（圖片影音的 data: 除外）；style 裡的 expression()／javascript:／behavior／-moz-binding；
+    //       <style> 裡的 @import 和 url(javascript:…)。
+    //   留：粗體斜體、換行段落、表格清單、圖片、連結（新分頁開的補 rel=noopener）、class、一般的 style 與 <style>。
+    //   酒館有 DOMPurify 就先過它再過這一層；手機版網頁沒有 DOMPurify，只過這一層，兩邊擋的東西一樣。
+    //   用 <template> 解析：裡面的東西是死的，解析當下 script 不跑、圖片不載，所以解析本身不會出事。
+    const _SAFE_DROP = { SCRIPT: 1, IFRAME: 1, FRAME: 1, FRAMESET: 1, OBJECT: 1, EMBED: 1, APPLET: 1, LINK: 1, META: 1, BASE: 1,
+        FORM: 1, TEMPLATE: 1, NOSCRIPT: 1, MATH: 1, PORTAL: 1, FOREIGNOBJECT: 1, PARAM: 1 };
+    const _SAFE_MEDIA = { IMG: 1, SOURCE: 1, VIDEO: 1, AUDIO: 1, PICTURE: 1, IMAGE: 1, TRACK: 1, INPUT: 1 };
+    const _BAD_SCHEME = /^(?:javascript|vbscript|livescript|mocha):/i;
+    const _BAD_CSS = /expression\s*\(|javascript\s*:|vbscript\s*:|behavior\s*:|-moz-binding|url\s*\(\s*['"]?\s*(?:javascript|vbscript|data:text)/i;
+    function _cleanUrl(tag, name, v) {
+        const s = String(v).replace(/[\u0000- \u007f-\u009f]+/g, '');
+        if (_BAD_SCHEME.test(s)) return false;
+        if (!/^data:/i.test(s)) return true;
+        // data: 只准圖片影音元素的來源用（<img src="data:image/…">，img 裡的 svg 也不會跑程式）；連結、表單、其他元素的 data: 一律拿掉
+        return !!_SAFE_MEDIA[tag] && /^(?:src|srcset|poster)$/.test(name) && /^data:(?:image|audio|video)\//i.test(s);
+    }
+    function _cleanNode(root) {
+        const all = root.querySelectorAll('*');
+        for (let i = all.length - 1; i >= 0; i--) {
+            const el = all[i];
+            const tag = String(el.tagName || el.nodeName || '').toUpperCase();
+            // 名字怪的元素（像 <scr<script> 會被解析成叫「scr<script」的元素）也拿掉：本身不會跑，但留著會讓下一手解析的人誤判
+            if (_SAFE_DROP[tag] || !/^[A-Z][A-Z0-9-]*$/.test(tag)) { el.remove(); continue; }
+            // svg 的 <set>／<animate> 可以在播放時把連結換成 javascript:，改的是 href 那幾個就整個拿掉
+            if ((tag === 'SET' || tag === 'ANIMATE') && /href/i.test(el.getAttribute('attributeName') || '')) { el.remove(); continue; }
+            if (tag === 'STYLE') {
+                el.textContent = String(el.textContent || '').replace(/@import[^;]*;?/gi, '').replace(/url\s*\(\s*['"]?\s*(?:javascript|vbscript|data:text)[^)]*\)/gi, 'none').replace(/expression\s*\(/gi, '(').replace(/-moz-binding[^;]*;?/gi, '');
+                continue;
+            }
+            for (const at of Array.from(el.attributes)) {
+                const name = at.name.toLowerCase(), v = at.value;
+                if (/^on/.test(name) || name === 'srcdoc' || name === 'formaction') { el.removeAttribute(at.name); continue; }
+                if (name === 'style') { if (_BAD_CSS.test(v)) el.removeAttribute(at.name); continue; }
+                if (/^(?:href|src|xlink:href|action|data|poster|background|lowsrc|dynsrc|ping|cite|longdesc|srcset|to|from|values)$/.test(name)) {
+                    const urls = name === 'srcset' ? v.split(',').map(x => x.trim().split(/\s+/)[0]) : [v];
+                    if (urls.some(u => !_cleanUrl(tag, name, u))) el.removeAttribute(at.name);
+                }
+            }
+            if (tag === 'A' && /_blank/i.test(el.getAttribute('target') || '')) el.setAttribute('rel', 'noopener noreferrer');
+        }
+    }
+    function safeHtml(html) {
+        let s = String(html == null ? '' : html);
+        if (!s) return '';
+        if (s.indexOf('<') < 0 && s.indexOf('&') < 0) return s;   // 沒有任何標籤：原樣（常見的純文字訊息省一次解析）
+        try {
+            const DP = window.DOMPurify || (window.parent && window.parent.DOMPurify);
+            if (DP && typeof DP.sanitize === 'function') s = String(DP.sanitize(s));
+        } catch (e) {}
+        const doc = (typeof document !== 'undefined') ? document : null;
+        if (!doc) return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');   // 沒有 DOM 可以解析（不該發生）：整段當純文字
+        const tpl = doc.createElement('template');
+        tpl.innerHTML = s;
+        _cleanNode(tpl.content);
+        return tpl.innerHTML;
+    }
+
+    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset, lsSet, safeHtml };
 })();
