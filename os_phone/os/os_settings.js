@@ -3138,7 +3138,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     try {
                         const all = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
                         all.sceneGen = Object.assign({}, all.sceneGen || {}, patch);
-                        localStorage.setItem(IMG_STORAGE_KEY, JSON.stringify(all));
+                        // 存不進去（本機空間滿）lsSet 會跳提示：鈕寫「存不進去」，草稿照留著，畫面上的也別當成已保存
+                        if (!_lsSet(IMG_STORAGE_KEY, JSON.stringify(all), '插圖指令')) { b.textContent = '存不進去'; setTimeout(() => { b.textContent = '保存'; }, 1400); return; }
                         Object.assign(sg, patch);
                         tabs.forEach(t => { saved[t.key] = drafts[t.key]; });
                         b.textContent = '已保存 ✓';

@@ -71,7 +71,9 @@
                 const t = el.querySelector('#aps-lock-time');
                 const dd = el.querySelector('#aps-lock-date');
                 if (t) t.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
-                if (dd) dd.textContent = (d.getMonth() + 1) + '月' + d.getDate() + '日 週' + '日一二三四五六'.charAt(d.getDay());
+                // 跟主畫面每 15 秒更新的那支（phone_shell 的 _tickClock）同一種寫法：以前這裡寫「10月20日 週二」，
+                //   一換心情、一重畫就變一種，15 秒後又被換回「10/20 星期二」
+                if (dd) dd.textContent = (d.getMonth() + 1) + '/' + d.getDate() + ' 星期' + '日一二三四五六'.charAt(d.getDay());
                 // 心情那顆圖示由主畫面那邊補（圖示清單在它那裡，不另外抄一份）
             }
         },

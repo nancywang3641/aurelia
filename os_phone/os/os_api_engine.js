@@ -444,7 +444,7 @@
             .replace(/^[ \t]*\[\s*(?:Chat|With)\s*[:：][^\]\n]*\][ \t]*(?:\r?\n|$)/gim, '')
             .replace(/^\s*\n/, '');
     }
-    // 這一間是誰、群裡有誰、還能傳到哪幾間。只給名字不給代號；回覆裡另開 <chat chatroom="名字"> 才會傳過去（wx_core _wxSplitRooms）
+    // 這一間是誰、群裡有誰、還能傳到哪幾間。能傳的那幾間寫成「名字＝代號」；回覆裡另開 <chat> 帶代號才會傳過去（wx_core _wxSplitRooms，只認代號）
     function _wxRoomsNote(apiChat) {
         if (!apiChat) return '';
         let contacts = [];

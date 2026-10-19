@@ -1144,7 +1144,11 @@
                 const want = rid || target;
                 console.warn('[WX] 這一段' + (rid ? '的代號「' + rid + '」對不到聊天室' : '沒寫代號（只寫了名字「' + target + '」）') + '，不送');
                 // 根本沒有這一間才記下來跟她說；有這間但被刪／拉黑／不是好友是故意不送，不吵她
-                if (want && !_anyRoomNamed(want) && out.unknown.indexOf(want) < 0) out.unknown.push(rid ? ('代號 ' + rid + (target ? '（' + target + '）' : '')) : want);
+                //   有代號就看那個代號的聊天室在不在（以前拿代號去比名字，一定比不到，被拉黑、刪掉的那間也跳「對不到」）；
+                //   去重用的字跟存進去的字要同一份，同一個錯代號才不會列兩次
+                const label = rid ? ('代號 ' + rid + (target ? '（' + target + '）' : '')) : want;
+                const exists = rid ? !!GLOBAL_CHATS[rid] : _anyRoomNamed(want);
+                if (want && !exists && out.unknown.indexOf(label) < 0) out.unknown.push(label);
                 continue;
             }
             out.push({ chat: chat, text: m[2] });
@@ -2580,7 +2584,8 @@
             // 通訊錄裡名字是「我」的自訂聯絡人（簡體名沒認出來時註冊錯的）一併拿掉
             try {
                 const list = win.WX_CONTACTS.getAllCustomContacts();
-                const kept = list.filter(function (c) { return !(c && !c.isGroup && _isMeName(c.name)); });
+                // 常駐角色（大廳那份）不動：saveAll 會把大廳那份整份寫回，他名字剛好跟這本的「我」一樣時，會從每一本故事一起消失
+                const kept = list.filter(function (c) { return !(c && !c.isGroup && !c.lobby && _isMeName(c.name)); });
                 if (kept.length !== list.length) win.WX_CONTACTS.saveAll(kept);
             } catch (e) {}
             // 舊帳：以前「同群就隱形註冊」留下來的路人（出租車司機、老張那種），要三個條件同時成立才動手 ——

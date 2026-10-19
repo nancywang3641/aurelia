@@ -1899,7 +1899,7 @@
               '人數那一句必須照這個形狀寫成加權:(only N characters in scene:1.5),後面緊接著用英文寫出男女各幾人。' +
               'N 要跟你底下實際列出的角色行數一模一樣。\n';
     }
-    function _launchReq() { return _LAUNCH_REQ_HEAD + _launchFmt() + _LAUNCH_REQ_TAIL; }
+    function _launchReq() { return _LAUNCH_REQ_HEAD + _launchFmt() + _launchReqTail(); }
     const _LAUNCH_REQ_HEAD =
         // 🚨不講清楚它是什麼,模型會直接把它當場景插圖畫:出來的是「剛才那一幕」——
         //   幾個人圍著同一個東西、鏡頭推到臉上。但這張是面板的固定底圖,每次劇情演完都看到同一張,
@@ -1911,7 +1911,9 @@
         '規則:\n' +
         '1. 出場人數依當前名單:玩家可以單獨出場,也可以帶 1~4 名隊友。不得固定四人或固定性別比例,不得加入名單以外的人物。\n';
     // 🚨人數怎麼強調要看接口（見 _launchFmt）：只用普通描述寫,壓不過後面那幾行角色描述,生出來常常多人或少人。
-    const _LAUNCH_REQ_TAIL =
+    // 🚨要每次 DIVE 都重算（跟 _launchFmt 一樣）：以前是載入時算一次的常數，開頁之後換了插圖接口沒重整，
+    //   開頭寫「這台是 NovelAI、用 Danbooru 標籤」，底下的範本卻還是加權那種寫法，兩段打架
+    function _launchReqTail() { return (
         '2. 性別只用 male、female;每名角色只寫一次性別與一次種族。\n' +
         '3. 人類標記 human;非人類必須標記明確種族。\n' +
         '4. 保留角色固定外貌;種族、服裝、職業、配件與身體構造跟隨當前世界觀,不得殘留上一個世界的元素。\n' +
@@ -1948,7 +1950,8 @@
               'Characters: (only [人數] characters in scene:1.5), [男女各幾人的英文寫法],\n' +
               '[依當前名單,每名角色一行,行末分號:a/an + age + gender + species + 固定外貌 + 這個世界的服裝, is + 待機動作 ;]\n' +
               'in the [落腳處] , standing by, waiting to depart, evenly spaced apart\n') +
-        '</LaunchArt>\n';
+        '</LaunchArt>\n');
+    }
     // 隊伍組成當 key:重進舊世界目前是 0 次 API,不能因為又 DIVE 一次就重生一張圖。
     //   同一組人再進去＝重用上次那張;換過人才重新要一張。
     function _teamKey(w) {
@@ -2082,7 +2085,7 @@
         const w = worlds.find(x => x.id === id);
         const list = _achvCoded(w);
         if (!list.length) return;
-        // 整段抓下來自己切:[Achievement|表情|名|描述|代碼]，代碼是視差世界才有的第五段(選填)
+        // 整段抓下來自己切:[Achievement|表情|名|描述|代碼]，代碼是視差世界才有的第五段(必填,對不上填 none)
         const got = [];
         const re = /\[Achievement\|([^\]]*)\]/gi;
         let m;
@@ -3770,7 +3773,7 @@
                 '<div class="wgt-roster" data-wgt-roster>' +
                   (roster.length
                     ? roster.map(_personRow).join('')
-                    : '<div class="wgt-empty">這個世界還沒召集過旅人。<br>用下面那顆按鈕請愛麗絲找幾位。</div>') +
+                    : '<div class="wgt-empty">這個世界還沒召集過旅人。<br>按上面的「再召集」請愛麗絲找幾位。</div>') +
                 '</div>' +
 
               '</div>' +

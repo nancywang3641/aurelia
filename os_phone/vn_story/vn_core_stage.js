@@ -531,7 +531,7 @@
                 // 前後綴、清洗、補下身、尺寸、帶翼加寬、負詞全交給 VN_Image.getSprite（劇情裡自動生立繪走的就是它）：
                 //   以前這裡自己抄一份，空前綴當預設、還多剝 looking at viewer，同一個人兩邊生出來的構圖不一樣。force＝這顆就是要重生
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
-                const url = await win.VN_Image.getSprite(rawP, true);
+                const url = await (win.VN_Image || window.VN_Image).getSprite(rawP, true);   // vn_config 只把 VN_Image 掛在 window（其他 VN 檔都這樣拿）
                 if (!url) throw new Error('生圖回傳空');
                 const blob = await (await fetch(url)).blob();
                 setT('去背中…');

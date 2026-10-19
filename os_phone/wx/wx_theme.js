@@ -511,7 +511,7 @@
             .wx-rp-item-info { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
             .wx-rp-item-name { font-size: 14px; font-weight: 500; color: inherit; }
             .wx-rp-item-time { font-size: 11px; color: color-mix(in srgb, currentColor 62%, transparent); }
-            .wx-rp-item-amount { font-size: 15px; font-weight: bold; color: #c2410c; flex-shrink: 0; }   /* 橘金在白底只有 2.11:1，這是最該看清的數字 */
+            .wx-rp-item-amount { font-size: 15px; font-weight: bold; color: var(--wx-rp-amount); flex-shrink: 0; }   /* 橘金在白底只有 2.11:1，這是最該看清的數字；夜晚另一個橘，見 aurelia_theme.css */
             .wx-rp-close { text-align: center; padding: 15px; font-size: 14px; color: var(--wx-link); cursor: pointer; border-top: 1px solid var(--wx-line); font-weight: 500; }
 
             /* ========== 轉帳／紅包／位置／影片卡片（以前整張寫在元素身上，主題抓不到；搬成零件，長相照舊） ========== */
