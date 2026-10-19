@@ -856,7 +856,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 state.selectedName = name;
                 state.selectedPrompt = finalPrompt;  // 存用戶最終確認的版本（供 spriteSave）
                 document.getElementById('sprite-selected-info').innerHTML =
-                    '<i class="fa-solid fa-bullseye"></i> 當前：<b style="color:var(--os-ink);">' + name + '</b>';
+                    '<i class="fa-solid fa-bullseye"></i> 當前：<b style="color:var(--os-ink);">' + _capiEsc(name) + '</b>';
 
                 // 🚨 三段之間一定要逗號（同 VN_Image.getSprite / autoGenSprite）：直接相接會把角色描述的最後一個 tag
                 //    跟後綴第一個字黏成一團（white dress + simple → "white dresssimple"），一次毀掉兩個 tag
@@ -958,7 +958,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     if (state.pickerWorld == null || (groups[state.pickerWorld] === undefined && state.pickerWorld !== cur)) state.pickerWorld = cur;
                     const wlabel = w => !w ? '未分類（舊頭像）' : (w === cur ? '當前世界' : (w.length > 20 ? '…' + w.slice(-18) : w));
                     let html = '<select class="vng-sel" id="sprite-picker-world" style="margin-bottom:10px;">'
-                        + wkeys.map(w => '<option value="' + esc(w) + '"' + (w === state.pickerWorld ? ' selected' : '') + '>' + wlabel(w) + ' (' + (groups[w] || []).length + ')</option>').join('')
+                        + wkeys.map(w => '<option value="' + esc(w) + '"' + (w === state.pickerWorld ? ' selected' : '') + '>' + esc(wlabel(w)) + ' (' + (groups[w] || []).length + ')</option>').join('')
                         + '</select>';
                     const pentries = groups[state.pickerWorld] || [];
                     if (!pentries.length) {
@@ -993,7 +993,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         if (v && v.url && !String(v.url).startsWith('blob:')) card.querySelector('img').src = v.url; else card.remove();
                     }
                 } catch (e) {
-                    listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗: ' + e.message + '</span>';
+                    listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗: ' + _capiEsc(e && e.message) + '</span>';
                 }
             }
 
@@ -1148,7 +1148,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (win2.VN_PLAYER && win2.VN_PLAYER.loadSpriteManager) { win2.VN_PLAYER.loadSpriteManager('sprite-list'); return; }
                 try {
                     const all = await win2.VN_Cache.getAllMeta('sprite_cache', { partial: true });   // 只列名字，不讀圖
-                    listEl.innerHTML = all.length ? all.map(e => '<div style="color:var(--os-ink-soft);font-size:11px;padding:2px 0;">' + e.key + '</div>').join('') : '<span style="color:var(--os-ink-soft);">尚無已存立繪</span>';
+                    listEl.innerHTML = all.length ? all.map(e => '<div style="color:var(--os-ink-soft);font-size:11px;padding:2px 0;">' + _capiEsc(e.key) + '</div>').join('') : '<span style="color:var(--os-ink-soft);">尚無已存立繪</span>';
                 } catch (e) { listEl.innerHTML = '<span style="color:#fc8181;">列表載入失敗</span>'; }
             }
 
@@ -1270,7 +1270,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             stProfiles.forEach(p => {
                 const isSelected = p.id === resolvedId ? 'selected' : '';
                 const safeName = p.name ? p.name.replace(/</g, "&lt;") : "Unknown";
-                opts += `<option value="${p.id}" ${isSelected}><i class="fa-solid fa-folder-open"></i> ${safeName.substring(0,25)}</option>`;
+                opts += `<option value="${_capiEsc(p.id)}" ${isSelected}><i class="fa-solid fa-folder-open"></i> ${safeName.substring(0,25)}</option>`;
             });
             return opts;
         };
@@ -1321,8 +1321,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group" id="manual-api-group">
-                            <div><div class="set-label">手動 API 地址</div><input class="set-input" id="os-api-url" placeholder="http://..." value="${llmConfig.url}"></div>
-                            <div style="margin-top:10px;"><div class="set-label">API Key</div><input class="set-input" id="os-api-key" type="password" value="${llmConfig.key}"></div>
+                            <div><div class="set-label">手動 API 地址</div><input class="set-input" id="os-api-url" placeholder="http://..." value="${_capiEsc(llmConfig.url)}"></div>
+                            <div style="margin-top:10px;"><div class="set-label">API Key</div><input class="set-input" id="os-api-key" type="password" value="${_capiEsc(llmConfig.key)}"></div>
                         </div>
 
                         <!-- 請求格式：OpenAI 相容（多數站）／Gemini 原生（打 /v1beta/models/…:generateContent，附安全過濾全關；接 Gemini CLI 的公益站要用這個） -->
@@ -1350,7 +1350,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <i class="fa-solid fa-link"></i> 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${llmConfig.useSystemApi ? 'hidden' : ''}" id="model-row">
-                                <select class="set-select" id="os-api-model"><option value="${llmConfig.model}">${llmConfig.model} (當前)</option></select>
+                                <select class="set-select" id="os-api-model"><option value="${_capiEsc(llmConfig.model)}">${_capiEsc(llmConfig.model)} (當前)</option></select>
                                 <div class="btn-fetch" id="os-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從酒館同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '<i class="fa-solid fa-rotate"></i>'}</div>
                             </div>
                         </div>
@@ -1371,23 +1371,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-slider-container">
                                 <div class="set-label"><span>Max Tokens</span></div>
-                                <input type="number" min="100" max="200000" step="100" value="${llmConfig.maxTokens}" class="set-input" id="os-max-tokens" style="margin-top:6px; width:100%;">
+                                <input type="number" min="100" max="200000" step="100" value="${_capiEsc(llmConfig.maxTokens)}" class="set-input" id="os-max-tokens" style="margin-top:6px; width:100%;">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Temperature</span><span class="set-slider-val" id="val-temp">${llmConfig.temperature}</span></div>
-                                <input type="range" min="0" max="2" step="0.05" value="${llmConfig.temperature}" class="set-slider" id="os-temperature">
+                                <input type="range" min="0" max="2" step="0.05" value="${_capiEsc(llmConfig.temperature)}" class="set-slider" id="os-temperature">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Top P</span><span class="set-slider-val" id="val-topp">${llmConfig.top_p ?? 1.0}</span></div>
-                                <input type="range" min="0" max="1" step="0.01" value="${llmConfig.top_p ?? 1.0}" class="set-slider" id="os-top-p">
+                                <input type="range" min="0" max="1" step="0.01" value="${_capiEsc(llmConfig.top_p ?? 1.0)}" class="set-slider" id="os-top-p">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Frequency Penalty</span><span class="set-slider-val" id="val-freq">${llmConfig.frequency_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${llmConfig.frequency_penalty ?? 0}" class="set-slider" id="os-freq-penalty">
+                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(llmConfig.frequency_penalty ?? 0)}" class="set-slider" id="os-freq-penalty">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Presence Penalty</span><span class="set-slider-val" id="val-pres">${llmConfig.presence_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${llmConfig.presence_penalty ?? 0}" class="set-slider" id="os-pres-penalty">
+                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(llmConfig.presence_penalty ?? 0)}" class="set-slider" id="os-pres-penalty">
                             </div>
                         </div>
 
@@ -1398,7 +1398,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             </div>
                             <div style="margin-top:10px;" id="thinking-budget-group" class="${llmConfig.enableThinking ? '' : 'hidden'}">
                                 <div class="set-label"><span>思考預算</span><span class="set-slider-val" id="val-think-budget">${llmConfig.thinkingBudget || 8000}</span></div>
-                                <input type="range" min="1000" max="32000" step="1000" value="${llmConfig.thinkingBudget || 8000}" class="set-slider" id="os-thinking-budget">
+                                <input type="range" min="1000" max="32000" step="1000" value="${_capiEsc(llmConfig.thinkingBudget || 8000)}" class="set-slider" id="os-thinking-budget">
                             </div>
                         </div>
 
@@ -1430,8 +1430,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group" id="sec-manual-api-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : 'display:flex;'}">
-                            <div><div class="set-label">手動 API 地址</div><input class="set-input" id="sec-api-url" placeholder="http://..." value="${secLlmConfig.url}"></div>
-                            <div style="margin-top:10px;"><div class="set-label">API Key</div><input class="set-input" id="sec-api-key" type="password" value="${secLlmConfig.key}"></div>
+                            <div><div class="set-label">手動 API 地址</div><input class="set-input" id="sec-api-url" placeholder="http://..." value="${_capiEsc(secLlmConfig.url)}"></div>
+                            <div style="margin-top:10px;"><div class="set-label">API Key</div><input class="set-input" id="sec-api-key" type="password" value="${_capiEsc(secLlmConfig.key)}"></div>
                         </div>
 
                         <div class="set-group" id="sec-api-format-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : ''}">
@@ -1449,7 +1449,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <i class="fa-solid fa-link"></i> 模型由酒館決定，在酒館切換即可。
                             </div>
                             <div class="model-row ${secLlmConfig.useSystemApi ? 'hidden' : ''}" id="sec-model-row">
-                                <select class="set-select" id="sec-api-model"><option value="${secLlmConfig.model}">${secLlmConfig.model} (當前)</option></select>
+                                <select class="set-select" id="sec-api-model"><option value="${_capiEsc(secLlmConfig.model)}">${_capiEsc(secLlmConfig.model)} (當前)</option></select>
                                 <div class="btn-fetch" id="sec-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從端點同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '<i class="fa-solid fa-rotate"></i>'}</div>
                             </div>
                         </div>
@@ -1480,23 +1480,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-slider-container">
                                 <div class="set-label"><span>Max Tokens</span></div>
-                                <input type="number" min="100" max="200000" step="100" value="${secLlmConfig.maxTokens}" class="set-input" id="sec-max-tokens" style="margin-top:6px; width:100%;">
+                                <input type="number" min="100" max="200000" step="100" value="${_capiEsc(secLlmConfig.maxTokens)}" class="set-input" id="sec-max-tokens" style="margin-top:6px; width:100%;">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Temperature</span><span class="set-slider-val" id="sec-val-temp">${secLlmConfig.temperature}</span></div>
-                                <input type="range" min="0" max="2" step="0.05" value="${secLlmConfig.temperature}" class="set-slider" id="sec-temperature">
+                                <input type="range" min="0" max="2" step="0.05" value="${_capiEsc(secLlmConfig.temperature)}" class="set-slider" id="sec-temperature">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Top P</span><span class="set-slider-val" id="sec-val-topp">${secLlmConfig.top_p ?? 1.0}</span></div>
-                                <input type="range" min="0" max="1" step="0.01" value="${secLlmConfig.top_p ?? 1.0}" class="set-slider" id="sec-top-p">
+                                <input type="range" min="0" max="1" step="0.01" value="${_capiEsc(secLlmConfig.top_p ?? 1.0)}" class="set-slider" id="sec-top-p">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Frequency Penalty</span><span class="set-slider-val" id="sec-val-freq">${secLlmConfig.frequency_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${secLlmConfig.frequency_penalty ?? 0}" class="set-slider" id="sec-freq-penalty">
+                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(secLlmConfig.frequency_penalty ?? 0)}" class="set-slider" id="sec-freq-penalty">
                             </div>
                             <div class="set-slider-container" style="margin-top:10px;">
                                 <div class="set-label"><span>Presence Penalty</span><span class="set-slider-val" id="sec-val-pres">${secLlmConfig.presence_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${secLlmConfig.presence_penalty ?? 0}" class="set-slider" id="sec-pres-penalty">
+                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(secLlmConfig.presence_penalty ?? 0)}" class="set-slider" id="sec-pres-penalty">
                             </div>
                         </div>
 
@@ -1667,7 +1667,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
                             <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。"><i class="fa-solid fa-life-ring"></i> 退路圖庫</div>
                             <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--os-ink);">pixabay.com/api/docs</a></div>
-                            <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${imgConfig.pixabayKey || ''}">
+                            <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${_capiEsc(imgConfig.pixabayKey || '')}">
                             <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
                                 <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
                                 <span style="font-size:12px; color:var(--os-ink);"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去 Pollinations）</span>
@@ -1713,7 +1713,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="set-label">ComfyUI 網址</div>
                                     <div style="display:flex; gap:8px;">
-                                        <input class="set-input" id="img-cfd-url" type="text" placeholder="http://127.0.0.1:8188" value="${imgConfig.comfyuiDirect?.url || 'http://127.0.0.1:8188'}" style="flex:1;">
+                                        <input class="set-input" id="img-cfd-url" type="text" placeholder="http://127.0.0.1:8188" value="${_capiEsc(imgConfig.comfyuiDirect?.url || 'http://127.0.0.1:8188')}" style="flex:1;">
                                         <button class="set-btn" id="img-cfd-test" type="button" style="white-space:nowrap;"><i class="fa-solid fa-plug"></i> 測試 / 抓清單</button>
                                     </div>
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
@@ -1776,23 +1776,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </select>
                                     <div class="set-label cfd-sublabel">模型</div>
                                     <select class="set-select" id="img-cfd-model">
-                                        <option value="${imgConfig.comfyuiDirect?.model || ''}" selected>${imgConfig.comfyuiDirect?.model || '（先按上面「測試 / 抓清單」）'}</option>
+                                        <option value="${_capiEsc(imgConfig.comfyuiDirect?.model || '')}" selected>${_capiEsc(imgConfig.comfyuiDirect?.model || '（先按上面「測試 / 抓清單」）')}</option>
                                     </select>
                                 </div>
                                 <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='flux'?'':'hidden'}" id="img-cfd-flux-fields">
                                     <div class="set-desc" title="檔名一般跟你下載的一致，不用改。">Flux 專用搭配檔${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1733') : ''}</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
-                                        <div><div class="set-label" style="font-size:11px;">clip_l</div><input class="set-input" id="img-cfd-clipl" value="${imgConfig.comfyuiDirect?.fluxClipL || 'clip_l.safetensors'}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">t5xxl</div><input class="set-input" id="img-cfd-t5xxl" value="${imgConfig.comfyuiDirect?.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors'}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">ae VAE</div><input class="set-input" id="img-cfd-ae" value="${imgConfig.comfyuiDirect?.fluxAe || 'ae.safetensors'}"></div>
-                                        <div><div class="set-label" style="font-size:11px;" title="建議 3.5。">Guidance</div><input class="set-input" id="img-cfd-guidance" type="number" step="0.1" min="0" max="10" value="${imgConfig.comfyuiDirect?.guidance ?? 3.5}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">clip_l</div><input class="set-input" id="img-cfd-clipl" value="${_capiEsc(imgConfig.comfyuiDirect?.fluxClipL || 'clip_l.safetensors')}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">t5xxl</div><input class="set-input" id="img-cfd-t5xxl" value="${_capiEsc(imgConfig.comfyuiDirect?.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors')}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">ae VAE</div><input class="set-input" id="img-cfd-ae" value="${_capiEsc(imgConfig.comfyuiDirect?.fluxAe || 'ae.safetensors')}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="建議 3.5。">Guidance</div><input class="set-input" id="img-cfd-guidance" type="number" step="0.1" min="0" max="10" value="${_capiEsc(imgConfig.comfyuiDirect?.guidance ?? 3.5)}"></div>
                                     </div>
                                 </div>
                                 <div class="set-group ${imgConfig.comfyuiDirect?.modelType==='anima'?'':'hidden'}" id="img-cfd-anima-fields">
                                     <div class="set-desc" title="檔名跟你下載的一致，通常不用改。">Anima 專用搭配檔${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1741') : ''}</div>
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
-                                        <div><div class="set-label" style="font-size:11px;" title="qwen 編碼器。">文字編碼器</div><input class="set-input" id="img-cfd-anima-clip" value="${imgConfig.comfyuiDirect?.animaClip || 'qwen_3_06b_base.safetensors'}"></div>
-                                        <div><div class="set-label" style="font-size:11px;" title="qwen VAE。">VAE</div><input class="set-input" id="img-cfd-anima-vae" value="${imgConfig.comfyuiDirect?.animaVae || 'qwen_image_vae.safetensors'}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="qwen 編碼器。">文字編碼器</div><input class="set-input" id="img-cfd-anima-clip" value="${_capiEsc(imgConfig.comfyuiDirect?.animaClip || 'qwen_3_06b_base.safetensors')}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="qwen VAE。">VAE</div><input class="set-input" id="img-cfd-anima-vae" value="${_capiEsc(imgConfig.comfyuiDirect?.animaVae || 'qwen_image_vae.safetensors')}"></div>
                                     </div>
                                 </div>
                                 <div class="set-group">
@@ -1800,13 +1800,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
                                         <div><div class="set-label" style="font-size:11px;">採樣器</div><select class="set-select" id="img-cfd-sampler">${['euler','euler_ancestral','euler_cfg_pp','dpmpp_2m','dpmpp_2m_sde','dpmpp_3m_sde','dpmpp_sde','dpmpp_2s_ancestral','heun','dpm_2','lms','ddim','uni_pc','uni_pc_bh2','lcm','res_multistep','er_sde'].map(s => `<option value="${s}"${(imgConfig.comfyuiDirect?.sampler||'euler')===s?' selected':''}>${s}</option>`).join('')}</select></div>
                                         <div><div class="set-label" style="font-size:11px;">排程器</div><select class="set-select" id="img-cfd-scheduler">${['normal','karras','exponential','sgm_uniform','simple','ddim_uniform','beta','linear_quadratic','kl_optimal'].map(s => `<option value="${s}"${(imgConfig.comfyuiDirect?.scheduler||'normal')===s?' selected':''}>${s}</option>`).join('')}</select></div>
-                                        <div><div class="set-label" style="font-size:11px;">步數</div><input class="set-input" id="img-cfd-steps" type="number" min="1" max="60" value="${imgConfig.comfyuiDirect?.steps ?? 28}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">CFG</div><input class="set-input" id="img-cfd-cfg" type="number" step="0.1" min="1" max="20" value="${imgConfig.comfyuiDirect?.cfg ?? 6.5}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${imgConfig.comfyuiDirect?.width ?? 1024}"></div>
-                                        <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${imgConfig.comfyuiDirect?.height ?? 1024}"></div>
-                                        <div><div class="set-label" style="font-size:11px;" title="-1 為隨機。">種子</div><input class="set-input" id="img-cfd-seed" type="number" value="${imgConfig.comfyuiDirect?.seed ?? -1}"></div>
-                                        <div><div class="set-label" style="font-size:11px;" title="0 為關閉。">CLIP skip</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${imgConfig.comfyuiDirect?.clipSkip ?? 0}"></div>
-                                        <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;" title="空＝模型內建。">VAE</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${imgConfig.comfyuiDirect.vae}" selected>${imgConfig.comfyuiDirect.vae}</option>`:''}</select></div>
+                                        <div><div class="set-label" style="font-size:11px;">步數</div><input class="set-input" id="img-cfd-steps" type="number" min="1" max="60" value="${_capiEsc(imgConfig.comfyuiDirect?.steps ?? 28)}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">CFG</div><input class="set-input" id="img-cfd-cfg" type="number" step="0.1" min="1" max="20" value="${_capiEsc(imgConfig.comfyuiDirect?.cfg ?? 6.5)}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">寬度</div><input class="set-input" id="img-cfd-width" type="number" step="64" value="${_capiEsc(imgConfig.comfyuiDirect?.width ?? 1024)}"></div>
+                                        <div><div class="set-label" style="font-size:11px;">高度</div><input class="set-input" id="img-cfd-height" type="number" step="64" value="${_capiEsc(imgConfig.comfyuiDirect?.height ?? 1024)}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="-1 為隨機。">種子</div><input class="set-input" id="img-cfd-seed" type="number" value="${_capiEsc(imgConfig.comfyuiDirect?.seed ?? -1)}"></div>
+                                        <div><div class="set-label" style="font-size:11px;" title="0 為關閉。">CLIP skip</div><input class="set-input" id="img-cfd-clipskip" type="number" min="0" max="4" value="${_capiEsc(imgConfig.comfyuiDirect?.clipSkip ?? 0)}"></div>
+                                        <div style="grid-column:1 / -1;"><div class="set-label" style="font-size:11px;" title="空＝模型內建。">VAE</div><select class="set-select" id="img-cfd-vae"><option value=""${!imgConfig.comfyuiDirect?.vae?' selected':''}>（內建 VAE）</option>${imgConfig.comfyuiDirect?.vae?`<option value="${_capiEsc(imgConfig.comfyuiDirect.vae)}" selected>${_capiEsc(imgConfig.comfyuiDirect.vae)}</option>`:''}</select></div>
                                     </div>
                                 </div>
                                 <div class="set-group">
@@ -1834,11 +1834,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label" title="選填，可空。">底詞</div>
-                                        <textarea class="set-textarea" id="img-cfd-base">${imgConfig.comfyuiDirect?.basePrompt || ''}</textarea>
+                                        <textarea class="set-textarea" id="img-cfd-base">${_capiEsc(imgConfig.comfyuiDirect?.basePrompt || '')}</textarea>
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="選填。">負面提示詞</div>
-                                        <textarea class="set-textarea" id="img-cfd-neg">${imgConfig.comfyuiDirect?.negPrompt || ''}</textarea>
+                                        <textarea class="set-textarea" id="img-cfd-neg">${_capiEsc(imgConfig.comfyuiDirect?.negPrompt || '')}</textarea>
                                     </div>
                                 </div>
                                 <div class="iface-section-title"><i class="fa-solid fa-gear"></i> 進階：自訂工作流</div>
@@ -1849,7 +1849,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <option value="custom" ${imgConfig.comfyuiDirect?.workflowMode==='custom'?'selected':''}>自訂（貼自己的工作流）</option>
                                     </select>
                                     <div id="img-cfd-custom-wf" class="${imgConfig.comfyuiDirect?.workflowMode==='custom'?'':'hidden'}" style="margin-top:8px;">
-                                        <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${imgConfig.comfyuiDirect?.customWorkflow || ''}</textarea>
+                                        <textarea class="set-textarea" id="img-cfd-custom-wf-text" style="min-height:120px; font-family:monospace; font-size:11px; white-space:pre;" placeholder='貼 ComfyUI「API 格式」工作流，例如 { "3": {...}, "4": {...} }'>${_capiEsc(imgConfig.comfyuiDirect?.customWorkflow || '')}</textarea>
                                         <div class="set-desc" style="margin-top:4px;" title="貼 ComfyUI API 格式工作流（設定開 Dev mode → Save (API Format) 匯出）。只有這幾個變數會被注入，其餘（LoRA、採樣器、放大、修臉…）請寫死在工作流裡；上面的 LoRA/參數欄在自訂模式不生效。">
                                             可用變數：<code>"%prompt%"</code>　<code>"%negative%"</code>　<code>"%model%"</code>　<code>"%seed%"</code>　<code>"%width%"</code>　<code>"%height%"</code>
                                         </div>
@@ -1872,7 +1872,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="set-group">
                                     <div class="field-row">
                                         <div class="set-label" title="現在已無免費方案，需儲值，請至官網獲取 Key。">API Key <span class="lbl-req">(必填)</span></div>
-                                        <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${imgConfig.pollinations.apiKey || ''}">
+                                        <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${_capiEsc(imgConfig.pollinations.apiKey || '')}">
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="按價格排序。">模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1840') : ''}</div>
@@ -1915,7 +1915,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label">Key</div>
-                                        <input class="set-input" id="img-capi-key" type="password" placeholder="站方給你的那把" value="${imgConfig.customApi?.apiKey || ''}">
+                                        <input class="set-input" id="img-capi-key" type="password" placeholder="站方給你的那把" value="${_capiEsc(imgConfig.customApi?.apiKey || '')}">
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="照站方寫的型號名一字不差地填。每個站支援的型號都不一樣，所以這裡不給清單。網址帶 /sdapi 的站不用填，它自己決定。">模型</div>
@@ -1966,7 +1966,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label">Token <span class="lbl-req">(必填)</span></div>
-                                        <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${imgConfig.novelai.token}">
+                                        <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${_capiEsc(imgConfig.novelai.token)}">
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。"><span><i class="fa-solid fa-shield-halved"></i> 防超免費尺寸${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1919') : ''}</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
@@ -2001,11 +2001,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                 </div>
                                                 <div>
                                                     <div class="set-label" title="建議 4~9。">CFG Scale</div>
-                                                    <input class="set-input" type="number" id="img-nai-scale" min="1" max="20" step="0.5" value="${imgConfig.novelai.scale ?? 5}">
+                                                    <input class="set-input" type="number" id="img-nai-scale" min="1" max="20" step="0.5" value="${_capiEsc(imgConfig.novelai.scale ?? 5)}">
                                                 </div>
                                                 <div>
                                                     <div class="set-label" title="建議 28~40。">Steps</div>
-                                                    <input class="set-input" type="number" id="img-nai-steps" min="1" max="50" step="1" value="${imgConfig.novelai.steps ?? 28}">
+                                                    <input class="set-input" type="number" id="img-nai-steps" min="1" max="50" step="1" value="${_capiEsc(imgConfig.novelai.steps ?? 28)}">
                                                 </div>
                                                 <div>
                                                     <div class="set-label" title="負詞預設。">UC Preset</div>
@@ -2043,7 +2043,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         <div class="row-inline">
                                             <select id="img-nai-preset-sel" class="set-select">
                                                 <option value="">-- 選擇預設 --</option>
-                                                ${(imgConfig.novelai.naiPresets || []).map((p, i) => `<option value="${i}">${p.name}</option>`).join('')}
+                                                ${(imgConfig.novelai.naiPresets || []).map((p, i) => `<option value="${i}">${_capiEsc(p.name)}</option>`).join('')}
                                             </select>
                                             <span class="nai-mini-btn" onclick="window._naiPreset.apply()">套用</span>
                                             <span class="nai-mini-btn" onclick="window._naiPreset.save()">另存</span>
@@ -2068,23 +2068,23 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                                     <div class="field-row">
                                         <div class="set-label" title="Danbooru tag 格式，逗號分隔。"><i class="fa-solid fa-palette"></i> 角色底詞</div>
-                                        <textarea class="set-textarea" id="img-nai-char-base">${imgConfig.novelai.charBasePrompt || ''}</textarea>
+                                        <textarea class="set-textarea" id="img-nai-char-base">${_capiEsc(imgConfig.novelai.charBasePrompt || '')}</textarea>
                                         <div class="field-reset"><span onclick="document.getElementById('img-nai-char-base').value='masterpiece, best quality, very aesthetic, absurdres, anime style, detailed face'">[重置]</span></div>
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label"><i class="fa-solid fa-ban"></i> 角色負詞</div>
-                                        <textarea class="set-textarea" id="img-nai-char-neg">${imgConfig.novelai.charNegPrompt || ''}</textarea>
+                                        <textarea class="set-textarea" id="img-nai-char-neg">${_capiEsc(imgConfig.novelai.charNegPrompt || '')}</textarea>
                                         <div class="field-reset"><span onclick="document.getElementById('img-nai-char-neg').value='nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry'">[重置]</span></div>
                                     </div>
                                     <div id="img-nai-item-block" class="nai-item-stack">
                                         <div class="field-row">
                                             <div class="set-label"><i class="fa-solid fa-box"></i> 物品底詞</div>
-                                            <textarea class="set-textarea" id="img-nai-item-base">${imgConfig.novelai.itemBasePrompt || ''}</textarea>
+                                            <textarea class="set-textarea" id="img-nai-item-base">${_capiEsc(imgConfig.novelai.itemBasePrompt || '')}</textarea>
                                             <div class="field-reset"><span onclick="document.getElementById('img-nai-item-base').value='masterpiece, best quality, white background, simple background, no background, product image, detailed'">[重置]</span></div>
                                         </div>
                                         <div class="field-row">
                                             <div class="set-label"><i class="fa-solid fa-ban"></i> 物品負詞</div>
-                                            <textarea class="set-textarea" id="img-nai-item-neg">${imgConfig.novelai.itemNegPrompt || ''}</textarea>
+                                            <textarea class="set-textarea" id="img-nai-item-neg">${_capiEsc(imgConfig.novelai.itemNegPrompt || '')}</textarea>
                                             <div class="field-reset"><span onclick="document.getElementById('img-nai-item-neg').value='person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text'">[重置]</span></div>
                                         </div>
                                     </div>
@@ -2114,13 +2114,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="field-row">
                                 <div class="set-label" title="全模組共用：夜店 / 偵探 / 寶寶 / VN頭像。這裡的詞會自動加在所有角色頭像生圖最前面，VN 背景不受影響。"><i class="fa-solid fa-palette"></i> 角色頭像通用底詞</div>
-                                <textarea class="set-textarea" id="img-style-prompt">${imgConfig.pollinations.charBasePrompt}</textarea>
+                                <textarea class="set-textarea" id="img-style-prompt">${_capiEsc(imgConfig.pollinations.charBasePrompt)}</textarea>
                                 <div class="field-hint">↑ 這裡設定的詞會自動加在所有角色頭像生圖的最前面。VN背景不受影響。VN頭像可在 VN 設定裡追加額外詞。</div>
                                 <div class="field-reset"><span onclick="document.getElementById('img-style-prompt').value='anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines'">[重置為預設]</span></div>
                             </div>
                             <div class="field-row">
                                 <div class="set-label"><i class="fa-solid fa-ban"></i> 角色負詞</div>
-                                <textarea class="set-textarea" id="img-char-neg-prompt">${imgConfig.pollinations.charNegPrompt}</textarea>
+                                <textarea class="set-textarea" id="img-char-neg-prompt">${_capiEsc(imgConfig.pollinations.charNegPrompt)}</textarea>
                                 <div class="field-reset"><span onclick="document.getElementById('img-char-neg-prompt').value='bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text'">[重置為預設]</span></div>
                             </div>
                         </div>
@@ -2281,12 +2281,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         <div class="set-group">
                             <div class="set-label">Group ID <span style="font-size:11px; color:#fc8181;">(必填)</span>${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2308') : ''}</div>
-                            <input class="set-input" id="mm-group-id" type="text" placeholder="請輸入 Minimax Group ID..." value="${minimaxConfig.groupId || ''}">
+                            <input class="set-input" id="mm-group-id" type="text" placeholder="請輸入 Minimax Group ID..." value="${_capiEsc(minimaxConfig.groupId || '')}">
                         </div>
 
                         <div class="set-group">
                             <div class="set-label">API Key <span style="font-size:11px; color:#fc8181;">(必填)</span></div>
-                            <input class="set-input" id="mm-api-key" type="password" placeholder="請輸入 Minimax API Key..." value="${minimaxConfig.apiKey || ''}">
+                            <input class="set-input" id="mm-api-key" type="password" placeholder="請輸入 Minimax API Key..." value="${_capiEsc(minimaxConfig.apiKey || '')}">
                         </div>
 
                         <div class="set-group">
@@ -2305,7 +2305,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         <div class="set-group">
                             <div class="set-slider-container">
                                 <div class="set-label"><span>預設語速</span><span class="set-slider-val" id="mm-speed-val">${(minimaxConfig.defaultSpeed ?? 1.0).toFixed(1)}</span></div>
-                                <input type="range" min="0.5" max="2" step="0.1" value="${minimaxConfig.defaultSpeed ?? 1.0}" class="set-slider" id="mm-speed">
+                                <input type="range" min="0.5" max="2" step="0.1" value="${_capiEsc(minimaxConfig.defaultSpeed ?? 1.0)}" class="set-slider" id="mm-speed">
                             </div>
                             <div style="margin-top:15px;">
                                 <div class="set-label">語言增強</div>
@@ -2360,7 +2360,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <input class="set-input" id="el-api-key" type="password" autocomplete="off" value="${_vcEsc(elConfig.apiKey)}">
                                     <div class="set-label">模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_el_model') : ''}</div>
                                     <select class="set-select" id="el-model">
-                                        ${elModels.map(m => `<option value="${m.id}" ${elConfig.modelId === m.id ? 'selected' : ''}>${_vcEsc(m.name)}</option>`).join('')}
+                                        ${elModels.map(m => `<option value="${_capiEsc(m.id)}" ${elConfig.modelId === m.id ? 'selected' : ''}>${_vcEsc(m.name)}</option>`).join('')}
                                     </select>
                                 </div>
                                 <div class="set-group">
@@ -2410,7 +2410,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                             <div class="set-label" style="margin-top:14px;">高度${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2420') : ''}</div>
                             <div class="mp-height-row">
-                                <input class="set-input" type="number" id="mp-panel-height" min="30" max="100" step="5" placeholder="100" value="${tavernExt.panelHeight ?? ''}">
+                                <input class="set-input" type="number" id="mp-panel-height" min="30" max="100" step="5" placeholder="100" value="${_capiEsc(tavernExt.panelHeight ?? '')}">
                                 <span class="mp-height-unit">%</span>
                             </div>
                         </div>
@@ -2978,7 +2978,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try {
                 const names = th.getPresetNames();
                 selectEl.innerHTML = '<option value="">（使用當前 in_use Preset）</option>' +
-                    names.map(n => `<option value="${n}" ${n === currentName ? 'selected' : ''}>${n}</option>`).join('');
+                    names.map(n => `<option value="${_capiEsc(n)}" ${n === currentName ? 'selected' : ''}>${_capiEsc(n)}</option>`).join('');
             } catch(e) {
                 selectEl.innerHTML = '<option value="">（讀取失敗）</option>';
             }
@@ -3021,8 +3021,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (!url) url = '(URL 未記錄；可能走官方端點)';
             const liveModel = (() => { try { return getSTContext()?.getChatCompletionModel?.() || ''; } catch(_) { return ''; } })();
             const model = liveModel || p.model || '(模型未記錄)';
-            const api = p.api ? ` <span>[${p.api}]</span>` : '';
-            infoEl.innerHTML = `<i class="fa-solid fa-globe"></i> ${url}<br><i class="fa-solid fa-robot"></i> ${model}${api}`;
+            const api = p.api ? ` <span>[${_capiEsc(p.api)}]</span>` : '';
+            // 網址、模型、代理名來自酒館的連線設定（可以是匯入別人的 profile）：當純文字
+            infoEl.innerHTML = `<i class="fa-solid fa-globe"></i> ${_capiEsc(url)}<br><i class="fa-solid fa-robot"></i> ${_capiEsc(model)}${api}`;
         }
 
         const profileInfoEl = container.querySelector('#st-profile-info');
@@ -3576,7 +3577,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     + '<div class="img-style-thumb" data-ref="' + _ie(s.ref || '') + '">' + (s.ref ? '' : '<i class="fa-solid fa-palette"></i>') + '</div>'
                     + '<div class="img-style-main"><div class="img-style-name">' + _ie(s.name) + '</div>'
                     + '<div class="img-style-use">' + (used.length ? '用在：' + _ie(used.join('、')) : '還沒有地方用') + '</div></div>'
-                    + '<button class="set-btn img-style-btn" type="button" onclick="window._imgStyle.edit(\'' + _ie(s.id) + '\')" aria-label="修改"><i class="fa-solid fa-pen"></i></button>'
+                    + '<button class="set-btn img-style-btn" type="button" onclick="window._imgStyle.edit(' + _ie(JSON.stringify(String(s.id))) + ')" aria-label="修改"><i class="fa-solid fa-pen"></i></button>'
                     + '<button class="set-btn img-style-btn is-del" type="button" onclick="window._imgStyle.del(\'' + _ie(s.id) + '\')" aria-label="刪除"><i class="fa-solid fa-trash"></i></button>'
                     + '</div>';
             }).join('');
@@ -4451,7 +4452,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (!sel) return;
             const cur = sel.value;
             sel.innerHTML = '<option value="">-- 選擇預設 --</option>' +
-                naiPresets.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+                naiPresets.map((p, i) => `<option value="${i}">${_capiEsc(p.name)}</option>`).join('');
             if (cur !== '' && naiPresets[parseInt(cur)]) sel.value = cur;
         }
 
@@ -4926,7 +4927,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (!sel) return;
             const cur = sel.value;
             sel.innerHTML = '<option value="">-- 選擇模板 --</option>' +
-                sceneSpecTemplates.map((t, i) => `<option value="${i}">${t.name}</option>`).join('');
+                sceneSpecTemplates.map((t, i) => `<option value="${i}">${_capiEsc(t.name)}</option>`).join('');
             if (cur !== '' && sceneSpecTemplates[parseInt(cur)]) sel.value = cur;
         }
 
@@ -4936,7 +4937,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (!sel) return;
             const cur = sel.value;
             sel.innerHTML = '<option value="">-- 從 NAI 預設包複製底詞 --</option>' +
-                naiPresets.map((p, i) => `<option value="${i}">${p.name}</option>`).join('');
+                naiPresets.map((p, i) => `<option value="${i}">${_capiEsc(p.name)}</option>`).join('');
             if (cur !== '' && naiPresets[parseInt(cur)]) sel.value = cur;
         }
 
