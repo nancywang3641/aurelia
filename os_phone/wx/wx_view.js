@@ -168,7 +168,24 @@
         return null; // 找不到，維持 DiceBear
     }
 
+    // 通訊錄的字母標頭：名字第一個字的拼音首字母（拿每個字母的第一個字當界線，用拼音排序比一下；繁體字也照拼音）。
+    //   英文照第一個字母，數字、符號、比不出來的歸 #
+    const _PY_BOUND = '阿八嚓哒妸发旮哈讥咔垃妈拏噢妑七呥扨它穵夕丫帀';
+    const _PY_LETTER = 'ABCDEFGHJKLMNOPQRSTWXYZ';
+    let _pyColl = null;
+    function _contactInitial(name) {
+        const ch = String(name || '').trim().charAt(0);
+        if (/[A-Za-z]/.test(ch)) return ch.toUpperCase();
+        if (!/[㐀-鿿]/.test(ch)) return '#';
+        try {
+            _pyColl = _pyColl || new Intl.Collator('zh-Hans-u-co-pinyin');
+            for (let i = _PY_BOUND.length - 1; i >= 0; i--) if (_pyColl.compare(ch, _PY_BOUND[i]) >= 0) return _PY_LETTER[i];
+        } catch (e) {}
+        return '#';
+    }
+
     window.WX_VIEW = {
+        _contactInitial: _contactInitial,
 
         // 媒體標籤清單對外開放：wx_core 判斷「[xxx] 是發話人還是媒體標籤」時要用同一份，
         // 各寫各的就會像這次一樣漂在繁體字上。
@@ -1040,11 +1057,14 @@
                 <div class="wx-contact-item" onclick="(window.parent.wxApp || window.wxApp).openContactSub('c_tags')"><div class="wx-contact-icon icon-tags"><svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M21.4 11.6l-9-9C12 2.2 11.5 2 11 2H4c-1.1 0-2 .9-2 2v7c0 .5.2 1 .6 1.4l9 9c.4.4 1 .4 1.4 0l8.4-8.4c.4-.4.4-1 0-1.4zM5.5 7C4.7 7 4 6.3 4 5.5S4.7 4 5.5 4 7 4.7 7 5.5 6.3 7 5.5 7z"/></svg></div><div class="wx-contact-name">標籤</div>${_cnt(_tagN)}</div>
             `;
             // 拉黑的人不在通訊錄，在「我 → 設置 → 通訊錄黑名單」
-            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat' && !(chats[k] && (chats[k].wxRemoved || chats[k].wxBlockedByMe))).map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].isGroup ? '' : (chats[id].realName || '') }));
-            contacts.sort((a, b) => a.name.localeCompare(b.name));
+            // 群聊在上面「群組」那格：這裡只列人（以前群也混進好友裡多列一次）
+            let contacts = Object.keys(chats).filter(k => k !== 'unknown_chat' && chats[k] && !chats[k].isGroup && !(chats[k].wxRemoved || chats[k].wxBlockedByMe)).map(id => ({ id: id, name: chats[id].name, customAvatar: chats[id].customAvatar, realName: chats[id].realName || '', _ini: _contactInitial(chats[id].name) }));
+            // 字母標頭照名字的拼音首字母分（英文名照第一個字母、其他歸 #）；以前寫死一個「A」，所有人都排在 A 底下
+            contacts.sort((a, b) => ((a._ini === '#') - (b._ini === '#')) || a._ini.localeCompare(b._ini) || String(a.name).localeCompare(String(b.name), 'zh-Hans-u-co-pinyin'));
             if (contacts.length > 0) {
-                html += `<div class="wx-contact-section">A</div>`;
+                let _lastIni = null;
                 contacts.forEach(c => {
+                    if (c._ini !== _lastIni) { _lastIni = c._ini; html += `<div class="wx-contact-section">${_lastIni}</div>`; }
                     // 🔥 修復邏輯：處理 img_ 和 avt_ 開頭的 DB ID
                     let defaultUrl = `https://api.dicebear.com/7.x/notionists/svg?seed=${encodeURIComponent(c.name)}&backgroundColor=e6e6e6`;
                     let avatarStyle = `width:38px; height:38px; margin-right:12px; background-image: url('${defaultUrl}')`;

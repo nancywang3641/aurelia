@@ -513,7 +513,7 @@
             menu.innerHTML = `<div class="wx-context-item danger" id="wx-ctx-delete">刪除 (永久)</div>`;
             let x = e.clientX; let y = e.clientY; if (x + 120 > win.innerWidth) x = win.innerWidth - 130; if (y + 100 > win.innerHeight) y = win.innerHeight - 110;
             this._popIn(menu, x, y, false);
-            menu.querySelector('#wx-ctx-delete').onclick = async () => { if(await AUI.confirm(`確定要永久刪除「${contactName}」嗎？\nID: ${contactId}`)) { this.deleteContact(contactId); } menu.remove(); };
+            menu.querySelector('#wx-ctx-delete').onclick = async () => { if(await AUI.confirm(`確定要永久刪除「${contactName}」嗎？`)) { this.deleteContact(contactId); } menu.remove(); };
             setTimeout(() => { targetDoc.addEventListener('click', function closeCtx() { menu.remove(); targetDoc.removeEventListener('click', closeCtx); }); }, 0);
         },
         

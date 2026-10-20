@@ -562,12 +562,15 @@
         if (!existing) {
             const totalAmount = parseFloat(amount) || 0;
             // 份數：第 4 格有寫就照寫的（她自己發的就是這個格式）；私聊只有她能領＝整包一份
-            //   （以前私聊也當成 100 份的拼手氣，88 元她只領到七十幾、還寫剩下多少）；群聊沒寫照舊，最多 100 份、每份至少 0.01
+            //   （以前私聊也當成 100 份的拼手氣，88 元她只領到七十幾、還寫剩下多少）；
+            //   群聊沒寫＝群裡除了發的人每人一份（以前一律 100 份：四人群領完還剩四十幾塊永遠沒人領得到、卡片永遠不會領完）
             const maxCount = Math.max(1, Math.floor(totalAmount / 0.01));
             const askedCount = parts.length >= 4 && /^\d+$/.test(parts[3]) ? parseInt(parts[3], 10) : 0;
+            //   能領的人＝群裡的角色扣掉發的那位、加上她＝角色人數（成員清單裡不一定有她那一格，不拿總數減）
+            const _others = (room && Array.isArray(room.members)) ? room.members.filter(x => x && x !== 'User').length : 0;
             const totalCount = askedCount ? Math.min(100, maxCount, askedCount)
                 : (room && !room.isGroup) ? 1
-                : Math.min(100, maxCount);
+                : Math.min(100, maxCount, _others > 0 ? _others : 100);
             const packetData = {
                 sender: senderName || "User",
                 totalAmount: totalAmount,
@@ -4261,10 +4264,11 @@
                     // 紅包單號：以前是 rp_ 加三位數，只有一千種，撞到以前發過的那包就整包接走它的金額和領取紀錄
                     //   （同轉帳那條改成時間）
                     const packetId = 'rp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
-                    // 份數：私聊只有對方能領＝一份；群聊照金額算，最多 100 份、每份至少 0.01
+                    // 份數：私聊只有對方能領＝一份；群聊＝群裡每個角色一份（每份至少 0.01、最多 100 份）
                     const maxCount = Math.floor(redPacketAmount / 0.01);
                     const _rpRoom = GLOBAL_ACTIVE_ID ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID] : null;
-                    const totalCount = (_rpRoom && !_rpRoom.isGroup) ? 1 : Math.min(100, Math.max(1, maxCount));
+                    const _rpAi = (_rpRoom && Array.isArray(_rpRoom.members)) ? _rpRoom.members.filter(x => x && x !== 'User').length : 0;
+                    const totalCount = (_rpRoom && !_rpRoom.isGroup) ? 1 : Math.min(100, Math.max(1, maxCount), _rpAi > 0 ? _rpAi : 100);
                     // 新格式：[RedPacket: 金額|備註|紅包ID|數量]
                     const memo = val2 || '恭喜發財，大吉大利';
                     content = `[RedPacket: ${val1}|${memo}|${packetId}|${totalCount}]`;
