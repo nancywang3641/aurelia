@@ -473,9 +473,33 @@
         if ('serviceWorker' in navigator && !SIMS_MODE) {
             // 當新 SW 取得控制權時，強制重新整理頁面以確保加載最新的 JS/CSS
             // （舊 SW 可能已用 Cache-First 提供了舊檔案，換 SW 後必須 reload）
+            //   10-20 實測修兩件：
+            //   ① 第一次安裝（本來沒有 SW）也會發 controllerchange（clients.claim 接管），以前照樣重整，
+            //      剛打開兩秒整頁又重開一次。頁面本來就是從網路拿的最新版，第一次不用重整。
+            //   ② 用到一半才換版（例如推播讓瀏覽器順手檢查到新版）：不當場整頁重開打斷她，
+            //      等她切出去（畫面藏起來）再換，回來就是新版。剛打開那段照舊馬上換。
+            let _swHad = !!navigator.serviceWorker.controller, _swReloading = false, _swDeferred = false;
+            const _swReload = () => { if (_swReloading) return; _swReloading = true; window.location.reload(); };
+            // 第一次裝好時，這次載的程式和樣式是 SW 接管前抓的、沒進離線快取（以前那次多的重整剛好把它們補進去）。
+            //   照頁面上的 <script>／<link> 再抓一次（經過 SW 就會存進去），一次 6 支慢慢來；第一次打開後馬上斷網也進得來
+            const _swWarm = () => {
+                const urls = Array.from(document.querySelectorAll('script[src], link[rel="stylesheet"][href]'))
+                    .map(el => el.src || el.href).filter(u => u && u.indexOf(location.origin) === 0);
+                let i = 0;
+                const next = () => { const u = urls[i++]; if (!u) return; fetch(u).then(r => r.blob()).catch(() => {}).then(next); };
+                for (let k = 0; k < 6; k++) next();
+            };
             navigator.serviceWorker.addEventListener('controllerchange', () => {
-                console.log('[SW] 偵測到新版本接管，自動重新整理…');
-                window.location.reload();
+                if (!_swHad) { _swHad = true; console.log('[SW] 第一次裝好離線快取，不用重整'); setTimeout(_swWarm, 3000); return; }
+                if (performance.now() < 20000 || document.visibilityState === 'hidden') {
+                    console.log('[SW] 偵測到新版本接管，自動重新整理…');
+                    _swReload();
+                    return;
+                }
+                if (_swDeferred) return;
+                _swDeferred = true;
+                console.log('[SW] 偵測到新版本，等切出去再換');
+                document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _swReload(); });
             });
 
             window.addEventListener('load', () => {
