@@ -2653,6 +2653,14 @@
                     const _vr = win.OS_VN_RULES?.getDepthParts?.() || [];
                     if (_vr.length) _loreDepths = (_loreDepths || []).concat(_vr);
                 } catch (e) { console.warn('[OS_API vn_story] VN 指令載入失敗:', e); }
+                // 📌 進行中的委託（地圖接的）：每一輪都帶單號和收款那一行的要求，跟酒館 injectMapMission 同一份字、同樣插在倒數第二則前面
+                try {
+                    const _mm = await win.AUREALIS_MAP?.missionReminderText?.();
+                    if (_mm) {
+                        const _B = win.AURELIA_BLOCK;
+                        _loreDepths = (_loreDepths || []).concat([{ depth: 2, role: 0, text: _B ? _B.wrap('aurelia_map_mission', _mm) : _mm }]);
+                    }
+                } catch (e) { console.warn('[OS_API vn_story] 進行中的委託載入失敗:', e); }
             }
 
             if (cotPrompt) apiMessages.push({ role: 'system', content: `### \n${cotPrompt}` });

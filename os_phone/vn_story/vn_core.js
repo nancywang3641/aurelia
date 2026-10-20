@@ -1690,6 +1690,15 @@
             const config = (win.OS_SETTINGS?.getConfig?.()) || {};
             if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
 
+            // 📮 網頁版：地圖接了還收著的委託、「搭話」那句，接在她這句前面一起送（存檔的 request 也是併好的，重寫這章照樣帶著）。
+            //   酒館那邊在 MESSAGE_SENT 併（os_app_memory_inject 的 mergeHeldMission），所以只有網頁版走這裡；續寫那通不併。
+            if (!opts?._continueFrom && win.OS_API?.isStandalone?.()) {
+                try {
+                    const _merged = await win.AUREALIS_MAP?.missionMergeHeld?.(choice);
+                    if (_merged) { choice = _merged; console.log('📮 [VN_Choice] 收著的委託／搭話併進這一句送出'); }
+                } catch (e) { console.warn('[VN_Choice] 併委託失敗:', e); }
+            }
+
             // loader 已由 doSend 在 Archive 關閉前就顯示好，這裡只確保 label 正確
             const _chkLbl = document.getElementById('vn-start-loader-label');
             if (_chkLbl) _chkLbl.textContent = 'AI 生成中...';

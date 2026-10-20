@@ -261,8 +261,10 @@
                     }).catch(() => {});
                 }
 
-                const doSend = () => {
+                const doSend = async () => {
                     let val = inp?.value?.trim();
+                    // 沒打字直接按送出：地圖收著委託或搭話的話，那段就當這一句送出去（跟酒館空送出一樣）
+                    if (!val && M && M.missionHeldText) { try { val = String((await M.missionHeldText()) || '').trim(); } catch (e) {} }
                     if (!val) return;
                     if (settle.size) val += '\n[結算委託] ' + [...settle].join('、');
                     this._pendingChoices = null;

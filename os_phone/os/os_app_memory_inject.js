@@ -825,7 +825,7 @@
 
     // 📌 進行中的委託：每一輪都帶單號和「辦成時寫收款那一行」的要求（內容由 map_core 的委託紀錄給）。
     //    接委託那則訊息只發一次，大總結藏掉舊樓、預設把舊樓剝成摘要以後，AI 就看不到單號，收尾時不會寫收款那行、報酬進不了錢包。
-    //    接委託只在酒館發生（PWA 沒有這條路），所以只有酒館端要注。
+    //    這支只管酒館；網頁版同一份字由 os_api_engine 的 _buildStandaloneContext 插在同一個深度（10-20 補齊）。
     var MAP_MISSION_INJECT_ID = 'aurelia_map_mission';
     var _lastMapMissionUninject = null;
     async function injectMapMission() {

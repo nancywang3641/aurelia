@@ -1999,10 +1999,10 @@ ${facilityText}
         // 3. 先收著不送（held）：她下一句從酒館輸入框送出時，才接在那則訊息前面一起送（missionMergeHeld）。
         //    以前這裡直接塞一則 System 訊息當最新一樓，資料中心只抓最新一樓 → 上一章的選項就拿不到了
         //    （10-14 她：「最新層變委託了，這樣資訊中心窗口的選擇就拿不到了」「只在輸入框用戶輸出下一個行動時，一起合併?」）。
-        //    網頁版沒有酒館可送（以前也只是印錯誤），照舊只記帳。
-        const tavern = !!win.TavernHelper;
-        try { await _missionRecord(eventData, tavern ? systemPrompt : ''); } catch (e) {}
-        if (tavern) AUI.toast('接下「' + eventData.title + '」了，下一句話送出時會一起帶給劇情');
+        //    網頁版（10-20 補齊）一樣收著：她在劇情選項框送下一句時，VN_Core._sendChoiceAndContinue 叫 missionMergeHeld 接上。
+        const canSend = !!win.TavernHelper || _isPwa();
+        try { await _missionRecord(eventData, canSend ? systemPrompt : ''); } catch (e) {}
+        if (canSend) AUI.toast('接下「' + eventData.title + '」了，下一句話送出時會一起帶給劇情');
         else console.error('[Map] ❌ TavernHelper 不存在');
 
         // 4. 關閉手機
@@ -2015,6 +2015,8 @@ ${facilityText}
     //   「委託完成」卡是播放器播到收款單那一刻才跳（missionDoneFromStory），每張只跳一次。
     //   🚨 'map_missions' 不是 app_ 開頭：創作室清孤兒資料不會掃到它（零件庫 map_parts 同理）。
     const MISSION_APP = 'map_missions', MISSION_KEY = 'log', MISSION_MAX = 40;
+    const TALK_KEY = 'talk';   // 網頁版「搭話」收著的那句（同一個 app、同一段故事一筆）
+    function _isPwa() { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } }
     function _escM(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     function _missionScope() {
         try { const d = win.OS_DB; if (d && d.currentChatId) { const c = d.currentChatId(); if (c != null && String(c)) return String(c); } } catch (e) {}
@@ -2078,24 +2080,46 @@ ${facilityText}
     // 📮 接了還收著的委託（held）：她下一句從酒館送出時（MESSAGE_SENT，os_app_memory_inject 叫），接在那則訊息裡一起送。
     //   委託排前面、她那句排最後（模型看最後一段決定在回什麼）；回傳併好的整則，沒有收著的回空字串。
     //   🚨 那則訊息裡已經有單號＝委託已經在裡面了（沒打字直接送出時，委託整段先填進輸入框），只翻旗標不再接一次。
+    //   網頁版「搭話」收著的那句也在這裡接（排在委託前面；酒館是按搭話當下就插一則系統訊息，不經這裡）。
     async function missionMergeHeld(userText) {
         const list = await _missionLoad();
         const held = list.filter(r => r.status === 'running' && r.held && r.startText);
-        if (!held.length) return '';
+        const talk = await _talkTake(String(userText || ''));
+        if (!held.length && !talk) return '';
         const text = String(userText || '');
-        held.forEach(r => { r.held = false; r.sentAt = Date.now(); });
-        await _missionSave(list);
-        const todo = held.filter(r => text.indexOf(r.id) < 0);
-        if (!todo.length) return '';
-        const blocks = todo.map(r => r.startText).join('\n\n');
+        let todo = [];
+        if (held.length) {
+            held.forEach(r => { r.held = false; r.sentAt = Date.now(); });
+            await _missionSave(list);
+            todo = held.filter(r => text.indexOf(r.id) < 0);
+        }
+        if (!todo.length) return talk ? talk + '\n\n' + (text.trim() || '(現在，請開始演出這段搭話...)') : '';
+        const blocks = (talk ? talk + '\n\n' : '') + todo.map(r => r.startText).join('\n\n');
         if (!text.trim()) return blocks + '\n\n(現在，請開始演出任務開頭...)';
         return blocks + '\n\n這一章先照下面這句演主角接下來做的事，再讓主角接到' + (todo.length > 1 ? '上面這幾份委託' : '這份委託') + '、演出任務開頭。\n\n' + text;
     }
     // 沒打字直接按送出時要填進輸入框的整段（只讀不改旗標；真的送出去由 missionMergeHeld 認單號翻旗標）
     async function missionHeldText() {
         const held = (await _missionLoad()).filter(r => r.status === 'running' && r.held && r.startText);
-        if (!held.length) return '';
-        return held.map(r => r.startText).join('\n\n') + '\n\n(現在，請開始演出任務開頭...)';
+        const talk = await _talkPeek();
+        if (!held.length) return talk ? talk + '\n\n(現在，請開始演出這段搭話...)' : '';
+        return (talk ? talk + '\n\n' : '') + held.map(r => r.startText).join('\n\n') + '\n\n(現在，請開始演出任務開頭...)';
+    }
+    // 🗣 網頁版「搭話」：沒有酒館可以插系統訊息，先收著，她下一句送出時接在前面（同委託那套）
+    async function _talkHold(text) {
+        try { const d = win.OS_DB; if (d && d.saveAppData) await d.saveAppData(MISSION_APP, TALK_KEY, { text: text, at: Date.now() }, _missionScope()); return true; }
+        catch (e) { console.warn('[Map] 搭話存不進去', e); return false; }
+    }
+    async function _talkPeek() {
+        try { const d = win.OS_DB; const v = (d && d.getAppData) ? await d.getAppData(MISSION_APP, TALK_KEY, _missionScope()) : null; return (v && v.text) || ''; }
+        catch (e) { return ''; }
+    }
+    // 拿走（送出那一下）；她那句裡已經有這段（空送出時整段先填進去了）就只清不接
+    async function _talkTake(userText) {
+        const t = await _talkPeek();
+        if (!t) return '';
+        try { const d = win.OS_DB; if (d && d.deleteAppData) await d.deleteAppData(MISSION_APP, TALK_KEY, _missionScope()); } catch (e) {}
+        return String(userText || '').indexOf(t) >= 0 ? '' : t;
     }
     // 設施頁「還沒結算」那張按「不辦了」：之後不再提醒 AI 結算。真的入帳的話照樣翻成辦完。
     async function _missionDrop(id) {
@@ -2608,6 +2632,13 @@ ${facilityText}
         const prompt = `[System: Interaction]\n{{user}} 正在與 ${char.name} (${char.role}) 搭話。\n地點: ${STATE.activeFacility.name}`;
         // 欄位叫 message（酒館助手只認這個；傳 content 插進去的是空訊息）
         if (win.TavernHelper) win.TavernHelper.createChatMessages([{ role: 'system', message: prompt }]);
+        else if (_isPwa()) {
+            // 網頁版：{{user}} 先換成她的名字（網頁版送出去的字不會再展開巨集），收著等她下一句
+            let me = '';
+            try { me = (win.OS_PERSONA && win.OS_PERSONA.getName && win.OS_PERSONA.getName()) || ''; } catch (e) {}
+            const text = prompt.replace(/\{\{user\}\}/g, me || '主角');
+            _talkHold(text).then(ok => { if (ok) AUI.toast('要跟' + char.name + '搭話了，下一句話送出時會一起帶給劇情'); });
+        }
         exitMap();
     }
 
