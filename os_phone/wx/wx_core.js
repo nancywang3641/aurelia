@@ -522,7 +522,8 @@
     }
     
     // 確保紅包數據已保存（從消息內容中提取並保存）
-    function ensureRedPacketData(content, senderName) {
+    // room：這則在哪一間（私聊只有她一個人能領）
+    function ensureRedPacketData(content, senderName, room) {
         // 檢測 [RedPacket: 金額|備註|ID] 格式
         const redPacketMatch = content.match(/\[\s*(?:紅包|RedPacket)\s*[:：]\s*(.+?)\s*\]/i);
         if (!redPacketMatch) {
@@ -560,9 +561,13 @@
         const existing = getRedPacketData(packetId);
         if (!existing) {
             const totalAmount = parseFloat(amount) || 0;
-            // 默認紅包數量：根據金額計算，最小1個，最大100個，每個至少0.01元
-            const maxCount = Math.floor(totalAmount / 0.01);
-            const totalCount = Math.min(100, Math.max(1, maxCount));
+            // 份數：第 4 格有寫就照寫的（她自己發的就是這個格式）；私聊只有她能領＝整包一份
+            //   （以前私聊也當成 100 份的拼手氣，88 元她只領到七十幾、還寫剩下多少）；群聊沒寫照舊，最多 100 份、每份至少 0.01
+            const maxCount = Math.max(1, Math.floor(totalAmount / 0.01));
+            const askedCount = parts.length >= 4 && /^\d+$/.test(parts[3]) ? parseInt(parts[3], 10) : 0;
+            const totalCount = askedCount ? Math.min(100, maxCount, askedCount)
+                : (room && !room.isGroup) ? 1
+                : Math.min(100, maxCount);
             const packetData = {
                 sender: senderName || "User",
                 totalAmount: totalAmount,
@@ -1333,7 +1338,7 @@
                     if (!_isMediaTag(tag)) {
                         senderName = tag;
                     }
-                    ensureRedPacketData(content, senderName);
+                    ensureRedPacketData(content, senderName, _rc);
                 }
                 // 🛵 外送單也先開：同一則裡「A 請 B 付、B 付了」，付款那行才找得到單（wx_takeout.js prescan）
                 if (content && /[\[［]\s*(?:TakeoutAsk|Takeout|外送|外賣|外卖|代付)/i.test(content)) {
@@ -2848,7 +2853,12 @@
     }
 
     function _mm() { return win.WX_MESSAGE_MANAGER || window.WX_MESSAGE_MANAGER; }
+    // 現在這個小窗的「點別處、捲動就收」：收小窗時一起拆。
+    //   🚨 以前只在點到別處時才拆：按了小窗裡的按鈕（複製、引用、刪除）收起來的那次沒拆，留下來的那個
+    //   下一次開小窗時一碰就把新的關掉、按鈕按不到——同一次打開期間第二次長按就什麼都按不了
+    let _mmOff = null;
     function _closeMsgMenu() {
+        if (_mmOff) { const f = _mmOff; _mmOff = null; try { f(); } catch (e) {} }
         const m = APP_CONTAINER && APP_CONTAINER.querySelector('.wx-msgmenu');
         if (m) m.remove();
     }
@@ -2990,16 +3000,18 @@
             else if (b.dataset.act === 'delete') { const M = _mm(); if (M) M.enterMultiSelectMode(idx); }
             else if (b.dataset.act === 'recall') _recallMine(idx);
         });
-        // 點別的地方、捲動就收起來
+        // 點別的地方、捲動就收起來（收的時候 _closeMsgMenu 一起拆掉這兩個）
         setTimeout(function () {
-            const off = function (e) {
-                if (menu.contains(e.target)) return;
-                _closeMsgMenu();
-                doc.removeEventListener('pointerdown', off, true);
-            };
-            doc.addEventListener('pointerdown', off, true);
+            if (!menu.isConnected) return;   // 還沒掛上就已經收了（例如馬上又開了另一個）
+            const off = function (e) { if (!menu.contains(e.target)) _closeMsgMenu(); };
+            const onScroll = function () { _closeMsgMenu(); };
             const sc = _getScrollEl();
-            if (sc) sc.addEventListener('scroll', function once() { _closeMsgMenu(); sc.removeEventListener('scroll', once); });
+            doc.addEventListener('pointerdown', off, true);
+            if (sc) sc.addEventListener('scroll', onScroll);
+            _mmOff = function () {
+                doc.removeEventListener('pointerdown', off, true);
+                if (sc) sc.removeEventListener('scroll', onScroll);
+            };
         }, 0);
     }
     function _renderReplyingBar() {
@@ -3010,7 +3022,7 @@
         const n = APP_CONTAINER.querySelector('#wxReplyingName');
         const t = APP_CONTAINER.querySelector('#wxReplyingText');
         if (n) n.textContent = _replyTo.name;
-        if (t) t.textContent = _replyTo.text;
+        if (t) t.textContent = (win.WX_VIEW && win.WX_VIEW.quoteLabel) ? win.WX_VIEW.quoteLabel(_replyTo.text) : _replyTo.text;   // 引用到卡片：寫成白話
         bar.classList.remove('hidden');
     }
     function _scrollToBottom(){ const r = _getScrollEl(); if (r) r.scrollTop = r.scrollHeight; }
@@ -4246,12 +4258,13 @@
                         // 立即扣款（紅包發送時就扣款）
                         win.WX_WALLET.transaction(-redPacketAmount, `微信紅包`);
                     }
-                    // 生成紅包ID（3位數字）
-                    const randomNum = Math.floor(Math.random() * 1000);
-                    const packetId = 'rp_' + String(randomNum).padStart(3, '0');
-                    // 默認紅包數量：根據金額計算，最小1個，最大100個，每個至少0.01元
+                    // 紅包單號：以前是 rp_ 加三位數，只有一千種，撞到以前發過的那包就整包接走它的金額和領取紀錄
+                    //   （同轉帳那條改成時間）
+                    const packetId = 'rp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 4);
+                    // 份數：私聊只有對方能領＝一份；群聊照金額算，最多 100 份、每份至少 0.01
                     const maxCount = Math.floor(redPacketAmount / 0.01);
-                    const totalCount = Math.min(100, Math.max(1, maxCount));
+                    const _rpRoom = GLOBAL_ACTIVE_ID ? GLOBAL_CHATS[GLOBAL_ACTIVE_ID] : null;
+                    const totalCount = (_rpRoom && !_rpRoom.isGroup) ? 1 : Math.min(100, Math.max(1, maxCount));
                     // 新格式：[RedPacket: 金額|備註|紅包ID|數量]
                     const memo = val2 || '恭喜發財，大吉大利';
                     content = `[RedPacket: ${val1}|${memo}|${packetId}|${totalCount}]`;
@@ -4326,7 +4339,7 @@
             
             if (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) {
                 const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
-                currentChat.messages.push({ type: 'system', content: content, isMe: false });
+                currentChat.messages.push({ type: 'system', content: content, isMe: false, _mine: 1 });   // _mine：她按的（畫成「你收下了」，不是「對方」）
                 this.render();
                 const chatName = currentChat.name;
                 const chatId = currentChat.id;
@@ -4449,7 +4462,7 @@
 
             if (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) {
                 const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
-                currentChat.messages.push({ type: 'system', content: content, isMe: false });
+                currentChat.messages.push({ type: 'system', content: content, isMe: false, _mine: 1 });   // _mine：她按的（畫成「你已收款」，不是「對方已接收」）
                 this.render();
                 const chatName = currentChat.name;
                 const chatId = currentChat.id;

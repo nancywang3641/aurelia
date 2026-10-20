@@ -170,9 +170,12 @@
             if (!saveToStorage) return input; 
 
             // 3. 創建新聯絡人 (隱形註冊)
-            let newId = forcedId || ('char_' + (Math.floor(Math.random() * 900) + 100));
+            //   🚨 編號別擲三位數：通訊錄是每本故事一份、這裡只跟這本的人比對，聊天記錄卻是全部故事存在同一個倉庫、只用這個編號當鑰匙。
+            //   以前只有 900 種，別本故事用掉的號碼這裡又生一次，開那間就把別本的聊天整份蓋掉。改成時間＋亂數（手動加好友那條也是時間）
+            const _genId = () => 'char_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            let newId = forcedId || _genId();
             while(list.find(c => c.id === newId)) {
-                newId = 'char_' + (Math.floor(Math.random() * 900) + 100);
+                newId = _genId();
             }
             
             const newContact = {

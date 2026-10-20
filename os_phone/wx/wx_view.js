@@ -174,6 +174,26 @@
         // 各寫各的就會像這次一樣漂在繁體字上。
         MSG_TAG: MSG_TAG,
 
+        // 引用的片段給她看的那一行：卡片標籤換成「[紅包] 買杯熱的」這種（以前引用列、泡泡上的引用塊直接印
+        //   [RedPacket: 88|買杯熱的|rp_e2e1]）。存給模型的引用照舊是原標籤，它才看得出引用的是哪張卡。
+        //   片段可能被截在標籤中間（引用只留前 30 字、右括號也被拿掉），所以結尾的 ] 可有可無
+        quoteLabel: function (text) {
+            const T = MSG_TAG;
+            const KIND = [[T.REDPACKET, '紅包', 1], [T.TRANSFER, '轉帳', 0, '¥'], [T.GIFT, '禮物', 0], [T.LOCATION, '位置', 0],
+                [T.TAKEOUT_ASK, '外送代付', 1], [T.TAKEOUT, '外送', 1], [T.IMAGE, '圖片', 0], [T.VOICE, '語音', 0], [T.STICKER, '表情包', -1],
+                [T.VIDEO, '影片', 0], [T.FILE, '檔案', 0], [T.LINK, '連結', 0], [T.PAYCODE, '收款碼', -1], [T.CALL, '通話', -1],
+                [T.WBSHARE, '分享', 1], [T.APPSHARE, '分享', 1]];
+            return String(text == null ? '' : text).replace(new RegExp('\\[\\s*(' + T.ALL + ')\\s*[:：]\\s*([^\\]]*)\\]?', 'gi'), function (m, tag, body) {
+                const k = KIND.find(function (x) { return new RegExp('^(?:' + x[0] + ')$', 'i').test(tag); });
+                if (!k) return m;
+                const parts = String(body).split(/\s*[|｜]\s*/);
+                let field = k[2] < 0 ? '' : String(parts[k[2]] != null ? parts[k[2]] : parts[0] || '');
+                if (k[1] === '位置') field = field.split(/[-－]/)[0];
+                field = field.trim();
+                return '[' + k[1] + ']' + (field ? ' ' + (k[3] || '') + field : '');
+            });
+        },
+
         // 假收款碼：程式畫「QR 樣式」SVG（三角定位框 + 依 seed 隨機黑塊），跑團用、不可掃也不用生圖
         _fakeQrSvg: function(seed) {
             let h = 0; const s = String(seed || 'qr'); for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) & 0x7fffffff;
@@ -302,6 +322,15 @@
 
             if (msg.type === 'system') {
                 let displayContent = msg.content || '';
+                // 她自己按收款、退回、收下禮物的那行（_mine）：內容跟模型寫的「對方收下了」同一個格式（給模型看），
+                //   畫的時候寫「你」。以前一律翻成「對方已接收轉帳」，她收了錢畫面卻說是對方收的
+                const _mineAct = msg._mine && String(displayContent).replace(/^\[\s*(?:系統|系统|System)\s*[:：]\s*/i, '').replace(/\]\s*$/, '')
+                    .match(/^(Accept|Return)\s+(.+?)\s*[|｜]/i);
+                if (_mineAct) {
+                    const _acc = /^accept$/i.test(_mineAct[1]), _what = _mineAct[2].trim();
+                    displayContent = /^\d+(?:\.\d+)?$/.test(_what) ? (_acc ? `你已收款 ${_what}元` : `你已退回轉帳 ${_what}元`)
+                        : (_acc ? `你收下了「${_what}」` : `你退回了「${_what}」`);
+                }
                 // 處理紅包領取系統消息：[系統: XXX領取了紅包 金額元|ID]，隱藏ID部分
                 // 匹配格式：[系統: ...領取了紅包 ...元|ID] 或 "XXX"領取了紅包XX元|rp_ID
                 if (displayContent.match(/領取.*?紅包.*?[|｜]/i)) {
@@ -446,7 +475,7 @@
             
             // 引用回覆的灰塊：照微信擺在泡泡內、正文下面。解析與 HTML 跟 VN 手機共用 OS_API.chatQuote
             const quoteHTML = (msg.quoteName && msg.quoteText && win.OS_API && win.OS_API.chatQuote)
-                ? win.OS_API.chatQuote.html(msg.quoteName, msg.quoteText, 'wx-quote') : '';
+                ? win.OS_API.chatQuote.html(msg.quoteName, window.WX_VIEW.quoteLabel(msg.quoteText), 'wx-quote') : '';   // 引用到卡片：畫成白話（存的照舊是原標籤）
 
             // 泡泡主題的共用 class：這一組（.pbub-row / .pbub-me / .pbub-other / .pbub-avatar / .pbub-bubble）
             // 微信跟 VN 手機都會掛，主題 CSS 只認它們——兩邊原本的 class 一個叫 .me 一個叫 .you 而且意思相反，
@@ -777,7 +806,9 @@
                 } catch (e) {}
                 return `<div class="wx-rpc-card ${rpDim}" onclick="${app}.openRedPacketById('${_jsArg(rpRef)}')"><div class="wx-rpc-top"><div class="wx-rpc-env"><div class="wx-rpc-coin">¥</div></div><div class="wx-rpc-text"><div class="wx-rpc-memo">${_attr(memo)}</div><div class="wx-rpc-sub">${rpSub}</div></div></div><div class="wx-rpc-foot"><span>微信紅包</span></div></div>`;
             });
-            _rep(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { let parts = content.split(/[-－]/); let name = parts[0].trim(); let address = parts.length > 1 ? parts[1].trim() : name; let v = 0; for (const ch of name) v = (v * 31 + ch.codePointAt(0)) % 4; return `<div class="wx-loc-card"><div class="wx-loc-map wx-loc-v${v}"><div class="wx-loc-streets"></div><div class="wx-loc-pin"><i class="fa-solid fa-location-dot"></i></div></div><div class="wx-loc-info"><div class="wx-loc-name">${_attr(name)}</div><div class="wx-loc-addr">${_attr(address)}</div></div></div>`; });
+            // 教的是 [定位: 店名-地址]；別的卡片都用直槓，模型常寫成 [位置: 地點|一句話]（以前直槓原樣印在卡上）。
+            //   先認直槓、沒有才用第一個破折號切，後面整段都是地址（以前「碼頭路 7-1 號」只剩「碼頭路 7」）
+            _rep(tagRe(MSG_TAG.LOCATION), (match, tag, content) => { const _cut = /[|｜]/.test(content) ? content.search(/[|｜]/) : content.search(/[-－]/); let name = (_cut >= 0 ? content.slice(0, _cut) : content).trim(); let address = _cut >= 0 ? content.slice(_cut + 1).trim() : name; if (!address) address = name; let v = 0; for (const ch of name) v = (v * 31 + ch.codePointAt(0)) % 4; return `<div class="wx-loc-card"><div class="wx-loc-map wx-loc-v${v}"><div class="wx-loc-streets"></div><div class="wx-loc-pin"><i class="fa-solid fa-location-dot"></i></div></div><div class="wx-loc-info"><div class="wx-loc-name">${_attr(name)}</div><div class="wx-loc-addr">${_attr(address)}</div></div></div>`; });
             _rep(tagRe(MSG_TAG.VIDEO), (m, t, content) => { var videoTitle = "Video Clip"; var isUrl = content.match(/^http/i); if (!isUrl) videoTitle = content; var vidClick = isUrl ? `onclick="window.open('${_jsArg(content)}')"` : ''; return `<div ${vidClick} class="wx-vcard${isUrl ? ' is-link' : ''}"><div class="wx-vcard-bg"></div><div class="wx-vcard-play"></div><div class="wx-vcard-title"><i class="fa-solid fa-video"></i> ${_attr(videoTitle)}</div><div class="wx-vcard-dur">00:15</div></div>`; });
             _rep(tagRe(MSG_TAG.FILE), (m, t, filename) => { filename = filename.trim(); let ext = filename.split('.').pop().toLowerCase(); let iconColor = '#999'; let iconText = '?'; if (ext.match(/ppt|pptx/)) { iconColor = '#f4511e'; iconText = 'P'; } else if (ext.match(/doc|docx/)) { iconColor = '#4b89dc'; iconText = 'W'; } else if (ext.match(/xls|xlsx/)) { iconColor = '#2e7d32'; iconText = 'X'; } else if (ext.match(/pdf/)) { iconColor = '#e53935'; iconText = '<span style="font-size:10px">PDF</span>'; } else if (ext.match(/txt/)) { iconColor = '#999'; iconText = 'T'; } let size = (Math.random() * 5 + 1).toFixed(1) + " MB"; return `<div class="wx-file-card"><div class="wx-file-info"><div class="wx-file-name">${_attr(filename)}</div><div class="wx-file-size">${size}</div></div><div class="wx-file-icon" style="background:${iconColor}">${iconText}</div></div>`; });
             _rep(tagRe(MSG_TAG.STICKER), (match, tag, content) => {
