@@ -1013,6 +1013,21 @@
             } catch (e) { return text; }
         },
 
+        // 🧼 外來的卡片 HTML（AI 直出的美化卡、角色卡正則套出來的面板）→ 照樣式顯示（卡片自帶的 <style> 也留）、但什麼都不准跑
+        _safeCard: function(html) {
+            const s = String(html == null ? '' : html);
+            const A = (win && win.AUI) || window.AUI;
+            if (A && typeof A.safeHtml === 'function') return A.safeHtml(s);
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');   // 沒有 AUI（不該發生）：整段當純文字
+        },
+        // 角色卡正則的結果：整份 HTML 文件會被包成 <iframe class="vn-regex-card" srcdoc="…">（卡片自帶的前端程式本來就要跑，
+        //   沙盒屬性另外交給她決定，這裡不動）；只認程式自己包的那一種原樣放行，其餘的片段一律消毒。
+        _REGEX_CARD_FRAME: /^<iframe class="vn-regex-card" scrolling="no" srcdoc="[^"]*"><\/iframe>$/,
+        _safeRegexCard: function(html) {
+            const s = String(html == null ? '' : html);
+            return this._REGEX_CARD_FRAME.test(s) ? s : this._safeCard(s);
+        },
+
         _grabRegexCardHtml: function(blockText) {
             if (!blockText) return '';
             // 🔥 學 PWA：先吃創作室（展廳）已啟用模板，沒命中才去酒館正則。
@@ -1036,11 +1051,14 @@
                             }
                             let _h = _tpl.html;
                             // 正則型：用 regexString 抓 {{1}}、{{2}} 佔位（與 _renderInline 同邏輯）
+                            //   模板是她做的、抓到的字是模型寫的 → 填進去之前照 _phVal 轉（粗體換行照留，會跑的不留）
                             if (_tpl.regexString) {
                                 try {
                                     const _rs = String(_tpl.regexString).replace(/^\^/, '').replace(/\$$/, '');
                                     const _m = String(blockText).match(new RegExp(_rs, 'i'));
-                                    if (_m) for (let i = 1; i < _m.length; i++) _h = _h.split('{{' + i + '}}').join((_m[i] || '').trim());
+                                    const _pv = (typeof _dp._phVal === 'function') ? (v) => _dp._phVal(v)
+                                        : (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                    if (_m) for (let i = 1; i < _m.length; i++) _h = _h.split('{{' + i + '}}').join(_pv((_m[i] || '').trim()));
                                 } catch (e) {}
                             }
                             return _h;
@@ -1056,7 +1074,7 @@
                 const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
                 if (_CR && typeof _CR.cardHtmlFor === 'function') {
                     const _cardHtml = _CR.cardHtmlFor(blockText);
-                    if (_cardHtml) return _cardHtml;
+                    if (_cardHtml) return this._safeRegexCard(_cardHtml);   // 卡片作者的版型＋模型寫的字：片段消毒，整份文件的 iframe 原樣
                 }
             } catch (e) {}
             const _win = window.parent || window;
@@ -1091,7 +1109,8 @@
                     const _esc = _card.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
                     return '<iframe class="vn-regex-card" scrolling="no" srcdoc="' + _esc + '"></iframe>';
                 }
-                return _card;
+                // 片段（不是整份文件）：酒館畫在聊天裡時也會先消毒，這裡照做，免得模型寫的字裡夾的 onerror 在彈窗裡跑起來
+                return this._safeCard(_card);
             }
             return '';
         },
@@ -2884,12 +2903,9 @@
                 const _ci = parseInt(line.slice(10), 10);
                 const _rawCard = (this._rawHtmlCards || [])[_ci] || '';
                 if (!_rawCard) { this.next(); return; }
-                let _cleanCard = _rawCard;
-                try {
-                    const _DP = (win && win.DOMPurify) || window.DOMPurify;
-                    if (_DP && _DP.sanitize) _cleanCard = _DP.sanitize(_rawCard);
-                    else _cleanCard = _rawCard.replace(/<script[\s\S]*?<\/script\s*>/gi, '').replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');   // 沒 DOMPurify 的保底消毒
-                } catch (e) {}
+                // 消毒走全站那支 AUI.safeHtml（有 DOMPurify 時它也先過 DOMPurify）。
+                //   以前沒 DOMPurify（手機版網頁）只靠一條正則，<img onerror> 以外的寫法（javascript: 連結、iframe、svg 動畫…）都擋不住
+                const _cleanCard = this._safeCard(_rawCard);
                 this._showDomBlock(null, null, _cleanCard);
                 return;
             }
@@ -3900,7 +3916,8 @@
             if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
         },
         addLog: function(name, text) { this.logHistory.push({ name, text: text.replace(/\*/g, '') }); },
-        showLog: function() { const content = document.getElementById('vn-log-content'); content.innerHTML = this.logHistory.map(log => `<div class="vn-log-item"><div class="vn-log-name">${log.name}</div><div class="vn-log-text">${log.text}</div></div>`).join(''); document.getElementById('vn-log-overlay').classList.add('active'); setTimeout(() => { content.scrollTop = content.scrollHeight; }, 50); },
+        // 紀錄裡的名字和台詞是模型寫的原文：轉義再放（以前原樣塞，台詞裡夾 <img onerror> 一打開紀錄就跑）
+        showLog: function() { const content = document.getElementById('vn-log-content'); const _e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); content.innerHTML = this.logHistory.map(log => `<div class="vn-log-item"><div class="vn-log-name">${_e(log.name)}</div><div class="vn-log-text">${_e(log.text)}</div></div>`).join(''); document.getElementById('vn-log-overlay').classList.add('active'); setTimeout(() => { content.scrollTop = content.scrollHeight; }, 50); },
         hideLog: function() { document.getElementById('vn-log-overlay').classList.remove('active'); },
 
         typewriter: function(el, html, speed) {

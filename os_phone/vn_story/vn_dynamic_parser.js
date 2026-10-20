@@ -185,15 +185,21 @@
                 return '_nochat';
             };
             return {
+                // 回傳的 HTML 是給面板塞進 innerHTML 的，字是模型寫的 → 轉完 markdown 再過 AUI.safeHtml（粗體換行照留，<img onerror> 這類會跑的拿掉）
                 md: function(text) {
                     if (!text) return '';
-                    return String(text)
+                    const A = (window.parent && window.parent.AUI) || window.AUI;
+                    const safe = (A && typeof A.safeHtml === 'function') ? (h) => A.safeHtml(h) : null;
+                    let src = String(text);
+                    if (!safe) src = src.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');   // 沒有 AUI（不該發生）：先當純文字
+                    const out = src
                         .replace(/\\n/g, '\n')   // AI 常寫「字面 \n」(反斜線n)當換行 → 先轉成真換行
                         .replace(new RegExp('[*][*](.+?)[*][*]', 'g'), function(_, p1){ return '<b>' + p1 + '</b>'; })
                         .replace(new RegExp('[*](.+?)[*]', 'g'),       function(_, p1){ return '<i>' + p1 + '</i>'; })
                         .replace(new RegExp('[`](.+?)[`]', 'g'),       function(_, p1){ return '<code>' + p1 + '</code>'; })
                         .replace(/\n/g, '<br>')                 // 換行→<br>(原本完全沒做→長信/多段內容全擠一起)
                         .replace(/(<br>\s*){3,}/g, '<br><br>'); // 收斂過多空行
+                    return safe ? safe(out) : out;
                 },
                 parse: function() {
                     const result = {};
@@ -509,6 +515,15 @@
             }
         },
         
+        // 🧼 {{1}}、{{2}} 佔位要填的字（模型寫的）：先整段轉義（& < > " ' 都轉，填在屬性裡也跑不出引號），
+        //   再把幾個不帶屬性的排版標籤（粗體、斜體、換行…）放回來，模型寫的 <br>、<b> 照舊有效果。
+        //   模板本身是她做的，不動；vn_core 的 _grabRegexCardHtml 填同一種模板也走這支。
+        _phVal: function(v) {
+            return String(v == null ? '' : v)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;')
+                .replace(/&lt;(\/?)(b|i|em|strong|u|s|small|sub|sup|br)\s*\/?&gt;/gi, '<$1$2>');
+        },
+
         // 傳統單行渲染 (保留不變)
         _renderInline: function(tpl, match, vnCore) {
             if (vnCore.hideVNPanel) vnCore.hideVNPanel();
@@ -517,7 +532,7 @@
             // 優先掛 VN 劇情窗口容器（酒館用 #page-game，跟 _showDomBlock 一致），沒有才退 body（避免在酒館全屏蓋整個畫面）
             const layer = document.getElementById('vn-game-layer') || document.getElementById('page-game') || document.body;
             let html = tpl.html;
-            for (let i = 1; i < match.length; i++) { html = html.split(`{{${i}}}`).join((match[i] || '').trim()); }
+            for (let i = 1; i < match.length; i++) { html = html.split(`{{${i}}}`).join(this._phVal((match[i] || '').trim())); }
             
             const overlay = document.createElement('div');
             overlay.style.cssText = 'position:absolute;inset:0;z-index:9000;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;opacity:0;transition:0.3s;';

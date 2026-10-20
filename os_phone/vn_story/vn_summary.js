@@ -110,11 +110,13 @@
                     // 過濾分隔行 (| :--- |)
                     const headerLine = tableLines[0];
                     const dataLines  = tableLines.filter(l => !/^\|[\s|:-]+\|$/.test(l) && l !== headerLine);
+                    // 格子裡的字是模型寫的總結：轉義再放（以前原樣塞，格子裡夾 <img onerror> 會跑）；格子裡的 <br> 照舊換行
+                    const cell = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/&lt;br\s*\/?&gt;/gi, '<br>');
                     const headers    = headerLine.split('|').filter((_,j,a)=>j>0&&j<a.length-1).map(h=>h.trim());
-                    html += '<table><thead><tr>' + headers.map(h=>`<th>${h}</th>`).join('') + '</tr></thead><tbody>';
+                    html += '<table><thead><tr>' + headers.map(h=>`<th>${cell(h)}</th>`).join('') + '</tr></thead><tbody>';
                     dataLines.forEach(l => {
                         const cells = l.split('|').filter((_,j,a)=>j>0&&j<a.length-1).map(c=>c.trim());
-                        html += '<tr>' + cells.map(c=>`<td>${c}</td>`).join('') + '</tr>';
+                        html += '<tr>' + cells.map(c=>`<td>${cell(c)}</td>`).join('') + '</tr>';
                     });
                     html += '</tbody></table>';
                 } else {

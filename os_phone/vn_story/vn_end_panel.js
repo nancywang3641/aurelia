@@ -368,7 +368,9 @@
         style.textContent = _scopeCss(w.panel.css);
         const ui = document.createElement('div');
         ui.className = 'vnep-ui';
-        ui.innerHTML = w.panel.html;
+        // 面板是模型生的 HTML：過 AUI.safeHtml 再放（樣式、class、data-act 照留，按鈕的行為本來就由下面 _bindActs 綁，不靠面板自己的程式）
+        const _A = win.AUI || window.AUI;
+        ui.innerHTML = (_A && typeof _A.safeHtml === 'function') ? _A.safeHtml(w.panel.html) : _esc(w.panel.html);
         root.appendChild(style);
         root.appendChild(ui);
         _applyBg(root, w);

@@ -197,7 +197,11 @@
             pane.dataset.card = '1';
             this._teardownCards(contentArea, pane);
             if (pane.querySelector('iframe, audio, video')) return;   // 已經掛好了就別重畫
-            pane.innerHTML = `<div class="native-render-wrapper">${html}</div>`;
+            // 卡片正則套出來的片段（卡片作者的版型＋模型寫的字）先消毒；整份文件包成的 iframe 原樣放（同 VN_Core._safeRegexCard）
+            const _V = window.VN_Core;
+            const _safe = (_V && typeof _V._safeRegexCard === 'function') ? _V._safeRegexCard(html)
+                : String(html == null ? '' : html).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            pane.innerHTML = `<div class="native-render-wrapper">${_safe}</div>`;
             try { if (CR && CR.fitCardFrames) CR.fitCardFrames(pane); } catch (e) {}
         },
 
@@ -302,6 +306,7 @@
         },
 
         async _avsHtml() {
+            const _txt = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             const storyId = window.VN_Core?._currentStoryId || '';
             const stateKey = storyId ? `avs_state_${storyId}` : 'avs_current_state';
             let state = {};
@@ -335,6 +340,11 @@
             let panelHtml = '';
             if (activeTpls.length > 0) {
                 let rendered = '';
+                // 面板＝AI 煉的模板＋劇情寫進去的數值（套模板時沒有轉義）→ 每塊 HTML 過 AUI.safeHtml（面板本來就只靠 CSS 互動：radio 分頁、<details>，消毒不影響）；
+                //   模板的 CSS 照原樣留（@import 字體也留），只把裡面的 </style 拆開，跳不出 <style>
+                const _A = win.AUI || window.AUI;
+                const _safeHtml = (h) => (_A && typeof _A.safeHtml === 'function') ? _A.safeHtml(h) : _txt(String(h || '').replace(/<[^>]+>/g, ' '));
+                const _safeCss = (c) => String(c || '').replace(/<\/(style)/gi, '<\\/$1');
                 let _allPacks = [];
                 try { _allPacks = await win.OS_DB?.getAllVarPacks?.() || []; } catch(e) {}
                 const _fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v == null ? '' : v));
@@ -348,7 +358,7 @@
                     let html = '';
                     try { html = (win.OS_AVS?.renderTemplate?.(tpl.htmlContent || '', state, _packVars, _fmt, _avatarMap)) || ''; }
                     catch (e) { html = ''; }
-                    rendered += `<style>${css}</style>${html}`;
+                    rendered += `<style>${_safeCss(css)}</style>${_safeHtml(html)}`;
                 }
                 // 🔬 右上角「本輪更新」鈕（os_avs 那份，跟酒館資訊中心同一份長相）；點了在下面的委派裡開小窗
                 panelHtml = (win.OS_AVS?.updatesBtnHtml ? win.OS_AVS.updatesBtnHtml() : '') + `<div class="native-render-wrapper">${rendered}</div>`;
@@ -360,9 +370,10 @@
             } else {
                 const rows = entries.map(([k, v]) => {
                     const display = typeof v === 'object' ? JSON.stringify(v) : String(v);
+                    // 變數名和值都是劇情（模型）寫的 → 轉義再放
                     return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(212,175,55,0.1);">
-                        <span style="color:rgba(200,178,130,0.6);font-size:11px;font-family:monospace;">${k}</span>
-                        <span style="color:#d4af37;font-size:13px;font-weight:bold;font-family:monospace;">${display}</span>
+                        <span style="color:rgba(200,178,130,0.6);font-size:11px;font-family:monospace;">${_txt(k)}</span>
+                        <span style="color:#d4af37;font-size:13px;font-weight:bold;font-family:monospace;">${_txt(display)}</span>
                     </div>`;
                 }).join('');
                 panelHtml = `<div>
@@ -405,14 +416,14 @@
                                 delta = `<span style="color:${d >= 0 ? '#2ecc71' : '#e74c3c'};font-size:10px;margin-left:4px;">${d >= 0 ? '+' : ''}${d}</span>`;
                             }
                             return `<div style="display:flex;gap:6px;align-items:center;padding:3px 0;">
-                                <span style="color:#888;font-size:10px;font-family:monospace;min-width:60px;">${k}</span>
-                                <span style="color:#666;font-size:10px;font-family:monospace;">${bStr}</span>
+                                <span style="color:#888;font-size:10px;font-family:monospace;min-width:60px;">${_txt(k)}</span>
+                                <span style="color:#666;font-size:10px;font-family:monospace;">${_txt(bStr)}</span>
                                 <span style="color:#555;font-size:10px;">→</span>
-                                <span style="color:#d4af37;font-size:10px;font-family:monospace;">${aStr}</span>
+                                <span style="color:#d4af37;font-size:10px;font-family:monospace;">${_txt(aStr)}</span>
                                 ${delta}
                             </div>`;
                         }).join('');
-                        const chTitle = ch.title || '未命名章節';
+                        const chTitle = _txt(ch.title || '未命名章節');   // 章節名是模型寫的
                         return `<div style="padding:10px 0;border-bottom:1px solid rgba(212,175,55,0.08);">
                             <div style="font-size:11px;color:#888;margin-bottom:6px;"><i class="fa-solid fa-book-open"></i> ${chTitle}</div>
                             ${changeLines}
@@ -454,7 +465,7 @@
                 </details>`;
             } catch(e) {}
 
-            return `<div id="avs-tab-root" data-story="${storyId}" data-last-ch="${lastChapter?.id || ''}">
+            return `<div id="avs-tab-root" data-story="${_txt(storyId)}" data-last-ch="${_txt(lastChapter?.id || '')}">
                 ${rerollBtn}
                 ${panelHtml}
                 ${lastExtractHtml}

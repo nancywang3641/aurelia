@@ -7,6 +7,8 @@
 (function () {
     console.log('[PhoneOS] 載入 VN 手機模式模組 (Chat/Call 擴展 + SFX + 世界書頭像支援)...');
     const win = window.parent || window;
+    // 模型寫的名字、系統提示、時間放進畫面前一律轉義（& < > " ' 五個都轉）
+    const _esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
     const VN_Phone = {
         chatParticipants: [], 
@@ -247,7 +249,7 @@
             const WV = win.WX_VIEW || window.WX_VIEW;
             const html = (WV && WV.renderBubble)
                 ? WV.renderBubble({ recalled: true, isMe: !!isMe, sender: sender, senderName: sender }, { isGroup: !!this.isGroupChat }, false)
-                : `<div class="wx-system-notice wx-recalled">${isMe ? '你' : (this.isGroupChat ? sender : '對方')}撤回了一則訊息</div>`;
+                : `<div class="wx-system-notice wx-recalled">${isMe ? '你' : (this.isGroupChat ? _esc(sender) : '對方')}撤回了一則訊息</div>`;
             if (!shown.length) { chatBody.insertAdjacentHTML('beforeend', html); return; }
             const job = { shown: shown, html: html };
             (this._recallJobs = this._recallJobs || []).push(job);
@@ -447,11 +449,12 @@
         },
 
         // 系統提示／時間：跟聊天 app 同一種樣子（一行淡灰字，有背景圖時自己帶一塊底）
+        //   字是模型寫的（[系統: …]、[Time: …]、群聊踢人那幾句裡的名字）→ 跟聊天 app 一樣當純文字顯示
         _sys: function (chatBody, text) {
-            chatBody.insertAdjacentHTML('beforeend', `<div class="wx-system-notice">${text}</div>`);
+            chatBody.insertAdjacentHTML('beforeend', `<div class="wx-system-notice">${_esc(text)}</div>`);
         },
         _time: function (chatBody, text) {
-            chatBody.insertAdjacentHTML('beforeend', `<div class="wx-time-stamp">${text}</div>`);
+            chatBody.insertAdjacentHTML('beforeend', `<div class="wx-time-stamp">${_esc(text)}</div>`);
         },
 
         // 📱 整則訊息交給聊天 app 那支畫（WX_VIEW.renderBubble）：頭像、泡泡、卡片、語音、群聊人名、引用全部同一份，

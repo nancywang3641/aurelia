@@ -92,42 +92,42 @@ function renderBasic(cfg) {
   <div class="vtts-field">
     <label class="vtts-label">音量 <span id="vtts-vol-val">${Math.round(cfg.volume*100)}%</span></label>
     <input class="vtts-input" id="vtts-vol" type="range" min="0" max="1" step="0.05"
-           value="${cfg.volume}" oninput="document.getElementById('vtts-vol-val').textContent=Math.round(this.value*100)+'%'">
+           value="${escV(cfg.volume)}" oninput="document.getElementById('vtts-vol-val').textContent=Math.round(this.value*100)+'%'">
   </div>
 </div>
 
 <div class="vtts-card">
   <div class="vtts-card-title"><i class="fa-solid fa-masks-theater"></i> 情緒張力控制 (WebUI 參數)</div>
   <div class="vtts-field">
-    <label class="vtts-label">語速 (Speed) <span id="vtts-spd-val">${cfg.speed ?? 1}</span></label>
+    <label class="vtts-label">語速 (Speed) <span id="vtts-spd-val">${escV(cfg.speed ?? 1)}</span></label>
     <input class="vtts-input" id="vtts-spd" type="range" min="0.5" max="2" step="0.1"
-           value="${cfg.speed ?? 1}" oninput="document.getElementById('vtts-spd-val').textContent=this.value">
+           value="${escV(cfg.speed ?? 1)}" oninput="document.getElementById('vtts-spd-val').textContent=this.value">
     <div class="vtts-hint">調整整體語速，高為更快。預設 1。</div>
   </div>
   <div class="vtts-field">
-    <label class="vtts-label">Top_K <span id="vtts-topk-val">${cfg.topK ?? 15}</span></label>
+    <label class="vtts-label">Top_K <span id="vtts-topk-val">${escV(cfg.topK ?? 15)}</span></label>
     <input class="vtts-input" id="vtts-topk" type="range" min="1" max="100" step="1"
-           value="${cfg.topK ?? 15}" oninput="document.getElementById('vtts-topk-val').textContent=this.value">
+           value="${escV(cfg.topK ?? 15)}" oninput="document.getElementById('vtts-topk-val').textContent=this.value">
     <div class="vtts-hint">控制情緒穩定度。無參考文本時不要太低。預設 15。</div>
   </div>
   <div class="vtts-field">
-    <label class="vtts-label">Top_P <span id="vtts-topp-val">${cfg.topP ?? 1}</span></label>
+    <label class="vtts-label">Top_P <span id="vtts-topp-val">${escV(cfg.topP ?? 1)}</span></label>
     <input class="vtts-input" id="vtts-topp" type="range" min="0.1" max="1" step="0.05"
-           value="${cfg.topP ?? 1}" oninput="document.getElementById('vtts-topp-val').textContent=this.value">
+           value="${escV(cfg.topP ?? 1)}" oninput="document.getElementById('vtts-topp-val').textContent=this.value">
     <div class="vtts-hint">控制語調豐富度。預設 1。</div>
   </div>
   <div class="vtts-field">
-    <label class="vtts-label">Temperature <span id="vtts-temp-val">${cfg.temperature ?? 1}</span></label>
+    <label class="vtts-label">Temperature <span id="vtts-temp-val">${escV(cfg.temperature ?? 1)}</span></label>
     <input class="vtts-input" id="vtts-temp" type="range" min="0.1" max="2" step="0.05"
-           value="${cfg.temperature ?? 1}" oninput="document.getElementById('vtts-temp-val').textContent=this.value">
+           value="${escV(cfg.temperature ?? 1)}" oninput="document.getElementById('vtts-temp-val').textContent=this.value">
     <div class="vtts-hint">控制情緒張力和隨機性。數值越大越奔放。預設 1。</div>
   </div>
   <div class="vtts-field">
-    <label class="vtts-label">Sample Steps <span id="vtts-steps-val">${cfg.sampleSteps ?? 32}</span>
+    <label class="vtts-label">Sample Steps <span id="vtts-steps-val">${escV(cfg.sampleSteps ?? 32)}</span>
       <span class="vtts-note-inline">（V3 / V4 專屬，V1/V2 忽略）</span>
     </label>
     <input class="vtts-input" id="vtts-steps" type="range" min="4" max="100" step="4"
-           value="${cfg.sampleSteps ?? 32}" oninput="document.getElementById('vtts-steps-val').textContent=this.value">
+           value="${escV(cfg.sampleSteps ?? 32)}" oninput="document.getElementById('vtts-steps-val').textContent=this.value">
     <div class="vtts-hint">Flow Matching 推理步數。越高音質越好但速度越慢。推薦 32（平衡）或 64（追求音質）。</div>
   </div>
 </div>
@@ -174,12 +174,12 @@ function renderIndexTab(cfg) {
   <div class="vtts-field">
     <label class="vtts-label">播放音量 <span id="vtts-vol-val">${Math.round((cfg.volume ?? 1)*100)}%</span></label>
     <input class="vtts-input" id="vtts-vol" type="range" min="0" max="1" step="0.05"
-           value="${cfg.volume ?? 1}" oninput="document.getElementById('vtts-vol-val').textContent=Math.round(this.value*100)+'%'">
+           value="${escV(cfg.volume ?? 1)}" oninput="document.getElementById('vtts-vol-val').textContent=Math.round(this.value*100)+'%'">
   </div>
   <div class="vtts-field">
     <label class="vtts-label">語氣強度 <span id="vtts-idxemo-val">${Math.round((cfg.indexEmoAlpha ?? 0.5)*100)}%</span></label>
     <input class="vtts-input" id="vtts-idxemo" type="range" min="0" max="1" step="0.05"
-           value="${cfg.indexEmoAlpha ?? 0.5}" oninput="document.getElementById('vtts-idxemo-val').textContent=Math.round(this.value*100)+'%'">
+           value="${escV(cfg.indexEmoAlpha ?? 0.5)}" oninput="document.getElementById('vtts-idxemo-val').textContent=Math.round(this.value*100)+'%'">
     <div class="vtts-hint">劇本寫了表情時，說話起伏要跟到多滿。往上調戲會多，但調過頭會開始聽起來像另一個人 —— 低沉的聲音特別容易被拉高。覺得太平就往上一格一格試。</div>
   </div>
   <div class="vtts-save-bar">
@@ -641,8 +641,13 @@ function renderNpcForm() {
 function esc(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// 數字欄（音量、語速…）：平常是數字，但配置檔可以從外面匯入（整份 Object.assign 進來），照樣轉義；0 要照樣印成 0
+function escV(v) { return esc(String(v)); }
+// 塞進 onclick="…('這裡')" 的字串參數：先照 JS 字串轉（\ ' 換行），再照屬性轉（& " < > '）。
+//   以前只做第一步：名字裡有 " 就能跳出 onclick 屬性、寫 &#39; 就能跳出 JS 字串（角色名、NPC 聲線鎖的名字是劇情裡模型寫的，配置檔也能從外面匯入）
 function escJs(s) {
-    return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    return String(s || '').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\r/g,'\\r').replace(/\n/g,'\\n').replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029')
+        .replace(/[&"<>']/g, c => ({ '&': '&amp;', '"': '&quot;', '<': '&lt;', '>': '&gt;', "'": '&#39;' }[c]));
 }
 
 // ── 面板控制器 ────────────────────────────────────────────────────────────────

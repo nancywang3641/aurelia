@@ -144,6 +144,9 @@
             if (!root.getAttribute('viewBox')) return '';
             doc.querySelectorAll('script, foreignObject, iframe, embed, object, image, video, audio, use, a').forEach(n => n.remove());
             const walk = (el) => {
+                // 處理指令（<?x …?>）和註解也拿掉：這份 SVG 是照 XML 解析、最後用 innerHTML 照 HTML 再解析一次，
+                //   <?x ><img src=x onerror=…>?> 在 XML 裡是一整段處理指令，到了 HTML 卻變成「註解＋一張會跑 onerror 的圖」
+                for (const c of Array.from(el.childNodes || [])) { if (c.nodeType === 7 || c.nodeType === 8) c.remove(); }
                 for (const attr of Array.from(el.attributes || [])) {
                     const n = attr.name.toLowerCase(), v = String(attr.value || '');
                     if (n.indexOf('on') === 0 || n === 'href' || n === 'xlink:href'

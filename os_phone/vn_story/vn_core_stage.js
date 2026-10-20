@@ -602,9 +602,15 @@
                 '<button type="button" data-s="far"><i class="fa-solid fa-heart-crack"></i> 疏遠</button>' +
                 '</div>' + (A && A.helpBtn ? A.helpBtn('vn_cc_lean') : '') + '</div>';
             if (avsCard) {
+                // 狀態面板那張卡＝AI 煉的模板＋劇情寫進去的數值（名字、形象這些是模型寫的，套模板時沒有轉義）
+                //   → 面板 HTML 過 AUI.safeHtml（樣式、radio 分頁、<details> 照留，會跑的拿掉）；
+                //   模板的 CSS 用 textContent 放進 <style>（照原樣、連 @import 字體都留，但跳不出 <style>）；
+                //   下面那排按鈕是程式自己的（有 onclick），放在消毒外面
+                const _A = win.AUI || window.AUI;
                 card.innerHTML =
-                    '<div class="vn-cc-avs-body"><style>' + avsCard.css + '</style>' + avsCard.html + '</div>' +
+                    '<div class="vn-cc-avs-body"><style></style>' + (_A && _A.safeHtml ? _A.safeHtml(avsCard.html) : esc(String(avsCard.html || '').replace(/<[^>]+>/g, ' '))) + '</div>' +
                     '<div class="vn-cc-tools">' + leanRow + btns + cvRow + '</div>';
+                card.querySelector('.vn-cc-avs-body > style').textContent = avsCard.css || '';
             } else {
                 card.innerHTML =
                     '<div class="vn-cc-head"><span class="vn-cc-name"></span></div>' + leanRow + btns + cvRow +

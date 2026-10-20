@@ -547,7 +547,7 @@
                 (f.charging ? '<span class="vnb-cmark"><i class="fa-solid fa-triangle-exclamation"></i> 蓄力中</span>' : '')
               + '<span class="vnb-tmark"><i class="fa-solid fa-crosshairs"></i></span>'
               + '<i class="vnb-foe-ic fa-solid ' + f.icon + '"></i>'
-              + '<div class="vnb-foe-nm">' + f.name + (f.tagNo ? '<span>' + f.tagNo + '</span>' : '') + '</div>'
+              + '<div class="vnb-foe-nm">' + esc(f.name) + (f.tagNo ? '<span>' + f.tagNo + '</span>' : '') + '</div>'
               + '<div class="vnb-bar"><i></i></div>'
               + '<div class="vnb-foe-hp">' + Math.max(0, f.hp) + ' / ' + f.maxHp + '</div>';
             card.querySelector('.vnb-bar i').style.width = Math.max(0, f.hp / f.maxHp * 100) + '%';
@@ -568,7 +568,7 @@
             const card = el('div', 'vnb-ally' + (a.dead ? ' dead' : ''));
             card.innerHTML =
                 '<i class="fa-solid ' + a.icon + '"></i>'
-              + '<span class="vnb-ally-nm">' + a.name + '</span>'
+              + '<span class="vnb-ally-nm">' + esc(a.name) + '</span>'
               + '<span class="vnb-bar"><i></i></span>'
               + '<span class="vnb-ally-hp">' + Math.max(0, a.hp) + '</span>';
             card.querySelector('.vnb-bar i').style.width = Math.max(0, a.hp / a.maxHp * 100) + '%';
@@ -636,8 +636,8 @@
             const afford = S.me.sp >= sk.cost;
             const b = el('button', 'vnb-skill' + (afford ? '' : ' poor'),
                   '<i class="fa-solid ' + sk.icon + '"></i>'
-                + '<span class="vnb-sk-nm">' + sk.name + '</span>'
-                + '<span class="vnb-sk-ds">' + sk.desc + '</span>'
+                + '<span class="vnb-sk-nm">' + esc(sk.name) + '</span>'
+                + '<span class="vnb-sk-ds">' + esc(sk.desc) + '</span>'
                 + '<span class="vnb-sk-cost">' + sk.cost + '</span>');
             b.type = 'button';
             b.disabled = !afford;
@@ -651,17 +651,19 @@
         S.el.order.innerHTML = '';
         S.order.forEach((u, i) => {
             const chip = el('div', 'vnb-ochip' + (i === S.oi ? ' now' : '') + (u.dead ? ' dead' : ''),
-                '<i class="fa-solid ' + (u.side === 'me' ? 'fa-user' : u.icon) + '"></i>' + u.name);
+                '<i class="fa-solid ' + (u.side === 'me' ? 'fa-user' : u.icon) + '"></i>' + esc(u.name));
             S.el.order.appendChild(chip);
         });
         S.el.round.textContent = S.round;
     }
 
+    // 🧼 html 裡的名字（敵人、隊友、招式、場地）都是模型寫的，呼叫端一律先 esc() 才拼進來；
+    //    純文字紀錄那份把 esc 轉出來的 &lt; &gt; &amp; 還原，跟以前一樣是原字
     function say(html, cls) {
         const line = el('div', 'vnb-li' + (cls ? ' ' + cls : ''), html);
         S.el.log.appendChild(line);
         S.el.log.scrollTop = S.el.log.scrollHeight;
-        S.log.push(String(html).replace(/<[^>]+>/g, ''));
+        S.log.push(String(html).replace(/<[^>]+>/g, '').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'));
     }
 
     function actsEnabled(on) {
@@ -779,26 +781,27 @@
         showDice(r.nat, r.crit ? '會心一擊！' : r.fumble ? '失手' : r.hit ? '命中' : '未命中');
         later(() => {
             const acTxt = opt.acMul ? '（' + r.total + ' vs 防禦 ' + r.ac + '·已破防）' : '（' + r.total + ' vs 防禦 ' + r.ac + '）';
-            const act = S.actName || '攻擊';
-            const tgtNm = t.name + (t.tagNo || '');
+            const act = esc(S.actName || '攻擊');   // 招式名是模型取的
+            const tgtNm = esc(t.name + (t.tagNo || ''));
+            const tNm = esc(t.name), vb = esc(verb);   // verb 會帶招式名（「使出 ○○ 命中」）
             if (r.hit) {
                 const dmg = applyDamage(S.me, t, r, opt);
                 showFx(dmg + '<small>DAMAGE</small>',
                        r.crit ? '<b>會心一擊！</b>' + act + '命中<b>' + tgtNm + '</b>'
                               : '你的<b>' + act + '</b>命中<b>' + tgtNm + '</b>',
                        r.crit ? 'crit' : '');
-                say('<b>你</b> ' + verb + ' <b>' + t.name + '</b>' + acTxt
+                say('<b>你</b> ' + vb + ' <b>' + tNm + '</b>' + acTxt
                   + (r.crit ? '<br>會心一擊！造成 <em>' + dmg + '</em> 點傷害' : '<br>命中，造成 <em>' + dmg + '</em> 點傷害'),
                   r.crit ? 'crit hit' : 'hit');
-                if (opt.stun && !t.dead) { t.stunned = true; say('<b>' + t.name + '</b> 被打亂了節奏，下回合動不了。', 'sys'); }
+                if (opt.stun && !t.dead) { t.stunned = true; say('<b>' + tNm + '</b> 被打亂了節奏，下回合動不了。', 'sys'); }
                 renderFoes();
-                if (t.dead) say('<b>' + t.name + '</b> 倒下了。', 'dead');
+                if (t.dead) say('<b>' + tNm + '</b> 倒下了。', 'dead');
             } else {
                 showFx(r.fumble ? '落空' : '未命中',
                        r.fumble ? '你的<b>' + act + '</b>重心一歪'
                                 : '你的<b>' + act + '</b>被<b>' + tgtNm + '</b>閃開了',
                        'miss');
-                say('<b>你</b> ' + verb + ' <b>' + t.name + '</b>' + acTxt + '<br>'
+                say('<b>你</b> ' + vb + ' <b>' + tNm + '</b>' + acTxt + '<br>'
                   + (r.fumble ? '重心一歪，完全落空。' : '被閃開了。'), 'miss');
             }
             done();
@@ -840,9 +843,9 @@
             renderMe(); renderAllies();
             popNum(tgt === S.me ? S.el.meBar : tgt.el, '+' + (tgt.hp - before), 'heal');
             showFx('+' + (tgt.hp - before),
-                   '<b>' + sk.name + '</b>　' + (tgt === S.me ? '你回復了體力' : '<b>' + tgt.name + '</b> 回復了體力'),
+                   '<b>' + esc(sk.name) + '</b>　' + (tgt === S.me ? '你回復了體力' : '<b>' + esc(tgt.name) + '</b> 回復了體力'),
                    'heal');
-            say('<b>你</b> 使出 <b>' + sk.name + '</b>，替 <b>' + (tgt === S.me ? '自己' : tgt.name) + '</b> 回復 <em>'
+            say('<b>你</b> 使出 <b>' + esc(sk.name) + '</b>，替 <b>' + (tgt === S.me ? '自己' : esc(tgt.name)) + '</b> 回復 <em>'
                 + (tgt.hp - before) + '</em> 點體力。', 'sys');
             return done();
         }
@@ -868,7 +871,7 @@
 
         // ── AI 帶進來的招：效果由 type 決定，傷害用招式自己的骰 ──
         if (sk.type === '群體') {
-            say('<b>你</b> 使出 <b>' + sk.name + '</b>。', 'sys');
+            say('<b>你</b> 使出 <b>' + esc(sk.name) + '</b>。', 'sys');
             return strikeSeq(alive.map(x => ({ t: x, opt: { dmgSpec: sk.dmg }, verb: '轟中' })), 0, done);
         }
         S.target = t; renderFoes();
@@ -889,7 +892,7 @@
             if (!f.charging && f.charge && Math.random() < f.charge) {
                 f.charging = true;
                 renderFoes();
-                say('<b>' + f.name + '</b> 收力後撤，肌肉繃緊——<b>下一擊會很重</b>。', 'sys');
+                say('<b>' + esc(f.name) + '</b> 收力後撤，肌肉繃緊——<b>下一擊會很重</b>。', 'sys');
                 later(checkOverThenNext, T_NEXT);
                 return;
             }
@@ -907,21 +910,22 @@
             showDice(r.nat, r.crit ? '會心一擊！' : r.hit ? '命中' : '未命中');
             later(() => {
                 const verb = big ? '全力砸下' : '撲上來';
-                const tName = isMe ? '你' : tgt.name;
+                const tName = isMe ? '你' : esc(tgt.name);
+                const fNm = esc(f.name);
                 // 擋下大招＝敵人失衡，下回合跳過（防禦只有玩家會擺,隊友沒這個動作）
                 if (big && isMe && S.me.guard) { f.stunned = true; if (S.beats) S.beats.guardedBig++; }
                 if (r.hit) {
                     const dmg = applyDamage(f, tgt, r, { extraDice: big ? f.dmg[0] * 2 : 0 });
                     renderMe(); renderAllies();
-                    say('<b>' + f.name + '</b> ' + verb + '向 <b>' + tName + '</b>（' + r.total + ' vs 防禦 ' + r.ac + '）<br>'
+                    say('<b>' + fNm + '</b> ' + verb + '向 <b>' + tName + '</b>（' + r.total + ' vs 防禦 ' + r.ac + '）<br>'
                       + (r.crit ? '會心一擊！' : '') + tName + '受到 <em>' + dmg + '</em> 點傷害'
                       + (isMe && S.me.guard ? '（已擋下一半）' : ''),
                       r.crit || big ? 'crit hit' : 'hit');
-                    if (!isMe && tgt.dead) { if (S.beats) S.beats.allyDowns.push(tgt.name); say('<b>' + tgt.name + '</b> 撐不住倒下了。', 'dead'); }
+                    if (!isMe && tgt.dead) { if (S.beats) S.beats.allyDowns.push(tgt.name); say('<b>' + tName + '</b> 撐不住倒下了。', 'dead'); }
                 } else {
-                    say('<b>' + f.name + '</b> ' + verb + '向 <b>' + tName + '</b>，落空了（' + r.total + ' vs 防禦 ' + r.ac + '）', 'miss');
+                    say('<b>' + fNm + '</b> ' + verb + '向 <b>' + tName + '</b>，落空了（' + r.total + ' vs 防禦 ' + r.ac + '）', 'miss');
                 }
-                if (f.stunned) { renderFoes(); say('你穩穩接下這一擊，<b>' + f.name + '</b> 收勢不及、露出破綻。', 'sys'); }
+                if (f.stunned) { renderFoes(); say('你穩穩接下這一擊，<b>' + fNm + '</b> 收勢不及、露出破綻。', 'sys'); }
                 later(checkOverThenNext, T_NEXT);
             }, T_RESOLVE);
         }, T_FOE_THINK);
@@ -939,7 +943,7 @@
                 hurt.hp = Math.min(hurt.maxHp, hurt.hp + heal);
                 renderMe(); renderAllies();
                 popNum(hurt === S.me ? S.el.meBar : hurt.el, '+' + (hurt.hp - before), 'heal');
-                say('<b>' + a.name + '</b> 替 <b>' + (hurt === S.me ? '你' : hurt.name) + '</b> 處置傷勢，回復 <em>'
+                say('<b>' + esc(a.name) + '</b> 替 <b>' + (hurt === S.me ? '你' : esc(hurt.name)) + '</b> 處置傷勢，回復 <em>'
                     + (hurt.hp - before) + '</em> 點體力。', 'sys');
                 later(checkOverThenNext, T_NEXT);
                 return;
@@ -950,14 +954,15 @@
             const r = attackRoll(a, t);
             showDice(r.nat, a.name + (r.crit ? ' 會心！' : r.hit ? ' 命中' : ' 未命中'));
             later(() => {
+                const aNm = esc(a.name), tNm = esc(t.name + (t.tagNo || ''));
                 if (r.hit) {
                     const dmg = applyDamage(a, t, r);
-                    say('<b>' + a.name + '</b> 攻向 <b>' + t.name + (t.tagNo || '') + '</b>（' + r.total + ' vs 防禦 ' + r.ac + '）<br>'
+                    say('<b>' + aNm + '</b> 攻向 <b>' + tNm + '</b>（' + r.total + ' vs 防禦 ' + r.ac + '）<br>'
                       + (r.crit ? '會心一擊！' : '命中，') + '造成 <em>' + dmg + '</em> 點傷害', r.crit ? 'crit hit' : 'hit');
                     renderFoes();
-                    if (t.dead) say('<b>' + t.name + (t.tagNo || '') + '</b> 倒下了。', 'dead');
+                    if (t.dead) say('<b>' + tNm + '</b> 倒下了。', 'dead');
                 } else {
-                    say('<b>' + a.name + '</b> 攻向 <b>' + t.name + (t.tagNo || '') + '</b>，被閃開了（' + r.total + ' vs 防禦 ' + r.ac + '）', 'miss');
+                    say('<b>' + aNm + '</b> 攻向 <b>' + tNm + '</b>，被閃開了（' + r.total + ' vs 防禦 ' + r.ac + '）', 'miss');
                 }
                 later(checkOverThenNext, T_NEXT);
             }, T_RESOLVE);
@@ -986,7 +991,7 @@
         const cur = S.order[S.oi];
         if (cur.stunned) {   // 大招被擋下的那一回合：站著喘，直接跳過
             cur.stunned = false;
-            say('<b>' + cur.name + '</b> 還在回身，這回合動不了。', 'sys');
+            say('<b>' + esc(cur.name) + '</b> 還在回身，這回合動不了。', 'sys');
             renderFoes();
             later(nextTurn, T_NEXT);
             return;
@@ -1036,9 +1041,9 @@
         const panel = el('div', 'vnb-end');
         const title = outcome === 'win' ? '戰鬥勝利' : outcome === 'lose' ? '力竭倒下' : '脫離戰場';
         const sub = outcome === 'win'
-                ? (killed.join('、') + ' 已被擊倒。')
+                ? (esc(killed.join('、')) + ' 已被擊倒。')
                 : outcome === 'lose' ? '你倒在地上，視野開始發黑。'
-                : (alive.join('、') + ' 被甩在身後。');
+                : (esc(alive.join('、')) + ' 被甩在身後。');
         panel.innerHTML =
             '<div class="vnb-end-t ' + (outcome === 'lose' ? 'lose' : outcome === 'flee' ? 'flee' : '') + '">' + title + '</div>'
           + '<div class="vnb-end-sub">' + sub + '</div>'
@@ -1220,10 +1225,10 @@
             S.order.sort((a, b) => (b._init - a._init) || (a.side === 'me' ? -1 : 1));
             S.oi = -1;
 
-            if (field && field.name) say('<b>' + field.name + '</b>', 'sys');
-            say('遭遇 <b>' + S.foes.map(f => f.name + (f.tagNo || '')).join('、') + '</b>。', 'sys');
-            if (S.allies.length) say('<b>' + S.allies.map(a => a.name).join('、') + '</b> 與你並肩迎敵。', 'sys');
-            say('出手順序：' + S.order.map(u => u.name + (u.tagNo || '')).join(' → '), 'sys');
+            if (field && field.name) say('<b>' + esc(field.name) + '</b>', 'sys');
+            say('遭遇 <b>' + S.foes.map(f => esc(f.name + (f.tagNo || ''))).join('、') + '</b>。', 'sys');
+            if (S.allies.length) say('<b>' + S.allies.map(a => esc(a.name)).join('、') + '</b> 與你並肩迎敵。', 'sys');
+            say('出手順序：' + S.order.map(u => esc(u.name + (u.tagNo || ''))).join(' → '), 'sys');
             if (S.notes.length) console.log('[VN_Battle] 開場調整：\n' + S.notes.join('\n'));
             renderOrder();
             actsEnabled(false);
