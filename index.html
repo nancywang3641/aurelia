@@ -98,6 +98,11 @@
 
     <!-- lobby-bgm-player 由 void_terminal.js createTab 動態建立（避免與此處重複造成 BGM 重疊） -->
 
+    <!-- 擴展根目錄：酒館由 index.js 設；手機版沒載 index.js，要自己設成這一頁所在的資料夾。
+         沒設的話書咖等模組會退回酒館的相對路徑，接在手機版網址後面變成兩段（書咖菜單那張圖 404，10-20 巡主控台抓到）。
+         必須排在所有模組前面：有的模組載入當下就算好路徑 -->
+    <script>window.AURELIA_EXT_BASE = window.AURELIA_EXT_BASE || '.';</script>
+
     <script src="core/aurelia_dialog.js"></script>
     <script src="core/aurelia_tilefx.js"></script>
     <script src="core/panel_manager.js"></script>

@@ -524,9 +524,10 @@ ${facilityText}
         // 夜晚＝19 點到隔天 4 點：跟全城圖（map_image 的夜晚＋凌晨）、排程（晚上＋午夜＋凌晨）同一條線。
         //   以前這裡 18～5 點算夜，18 點全城圖還是黃昏、5 點已經是早晨，底圖卻先換成夜景
         const isNight = hour >= 19 || hour < 5;
-        return isNight 
-            ? 'https://nancywang3641.github.io/aurelia/district/AURELIA-NIGHT.jpg' 
-            : 'https://nancywang3641.github.io/aurelia/district/AURELIA-DAY.jpg';
+        // 10-20：以前指舊家 GitHub Pages 的 AURELIA-DAY／NIGHT.jpg，搬到 Netlify 後一直 404（底色只剩純色）。
+        //   換成介面圖庫那張新的全城圖（map_image.js 的 imageUrl，跟全城圖同一套鎖點）
+        const MI = win.AUREALIS_MAP_IMAGE;
+        return (MI && MI.imageUrl) ? MI.imageUrl('CITY', isNight ? 'night' : 'day') : '';
     }
 
     function exitMap() {
@@ -646,7 +647,8 @@ ${facilityText}
         if (!bg || !homeLayer || !innerLayer || !title) return;
 
         // 全頁底色維持奧瑞亞固定圖（就算 marker 模式也保留作氛圍底色）
-        bg.style.backgroundImage = `url('${getHomeBackground()}')`;
+        const _homeBg = getHomeBackground();
+        bg.style.backgroundImage = _homeBg ? `url('${_homeBg}')` : '';
         bg.classList.remove('blur');
 
         // 預先準備 worldMap URL（marker 模式時貼到 selector 上，跟 marker 座標 100% 對齊）

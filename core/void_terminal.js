@@ -30,7 +30,6 @@
     applyLayoutMode(); // 初始化執行
 
     // ===== 全域世界館藏 (書架 QbBookshelf 讀) =====
-    const BASE_IMG_URL = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
     // 六本固定館藏的封面是阿洛照故事背景畫的（docs/五本固定館藏封面_20260915.md、
     //   docs/艾斯蘭登大陸封面補件_20260916.md），640x960 WebP 放介面圖庫、鎖 commit。
     const SHELF_COVER_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@9ee3c282230f518b10da9305534783e2b452e811/aseets/bookshelf_ui/';
@@ -78,7 +77,9 @@
     let _irisAbortCtrl = null;       // 瀅瀅 / 柴郡聊天的 AbortController（送出中可點 ⏹ 停止）
 
     const URLS = {
-        IRIS_AVATAR: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/char_presets/ying.png',
+        // 10-20：原本指 char_presets/ying.png，sound-files 從來沒有這張（5 月搬素材漏搬），每次開大廳都 404。
+        //   這個 <img> 被 lobby.css（.void-tab .void-char-img）永遠藏著，左欄看到的是 lobby.css 的 yingying.png；指同一張，不多下載也不 404
+        IRIS_AVATAR: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/yingying.png',
         PERSONA_FALLBACK: 'https://files.catbox.moe/l5hl69.png',
     };
 

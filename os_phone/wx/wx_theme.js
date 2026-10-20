@@ -6,7 +6,9 @@
     window.WX_THEME = {
         version: 'v104.0-bg-preview',
         css: `
-            @import url('https: //fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+            /* 10-20：這裡原本 @import Google 的 Noto Sans SC，但網址寫成「https: //」（冒號後多一格），從來沒載到過，
+               每次打開都在主控台留一筆紅字，字一直是系統字。要不要真的換成 Noto Sans SC（簡體字形）是待辦 #135 ⑤ 等她選，
+               先拿掉壞的那行、畫面不變；選了再加回 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap') */
             @keyframes popIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
             
             .wx-shell { width: 100%; height: 100%; background: var(--wx-page); display: flex; flex-direction: column; overflow: hidden; font-family: 'Noto Sans SC', sans-serif; }

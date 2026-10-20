@@ -1,5 +1,5 @@
 /**
- * core/void/ambient.js — 大廳 BGM 系統 + 背景時段切換
+ * core/void/ambient.js — 大廳 BGM 系統（背景時段切換 10-20 拿掉：那幾張底圖從來不存在）
  * 從 void_terminal.js 抽出。橋：VoidTerminal._bridge.isActivitySuspended()。
  */
 (function (VoidAmbient) {
@@ -11,38 +11,9 @@
         lobby: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/bgm/home_yingcafe.mp3',
         '404': 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/bgm/home_room404.mp3',
     };
-    const BASE_BG = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/home-page/';
-
-    // ===== 大廳 BG 依本地時段切換：day(6-18) / evening(18-21) / night(21-6) =====
-    function _getCafeBgPeriod() {
-        const h = new Date().getHours();
-        if (h >= 6 && h < 18) return 'day';
-        if (h >= 18 && h < 21) return 'evening';
-        return 'night';
-    }
-
-    // 算「現在 → 下一個時段邊界（06:00 / 18:00 / 21:00）」的毫秒數
-    function _msToNextCafePeriod() {
-        const now = new Date();
-        const next = new Date(now);
-        next.setMinutes(0, 0, 0);
-        const h = now.getHours();
-        if (h < 6)       next.setHours(6);
-        else if (h < 18) next.setHours(18);
-        else if (h < 21) next.setHours(21);
-        else { next.setDate(next.getDate() + 1); next.setHours(6); }
-        return next.getTime() - now.getTime() + 1000; // +1s buffer 確保跨過邊界
-    }
-
-    // 在每個時段邊界自動重套大廳 BG（一天只觸發 3 次）
-    let _cafeBgTimer = null;
-    function _scheduleCafeBgUpdate() {
-        if (_cafeBgTimer) clearTimeout(_cafeBgTimer);
-        _cafeBgTimer = setTimeout(() => {
-            if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(VoidAmbient.currentBgUrl());
-            _scheduleCafeBgUpdate();
-        }, _msToNextCafePeriod());
-    }
+    // 10-20：舊大廳的時段底圖（aseets/home-page/YingyingCafe_day／evening／night.png）sound-files 從來沒有
+    //   （5 月從舊網站搬素材時漏搬），每次開大廳、每到時段邊界都 404，畫面一直是 .void-bg 的底色。
+    //   大廳現在是舞台／左欄立繪，這張用不到：不再去抓、也不排時段計時器；呼叫端拿到空字串就不設 --void-bg-url
 
     // ===== BGM 系統 =====
     let bgmEnabled = true;
@@ -127,9 +98,7 @@
     VoidAmbient.pauseBgm     = () => { const a = getLobbyBgmEl(); if (a) a.pause(); };
     VoidAmbient.toggleBgm    = toggleLobbyBgm;
     VoidAmbient.isEnabled    = () => bgmEnabled;
-    VoidAmbient.currentBgUrl = () => `${BASE_BG}YingyingCafe_${_getCafeBgPeriod()}.png`;
-
-    _scheduleCafeBgUpdate(); // 啟動背景時段排程（沿用原 void_terminal.js 載入時行為）
+    VoidAmbient.currentBgUrl = () => '';   // 見最上面：舊大廳時段底圖從來不存在
 
     console.log('✅ VoidAmbient（BGM + 背景時段）模組就緒');
 })(window.VoidAmbient = window.VoidAmbient || {});
