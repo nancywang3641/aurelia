@@ -2661,6 +2661,11 @@
                         _loreDepths = (_loreDepths || []).concat([{ depth: 2, role: 0, text: _B ? _B.wrap('aurelia_map_mission', _mm) : _mm }]);
                     }
                 } catch (e) { console.warn('[OS_API vn_story] 進行中的委託載入失敗:', e); }
+                // 🎬 導演模式開著：最新一版導演稿插在倒數第一則前面（跟酒館 injectDirector 同一份字、同一個深度）
+                try {
+                    const _dir = await win.OS_STATE_RUNTIME?.directorBlock?.();
+                    if (_dir) _loreDepths = (_loreDepths || []).concat([{ depth: 1, role: 0, text: _dir }]);
+                } catch (e) { console.warn('[OS_API vn_story] 導演稿載入失敗:', e); }
             }
 
             if (cotPrompt) apiMessages.push({ role: 'system', content: `### \n${cotPrompt}` });

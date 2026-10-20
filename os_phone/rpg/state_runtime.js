@@ -1842,12 +1842,18 @@ _directorSpec(castNames);
             if (!recentText || lastId < 0) return;
             const data = (await win.OS_DB.getStateData(chatId)) || {};
             const director = data.director || { patches: [] };
+            // 💸 存不下的稿不要先叫模型：導演稿錨在 AVS 那一輪的紀錄上，一筆都沒有（狀態記錄關著）就算產出來也落不了地
+            if (!_patchList(data.patches).length) { console.log('🎬 [Director] 還沒有狀態紀錄可錨（即時記錄狀態關著？）→ 這輪不產稿，不叫模型'); return; }
             // 這輪已有導演稿？看正文的 avs id 有沒有被導演稿錨過（重roll 會先走失效回朔）
+            //   網頁版的 avs id 就是章節 id（lastId），不用從正文撈
             try {
-                const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
-                const _ids = _idsInText(String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || ''));
                 const _dids = new Set((Array.isArray(director.patches) ? director.patches : []).map(d => String(d.id)));
-                if (_ids.some(id => _dids.has(id))) return;
+                if (_isStandalone()) { if (_dids.has(String(lastId))) return; }
+                else {
+                    const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
+                    const _ids = _idsInText(String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || ''));
+                    if (_ids.some(id => _dids.has(id))) return;
+                }
             } catch (e) {}
             const prev = _latestDirectorText(director);
             const cast = _activeCastNames();
@@ -1891,23 +1897,23 @@ _directorSpec(castNames);
     }
 
     // 注入給正文模型：整份導演稿＋邊界鐵則（正文模型演所有角色=必須全知，但輸出要守知識邊界）
+    //   酒館走 injectPrompts（injectDirector）；網頁版由 os_api_engine 組 VN 提示詞時叫 directorBlock 插在同一個深度
+    async function directorBlock() {
+        if (!directorOn() || !win.OS_DB?.getStateData) return '';
+        const chatId = getChatId();
+        if (!chatId) return '';
+        const data = await win.OS_DB.getStateData(chatId);
+        const text = _latestDirectorText(data && data.director);
+        if (!text.trim()) return '';
+        return _directorWrap(text);
+    }
     async function injectDirector() {
         try {
             try { _lastDirectorUninject?.(); } catch (e) {}
             _lastDirectorUninject = null;
-            if (!directorOn()) return;
-            if (!win.TavernHelper?.injectPrompts || !win.OS_DB?.getStateData) return;
-            const chatId = getChatId();
-            if (!chatId) return;
-            const data = await win.OS_DB.getStateData(chatId);
-            const text = _latestDirectorText(data && data.director);
-            if (!text.trim()) return;
-            const content = '<劇情監製稿 規則="寫作前必讀·知識邊界鐵則">\n' +
-                '下面是監製整理的劇情帳本。你演出所有角色，所以你全知；但每個角色「只能」依自己知道的資訊行動：\n' +
-                '- 角色的台詞、行動、內心不得使用「其他角色的私人記憶」——除非本輪劇情中正式得知。\n' +
-                '- 旁白不得直接揭露任何角色的私人記憶為客觀事實。\n' +
-                '- 【本輪可用張力】是可選方向、不是待辦清單：本輪一個都不用、讓角色休息或過日常，完全正常。\n' +
-                '- 角色的傷勢、疲勞、極限是硬約束：受傷該痛、力竭該倒，不得為了推進劇情讓角色硬撐或犧牲休息。\n\n' + text + '\n</劇情監製稿>';
+            if (!win.TavernHelper?.injectPrompts) return;
+            const content = await directorBlock();
+            if (!content) return;
             const result = win.TavernHelper.injectPrompts([{
                 id: DIRECTOR_INJECT_ID,
                 content,
@@ -1919,6 +1925,14 @@ _directorSpec(castNames);
         } catch (e) {
             console.warn('🎬 [Director] inject 失敗:', e?.message || e);
         }
+    }
+    function _directorWrap(text) {
+        return '<劇情監製稿 規則="寫作前必讀·知識邊界鐵則">\n' +
+            '下面是監製整理的劇情帳本。你演出所有角色，所以你全知；但每個角色「只能」依自己知道的資訊行動：\n' +
+            '- 角色的台詞、行動、內心不得使用「其他角色的私人記憶」——除非本輪劇情中正式得知。\n' +
+            '- 旁白不得直接揭露任何角色的私人記憶為客觀事實。\n' +
+            '- 【本輪可用張力】是可選方向、不是待辦清單：本輪一個都不用、讓角色休息或過日常，完全正常。\n' +
+            '- 角色的傷勢、疲勞、極限是硬約束：受傷該痛、力竭該倒，不得為了推進劇情讓角色硬撐或犧牲休息。\n\n' + text + '\n</劇情監製稿>';
     }
 
     // 手改導演稿（變數工坊 UI 用）：存成「當前最後一樓」的 patch＝最高權威、下一輪就注入
@@ -2717,8 +2731,13 @@ _directorSpec(castNames);
             _pwaWired = true;
             win.addEventListener('VN_CHAPTER_SAVED', (e) => {
                 if (!_isStandalone()) return;
-                if (!isEnabled()) return;              // 狀態面板的「即時記錄狀態」關著就不抽
                 if (win.__AURELIA_SUMMARIZING) return; // 大總結那通不算劇情推進
+                // 🎬 導演稿（10-20 補齊）：跟酒館一樣獨立於狀態系統——狀態開著由 extractOnce 搭便車（它一開跑就搶下本輪旗標），
+                //    關著或沒搭上就自己補一通；函式自己看 sp_director_on
+                clearTimeout(_directorDebounce);
+                _directorHandledThisRound = false;
+                _directorDebounce = setTimeout(() => { if (!_directorHandledThisRound) extractDirector(); }, 1200 + CONFIG.debounceMs + 1200);
+                if (!isEnabled()) return;              // 狀態面板的「即時記錄狀態」關著就不抽
                 setTimeout(() => {
                     // skipScenes 不要寫死：開了「獨立插圖副模型」就走下面那通獨立的，
                     // 沒開就讓插圖搭這通的便車（同酒館分工）。
@@ -2916,7 +2935,7 @@ _directorSpec(castNames);
             return _expandSceneNames(str, map, null);
         },
         forceExtract, clearPatches, deepConsolidate,
-        injectCurrent, injectRules, extractOnce,
+        injectCurrent, injectRules, extractOnce, directorBlock,
         reconcile: _reconcilePatches,   // 對帳回滾：不靠刪除事件，任何「要用狀態」的入口都可以先叫它
         // 🧩 依 patch id 回滾（PWA 的 patch id ＝章節 id）：刪章／孤兒對帳呼叫，
         //    把那幾筆 patch 砍掉、並把它們碰過的欄位退回「base＋剩餘 patch」的值。
