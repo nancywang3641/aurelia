@@ -82,39 +82,8 @@
         }
     }
 
-    // 2. 專屬數據提取器：抓取 Sys-Terminal 的數據給你的 VN 面板使用
-    function extractSystemTerminalData() {
-        // 尋找對話中所有的終端機面板 (注意酒館會自動加上 custom- 前綴)
-        const terminals = document.querySelectorAll('.custom-sys-terminal-root');
-        if (terminals.length === 0) return;
-
-        // 取最新的一個面板
-        const latestTerminal = terminals[terminals.length - 1];
-
-        // 安全提取文字的工具函數
-        const getText = (selector) => {
-            const el = latestTerminal.querySelector(selector);
-            return el ? el.innerText.trim() : '無數據';
-        };
-
-        // 封裝成乾淨的 JSON 數據
-        const terminalData = {
-            objective: getText('.custom-row-mission .custom-value'),
-            timeLimit: getText('.custom-data-row:nth-child(2) .custom-value'),
-            supplyDrop: getText('.custom-row-reward .custom-value'),
-            penalty: getText('.custom-row-danger .custom-value'),
-            tasksCompleted: getText('.custom-sub-data-item:nth-child(1) .custom-value'),
-            taskPool: getText('.custom-sub-data-item:nth-child(2) .custom-value'),
-            statusMouth: getText('.custom-status-item:nth-child(1) .custom-value'),
-            statusBreasts: getText('.custom-status-item:nth-child(2) .custom-value'),
-            statusSexOrgans: getText('.custom-status-item:nth-child(3) .custom-value'),
-            statusAnus: getText('.custom-status-item:nth-child(4) .custom-value')
-        };
-
-        // 儲存到全局變數，讓你的 VN 面板或 os_api_engine 可以直接調用
-        window.AURELIA_VN_DATA = window.AURELIA_VN_DATA || {};
-        window.AURELIA_VN_DATA.latestTerminal = terminalData;
-    }
+    // 2.（10-20 拿掉）以前這裡照某一張卡的面板欄位抓資料給 VN 面板，欄位名寫死了那張卡的內容；
+    //   全專案沒有地方讀它，repo 又是公開的，整段拿掉。對外那支 getLatestTerminalData 留著、一律回 null，免得有卡片腳本叫它出錯。
 
     // 3. 設立自動監聽器
     //    防抖：AI 串流吐字時 #chat subtree mutation 連發，每批各排一個 timer 會疊著重跑同樣的全 DOM 掃描
@@ -130,7 +99,6 @@
             _pendingSync = setTimeout(() => {
                 _pendingSync = null;
                 syncRegexStyles();
-                extractSystemTerminalData();
             }, 300);
         }
     });
@@ -140,7 +108,6 @@
         if (chat) {
             observer.observe(chat, { childList: true, subtree: true });
             syncRegexStyles(); // 啟動時先抓取一次
-            extractSystemTerminalData();
         } else {
             // 如果聊天室還沒加載，1秒後重試
             setTimeout(initObserver, 1000);
@@ -153,7 +120,7 @@
     // 開放 API 給其他面板使用
     window.AureliaRegexBridge = {
         forceSyncCss: syncRegexStyles,
-        getLatestTerminalData: () => window.AURELIA_VN_DATA?.latestTerminal || null
+        getLatestTerminalData: () => null
     };
 
 })();
