@@ -198,18 +198,30 @@
         return _loading;
     }
 
-    // 從原始卡片 JSON 抽正則存成一包。回存下來的條數（0＝這張卡沒帶正則）。
-    async function saveFromCard(worldId, cardName, rawCard) {
-        if (!worldId || !rawCard) return 0;
-        const d = rawCard.data || rawCard;
+    function _cardScripts(rawCard) {
+        const d = (rawCard && (rawCard.data || rawCard)) || {};
         const raw = (d.extensions && d.extensions.regex_scripts) || [];
-        if (!Array.isArray(raw) || !raw.length) return 0;
+        return Array.isArray(raw) ? raw.map(_st2th).filter(s => s && s.find_regex) : [];
+    }
+    // 匯入前先看一眼：這張卡帶幾條美化正則、換出來的東西裡有沒有會跑的程式（給匯入時那句提醒用）
+    function inspectCard(rawCard) {
+        const list = _cardScripts(rawCard);
+        const code = list.some(s => /<script\b|\son[a-z]+\s*=|javascript:/i.test(String(s.replace_string || '')));
+        return { count: list.length, hasCode: code };
+    }
+
+    // 從原始卡片 JSON 抽正則存成一包。回存下來的條數（0＝這張卡沒帶正則）。
+    //   opts.enabled === false：她匯入時選了「不載入任何程式」→ 照樣收下（開場白頁的「美化／原文」之後還能打開），只是先關著
+    async function saveFromCard(worldId, cardName, rawCard, opts) {
+        if (!worldId || !rawCard) return 0;
+        const scripts = _cardScripts(rawCard);
+        if (!scripts.length) return 0;
         const pack = {
             worldId: worldId,
             cardName: cardName || '',
-            enabled: true,
+            enabled: !(opts && opts.enabled === false),
             importedAt: Date.now(),
-            scripts: raw.map(_st2th).filter(s => s && s.find_regex)
+            scripts: scripts
         };
         if (!pack.scripts.length) return 0;
         try {
@@ -461,7 +473,7 @@
     async function refresh() { _packs = null; _loading = null; return await _load(); }
 
     win.OS_CARD_REGEX = window.OS_CARD_REGEX = {
-        saveFromCard, listPacks, getPack, setEnabled, removePack, hasPack, refresh,
+        saveFromCard, inspectCard, listPacks, getPack, setEnabled, removePack, hasPack, refresh,
         currentWorldId, scriptsFor, cardHtmlFor, cardsIn, applyText, renderRichHtml, stopMedia, fitCardFrames,
         setHost, getHost
     };

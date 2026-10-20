@@ -275,9 +275,25 @@
         //  酒館卡把美化面板放在 extensions.regex_scripts（找一段標記 → 換成一整份 HTML）。
         //  不收下來的話，這張卡在這裡就只剩裸文字（<标题栏> 那種標記直接晾在畫面上）。
         //  存進 IDB 的正則庫，不塞進上面那顆 world 物件——它是進 localStorage 的，一張卡的正則就上百 KB。
-        let regexCount = 0;
+        //  🔐 收下之前先問她（跟酒館「這張卡有內嵌正則，要允許嗎」同一件事）：
+        //     卡片面板裡的程式跑起來權限跟奧瑞亞一樣。選「不載入任何程式」照樣收下、先關著，
+        //     之後在開場白頁的「美化／原文」打開就好，不用重新匯入。
+        let regexCount = 0, regexOn = true;
         try {
-            if (win.OS_CARD_REGEX) regexCount = await win.OS_CARD_REGEX.saveFromCard(worldId, card.name, rawCard);
+            const CR = win.OS_CARD_REGEX;
+            if (CR) {
+                const look = CR.inspectCard ? CR.inspectCard(rawCard) : { count: 1, hasCode: true };
+                if (look.count) {
+                    _setProgress(panelEl, '等妳決定要不要載入美化…', 80);
+                    regexOn = await AUI.confirm(
+                        (look.hasCode
+                            ? '卡片作者寫的美化面板裡有程式，跑起來讀得到妳的設定（包括 API 金鑰）。從信得過的地方下載的卡再載入。'
+                            : '這張卡的美化面板只有版面，沒有程式。')
+                        + '\n之後想換，這本書開場白那頁上面的「美化／原文」可以切。',
+                        { title: '這張卡帶了美化面板', okText: '載入美化', cancelText: '不載入任何程式', danger: false, dismissible: false });
+                }
+                regexCount = await CR.saveFromCard(worldId, card.name, rawCard, { enabled: regexOn });
+            }
             else console.warn('[CardImport] 正則庫模組沒載入，這張卡自帶的美化面板不會生效');
         } catch (e) { console.warn('[CardImport] 自帶正則存入失敗', e); }
 
@@ -289,6 +305,7 @@
                 worldDesc,
                 importedEntryCount,
                 regexCount,
+                regexOn,
                 railEl,
             });
         }, 600);
@@ -307,7 +324,7 @@
     // ═══════════════════════════════════════════════════════════
     //  匯入成功畫面
     // ═══════════════════════════════════════════════════════════
-    function _showSuccess(panelEl, { name, worldDesc, importedEntryCount, regexCount, railEl }) {
+    function _showSuccess(panelEl, { name, worldDesc, importedEntryCount, regexCount, regexOn, railEl }) {
         panelEl.innerHTML = `
             <div style="position:absolute;inset:0;background:var(--qbs-page);"></div>
             <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
@@ -320,7 +337,7 @@
                 </div>
                 <div style="font-size:11px;color:var(--qbs-good);line-height:2.4;
                             background:var(--qbs-field);padding:10px 18px;border-radius:6px;">
-                    <i class="fa-solid fa-book"></i> 世界書條目　${importedEntryCount} 條${regexCount ? `<br><i class="fa-solid fa-wand-magic-sparkles"></i> 自帶美化面板　${regexCount} 條` : ''}
+                    <i class="fa-solid fa-book"></i> 世界書條目　${importedEntryCount} 條${regexCount ? `<br><i class="fa-solid fa-wand-magic-sparkles"></i> 自帶美化面板　${regexCount} 條${regexOn === false ? '（先關著）' : ''}` : ''}
                 </div>
                 <button id="ci-go-back" style="
                     margin-top:8px;background:var(--qbk-accent);
