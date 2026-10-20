@@ -867,6 +867,9 @@
     }
     const lorebookApi = {
         getLorebooks: function() { return getBooks(); },
+        // 酒館的「全域世界書」＝這裡的常駐書包（每本故事都帶）；創作室「我的角色」掛常駐用（rebind 是整份替換，跟酒館一樣）
+        getGlobalWorldbookNames: function() { return getGlobalPacks(); },
+        rebindGlobalWorldbooks: async function(names) { return saveGlobalPacks(Array.isArray(names) ? names : []); },
         getLorebookEntries: async function(name) {
             return (await _bookEntries(name))
                 .sort((a, b) => (parseInt(a.order) || 0) - (parseInt(b.order) || 0))

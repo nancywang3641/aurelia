@@ -16,7 +16,7 @@
     const renderMarkdown = _b.renderMarkdown;
     const _studioBadReply = _b._studioBadReply;
     // 酒館走酒館助手；PWA 沒有酒館助手（index.html 設成 null），改走手機自己的世界書（書包），
-    //   同一組函式由 OS_WORLDBOOK.lorebookApi 接。「我的角色」那頁仍只走酒館（它要掛全域常駐，PWA 沒這層）。
+    //   同一組函式由 OS_WORLDBOOK.lorebookApi 接。「我的角色」那頁 10-20 起也一樣（掛全域常駐＝網頁版的常駐書包）。
     //   只在 PWA 才換：酒館裡酒館助手偶爾還沒就緒，不能因此跳去改手機那套書。
     const _onPwa = () => { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } };
     const _wbTH = () => _onPwa() ? ((win.OS_WORLDBOOK && win.OS_WORLDBOOK.lorebookApi) || null) : _b._wbTH();

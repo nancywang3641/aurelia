@@ -2695,6 +2695,15 @@ ${facilityText}
         }
         if ((tries || 0) < 20) setTimeout(() => _wireScanPurge((tries || 0) + 1), 500);   // 事件系統晚就緒→重試 10 秒放棄
     })();
+    // 網頁版（10-20 補齊）：「跑團推進一輪」＝一章寫完存檔（VN_CHAPTER_SAVED）；只認現在這段故事的章
+    win.addEventListener('VN_CHAPTER_SAVED', (e) => {
+        if (!_isPwa()) return;
+        const d = (e && e.detail) || {};
+        let cur = '';
+        try { cur = localStorage.getItem('vn_current_story_id') || ''; } catch (err) {}
+        if (d.storyId && cur && d.storyId !== cur) return;
+        _onStoryAdvanced();
+    });
 
     // 訂閱世界容器變動 → 自動重渲染
     if (win.WORLD_RUNTIME && typeof win.WORLD_RUNTIME.onChange === 'function') {

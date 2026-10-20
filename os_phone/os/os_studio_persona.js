@@ -15,7 +15,10 @@
     const _sgcEsc = _b._sgcEsc;
     const renderMarkdown = _b.renderMarkdown;
     const _studioBadReply = _b._studioBadReply;
-    const _wbTH = _b._wbTH;
+    // 網頁版（10-20 補齊）沒有酒館助手：跟創作室世界書那頁一樣改走手機自己的書包（OS_WORLDBOOK.lorebookApi，同一組函式名）；
+    //   「掛全域常駐」對到網頁版的常駐書包（vn_global_wb_packs），每本故事都帶
+    const _onPwa = () => { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } };
+    const _wbTH = () => _onPwa() ? ((win.OS_WORLDBOOK && win.OS_WORLDBOOK.lorebookApi) || null) : _b._wbTH();
     const _wbToast = _b._wbToast;
     const _studioConfirmRetry = _b._studioConfirmRetry;
 
@@ -449,6 +452,8 @@
             const names = new Set();
             try { const cw = TH.getCharWorldbookNames && TH.getCharWorldbookNames('current'); if (cw) { if (cw.primary) names.add(cw.primary); (cw.additional || []).forEach(n => names.add(n)); } } catch (e) {}
             try { const chat = TH.getChatWorldbookName && TH.getChatWorldbookName('current'); if (chat) names.add(chat); } catch (e) {}
+            // 網頁版沒有「卡綁的書」：這本故事掛的書包就是那張卡的世界
+            if (_onPwa()) { try { ((win.OS_WORLDBOOK && win.OS_WORLDBOOK.getActivePacks && win.OS_WORLDBOOK.getActivePacks()) || []).forEach(n => names.add(n)); } catch (e) {} }
             names.delete(MC_BOOK);
             if (!names.size) return null;
             const parts = [];

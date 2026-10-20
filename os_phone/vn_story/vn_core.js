@@ -200,24 +200,32 @@
         _lorebookLoaded: false,
 
         _loadLorebookAvatars: async function() {
-            if (!win.TavernHelper) return;
+            // 網頁版（10-20 補齊）：沒有酒館助手，讀「常駐書包＋這本故事掛的書包」（角色圖鑑「世界書」那塊寫的就是這裡）
+            const _pwaLb = (win.OS_API?.isStandalone?.() && win.OS_WORLDBOOK?.lorebookApi) ? win.OS_WORLDBOOK.lorebookApi : null;
+            const LB = _pwaLb || win.TavernHelper;
+            if (!LB) return;
             this._lorebookAvatarCache = {};
             this._lorebookExpCache = {};
             this._lorebookSpriteCache = {};
             try {
                 const lbs = new Set();
-                const settings = win.TavernHelper.getLorebookSettings();
-                if (settings && settings.selected_global_lorebooks) {
-                    settings.selected_global_lorebooks.forEach(lb => lbs.add(lb));
+                if (_pwaLb) {
+                    try { (_pwaLb.getGlobalWorldbookNames ? _pwaLb.getGlobalWorldbookNames() : []).forEach(lb => lbs.add(lb)); } catch (e) {}
+                    try { ((win.OS_WORLDBOOK.getActivePacks && win.OS_WORLDBOOK.getActivePacks()) || []).forEach(lb => lbs.add(lb)); } catch (e) {}
+                } else {
+                    const settings = win.TavernHelper.getLorebookSettings();
+                    if (settings && settings.selected_global_lorebooks) {
+                        settings.selected_global_lorebooks.forEach(lb => lbs.add(lb));
+                    }
+                    const charLbs = win.TavernHelper.getCharLorebooks();
+                    if (charLbs && charLbs.primary) lbs.add(charLbs.primary);
+                    if (charLbs && charLbs.additional) charLbs.additional.forEach(lb => lbs.add(lb));
                 }
-                const charLbs = win.TavernHelper.getCharLorebooks();
-                if (charLbs && charLbs.primary) lbs.add(charLbs.primary);
-                if (charLbs && charLbs.additional) charLbs.additional.forEach(lb => lbs.add(lb));
 
                 for (const lb of lbs) {
                     if (!lb) continue;
                     try {
-                        const entries = await win.TavernHelper.getLorebookEntries(lb);
+                        const entries = await LB.getLorebookEntries(lb);
                         for (const entry of entries) {
                             const cm = entry.comment;
                             const isAvatar = (cm === '【素材-角色頭像素材】' || cm === '【素材-隨機頭像素材】');
@@ -3889,10 +3897,11 @@
 
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
-                // 獨立模式：這個角色用雲端聲音念時才顯示（重播上一句不用再花錢）
+                // 獨立模式：這個角色用雲端聲音念時（重播上一句不用再花錢），或本機語音開著時（10-20 補齊：電腦上開網頁版也連得到本機 SoVITS）才顯示
                 const cloud = !!(this._currentChar && win.OS_VOICE_CAST?.cloudFor(this._currentChar.charName));
-                btnRegen.style.display = cloud ? 'inline-block' : 'none';
-                btnRegen.title = '重播當前語音';
+                const local = !!(this._currentChar && (window.parent || window).VN_TTS?.config?.enabled);
+                btnRegen.style.display = (cloud || local) ? 'inline-block' : 'none';
+                btnRegen.title = cloud ? '重播當前語音' : '清除快取並重新生成當前語音';
             } else {
                 // ST 模式：有角色行就顯示，title 保持原意
                 btnRegen.style.display = this._currentChar ? 'inline-block' : 'none';
@@ -3907,7 +3916,6 @@
             if (!charName || !text) return;
 
             const btn = document.getElementById('vn-btn-regen');
-            const isStandalone = win.OS_API?.isStandalone?.() ?? false;
 
             // ── 名單上的雲端聲音：優先從快取重播（免費），快取失效才再合成一次 ──
             const V = win.OS_VOICE_CAST;
@@ -3919,9 +3927,9 @@
                 if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
                 return;
             }
-            if (isStandalone) return;
+            // 網頁版（10-20 補齊）也走下面這條：本機語音（SoVITS／IndexTTS）開著就清快取重生，沒開就什麼都不做
 
-            // ── ST 模式：透過 VN_TTS 重新生成 ──
+            // ── 本機語音：透過 VN_TTS 重新生成 ──
             const VN_TTS = (window.parent || window).VN_TTS;
             if (!VN_TTS?.config?.enabled) { console.warn('[VN] VN_TTS 不可用或未啟用'); return; }
 

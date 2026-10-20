@@ -114,19 +114,29 @@
     }
 
     // ================================================================
-    // 世界書（只有酒館版有）
+    // 世界書：酒館走酒館助手；網頁版（10-20 補齊）走手機自己的書包——「角色卡主書」＝這本故事掛的第一本書包，
+    //   讀的順序跟舞台（VN_Core._loadLorebookAvatars）一樣：常駐書包 → 這本故事的書包
     // ================================================================
+    function _pwa() { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } }
+    function _lb() { return _pwa() ? ((win.OS_WORLDBOOK && win.OS_WORLDBOOK.lorebookApi) || null) : TH(); }
+    function _storyPacks() { try { return (win.OS_WORLDBOOK && win.OS_WORLDBOOK.getActivePacks && win.OS_WORLDBOOK.getActivePacks()) || []; } catch (e) { return []; } }
     function wbAvailable() {
-        const t = TH();
+        const t = _lb();
         return !!(t && t.getLorebookEntries && t.setLorebookEntries && t.createLorebookEntries);
     }
     function charPrimary() {
+        if (_pwa()) { const g = (_lb().getGlobalWorldbookNames && _lb().getGlobalWorldbookNames()) || []; return _storyPacks().find(p => g.indexOf(p) < 0) || ''; }
         try { const c = TH().getCharLorebooks(); return (c && c.primary) || ''; } catch (e) { return ''; }
     }
     // 讀的順序跟舞台一樣（全域 → 角色卡主 → 角色卡附加），同一個名字後讀到的蓋前面
     function wbBooks() {
-        const t = TH(); const out = [];
+        const t = _lb(); const out = [];
         const add = (b) => { if (b && out.indexOf(b) < 0) out.push(b); };
+        if (_pwa()) {
+            try { ((t.getGlobalWorldbookNames && t.getGlobalWorldbookNames()) || []).forEach(add); } catch (e) {}
+            _storyPacks().forEach(add);
+            return out;
+        }
         try { const g = t.getLorebookSettings && t.getLorebookSettings(); (g && g.selected_global_lorebooks || []).forEach(add); } catch (e) {}
         try { const c = t.getCharLorebooks && t.getCharLorebooks(); if (c) { add(c.primary); (c.additional || []).forEach(add); } } catch (e) {}
         return out;
@@ -149,7 +159,7 @@
     async function wbLoad() {
         const out = { exp: [], preset: [] };
         if (!wbAvailable()) return out;
-        const t = TH();
+        const t = _lb();
         for (const book of wbBooks()) {
             let entries = [];
             try { entries = await t.getLorebookEntries(book) || []; } catch (e) { continue; }
@@ -176,7 +186,7 @@
     // 一次改好幾個角色（手動保存是一個、匯入清單是很多個）。每個角色的行整批換掉，別人的行原封不動。
     //   新行放進「這個角色原本所在的條目」；原本沒有 → 角色卡主世界書裡那一條；再沒有 → 在角色卡主世界書新建（停用、不進 AI）。
     async function wbSaveMany(wb, kind, changes) {
-        const t = TH();
+        const t = _lb();
         const entries = wb[kind] || [];
         const primary = charPrimary();
         const fallback = entries.find(E => E.book === primary) || entries[0] || null;
