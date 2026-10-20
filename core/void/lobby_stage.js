@@ -1069,8 +1069,10 @@
         const footPad = Math.round(a.h * (a.bpad || 0));
         // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
         const left = a.x - w / 2, top = a.y - a.h + footPad, z = 2 + Math.round(a.y) + _actorZBias(a);
-        if (a._left !== left) { a.el.style.left = left + 'px'; a._left = left; }
-        if (a._top !== top) { a.el.style.top = top + 'px'; a._top = top; }
+        //   位置寫 translate 屬性、不寫 left/top：left/top 逐幀寫會弄髒版面樹（酒館聊天 DOM 肥時每幀整頁重排）。
+        //   彈跳／翻面的 keyframes 吃的是 transform，translate 屬性跟它疊加、互不蓋掉；left/top 第一次歸零就不再碰
+        if (!a._trBase) { a.el.style.left = '0px'; a.el.style.top = '0px'; a._trBase = true; }
+        if (a._left !== left || a._top !== top) { a.el.style.translate = left + 'px ' + top + 'px'; a._left = left; a._top = top; }
         if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
         if (a._walking !== !!a.walking) { a.el.classList.toggle('walking', !!a.walking); a._walking = !!a.walking; }
         if (a._flipC !== !!a.flip) { a.el.classList.toggle('flip', !!a.flip); a._flipC = !!a.flip; }
@@ -1131,7 +1133,7 @@
         el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';   // 換好的圖載入才顯示
         a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
         a.frameW = a.frameH = null;
-        a._left = a._top = a._z = a._bg = a._tf = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
+        a._left = a._top = a._z = a._bg = a._tf = a._trBase = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
         a.bpad = a.wfrac = a.hw = null;   // 換新圖→清掉舊的量測值，重新量
         if (isSheet) {
             const probe = new Image();
@@ -1319,10 +1321,10 @@
         const x = Math.round(npc.x), ty = Math.round(npc.y + 8), hy = Math.round(npc.y - npc.h - 6);
         if (npc._ex === x && npc._ety === ty) return;   // 沒移動就不碰 DOM
         npc._ex = x; npc._ety = ty;
-        npc.tag.style.left = x + 'px';
-        npc.tag.style.top = ty + 'px';
-        npc.hint.style.left = x + 'px';
-        npc.hint.style.top = hy + 'px';
+        // 名牌、搭話鈕跟著人走：寫 translate 屬性不寫 left/top（同 placeActor：不弄髒版面）；CSS 的 transform 置中照樣疊上去
+        if (!npc._exBase) { npc.tag.style.left = npc.tag.style.top = npc.hint.style.left = npc.hint.style.top = '0px'; npc._exBase = true; }
+        npc.tag.style.translate = x + 'px ' + ty + 'px';
+        npc.hint.style.translate = x + 'px ' + hy + 'px';
     }
     function updateNpcs(dt) {
         S.npcs.forEach(n => {
@@ -1730,12 +1732,21 @@
         const appPanel = document.getElementById('aurelia-panel-container');
         return !!(appPanel && appPanel.style.display !== 'none' && appPanel.getClientRects().length && appPanel.querySelector('#aurelia-iframe-container > *'));
     }
+    // 下面那幾個讀 offsetParent／getClientRects 的檢查會強迫瀏覽器當場重排（前一格有人改過樣式的話），
+    //   每格都問＝每格多一次同步重排（10-20 卡頓量測：酒館聊天 DOM 肥時一格 2ms 上下）→ 結果留 250ms，便宜的檢查照每格做
+    let _hidAt = -1e9, _hidVal = false;
     function _stageHidden() {
+        if (document.hidden) return true;
+        if (!S.root || !S.root.isConnected) return true;
+        const now = performance.now();
+        if (now - _hidAt < 250) return _hidVal;
+        _hidAt = now; _hidVal = _stageHiddenNow();
+        return _hidVal;
+    }
+    function _stageHiddenNow() {
         try {
-            if (document.hidden) return true;
-            // app 蓋著時大廳也睡：NPC 在後面照走的話，每一格都在改 left/top，酒館聊天 DOM 肥時整頁重排、前面的 app 跟著卡
+            // app 蓋著時大廳也睡：NPC 在後面照走的話，每一格都在改樣式，酒館聊天 DOM 肥時整頁重排、前面的 app 跟著卡
             if (_appCovering()) return true;
-            if (!S.root || !S.root.isConnected) return true;
             if (S.root.offsetParent === null) return true;   // 大廳分頁 display:none（切去其他 tab）
             const vn = document.getElementById('aurelia-vn-panel');
             if (vn && vn.offsetParent !== null) return true;   // VN 劇情面板開著（全螢幕蓋住舞台）

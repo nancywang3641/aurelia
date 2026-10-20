@@ -377,8 +377,9 @@
         const x = anc.x, y = anc.y;
         if (t._px === x && t._py === y) return;   // 沒動就不碰 DOM
         t._px = x; t._py = y;
-        t.icon.style.left = x + 'px';
-        t.icon.style.top = y + 'px';
+        // 跟著兩個人走：寫 translate 屬性不寫 left/top（不弄髒版面；CSS 的 translateX(-50%) 置中照樣疊上去）
+        if (!t._trBase) { t.icon.style.left = '0px'; t.icon.style.top = '0px'; t._trBase = true; }
+        t.icon.style.translate = x + 'px ' + y + 'px';
     }
     // 沒有主人的泡泡一律清掉：狀態與 DOM 不同步時（重複 mount、狀態被重建）的兜底
     function _sweepOrphanBubbles() {
