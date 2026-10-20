@@ -82,7 +82,8 @@
             ss_2486: { title: '有人找妳就通知', body: '妳沒在看的時候有人開口，就在手機上叮一下。第一次打開會問妳要不要允許通知。' },
             ss_2499: { title: '手機通知', body: '丹自己醒來寫紙條的時候叮妳一下，點通知直接回到板子。' },
             ss_2515: { title: '介面佈局', body: '頂部被遮擋時選「強制下移」。' },
-            ss_2549: { title: '本地全量備份', body: '匯出所有資料成 JSON 檔。' },
+            ss_2549: { title: '本地備份', body: '把資料匯出成一個 JSON 檔，存到相簿、iCloud 或雲端硬碟。全部勾著就是完整備份；只想帶一部分就把其他塊的勾取消。「設定」那塊有 API 金鑰，勾著匯出前會再提醒一次。還原時按「從本地 JSON 還原」，檔案裡有哪幾塊就還原哪幾塊。' },
+            bk_local_st: { title: '奧瑞亞的資料備份', body: '只收奧瑞亞自己存的東西：劇情記憶和大總結、手機 app、狀態面板、大廳、創作室、成就，還有圖片、語音這些設定。\n\n聊天、角色卡、世界書、預設、正則是酒館在管的，用酒館自己的匯出就好，這裡不重複收。API 用酒館連線的話，那份設定也不收（金鑰在酒館那邊）。\n\n「設定」那塊有金鑰，勾著匯出前會再提醒一次。還原時按「從本地 JSON 還原」，完成會自己重新整理。' },
             ss_cloudbk: { title: '自動備份', body: '開著時，打開 app 距離上次超過一天就備份一次，切出 app 時也會補；內容沒變就不上傳。按「雲端的備份」可以挑一份還原。\n\n備份到哪裡二選一：\n・托管伺服器：用上面「回覆交給伺服器跑」的網址與通行碼，伺服器留最近七份。\n・GitHub 私人倉庫：沒有伺服器的人用，備份存在你自己的倉庫，只有你看得到；怎麼開看那格的小問號。\n\n不含圖片。勾哪幾塊就傳哪幾塊；「設定」裡有 API 金鑰，預設不傳。\n\n都不想開也沒關係：太久沒匯出時，打開 app 會問你要不要匯出一份。' },
             ss_cloudbk_gh: { title: 'GitHub 私人倉庫', body: '備份存在你自己的 GitHub 私人倉庫，只有你看得到。每備份一次就是一次更新，以前的版本 GitHub 會記著，「雲端的備份」列最近十份。\n\n第一次要做三件事：\n1. 在 GitHub 開一個新倉庫，選 Private（私人）。\n2. 到 GitHub 右上頭像 → Settings → Developer settings → Personal access tokens → Fine-grained tokens，按 Generate new token。Repository access 選 Only select repositories，只選剛剛那個倉庫；Permissions 裡的 Contents 選 Read and write。產生後複製那串金鑰，它只會顯示一次。\n3. 這裡填「帳號/倉庫名」和那串金鑰。直接貼倉庫的網址也可以。\n\n金鑰存在這台裝置的瀏覽器裡。照第 2 步只開放那一個倉庫，萬一外流也只碰得到備份。' },
         });
@@ -1253,7 +1254,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             secLlmConfig.useSystemApi = false;
         }
         const stHide = isStandalone ? ' style="display:none"' : '';
-        
+        const pwaOnly = isStandalone ? '' : ' hidden';   // 只有手機版用得到的格子（加在 class 上）
+
         let stProfiles = [];
         let stActiveProfileId = '';
         try {
@@ -1295,7 +1297,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     <!-- ⛔ 「記憶向量」分頁已移除：它跟 📝 記憶（變數工坊→記憶）是同一個系統、同一份 os_vector_config，
                          但欄位少了本地模型/記憶來源/主模型只注入近期那幾個，而它存檔是整份覆蓋 →
                          每按一次「保存所有設定」就把那幾個設定清掉（本地模型的勾會自己不見就是這個）。 -->
-                    <div class="set-tab" data-tab="sys"${!isStandalone ? ' style="display:none"' : ''}>系統/備份</div>
+                    <div class="set-tab" data-tab="sys">系統/備份</div>
                 </div>
 
                 <div class="set-content">
@@ -2507,7 +2509,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                     <div id="view-sys" class="tab-view hidden">
 
-                        <div class="set-group" id="push-group">
+                        <div class="set-group${pwaOnly}" id="push-group">
                             <div class="set-label"><i class="fa-solid fa-bell"></i> 手機通知${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2499') : ''}</div>
                             <div class="push-gate hidden" id="push-gate">
                                 要從主畫面開啟才收得到——分享鈕 → 加入主畫面，再從那顆圖示進來。
@@ -2522,7 +2524,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="push-state" id="push-state">還沒開。</div>
                         </div>
 
-                        <div class="set-group">
+                        <div class="set-group${pwaOnly}">
                             <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。"><i class="fa-solid fa-desktop"></i> 介面佈局${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2515') : ''}</div>
                             <select class="set-select" id="os-layout-mode">
                                 <option value="auto" ${localStorage.getItem('aurelia_layout_mode') !== 'pad-ios' ? 'selected' : ''}>自動適配 (Auto/預設)</option>
@@ -2541,14 +2543,15 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         </div>
 
                         <div class="set-group">
-                            <div class="set-label" title="匯出包含所有 IndexedDB 資料的 JSON 檔案，可保存至手機相簿/iCloud/Google Drive。未來 VN 故事存檔也會一併匯出。"><i class="fa-solid fa-floppy-disk"></i> 本地全量備份${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2549') : ''}</div>
-                            <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;"><i class="fa-solid fa-upload"></i> 匯出完整備份 JSON</div>
+                            <div class="set-label"><i class="fa-solid fa-floppy-disk"></i> ${isStandalone ? '本地備份' : '奧瑞亞的資料備份'}${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(isStandalone ? 'ss_2549' : 'bk_local_st') : ''}</div>
+                            <div class="cloudbk-parts" id="bk-parts"></div>
+                            <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;"><i class="fa-solid fa-upload"></i> 匯出備份 JSON</div>
                             <label class="bk-opt"><input type="checkbox" id="bk-export-img" checked><span>帶圖片</span>${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('bk_export_img') : ''}</label>
                             <div class="btn-test" id="bk-import-btn" style="margin-top:8px;"><i class="fa-solid fa-download"></i> 從本地 JSON 還原</div>
                             <input type="file" id="bk-file-input" accept=".json" style="display:none;" />
                         </div>
 
-                        <div class="danger-zone">
+                        <div class="danger-zone${pwaOnly}">
                             <h3><i class="fa-solid fa-triangle-exclamation"></i> 危險區域：一鍵格式化</h3>
                             <p>此操作將徹底刪除所有本地資料庫（包含角色、對話、長線劇情、變數工坊與系統設定）。操作後將自動重整網頁。請務必先進行備份！</p>
                             <div class="btn-danger" id="bk-format-btn"><i class="fa-solid fa-burst"></i> 格式化並清空所有數據</div>
@@ -5163,6 +5166,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     function bindBackupTab(container) {
         const win = window.parent || window;
         const BACKUP = win.OS_BACKUP;
+        const isStandaloneNow = () => { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } };
 
         const elStatus    = container.querySelector('#bk-status');
 
@@ -5464,16 +5468,36 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             chkImg.checked = BACKUP.getSettings().exportImages !== false;
             chkImg.addEventListener('change', () => { const s = BACKUP.getSettings(); s.exportImages = chkImg.checked; BACKUP.saveSettings(s); });
         }
+        // 要匯出哪幾塊：跟雲端備份同一份名冊，酒館裡只列奧瑞亞自己管的（BACKUP.partsHere）；勾的記在這台
+        const elParts = container.querySelector('#bk-parts');
+        if (elParts && BACKUP && BACKUP.partsHere) {
+            const cur = BACKUP.exportPartsGet();
+            const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+            elParts.innerHTML = BACKUP.partsHere().map(p => '<label class="cloudbk-part"><input type="checkbox" data-part="' + p.k + '"' + (cur[p.k] ? ' checked' : '') + '><span>' + esc(p.label) + '</span></label>').join('');
+            elParts.addEventListener('change', (e) => {
+                const t = e.target;
+                if (t && t.dataset && t.dataset.part) BACKUP.exportPartsSave({ [t.dataset.part]: t.checked });
+            });
+        }
+        const _pickedParts = () => {
+            const out = {};
+            if (elParts) elParts.querySelectorAll('input[data-part]').forEach(i => { out[i.dataset.part] = i.checked; });
+            return out;
+        };
         if (btnExport) btnExport.addEventListener('click', async () => {
             if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
+            const parts = elParts ? _pickedParts() : undefined;
+            if (parts && !Object.keys(parts).some(k => parts[k])) { setStatus('一塊都沒勾', '#fc8181'); return; }
+            if (BACKUP.confirmSecrets && !await BACKUP.confirmSecrets(parts || BACKUP.exportPartsGet())) return;
             setBtnLoading(btnExport, '準備中...');
             setStatus('正在打包資料...', 'rgba(26,28,40,0.25)');
             try {
-                const sizeKB = await BACKUP.exportLocal({ images: chkImg ? chkImg.checked : undefined });
+                const sizeKB = await BACKUP.exportLocal({ images: chkImg ? chkImg.checked : undefined, parts: parts });
                 const L = BACKUP.lastExport;
-                setStatus('匯出完成（' + sizeKB + ' KB' + (L && L.images ? '，含圖片和語音 ' + L.images + ' 張' : '') + '），請儲存至安全位置', 'rgba(26,28,40,0.25)');
+                // 酒館（Tauri）下載不會跳任何東西，要講檔案去哪了
+                setStatus('匯出完成（' + sizeKB + ' KB' + (L && L.images ? '，含圖片和語音 ' + L.images + ' 張' : '') + '）' + (isStandaloneNow() ? '，請儲存至安全位置' : '，檔案在「下載」資料夾'), 'rgba(26,28,40,0.25)');
             } catch(e) { setStatus('匯出失敗：' + e.message, '#fc8181'); }
-            setBtnDone(btnExport, '匯出完整備份 JSON');
+            setBtnDone(btnExport, '匯出備份 JSON');
         });
 
         const btnImport = container.querySelector('#bk-import-btn');

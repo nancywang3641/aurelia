@@ -456,11 +456,14 @@
 
     // ── 本地匯出入 ────────────────────────────────────────────────────
     // opts.images：帶不帶 images 倉庫（沒給就照設置頁那個勾，預設帶）。回檔案大小（KB）；帶了幾張圖在 OS_BACKUP.lastExport
+    // opts.parts：勾了哪幾塊（沒給就照設置頁記的，沒記過＝全勾）。全勾時跟以前的完整備份一樣（同一套 PARTS，沒排進哪塊的都歸到「設定」或「手機 app」）
     const IMG_SLOT = '__AURELIA_IMAGES_SLOT__';
     let lastExport = null;
     async function exportLocal(opts = {}) {
         const withImages = (typeof opts.images === 'boolean') ? opts.images : getSettings().exportImages !== false;
-        const data = await collectAll({ images: withImages });
+        const picked = opts.parts || exportPartsGet();
+        if (!partsHere().some(p => picked[p.k])) throw new Error('一塊都沒勾');
+        const data = await collectParts(picked, { type: 'full', images: withImages });
         if (withImages) data.db.images = IMG_SLOT;
         const content = JSON.stringify(data, null, 2);
         let parts = [content], nImg = 0;
@@ -485,7 +488,7 @@
         lastExport = { kb: sizeKB, images: withImages ? nImg : null };
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'aurelia-full-backup-' + new Date().toISOString().slice(0, 10) + '.json';
+        a.download = 'aurelia-' + (_isPwa() ? '' : 'tavern-') + 'backup-' + new Date().toISOString().slice(0, 10) + '.json';
         a.click();
         try { const s = getSettings(); s.lastExportAt = Date.now(); saveSettings(s); } catch (e) {}   // 打開 app 時「多久沒備份」看這個
         return sizeKB;
@@ -575,10 +578,9 @@
         try { if (localStorage.getItem(WARN_KEY) === today) return; } catch (e) {}
         win.AUI.lsSet(WARN_KEY, today, '空間提醒');
         const A = win.AUI || window.AUI;
-        // 「系統/備份」那一頁只有 PWA 有；酒館版沒有那頁，就只指相簿
-        let pwa = false; try { pwa = !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) {}
+        // 「系統/備份」那一頁 10-20 起酒館也有
         const msg = '這台裝置留給奧瑞亞的空間已經用了 ' + Math.round(st.ratio * 100) + '%。'
-                  + (pwa ? '到 設置 → 系統/備份 先匯出一份備份，再到相簿壓縮或清掉不要的圖。' : '到相簿壓縮或清掉不要的圖。');
+                  + '到 設置 → 系統/備份 先匯出一份備份，再到相簿壓縮或清掉不要的圖。';
         try { if (A && A.toast) A.toast(msg, { type: 'warn' }); } catch (e) {}
     }
     try { setTimeout(() => { _bootCheck().catch(() => {}); }, 6000); } catch (e) {}
@@ -591,7 +593,9 @@
     //   沒伺服器（或沒開）：打開 app 時超過七天沒匯出就問一次要不要匯出，「之後再說」三天後再問（只在手機版）。
     const AUTO_KEY = 'os_backup_auto';
     const PARTS = [
-        { k: 'story', label: '劇情（章節、記憶、大總結、書架、人設）', stores: ['vn_chapters', 'vn_memories', 'vn_grand_summaries', 'tavern_summary', 'map_data'],
+        //   tavernLabel：酒館裡顯示的名字（章節、書架、人設在酒館是酒館自己的）；tavern:false＝酒館裡不列（那塊是酒館在管的）
+        { k: 'story', label: '劇情（章節、記憶、大總結、書架、人設）', tavernLabel: '劇情（記憶、大總結、地圖、角色的聲線）',
+          stores: ['vn_chapters', 'vn_memories', 'vn_grand_summaries', 'tavern_summary', 'map_data'],
           ls: ['aurelia_custom_worlds', 'vn_current_story_id', 'vn_current_story_title', 'os_personas',
                'os_persona_current', 'vn_current_world_id', 'vn_story_index', 'os_vn_gen_presets', 'vn_free_history',
                'aurelia_greet_replace_rules', 'aurelia_map_theater_log'],
@@ -604,7 +608,7 @@
           prefixes: ['wx_custom_contacts_v1__', 'wx_contact_tags__', 'wx_chat_settings_', 'wx_bubble_style_', 'vn_bubble_room::',
                      'wx_cards_', 'wx_redpacket_', 'wx_transfer_', 'wx_removed::', 'wx_seeme_memory::', 'wb_unfollowed__',
                      'vn_sticker_ai_lib__', 'aurelia_appdata_'] },
-        { k: 'wb', label: '世界書', worldbook: true, ls: ['os_worldbook_books', 'vn_active_wb_packs', 'vn_global_wb_packs'] },
+        { k: 'wb', label: '世界書', worldbook: true, tavern: false, ls: ['os_worldbook_books', 'vn_active_wb_packs', 'vn_global_wb_packs'] },
         // 提示詞是她自己寫的東西、沒有金鑰：10-19 從「設定」那塊（預設不勾）拆出來，雲端備份預設就收
         { k: 'prompts', label: '提示詞（條目、預設包、大廳的人設）',
           ls: ['vn_prompt_order', 'os_prompt_entries', 'os_prompt_bundles', 'os_universal_cot', 'os_vn_rules_custom', 'sp_summary_tpl',
@@ -620,7 +624,7 @@
           ls: ['studio_quick_chips', 'vn_component_groups', 'vn_theme_gallery'], prefixes: ['os_studio_parsed_', 'studio_panel_type_'] },
         { k: 'ach', label: '成就', achievements: true },
         // 其他塊沒收的 LS_BACKUP_KEYS 全部歸這塊（下面那段自動補），這裡只列原本那幾個
-        { k: 'settings', label: '設定（含 API 金鑰）', off: true,
+        { k: 'settings', label: '設定（含 API 金鑰）', tavernLabel: '設定（圖片、語音、接口，含金鑰）', off: true,
           ls: ['os_global_config', 'os_secondary_llm_config', 'os_image_config', 'os_minimax_config', 'os_elevenlabs_config',
                'os_voice_cast', 'os_vn_foreign', 'vn_cfg_v4', 'wx_phone_api_config'] },
     ];
@@ -665,24 +669,92 @@
             return (url && token) ? { url, token } : null;
         } catch (e) { return null; }
     }
-    async function collectParts(parts) {
-        const sel = PARTS.filter(p => parts[p.k]);
+    // ── 這一邊列哪幾塊（10-20 她定的）──
+    //   酒館的聊天、角色卡、世界書、預設、正則是酒館在管、酒館自己有匯出；酒館這頁只收奧瑞亞自己存的，所以世界書那塊不列。
+    function partsHere() {
+        const pwa = _isPwa();
+        return PARTS.filter(p => pwa || p.tavern !== false)
+            .map(p => Object.assign({}, p, { label: (!pwa && p.tavernLabel) || p.label }));
+    }
+    // 酒館裡用「酒館的連線」叫模型時，那份 API 設定不收：金鑰在酒館那邊，她說「這也可以跳過」
+    function _tavernSkip() {
+        if (_isPwa()) return [];
+        const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null') || {}; } catch (e) { return {}; } };
+        const main = read('os_global_config'), sec = read('os_secondary_llm_config');
+        const out = [];
+        if (main.useSystemApi) out.push('os_global_config');
+        if (sec.useSystemApi || (sec.syncWithPrimary && main.useSystemApi)) out.push('os_secondary_llm_config');
+        return out;
+    }
+    // 匯出要勾哪幾塊（記在這台）；沒記過＝全勾
+    function exportPartsGet() {
+        const saved = getSettings().exportParts || {};
+        const out = {};
+        partsHere().forEach(p => { out[p.k] = (typeof saved[p.k] === 'boolean') ? saved[p.k] : true; });
+        return out;
+    }
+    function exportPartsSave(parts) {
+        const s = getSettings(); s.exportParts = Object.assign({}, s.exportParts || {}, parts); return saveSettings(s);
+    }
+    function _selLsKeys(sel) {
+        const skip = _tavernSkip(), keys = [];
+        sel.forEach(p => {
+            (p.ls || []).forEach(k => { if (skip.indexOf(k) === -1 && localStorage.getItem(k) !== null) keys.push(k); });
+            if (p.prefixes) for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && p.prefixes.some(x => k.startsWith(x))) keys.push(k);
+            }
+        });
+        return keys;
+    }
+    async function collectParts(parts, opts) {
+        opts = opts || {};
+        const shown = partsHere().map(p => p.k);
+        const sel = PARTS.filter(p => parts[p.k] && shown.indexOf(p.k) !== -1);
         const db = { stores: {} }, ls = {};
         for (const p of sel) {
             if (p.worldbook) db.worldbook = await _getStore('world_book_entries');
             if (p.achievements) db.achievements = await _getStore('achievements');
             for (const s of (p.stores || [])) db.stores[s] = await _getStore(s);
-            (p.ls || []).forEach(k => { const v = localStorage.getItem(k); if (v !== null) ls[k] = v; });
-            if (p.prefixes) for (let i = 0; i < localStorage.length; i++) {
-                const k = localStorage.key(i);
-                if (k && p.prefixes.some(x => k.startsWith(x))) ls[k] = localStorage.getItem(k);
-            }
         }
+        _selLsKeys(sel).forEach(k => { ls[k] = localStorage.getItem(k); });
         if (sel.some(p => (p.stores || []).indexOf('app_data') !== -1)) {
             db.xiaoji_roster = XJ.roster();
-            db.fav_voices = await FAV.collect(db.stores.app_data);   // ⭐ 收藏的語音跟著它的清單走
+            if (!opts.images) db.fav_voices = await FAV.collect(db.stores.app_data);   // ⭐ 收藏的語音跟著它的清單走（帶圖片時已經在 images 裡）
         }
-        return { version: 4, exportedAt: new Date().toISOString(), type: 'cloud', parts: sel.map(p => p.k), db, localStorage: ls };
+        return { version: 4, exportedAt: new Date().toISOString(), type: opts.type || 'cloud', parts: sel.map(p => p.k), db, localStorage: ls };
+    }
+
+    // 🔑 要匯出的設定裡有沒有金鑰、通行碼（她：「設置key匯出的時候，要給提醒」）。回有幾項設定帶著
+    const SECRET_FIELD = /^(key|api_?key|token|secret|password|passcode|pwd)$|(api_?key|token|secret|password|passcode)$/i;
+    function _hasSecret(lsKey, raw) {
+        if (raw == null || raw === '') return false;
+        let v;
+        try { v = JSON.parse(raw); } catch (e) { v = raw; }
+        if (typeof v !== 'object' || v === null) return /(_key|token|secret|password|passcode)$/i.test(lsKey) && String(v).trim().length >= 6;
+        const walk = (o, d) => {
+            if (!o || typeof o !== 'object' || d > 5) return false;
+            return Object.keys(o).some(k => {
+                const x = o[k];
+                if (typeof x === 'string') return SECRET_FIELD.test(k) && x.trim().length >= 6;
+                return walk(x, d + 1);
+            });
+        };
+        return walk(v, 0);
+    }
+    function secretsIn(parts) {
+        const shown = partsHere().map(p => p.k);
+        const sel = PARTS.filter(p => parts[p.k] && shown.indexOf(p.k) !== -1);
+        return _selLsKeys(sel).filter(k => _hasSecret(k, localStorage.getItem(k))).length;
+    }
+    // 匯出前問一聲：有金鑰才問；回 false＝她不要了
+    async function confirmSecrets(parts) {
+        const n = secretsIn(parts);
+        if (!n) return true;
+        const A = win.AUI || window.AUI;
+        if (!A || !A.confirm) return true;
+        return A.confirm('這份備份裡有 API 金鑰或通行碼（' + n + ' 項設定）。檔案別傳給別人，也別放到公開的地方。\n不想帶的話，取消「設定」那塊的勾再匯出。',
+            { title: '備份裡有金鑰', okText: '照樣匯出', cancelText: '先不要', danger: false });
     }
     async function _sha(text) {
         try {
@@ -868,7 +940,7 @@
         const ok = await A.confirm((last ? '已經 ' + Math.floor((Date.now() - last) / DAY) + ' 天沒備份了。' : '還沒備份過。')
             + '手機版的資料只存在這支手機的瀏覽器裡，清掉或換手機就沒了。要現在匯出一份嗎？',
             { title: '備份', okText: '匯出', cancelText: '之後再說', danger: false });   // 句子裡有「清掉」會被判成危險、按鈕變紅
-        if (ok) { try { await exportLocal(); } catch (e) {} }
+        if (ok) { try { if (await confirmSecrets(exportPartsGet())) await exportLocal(); } catch (e) {} }
         else win.AUI.lsSet(REMIND_KEY, String(Date.now() + 3 * DAY), '「之後再說」');
     }
     try { setTimeout(() => { _autoBoot().catch(() => {}); }, 20000); } catch (e) {}
@@ -887,6 +959,7 @@
         _img: IMG,
         get lastExport() { return lastExport; },
         PARTS, autoGet, autoSave, relayOf, ghGet, ghSave, destReady, cloudBackup, cloudList, cloudGet, collectParts,
+        partsHere, exportPartsGet, exportPartsSave, secretsIn, confirmSecrets,
         getSettings,
         saveSettings,
         applyData,
