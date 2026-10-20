@@ -1740,6 +1740,16 @@
                                 if (p.length >= 3 && /^T\d+$/i.test(p[0])) win.OS_ECONOMY.processAiTransaction(p[0], p[1], p[2]);
                             });
                         }
+                        // 🎬 開頭設置補救（網頁版，10-20 補齊）：這章漏了 [Bg]／[BGM] 就從前面幾章帶過來，存檔和這次播放都是補好的版本
+                        //   （酒館那支在生成結束後改寫最新一樓；網頁版在這裡改，免得先播一次沒背景的）。vn_fix_opening=0 關
+                        if (win.OS_API?.isStandalone?.() && localStorage.getItem('vn_fix_opening') !== '0' && win.OS_STATE_RUNTIME?.repairOpeningText) {
+                            try {
+                                const _sid0 = window.VN_Core._currentStoryId || '';
+                                const _older = ((await win.OS_DB?.getAllVnChapters?.()) || []).filter(c => c.storyId === _sid0).map(c => c.content || '');   // 新的在前
+                                const _fixed = win.OS_STATE_RUNTIME.repairOpeningText(fullText, _older);
+                                if (_fixed) { fullText = _fixed; console.log('🛰️ [VN_Choice] 開頭設置補救：這章漏的背景／音樂從前面帶過來了'); }
+                            } catch (e) {}
+                        }
                         // 存檔（含思考鏈，沿用當前 storyId）
                         try {
                             const tm = fullText.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i) || fullText.match(/\[Story\|([^\]]+)\]/i);

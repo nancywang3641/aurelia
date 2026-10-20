@@ -2669,6 +2669,42 @@ _directorSpec(castNames);
     //   • 改寫用 setChatMessages({refresh:'affected'})，與 _captureAndStripRecall 同款（程式化刷新、不觸發 MESSAGE_EDITED）。
     //   • 隱藏開關 localStorage vn_fix_opening=0 可關，預設開。
     // ─────────────────────────────────────────────────────────────────────
+    // 純函式（酒館這支和網頁版 VN_Core 存章之前都用）：cur＝這一章原文、older＝更早的章／訊息原文（新的在前）。
+    //   回補好的整章；不用補或沒得補回 null
+    function repairOpeningText(cur, older) {
+        cur = String(cur || '');
+        // 只看最後一個 </thinking> 之後的正文段：CoT 常提到 <content>/<ChapterCard>/[Bg| 範例字樣，
+        // 閘門會被騙、補回的行還會插進思考區被剝掉 → 檢測與插入都在 tail 上做、頭尾重組寫回
+        let _tailStart = 0;
+        { const _re = /<\/think(?:ing)?>/gi; let _tm; while ((_tm = _re.exec(cur)) !== null) _tailStart = _tm.index + _tm[0].length; }
+        const _head = cur.slice(0, _tailStart), _tail = cur.slice(_tailStart);
+        if (_tail.indexOf('<content>') === -1 || _tail.indexOf('</content>') === -1) return null;  // 只動完整 VN 正文，避開半截/思考期/錯誤訊息
+
+        const hasBg  = /\[Bg\|/i.test(_tail);
+        const hasBgm = /\[BGM\|/i.test(_tail);
+        if (hasBg && hasBgm) return null;                   // 兩個都在 → 沒漏
+
+        // carry-forward：往回找最近一則含該 tag 的訊息，撈「最後一個」(=當前場景/音樂)整行原樣（'_' = 本輪已有、不用找）
+        let bgLine = hasBg ? '_' : null, bgmLine = hasBgm ? '_' : null;
+        for (let i = 0; i < (older || []).length && (bgLine === null || bgmLine === null); i++) {
+            const t = String(older[i] || '');
+            if (bgLine === null)  { const ms = t.match(/^[ \t]*\[Bg\|[^\]\n]*\]/gim);  if (ms) bgLine  = ms[ms.length - 1].trim(); }
+            if (bgmLine === null) { const ms = t.match(/^[ \t]*\[BGM\|[^\]\n]*\]/gim); if (ms) bgmLine = ms[ms.length - 1].trim(); }
+        }
+        const inject = [];
+        if (bgmLine && bgmLine !== '_') inject.push(bgmLine);   // 音樂在前
+        if (bgLine  && bgLine  !== '_') inject.push(bgLine);
+        if (!inject.length) return null;                     // 歷史也沒得 carry → 不補
+
+        // 插進開場：有 <ChapterCard> 就插它後面（Bg/BGM 本就屬卡內）、否則插 <content> 後面；各自獨立一行
+        // （在 _tail 上替換再與 _head 重組 → 絕不會插進 CoT 裡被剝掉）
+        const block = inject.join('\n');
+        const _nextTail = /<ChapterCard>/i.test(_tail)
+            ? _tail.replace(/(<ChapterCard>[^\n]*\n?)/i, `$1${block}\n`)
+            : _tail.replace(/(<content>[^\n]*\n?)/i, `$1${block}\n`);
+        if (_nextTail === _tail) return null;
+        return _head + _nextTail;
+    }
     async function _repairOpeningSettings() {
         try {
             if (localStorage.getItem('vn_fix_opening') === '0') return;
@@ -2679,37 +2715,11 @@ _directorSpec(castNames);
             const msg = ctx.chat[arrIdx] || {};
             if (msg.is_user || msg.is_system) return;           // 只修主模型回覆
             const cur = String(msg.mes || msg.message || '');
-            // 只看最後一個 </thinking> 之後的正文段：CoT 常提到 <content>/<ChapterCard>/[Bg| 範例字樣，
-            // 閘門會被騙、補回的行還會插進思考區被剝掉 → 檢測與插入都在 tail 上做、頭尾重組寫回
-            let _tailStart = 0;
-            { const _re = /<\/think(?:ing)?>/gi; let _tm; while ((_tm = _re.exec(cur)) !== null) _tailStart = _tm.index + _tm[0].length; }
-            const _head = cur.slice(0, _tailStart), _tail = cur.slice(_tailStart);
-            if (_tail.indexOf('<content>') === -1 || _tail.indexOf('</content>') === -1) return;  // 只動完整 VN 正文，避開半截/思考期/錯誤訊息
-
-            const hasBg  = /\[Bg\|/i.test(_tail);
-            const hasBgm = /\[BGM\|/i.test(_tail);
-            if (hasBg && hasBgm) return;                        // 兩個都在 → 沒漏
-
-            // carry-forward：往回找最近一則含該 tag 的訊息，撈「最後一個」(=當前場景/音樂)整行原樣（'_' = 本輪已有、不用找）
-            let bgLine = hasBg ? '_' : null, bgmLine = hasBgm ? '_' : null;
-            for (let i = arrIdx - 1; i >= 0 && (bgLine === null || bgmLine === null); i--) {
-                const t = String(ctx.chat[i]?.mes || ctx.chat[i]?.message || '');
-                if (bgLine === null)  { const ms = t.match(/^[ \t]*\[Bg\|[^\]\n]*\]/gim);  if (ms) bgLine  = ms[ms.length - 1].trim(); }
-                if (bgmLine === null) { const ms = t.match(/^[ \t]*\[BGM\|[^\]\n]*\]/gim); if (ms) bgmLine = ms[ms.length - 1].trim(); }
-            }
-            const inject = [];
-            if (bgmLine && bgmLine !== '_') inject.push(bgmLine);   // 音樂在前
-            if (bgLine  && bgLine  !== '_') inject.push(bgLine);
-            if (!inject.length) return;                          // 歷史也沒得 carry → 不補
-
-            // 插進開場：有 <ChapterCard> 就插它後面（Bg/BGM 本就屬卡內）、否則插 <content> 後面；各自獨立一行
-            // （在 _tail 上替換再與 _head 重組 → 絕不會插進 CoT 裡被剝掉）
-            const block = inject.join('\n');
-            const _nextTail = /<ChapterCard>/i.test(_tail)
-                ? _tail.replace(/(<ChapterCard>[^\n]*\n?)/i, `$1${block}\n`)
-                : _tail.replace(/(<content>[^\n]*\n?)/i, `$1${block}\n`);
-            if (_nextTail === _tail) return;
-            const next = _head + _nextTail;
+            const older = [];
+            for (let i = arrIdx - 1; i >= 0; i--) older.push(String(ctx.chat[i]?.mes || ctx.chat[i]?.message || ''));
+            const next = repairOpeningText(cur, older);
+            if (!next) return;
+            const inject = (next.match(/^\[(?:Bg|BGM)\|[^\]\n]*\]/gim) || []).filter(l => cur.indexOf(l) === -1);
 
             _selfEditing = true;   // 擋自身改寫觸發 MESSAGE_UPDATED → onMessageInvalidated 誤砍本則剛存的 patch
             try {
@@ -2935,7 +2945,7 @@ _directorSpec(castNames);
             return _expandSceneNames(str, map, null);
         },
         forceExtract, clearPatches, deepConsolidate,
-        injectCurrent, injectRules, extractOnce, directorBlock,
+        injectCurrent, injectRules, extractOnce, directorBlock, repairOpeningText,
         reconcile: _reconcilePatches,   // 對帳回滾：不靠刪除事件，任何「要用狀態」的入口都可以先叫它
         // 🧩 依 patch id 回滾（PWA 的 patch id ＝章節 id）：刪章／孤兒對帳呼叫，
         //    把那幾筆 patch 砍掉、並把它們碰過的欄位退回「base＋剩餘 patch」的值。

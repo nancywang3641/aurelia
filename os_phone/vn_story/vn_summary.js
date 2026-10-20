@@ -127,11 +127,26 @@
             return `<div style="white-space:pre-wrap;">${html}</div>`;
         },
 
+        // 這段故事還有幾章沒總結進去（自動總結數門檻用；os_story_tools.autoSummarizeCheck）
+        pendingChapters: async function() {
+            const storyId = localStorage.getItem('vn_current_story_id') || '';
+            if (!storyId || !win.OS_DB?.getAllVnChapters) return 0;
+            let chapters = [];
+            try { chapters = ((await win.OS_DB.getAllVnChapters()) || []).filter(ch => ch.storyId === storyId); } catch (e) { return 0; }
+            const list = await this._getFromDB(storyId);
+            const latest = list.length ? list[list.length - 1] : null;
+            const covered = (latest && Array.isArray(latest.coveredChapterIds)) ? latest.coveredChapterIds : [];
+            return chapters.filter(ch => ch.id && covered.indexOf(ch.id) === -1).length;
+        },
+
         // opts.phoneOnly：沒有新章節、只把手機聊天室還沒寫進故事的節寫進去（故事管理那顆鈕）
+        // opts.auto：背景自動總結（上下文小窗「自動總結」）——不跳對話框、不開結果窗，成功失敗各跳一行提示
         generate: async function(opts) {
             const phoneOnly = !!(opts && opts.phoneOnly);
+            const auto = !!(opts && opts.auto);
             const btn = document.getElementById('ctx-summary-btn');
             if (btn && btn.disabled) return;
+            const _say = (msg) => { if (auto) console.log('[VN_Summary 自動] ' + msg); else AUI.alert(msg); };
 
             // 酒館版：大總結在「故事日誌 → 故事管理」(os_story_tools)，這顆 CTX 鈕當快捷入口 →
             //   直接開「生成大總結設置」窗（不必先進日誌再點）。PWA/獨立版才走下面這套自帶大總結。
@@ -154,7 +169,7 @@
                         : all.filter(ch => !ch.storyId);
                 } catch(e) { console.warn('[VN_Summary] 讀取章節失敗:', e); }
             }
-            if (!chapters.length) { AUI.alert('找不到劇情章節，請確認已儲存至少一章'); return; }
+            if (!chapters.length) { _say('找不到劇情章節，請確認已儲存至少一章'); return; }
 
             const prevList  = await this._getFromDB(storyId);
             const count     = prevList.length + 1;
@@ -169,7 +184,7 @@
             // 📱 手機聊天室裡還沒寫進故事的節（wx_summary.js）：一起寫進去，存檔後蓋章
             let _phone = { prompt: '', refs: [] };
             try { if (win.WX_SUMMARY?.collectForStory) _phone = await win.WX_SUMMARY.collectForStory(); } catch (e) { console.warn('[VN_Summary] 收手機聊天室記錄失敗（不影響總結）:', e); }
-            if (phoneOnly && !_phone.prompt) { AUI.alert('手機聊天室裡沒有還沒寫進故事的記錄。'); return; }
+            if (phoneOnly && !_phone.prompt) { _say('手機聊天室裡沒有還沒寫進故事的記錄。'); return; }
 
             const contentToSummarize = newChapters.map(ch => {
                 const _noCot = String(ch.content || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會從 CoT 開抓
@@ -178,7 +193,7 @@
             }).filter(Boolean).join('\n\n---\n\n');
 
             if (!contentToSummarize.trim() && !phoneOnly) {
-                AUI.alert(latest ? '沒有新章節需要總結（上次大總結之後沒有新增章節）' : '章節中找不到 <content> 內容');
+                _say(latest ? '沒有新章節需要總結（上次大總結之後沒有新增章節）' : '章節中找不到 <content> 內容');
                 if (btn) { btn.textContent = '大總結'; btn.disabled = false; }
                 return;
             }
@@ -197,7 +212,7 @@
 
             const osApi = win.OS_API;
             const osSet = win.OS_SETTINGS;
-            if (!osApi) { AUI.alert('找不到 OS_API，請確認已載入獨立版核心'); return; }
+            if (!osApi) { _say('找不到 OS_API，請確認已載入獨立版核心'); return; }
 
             if (btn) { btn.textContent = '生成中...'; btn.disabled = true; }
 
@@ -219,7 +234,8 @@
                 const _v = win.OS_STORY_TOOLS?.validateSummary?.(generated) || { ok: true };
                 if (!_v.ok) {
                     console.warn('[VN_Summary] 生成結果未通過驗證，放棄存檔、保留舊總結：' + _v.reason);
-                    AUI.alert('這次生成的內容不像總結（' + _v.reason + '）\n已保留上一版，沒有覆蓋掉。可以再按一次重試。');
+                    if (auto) { try { AUI.toast('自動總結這次沒成功（' + _v.reason + '），保留上一版，下次到輪再試', { type: 'warn' }); } catch (e) {} }
+                    else _say('這次生成的內容不像總結（' + _v.reason + '）\n已保留上一版，沒有覆蓋掉。可以再按一次重試。');
                     return;
                 }
                 await this._saveToDB(storyId, { count, content: generated, coveredChapterIds });
@@ -228,9 +244,11 @@
                 try { if (_phone.refs.length && win.WX_SUMMARY?.markMerged) await win.WX_SUMMARY.markMerged(_phone.refs, count); } catch (e) {}
                 try { if (win.WX_SUMMARY?.summarizeAll) win.WX_SUMMARY.summarizeAll({ reason: 'grand_summary' }); } catch (e) {}
                 try { document.getElementById('vn-ctx-popup')?.classList.remove('show'); } catch (e) {}   // 生完才收 CTX：生成中要留著給那顆鈕顯示進度
-                this.showResult(generated, count);
+                if (auto) { try { AUI.toast('已自動總結（第 ' + count + ' 次）'); } catch (e) {} } else this.showResult(generated, count);
+                // 🖼 大總結存好 → 角色表裡還沒頭像的補生（同酒館 _doSave 那條；sp_autoavatar_on 關掉就不補）
+                try { if (localStorage.getItem('sp_autoavatar_on') !== '0') win.OS_STORY_TOOLS?.fillMissingAvatars?.(generated); } catch (e) {}
             } catch(e) {
-                AUI.alert('生成失敗: ' + (e.message || e));
+                if (auto) { try { AUI.toast('自動總結沒成功：' + (e.message || e) + '，下次到輪再試', { type: 'warn' }); } catch (e2) {} } else _say('生成失敗: ' + (e.message || e));
             } finally {
                 if (btn) { btn.textContent = '大總結'; btn.disabled = false; }
             }

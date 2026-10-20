@@ -380,10 +380,16 @@
     //   這個按鈕不新增劇情、只把現有那張卡重壓：角色表/關係圖譜程式原樣保留(一個不漏)、事件表丟 AI 濃縮、物品/結算/代辦等廢區塊移除。
     API.recompressSummary = async function () {
         const chatId = getChatIdentifier();
-        const rec = await _loadTavernSummary(chatId);
+        // 網頁版（10-20 補齊）：大總結在 vn_grand_summaries（一段故事好幾版，最新那版＝次數最大的），壓完蓋回同一版
+        const pwa = _isStandalone();
+        let rec = null, pwaLatest = null;
+        if (pwa) {
+            try { const list = (await win.OS_DB?.getGrandSummaries?.(chatId)) || []; pwaLatest = list.length ? list.reduce((a, b) => ((a.count || 0) >= (b.count || 0) ? a : b)) : null; } catch (e) {}
+            if (pwaLatest) rec = { content: pwaLatest.content, summaryCount: pwaLatest.count };
+        } else rec = await _loadTavernSummary(chatId);
         if (!rec || !rec.content) { AUI.alert('目前這個對話還沒有大總結，沒得壓縮。'); return; }
         const osApi = win.OS_API, osSet = win.OS_SETTINGS, osDb = win.OS_DB;
-        if (!osApi?.chat || !osSet?.getConfig || !osDb?.saveTavernSummary) { AUI.alert('找不到 OS_API / OS_SETTINGS / OS_DB'); return; }
+        if (!osApi?.chat || !osSet?.getConfig || !(pwa ? osDb?.saveGrandSummary : osDb?.saveTavernSummary)) { AUI.alert('找不到 OS_API / OS_SETTINGS / OS_DB'); return; }
         const beforeFull = rec.content.length;
         const beforeInject = (API.buildInjectionPayload ? API.buildInjectionPayload(rec.content) : rec.content).length;
         if (!await AUI.confirm(`重壓目前大總結？\n\n存檔全文 ${beforeFull} 字、每輪實際注入約 ${beforeInject} 字。\n會把久遠事件壓成階段節點、最近逐筆保留；角色 / 關係全保留、物品表移除。劇情不會新增。`)) return;
@@ -429,15 +435,20 @@
             rebuilt = rebuilt.map(s => preserved[s.header] ? { header: s.header, body: preserved[s.header] } : s);
             for (const h of Object.keys(preserved)) { if (!rebuilt.find(s => s.header === h)) rebuilt.push({ header: h, body: preserved[h] }); }
             const headLine = `【大总结(第${rec.summaryCount || 1}次)】` + (rec.lastId != null ? `\nLast: ${rec.lastId}` : '');
-            const finalContent = headLine + '\n\n' + rebuilt.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');
+            const bodyOut = rebuilt.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');
+            // 網頁版的大總結本來就沒有那行檔頭（VN_Summary 直接存模型寫的），原本沒有就不加
+            const finalContent = (pwa && !/^\s*【大总结/.test(rec.content)) ? bodyOut : headLine + '\n\n' + bodyOut;
 
-            await osDb.saveTavernSummary(chatId, Object.assign({}, rec, { content: finalContent }));
+            if (pwa) await osDb.saveGrandSummary(Object.assign({}, pwaLatest, { content: finalContent }));
+            else await osDb.saveTavernSummary(chatId, Object.assign({}, rec, { content: finalContent }));
             try { win.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}
             const afterFull = finalContent.length;
             const afterInject = (API.buildInjectionPayload ? API.buildInjectionPayload(finalContent) : finalContent).length;
             console.log(`[大總結] ✅ 重壓完成 全文 ${beforeFull}→${afterFull}、注入 ${beforeInject}→${afterInject}`);
             AUI.alert(`重壓完成！\n存檔全文：${beforeFull} → ${afterFull} 字\n每輪實際注入：${beforeInject} → ${afterInject} 字\n角色 / 關係全保留、物品表已移除。`);
             try { const sb = document.querySelector('#ost-panel .ost-hide-btn[title="重新整理"]'); if (sb) API._refreshStatus(sb); } catch (e) {}
+            // 網頁版的故事管理有一格「內容」顯示整份大總結：重開一次換成壓好的那份
+            if (pwa) { try { const host = document.getElementById('ost-panel')?.parentElement; if (host) API.openPanel(host); } catch (e) {} }
         } catch (e) {
             console.error('[大總結] 重壓失敗:', e);
             AUI.alert('重壓失敗：' + (e?.message || e));
@@ -1648,7 +1659,10 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                             : '還沒有大總結。玩幾章之後按下面那顆，系統會把劇情壓成一份長期記憶。'}</div>
                         <button class="ost-btn ost-btn-primary" id="ost-sa-gen"><i class="fa-solid fa-pen-to-square"></i> 生成 / 更新大總結</button>
                         <div class="ost-hint">拿上一版當底稿，只把「上次之後的新章節」合併進去</div>
+                        ${latest ? `<button class="ost-btn" id="btn-recompress-summary"><i class="fa-solid fa-shuffle"></i> 重壓目前大總結</button>
+                        <div class="ost-hint">把目前累積的總結再濃縮一次（不新增劇情）</div>` : ''}
                         <div class="ost-btn-row"><button class="ost-btn" id="btn-merge-phone"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>${_help('ost_merge_phone')}</div>
+                        <button class="ost-btn" id="ost-sa-tpl"><i class="fa-solid fa-pen"></i> 編輯大總結生成模板</button>
                     </div>
                     ${latest ? `
                     <div class="ost-section">
@@ -1673,6 +1687,10 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         };
         const mp = ov.querySelector('#btn-merge-phone');
         if (mp) mp.onclick = () => API.mergePhoneChats();
+        const rc = ov.querySelector('#btn-recompress-summary');
+        if (rc) rc.onclick = () => API.recompressSummary();
+        const tp = ov.querySelector('#ost-sa-tpl');
+        if (tp) tp.onclick = () => API.openSummaryTemplateModal();   // 模板兩邊共用同一份（VN_Summary 讀 getSummaryTemplate）
         const sv = ov.querySelector('#ost-sa-save');
         if (sv) sv.onclick = async () => {
             const ta = ov.querySelector('#ost-sa-text');
@@ -1757,10 +1775,23 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             if (_autoSumming) return;                                  // 正在背景總結
             if (_genInProgress) return;                                // 有生成在跑(使用者回合)→ 等它結束再說
             if (win.__AURELIA_SUMMARIZING) return;                     // 正在跑總結(含手動)
-            if (win.OS_API?.isStandalone?.()) return;                  // 酒館 only(PWA 有自己的總結)
             if (localStorage.getItem('sp_autosum_on') !== '1') return; // 開關關
             let every = parseInt(localStorage.getItem('sp_autosum_every'));
             if (isNaN(every) || every < 2) every = 20;
+            // 網頁版（10-20 補齊）：總結走 VN_Summary 那套滾動合併；數的是還沒總結進去的章數。
+            //   一章＝她那句＋AI 那段，算兩樓，所以「每 N 樓」跟酒館同一個意思
+            if (_isStandalone()) {
+                const S = win.VN_Summary || window.VN_Summary;
+                if (!S?.pendingChapters || !S.generate) return;
+                const n = await S.pendingChapters();
+                if (n * 2 < every) return;
+                _autoSumming = true;
+                try {
+                    console.log(`[自動總結] 網頁版還沒總結 ${n} 章（${n * 2} 樓）≥ ${every} 樓 → 背景總結`);
+                    await S.generate({ auto: true });
+                } finally { _autoSumming = false; }
+                return;
+            }
             const info = await API.getUnsummarizedInfo();
             if (!info || info.uncounted < every || info.start > info.end) return;
             _autoSumming = true;
@@ -1785,8 +1816,8 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
     API.autoMemTidyTick = async function () {
         try {
             if (localStorage.getItem('sp_memtidy_on') !== '1') return;
-            if (win.OS_API?.isStandalone?.()) return;                  // 酒館 only（跟自動總結一樣）
             if (win.__AURELIA_SUMMARIZING) return;                     // 大總結自己那一通的結束不算一輪
+            //   網頁版（10-20 補齊）一樣跑：每章寫完數一輪（VN_CHAPTER_SAVED，見下面 _initAutoSumPwa）
             const sid = _mtSid(); if (!sid) return;
             const n = (_mtCounts()[sid] || 0) + 1;
             _mtSet(sid, n);
@@ -1828,6 +1859,20 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
         } catch (e) {}
         if (tries > 0) setTimeout(function () { _initAutoSum(tries - 1); }, 1500);
     })(8);
+    // 網頁版的「一章寫完」＝ OS_DB.saveVnChapter 發的 VN_CHAPTER_SAVED（酒館沒有這個事件，上面那段在網頁版也接不到東西）。
+    //   只認現在這段故事的章（小劇場那類換過編號的不算）；時間差照酒館那邊排
+    (function _initAutoSumPwa() {
+        win.addEventListener('VN_CHAPTER_SAVED', function (e) {
+            try {
+                if (!_isStandalone()) return;
+                const d = (e && e.detail) || {};
+                const cur = localStorage.getItem('vn_current_story_id') || '';
+                if (d.storyId && cur && d.storyId !== cur) return;
+                clearTimeout(_autoSumTimer); _autoSumTimer = setTimeout(function () { API.autoSummarizeCheck(); }, 4000);
+                clearTimeout(_memTidyTimer); _memTidyTimer = setTimeout(function () { API.autoMemTidyTick(); }, 25000);
+            } catch (err) {}
+        });
+    })();
 
     // ====================================================================
     // E. 大總結 → 補齊缺的頭像（中文角色表 → 副模型轉英文 Danbooru tag → 生圖）
@@ -1838,7 +1883,7 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
     API.fillMissingAvatars = async function (summaryContent) {
         try {
             if (_fillingAvatars) return;
-            if (win.OS_API?.isStandalone?.()) return;                 // 酒館 only
+            //   網頁版（10-20 補齊）：VN_Summary 存好大總結後也叫這支（帶著剛生好的內容）
             const VC = win.VN_Cache || window.VN_Cache, VCore = win.VN_Core || window.VN_Core;
             if (!VC?.get || !VCore?._genAvatarToCache) return;        // 沒生圖管線就算了
             const osApi = window.parent.OS_API;
