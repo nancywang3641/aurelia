@@ -80,6 +80,11 @@
     }
     function _th() { return win.TavernHelper || window.TavernHelper; }
     function _gate() { return win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE; }
+    // 🌐 網頁版（10-20 補齊）：沒有酒館世界書可寫——世界檔案不落地，組提示詞時由 pwaWorldLore 從檔案庫現組；
+    //   「這段在哪個世界」照舊綁 _cid()（網頁版那把就是故事 id）；DIVE 的開場指令交給劇情播放器送（_toVn）。
+    function _pwa() { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } }
+    // 讀別的書（熟人檔案）：酒館問酒館助手，網頁版問世界書 app 的書包（同一組函式名）
+    function _lbApi() { return _pwa() ? ((win.OS_WORLDBOOK && win.OS_WORLDBOOK.lorebookApi) || null) : _th(); }
     // 🎲 VN 自由模式跟著「人在不在視差世界」走：旅人每趟隨機生成、沒有表情圖庫,
     //   立繪本來就全走生成 → 世界裡固定純生成,撤離自動回她在藏書選的模式(那邊的設定不會被動到)。
     //   模組自己讀 isInParallax() 判斷,這裡只負責在狀態可能變了的時候戳它一下;
@@ -1043,6 +1048,7 @@
             (p.secret ? '\n### 祕密與真相\n' + p.secret : '');
     }
     async function _writeEntry(w, entryText) {
+        if (_pwa()) return true;   // 網頁版不寫世界書：檔案庫裡的原文就是正本，組提示詞時現組（pwaWorldLore）
         const TH = _th();
         if (!TH || !TH.getLorebookEntries) return false;
         try {
@@ -1103,6 +1109,7 @@
     // （原本的 _charBooks/_linkBook 已移除：綁定判斷與掛載都搬去切書模組，那邊才知道兩種模式的差別）
     // 回傳 { fixed:補回幾個條目, link:綁定狀態(null=判斷不了) }
     async function _healthCheck() {
+        if (_pwa()) return { fixed: 0, link: _gate()?.status?.() || null };   // 網頁版沒有書要補
         const T = _th2();
         const worlds = await _get(K_WORLDS, []);
         if (!worlds.length) return { fixed: 0, linked: null };
@@ -1136,6 +1143,7 @@
     //   出事時完全看不出是誰關的。所以只要真的把「原本亮著的」關掉,就把來源講出來。
     //   正常情況下這只會在撤離或刪世界時出現一次;它在別的時候跳出來,就是那裡有問題。
     async function _syncWorldLamps(activeId, why) {
+        if (_pwa()) return;   // 網頁版沒有條目燈：只帶「這段故事所在的那個世界」本來就是組提示詞那邊決定的
         const TH = _th();
         if (!TH || !TH.updateLorebookEntriesWith) return;
         try {
@@ -1238,6 +1246,7 @@
         return new Set(worlds.filter(x => x && x.id !== exceptId && x.entryUid != null).map(x => x.entryUid));
     }
     async function _deleteEntry(w) {
+        if (_pwa()) return;
         const TH = _th();
         if (!TH || !TH.updateLorebookEntriesWith) return;
         const claimed = await _claimedUids(w.id);
@@ -1857,6 +1866,7 @@
     //   但程式已經把這一室標記成「在這個世界」了。她只會看到「已進入」的提示,然後什麼都沒發生。
     //   所以點完之後回頭看一眼:框裡還有沒有我們塞的那段。
     async function _toChat(text) {
+        if (_pwa()) return _toVn(text);
         try {
             const doc = win.document;
             const ta = doc.querySelector('#send_textarea'), btn = doc.querySelector('#send_but');
@@ -1871,6 +1881,26 @@
             const head = String(text).slice(0, 24);
             return (ta.value && ta.value.indexOf(head) >= 0) ? 'stuck' : 'sent';
         } catch (e) { console.error('[Worldgate③] 注入聊天失敗', e); return 'nofield'; }
+    }
+    // 🌐 網頁版沒有酒館輸入框：打開劇情畫面，把開場指令當成這段故事的下一句送出去（跟選項框打字送出同一條，VN_Core.sendPlayerLine）。
+    //   回 'sent'／'noapi'（還沒設定 AI）／'busy'（劇情那邊正在寫上一段）／'nofield'（劇情畫面打不開）。
+    //   不是 'sent' 一律由 _dive 撤回：網頁版沒有「字留在輸入框、設定好再按送出」這條退路，留著只會變成人在世界裡、卻沒有開場。
+    async function _toVn(text) {
+        try {
+            const CC = win.AureliaControlCenter, V = win.VN_Core;
+            if (!CC || !CC.showVnPanel || !V || !V.sendPlayerLine) return 'nofield';
+            const cfg = (win.OS_SETTINGS && win.OS_SETTINGS.getConfig && win.OS_SETTINGS.getConfig()) || {};
+            if (!cfg.url && !cfg.useSystemApi) return 'noapi';
+            const ld0 = win.document.getElementById('vn-start-loader');
+            if (ld0 && ld0.style.display === 'flex') return 'busy';
+            CC.showVnPanel();
+            // 劇情畫面第一次打開要等它長出來（模組還沒載好時 showVnPanel 會等兩秒才 launchApp）；
+            //   讀取條是送出那一下才建的，所以等的是劇情頁本身
+            for (let i = 0; i < 50 && !win.document.getElementById('page-game'); i++) await new Promise(r => setTimeout(r, 100));
+            if (!win.document.getElementById('page-game')) return 'nofield';
+            try { win.VN_PLAYER && win.VN_PLAYER.switchPage && win.VN_PLAYER.switchPage('page-game'); } catch (e) {}
+            return V.sendPlayerLine(text) ? 'sent' : 'busy';
+        } catch (e) { console.error('[Worldgate③] 送開場指令失敗（網頁版）', e); return 'nofield'; }
     }
     // ══ 🚀 啟航封面圖(這趟隊伍的群像,VN 劇情末尾當底圖) ═════════════════
     // 這張圖不另外呼叫模型:主持AI 寫第一層正文的那一輪,手上剛好有隊伍名單與外觀基準,
@@ -2152,6 +2182,21 @@
         console.log('[Worldgate③] 🏅「' + w.name + '」的成就取名規則已更新到條目裡');
     }
     function _initLaunchHook() {
+        // 網頁版的「一章寫完」＝ OS_DB.saveVnChapter 發的 VN_CHAPTER_SAVED（向量記憶、人物檔案也接這個）
+        if (_pwa()) {
+            win.addEventListener('VN_CHAPTER_SAVED', async (e) => {
+                try {
+                    const d = (e && e.detail) || {};
+                    if (!d.storyId || d.storyId !== _cid()) return;   // 不是這段故事（小劇場那類換過編號的）就不管
+                    await _verifyWorldState();
+                    await _scanAchv(d.content || '');
+                    await _scanLaunchArt(d.content || '');
+                } catch (err) {}
+            });
+            console.log('[Worldgate③] 🚀 啟航圖便車已掛載（網頁版）');
+            return;
+        }
+        // 酒館事件還沒好（或 OS_API 晚一步載好、_pwa() 還判斷不出來）：等一下再看是哪一邊
         if (!win.eventOn || !win.tavern_events) { setTimeout(_initLaunchHook, 1000); return; }
         const ev = win.tavern_events;
         if (!ev.MESSAGE_RECEIVED) return;
@@ -2175,6 +2220,8 @@
     //   沒有這一條的話,舊世界的燈會一直亮著,新聊天室生成世界時整份被餵進去(她實測撞到)。
     //   _syncWorldLamps 自己有「已經是對的就不寫」的守衛,所以重複觸發不會反覆寫世界書。
     function _initChatHook() {
+        // 網頁版沒有換聊天室事件：「這段在哪個世界」跟故事 id 走，開機對一次、之後每章寫完（_initLaunchHook）再對
+        if (_pwa()) { setTimeout(() => { _verifyWorldState().catch(() => {}); }, 3000); return; }
         if (!win.eventOn || !win.tavern_events) { setTimeout(_initChatHook, 1000); return; }
         const ev = win.tavern_events;
         if (!ev.CHAT_CHANGED) return;
@@ -2291,11 +2338,13 @@
         await _syncWorldLamps(w.id, 'DIVE');   // 這個世界改成常駐、其餘關掉——不靠關鍵字，也不用人記得切
         try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         const sent = await _toChat(_divePrompt(w));
-        if (sent === 'nofield') {
+        if (sent === 'nofield' || (_pwa() && sent !== 'sent')) {
             await gate.exitParallax();
             await _syncFreeMode();
             await _setCurrentId(''); await _syncWorldLamps('', '撤離');   // 進不去就把剛點的燈收回來
-            return { ok: false, msg: '找不到酒館輸入框,已切回主世界' };
+            const why = { noapi: '還沒設定 AI（設置 → API），設定好再 DIVE 一次', busy: '劇情那邊正在寫上一段，等它寫完再 DIVE 一次',
+                          nofield: _pwa() ? '劇情畫面打不開' : '找不到酒館輸入框' };
+            return { ok: false, msg: (why[sent] || why.nofield) + '，已切回主世界' };
         }
         // stuck=文字塞進去了但送不出去(通常是還沒設定 API,送出鍵被鎖著)。
         //   世界照樣算進去了——她只要開好 API 再按送出就接得上,不必重來一次。
@@ -2930,6 +2979,11 @@
     function _warnHtml() {
         const L = _health && _health.link;
         if (!L) return '';                                   // 問不到就不提示
+        // 網頁版：沒有書可掛，只看現在打開的是不是藏書「奧瑞亞」那本（世界門只開在那本）
+        if (L.pwa) {
+            return L.ours ? '' : '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
+                '<span>現在打開的故事不是「奧瑞亞」那本。到藏書打開奧瑞亞、踏入故事之後，才進得了世界。你可以先挑好世界。</span></div>';
+        }
         if (L.missing && L.missing.length) {
             return '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
                 '<span>還缺這幾本世界書：' + _esc(L.missing.join('、')) +
@@ -3351,7 +3405,7 @@
         } catch (err) { console.warn('[Worldgate] 角色簿讀取失敗', err); }
         // ① 人物核心世界書
         try {
-            const entries = (await _th()?.getLorebookEntries?.(BOOK_CORE)) || [];
+            const entries = (await _lbApi()?.getLorebookEntries?.(BOOK_CORE)) || [];   // 網頁版：她匯入過人物核心這本書包才有
             entries.forEach(e => {
                 const cm = String((e && e.comment) || '').trim();
                 const ct = String((e && e.content) || '').trim();
@@ -3696,7 +3750,8 @@
         _curDetailId = w.id;
         if (await _salvageWorld(w)) _fillArt(w);   // 🩹 那四行沒被認出來的舊世界:補回欄位後順手把圖補生
         let entryText = '';
-        try {
+        if (_pwa()) entryText = w.entryText ? _entryContent(w, w.entryText) : '';   // 網頁版沒落地成條目：照檔案庫原文組
+        else try {
             const entries = await _th()?.getLorebookEntries?.(BOOK_PARA);
             const e = (w.entryUid != null && (entries || []).find(x => x && x.uid === w.entryUid))
                 || (entries || []).find(x => x.comment === _entryComment(w));
@@ -3989,6 +4044,19 @@
         } catch (e) { return []; }
     }
 
+    // 🌐 網頁版組提示詞用（os_api_engine 的 _buildStandaloneContext）：這段故事人在哪個世界，就回那個世界的檔案；
+    //   內容跟酒館【奧瑞亞-視差】裡亮著的那條同一支 _entryContent 組（旅人、熟人、成就、白板企劃都在裡面）。不在世界裡回空字串
+    async function pwaWorldLore() {
+        if (!_pwa()) return '';
+        try {
+            if (!_gate()?.isInParallax?.()) return '';
+            const id = await _getCurrentId();
+            if (!id) return '';
+            const w = (await _get(K_WORLDS, [])).find(x => x && x.id === id);
+            if (!w || !w.entryText) return '';
+            return '[設定] ' + _entryComment(w) + '\n' + _entryContent(w, w.entryText);
+        } catch (e) { return ''; }
+    }
     async function getCurrentWorld() {
         try {
             const id = await _getCurrentId();
@@ -4070,7 +4138,7 @@
         return Array.from(new Set(a.concat(b).filter(Boolean)));
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, getWorldPanel, getBattleAllies, resolveAchvCode,
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode,
         receivePlan, takeBackPlan, planStatus, usedNames };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

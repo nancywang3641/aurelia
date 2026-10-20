@@ -223,7 +223,13 @@
     // 這本書這一輪要帶的內建條目（標題＋內容），格式跟書包條目一樣，接在書包前面
     function forBook(worldId, scanText) {
         if (!worldId) return '';
-        const aur = isAureliaBook(worldId);
+        // 世界門：這段奧瑞亞故事已經從世界門進了異世界 → 跟其他藏書一樣只帶視差那份
+        //   （等於酒館切書收起【奧瑞亞世界】和人物核心；那個世界的檔案由 OS_WORLDGATE.pwaWorldLore 接在後面）
+        let inPara = false;
+        if (isAureliaBook(worldId)) {
+            try { const G = win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE; inPara = !!(G && G.isInParallax && G.isInParallax()); } catch (e) {}
+        }
+        const aur = isAureliaBook(worldId) && !inPara;
         const raw = String(scanText || ''), lower = raw.toLowerCase();
         const list = PARALLAX.filter(e => !(aur && e.notAurelia)).concat(aur ? AURELIA : []);
         return list.filter(e => _hit(e, lower, raw)).map(e => '[設定] ' + e.title + '\n' + e.text).join('\n\n---\n\n');

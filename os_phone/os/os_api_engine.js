@@ -2583,6 +2583,11 @@
             try { _wid = localStorage.getItem('vn_current_world_id') || ''; } catch (e) {}
             let _builtinLore = '';
             try { _builtinLore = win.OS_BUILTIN_LORE?.forBook?.(_wid, scanText) || ''; } catch (e) { console.warn('[OS_API standalone] 內建世界書載入失敗:', e); }
+            // 🌌 世界門：這段故事從愛麗絲那裡 DIVE 進了哪個世界，就常駐帶那個世界的檔案（酒館是【奧瑞亞-視差】裡亮著的那條）
+            try {
+                const _wgLore = await win.OS_WORLDGATE?.pwaWorldLore?.();
+                if (_wgLore) _builtinLore = _builtinLore ? _builtinLore + '\n\n---\n\n' + _wgLore : _wgLore;
+            } catch (e) { console.warn('[OS_API standalone] 世界門的世界檔案載入失敗:', e); }
             const _isAureliaBook = !!win.OS_BUILTIN_LORE?.isAureliaBook?.(_wid);
             try {
                 // 常駐書包(每本都用) ∪ 這本藏書自己掛的 —— 前者是酒館「全域世界書」的對應物，
