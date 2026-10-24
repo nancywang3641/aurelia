@@ -244,6 +244,7 @@
         return '<div class="snb-entry"><b>世界種子</b><p>' + esc(S.seedText(d.seed || {}).split('｜').join('\n')) + '</p></div>' +
             (d.player ? '<h5>妳在裡面是誰</h5><div class="snb-entry"><p>' + esc(d.player) + '</p></div>' : '') +
             '<h5>人物</h5>' + (d.people || []).map(p => '<div class="snb-entry"><b>' + esc(p.name) + '</b><p>' + esc(p.content) + '</p></div>').join('') +
+            ((d.travelers || []).length ? '<h5>同行旅人</h5>' + d.travelers.map(t => '<div class="snb-entry"><b>' + esc(t.name) + '</b><p>' + esc(t.content) + '</p></div>').join('') : '') +
             '<h5>岔路</h5>' + (d.nodes || []).map(n => '<div class="snb-entry"><b>' + esc(n.name) + '</b>' + (n.when ? '<small>什麼情況下會碰到：' + esc(n.when) + '</small>' : '') + '<p>' + esc(n.content) + '</p></div>').join('') +
             '<h5>可能的結局</h5>' + (d.endings || []).map(e => '<div class="snb-entry"><b>' + esc(e.name) + '</b>' + (ek[e.kind] ? '<small>' + ek[e.kind] + '的結局</small>' : '') + '<p>' + esc(e.content) + '</p></div>').join('') +
             (d.secret ? '<h5>祕密與真相</h5><div class="snb-entry"><p>' + esc(d.secret) + '</p></div>' : '');
@@ -261,7 +262,8 @@
             '<div class="snb-two"><div class="snb-front"><h4><i class="fa-solid fa-compass"></i>方向</h4><p>' + esc(d.front) + '</p>' +
                 '<p class="snb-dest-line"><i class="fa-solid fa-door-open"></i>交到：' + esc(S.DESTS[d.dest] || '') + (tags.length ? '・' + tags.join('・') : '') + '</p>' +
                 '<h4><i class="fa-solid fa-diagram-project"></i>企劃書裡有</h4><div class="snb-adds">' +
-                '<span><b>' + c.people + '</b>位人物</span><span><b>' + c.nodes + '</b>個岔路</span><span><b>' + c.endings + '</b>種結局</span></div></div>' + back + '</div>' +
+                '<span><b>' + c.people + '</b>位人物</span>' + (c.travelers ? '<span><b>' + c.travelers + '</b>位同行旅人</span>' : '') +
+                '<span><b>' + c.nodes + '</b>個岔路</span><span><b>' + c.endings + '</b>種結局</span></div></div>' + back + '</div>' +
             ((d.talk || []).length ? '<h4 class="snb-h4"><i class="fa-solid fa-comments"></i>討論過的</h4><div class="snb-talk">' + _talkHtml(d.talk) + '</div>' : '') +
             (d.notes.length ? '<div class="snb-talk">' + d.notes.map(n => '<div class="snb-msg"><span class="snb-ava">' + esc(String(n.name || '?').slice(0, 1)) + '</span><div><u>' + (n.role === 'check' ? '挑毛病的' : '寫的') + '・' + esc(n.name) + '</u>' + esc(n.text) + '</div></div>').join('') + '</div>' : '') +
             (d.state === 'wait'

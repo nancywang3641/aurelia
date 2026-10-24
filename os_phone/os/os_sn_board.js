@@ -17,9 +17,12 @@
     const BOOK = '【奧瑞亞-白板】';
     const REF_BOOKS = ['【奧瑞亞世界】', '【奧瑞亞-視差】', '【奧瑞亞-人物核心】', BOOK];
     const CAPS = { WAIT: 3, IDEAS: 5, MATS: 20, COMBINE_AT: 10, COMBINE_SHOW: 8, CLIP_MAX: 3, DROPPED: 30, SHIFTS: 40, REFS: 8, REF_CUT: 600, ENTRIES: 8,
-        TALK: 4, PEOPLE: 4, NODES: 7, ENDINGS: 4, MIN_NODES: 3, MIN_ENDINGS: 2 };
+        TALK: 4, PEOPLE: 4, NODES: 7, ENDINGS: 4, MIN_NODES: 3, MIN_ENDINGS: 2, TRAVELERS: 4 };
     const LEN = { MAT: 80, CARD: 120, WHY: 60, SRC: 40, IDEA: 140, KEY: 12, KEYS: 6, TITLE: 24, FRONT: 300, NAME: 30, ENTRY: 1200, NOTE: 120, SAY: 20, REDO: 200,
-        TALK: 600, RAE: 200, PERSON: 900, NODE: 700, WHEN: 80, ENDING: 500, SECRET: 900, PLAYER: 400 };
+        TALK: 600, RAE: 200, PERSON: 900, NODE: 700, WHEN: 80, ENDING: 500, SECRET: 900, PLAYER: 400, TRAVELER: 500, BRIEF: 3000 };
+    // 上班須知：她世界書裡的一條，每班整段帶上（不靠關鍵字撈）。內容是她的設定，不寫進程式；條目關著也讀（關著才不會跑進平常的劇情）。
+    //   找不到就照舊不帶。她 10-25：「須知照你說的放【奧瑞亞-視差】、叫 SN 上班須知」
+    const BRIEF_TITLE = 'SN 上班須知';
     const KINDS = { faction: '勢力', place: '地點', person: '人物', conflict: '衝突', rule: '規矩' };
     const JOBS = { check: '挑毛病', write: '寫稿', talk: '討論', plan: '寫企劃書', combine: '湊點子', clip: '剪素材', idle: '沒事做' };
     // 企劃要交到哪裡（她孵化時選）。這版只開世界門；另外兩個掛著寫「之後」。沒有 dest 的是一版的稿（收進世界書）
@@ -169,6 +172,10 @@
             return _old(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), kind: ENDING_KINDS[k] ? k : '', content: _cutBlock(_plain(x.body), LEN.ENDING) });
         }).filter(e => e.name && e.content);
     }
+    // 同行旅人：陪她從奧瑞亞進去的人（愛麗絲召集旅人時照這欄）。舊企劃沒有這欄，不算缺
+    function _travelers(text) {
+        return _all(text, 'traveler').map(x => _old(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), content: _cutBlock(_plain(x.body), LEN.TRAVELER) })).filter(t => t.name && t.content);
+    }
     function _secret(text) { const x = _tag(text, 'secret'); return x ? _cutBlock(_plain(x.body), LEN.SECRET) : ''; }
     function _player(text) { const x = _tag(text, 'player'); return x ? _cutBlock(_plain(x.body), LEN.PLAYER) : ''; }
     function parseReply(text, job) {
@@ -221,13 +228,13 @@
             const cut = x.cut ? '企劃書寫到一半被切掉了（回覆太長）' : '';
             if (!title || !front || !front.body || !seed || !seed.name || !seed.concept) return no(cut || '企劃書缺名字、方向或世界種子');
             if (!people.length || nodes.length < CAPS.MIN_NODES || endings.length < CAPS.MIN_ENDINGS) return no(cut || '企劃書的人物、岔路或結局太少');
-            return { ok: true, plan: { title, front: _cutBlock(_plain(front.body), LEN.FRONT), seed, player: _player(x.body), people, nodes, endings, secret: _secret(x.body), note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
+            return { ok: true, plan: { title, front: _cutBlock(_plain(front.body), LEN.FRONT), seed, player: _player(x.body), people, travelers: _travelers(x.body).slice(0, CAPS.TRAVELERS), nodes, endings, secret: _secret(x.body), note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
         }
         if (kind === 'check') {
             const x = _tagOrCut(t, 'review');
             if (!x) return no('沒交挑毛病的結果');
             const note = _tag(x.body, 'note');
-            if (job.dest) return { ok: true, review: { seed: _seedOf(x.body), player: _player(x.body), people: _people(x.body), nodes: _nodes(x.body), endings: _endings(x.body), secret: _secret(x.body), note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
+            if (job.dest) return { ok: true, review: { seed: _seedOf(x.body), player: _player(x.body), people: _people(x.body), travelers: _travelers(x.body), nodes: _nodes(x.body), endings: _endings(x.body), secret: _secret(x.body), note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
             return { ok: true, review: { entries: _all(x.body, 'entry').map(_entry).filter(Boolean).slice(0, CAPS.ENTRIES), note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
         }
         return no('這班沒事做');
@@ -279,7 +286,7 @@
             const talk = idea.talk || [];
             const pl = p.plan;
             const d = { id: _mkId('d'), dest: idea.dest || 'gate', idea: { text: idea.text, keys: idea.keys, from: idea.from, by: idea.by, byName: idea.byName },
-                title: pl.title, front: pl.front, seed: pl.seed, player: pl.player || '', people: pl.people, nodes: pl.nodes, endings: pl.endings, secret: pl.secret, talk,
+                title: pl.title, front: pl.front, seed: pl.seed, player: pl.player || '', people: pl.people, travelers: pl.travelers || [], nodes: pl.nodes, endings: pl.endings, secret: pl.secret, talk,
                 writer: _who(who), checker: null, notes: pl.note ? [{ by: who.id, name: who.name, role: 'write', text: pl.note }] : [],
                 state: o.solo ? 'wait' : 'check', unchecked: !!o.solo, untalked: !talk.some(t => t.role === 'talk'), peeked: false, at: now };
             b.drafts.push(d);
@@ -296,7 +303,8 @@
                 const i = list.findIndex(y => y.name === key);
                 if (i >= 0) list[i] = x; else if (list.length < cap) list.push(x);
             });
-            merge(d.people, rv.people, CAPS.PEOPLE); merge(d.nodes, rv.nodes, CAPS.NODES); merge(d.endings, rv.endings, CAPS.ENDINGS);
+            if (!Array.isArray(d.travelers)) d.travelers = [];   // 加這欄之前寫的企劃書：挑毛病的人可以補上
+            merge(d.people, rv.people, CAPS.PEOPLE); merge(d.travelers, rv.travelers || [], CAPS.TRAVELERS); merge(d.nodes, rv.nodes, CAPS.NODES); merge(d.endings, rv.endings, CAPS.ENDINGS);
             if (rv.secret) d.secret = rv.secret;
             if (rv.player) d.player = rv.player;
             if (rv.seed && rv.seed.name && rv.seed.concept) d.seed = rv.seed;
@@ -505,11 +513,11 @@
         i.talk = (i.talk || []).concat([{ by: 'rae', name: '妳', role: 'rae', text: t, at: now }]);
         return { ok: true, board: b };
     }
-    function countPlan(d) { return { people: (d.people || []).length, nodes: (d.nodes || []).length, endings: (d.endings || []).length }; }
-    function planCountText(c) { return [c.people ? c.people + ' 位人物' : '', c.nodes ? c.nodes + ' 個岔路' : '', c.endings ? c.endings + ' 種結局' : ''].filter(Boolean).join('、'); }
+    function countPlan(d) { return { people: (d.people || []).length, travelers: (d.travelers || []).length, nodes: (d.nodes || []).length, endings: (d.endings || []).length }; }
+    function planCountText(c) { return [c.people ? c.people + ' 位人物' : '', c.travelers ? c.travelers + ' 位同行旅人' : '', c.nodes ? c.nodes + ' 個岔路' : '', c.endings ? c.endings + ' 種結局' : ''].filter(Boolean).join('、'); }
     // 交給愛麗絲那份（她那邊存進世界門的「白板送來的企劃」）
     function planOf(d) {
-        return { id: d.id, title: d.title, front: d.front, seed: d.seed, player: d.player || '', people: d.people, nodes: d.nodes, endings: d.endings, secret: d.secret || '',
+        return { id: d.id, title: d.title, front: d.front, seed: d.seed, player: d.player || '', people: d.people, travelers: d.travelers || [], nodes: d.nodes, endings: d.endings, secret: d.secret || '',
             by: [d.writer && d.writer.name, d.checker && d.checker.name].filter(Boolean) };
     }
     function markSent(b, draftId, now) {
@@ -580,23 +588,34 @@
     function planText(d) {
         return '標題：' + d.title + '\n方向：' + d.front + '\n世界種子：' + _seedText(d.seed) + (d.player ? '\n玩家是誰：' + d.player : '') +
             '\n人物：\n' + (d.people || []).map(p => '（' + p.name + '）' + p.content).join('\n') +
+            '\n同行旅人：\n' + ((d.travelers || []).length ? d.travelers.map(t => '（' + t.name + '）' + t.content).join('\n') : '（還沒寫）') +
             '\n岔路：\n' + (d.nodes || []).map(n => '（' + n.name + (n.when ? '｜什麼情況下會碰到：' + n.when : '') + '）' + n.content).join('\n') +
             '\n可能的結局：\n' + (d.endings || []).map(e => '（' + e.name + (e.kind ? '｜' + ENDING_KINDS[e.kind] : '') + '）' + e.content).join('\n') +
             (d.secret ? '\n祕密與真相：' + d.secret : '');
     }
     function _talkText(talk, U) { return (talk || []).map(t => (t.role === 'rae' ? U : t.name) + '：' + t.text).join('\n'); }
-    const GATE_WHAT = '世界門是玩家從奧瑞亞走進去的異世界：她會在裡面生活、冒險，愛麗絲照企劃書把世界展開成完整的世界檔案、再找幾位同行的旅人。';
+    // 身體改造那句照 os_worldgate.js 展開世界的【身體】規則；旅人照它召集旅人那段（各自報名的陌生人、不是配好的小隊）
+    const GATE_WHAT = '世界門是玩家從奧瑞亞進去的異世界：她會在裡面生活、冒險。進去的玩家和同行旅人都是奧瑞亞的人類，落地時那個世界的法則會把他們的身體改造成能在那裡活下去的樣子，為人和性格不變。' +
+        '愛麗絲照企劃書把世界展開成完整的世界檔案，再照企劃書的同行旅人那欄召集四位旅人（企劃寫了誰就找誰，不滿四位的她自己補），他們在大廳等她搭話，她挑誰跟她同一趟進去。';
+    // 冷讀抓到的：人數跟「四位」對不上、「陪她」像為她而來、綁岔路的人沒被挑或半路脫隊那條路就斷、括號三項會被照抄成每位一個模子
+    function _travelerNeed(U) {
+        return '2～' + CAPS.TRAVELERS + ' 位會跟' + U + '同一趟進去的同行旅人。他們是奧瑞亞的普通人，在大廳各自報名這個世界、彼此不認識；不是這個世界的人，也不是 person 那幾位。' +
+            '幾位之間的年齡、在奧瑞亞做的事、來歷要拉開，不是一支照這個世界配好的專業小隊：本行跟這個世界的題材直接相關的最多一位，至少兩位做的事不需要專業訓練或學歷。' +
+            '每位要讓人知道：名字或外號、在奧瑞亞做什麼、是什麼樣的人、為什麼報名這個世界，還有他跟哪個岔路或結局有關、在那裡會想要什麼（提到岔路或結局時寫它的名字）。' +
+            U + '不一定會挑他、他也可能半路脫隊，所以那個岔路或結局不能只靠他才走得到。不用寫他落地後變成什麼樣子，那是展開世界時才定的。';
+    }
     const SEED_FMT = '<seed genre="題材，8 個字以內" type="基調，6 個字以內：住進去會過什麼樣的日子" name="世界名，8 個字以內" concept="一句話，25 個字以內" ' +
         'twist="一條會左右當地人怎麼謀生、怎麼往來的規矩，45 個字以內" daily="這條規矩讓當地人多出什麼營生和往來，25 個字以內" style="視覺風格，5 個字以內的名詞" ' +
         'lure="這個世界最吸引人的東西，5 個字以內的名詞" danger="主要危險，5 個字以內的名詞" crisis="現在正在發生、玩家會撞上的事，20 個字以內"></seed>';
     const PERSON_NEED = '名字或外號（不能只用職業或身分關係當稱呼）、住在哪裡、靠什麼過活、從哪裡來、怎麼變成現在這樣、個性跟說話的樣子、跟誰有牽扯、想要什麼或怕什麼、對玩家的態度會因為什麼而變';
-    // ctx.usedNames＝世界門檔案庫裡已經有的世界名（寫企劃書時別撞名）
+    // ctx.usedNames＝世界門檔案庫裡已經有的世界名（寫企劃書時別撞名）；ctx.brief＝她世界書裡的上班須知（每班都帶，沒有就不帶）
     function buildMessages(job, who, b, refs, user, ctx) {
         const U = user || '她';
         ctx = ctx || {};
         const sys = (who.sys ? who.sys + '\n\n' : '你是' + who.name + '。\n') +
             '今天你在 SN 公司 32 樓的研討室值白板的班。白板是' + U + '的：大家在上面剪素材、湊點子、討論，再寫成稿或企劃書；' + U + '看過說好，稿才會寫進她的世界書，企劃書才會交給世界門的愛麗絲。\n' +
-            '這一班只做下面交代的那一件事，照格式交回來就下班，格式以外的話不用寫。\n\n' + RULES + '\n' + PLAIN;
+            '這一班只做下面交代的那一件事，照格式交回來就下班，格式以外的話不用寫。\n\n' +
+            (ctx.brief ? '上班須知（' + U + '寫給值班的人的背景，每一班都照這個想）：\n' + ctx.brief + '\n\n' : '') + RULES + '\n' + PLAIN;
         const dropped = _list(b.dropped.slice(0, 10), x => '・' + x.title, '（沒有）');
         const L = [];
         if (job.kind === 'clip') {
@@ -637,6 +656,7 @@
             L.push((talk.some(t => t.role === 'talk') ? '這一段接著上一段講，可以同意也可以反對。' : '你先開頭。') + '挑幾件講，不用每件都講：',
                 '・這個點子變成一個世界，最好玩的是什麼',
                 '・' + U + '進去以後是誰、為什麼會在那裡',
+                '・誰會跟' + U + '同一趟進去（同行旅人）：什麼樣的奧瑞亞人會想報名這個世界、他們會讓哪個岔路或結局變得不一樣',
                 '・會撞上什麼人、什麼事',
                 '・哪裡可能出錯、哪裡會無聊、哪裡會變成不管怎麼做都只能照一條路走',
                 '這一段只討論，不用寫成企劃書，下一步才寫。',
@@ -654,12 +674,14 @@
                 '・seed：世界種子，每一格照格式裡寫的意思和字數寫。',
                 '・player：' + U + '進去以後是誰、為什麼會在那裡。討論裡' + U + '說了想當什麼，就照她說的寫。',
                 '・person：' + Math.max(3, CAPS.PEOPLE - 1) + '～' + CAPS.PEOPLE + ' 位這個世界的人。每位都要寫到' + PERSON_NEED + '；寫成講這個人的一段話，不用照這個順序一項一項列。只寫外人看得到、打聽得到的；他瞞著別人的事只寫進 secret。',
+                '・traveler：' + _travelerNeed(U) + '寫成講這個人的一段話，不用照這個順序一項一項列。討論裡' + U + '說了想跟誰一起進去，就照她說的寫，跟上面的要求衝突時以她說的為準。',
                 '・node：' + (CAPS.MIN_NODES + 1) + '～' + CAPS.NODES + ' 個岔路。每個寫：什麼情況下會碰到（寫條件，不是第幾章）、那時候的局面、玩家可能怎麼做、各自通往哪裡，還有玩家什麼都不做的話會怎樣。每個至少兩條路。不要有不管玩家怎麼做都只會走到同一個結果的岔路。',
                 '・ending：' + (CAPS.MIN_ENDINGS + 1) + '～' + CAPS.ENDINGS + ' 種可能的結局，要有好的、壞的、出乎意料的，kind 寫 good、bad 或 surprise。每個一定要寫怎麼走到、世界會留下什麼後果。沒有哪一個是保證會發生的。',
                 '・secret：祕密與真相，一定要寫誰知道、什麼情況下會被發現。',
                 '・note：給挑毛病那位同事的一句話。',
                 '格式：', '<plan title="企劃書的名字，十個字以內">', '<front>方向</front>', SEED_FMT, '<player>玩家是誰、為什麼會在那裡</player>',
-                '<person name="名字或外號">這個人的背景</person>', '<node name="岔路的名字" when="什麼情況下會碰到">那時候的局面；玩家可能怎麼做、各自通往哪裡；什麼都不做會怎樣</node>',
+                '<person name="名字或外號">這個人的背景</person>', '<traveler name="名字或外號">這位旅人的一段話</traveler>',
+                '<node name="岔路的名字" when="什麼情況下會碰到">那時候的局面；玩家可能怎麼做、各自通往哪裡；什麼都不做會怎樣</node>',
                 '<ending name="結局的名字" kind="good、bad、surprise 三選一">怎麼走到；世界留下什麼後果</ending>', '<secret>祕密與真相</secret>', '<note>一句話</note>', '</plan>', SAY_FMT);
         } else if (job.kind === 'check' && job.dest) {
             const d = b.drafts.find(x => x.id === job.draftId);
@@ -667,14 +689,16 @@
             if (d && d.notes.length) L.push('寫的人留言：' + d.notes.map(n => n.text).join('／'));
             L.push('檢查：',
                 '・人物有沒有缺背景（' + PERSON_NEED + '）',
+                '・同行旅人照不照這個要求：' + _travelerNeed(U) + '還沒寫同行旅人的話就補上。',
                 '・有沒有岔路不管玩家怎麼做都只會走到同一個結果（換句話說的同一條路也算）',
                 '・每個結局走不走得到：有沒有岔路或條件通往它',
                 '・壞的結局是不是真的會發生，還是寫成最後一定會被救回來',
                 '・人物、岔路、結局、祕密之間有沒有矛盾；有沒有碰到素材界線',
                 '・玩家是誰有沒有寫清楚；討論裡' + U + '說想當什麼，有沒有照她說的',
-                '有問題就直接改那一段，寫改好的整段：name 跟原本一樣；要幫他改名字的話 name 寫新的、old 寫原本的。少了結局或岔路就補一個新的；種子有問題就整個 seed 重寫。',
+                '有問題就直接改那一段，寫改好的整段：name 跟原本一樣；要幫他改名字的話 name 寫新的、old 寫原本的。少了結局、岔路或同行旅人就補新的；種子有問題就整個 seed 重寫。',
                 '只放有改的段落，沒改的整個不要出現，也不要寫「沒問題」當內容；整份都沒問題就只寫 note。',
-                '格式：', '<review>', SEED_FMT, '<player>改好的玩家是誰</player>', '<person name="名字" old="原本的名字，沒改名就不寫這格">改好的整段</person>', '<node name="原本的名字" when="什麼情況下會碰到">改好的整段</node>',
+                '格式：', '<review>', SEED_FMT, '<player>改好的玩家是誰</player>', '<person name="名字" old="原本的名字，沒改名就不寫這格">改好的整段</person>',
+                '<traveler name="名字" old="原本的名字，沒改名就不寫這格">改好的整段</traveler>', '<node name="原本的名字" when="什麼情況下會碰到">改好的整段</node>',
                 '<ending name="原本的名字" kind="good、bad、surprise 三選一">改好的整段</ending>', '<secret>改好的祕密與真相</secret>',
                 '<note>給寫的人和' + U + '的一句話：你看了什麼、改了什麼</note>', '</review>', SAY_FMT);
         } else if (job.kind === 'check') {
@@ -892,6 +916,20 @@
             });
         }
         return pickRefs(hits);
+    }
+    // 上班須知：照條目名找（空白、大小寫不計），【奧瑞亞-視差】先找；關著的條目也算。世界書讀不到、沒這條都回空字串
+    async function shiftBrief() {
+        const A = _lb();
+        if (!A || !A.getLorebookEntries) return '';
+        const want = _fold(BRIEF_TITLE).replace(/\s+/g, '');
+        const books = ['【奧瑞亞-視差】'].concat(REF_BOOKS.filter(x => x !== '【奧瑞亞-視差】'));
+        for (const book of books) {
+            let es = [];
+            try { es = (await A.getLorebookEntries(book)) || []; } catch (e) {}
+            const hit = es.find(e => e && _fold(e.comment || '').replace(/\s+/g, '').indexOf(want) >= 0 && String(e.content || '').trim());
+            if (hit) return _cutBlock(hit.content, LEN.BRIEF);
+        }
+        return '';
     }
 
     // 世界門檔案庫裡已經有的世界名（＋還沒展開的白板企劃）：寫企劃書時別撞名。世界門沒載好就算了
@@ -1127,6 +1165,7 @@
             if (!who) throw new Error('找不到' + pick.name);
             const refs = (rec.did === 'write' || rec.did === 'check') ? await worldRefs(refTerms(plan.job, plan.board)) : [];
             const ctx = rec.did === 'plan' ? { usedNames: await _gateNames() } : {};
+            try { ctx.brief = await shiftBrief(); } catch (e) {}
             const msgs = buildMessages(plan.job, who, plan.board, refs, who.user, ctx);
             reply = who.type === 'xiaoji' ? await _callXiaoji(who, msgs, rec.did) : await _callDorm(who, msgs);
             const p = parseReply(reply, plan.job);
@@ -1373,13 +1412,13 @@
         BOOK, KINDS, JOBS, CAPS, DESTS, OPEN_DESTS, ENDING_KINDS, _cfg,
         getStaff, saveStaff, getBoard, waitingNow, shifts, act, visit, wake, candidates, setSlot, setOn, setTimes, resolve, faceOf, lookOf, onChange,
         waitCount, canHatch, countText, isAsleep, canWatch,
-        runShift, tick, start, worldRefs, isBusy: () => !!_busy,
+        runShift, tick, start, worldRefs, shiftBrief, isBusy: () => !!_busy,
         prepareWorld, commitWorld, undoWorld, attach, isAttached, deliverGate, takeBackGate, gateStatus, countPlan, planCountText, seedText: _seedText,
         _lockDataForTest: _lockData, _saveBoardForTest: saveBoard,
         _pure: { emptyBoard, normBoard, waitCount, canHatch, isAsleep, nextSlot, unstick, pickJob, parseReply, applyResult, talkDone, addTalk,
             addMaterial, hatch, redo, drop, countKinds, countText, markWorld, markSent, planOf, planText, countPlan, refTerms, pickRefs, buildMessages,
             safeLink, youTubeUrl, youTubeStart, noteSong, cutNice: _cutNice, materialFrom, watchMessages, lyricPlan, lyricsMessages, songAt,
-            BOOK, REF_BOOKS, CAPS, LEN, LYR, KINDS, JOBS, DESTS, SEED_LEN, SLEEP_MS },
+            BOOK, REF_BOOKS, BRIEF_TITLE, CAPS, LEN, LYR, KINDS, JOBS, DESTS, SEED_LEN, SLEEP_MS },
     };
     win.OS_SN_BOARD = OS_SN_BOARD;
     if (win !== window) { try { window.OS_SN_BOARD = OS_SN_BOARD; } catch (e) {} }

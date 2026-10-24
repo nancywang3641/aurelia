@@ -19,7 +19,7 @@
     const K_FOLK = 'folk';       // 她自己在面板裡加的角色簿（跨聊天室共用，跟 K_WORLDS 同層）
                                  // 🚨刻意不存世界書：她討厭的就是建條目那套儀式（開書、填 comment、
                                  //   填鑰匙、選插入位置，然後條目一多就再也找不到）。這裡建完立刻能勾。
-    const K_PLANS = 'sn_plans';  // 🧑‍💼 SN 32 樓白板送來、還沒展開的企劃：[{id,title,front,seed,people,nodes,endings,secret,by,at}]（跨聊天室，跟 K_WORLDS 同層）
+    const K_PLANS = 'sn_plans';  // 🧑‍💼 SN 32 樓白板送來、還沒展開的企劃：[{id,title,front,seed,player,people,travelers,nodes,endings,secret,by,at}]（跨聊天室，跟 K_WORLDS 同層；travelers 10-25 才有）
     const K_CURRENT = 'current'; // 這個聊天室目前在哪個世界（世界 id；撤離清空）— world_rules_injector 依此翻模組條目
     const BOOK_PARA = '【奧瑞亞-視差】';
     const BOOK_CORE = '【奧瑞亞-人物核心】';   // 她的熟人檔案庫（視差模式刻意不掛這本＝認知隔離，
@@ -519,11 +519,29 @@
         }
         return s;
     }
-    async function _expandTravelers(seed, worldText, note, pref) {
+    // 🧑‍💼 白板企劃寫了同行旅人：照它召集（名字、本行、為人、動機照寫），跟岔路或結局的牽連寫進 hook，入隊後進條目給主持AI。
+    //   企劃寫不滿四位的其餘自己補（hook 留空）。只給這個世界的第一批：再召集一批還照企劃，只會召回同一批人
+    function _planTravLine(plan, hasWish) {
+        const list = (plan && Array.isArray(plan.travelers)) ? plan.travelers.filter(t => t && t.name && t.content) : [];
+        if (!list.length) return '';
+        const nodes = (plan.nodes || []).map(n => n.name + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '')).join('、');
+        const endings = (plan.endings || []).map(e => e.name).join('、');
+        return '【白板企劃·同行旅人】這個世界是 SN 32 樓的企劃室事先規劃好的,企劃書替同行旅人寫了下面幾位。照這份召集:' +
+            '名字、在奧瑞亞做什麼、為人、為什麼報名照企劃寫,可以補細節,不要改掉;企劃寫不滿四位的,其餘幾位你自己補。' +
+            '企劃跟下面的配額衝突時以企劃為準,自己補的那幾位要讓整隊仍然滿足配額。' +
+            (hasWish ? '玩家在【這一趟想找的人】寫的跟企劃衝突時,以玩家寫的為準。' : '') + '\n' +
+            list.map(t => '- ' + t.name + ':' + t.content).join('\n') + '\n' +
+            (nodes ? '企劃的岔路:' + nodes + '\n' : '') + (endings ? '企劃的結局:' + endings + '\n' : '') +
+            'hook 寫這位旅人跟哪個岔路或結局有關、怎麼有關(照企劃寫的;你自己補的那幾位寫空字串),他的 reason、goal、breakup 要跟 hook 接得上。' +
+            '岔路與結局只是可能會發生的事,不要寫成他一定會做的事。\n';
+    }
+    async function _expandTravelers(seed, worldText, note, pref, plan) {
+        const planT = _planTravLine(plan, !!String((pref && pref.note) || '').trim());
         const prompt =
             '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
             _toneLine(seed) +   // 喜劇向的世界配四段悲愴身世會很出戲
             _noteLine(note) +
+            planT +
             _prefLines(pref) +
             '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。性格差異明顯。\n' +
             // 🚨這四個人是各自報名、在大廳湊在一起的陌生人,不是一支照著世界主題配好的專業小隊。
@@ -538,6 +556,7 @@
             '"skill":"{一句話擅長,可以是專業本事,也可以只是生活裡練出來的小能力}","look":"{一句話外貌印象}","record":"{一句話視差資歷}",' +
             '"reason":"{一句話前往此世界的動機,份量可輕可重}",' +
             '"fit":"{他跟這個世界的關係,一句:可以正好對上,也可以完全不搭、甚至是會出事的錯位}","weakness":"{明確的弱點,一句,要能在跑團裡出事}","goal":"{他自己的個人目標,一句}",' +
+            (planT ? '"hook":"{他跟企劃哪個岔路或結局有關、怎麼有關,一句;你自己補的人寫空字串}",' : '') +
             '"clash":"{最可能跟哪一類隊友或哪種做法起衝突,一句}","breakup":"{在什麼條件下他會離隊或翻臉,一句}",' +
             '"greet":"{在大廳被搭話時的開場白1~2句,符合性格}",' +
             // 🎨 這欄是給生圖用的，不給玩家看：大廳小人要照這串畫，所以只寫外觀、不寫劇情
@@ -601,6 +620,7 @@
             look: String(t.look || ''), record: String(t.record || ''), reason: String(t.reason || ''),
             fit: String(t.fit || ''), weakness: String(t.weakness || ''), goal: String(t.goal || ''),
             clash: String(t.clash || ''), breakup: String(t.breakup || ''),
+            hook: String(t.hook || ''),   // 🧑‍💼 白板企劃寫的旅人：跟哪個岔路或結局有關（給主持AI，身分卡不顯示）
             greet: String(t.greet || ''), sprite: String(t.sprite || ''),
             quiz: (Array.isArray(t.quiz) ? t.quiz : []).slice(0, 3).map(q => ({
                 q: String((q && q.q) || ''),
@@ -1000,7 +1020,8 @@
             .map(t => '- ' + t.name + '(' + t.job + '):' + t.persona + ' ' + t.origin +
             (t.skill ? ';擅長' + t.skill : '') + (t.fit ? ';與這個世界的關係:' + t.fit : '') +
             (t.goal ? ';個人目標:' + t.goal : '') + (t.weakness ? ';弱點:' + t.weakness : '') +
-            (t.clash ? ';容易起衝突於:' + t.clash : '') + (t.breakup ? ';離隊或翻臉的條件:' + t.breakup : '')).join('\n');
+            (t.clash ? ';容易起衝突於:' + t.clash : '') + (t.breakup ? ';離隊或翻臉的條件:' + t.breakup : '') +
+            (t.hook ? ';跟這個世界可能的岔路或結局的牽連:' + t.hook : '')).join('\n');
         // 🚨旅人的「演法」要寫在條目(每一輪都看得到),不能只靠開場指令那一段——
         //   幾百輪後開場早淡出上下文,主持AI就滑回「隊友=主角衛星」的預設:
         //   幹什麼都以玩家目標為準、全員永遠黏在一起、分歧自動被抹平(Rae 實測回報)。
@@ -3258,7 +3279,7 @@
         // 連接設定是逐次隨請求帶的(不是切全域),兩支同時在跑不會互相踩。
         // 面板或成就掛了就當這個世界沒有那一項,不能連累旅人與世界存檔。
         const [trav, panel, achv] = await Promise.all([
-            _expandTravelers(seed, r.text, note),
+            _expandTravelers(seed, r.text, note, null, plan),
             _expandPanel(seed, r.text).catch(e => { console.warn('[Worldgate③] 面板生成失敗', e); return null; }),
             _expandAchv(seed, r.text).catch(e => { console.warn('[Worldgate③] 成就生成失敗', e); return null; }),
         ]);
@@ -3280,7 +3301,8 @@
             achv: achv || null,     // 🏅 這個世界的成就清單;解鎖仍走既有的成就標記,這裡只是清單
             visits: 0, ts: Date.now(),
             // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
-            plan: plan ? { from: plan.id, title: plan.title || '', front: plan.front || '', nodes: plan.nodes || [], endings: plan.endings || [], secret: plan.secret || '', people: plan.people || [] } : null,
+            //   同行旅人那欄也留著：第一批旅人沒召集到時，詳情頁「召集旅人」還要照它召
+            plan: plan ? { from: plan.id, title: plan.title || '', front: plan.front || '', nodes: plan.nodes || [], endings: plan.endings || [], secret: plan.secret || '', people: plan.people || [], travelers: plan.travelers || [] } : null,
         };
         const wrote = await _writeEntry(w, r.text);
         if (!wrote) { _toast('世界條目寫入失敗(確認已匯入' + BOOK_PARA + ')'); onFail(); return; }
@@ -3961,11 +3983,13 @@
                 await _saveWorld(w);
                 _busy = true;
                 _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
+                // 🧑‍💼 白板企劃的同行旅人只給第一批：名單上還一個人都沒有（展開時那次沒召集到）才照企劃召，已經有人了再照企劃只會召回同一批
+                const firstBatch = !(w.travelers || []).some(t => t && !t.gone);
                 const trav = await _expandTravelers(
                     { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept, twist: w.twist },
                     w.entryText || entryText || w.concept || w.name,
                     w.note || '',   // 當初展開時的追加要求要跟著帶,不然新召的旅人會跟這個世界對不上
-                    pref);
+                    pref, firstBatch ? w.plan : null);
                 _busy = false;
                 if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w, 2); return; }
                 // 同名的不重複收（它偶爾會再抽到上一批的人）
