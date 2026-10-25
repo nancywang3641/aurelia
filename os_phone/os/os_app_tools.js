@@ -182,6 +182,7 @@
             if (now - c.last < c.mins * 60 * 1000) continue;
             const rec = apps.find(function (a) { return a && String(a.id) === ids[i]; });
             if (!rec || !canWake(rec)) continue;
+            if (win.AppRuntime && win.AppRuntime.needsConsent && win.AppRuntime.needsConsent(rec)) continue;   // 別人做的、她還沒同意過：背景問不了她，先不叫
             setWakeCfg(ids[i], { last: now });                  // 不管擲中沒，重新計時
             if (_isOpen(ids[i])) continue;                      // 她正開著這個 app：不在背後再開一份
             if (Math.random() * 100 >= c.chance) continue;

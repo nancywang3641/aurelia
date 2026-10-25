@@ -145,6 +145,25 @@
         return function cleanup() { try { iframe.remove(); } catch (e) {} };
     }
 
-    win.AppRuntime = { mountAppIframe: mountAppIframe };
+    // 🔐 別人做的 app（應用工坊貼上／載入 .html 的）第一次跑之前先問一次，照酒館助手匯入腳本的做法。
+    //   app 跑在上面那個 iframe 裡，讀得到整個奧瑞亞（設定、金鑰、用她的接口叫模型），所以來路不明的先讓她點頭。
+    //   rec.trusted === false＝匯入時還沒同意過；沒有這一欄＝這版以前就裝好的（她早就在跑了）或創作室做的，都不問。
+    function needsConsent(rec) { return !!(rec && rec.source === 'import' && rec.trusted === false); }
+    function askToRun(name) {
+        const nm = String(name || '').trim();
+        return win.AUI.confirm(
+            (nm ? '「' + nm + '」' : '這個應用') + '不是用創作室做的。打開之後，它看得到你在奧瑞亞的所有設定（包括金鑰），也能用你的接口叫模型、花你的額度。\n確定是信得過的人給的再打開。',
+            { title: '這個應用是別人做的', okText: '打開', cancelText: '先不要', danger: true });
+    }
+    // 已安裝的 app 要跑之前叫這支：不用問的直接 true；問了按「打開」就記在 app 上（之後不再問），按「先不要」回 false
+    async function ensureConsent(rec) {
+        if (!needsConsent(rec)) return true;
+        if (!(await askToRun(rec.name))) return false;
+        rec.trusted = true;
+        try { if (win.OS_DB && win.OS_DB.savePhoneApp) await win.OS_DB.savePhoneApp(rec); } catch (e) { console.warn('[AppRuntime] 同意紀錄沒存成，下次打開會再問', e); }
+        return true;
+    }
+
+    win.AppRuntime = { mountAppIframe: mountAppIframe, needsConsent: needsConsent, askToRun: askToRun, ensureConsent: ensureConsent };
     console.log('✅ AppRuntime（app iframe 執行器）模組就緒');
 })();

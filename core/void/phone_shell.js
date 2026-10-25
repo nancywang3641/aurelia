@@ -566,10 +566,13 @@
             _o[id] = Date.now(); _lsSet('aurelia_app_opened', JSON.stringify(_o), 'app 最近打開的時間');   // 最近使用時間(給應用工坊顯示)
             container.innerHTML = '<div class="aps-loading">載入中…</div>';
             const dbp = (win.OS_DB && win.OS_DB.getPhoneApp) ? win.OS_DB.getPhoneApp(id) : Promise.resolve(null);
-            Promise.resolve(dbp).then(function (rec) {
+            Promise.resolve(dbp).then(async function (rec) {
                 if (!rec || !rec.html) { container.innerHTML = '<div class="aps-fail">app 內容遺失，請到應用商店重裝</div>'; return; }
-                if (win.AppRuntime && win.AppRuntime.mountAppIframe) win.AppRuntime.mountAppIframe(container, rec.html, { preview: false, appId: rec.id || id, provider: rec.provider });
-                else container.innerHTML = '<div class="aps-fail">app 執行器未載入</div>';
+                const R = win.AppRuntime;
+                if (!R || !R.mountAppIframe) { container.innerHTML = '<div class="aps-fail">app 執行器未載入</div>'; return; }
+                // 🔐 匯入後沒預覽過就裝上桌面的別人做的 app：第一次打開先問（按「先不要」回主畫面，不跑）
+                if (R.ensureConsent && !(await R.ensureConsent(rec))) { _home(); return; }
+                R.mountAppIframe(container, rec.html, { preview: false, appId: rec.id || id, provider: rec.provider });
             }).catch(function () { container.innerHTML = '<div class="aps-fail">app 載入失敗</div>'; });
             // iframe 由 _home 清空容器時一併移除，無需回傳 cleanup
         };

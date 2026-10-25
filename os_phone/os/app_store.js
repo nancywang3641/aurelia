@@ -147,8 +147,13 @@
       +   '<div class="ws-success hidden" id="ws-success"><div class="ws-suc-check"><i class="fa-solid fa-check"></i></div><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
       + '</div>';
 
+    // 🔐 匯入框裡她按過「打開」的那一份 HTML：同一份再預覽不再問、裝上桌面時記成已同意（app_runtime.js 的 askToRun）。
+    //   內容改過就是另一份，再問一次。從「原始碼」載進來的是她已經在跑的 app，直接算同意過。
+    let _okHtml = '';
+
     function launch(c) {
         if (!c) return;
+        _okHtml = '';
         c.innerHTML = STORE_HTML;
         _applyAssets(c);
         // 首頁返回鈕：退出工坊 app 回手機桌面（phone_shell 已把 PhoneSystem.goHome 接成回桌面）
@@ -254,6 +259,7 @@
             mkRow('fa-code', '原始碼', function () {
                 const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
                 const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
+                if (!(win.AppRuntime && win.AppRuntime.needsConsent && win.AppRuntime.needsConsent(a))) _okHtml = String(a.html || '').trim();   // 預覽時比的是 trim 過的框內容
                 _go(c, 'import'); _toast(c, '原始碼已載入「匯入」框，可全選複製');
             }),
             mkRow('fa-pen', '改名', async function () {
@@ -318,9 +324,11 @@
             const help = (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('as_wake') : '';
             const tog = mkRow('fa-clock-rotate-left', '自己動', null, { toggle: true, on: cfg.on });
             const lab = tog.querySelector('.ws-act-label'); if (lab && help) lab.insertAdjacentHTML('beforeend', help);
-            tog.addEventListener('click', function (e) {
+            tog.addEventListener('click', async function (e) {
                 if (e.target && e.target.closest && e.target.closest('.aui-help')) return;
                 const on = !T.wakeCfg(a.id).on;
+                // 🔐 開了它會在背景自己跑：別人做的、還沒同意過的，開之前先問（背景跑的時候問不了）
+                if (on && win.AppRuntime && win.AppRuntime.ensureConsent && !(await win.AppRuntime.ensureConsent(a))) return;
                 T.setWakeCfg(a.id, { on: on });
                 const t = tog.querySelector('.ws-act-tog'); if (t) t.classList.toggle('on', on);
             });
@@ -475,11 +483,23 @@
             };
             r.readAsText(f);
         });
-        prevBtn.addEventListener('click', function () {
+        let asking = false;   // 問的窗還開著時又按一次預覽，別疊第二個窗
+        prevBtn.addEventListener('click', async function () {
             const html = (c.querySelector('#as-im-html').value || '').trim();
             if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '看起來不是完整 HTML 面板'); return; }
+            const R = win.AppRuntime;
+            if (!R) return;
+            // 🔐 貼進來的是別人做的：這一份第一次跑之前先問，按「先不要」就不預覽
+            if (html !== _okHtml && R.askToRun) {
+                if (asking) return;
+                asking = true;
+                let ok = false;
+                try { ok = await R.askToRun((c.querySelector('#as-im-name').value || '').trim()); } finally { asking = false; }
+                if (!ok) return;
+                _okHtml = html;
+            }
             c.querySelector('#as-im-prev-wrap').classList.remove('hidden');
-            if (win.AppRuntime) win.AppRuntime.mountAppIframe(c.querySelector('#as-im-prev'), html, { preview: true });
+            R.mountAppIframe(c.querySelector('#as-im-prev'), html, { preview: true });
         });
         installBtn.addEventListener('click', function () {
             const name = (c.querySelector('#as-im-name').value || '').trim();
@@ -487,7 +507,8 @@
             const html = (c.querySelector('#as-im-html').value || '').trim();
             if (!name) { _toast(c, '請填應用名稱'); return; }
             if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '請貼上完整 HTML'); return; }
-            _install(c, { name: name, emoji: emoji, iconUrl: '', html: html, source: 'import' });
+            // trusted：預覽時按過「打開」的同一份＝已同意；沒預覽就裝的記 false，第一次從桌面打開再問
+            _install(c, { name: name, emoji: emoji, iconUrl: '', html: html, source: 'import', trusted: html === _okHtml });
         });
     }
 
