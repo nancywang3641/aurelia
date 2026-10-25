@@ -127,6 +127,7 @@
             layer.className = 'vnep-bglayer';
             layer.style.backgroundImage = _bgUrl(url);
             root.insertBefore(layer, root.firstChild);   // 要在 .vnep-ui 前面，不然蓋在面板上
+            _enterBg(layer);                              // 圖晚到、面板還在進場：照樣從暗處推近
             return;
         }
         if (!fade) { cur.style.backgroundImage = _bgUrl(url); return; }
@@ -298,6 +299,7 @@
     }
 
     // 面板尺寸一變就重算溢出（酒館聊天欄是可以拖寬拖窄的）。只留一個觀察者，換世界時拆掉。
+    // 🚨進場還在滑的時候不量：那時量到的是滑到一半的位置，會把正在進場的按鈕當成跑出去、拉歪一輩子
     let _ro = null;
     function _watchResize(root) {
         _unwatch();
@@ -305,9 +307,90 @@
         let t = null;
         _ro = new ResizeObserver(() => {
             clearTimeout(t);
-            t = setTimeout(() => { try { _guardOverflow(root); } catch (e) {} }, 120);
+            t = setTimeout(() => { try { _guardOverflow(root); } catch (e) {} }, Math.max(120, _enterUntil - Date.now() + 40));
         });
         _ro.observe(root);
+    }
+
+    // ── 🎬 進場：滑進來（10-26 她從三個小樣挑的 A，參考資料/vn_end_entrance_LAB.html）──
+    //   底圖從暗處慢慢推近；標題、裝飾和每一顆入口從離它最近的那條邊滑進來，照閱讀順序一顆接一顆，
+    //   右上的系統鍵最後。每章演完都會看到一次 → 整段壓在 1.3 秒內。
+    //   面板是模型生的，程式只認得兩種東西：帶 data-act 的入口（生成規則規定一定有），和最外層的其他東西
+    //   （標題、裝飾）；模型把整頁包在一個滿版外框裡的，往裡拆一層再找。
+    //   🚨動的是 translate／opacity 這兩個獨立屬性（Web Animations），不碰模型自己寫的 transform——
+    //     它歪一點、轉一點、溢出守衛拉回來的位移都還在。動畫一結束就整個拿掉，不留任何樣式。
+    //   演出動畫關掉、或系統要求減少動態 → 不演，模型寫的待機小動作也一起停（.vnep-still）。
+    const SYS_ACTS = ['phone', 'settings', 'home'];
+    const ENTER_MS = 1300;
+    let _enterUntil = 0;
+    function _motionOk() {
+        try {
+            if (localStorage.getItem('aurelia_reveal_fx') === '0') return false;   // 大廳設置的「演出動畫」
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false;
+            return typeof document.body.animate === 'function';
+        } catch (e) { return false; }
+    }
+    function _enterPieces(root) {
+        const ui = root.querySelector('.vnep-ui');
+        const box = root.getBoundingClientRect();
+        if (!ui || !box.width || !box.height) return null;
+        const area = box.width * box.height;
+        const items = [], holders = [];
+        const walk = (parent, depth) => {
+            Array.prototype.forEach.call(parent.children, el => {
+                if (el.tagName === 'STYLE') return;
+                const r = el.getBoundingClientRect();
+                if (!r.width || !r.height) return;
+                if (el.matches('[data-act]')) { items.push(el); return; }
+                if (el.querySelector('[data-act]')) {
+                    // 裝著入口的外框：滿版的往裡拆，一般大小的（像左邊那條入口列）淡入、裡面的入口各自滑
+                    if (depth < 2 && r.width * r.height > area * 0.6) walk(el, depth + 1);
+                    else { holders.push(el); el.querySelectorAll('[data-act]').forEach(b => items.push(b)); }
+                    return;
+                }
+                items.push(el);
+            });
+        };
+        walk(ui, 0);
+        const list = items.map(el => {
+            const r = el.getBoundingClientRect();
+            const cx = (r.left + r.width / 2 - box.left) / box.width, cy = (r.top + r.height / 2 - box.top) / box.height;
+            const d = { left: cx, right: 1 - cx, top: cy, bottom: 1 - cy };
+            return {
+                el: el, cx: cx, cy: cy,
+                edge: Object.keys(d).sort((a, b) => d[a] - d[b])[0],          // 從離它最近的那條邊進來
+                sys: SYS_ACTS.indexOf(el.getAttribute('data-act')) >= 0,
+                big: r.width * r.height > area * 0.35,                         // 大片裝飾滑起來像整頁在晃：只淡入
+            };
+        });
+        // 閱讀順序：上到下、左到右；系統鍵最後
+        list.sort((a, b) => (a.sys - b.sys) || ((a.cy - b.cy) * 3 + (a.cx - b.cx)));
+        return { list: list, holders: holders };
+    }
+    const _OFF = { left: '-28px 0', right: '28px 0', top: '0 -28px', bottom: '0 28px' };
+    function _enter(root) {
+        const p = _enterPieces(root);
+        if (!p) return;
+        _enterUntil = Date.now() + ENTER_MS;
+        const bg = root.querySelector(':scope > .vnep-bglayer');
+        if (bg) _enterBg(bg);
+        p.holders.forEach(h => h.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 200, delay: 150, fill: 'backwards' }));
+        p.list.forEach((x, i) => x.el.animate(
+            x.big ? [{ opacity: 0 }, { opacity: 1 }]
+                  : [{ opacity: 0, translate: _OFF[x.edge] }, { opacity: 1, translate: '0 0' }],
+            { duration: 420, delay: 200 + Math.min(i * 55, 650), easing: 'cubic-bezier(.2,.9,.3,1.15)', fill: 'backwards' }));
+    }
+    // 底圖：從暗處慢慢推近。面板已經演到一半才掛上的（圖晚到），用剩下的時間演完，最少半秒
+    function _enterBg(layer) {
+        const left = _enterUntil - Date.now();
+        if (left <= 0 || typeof layer.animate !== 'function') return;
+        layer.animate([{ opacity: 0, scale: 1.08, filter: 'brightness(.5)' }, { opacity: 1, scale: 1, filter: 'brightness(1)' }],
+                      { duration: Math.max(500, left), easing: 'cubic-bezier(.2,.7,.2,1)', fill: 'backwards' });
+    }
+    // 不演的時候：模型寫的待機小動作也停（CSS 那邊用 .vnep-still 蓋掉，SVG 自己的動畫另外暫停）
+    function _holdStill(root) {
+        root.classList.add('vnep-still');
+        root.querySelectorAll('svg').forEach(s => { try { s.pauseAnimations(); } catch (e) {} });
     }
     function _unwatch() { try { _ro && _ro.disconnect(); } catch (e) {} _ro = null; }
 
@@ -383,6 +466,9 @@
         root.classList.add('active');
         _guardContrast(root);   // 要在掛上 active、文字也寫定之後才量，量的是最終畫面
         _guardOverflow(root);
+        // 進場排在位置拉正之後：從最近的邊滑進來，要先知道它最後停在哪
+        if (_motionOk()) { try { _enter(root); } catch (e) { console.warn('[VN末尾面板] 進場沒演成：' + e.message); } }
+        else _holdStill(root);
         _watchResize(root);     // 聊天欄被拉寬拉窄時要重算，不然又跑出去
         const miss = Object.keys(acts2 || {}).filter(a => found.indexOf(a) < 0);
         console.log('[VN末尾面板] 已套用「' + (w.name || '未命名世界') + '」的活動面板' +
@@ -396,7 +482,8 @@
         _unwatch();
         _toggleNative([]);   // 原生系統鍵先還原，不然面板拆了按鈕也跟著不見
         if (!root) return;
-        root.classList.remove('active', 'has-bg');
+        root.classList.remove('active', 'has-bg', 'vnep-still');
+        _enterUntil = 0;
         root.style.removeProperty('--vnep-bg');
         root.innerHTML = '';
     }
