@@ -586,7 +586,7 @@
     const SEED_NAMES = { genre: '題材', type: '基調', name: '世界名', concept: '一句話', twist: '核心規則', daily: '當地人的日常', style: '視覺風格', lure: '最吸引人的', danger: '主要危險', crisis: '正在發生的事' };
     function _seedText(s) { return Object.keys(SEED_NAMES).filter(k => s && s[k]).map(k => SEED_NAMES[k] + '：' + s[k]).join('｜'); }
     function planText(d) {
-        return '標題：' + d.title + '\n方向：' + d.front + '\n世界種子：' + _seedText(d.seed) + (d.player ? '\n玩家是誰：' + d.player : '') +
+        return '標題：' + d.title + '\n方向：' + d.front + '\n世界種子：' + _seedText(d.seed) + '\n玩家是誰：' + (d.player || '（還沒寫）') +
             '\n人物：\n' + (d.people || []).map(p => '（' + p.name + '）' + p.content).join('\n') +
             '\n同行旅人：\n' + ((d.travelers || []).length ? d.travelers.map(t => '（' + t.name + '）' + t.content).join('\n') : '（還沒寫）') +
             '\n岔路：\n' + (d.nodes || []).map(n => '（' + n.name + (n.when ? '｜什麼情況下會碰到：' + n.when : '') + '）' + n.content).join('\n') +
@@ -596,7 +596,7 @@
     function _talkText(talk, U) { return (talk || []).map(t => (t.role === 'rae' ? U : t.name) + '：' + t.text).join('\n'); }
     // 身體改造那句照 os_worldgate.js 展開世界的【身體】規則；旅人照它召集旅人那段（各自報名的陌生人、不是配好的小隊）
     const GATE_WHAT = '世界門是玩家從奧瑞亞進去的異世界：她會在裡面生活、冒險。進去的玩家和同行旅人都是奧瑞亞的人類，落地時那個世界的法則會把他們的身體改造成能在那裡活下去的樣子，為人和性格不變。' +
-        '愛麗絲照企劃書把世界展開成完整的世界檔案，再照企劃書的同行旅人那欄召集四位旅人（企劃寫了誰就找誰，不滿四位的她自己補），他們在大廳等她搭話，她挑誰跟她同一趟進去。';
+        '愛麗絲照企劃書把世界展開成完整的世界檔案，再照企劃書的同行旅人那欄召集四位旅人（企劃寫了誰就找誰，不滿四位的由愛麗絲補），他們在大廳等玩家搭話，玩家挑誰跟她同一趟進去。';
     // 冷讀抓到的：人數跟「四位」對不上、「陪她」像為她而來、綁岔路的人沒被挑或半路脫隊那條路就斷、括號三項會被照抄成每位一個模子
     function _travelerNeed(U) {
         return '2～' + CAPS.TRAVELERS + ' 位會跟' + U + '同一趟進去的同行旅人。他們是奧瑞亞的普通人，在大廳各自報名這個世界、彼此不認識；不是這個世界的人，也不是 person 那幾位。' +
@@ -687,6 +687,12 @@
             const d = b.drafts.find(x => x.id === job.draftId);
             L.push('【這班：挑毛病】', ((d && d.writer && d.writer.name) || '同事') + '寫了這份世界門的企劃書，你來挑毛病：', GATE_WHAT, d ? planText(d) : '');
             if (d && d.notes.length) L.push('寫的人留言：' + d.notes.map(n => n.text).join('／'));
+            // 討論也給挑毛病的人看：下面要他對照「她在討論裡說的」，以前只給企劃書、他根本看不到（10-25 冷讀抓到）
+            const talk = (d && d.talk) || [];
+            if (talk.length) L.push('寫之前大家討論過的（「' + U + '：」開頭的是' + U + '本人說的話）：', _talkText(talk, U));
+            const raeSaid = talk.some(t => t.role === 'rae');
+            // 岔路、結局也照人物那樣用 old 改名；補新的就只寫 name（以前格式寫 name="原本的名字"，補新的不知道填什麼）
+            const OLD = 'old="原本的名字，只有改名才寫這格"';
             L.push('檢查：',
                 '・人物有沒有缺背景（' + PERSON_NEED + '）',
                 '・同行旅人照不照這個要求：' + _travelerNeed(U) + '還沒寫同行旅人的話就補上。',
@@ -694,12 +700,13 @@
                 '・每個結局走不走得到：有沒有岔路或條件通往它',
                 '・壞的結局是不是真的會發生，還是寫成最後一定會被救回來',
                 '・人物、岔路、結局、祕密之間有沒有矛盾；有沒有碰到素材界線',
-                '・玩家是誰有沒有寫清楚；討論裡' + U + '說想當什麼，有沒有照她說的',
-                '有問題就直接改那一段，寫改好的整段：name 跟原本一樣；要幫他改名字的話 name 寫新的、old 寫原本的。少了結局、岔路或同行旅人就補新的；種子有問題就整個 seed 重寫。',
+                '・玩家是誰有沒有寫清楚' + (raeSaid ? '；討論裡' + U + '說想當什麼、想跟誰一起進去，企劃書有沒有照她說的（跟上面的要求衝突時以她說的為準）' : ''),
+                '有問題就直接改那一段，寫改好的整段：沒改名的話 name 寫原本的名字、不寫 old；要改名字的話 name 寫新的、old 寫原本的。' +
+                    '少了結局、岔路或同行旅人就補新的：name 寫新取的名字，不寫 old。種子有問題就整個 seed 重寫。',
                 '只放有改的段落，沒改的整個不要出現，也不要寫「沒問題」當內容；整份都沒問題就只寫 note。',
-                '格式：', '<review>', SEED_FMT, '<player>改好的玩家是誰</player>', '<person name="名字" old="原本的名字，沒改名就不寫這格">改好的整段</person>',
-                '<traveler name="名字" old="原本的名字，沒改名就不寫這格">改好的整段</traveler>', '<node name="原本的名字" when="什麼情況下會碰到">改好的整段</node>',
-                '<ending name="原本的名字" kind="good、bad、surprise 三選一">改好的整段</ending>', '<secret>改好的祕密與真相</secret>',
+                '格式：', '<review>', SEED_FMT, '<player>改好的玩家是誰</player>', '<person name="名字" ' + OLD + '>改好的整段</person>',
+                '<traveler name="名字" ' + OLD + '>改好的整段</traveler>', '<node name="名字" ' + OLD + ' when="什麼情況下會碰到">改好的整段</node>',
+                '<ending name="名字" ' + OLD + ' kind="good、bad、surprise 三選一">改好的整段</ending>', '<secret>改好的祕密與真相</secret>',
                 '<note>給寫的人和' + U + '的一句話：你看了什麼、改了什麼</note>', '</review>', SAY_FMT);
         } else if (job.kind === 'check') {
             const d = b.drafts.find(x => x.id === job.draftId);
