@@ -4180,7 +4180,18 @@
         return Array.from(new Set(a.concat(b).filter(Boolean)));
     }
 
+    // 🌐 大廳世界門核心的環繞螢幕要的圖（lobby_stage.js 的 _orbLoad）：只給真的生出來的概念圖——
+    //   題材備圖（_fbUrl，10-26 量過那幾張網址是 404）、重開就失效的 blob: 都不給；最近建的排前面
+    async function orbitArts(max) {
+        const worlds = await _get(K_WORLDS, []);
+        return (Array.isArray(worlds) ? worlds : [])
+            .filter(w => w && typeof w.art === 'string' && w.art && !w.artFb && w.art.indexOf(_FB_BASE) !== 0 && w.art.indexOf('blob:') !== 0)
+            .sort((a, b) => (b.ts || 0) - (a.ts || 0))
+            .slice(0, max || 7)
+            .map(w => ({ id: w.id, name: String(w.name || ''), art: w.art }));
+    }
+
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode,
-        receivePlan, takeBackPlan, planStatus, usedNames };
+        receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

@@ -838,3 +838,38 @@
   filter:drop-shadow(1.5px 0 0 #d6f1ff) drop-shadow(-1.5px 0 0 #d6f1ff)
          drop-shadow(0 1.5px 0 #d6f1ff) drop-shadow(0 -1.5px 0 #d6f1ff)
          drop-shadow(0 0 14px rgba(70,165,255,.85)); }
+/* 🌐 核心的環繞螢幕（10-26，lobby_stage.js 的 _orb*；照 Vproject QUANTUM_CORE_HOVER_LAB）：半透明藍框小螢幕，上面一條標頭（編號＋世界名＋綠燈），
+   畫面疊掃描線、偶爾一道反光、偶爾閃一下。位置、大小、前後、淡入淡出由程式每幀寫；--orb-i 讓每片的閃和反光錯開 */
+.lstage-orb-scr { position:absolute; left:0; top:0; width:156px; height:100px; pointer-events:none; opacity:0; will-change:transform,opacity;
+  border-radius:6px; overflow:hidden; background:rgba(8,30,60,.5); border:1px solid rgba(160,220,255,.8);
+  box-shadow:0 0 14px rgba(70,165,255,.55), inset 0 0 12px rgba(80,170,255,.35); }
+.lstage-orb-hd { position:relative; z-index:2; display:flex; align-items:center; gap:4px; height:13px; padding:0 6px;
+  background:linear-gradient(90deg,rgba(110,190,255,.6),rgba(110,190,255,.12)); color:#eaf6ff;
+  font-size:8px; letter-spacing:1px; line-height:13px; white-space:nowrap; }
+.lstage-orb-hd b { flex:none; font:600 7px/13px ui-monospace,Consolas,monospace; color:#bfe4ff; letter-spacing:.5px; }
+.lstage-orb-hd span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.lstage-orb-hd i { flex:none; margin-left:auto; width:4px; height:4px; border-radius:50%; background:#8fffd6; box-shadow:0 0 4px #8fffd6;
+  animation:lstage-orb-blink 1.6s steps(2) infinite; }
+.lstage-orb-scr img { display:block; width:100%; height:87px; object-fit:cover; opacity:.84; filter:saturate(.85) brightness(1.06);
+  animation:lstage-orb-flick 9s infinite; animation-delay:calc(var(--orb-i, 0) * -2.1s); }
+.lstage-orb-scr::before { content:""; position:absolute; inset:13px 0 0; z-index:1; pointer-events:none;
+  background:linear-gradient(180deg,rgba(120,200,255,.16),rgba(20,70,150,.28)),
+             repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 3px); }
+.lstage-orb-scr::after { content:""; position:absolute; top:0; bottom:0; left:-60%; width:40%; z-index:1; pointer-events:none;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.22),transparent); transform:skewX(-18deg);
+  animation:lstage-orb-sheen 6s ease-in-out infinite; animation-delay:calc(var(--orb-i, 0) * -.85s); }
+.lstage-orb-cn { position:absolute; width:9px; height:9px; z-index:3; border:0 solid #dff4ff; }
+.lstage-orb-cn.a { left:2px; top:2px; border-left-width:1.5px; border-top-width:1.5px; }
+.lstage-orb-cn.b { right:2px; top:2px; border-right-width:1.5px; border-top-width:1.5px; }
+.lstage-orb-cn.c { left:2px; bottom:2px; border-left-width:1.5px; border-bottom-width:1.5px; }
+.lstage-orb-cn.d { right:2px; bottom:2px; border-right-width:1.5px; border-bottom-width:1.5px; }
+.lstage-orb-beams { position:absolute; left:0; top:0; pointer-events:none; overflow:visible; }
+.lstage-orb-beams line { stroke:#6fbcff; stroke-width:3; stroke-linecap:round; stroke-dasharray:4 7; filter:drop-shadow(0 0 3px rgba(80,170,255,.9)); }
+@keyframes lstage-orb-sheen { 0%,62% { left:-60%; } 88%,100% { left:130%; } }
+@keyframes lstage-orb-flick { 0%,90%,100% { opacity:.84; } 91% { opacity:.45; } 92% { opacity:.8; } 93.5% { opacity:.5; } 95% { opacity:.84; } }
+@keyframes lstage-orb-blink { 50% { opacity:.25; } }
+/* 大廳設置「演出動畫」關掉（.is-still）或系統要求減少動態：螢幕裡的閃、反光、綠燈也停（轉和飄由程式停） */
+.lstage-orb-scr.is-still img, .lstage-orb-scr.is-still::after, .lstage-orb-scr.is-still .lstage-orb-hd i { animation:none; }
+@media (prefers-reduced-motion: reduce) {
+  .lstage-orb-scr img, .lstage-orb-scr::after, .lstage-orb-hd i { animation:none; }
+}

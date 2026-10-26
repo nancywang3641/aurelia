@@ -191,7 +191,7 @@
             //    光用淡藍細邊＋藍光（lit-cyan），跟底座那幾圈藍光同一個調（小樣 tmp/hall_core_glow_lab.html：青銅邊在銀色核心上是一圈橘框、深藍邊像描框）
             hotspots: [
                 { obj: 'obj_core_v7', label: '世界門', icon: 'fa-globe', open: 'worldgate', cls: 'hs-core',
-                  lit: true, litCls: 'lstage-obj-lit-cyan' },
+                  lit: true, litCls: 'lstage-obj-lit-cyan', orbit: true },   // orbit＝滑過／走近時一圈世界螢幕繞著轉（_orbOpen）
             ],
         },
         room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
@@ -1313,10 +1313,16 @@
     const HS_PAD = 60;   // 同 NPC talkRect 的預設 talkPad
     // 亮／不亮：熱點掛 is-near（走近）或 is-flash（第一次進場閃一下），家具本身照 lit 那套鑲光
     function _hsLight(h, on, cls) {
-        if (on) { h.el.classList.add(cls); if (h.litEl) h.litEl.classList.add(...h.litCls); return; }
+        if (on) {
+            h.el.classList.add(cls); if (h.litEl) h.litEl.classList.add(...h.litCls);
+            if (h.orbit && cls === 'is-near') _orbOpen(h);   // 🌐 走近核心＝展開世界螢幕（第一次進場那下閃光不展開）
+            return;
+        }
         h.el.classList.remove(cls);
-        const still = h.el.classList.contains('is-near') || h.el.classList.contains('is-flash') || (h.el.matches && h.el.matches(':hover'));
+        const hover = !!(h.el.matches && h.el.matches(':hover'));
+        const still = h.el.classList.contains('is-near') || h.el.classList.contains('is-flash') || hover;
         if (h.litEl && !still) h.litEl.classList.remove(...h.litCls);
+        if (h.orbit && !hover && !h.el.classList.contains('is-near')) _orbClose();
     }
     // 每一幀：最近、搆得到的那件浮出名字＋亮起來（跟 NPC 頭上的對話泡泡同一個時機）；講話中、擺設模式不冒
     function _hsProximity(p) {
@@ -1328,6 +1334,178 @@
         if (S.hsNear) _hsLight(S.hsNear, false, 'is-near');
         S.hsNear = h;
         if (h) _hsLight(h, true, 'is-near');
+    }
+    // 🌐 世界門核心的環繞螢幕（10-26 她：「把世界門核心的環繞螢幕效果搬進大廳」；做法照 Vproject QUANTUM_CORE_HOVER_LAB）：
+    //   滑過核心（手機走近）→ 一圈半透明小螢幕從核心中心一片接一片浮出，沿壓扁的橢圓慢慢轉，每片放一個她世界的概念圖；
+    //   轉到後面變小變淡、被核心擋住，轉到前面變大蓋過核心，兩側會側過去；整圈跟著核心一起上下飄。移開 220ms 才收（滑鼠擦過邊緣不閃）。
+    //   熱點帶 orbit:true 才有（SCENES.hall 的世界門）。只有展開、收起途中跑自己的 rAF，收完就停；點開面板、舞台藏起來、擺設模式當下收掉；
+    //   換場景、離開舞台整組拆掉（_orbDrop）。
+    //   圖：OS_WORLDGATE.orbitArts（只給真的生出來的概念圖）→ 縮成 312×200 小張 blob 再放，不把整張 data URL 塞進畫面；讀不到的那張不放（不露壞圖）。
+    //   一個世界都沒有＝不展開，核心照舊亮光、浮出「世界門」。
+    //   大廳設置「演出動畫」關掉（aurelia_reveal_fx='0'）或系統要求減少動態：不轉、不飄、不閃、不跑 rAF，直接靜態排一圈（還看得到有哪些世界）。
+    const ORB_MAX = 7, ORB_PERIOD = 45, ORB_W = 156, ORB_H = 100, ORB_CORE_W = 221;   // ORB_CORE_W＝LAB 量位置時核心的寬，她縮放過核心就照比例
+    const ORB = { h: null, scr: [], beams: null, target: 0, show: 0, rot: 0.6, last: 0, raf: 0, leaveT: 0, list: null, loading: false, still: false };
+    const _orbThumbs = new Map();   // 概念圖 → 小張 blob 網址（跨場景留著，同一張不重縮；清單換了就收掉沒用到的）
+    function _orbStill() {
+        try {
+            if (localStorage.getItem('aurelia_reveal_fx') === '0') return true;
+            return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (e) { return false; }
+    }
+    function _orbThumb(art) {
+        const key = art.length + '|' + art.slice(0, 80) + art.slice(-80);
+        if (_orbThumbs.has(key)) return Promise.resolve({ key, url: _orbThumbs.get(key) });
+        return new Promise(res => {
+            const im = new Image();
+            if (!/^data:/.test(art)) im.crossOrigin = 'anonymous';
+            im.onload = () => {
+                try {
+                    const W = 312, H = 200, k = Math.max(W / im.naturalWidth, H / im.naturalHeight), sw = W / k, sh = H / k;
+                    const cv = document.createElement('canvas');
+                    cv.width = W; cv.height = H;
+                    cv.getContext('2d').drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
+                    cv.toBlob(b => {
+                        if (!b) { res(null); return; }
+                        const url = URL.createObjectURL(b);
+                        _orbThumbs.set(key, url);
+                        res({ key, url });
+                    }, 'image/jpeg', 0.82);
+                } catch (e) { res(null); }   // 外站圖沒給 CORS（畫布讀不回來）→ 這張不放
+            };
+            im.onerror = () => res(null);
+            im.src = art;
+        });
+    }
+    async function _orbLoad() {
+        if (ORB.list || ORB.loading) return;
+        ORB.loading = true;
+        let arts = [];
+        try { arts = (await window.OS_WORLDGATE?.orbitArts?.(ORB_MAX)) || []; } catch (e) {}
+        const list = [], used = new Set();
+        for (const a of arts) {
+            const t = await _orbThumb(a.art);
+            if (t) { list.push({ name: a.name, src: t.url }); used.add(t.key); }
+        }
+        _orbThumbs.forEach((url, key) => { if (!used.has(key)) { URL.revokeObjectURL(url); _orbThumbs.delete(key); } });
+        ORB.loading = false;
+        if (!ORB.h || !ORB.h.el.isConnected || !S.world) return;   // 等圖的時候換場景／離開舞台了
+        ORB.list = list;
+        _orbBuild();
+        if (ORB.target) _orbKick();
+    }
+    function _orbClear() {
+        ORB.scr.forEach(s => s.el.remove());
+        ORB.scr = [];
+        if (ORB.beams) { ORB.beams.remove(); ORB.beams = null; }
+    }
+    function _orbBuild() {
+        _orbClear();
+        const n = ORB.list.length, core = ORB.h.litEl;
+        if (!n || !core) return;
+        const NS = 'http://www.w3.org/2000/svg';
+        const beams = document.createElementNS(NS, 'svg');
+        beams.setAttribute('class', 'lstage-orb-beams');
+        beams.setAttribute('width', MAP_W); beams.setAttribute('height', MAP_H);
+        beams.setAttribute('viewBox', '0 0 ' + MAP_W + ' ' + MAP_H);
+        beams.style.zIndex = String((parseInt(core.style.zIndex, 10) || 2) - 1);   // 光束整束在核心後面
+        S.world.appendChild(beams);
+        ORB.beams = beams;
+        ORB.scr = ORB.list.map((w, i) => {
+            const el = document.createElement('div');
+            el.className = 'lstage-orb-scr' + (ORB.still ? ' is-still' : '');
+            el.style.setProperty('--orb-i', i);   // 每片的閃、反光錯開
+            el.innerHTML = '<div class="lstage-orb-hd"><b></b><span></span><i></i></div><img alt="">' +
+                '<span class="lstage-orb-cn a"></span><span class="lstage-orb-cn b"></span><span class="lstage-orb-cn c"></span><span class="lstage-orb-cn d"></span>';
+            el.querySelector('b').textContent = 'W-' + String(i + 1).padStart(2, '0');
+            el.querySelector('.lstage-orb-hd span').textContent = w.name;
+            el.querySelector('img').src = w.src;
+            S.world.appendChild(el);
+            const ln = document.createElementNS(NS, 'line');
+            beams.appendChild(ln);
+            return { el, ln, base: i / n * Math.PI * 2, bobP: 3.6 + (i % 4) * 0.7, bobO: i * 1.7 };
+        });
+    }
+    // 跟核心身上的 CSS 漂浮（lstage-hover）同步：讀那支動畫的時間，算出現在往上飄了幾 px
+    function _orbFloat(core) {
+        const a = core.getAnimations ? core.getAnimations().find(x => x.animationName === 'lstage-hover') : null;
+        if (!a || a.currentTime == null) return 0;
+        const p = (a.currentTime / 1000 % 3.4) / 3.4, e = p < 0.5 ? p * 2 : (1 - p) * 2;
+        return -14 * (e < 0.5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2);
+    }
+    function _orbPlace(now) {
+        const b = ORB.h.box, core = ORB.h.litEl, still = ORB.still, n = ORB.scr.length;
+        const k = b.w / ORB_CORE_W, cx = b.x + b.w / 2, cy = b.y + b.h * 0.48;
+        const coreZ = parseInt(core.style.zIndex, 10) || 2, fy = still ? 0 : _orbFloat(core);
+        for (let i = 0; i < n; i++) {
+            const s = ORB.scr[i];
+            const t = Math.min(1, Math.max(0, ORB.show * 1.45 - i / n * 0.45));   // 一片接一片展開
+            const r = still ? ORB.show : 1 - Math.pow(1 - t, 3);
+            const a = s.base + ORB.rot, depth = Math.sin(a), spread = 0.18 + 0.82 * r;   // depth：1＝最前面、-1＝最後面
+            const bob = still ? 0 : Math.sin(now / 1000 * Math.PI * 2 / s.bobP + s.bobO) * 5 * k;
+            const x = cx + 272 * k * Math.cos(a) * spread;
+            const y = cy + fy + 80 * k * depth * spread - 14 * k * r + bob;
+            const sc = (0.74 + 0.26 * (depth + 1) / 2) * (0.3 + 0.7 * r) * k;
+            const turn = -Math.cos(a) * 32;   // 轉到兩側時側過去
+            s.el.style.transform = 'translate(' + (x - ORB_W / 2).toFixed(1) + 'px,' + (y - ORB_H / 2).toFixed(1) + 'px) perspective(520px) rotateY(' + turn.toFixed(1) + 'deg) scale(' + sc.toFixed(3) + ')';
+            s.el.style.opacity = (r * (0.5 + 0.45 * (depth + 1) / 2)).toFixed(3);
+            // 前後層只在核心上下 15 以內：轉到前面蓋過核心，但站在底座上、核心前面的人（最近腳在核心底邊下 18）還是蓋在螢幕前面（LAB 用 ±50 會把人蓋掉）
+            s.el.style.zIndex = String(coreZ + Math.round(depth * 15) + (depth >= 0 ? 1 : -1));
+            if (r > 0.02) {
+                s.ln.setAttribute('x1', cx.toFixed(1)); s.ln.setAttribute('y1', (cy + fy + 10 * k).toFixed(1));
+                s.ln.setAttribute('x2', x.toFixed(1)); s.ln.setAttribute('y2', (y + ORB_H * sc / 2 - 4 * k).toFixed(1));
+                s.ln.style.opacity = (r * (0.45 + 0.45 * (depth + 1) / 2)).toFixed(3);
+                s.ln.style.strokeDashoffset = still ? '0' : (-now / 40).toFixed(1);   // 虛線往螢幕那頭流，像資料在傳
+                s.ln.style.display = '';
+            } else s.ln.style.display = 'none';
+        }
+    }
+    function _orbHide() {
+        ORB.scr.forEach(s => { s.el.style.opacity = '0'; s.ln.style.display = 'none'; });
+    }
+    function _orbTick(now) {
+        ORB.raf = 0;
+        if (!ORB.h || !ORB.h.el.isConnected || !ORB.scr.length) return;
+        if (S.edit || _stageHidden()) { ORB.target = 0; ORB.show = 0; _orbHide(); return; }   // 擺設模式、舞台被蓋住：直接收，不在背後空轉
+        const dt = Math.min(0.05, (now - ORB.last) / 1000);
+        ORB.last = now;
+        ORB.show += (ORB.target - ORB.show) * (1 - Math.exp(-dt / (ORB.target ? 0.32 : 0.26)));
+        ORB.rot += dt * Math.PI * 2 / ORB_PERIOD;
+        if (!ORB.target && ORB.show < 0.004) { ORB.show = 0; _orbHide(); return; }   // 收完就停，不留 rAF
+        _orbPlace(now);
+        ORB.raf = requestAnimationFrame(_orbTick);
+    }
+    function _orbKick() {
+        if (!ORB.scr.length) return;
+        if (ORB.still) {   // 靜態：一步到位，不跑 rAF
+            if (ORB.raf) { cancelAnimationFrame(ORB.raf); ORB.raf = 0; }
+            ORB.show = ORB.target;
+            if (ORB.target) _orbPlace(0); else _orbHide();
+            return;
+        }
+        if (!ORB.raf) { ORB.last = performance.now(); ORB.raf = requestAnimationFrame(_orbTick); }
+    }
+    function _orbOpen(h) {
+        clearTimeout(ORB.leaveT);
+        if (ORB.h !== h) { _orbDrop(); ORB.h = h; }
+        if (S.edit || !h.litEl) return;
+        ORB.target = 1;
+        ORB.still = _orbStill();
+        ORB.scr.forEach(s => s.el.classList.toggle('is-still', ORB.still));
+        if (!ORB.list) { _orbLoad(); return; }   // 圖第一次要先拿：拿好了還在滑過／走近就自己展開
+        _orbKick();
+    }
+    function _orbClose(now) {
+        clearTimeout(ORB.leaveT);
+        if (!ORB.h) return;
+        const go = () => { ORB.target = 0; _orbKick(); };
+        if (now) go(); else ORB.leaveT = setTimeout(go, 220);
+    }
+    function _orbDrop() {
+        clearTimeout(ORB.leaveT);
+        if (ORB.raf) cancelAnimationFrame(ORB.raf);
+        ORB.raf = 0;
+        _orbClear();
+        ORB.h = null; ORB.list = null; ORB.target = 0; ORB.show = 0;
     }
     function _npcInReach(n) {
         if (!S.player || !n) return false;
@@ -2639,6 +2817,7 @@
         obs.observe(left, { childList: true, subtree: true });
     }
     function _mountHotspots(isStatic) {
+        _orbDrop();
         S.hotspots = []; S.hsNear = null;
         (SCENES[S.scene].hotspots || []).forEach(hs => {
             let box = hs;
@@ -2672,16 +2851,20 @@
             //    光是照圖片本身的形狀長出來的，所以沙發亮沙發、圓几亮圓几，各是各的輪廓。
             //    🚨 前提是一張圖只畫一件東西 —— 一張圖畫三件，一圈光會把三件一起框起來。
             const litCls = ['lstage-obj-lit'].concat(hs.litCls ? [hs.litCls] : []);   // litCls＝這間的光換顏色（帽匠工坊是紫的）
-            const H = { el, box, litEl, litCls, reach: hs.reach || 0 };
+            const H = { el, box, litEl, litCls, reach: hs.reach || 0, orbit: !!(hs.orbit && litEl && !isStatic) };
             if (litEl) {
-                el.addEventListener('mouseenter', () => litEl.classList.add(...litCls));
-                el.addEventListener('mouseleave', () => { if (!el.classList.contains('is-near') && !el.classList.contains('is-flash')) litEl.classList.remove(...litCls); });
+                el.addEventListener('mouseenter', () => { litEl.classList.add(...litCls); if (H.orbit) _orbOpen(H); });
+                el.addEventListener('mouseleave', () => {
+                    if (!el.classList.contains('is-near') && !el.classList.contains('is-flash')) litEl.classList.remove(...litCls);
+                    if (H.orbit && !el.classList.contains('is-near')) _orbClose();
+                });
             }
             if (!isStatic) S.hotspots.push(H);
             if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
                 (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
             el.addEventListener('click', (e) => {
                 e.stopPropagation();   // 別冒泡到 .lstage-click（那層會判成點空地→走過去/結束對話）
+                if (H.orbit) { _orbClose(true); ORB.list = null; }   // 🌐 開面板就收螢幕；面板裡可能建／刪世界，下次滑過重拿一次
                 if (hs.open && HOTSPOT_ACTIONS[hs.open]) HOTSPOT_ACTIONS[hs.open]();
                 else if (hs.to) goScene(hs.to, hs.spawn, 'arrive');
             });
@@ -2798,6 +2981,7 @@
         window.LobbyTheater?.end();
         if (S.edit) window.LobbyEditor?.exit(false);
         if (S.onWheel) { try { S.root?.removeEventListener('wheel', S.onWheel, { passive: false }); } catch (e) {} S.onWheel = null; }
+        _orbDrop();   // 🌐 世界門的環繞螢幕：停 rAF、拆掉
         _closeWins();
         S.joy = null;   // 清搖桿殘留方向
         endTalk();
@@ -3016,6 +3200,7 @@
         openWorkshopPanel: _openWorkshopPanel,   // 🎩 造物工坊面板（同上：立繪模式沒有工坊可以走進去）
         rollGuestPool: () => window.LobbyNpcs?.rollGuestPool(),   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個；懶解析到 lobby_npcs.js，async 透傳）
         pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
+        orbState: () => ({ open: ORB.target, show: +ORB.show.toFixed(3), screens: ORB.scr.length, rafRunning: !!ORB.raf, still: ORB.still }),   // console 診斷用：世界門環繞螢幕現在怎樣
         openDressRoom: (a) => window.LobbyDress?.openRoom(a),   // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）
         _S: S,
         _b: {   // 🔌 拆檔橋：子模組專用（lobby_theater.js…），外部腳本別戳
