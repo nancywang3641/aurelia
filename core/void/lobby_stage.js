@@ -1340,8 +1340,9 @@
     //   轉到後面變小變淡、被核心擋住，轉到前面變大蓋過核心，兩側會側過去；整圈跟著核心一起上下飄。移開 220ms 才收（滑鼠擦過邊緣不閃）。
     //   熱點帶 orbit:true 才有（SCENES.hall 的世界門）。只有展開、收起途中跑自己的 rAF，收完就停；點開面板、舞台藏起來、擺設模式當下收掉；
     //   換場景、離開舞台整組拆掉（_orbDrop）。
-    //   圖：OS_WORLDGATE.orbitArts（只給真的生出來的概念圖）→ 縮成 312×200 小張 blob 再放，不把整張 data URL 塞進畫面；讀不到的那張不放（不露壞圖）。
-    //   一個世界都沒有＝不展開，核心照舊亮光、浮出「世界門」。
+    //   圖：先放她的世界（OS_WORLDGATE.orbitArts，只給真的生出來的概念圖），不夠 ORB_MAX 片拿藏書內建書的封面補滿（_orbLoad）；
+    //   都縮成 312×200 小張 blob 再放，不把整張 data URL 塞進畫面；讀不到的那張不放（不露壞圖）。
+    //   兩邊都拿不到圖（沒世界、封面也載不到）＝不展開，核心照舊亮光、浮出「世界門」。
     //   大廳設置「演出動畫」關掉（aurelia_reveal_fx='0'）或系統要求減少動態：不轉、不飄、不閃、不跑 rAF，直接靜態排一圈（還看得到有哪些世界）。
     const ORB_MAX = 7, ORB_PERIOD = 45, ORB_W = 156, ORB_H = 100, ORB_CORE_W = 221;   // ORB_CORE_W＝LAB 量位置時核心的寬，她縮放過核心就照比例
     const ORB = { h: null, scr: [], beams: null, target: 0, show: 0, rot: 0.6, last: 0, raf: 0, leaveT: 0, list: null, loading: false, still: false };
@@ -1352,8 +1353,9 @@
             return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
         } catch (e) { return false; }
     }
-    function _orbThumb(art) {
-        const key = art.length + '|' + art.slice(0, 80) + art.slice(-80);
+    function _orbThumb(art, ay) {   // ay＝直式圖裁橫條時取哪一段（0 頂、1 底；預設置中）
+        ay = ay == null ? 0.5 : ay;
+        const key = ay + '|' + art.length + '|' + art.slice(0, 80) + art.slice(-80);
         if (_orbThumbs.has(key)) return Promise.resolve({ key, url: _orbThumbs.get(key) });
         return new Promise(res => {
             const im = new Image();
@@ -1363,7 +1365,7 @@
                     const W = 312, H = 200, k = Math.max(W / im.naturalWidth, H / im.naturalHeight), sw = W / k, sh = H / k;
                     const cv = document.createElement('canvas');
                     cv.width = W; cv.height = H;
-                    cv.getContext('2d').drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) / 2, sw, sh, 0, 0, W, H);
+                    cv.getContext('2d').drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) * ay, sw, sh, 0, 0, W, H);
                     cv.toBlob(b => {
                         if (!b) { res(null); return; }
                         const url = URL.createObjectURL(b);
@@ -1385,6 +1387,15 @@
         for (const a of arts) {
             const t = await _orbThumb(a.art);
             if (t) { list.push({ name: a.name, src: t.url }); used.add(t.key); }
+        }
+        // 不夠一圈（或一個世界都還沒有）：拿藏書書架內建那幾本的封面補滿（10-26 她：「是不是可以拿PWA那幾張世界圖?」）。
+        //   清單只有一份，在 void_terminal.js 的 AURELIA_WORLDS（酒館、網頁版都載），別在這裡另抄網址；拿不到就只放她的世界。
+        //   封面是 640×960 直式插畫，裁橫條取偏上那段（天際線、龍都在那一帶）
+        const books = Object.values(window.AURELIA_WORLDS || {}).filter(bk => bk && bk.cover);
+        for (const bk of books) {
+            if (list.length >= ORB_MAX) break;
+            const t = await _orbThumb(bk.cover, 0.4);
+            if (t) { list.push({ name: String(bk.title || ''), src: t.url }); used.add(t.key); }
         }
         _orbThumbs.forEach((url, key) => { if (!used.has(key)) { URL.revokeObjectURL(url); _orbThumbs.delete(key); } });
         ORB.loading = false;
