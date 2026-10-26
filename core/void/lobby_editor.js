@@ -442,7 +442,7 @@
     }
     function _objLabel(o, i) {
         const f = o.file || '';
-        return f ? f.split('/').pop().replace(/\.(png|webp|jpe?g)$/i, '').replace(/_day$/, '') : ('上傳圖 ' + (i + 1));
+        return f ? f.split('/').pop().replace(/\.(png|webp|jpe?g|svg)$/i, '').replace(/_day$/, '') : ('上傳圖 ' + (i + 1));
     }
     function _toggleLayersWin() {
         if (S.edit.layersWin) { S.edit.layersWin.remove(); S.edit.layersWin = null; return; }

@@ -76,37 +76,39 @@
             // 🆕 2026-09-20 整間換素材（舊的 lobby_base_v2 + lobby_obj_01~07 + 手繪遮罩全部不再用）。
             //    新底圖是「空房」，所有家具都是獨立物件＝她在擺設模式裡可以整間重排。
             // 🚨 沒有 mask：新底圖的地板形狀跟舊的對不上，碰撞改走 boundary 鋼索（同占卜小屋／帽匠工坊）。
-            base: 'lobby_cafe_base_v3.png',
-            upper: 'lobby_cafe_upper_v3.png',   // 前緣那排花圃＋台階：壓在最上層，小人走到下緣會被它擋住腳
+            // 🖋 v5（10-26）＝底圖、前緣和家具換成 SVG，畫布跟 v3/v4 的 PNG 一樣大 → 座標一格都沒動；菜單立牌沒畫 SVG，照用 PNG。
+            //   她存過的擺設記的是舊檔名，載入時照 LOBBY_SVG 換新（_loadCfg）
+            base: 'lobby_cafe_base_v5.svg',
+            upper: 'lobby_cafe_upper_v5.svg',   // 前緣那排花圃＋台階：壓在最上層，小人走到下緣會被它擋住腳
             // 客人出沒區（npcZone）的底線：花圃頂邊約 y805～865，腳再往下整個人就被花圃蓋住（10-19：雷伊漫步到 y914，只剩頭頂）。
             //   她在擺設模式存過的出沒區也一樣收到這條線（_loadCfg）；她自己走過去照舊只擋腳
             npcMaxY: 835,
             cfgKey: 'lobby_stage_layout_cafe_v4',   // v4＝沙發組拆成三件（存檔是整份覆蓋，不升版會蓋掉新佈局）
             layout: [   // ⬇ Rae 擺設模式輸出（複製數據）；改版請直接換這份
-                { file: "lobby_cafe_obj_mat_v3.png", x: 780, y: 387, w: 637, h: 383, footH: 0, s: 0.234, layer: "floor", noCollide: true },   // 長毯(中央走道，平貼地板)
-                { file: "lobby_cafe_obj_bar_v3.png", x: 342, y: 91, w: 1259, h: 903, footH: 200, s: 0.309 },   // 咖啡吧台(左後牆，含咖啡機與水槽)
-                { file: "lobby_cafe_obj_counter_v3.png", x: 323, y: 387, w: 1956, h: 593, footH: 180, s: 0.224 },   // 點心櫃檯(瀅瀅站這裡)
-                { file: "lobby_cafe_obj_plant_back_v3.png", x: 154, y: 254, w: 876, h: 1056, footH: 130, s: 0.104 },   // 大盆栽(左後角)
-                { file: "lobby_cafe_obj_shelf_v3.png", x: 1294, y: 135, w: 760, h: 1113, footH: 150, s: 0.217 },   // 書櫃(右後牆)
-                { file: "lobby_cafe_obj_cabinet_v3.png", x: 732, y: 170, w: 680, h: 1099, footH: 150, s: 0.182 },   // 玻璃展示櫃(後牆中央)
-                { file: "lobby_cafe_obj_console_v3.png", x: 70, y: 559, w: 643, h: 904, footH: 200, s: 0.277, zb: -446 },   // 畫架＋盆栽(左牆；zb 把它壓回牆邊)
-                { file: "lobby_cafe_obj_table_v3.png", x: 451, y: 587, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
-                { file: "lobby_cafe_obj_chair_l_v3.png", x: 400, y: 610, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
-                { file: "lobby_cafe_obj_chair_r_v3.png", x: 549, y: 608, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
-                { file: "lobby_cafe_obj_rug_v4.png", x: 1163, y: 365, w: 1186, h: 869, footH: 0, s: 0.184, layer: "floor", noCollide: true },   // 圓毯(沙發組底下，平貼地板)
-                { file: "lobby_cafe_obj_sofa_v4.png", x: 1199, y: 312, w: 877, h: 859, footH: 560, footW: 703, s: 0.134 },   // 🎯 單人沙發(互動點＝我的角色)
-                { file: "lobby_cafe_obj_teatable_v4.png", x: 1243, y: 383, w: 835, h: 785, footH: 230, footW: 385, s: 0.142 },   // 🎯 圓几＋茶具(互動點＝世界書)
-                { file: "lobby_cafe_obj_cart_v3.png", x: 852, y: 223, w: 698, h: 1129, footH: 150, s: 0.127 },   // 邊桌推車
-                { file: "lobby_cafe_obj_plant_right_v3.png", x: 1213, y: 247, w: 735, h: 1074, footH: 130, s: 0.099 },   // 龜背芋
-                { file: "lobby_cafe_obj_chair_r_v3.png", x: 996, y: 781, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
-                { file: "lobby_cafe_obj_table_v3.png", x: 898, y: 761, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
-                { file: "lobby_cafe_obj_chair_l_v3.png", x: 847, y: 784, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
-                { file: "lobby_cafe_obj_chair_r_v3.png", x: 1054, y: 513, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
-                { file: "lobby_cafe_obj_table_v3.png", x: 956, y: 492, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
-                { file: "lobby_cafe_obj_chair_l_v3.png", x: 905, y: 515, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
-                { file: "lobby_cafe_obj_chair_r_v3.png", x: 1364, y: 681, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
-                { file: "lobby_cafe_obj_table_v3.png", x: 1266, y: 659, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
-                { file: "lobby_cafe_obj_chair_l_v3.png", x: 1215, y: 683, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_mat_v5.svg", x: 780, y: 387, w: 637, h: 383, footH: 0, s: 0.234, layer: "floor", noCollide: true },   // 長毯(中央走道，平貼地板)
+                { file: "lobby_cafe_obj_bar_v5.svg", x: 342, y: 91, w: 1259, h: 903, footH: 200, s: 0.309 },   // 咖啡吧台(左後牆，含咖啡機與水槽)
+                { file: "lobby_cafe_obj_counter_v5.svg", x: 323, y: 387, w: 1956, h: 593, footH: 180, s: 0.224 },   // 點心櫃檯(瀅瀅站這裡)
+                { file: "lobby_cafe_obj_plant_back_v5.svg", x: 154, y: 254, w: 876, h: 1056, footH: 130, s: 0.104 },   // 大盆栽(左後角)
+                { file: "lobby_cafe_obj_shelf_v5.svg", x: 1294, y: 135, w: 760, h: 1113, footH: 150, s: 0.217 },   // 書櫃(右後牆)
+                { file: "lobby_cafe_obj_cabinet_v5.svg", x: 732, y: 170, w: 680, h: 1099, footH: 150, s: 0.182 },   // 玻璃展示櫃(後牆中央)
+                { file: "lobby_cafe_obj_console_v5.svg", x: 70, y: 559, w: 643, h: 904, footH: 200, s: 0.277, zb: -446 },   // 畫架＋盆栽(左牆；zb 把它壓回牆邊)
+                { file: "lobby_cafe_obj_table_v5.svg", x: 451, y: 587, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 400, y: 610, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 549, y: 608, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_rug_v5.svg", x: 1163, y: 365, w: 1186, h: 869, footH: 0, s: 0.184, layer: "floor", noCollide: true },   // 圓毯(沙發組底下，平貼地板)
+                { file: "lobby_cafe_obj_sofa_v5.svg", x: 1199, y: 312, w: 877, h: 859, footH: 560, footW: 703, s: 0.134 },   // 🎯 單人沙發(互動點＝我的角色)
+                { file: "lobby_cafe_obj_teatable_v5.svg", x: 1243, y: 383, w: 835, h: 785, footH: 230, footW: 385, s: 0.142 },   // 🎯 圓几＋茶具(互動點＝世界書)
+                { file: "lobby_cafe_obj_cart_v5.svg", x: 852, y: 223, w: 698, h: 1129, footH: 150, s: 0.127 },   // 邊桌推車
+                { file: "lobby_cafe_obj_plant_right_v5.svg", x: 1213, y: 247, w: 735, h: 1074, footH: 130, s: 0.099 },   // 龜背芋
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 996, y: 781, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v5.svg", x: 898, y: 761, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 847, y: 784, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 1054, y: 513, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v5.svg", x: 956, y: 492, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 905, y: 515, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 1364, y: 681, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v5.svg", x: 1266, y: 659, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 1215, y: 683, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
                 // 🎯 菜單立牌(互動點＝書咖櫃檯)：站在點心櫃檯桌面上、點心櫃左邊。zb 把它擠到櫃檯前面一層（不然底邊比櫃檯高、會被櫃檯蓋住）
                 { file: "lobby_cafe_obj_menu_v1.png", x: 408, y: 392, w: 289, h: 300, footH: 0, s: 0.16, zb: 81, noCollide: true },
             ],
@@ -132,9 +134,9 @@
             //    一顆管一件家具（沙發一張圖、圓几一張圖）→ 不用再切比例框，滑過去亮的就是那一件本身。
             //    照樣跟著家具走：她在擺設模式挪沙發或圓几，熱點自己跟上。
             hotspots: [
-                { obj: 'obj_sofa_v4', label: '我的角色', icon: 'fa-user-pen',
+                { obj: 'obj_sofa_v5', label: '我的角色', icon: 'fa-user-pen',
                   open: 'persona', cls: 'hs-cafe', lit: true },
-                { obj: 'obj_teatable_v4', label: '世界書', icon: 'fa-book-open',
+                { obj: 'obj_teatable_v5', label: '世界書', icon: 'fa-book-open',
                   open: 'worldbook', cls: 'hs-cafe', lit: true },
                 // 10-14 她：「新東西，菜單，放書咖櫃台上面，這樣也能像核心那樣直接打開面板」
                 //   菜單在櫃檯桌面上，人只能站到櫃檯前面（腳離它約 80px）→ reach 多給 50，站在櫃檯前就亮
@@ -142,28 +144,30 @@
             ],
         },
         hall: {
-            base: 'lobby_hall_base_v6.png',   // v6=Rae 修正底圖(exchange_left_entry02)
+            // 🖋 v7（10-26）＝底圖和 13 件家具換成 SVG，畫布跟原 PNG 一樣大（含透明邊）→ 下面的 x/y/w/h/s、佔地一格都沒動。
+            //   她存過的擺設記的是舊檔名，載入時照 LOBBY_SVG 換新（_loadCfg）；碰撞遮罩照用 v5 那張 PNG
+            base: 'lobby_hall_base_v7.svg',
             mask: 'lobby_hall_mask_v5.png',   // v5 手繪碰撞遮罩(白=可走)
             cfgKey: 'lobby_stage_layout_hall_v9',   // v9：定版 Rae 擺設數據（兩組座位左+右）
             layout: [   // ⬇ Rae 擺設模式輸出（複製數據）；改版請直接換這份
-                { file: "lobby_hall_obj_counter_v5.png", x: 994, y: 229, w: 1548, h: 556, footH: 160, footW: 1548, s: 0.27 },
-                { file: "lobby_hall_obj_pedestal_v5.png", x: 630, y: 462, w: 989, h: 682, footH: 120, footW: 360, s: 0.275, layer: "floor", noCollide: true },
-                { file: "lobby_hall_obj_core_v5.png", x: 657, y: 252, w: 245, h: 321, footH: 40, footW: 86, s: 0.902, float: true },
-                { file: "lobby_hall_obj_sofa_v6.png", x: 108, y: 231, w: 1012, h: 844, footH: 570, footW: 798, s: 0.248 },
-                { file: "lobby_hall_obj_coffee_v6.png", x: 260, y: 309, w: 754, h: 593, footH: 360, footW: 754, s: 0.173 },
-                { file: "lobby_hall_obj_lounge_v6.png", x: 382, y: 234, w: 544, h: 752, footH: 295, footW: 485, s: 0.132 },
-                { file: "lobby_hall_obj_holotable_v5.png", x: 298, y: 679, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
-                { file: "lobby_hall_obj_chair_nw_v5.png", x: 215, y: 631, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
-                { file: "lobby_hall_obj_chair_ne_v5.png", x: 390, y: 631, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
-                { file: "lobby_hall_obj_chair_s_v5.png", x: 307, y: 736, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
-                { file: "lobby_hall_obj_deco_05_v5.png", x: 540, y: 116, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
-                { file: "lobby_hall_obj_deco_01_v5.png", x: 985, y: 795, w: 67, h: 124, footH: 40, footW: 59, s: 0.799 },
-                { file: "lobby_hall_obj_deco_02_v5.png", x: 1420, y: 300, w: 63, h: 99, footH: 20, s: 0.6 },
-                { file: "lobby_hall_obj_chair_nw_v5.png", x: 1192, y: 537, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
-                { file: "lobby_hall_obj_holotable_v5.png", x: 1275, y: 585, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
-                { file: "lobby_hall_obj_chair_s_v5.png", x: 1284, y: 642, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
-                { file: "lobby_hall_obj_chair_ne_v5.png", x: 1367, y: 537, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
-                { file: "lobby_hall_obj_deco_05_v5.png", x: 842, y: 114, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
+                { file: "lobby_hall_obj_counter_v7.svg", x: 994, y: 229, w: 1548, h: 556, footH: 160, footW: 1548, s: 0.27 },
+                { file: "lobby_hall_obj_pedestal_v7.svg", x: 630, y: 462, w: 989, h: 682, footH: 120, footW: 360, s: 0.275, layer: "floor", noCollide: true },
+                { file: "lobby_hall_obj_core_v7.svg", x: 657, y: 252, w: 245, h: 321, footH: 40, footW: 86, s: 0.902, float: true },
+                { file: "lobby_hall_obj_sofa_v7.svg", x: 108, y: 231, w: 1012, h: 844, footH: 570, footW: 798, s: 0.248 },
+                { file: "lobby_hall_obj_coffee_v7.svg", x: 260, y: 309, w: 754, h: 593, footH: 360, footW: 754, s: 0.173 },
+                { file: "lobby_hall_obj_lounge_v7.svg", x: 382, y: 234, w: 544, h: 752, footH: 295, footW: 485, s: 0.132 },
+                { file: "lobby_hall_obj_holotable_v7.svg", x: 298, y: 679, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
+                { file: "lobby_hall_obj_chair_nw_v7.svg", x: 215, y: 631, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
+                { file: "lobby_hall_obj_chair_ne_v7.svg", x: 390, y: 631, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
+                { file: "lobby_hall_obj_chair_s_v7.svg", x: 307, y: 736, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
+                { file: "lobby_hall_obj_deco_05_v7.svg", x: 540, y: 116, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
+                { file: "lobby_hall_obj_deco_01_v7.svg", x: 985, y: 795, w: 67, h: 124, footH: 40, footW: 59, s: 0.799 },
+                { file: "lobby_hall_obj_deco_02_v7.svg", x: 1420, y: 300, w: 63, h: 99, footH: 20, s: 0.6 },
+                { file: "lobby_hall_obj_chair_nw_v7.svg", x: 1192, y: 537, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
+                { file: "lobby_hall_obj_holotable_v7.svg", x: 1275, y: 585, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
+                { file: "lobby_hall_obj_chair_s_v7.svg", x: 1284, y: 642, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
+                { file: "lobby_hall_obj_chair_ne_v7.svg", x: 1367, y: 537, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
+                { file: "lobby_hall_obj_deco_05_v7.svg", x: 842, y: 114, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
             ],
             points: {
                 npcZone:  { x: 191, y: 249, w: 1273, h: 626 },
@@ -186,7 +190,7 @@
             //    愛麗絲身上那顆「世界門」照留（新入口加在旁邊）；兩邊開的是同一個面板。
             //    光用淡藍細邊＋藍光（lit-cyan），跟底座那幾圈藍光同一個調（小樣 tmp/hall_core_glow_lab.html：青銅邊在銀色核心上是一圈橘框、深藍邊像描框）
             hotspots: [
-                { obj: 'obj_core_v5', label: '世界門', icon: 'fa-globe', open: 'worldgate', cls: 'hs-core',
+                { obj: 'obj_core_v7', label: '世界門', icon: 'fa-globe', open: 'worldgate', cls: 'hs-core',
                   lit: true, litCls: 'lstage-obj-lit-cyan' },
             ],
         },
@@ -486,6 +490,38 @@
         'city/obj/plot_frame_small_04_day.png': { file: 'city/obj/plot_frame_day_npc03.png', w: 398, h: 300 },
         'city/obj/plot_frame_small_05_day.png': { file: 'city/obj/plot_frame_day_npc04.png', w: 411, h: 305 },
     };
+    // 🖋 10-26 大廳、書咖換 SVG（見 SCENES.hall／cafe）：她存過的擺設（layoutFull／舊版 layout）記的是舊檔名 → _loadCfg 載入時就地換新，她調過的位置照留；
+    //   新畫布跟舊圖一樣大，w/h 不用改。她下次在擺設模式按「完成」就存成新檔名。不升 cfgKey：升了她排好的大廳、書咖就作廢了
+    const LOBBY_SVG = {
+        'lobby_cafe_obj_mat_v3.png': 'lobby_cafe_obj_mat_v5.svg',
+        'lobby_cafe_obj_bar_v3.png': 'lobby_cafe_obj_bar_v5.svg',
+        'lobby_cafe_obj_counter_v3.png': 'lobby_cafe_obj_counter_v5.svg',
+        'lobby_cafe_obj_plant_back_v3.png': 'lobby_cafe_obj_plant_back_v5.svg',
+        'lobby_cafe_obj_shelf_v3.png': 'lobby_cafe_obj_shelf_v5.svg',
+        'lobby_cafe_obj_cabinet_v3.png': 'lobby_cafe_obj_cabinet_v5.svg',
+        'lobby_cafe_obj_console_v3.png': 'lobby_cafe_obj_console_v5.svg',
+        'lobby_cafe_obj_table_v3.png': 'lobby_cafe_obj_table_v5.svg',
+        'lobby_cafe_obj_chair_l_v3.png': 'lobby_cafe_obj_chair_l_v5.svg',
+        'lobby_cafe_obj_chair_r_v3.png': 'lobby_cafe_obj_chair_r_v5.svg',
+        'lobby_cafe_obj_rug_v4.png': 'lobby_cafe_obj_rug_v5.svg',
+        'lobby_cafe_obj_sofa_v4.png': 'lobby_cafe_obj_sofa_v5.svg',
+        'lobby_cafe_obj_teatable_v4.png': 'lobby_cafe_obj_teatable_v5.svg',
+        'lobby_cafe_obj_cart_v3.png': 'lobby_cafe_obj_cart_v5.svg',
+        'lobby_cafe_obj_plant_right_v3.png': 'lobby_cafe_obj_plant_right_v5.svg',
+        'lobby_hall_obj_counter_v5.png': 'lobby_hall_obj_counter_v7.svg',
+        'lobby_hall_obj_pedestal_v5.png': 'lobby_hall_obj_pedestal_v7.svg',
+        'lobby_hall_obj_core_v5.png': 'lobby_hall_obj_core_v7.svg',
+        'lobby_hall_obj_sofa_v6.png': 'lobby_hall_obj_sofa_v7.svg',
+        'lobby_hall_obj_coffee_v6.png': 'lobby_hall_obj_coffee_v7.svg',
+        'lobby_hall_obj_lounge_v6.png': 'lobby_hall_obj_lounge_v7.svg',
+        'lobby_hall_obj_holotable_v5.png': 'lobby_hall_obj_holotable_v7.svg',
+        'lobby_hall_obj_chair_nw_v5.png': 'lobby_hall_obj_chair_nw_v7.svg',
+        'lobby_hall_obj_chair_ne_v5.png': 'lobby_hall_obj_chair_ne_v7.svg',
+        'lobby_hall_obj_chair_s_v5.png': 'lobby_hall_obj_chair_s_v7.svg',
+        'lobby_hall_obj_deco_05_v5.png': 'lobby_hall_obj_deco_05_v7.svg',
+        'lobby_hall_obj_deco_01_v5.png': 'lobby_hall_obj_deco_01_v7.svg',
+        'lobby_hall_obj_deco_02_v5.png': 'lobby_hall_obj_deco_02_v7.svg',
+    };
     // 🌱 10-11 npc01 那塊地蓋成 LUNA 苗圃：舊存檔（layoutFull）裡還是那間鄰居房＋空地框 → 換成苗圃，她調過的其他東西照留。
     //    走進廣場（_loadCfg）跟快轉縮圖（_openCityMap）各自讀存檔，兩邊都要過這支。
     const NURSERY_FILE = 'city/obj/luna_nursery_day.png';
@@ -575,7 +611,7 @@
     // 🩹 書咖菜單立牌（10-14 新加的）：存檔是整份家具清單，她排過書咖的話裡面沒有這件 → 照她櫃檯現在的位置補上（有了就不重複）。
     //   不升 cfgKey：升了她排好的整間書咖就作廢了
     function _addCafeMenu(layout, defs) {
-        const MENU = 'lobby_cafe_obj_menu_v1.png', COUNTER = 'lobby_cafe_obj_counter_v3.png';
+        const MENU = 'lobby_cafe_obj_menu_v1.png', COUNTER = 'lobby_cafe_obj_counter_v5.svg';   // 櫃檯是 _loadCfg 換過新檔名之後的（10-26 換 SVG）
         if (layout.some(o => o.file === MENU)) return;
         const def = defs.find(o => o.file === MENU), dc = defs.find(o => o.file === COUNTER);
         if (!def) return;
@@ -615,6 +651,7 @@
                     layout.forEach(o => {   // 🩹 地塊框改版導向：舊框檔名就地換新檔+新原始尺寸（保留她調過的 x/y/s）
                         const fix = PLOT_FRAME_FIX[o.file];
                         if (fix) { o.file = fix.file; o.w = fix.w; o.h = fix.h; }
+                        if (LOBBY_SVG[o.file]) o.file = LOBBY_SVG[o.file];   // 🖋 大廳、書咖舊 PNG 檔名→SVG（要在下面 _addCafeMenu 之前：它照新檔名找櫃檯）
                     });
                     // 🩹 底板v2把MC家地塊框拆出來了：舊存檔沒有這件→補進去（有了就不重複）
                     if (S.scene === 'city' && !layout.some(o => o.file === 'city/obj/plot_frame_day_player.png')) {
@@ -628,7 +665,7 @@
                     if (S.scene === 'city') layout = _fixCityLayout(layout);
                     if (S.scene === 'cafe') _addCafeMenu(layout, SC.layout || []);
                 } else (saved.layout || []).forEach(s => {
-                    const t = layout.find(o => o.file === s.file);
+                    const t = layout.find(o => o.file === (LOBBY_SVG[s.file] || s.file));
                     if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
                 });
                 if (saved.baseOverride) baseOverride = saved.baseOverride;
