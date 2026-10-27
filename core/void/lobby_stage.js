@@ -219,30 +219,32 @@
             ],
         },
         exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
-            base: 'lobby_exchange_base_v2.png',   // v2=Rae 修正版（換檔名防快取）
+            // 🖋 v3（10-27）＝底圖和 11 種家具換成 SVG（Vproject EXCHANGE_SVG_LAB），畫布跟 v2 那批 PNG 一樣大 → 座標一格都沒動；碰撞遮罩照用 v1 那張 PNG。
+            //   她存過的擺設記的是舊檔名，載入時照 LOBBY_SVG 換新（_loadCfg）
+            base: 'lobby_exchange_base_v3.svg',
             mask: 'lobby_exchange_mask_v1.png',
             cfgKey: 'lobby_stage_layout_exchange_v2',   // v2：定版 Rae 擺設數據（兩組洽談區）
             layout: [   // ⬇ Rae 擺設模式輸出（複製數據）；改版請直接換這份
-                { file: "lobby_exchange_obj_rate_screen.png", x: 524, y: 37, w: 1682, h: 507, footH: 0, s: 0.3, layer: "back" },
-                { file: "lobby_exchange_obj_counter.png", x: 366, y: 232, w: 1949, h: 448, footH: 90, footW: 1929, s: 0.411 },
-                { file: "lobby_exchange_obj_rug.png", x: 258, y: 593, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
-                { file: "lobby_exchange_obj_lamp_left.png", x: 299, y: 524, w: 212, h: 678, footH: 170, s: 0.132 },
-                { file: "lobby_exchange_obj_table.png", x: 388, y: 632, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
-                { file: "lobby_exchange_obj_chair_left.png", x: 315, y: 597, w: 603, h: 766, footH: 370, s: 0.129 },
-                { file: "lobby_exchange_obj_chair_right.png", x: 472, y: 599, w: 606, h: 801, footH: 410, s: 0.129 },
-                { file: "lobby_exchange_obj_chair_front_v2.png", x: 394, y: 715, w: 491, h: 471, footH: 240, s: 0.156 },
-                { file: "lobby_exchange_obj_bench.png", x: 192, y: 355, w: 978, h: 613, footH: 60, s: 0.132 },
-                { file: "lobby_exchange_obj_plant.png", x: 148, y: 348, w: 485, h: 1227, footH: 40, s: 0.07 },
-                { file: "lobby_exchange_obj_planter.png", x: 269, y: 710, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
-                { file: "lobby_exchange_obj_lamp_left.png", x: 544, y: 525, w: 212, h: 678, footH: 170, s: 0.132 },
-                { file: "lobby_exchange_obj_planter.png", x: 1268, y: 722, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
-                { file: "lobby_exchange_obj_rug.png", x: 967, y: 600, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
-                { file: "lobby_exchange_obj_chair_left.png", x: 1024, y: 604, w: 603, h: 766, footH: 370, s: 0.129 },
-                { file: "lobby_exchange_obj_chair_right.png", x: 1181, y: 606, w: 606, h: 801, footH: 410, s: 0.129 },
-                { file: "lobby_exchange_obj_table.png", x: 1097, y: 639, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
-                { file: "lobby_exchange_obj_chair_front_v2.png", x: 1103, y: 722, w: 491, h: 471, footH: 230, s: 0.156 },
-                { file: "lobby_exchange_obj_lamp_left.png", x: 1008, y: 531, w: 212, h: 678, footH: 170, s: 0.132 },
-                { file: "lobby_exchange_obj_lamp_left.png", x: 1253, y: 532, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_rate_screen_v3.svg", x: 524, y: 37, w: 1682, h: 507, footH: 0, s: 0.3, layer: "back" },
+                { file: "lobby_exchange_obj_counter_v3.svg", x: 366, y: 232, w: 1949, h: 448, footH: 90, footW: 1929, s: 0.411 },
+                { file: "lobby_exchange_obj_rug_v3.svg", x: 258, y: 593, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 299, y: 524, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_table_v3.svg", x: 388, y: 632, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
+                { file: "lobby_exchange_obj_chair_left_v3.svg", x: 315, y: 597, w: 603, h: 766, footH: 370, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_right_v3.svg", x: 472, y: 599, w: 606, h: 801, footH: 410, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_front_v3.svg", x: 394, y: 715, w: 491, h: 471, footH: 240, s: 0.156 },
+                { file: "lobby_exchange_obj_bench_v3.svg", x: 192, y: 355, w: 978, h: 613, footH: 60, s: 0.132 },
+                { file: "lobby_exchange_obj_plant_v3.svg", x: 148, y: 348, w: 485, h: 1227, footH: 40, s: 0.07 },
+                { file: "lobby_exchange_obj_planter_v3.svg", x: 269, y: 710, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 544, y: 525, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_planter_v3.svg", x: 1268, y: 722, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
+                { file: "lobby_exchange_obj_rug_v3.svg", x: 967, y: 600, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
+                { file: "lobby_exchange_obj_chair_left_v3.svg", x: 1024, y: 604, w: 603, h: 766, footH: 370, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_right_v3.svg", x: 1181, y: 606, w: 606, h: 801, footH: 410, s: 0.129 },
+                { file: "lobby_exchange_obj_table_v3.svg", x: 1097, y: 639, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
+                { file: "lobby_exchange_obj_chair_front_v3.svg", x: 1103, y: 722, w: 491, h: 471, footH: 230, s: 0.156 },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 1008, y: 531, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 1253, y: 532, w: 212, h: 678, footH: 170, s: 0.132 },
             ],
             points: {
                 npcZone:  { x: 118, y: 418, w: 1260, h: 459 },
@@ -490,8 +492,8 @@
         'city/obj/plot_frame_small_04_day.png': { file: 'city/obj/plot_frame_day_npc03.png', w: 398, h: 300 },
         'city/obj/plot_frame_small_05_day.png': { file: 'city/obj/plot_frame_day_npc04.png', w: 411, h: 305 },
     };
-    // 🖋 10-26 大廳、書咖換 SVG（見 SCENES.hall／cafe）：她存過的擺設（layoutFull／舊版 layout）記的是舊檔名 → _loadCfg 載入時就地換新，她調過的位置照留；
-    //   新畫布跟舊圖一樣大，w/h 不用改。她下次在擺設模式按「完成」就存成新檔名。不升 cfgKey：升了她排好的大廳、書咖就作廢了
+    // 🖋 10-26 大廳、書咖，10-27 交易所換 SVG（見 SCENES.hall／cafe／exchange）：她存過的擺設（layoutFull／舊版 layout）記的是舊檔名 → _loadCfg 載入時就地換新，她調過的位置照留；
+    //   新畫布跟舊圖一樣大，w/h 不用改。她下次在擺設模式按「完成」就存成新檔名。不升 cfgKey：升了她排好的大廳、書咖、交易所就作廢了
     const LOBBY_SVG = {
         'lobby_cafe_obj_mat_v3.png': 'lobby_cafe_obj_mat_v5.svg',
         'lobby_cafe_obj_bar_v3.png': 'lobby_cafe_obj_bar_v5.svg',
@@ -508,6 +510,17 @@
         'lobby_cafe_obj_teatable_v4.png': 'lobby_cafe_obj_teatable_v5.svg',
         'lobby_cafe_obj_cart_v3.png': 'lobby_cafe_obj_cart_v5.svg',
         'lobby_cafe_obj_plant_right_v3.png': 'lobby_cafe_obj_plant_right_v5.svg',
+        'lobby_exchange_obj_rate_screen.png': 'lobby_exchange_obj_rate_screen_v3.svg',
+        'lobby_exchange_obj_counter.png': 'lobby_exchange_obj_counter_v3.svg',
+        'lobby_exchange_obj_rug.png': 'lobby_exchange_obj_rug_v3.svg',
+        'lobby_exchange_obj_lamp_left.png': 'lobby_exchange_obj_lamp_left_v3.svg',
+        'lobby_exchange_obj_table.png': 'lobby_exchange_obj_table_v3.svg',
+        'lobby_exchange_obj_chair_left.png': 'lobby_exchange_obj_chair_left_v3.svg',
+        'lobby_exchange_obj_chair_right.png': 'lobby_exchange_obj_chair_right_v3.svg',
+        'lobby_exchange_obj_bench.png': 'lobby_exchange_obj_bench_v3.svg',
+        'lobby_exchange_obj_plant.png': 'lobby_exchange_obj_plant_v3.svg',
+        'lobby_exchange_obj_planter.png': 'lobby_exchange_obj_planter_v3.svg',
+        'lobby_exchange_obj_chair_front_v2.png': 'lobby_exchange_obj_chair_front_v3.svg',
         'lobby_hall_obj_counter_v5.png': 'lobby_hall_obj_counter_v7.svg',
         'lobby_hall_obj_pedestal_v5.png': 'lobby_hall_obj_pedestal_v7.svg',
         'lobby_hall_obj_core_v5.png': 'lobby_hall_obj_core_v7.svg',
