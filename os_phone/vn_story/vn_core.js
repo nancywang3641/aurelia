@@ -569,6 +569,8 @@
             try { if (window.VN_DynamicParser && window.VN_DynamicParser.init) window.VN_DynamicParser.init(); } catch (e) {}
             // 🎨 套用此世界(chatId)的自訂 VN 面板 CSS
             try { if (window.VN_Theme) window.VN_Theme.apply(); } catch (e) {}
+            // 🌍 人在有自己劇情介面的視差世界裡＝換成那個世界的（世界門查完自己重畫；不 await，同上面同步契約）
+            try { const _WG = win.OS_WORLDGATE || window.OS_WORLDGATE; if (_WG && _WG.syncTheme) _WG.syncTheme(); } catch (e) {}
             // ⚠️ 先剝 CoT 再取正文：<thinking> 裡常「提到」<content>（格式自檢清單），直接抓會從思考區開抓、把 CoT 包進正文
             const _txtNoCot = String(txt).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
             const contentMatch = _txtNoCot.match(/<content>([\s\S]*?)<\/content>/i);

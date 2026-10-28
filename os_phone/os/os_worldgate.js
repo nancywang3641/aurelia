@@ -64,6 +64,7 @@
         const c = _cid();
         _pendingCur = v ? { id: v, ts: Date.now() } : null;   // 撤離(空值)要把手上那筆一起丟掉
         if (c) await _set(K_CURRENT, v, c);
+        try { await syncTheme(); } catch (e) {}   // 進世界換上它的劇情介面、撤離換回這本故事的
     }
     // 舊資料搬家:把 global 那一格搬進「現在這個聊天室」，然後清掉。
     //   只做一次，其餘聊天室從乾淨狀態開始——所以絕不能在拿不到 chatId 時就清掉 global。
@@ -170,7 +171,8 @@
     //   短的那支(抽種子,三十秒)不必開,維持原樣。
     // onChunk:串流途中每收到一塊就被叫一次,參數是「到目前為止的全文」(不是增量)。
     //   只有選了連接 profile 的人真的會串流,其餘路徑送出去也是整篇才回 → onChunk 從頭到尾不觸發,行為同以往。
-    async function _callAI(prompt, label, route, useMain, asText, stream, onChunk) {
+    // floor:這一趟的輸出上限至少要多少(不填=8192;只對 Claude 原生、Gemini 原生生效);只拉高、不壓低她填的數值。
+    async function _callAI(prompt, label, route, useMain, asText, stream, onChunk, floor) {
         const api = win.OS_API || window.OS_API;
         if (!api || !api.chat) return null;
         try {
@@ -190,7 +192,10 @@
             // 不動使用者填的數值本身,只在這一趟呼叫拉高(同 chatMain 的做法)。
             if (stream === true) {
                 const _mt = parseInt(config.maxTokens);
-                if (isNaN(_mt) || _mt < 8192) config.maxTokens = 8192;
+                // floor 只給原生格式:OpenAI 相容常接 DeepSeek 這種上限 8192 的站,填超過會被退件(_THINK_ROOM 那段)
+                const _fmt = String(config.apiFormat || 'openai');
+                const _need = Math.max(8192, (_fmt === 'anthropic' || _fmt === 'gemini') ? (parseInt(floor) || 0) : 0);
+                if (isNaN(_mt) || _mt < _need) config.maxTokens = _need;
             }
             const raw = await new Promise((resolve, reject) => {
                 api.chat([{ role: 'system', content: prompt }], config, (typeof onChunk === 'function' ? onChunk : null), resolve, reject, { task: 'worldgate', label, keepCodeFences: true, stream: stream === true });
@@ -876,29 +881,92 @@
         if (!hover) s += '這是觸控螢幕,沒有 hover——任何看得出狀態的東西都不可以只靠 hover 呈現,平常就要看得出哪些可以點。\n';
         return s;
     }
+    // 回 { panel, theme }:panel 是結束畫面(null=沒做出來,末尾退回原本那幾顆鍵),
+    //   theme 是這個世界的劇情介面 CSS(null=沒做出來,劇情照舊用這本故事的主題)。
+    // 🚨兩樣分兩通同時發,不塞同一通(10-28 用官方 Opus/Sonnet/Haiku 5.5 實測):塞一通時三顆都先在思考裡把兩份
+    //   整個寫一遍,16000 上限全被思考吃光、一個字都沒寫出來。分開以後各自有自己的上限,一樣壞了不連累另一樣,
+    //   等的時間是慢的那一通。錢差不多:要寫的字一樣多,只多送一次世界節錄。兩通吃同一個美術方向,長得才像同一個世界。
     async function _expandPanel(seed, worldText) {
         const S = win.OS_UI_STYLE || window.OS_UI_STYLE;
-        if (!S || !S.pick) return null;   // 風格庫沒載入=沒有這個功能,世界照樣能玩(末尾退回原本那幾顆鍵)
+        if (!S || !S.pick) return { panel: null, theme: null };   // 風格庫沒載入=沒有這個功能,世界照樣能玩(末尾退回原本那幾顆鍵)
         // 不限 cssOnly:AVS 只能純 CSS 所以挑得到的包有限,這裡底下墊著一張圖,
         //   那幾包要有主視覺才成立的風格終於用得上——這是風格庫接進 VN 才拿得到的東西。
         const art = S.pick();
+        const T = _themeKit();
+        const [panel, theme] = await Promise.all([
+            _makePanel(S, art, seed, worldText).catch(e => { console.warn('[Worldgate③] 結束畫面生成失敗', e); return null; }),
+            T ? _makeTheme(S, art, T, seed, worldText).catch(e => { console.warn('[Worldgate③] 劇情介面生成失敗', e); return null; }) : null,
+        ]);
+        if (panel) S.remember(art.styleId, art.layoutId);
+        return { panel, theme };
+    }
+    function _worldLines(seed, worldText) {
+        return '【這個世界】' + seed.name + ':' + (seed.concept || '') +
+            (seed.genre ? '(題材:' + seed.genre + ')' : '') + (seed.style ? '(風格:' + seed.style + ')' : '') + '\n' +
+            '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n';
+    }
+    async function _makePanel(S, art, seed, worldText) {
         const prompt =
             _PANEL_RULES +
             _screenLine() +
-            '【這個世界】' + seed.name + ':' + (seed.concept || '') +
-            (seed.genre ? '(題材:' + seed.genre + ')' : '') + (seed.style ? '(風格:' + seed.style + ')' : '') + '\n' +
-            '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
+            _worldLines(seed, worldText) +
             S.build(art.styleId, art.layoutId) +
             '語言:繁體中文。';
-        const raw = await _callAI(prompt, '世界門生成活動面板', 'worldgate_panel', false, true, true);
+        const raw = await _callAI(prompt, '世界門生成活動面板', 'worldgate_panel', false, true, true, null, _THINK_ROOM);
         if (!raw) return null;
         const html = _pickTagged(raw, 'panel-html');
         if (!html) { console.warn('[Worldgate③] 面板沒認到 <panel-html>,這個世界先不做面板'); return null; }
-        S.remember(art.styleId, art.layoutId);
         return {
             html: _cleanPanelHtml(html), css: _cleanPanelCss(_pickTagged(raw, 'panel-css')),
             styleId: art.styleId, layoutId: art.layoutId,
         };
+    }
+    // 🧠 思考型模型的輸出上限要留思考的位子:Claude 5.5 一代(和 Gemini 的思考型)會先在思考裡把整份草稿寫一遍,
+    //   思考也算在上限裡。實測只做結束畫面、上限 8192:Haiku 5.5 八千多全是思考,一個字沒寫。
+    //   只給原生格式(Claude 原生、Gemini 原生)拉這麼高:OpenAI 相容那條常接 DeepSeek 這種上限 8192 的站,超過會直接被退件。
+    const _THINK_ROOM = 48000;
+    // 🎨 劇情介面的說明書只有一份,在創作室(OS_STUDIO.vnTheme;創作室和小機做主題也是讀它)。沒載入就只做結束畫面。
+    function _themeKit() {
+        const St = win.OS_STUDIO || window.OS_STUDIO;
+        const T = St && St.vnTheme;
+        return (T && typeof T.spec === 'function' && typeof T.pick === 'function') ? T : null;
+    }
+    // 跟創作室「AI 生成主題」同一份說明書,「用戶想要的風格」換成這個世界＋結束畫面那份美術方向的識別(不帶版型:那是結束畫面的骨架)
+    async function _makeTheme(S, art, T, seed, worldText) {
+        const p = S.get ? S.get(art.styleId) : null;
+        const prompt =
+            T.spec() + '\n' +
+            '用戶想要的風格:做成「' + seed.name + '」這個世界裡真的會有的介面,用這個世界自己的材料。\n' +
+            _worldLines(seed, worldText) +
+            (p ? '【美術方向】這個世界章末的結束畫面走「' + p.name + '」:' + p.metaphor + '。語氣是' + p.tone + '。配色結構:' + p.color + '。\n' +
+                '劇情介面跟結束畫面要看得出是同一個世界的東西:配色與材質語言跟它一致,但你做的是上面說明裡那一套元件,版型照說明,不必照搬結束畫面的排法。\n' : '') +
+            '語言:繁體中文。';
+        const raw = await _callAI(prompt, '世界門生成主題', 'worldgate_theme', false, true, true, null, _THINK_ROOM);
+        return raw ? _pickTheme(raw, T) : null;
+    }
+    // 從回覆裡挑 CSS,再剝掉會把配件推走的寫法(同小機、創作室套用前那道)。
+    //   被輸出上限切斷的不收:後半截(章末鈕、設定視窗)會停在預設金黑,整套半吊子。
+    function _pickTheme(raw, T) {
+        const got = T.pick(raw) || {};
+        let css = String(got.css || '').trim();
+        if (!css) { console.warn('[Worldgate③] 劇情介面的回覆裡沒有 CSS,這個世界先不做'); return null; }
+        // 只缺收尾的 ``` 不算切斷:回覆最後那個圍欄會被 _stripFences 一起剝掉。真的切斷=括號沒收齊
+        const shut = (css.match(/\{/g) || []).length === (css.match(/\}/g) || []).length && /\}\s*$/.test(css);
+        if (got.cut && !shut) { console.warn('[Worldgate③] 劇情介面寫到一半被切斷,這次不用'); return null; }
+        if (typeof T.strip === 'function') {
+            const s = T.strip(css);
+            if (s && s.hit) console.log('[Worldgate③] 劇情介面有 ' + s.hit + ' 處會把配件推走的寫法,已剝掉');
+            if (s && s.css) css = s.css;
+        }
+        if (typeof T.fixText === 'function') {
+            const f = T.fixText(css);
+            if (f && f.hit) { console.log('[Worldgate③] 劇情介面漏寫的內文字色(對話三態、粗體)補了 ' + f.hit + ' 條,照它寫的字色'); css = f.css; }
+        }
+        if (typeof T.risky === 'function') {
+            const r = T.risky(css) || [];
+            if (r.length) console.warn('[Worldgate③] 劇情介面可能有問題:' + r.join('、'));
+        }
+        return css.replace(/<\/style/gi, '<\\/style');
     }
 
     // ══ 🏅 這個世界的成就清單 ═══════════════════════════════════════
@@ -1556,6 +1624,25 @@
     async function _worldById(id) {
         const worlds = await _get(K_WORLDS, []);
         return worlds.find(x => x.id === id) || null;
+    }
+    // 🎨 告訴 VN_Theme 現在人在哪個世界、那個世界的劇情介面是哪一份:人在有 vnTheme 的世界裡就換成它的,
+    //   撤離、換到沒進世界的聊天室、那個世界沒有自己那份 → null,回到這本故事原本的主題。
+    //   進出世界都經過 _setCurrentId,換聊天室走 _resync,VN 每次開播也會叫一次(重整後第一次開劇情)。
+    //   在世界裡用創作室或小機改主題,改的是世界那份(save 寫回世界檔案)。
+    async function syncTheme() {
+        const VT = win.VN_Theme || window.VN_Theme;
+        if (!VT || typeof VT.setWorld !== 'function') return;
+        let w = null;
+        try { const id = await _getCurrentId(); if (id) w = await _worldById(id); } catch (e) { w = null; }
+        if (!w || !w.vnTheme) { VT.setWorld(null); return; }
+        const id = w.id;
+        VT.setWorld({ id, css: w.vnTheme, save: (css) => { _saveTheme(id, css).catch(e => console.warn('[Worldgate③] 劇情介面存檔失敗', e)); } });
+    }
+    async function _saveTheme(id, css) {
+        const w = await _worldById(id);
+        if (!w) return;
+        if (css) w.vnTheme = css; else delete w.vnTheme;
+        await _saveWorld(w, ['vnTheme']);
     }
     // ── 世界的兩張圖:概念圖(一幅遠景)＋方位圖(俯瞰全境,墊在降生地九宮格底下) ──
     // 學 map 面板大地圖那條:AI 只在展開世界那一次順便吐內容關鍵詞,不另外呼叫文字模型;
@@ -2288,6 +2375,7 @@
             } catch (e) {}
             await _syncFreeMode();
             try { await _syncWorldLamps(id, '換聊天室'); } catch (e) {}
+            try { await syncTheme(); } catch (e) {}
         };
         // 延遲是等酒館把 chatId 切過去,太早讀到的還是上一個聊天室(同 vn_free_mode 的作法)
         win.eventOn(ev.CHAT_CHANGED, () => { setTimeout(_resync, 800); });
@@ -2538,7 +2626,7 @@
             // 管理模式下卡片底部的維護區：一行一個對象，左邊標名字、右邊短鈕
             '.wg-card-ops{margin-top:8px;padding-top:8px;border-top:1px dashed rgba(26,28,40,.12);}' +
             '.wg-ops-row{display:flex;align-items:center;gap:5px;}.wg-ops-row+.wg-ops-row{margin-top:5px;}' +
-            '.wg-ops-k{flex:0 0 62px;color:#8a8ea6;font-size:11px;}' +
+            '.wg-ops-k{flex:0 0 84px;color:#8a8ea6;font-size:11px;white-space:nowrap;}' +   // 「結束畫面＋主題」七個字要一行放得下
             '.wg-note{color:#8a8ea6;font-size:10px;text-align:center;margin-top:7px;line-height:1.5;}' +
             '.wg-loading{margin:auto;display:flex;flex-direction:column;align-items:center;gap:12px;color:#8a8ea6;font-size:11px;letter-spacing:2px;font-weight:700;}' +
             '.wg-spinner{width:26px;height:26px;border:2px solid rgba(26,28,40,.15);border-top-color:#1A1C28;border-radius:50%;animation:wgSpin 1s linear infinite;}' +
@@ -3091,10 +3179,10 @@
                     // 🚨兩個東西各有兩個動作,平鋪成四顆就得靠加長文案去區分,愈補愈醜。
                     //   分成兩行、左邊寫是什麼、右邊放短鈕,結構自己講清楚,字就不用長。
                     ? '<div class="wg-card-ops">' +
-                        '<div class="wg-ops-row"><span class="wg-ops-k">結束畫面</span>' +
+                        '<div class="wg-ops-row"><span class="wg-ops-k">結束畫面＋主題</span>' +
                           '<button class="wg-mgr-btn" data-op="panel" data-id="' + w.id + '">' +
-                            (w.panel ? '換一個' : '做一個') + '</button>' +
-                          (w.panel ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除</button>' : '') +
+                            ((w.panel || w.vnTheme) ? '換一個' : '做一個') + '</button>' +
+                          ((w.panel || w.vnTheme) ? '<button class="wg-mgr-btn" data-op="panel-x" data-id="' + w.id + '">移除</button>' : '') +
                         '</div>' +
                         '<div class="wg-ops-row"><span class="wg-ops-k">成就</span>' +
                           '<button class="wg-mgr-btn" data-op="achv" data-id="' + w.id + '">' +
@@ -3296,9 +3384,9 @@
         // 旅人與面板兩支並行:各自只吃世界檔案節錄、彼此不相干,牆鐘時間等於慢的那一支。
         // 連接設定是逐次隨請求帶的(不是切全域),兩支同時在跑不會互相踩。
         // 面板或成就掛了就當這個世界沒有那一項,不能連累旅人與世界存檔。
-        const [trav, panel, achv] = await Promise.all([
+        const [trav, pt, achv] = await Promise.all([
             _expandTravelers(seed, r.text, note, null, plan),
-            _expandPanel(seed, r.text).catch(e => { console.warn('[Worldgate③] 面板生成失敗', e); return null; }),
+            _expandPanel(seed, r.text).catch(e => { console.warn('[Worldgate③] 面板生成失敗', e); return { panel: null, theme: null }; }),
             _expandAchv(seed, r.text).catch(e => { console.warn('[Worldgate③] 成就生成失敗', e); return null; }),
         ]);
         _busy = false;
@@ -3315,7 +3403,8 @@
             artPrompt: r.artPrompt || '', mapPrompt: r.mapPrompt || '',   // 兩張圖的關鍵詞,同一次 API 順便帶回來的
             art: '', mapArt: '',    // 圖在世界存好之後才在背景生,不擋畫面
             travelers: _normTravelers(trav),
-            panel: panel || null,   // 🎴 VN 劇情末尾那一頁的外觀;null=沒生成到,末尾退回原本那幾顆鍵
+            panel: pt.panel || null,   // 🎴 VN 劇情末尾那一頁的外觀;null=沒生成到,末尾退回原本那幾顆鍵
+            vnTheme: pt.theme || '',   // 🎨 這個世界的劇情主題(對話框那套 CSS),跟結束畫面同時生的(兩通);空=照舊用這本故事的主題
             achv: achv || null,     // 🏅 這個世界的成就清單;解鎖仍走既有的成就標記,這裡只是清單
             visits: 0, ts: Date.now(),
             // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
@@ -3729,8 +3818,9 @@
         // 移除是純本地的動作,不燒 API。成就拿掉要順手把條目裡那一段也清掉,
         //   不然主持AI 還照著一份已經不存在的清單鋪機會、發成就。
         if (op === 'panel-x') {
-            delete w.panel; await _saveWorld(w);
-            _toast('結束畫面已移除,劇情末尾回到原本的樣子'); _renderList(); return;
+            delete w.panel; delete w.vnTheme; await _saveWorld(w);
+            try { await syncTheme(); } catch (e) {}
+            _toast('結束畫面和主題已移除,回到原本的樣子'); _renderList(); return;
         }
         if (op === 'achv-x') {
             delete w.achv; delete w.achvDone; await _saveWorld(w);
@@ -3744,11 +3834,17 @@
         _busy = true;
         try {
             if (op === 'panel') {
-                _loading('正在佈置「' + _esc(w.name) + '」的結束畫面…');
-                const panel = await _expandPanel(src, text).catch(() => null);
-                if (!panel) { _toast('結束畫面沒做出來,再試一次'); return; }
-                w.panel = panel; await _saveWorld(w);
-                _toast('結束畫面已換上,下次劇情演完就看得到');
+                _loading('正在佈置「' + _esc(w.name) + '」的結束畫面和主題…');
+                // 結束畫面和這個世界的劇情主題一起重做(兩通同時發);哪一樣這次沒做出來,那一樣就留著原本的
+                const r = await _expandPanel(src, text).catch(() => ({ panel: null, theme: null }));
+                if (!r.panel && !r.theme) { _toast('結束畫面沒做出來,再試一次'); return; }
+                if (r.panel) w.panel = r.panel;
+                if (r.theme) w.vnTheme = r.theme;
+                await _saveWorld(w);
+                try { await syncTheme(); } catch (e) {}   // 人正在這個世界裡:劇情介面馬上換
+                _toast(r.panel && r.theme ? '結束畫面和主題都換好了,下次進這個世界的劇情就看得到'
+                    : r.panel ? '結束畫面已換上(主題這次沒做出來,照舊用原本的)'
+                    : '主題已換上(結束畫面這次沒做出來,照舊用原本的)');
             } else if (op === 'launch') {
                 // 群像畫的是「這趟隊伍」，沒人可畫就直接說，不要跑一趟 API 回來才失敗
                 if (!(w.travelers || []).some(t => t && t.recruited && !t.gone)) {
@@ -4191,7 +4287,7 @@
             .map(w => ({ id: w.id, name: String(w.name || ''), art: w.art }));
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode,
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

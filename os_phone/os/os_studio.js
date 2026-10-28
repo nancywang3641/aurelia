@@ -1418,7 +1418,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 
 可設計的元素：
 - #text-panel：對話框外框，整個畫面的「主視覺、主力，你要重點發揮的地方」。⚠️它一定帶三狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心）。預設已分別對 #text-panel.char-mode、.nar-mode、.inner-mode 設了背景，特異性比純 #text-panel 高，所以換背景/邊框「必須」分別寫這三條，否則沒效果。三態都要做。背景、邊框、外框、圓角、clip-path 造型、::before/::after 裝飾、材質紋理、字體、陰影、動畫……都大膽用，做出有記憶點的設計，別只是換顏色。唯一限制：它要維持在「畫面底部、水平置中」，別用 position/transform 把 #text-panel 或外層 #text-panel-wrapper 搬走。
-- #dialogue-text：對話內文（字體 / 字色 / 行距），配合對話框設計。⚠️文字對齊保持預設靠左，不要置中（見下方鐵則）。
+- #dialogue-text：對話內文（字體 / 字色 / 行距），配合對話框設計。⚠️文字對齊保持預設靠左，不要置中（見下方鐵則）。⚠️字色跟對話框背景一樣：預設已分別對 #text-panel.char-mode #dialogue-text、.nar-mode、.inner-mode 底下的內文設了字色，特異性比純 #dialogue-text 高，所以字色要三態各寫一條，只寫 #dialogue-text 蓋不過去，有人說話時字會變回預設的淺色。內文裡的粗體（#dialogue-text strong）預設是白字、強調（#dialogue-text em）預設是金色，底色換亮的話這兩個也要一起改。
 - #speaker-name：角色名牌（固定浮在對話框左上，旁白時自動隱藏）。只重新設計它的外觀（底色/邊框/圓角/字體/造型）配合對話框，「位置不要動」。
 - #top-badge：左上角的「場景牌」，顯示當前時間・地點（例如「黃昏 南城舊巷」，文字兩側有金色短線裝飾，那是 ::before / ::after）。可重新設計它的外觀（底色/漸隱/邊框/圓角/字體/裝飾線）配合主題，但「位置不要動」（固定左上）。註：直播模式時同樣內容會改顯示在 #stream-scene-row（內含 #stream-scene-label），請一併配合上色。
 - #vn-panel-controls 與 .vn-panel-btn：對話框上緣那排小鈕。外面只有三顆：LOG（翻對話紀錄）、SKIP（跳過）、☰（其他功能）；按 ☰ 會往上浮出 #vn-more-menu，裡面是同款的 .vn-panel-btn。你只要把 .vn-panel-btn 設計好，浮窗裡的鈕自動跟著。（.vn-panel-btn.active 為啟用態。）「位置不要動」，只重新上色/造型配合主題。
@@ -1807,6 +1807,29 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         });
         return { css: hit ? out : String(css || ''), hit };
     }
+    // 內文字色只寫在純 #dialogue-text 上：預設那三條（.char-mode／.nar-mode／.inner-mode #dialogue-text）特異性比它高，
+    //   哪一態沒自己寫字色，那一態就退回預設淺色字——亮底的主題整句看不見（10-28 世界門實測 Opus 撞過：旁白、內心寫了，說話那態漏了）。
+    //   模型的意思很清楚（就是要這個字色），所以照它寫的那個顏色把缺的那幾態補上，不另外猜顏色。
+    function _vthFixTextColor(css) {
+        const t = String(css || '');
+        const bare = t.replace(/\/\*[\s\S]*?\*\//g, '');   // 註解會黏在選擇器前面（/* 內文 */ #dialogue-text），先拿掉再認
+        let base = '';
+        bare.replace(/([^{}]+)\{([^}]*)\}/g, (w, sel, body) => {
+            if (sel.split(',').some(x => x.trim() === '#dialogue-text')) {
+                const m = /(?:^|[;{\s])color\s*:\s*([^;}]+)/i.exec(body);
+                if (m) base = m[1].trim();
+            }
+            return w;
+        });
+        if (!base) return { css: t, hit: 0 };
+        const add = ['char', 'nar', 'inner'].filter(md =>
+            !new RegExp('\\.' + md + '-mode\\s+#dialogue-text[^{]*\\{(?:[^}]*[;\\s])?color\\s*:', 'i').test(bare));
+        const lines = add.map(md => '#text-panel.' + md + '-mode #dialogue-text{color:' + base + ';}');
+        // 粗體預設寫死白字（vn_styles.css）：主題換了內文字色卻沒管粗體，亮底上粗體那幾個字整串不見 → 跟著內文字色走（照樣是粗的）
+        if (!/#dialogue-text\s+strong[^{]*\{(?:[^}]*[;\s])?color\s*:/i.test(bare)) lines.push('#dialogue-text strong{color:inherit;}');
+        if (!lines.length) return { css: t, hit: 0 };
+        return { css: t + '\n' + lines.join('\n'), hit: lines.length };
+    }
     function _vthRisky(css) {
         const out = [];
         // 分層寫反：裝飾層騎到文字上面。文字區被蓋住是最傷的一種壞法（Rae 實機撞過放射狀線條蓋住整句）
@@ -1823,7 +1846,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         try {
             const t = String(css || '');
             const clear = /#text-panel\s*(?:\.(?:char|nar|inner)-mode)?[^{}]*\{[^}]*background\s*:\s*(?:none|transparent|rgba\([^)]*,\s*0(?:\.0*)?\s*\))/i.test(t);
-            const plateHasBg = /#text-panel\s*::?before[^{}]*\{[^}]*background/i.test(t);
+            // 底板可以三態各畫一塊（#text-panel.char-mode::before…），那也算有底（10-28 世界門實測 Sonnet 這樣寫被誤報）
+            const plateHasBg = /#text-panel(?:\.(?:char|nar|inner)-mode)?\s*::?before[^{}]*\{[^}]*background/i.test(t);
             if (clear && !plateHasBg) out.push('對話框沒有底（三態的背景被設成透明，底板也沒畫背景）');
         } catch (e) {}
         const re = /(?:^|\})\s*([^{}]*#text-panel[^{},]*)\{([^}]*)\}/g;
@@ -1888,7 +1912,8 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const VT = (window.parent || window).VN_Theme || window.VN_Theme;
         const VC = (window.parent || window).VN_Cache || window.VN_Cache;
         if (!VT) { host.innerHTML = '<div style="color:#fc8181;padding:10px;">VN_Theme 未載入，請先進 VN 一次再回來</div>'; return; }
-        const chatId = (VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : (VT.getCurrentWorld ? VT.getCurrentWorld() : '');
+        // 先問 VN_Theme：人在有自己主題的視差世界裡時它回那個世界，這裡改的就是世界那份（它自己會退回 VN_Cache 那個）
+        const chatId = VT.getCurrentWorld ? VT.getCurrentWorld() : ((VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : '');
         const css = VT.getCss(chatId);
         const esc = _sgcEsc;   // 也會放進 placeholder="…"、data-id="…"，引號要一起轉
         const ph = '手寫 / 貼上，或用上面的「AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n#vn-chapter-card / #vncc-box（章節卡；預設抄對話框的皮，要單獨設計就對 #vncc-box 寫規則加 !important）\n  #vncc-story #vncc-num #vncc-title #vncc-rule #vncc-preface｜.vncc-cell .vncc-cell-k .vncc-cell-v｜#vncc-enter（開始閱讀鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
@@ -4641,6 +4666,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 if (!got.css) throw new Error('它沒有交出 CSS');
                 return { css: got.css, note: got.note, cut: got.cut };
             },
+            pick: _vthPickCss,   // 世界門生結束畫面時一起生的那份也要從回覆裡挑 CSS（被切斷的會標 cut）
             doc: function (css, mode) { return _vthBuildSrcdoc(css, mode || 'char-mode', false); },
             skinCard: _vthSkinCard,   // 章節卡：畫完之後把對話框的皮抄到卡上（同編輯器的 frame.onload）
             // 尺寸同主題編輯器：手機 390×844；中間＝她在編輯器填的嵌入寬（vth_desk_w，預設 1000）×0.66；全屏＝螢幕
@@ -4649,7 +4675,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
                 return { phone: { w: 390, h: 844, lab: '手機' }, center: { w: dw, h: Math.round(dw * 0.66), lab: '中間' },
                     full: { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080, lab: '全屏' } };
             },
-            strip: _vthStripLayout, risky: _vthRisky, flat: _vthFlat, missingVars: _vthMissingVars,
+            strip: _vthStripLayout, risky: _vthRisky, flat: _vthFlat, missingVars: _vthMissingVars, fixText: _vthFixTextColor,
             gallery: _vthGalleryLoad, saveGallery: _vthGallerySave,
         },
         launch, attachVpScaler: _attachVpScaler,
