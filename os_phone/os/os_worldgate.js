@@ -171,8 +171,13 @@
     //   短的那支(抽種子,三十秒)不必開,維持原樣。
     // onChunk:串流途中每收到一塊就被叫一次,參數是「到目前為止的全文」(不是增量)。
     //   只有選了連接 profile 的人真的會串流,其餘路徑送出去也是整篇才回 → onChunk 從頭到尾不觸發,行為同以往。
-    // floor:這一趟的輸出上限至少要多少(不填=8192;只對 Claude 原生、Gemini 原生生效);只拉高、不壓低她填的數值。
-    async function _callAI(prompt, label, route, useMain, asText, stream, onChunk, floor) {
+    // 🧠 思考型模型的輸出上限要留思考的位子:Claude 5.5 一代(和 Gemini 的思考型)不送思考參數也會先想,思考也算在上限裡。
+    //   10-28/29 用官方 Opus/Sonnet/Haiku 5.5 實測:結束畫面上限 8192 時 Haiku 八千多全是思考、一個字沒寫;
+    //   抽種子三顆都要 2800~4900(原本吃她填的最大輸出,預設 2000);展開世界、召集旅人 Sonnet/Haiku 要 1 萬~2 萬(原本 8192)。
+    //   所以世界門每一通在原生格式(Claude 原生、Gemini 原生)都拉到這麼高:只按真的寫出來的字算錢,開高不多花。
+    //   OpenAI 相容那條不拉:常接 DeepSeek 這種上限 8192 的站,填超過會直接被退件。
+    const _THINK_ROOM = 48000;
+    async function _callAI(prompt, label, route, useMain, asText, stream, onChunk) {
         const api = win.OS_API || window.OS_API;
         if (!api || !api.chat) return null;
         try {
@@ -189,17 +194,24 @@
             // 複製再改:config 是 getConfig()/getSecondaryConfig() 回傳的,直接改等於動到設定本身。
             config = Object.assign({}, config || {}, { route });
             // 長輸出那幾支保底 8192:副模型的預設額度只有 1000,旅人那包 JSON 會被印到一半 → 整份 parse 失敗。
-            // 不動使用者填的數值本身,只在這一趟呼叫拉高(同 chatMain 的做法)。
-            if (stream === true) {
-                const _mt = parseInt(config.maxTokens);
-                // floor 只給原生格式:OpenAI 相容常接 DeepSeek 這種上限 8192 的站,填超過會被退件(_THINK_ROOM 那段)
-                const _fmt = String(config.apiFormat || 'openai');
-                const _need = Math.max(8192, (_fmt === 'anthropic' || _fmt === 'gemini') ? (parseInt(floor) || 0) : 0);
-                if (isNaN(_mt) || _mt < _need) config.maxTokens = _need;
-            }
-            const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, (typeof onChunk === 'function' ? onChunk : null), resolve, reject, { task: 'worldgate', label, keepCodeFences: true, stream: stream === true });
+            // 原生格式每一通拉到 _THINK_ROOM。不動使用者填的數值本身,只在這一趟呼叫拉高(同 chatMain 的做法)。
+            const _mt = parseInt(config.maxTokens);
+            const _fmt = String(config.apiFormat || 'openai');
+            const _old = stream === true ? Math.max(8192, isNaN(_mt) ? 0 : _mt) : _mt;   // 沒有思考位子時本來會送的
+            const _need = (_fmt === 'anthropic' || _fmt === 'gemini') ? _THINK_ROOM : (stream === true ? 8192 : 0);
+            let lifted = false;
+            if (_need && (isNaN(_mt) || _mt < _need)) { config.maxTokens = _need; lifted = _need !== _old; }
+            const ask = cfg => new Promise((resolve, reject) => {
+                api.chat([{ role: 'system', content: prompt }], cfg, (typeof onChunk === 'function' ? onChunk : null), resolve, reject, { task: 'worldgate', label, keepCodeFences: true, stream: stream === true });
             });
+            let raw;
+            try { raw = await ask(config); }
+            catch (e) {
+                // 舊型號寫不到這麼長(Opus 4.1 只到 32000、Gemini 2.0 只到 8192),拉高的上限會被退件 → 照原本的上限再送一次
+                if (!lifted || !/max_tokens|max.?output.?tokens|output tokens/i.test(String((e && e.message) || e))) throw e;
+                console.warn('[Worldgate③] ' + label + ':這顆模型不收 ' + config.maxTokens + ' 的上限,照原本的再送一次');
+                raw = await ask(Object.assign({}, config, { maxTokens: isNaN(_old) ? undefined : _old }));
+            }
             return asText ? _stripFences(raw) : _extractJSON(raw);
         } catch (e) { console.warn('[Worldgate③] ' + label + ' 失敗', e); return null; }
     }
@@ -912,7 +924,7 @@
             _worldLines(seed, worldText) +
             S.build(art.styleId, art.layoutId) +
             '語言:繁體中文。';
-        const raw = await _callAI(prompt, '世界門生成活動面板', 'worldgate_panel', false, true, true, null, _THINK_ROOM);
+        const raw = await _callAI(prompt, '世界門生成活動面板', 'worldgate_panel', false, true, true);
         if (!raw) return null;
         const html = _pickTagged(raw, 'panel-html');
         if (!html) { console.warn('[Worldgate③] 面板沒認到 <panel-html>,這個世界先不做面板'); return null; }
@@ -921,10 +933,6 @@
             styleId: art.styleId, layoutId: art.layoutId,
         };
     }
-    // 🧠 思考型模型的輸出上限要留思考的位子:Claude 5.5 一代(和 Gemini 的思考型)會先在思考裡把整份草稿寫一遍,
-    //   思考也算在上限裡。實測只做結束畫面、上限 8192:Haiku 5.5 八千多全是思考,一個字沒寫。
-    //   只給原生格式(Claude 原生、Gemini 原生)拉這麼高:OpenAI 相容那條常接 DeepSeek 這種上限 8192 的站,超過會直接被退件。
-    const _THINK_ROOM = 48000;
     // 🎨 劇情介面的說明書只有一份,在創作室(OS_STUDIO.vnTheme;創作室和小機做主題也是讀它)。沒載入就只做結束畫面。
     function _themeKit() {
         const St = win.OS_STUDIO || window.OS_STUDIO;
@@ -941,7 +949,7 @@
             (p ? '【美術方向】這個世界章末的結束畫面走「' + p.name + '」:' + p.metaphor + '。語氣是' + p.tone + '。配色結構:' + p.color + '。\n' +
                 '劇情介面跟結束畫面要看得出是同一個世界的東西:配色與材質語言跟它一致,但你做的是上面說明裡那一套元件,版型照說明,不必照搬結束畫面的排法。\n' : '') +
             '語言:繁體中文。';
-        const raw = await _callAI(prompt, '世界門生成主題', 'worldgate_theme', false, true, true, null, _THINK_ROOM);
+        const raw = await _callAI(prompt, '世界門生成主題', 'worldgate_theme', false, true, true);
         return raw ? _pickTheme(raw, T) : null;
     }
     // 從回覆裡挑 CSS,再剝掉會把配件推走的寫法(同小機、創作室套用前那道)。
