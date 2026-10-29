@@ -2533,6 +2533,22 @@
         await _syncFreeMode();
         try { await _syncWorldLamps(id, '每輪確認'); } catch (e) {}
         try { await _upgradeAchvBlock(id); } catch (e) {}
+        try { await _upgradePlanBlock(id); } catch (e) {}
+    }
+    // 🌳 岔路代號和 [Branch]／[Ending] 的標記說明是 10-29 才加進條目的（_planBlock）→ 之前展開的白板企劃世界，
+    //   酒館裡那條條目還是舊那份：主持AI 不知道要標記，岔路圖永遠不會亮（她問「當前的劇本可以繼續跑齁」才想到）。
+    //   跟成就那條同一招：條目原文重寫一次（不叫模型），存版號，每個世界只做一次。網頁版的條目是組提示詞時現組的，本來就是新的。
+    //   每輪確認＋換聊天室／開機那次都會叫：打開聊天室的第一章就用得上，不用等第一章寫完
+    const PLAN_BLOCK_V = 1;   // 1=10-29 岔路代號＋標記
+    async function _upgradePlanBlock(id) {
+        if (!id || _pwa()) return;
+        const w = await _worldById(id);
+        if (!w || !w.entryText || !_planTree(w)) return;
+        if (w.planBlockV === PLAN_BLOCK_V) return;
+        if (!(await _writeEntry(w, w.entryText))) return;
+        w.planBlockV = PLAN_BLOCK_V;
+        await _saveWorld(w, ['planBlockV']);
+        console.log('[Worldgate③] 🌳「' + w.name + '」的條目換上岔路代號和標記說明');
     }
 
     // 成就取名規則改寫過（見 _achvBlock）→ 已經落地的條目還是舊那份,主持AI 讀到的也還是舊的。
@@ -2622,6 +2638,7 @@
             await _syncFreeMode();
             try { await _syncWorldLamps(id, '換聊天室'); } catch (e) {}
             try { await syncTheme(); } catch (e) {}
+            try { await _upgradePlanBlock(id); } catch (e) {}   // 舊世界的條目換上岔路標記說明（只做一次）
         };
         // 延遲是等酒館把 chatId 切過去,太早讀到的還是上一個聊天室(同 vn_free_mode 的作法)
         win.eventOn(ev.CHAT_CHANGED, () => { setTimeout(_resync, 800); });
@@ -3676,7 +3693,7 @@
             panel: pt.panel || null,   // 🎴 VN 劇情末尾那一頁的外觀;null=沒生成到,末尾退回原本那幾顆鍵
             vnTheme: pt.theme || '',   // 🎨 這個世界的劇情主題(對話框那套 CSS),跟結束畫面同時生的(兩通);空=照舊用這本故事的主題
             achv: achv || null,     // 🏅 這個世界的成就清單;解鎖仍走既有的成就標記,這裡只是清單
-            visits: 0, ts: Date.now(),
+            visits: 0, ts: Date.now(), planBlockV: PLAN_BLOCK_V,   // 新建的條目本來就是新的岔路標記說明（_upgradePlanBlock 不用再寫一次）
             // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
             //   同行旅人那欄也留著：第一批旅人沒召集到時，詳情頁「召集旅人」還要照它召
             //   vars＝SN 收尾設計的狀態欄（人在這個世界裡掛成一包，見 _syncPlanPack）
