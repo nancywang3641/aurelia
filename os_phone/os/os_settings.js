@@ -34,7 +34,7 @@
             ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖。上面每個地方挑一包，好幾個地方可以用同一包。' },
             ss_img_style_ref: { title: '底圖', body: '給生圖參考畫風用的一張圖。只有自訂接口收得到參考圖，其他接口會略過。' },
             ss_img_test: { title: '試畫一張', body: '選一個地方，照那一列現在的設定畫一張。ComfyUI 的預設包要先存好才試得到。' },
-            ss_cfd_edit: { title: '載入預設包', body: '下面這些欄位就是 ComfyUI「目前的設定」。按底部「保存所有設定」存的是它，不會動到任何預設包。\n\n選一個包，欄位就換成那個包的內容。改完按「存回這個包」才會改到那個包；按「另存新的包」存成新的一個。選了包再按底部保存，目前的設定就變成畫面上這一份。\n\n哪個地方用目前的設定、哪個地方用哪個包，在「畫風」頁選。' },
+            ss_cfd_edit: { title: '預設包', body: '下面這些欄位就是 ComfyUI「目前的設定」。按底部「保存所有設定」存的是它，不會動到任何預設包。\n\n選一個包，欄位就換成那個包的內容。下拉直接選，或按「看圖挑」看著預覽圖按「套用」，兩個是一樣的；匯入、匯出、拖圖建包也在看圖挑那個窗裡。改完按「存回這個包」才會改到那個包；按「另存新的包」存成新的一個。選了包再按底部保存，目前的設定就變成畫面上這一份。\n\n哪個地方用目前的設定、哪個地方用哪個包，在「畫風」頁選。' },
             ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。' },
             ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
@@ -1720,13 +1720,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     </div>
                                     <div class="set-desc" id="img-cfd-status" style="margin-top:6px;"></div>
                                 </div>
-                                <div class="set-group">
-                                    <div class="set-label" title="把整組設定存起來，一鍵切換。每個包存一組設定，可存預覽圖、套用、刪除。改完記得到底部按儲存。"><i class="fa-solid fa-box"></i> 預設包</div>
-                                    <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()" style="margin-top:4px;"><i class="fa-solid fa-box"></i> 打開預設包 · ${(imgConfig.comfyuiDirect?.presets || []).length} 個</button>
-                                </div>
                                 <div class="set-group" id="img-cfd-edit-group">
-                                    <div class="set-label"><i class="fa-solid fa-pen-to-square"></i> 載入預設包${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cfd_edit') : ''}</div>
-                                    <select class="set-select" id="img-cfd-edit-sel"></select>
+                                    <div class="set-label"><i class="fa-solid fa-box"></i> 預設包${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cfd_edit') : ''}</div>
+                                    <div class="cfd-pack-pick-row">
+                                        <select class="set-select" id="img-cfd-edit-sel"></select>
+                                        <button class="set-btn" id="img-cfd-preset-open" type="button" onclick="window._cfdPreset.open()"><i class="fa-solid fa-table-cells-large"></i> 看圖挑 · ${(imgConfig.comfyuiDirect?.presets || []).length}</button>
+                                    </div>
                                     <div class="set-room-style-btns">
                                         <button class="set-btn" type="button" onclick="window._cfdEdit && window._cfdEdit.saveBack()"><i class="fa-solid fa-floppy-disk"></i> 存回這個包</button>
                                         <button class="set-btn" type="button" onclick="window._cfdEdit && window._cfdEdit.saveAs()"><i class="fa-solid fa-plus"></i> 另存新的包</button>
@@ -1734,19 +1733,16 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     <div class="set-desc" id="img-cfd-edit-status"></div>
                                 </div>
                                 <!-- 預設包 modal（可視化卡片牆） -->
-                                <div id="img-cfd-preset-modal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
-                                    <div style="background:#f5f3ee; width:min(560px,92%); max-height:calc(100% - 24px); border-radius:12px; padding:16px; overflow:auto; box-shadow:0 10px 40px rgba(0,0,0,0.4);">
-                                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;">
-                                            <div style="font-size:15px; font-weight:700; color:var(--os-ink);"><i class="fa-solid fa-box"></i> 預設包</div>
-                                            <span style="cursor:pointer; font-size:18px; color:var(--os-ink); padding:0 6px;" onclick="window._cfdPreset.close()">✕</span>
+                                <div id="img-cfd-preset-modal" class="cfd-pack-modal">
+                                    <div class="cfd-pack-box">
+                                        <div class="cfd-pack-head">
+                                            <div class="cfd-pack-title"><i class="fa-solid fa-box"></i> 預設包<span class="cfd-pack-count" id="img-cfd-preset-count"></span></div>
+                                            <button type="button" class="cfd-pack-close" title="關閉" onclick="window._cfdPreset.close()"><i class="fa-solid fa-xmark"></i></button>
                                         </div>
-                                        <div style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.7); margin-bottom:4px;"><i class="fa-solid fa-palette"></i> 預覽測試詞（每個包都用這句生縮圖，只比風格差異）</div>
-                                        <input id="img-cfd-preview-prompt" class="set-input" style="width:100%; margin-bottom:12px;" value="${(imgConfig.comfyuiDirect?.previewPrompt || '1 person, upper body portrait, looking at viewer, simple background').replace(/"/g,'&quot;')}">
-                                        <div id="img-cfd-preset-grid" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px;"></div>
-                                        <div style="display:flex; gap:6px; align-items:center; margin-top:14px; border-top:1px solid rgba(var(--os-ink-rgb), 0.12); padding-top:12px;">
-                                            <input id="img-cfd-preset-newname" class="set-input" placeholder="新預設包名稱（如：日常動漫）" style="flex:1;">
-                                            <button class="set-btn" type="button" onclick="window._cfdPreset.saveNew()" style="white-space:nowrap;"><i class="fa-solid fa-plus"></i> 從目前設定另存</button>
-                                        </div>
+                                        <div class="cfd-pack-body">
+                                        <div class="cfd-pack-pv-label"><i class="fa-solid fa-palette"></i> 預覽測試詞（每個包都用這句生縮圖，只比風格差異）</div>
+                                        <input id="img-cfd-preview-prompt" class="set-input cfd-pack-pv-input" value="${(imgConfig.comfyuiDirect?.previewPrompt || '1 person, upper body portrait, looking at viewer, simple background').replace(/"/g,'&quot;')}">
+                                        <div id="img-cfd-preset-grid" class="cfd-pack-grid"></div>
                                         <div class="cfd-wf-restore">
                                             <div class="cfd-wf-restore-drop" id="img-cfd-wf-drop"><i class="fa-solid fa-image"></i> 拖一張以前用 ComfyUI 生的圖進來（或點這裡選檔）<br>自動把模型／LoRA／採樣器／提示詞拆進一張預設卡，套用後每格都能調</div>
                                             <input type="file" id="img-cfd-wf-img" accept="image/png" class="cfd-pack-file-hidden">
@@ -1766,6 +1762,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                                 <button class="set-btn" type="button" onclick="window._cfdPreset._applyImport('append')">全部新增</button>
                                                 <button class="set-btn cfd-import-cancel" type="button" onclick="window._cfdPreset._cancelImport()">取消</button>
                                             </div>
+                                        </div>
                                         </div>
                                     </div>
                                 </div>

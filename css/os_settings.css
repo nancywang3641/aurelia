@@ -149,9 +149,30 @@
         input:checked + .slider:before { transform: translateX(20px); background-color: var(--os-ink); box-shadow: 0 0 8px rgba(var(--os-ink-rgb), 0.5); }
         .set-status { font-size: 11px; font-weight: bold; color: rgba(var(--os-ink-rgb), 0.72); text-align: center; margin-top: 20px; min-height: 20px; padding-bottom: 20px; letter-spacing: 1px; }
 
-        /* 生圖預設包 匯入/匯出 */
-        .cfd-pack-io-row { display: flex; gap: 6px; margin-top: 8px; }
-        .cfd-pack-io-row .set-btn { flex: 1; white-space: nowrap; }
+        /* ComfyUI 預設包：設定頁上一張卡（下拉＋看圖挑、存回／另存）→ 看圖挑開這個窗
+           窗＝標題固定、底下捲：61 個包也找得到右上角的叉；縮圖跟著窗寬排，手機窗三欄（以前一欄一張 330px，捲兩萬多像素） */
+        .cfd-pack-pick-row { display: flex; gap: 6px; align-items: stretch; }
+        .cfd-pack-pick-row .set-select { flex: 1; min-width: 0; }
+        .cfd-pack-pick-row .set-btn { flex: none; white-space: nowrap; }
+        .cfd-pack-modal { display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(0,0,0,0.55); align-items: center; justify-content: center; padding: 12px; box-sizing: border-box; }
+        .cfd-pack-modal.is-open { display: flex; }
+        .cfd-pack-box { background: var(--os-page-bg); border-radius: 12px; width: 100%; max-width: 560px; max-height: 100%; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 12px 40px rgba(0,0,0,0.3); }
+        .cfd-pack-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 8px 10px 14px; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.12); }
+        .cfd-pack-title { font-size: 15px; font-weight: 700; color: var(--os-ink); }
+        .cfd-pack-count { margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--os-ink-soft); }
+        .cfd-pack-close { flex: none; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; background: none; border: none; border-radius: 8px; font-size: 18px; color: var(--os-ink-soft); cursor: pointer; }
+        .cfd-pack-close:hover { color: var(--os-ink); background: rgba(var(--os-ink-rgb), 0.08); }
+        .cfd-pack-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 12px; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
+        .cfd-pack-pv-label { font-size: 11px; color: rgba(var(--os-ink-rgb), 0.7); margin-bottom: 4px; }
+        .cfd-pack-pv-input { width: 100%; box-sizing: border-box; margin-bottom: 12px; }
+        .cfd-pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+        .cfd-pack-grid .cfd-pack-acts { gap: 2px; }
+        .cfd-pack-grid .cfd-pack-act { min-width: 0; }
+        .cfd-pack-card.is-on { border-color: #2b6cb0; box-shadow: 0 0 0 1px #2b6cb0; }
+
+        /* 生圖預設包 匯入/匯出（NAI 那個窗也用這排）：窄的時候換行，別讓最後一顆被切掉 */
+        .cfd-pack-io-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+        .cfd-pack-io-row .set-btn { flex: 1 1 auto; white-space: nowrap; }
         .cfd-pack-io-hint { font-size: 10px; color: var(--os-ink-soft); margin-top: 4px; line-height: 1.5; }
         .cfd-pack-file-hidden { display: none; }
         .cfd-pack-clear { color: #c0392b; border-color: rgba(192,57,43,0.4); }
@@ -161,7 +182,7 @@
 
         /* 預設包卡片牆：縮圖 → 名字（點下去就地改名）→ 套用 → 預覽/改名/覆蓋/刪除 */
         .cfd-pack-empty { grid-column: 1 / -1; color: var(--os-ink-soft); font-size: 12px; padding: 20px; text-align: center; line-height: 1.6; }
-        .cfd-pack-card { border: 1px solid rgba(var(--os-ink-rgb), 0.15); border-radius: 8px; padding: 8px; background: var(--os-surface); }
+        .cfd-pack-card { border: 1px solid rgba(var(--os-ink-rgb), 0.15); border-radius: 8px; padding: 6px; background: var(--os-surface); min-width: 0; }
         .cfd-pack-thumb { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 6px; background: rgba(var(--os-ink-rgb), 0.04); display: block; }
         .cfd-pack-thumb-empty { display: flex; align-items: center; justify-content: center; background: rgba(var(--os-ink-rgb), 0.06); color: var(--os-ink-soft); font-size: 11px; text-align: center; line-height: 1.5; }
         .cfd-pack-name { font-size: 12px; font-weight: 600; color: var(--os-ink); margin: 6px 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }

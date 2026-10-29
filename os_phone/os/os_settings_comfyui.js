@@ -377,13 +377,17 @@
                 const grid = container.querySelector('#img-cfd-preset-grid');
                 if (!grid) return;
                 const openBtn = container.querySelector('#img-cfd-preset-open');
-                if (openBtn) openBtn.textContent = '打開預設包（' + cfdPresets.length + ' 個）';
-                if (!cfdPresets.length) { grid.innerHTML = '<div class="cfd-pack-empty">還沒有預設包。把面板調好後，按下面「<i class="fa-solid fa-plus"></i> 從目前設定另存」。</div>'; return; }
+                if (openBtn) openBtn.innerHTML = '<i class="fa-solid fa-table-cells-large"></i> 看圖挑 · ' + cfdPresets.length;
+                const countEl = container.querySelector('#img-cfd-preset-count');
+                if (countEl) countEl.textContent = cfdPresets.length ? String(cfdPresets.length) : '';
+                if (!cfdPresets.length) { grid.innerHTML = '<div class="cfd-pack-empty">還沒有預設包。把面板調好後，關掉這個窗按「<i class="fa-solid fa-plus"></i> 另存新的包」，或把以前用 ComfyUI 生的圖拖到下面。</div>'; return; }
+                // 面板上現在載的是哪個包：那張卡框起來（_editing 宣告在下面，經 _cfdEdit 問，開窗前還沒建好就當沒有）
+                const cur = (window._cfdEdit && window._cfdEdit.current) ? window._cfdEdit.current() : '';
                 grid.innerHTML = cfdPresets.map(function(p, i){
                     const thumb = p.preview
-                        ? '<img class="cfd-pack-thumb" src="' + escAttr(p.preview) + '">'
+                        ? '<img class="cfd-pack-thumb" loading="lazy" src="' + escAttr(p.preview) + '">'
                         : '<div class="cfd-pack-thumb cfd-pack-thumb-empty">尚無預覽</div>';
-                    return '<div class="cfd-pack-card">' +
+                    return '<div class="cfd-pack-card' + (cur && p.name === cur ? ' is-on' : '') + '">' +
                         thumb +
                         '<div class="cfd-pack-name" data-idx="' + i + '" title="' + escAttr(p.name) + (p.customWorkflow ? '（自帶工作流）' : '') + '　點名字可以改名" onclick="window._cfdPreset.renameIdx(' + i + ')">' +
                           (p.customWorkflow ? '<i class="fa-solid fa-gear cfd-pack-wf"></i>' : '') + escAttr(p.name) +
@@ -485,8 +489,8 @@
                 return res;
             }
             window._cfdPreset = {
-                open: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.style.display = 'flex'; this._cancelImport(); renderPresetGrid(); },
-                close: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.style.display = 'none'; },
+                open: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.classList.add('is-open'); this._cancelImport(); renderPresetGrid(); },
+                close: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.classList.remove('is-open'); },
                 applyIdx: function(i){
                     const p = cfdPresets[i]; if (!p) return;
                     _pick(p.name || '');   // 打開這個包來改（面板上方「正在改的預設包」跟著換）
@@ -529,14 +533,6 @@
                         else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
                     });
                     inp.addEventListener('blur', function(){ finish(true); });
-                },
-                saveNew: function(){
-                    const ni = container.querySelector('#img-cfd-preset-newname');
-                    const name = ni && ni.value.trim();
-                    if (!name) { AUI.alert('請先輸入新預設包名稱'); if (ni) ni.focus({ preventScroll: true }); return; }
-                    cfdPresets.push(buildCfdPreset(name));
-                    if (ni) ni.value = '';
-                    renderPresetGrid();
                 },
                 // 🖼️ 拖/選一張以前 ComfyUI 生的圖 → 讀出當初工作流 → 直接變成一張帶工作流的預設包卡（原圖當預覽縮圖）
                 importImage: function(){
@@ -780,6 +776,7 @@
             }
             window._cfdEdit = {
                 pick: _pick,
+                current: function(){ return _editing; },
                 // 面板上載的是哪個包就存回哪個；面板上是目前的設定（沒有包可存回）＝另存新的包
                 saveBack: function(){
                     const i = _editing ? cfdPresets.findIndex(function(x){ return x.name === _editing; }) : -1;
