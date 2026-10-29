@@ -150,3 +150,6 @@ body.snb-harness .lobby-left{position:fixed;inset:0}
 .snb-dest:not(:disabled):hover{border-color:var(--blue)}
 .snb-dest:disabled{opacity:.55;cursor:default}
 .snb-back h5{margin:12px 0 6px;font-size:12px;opacity:.8}
+/* 🧾 收尾做到哪（企劃書那頁）：做好的實心、還沒做的淡、沒做成跳過的劃掉 */
+.snb-fin{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 2px}.snb-fin span{background:#fff;border-radius:10px;padding:4px 9px;font-size:12px;display:flex;gap:5px;align-items:center;opacity:.55}
+.snb-fin span.is-on{opacity:1}.snb-fin span.is-on i{color:var(--mint)}.snb-fin span.is-now{opacity:1;outline:1.5px dashed var(--blue)}.snb-fin span.is-skip{text-decoration:line-through}

@@ -65,6 +65,36 @@
         _pendingCur = v ? { id: v, ts: Date.now() } : null;   // 撤離(空值)要把手上那筆一起丟掉
         if (c) await _set(K_CURRENT, v, c);
         try { await syncTheme(); } catch (e) {}   // 進世界換上它的劇情介面、撤離換回這本故事的
+        try { await _syncPlanPack(); } catch (e) { console.warn('[Worldgate③] 狀態欄掛不上', e); }   // SN 收尾設計的狀態欄跟著進出
+    }
+    // 🧾 SN 收尾設計的狀態欄：人在那個世界裡就替這個聊天室掛一包（AVS 變數包綁 chatId＝只有這一室在用），撤離、換世界就收掉。
+    //   只掛定義：變數說明每一輪由 state_runtime 從綁這一室的包組進提示詞，第一章起抽狀態的副模型照說明填值。
+    //   🚨 初值不由這裡寫：AVS 的 initFromPack 會把整份狀態換掉；自己讀了改再寫，又可能撞上快取還沒對到這一室、讀到空的再整份寫回去。
+    async function _syncPlanPack() {
+        const db = _db();
+        if (!db || !db.getAllVarPacks || !db.saveVarPack || !db.deleteVarPack) return;
+        const AD = win.OS_AVS_ADAPTER || window.OS_AVS_ADAPTER;
+        const cid = (AD && AD.getCurrentChatId && AD.getCurrentChatId()) || _cid();
+        if (!cid) return;
+        const id = await _getCurrentId();
+        const w = id ? await _worldById(id) : null;
+        const vars = (w && w.plan && Array.isArray(w.plan.vars)) ? w.plan.vars.filter(v => v && v.name) : [];
+        const want = vars.length ? 'pack_wg_' + w.id + '_' + cid : '';
+        const all = (await db.getAllVarPacks()) || [];
+        let changed = false;
+        for (const p of all) {
+            if (p && typeof p.id === 'string' && p.id.indexOf('pack_wg_') === 0 && p.chatId === cid && p.id !== want) { await db.deleteVarPack(p.id); changed = true; }
+        }
+        if (want) {
+            const variables = vars.map(v => ({ name: String(v.name), type: v.type || 'string', defaultValue: v.defaultValue == null ? '' : String(v.defaultValue), desc: String(v.desc || '') }));
+            const cur = all.find(p => p && p.id === want);
+            if (!cur || JSON.stringify(cur.variables) !== JSON.stringify(variables)) {
+                await db.saveVarPack({ id: want, name: '世界門・' + w.name, chatId: cid, variables,
+                    notes: 'SN 企劃室收尾時替「' + w.name + '」設計的狀態欄。人在這個世界裡自動掛上，撤離或換到別的世界就收起來。' });
+                changed = true;
+            }
+        }
+        if (changed) { try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {} }
     }
     // 舊資料搬家:把 global 那一格搬進「現在這個聊天室」，然後清掉。
     //   只做一次，其餘聊天室從乾淨狀態開始——所以絕不能在拿不到 chatId 時就清掉 global。
@@ -115,7 +145,12 @@
 
     // ── 副模型呼叫(仿 os_cafe:優先副模型 config,失敗回 null 讓 UI 給重試) ──
     function _extractJSON(raw) {
-        try { const m = String(raw || '').match(/[\[{][\s\S]*[\]}]/); return m ? JSON.parse(m[0]) : null; }
+        const m = String(raw || '').match(/[\[{][\s\S]*[\]}]/);
+        if (!m) return null;
+        try { return JSON.parse(m[0]); } catch (e) {}
+        // 10-29 實測 Haiku 5.5 寫成就清單，最後一個陣列後面多了一個逗號（],}）→ 整份報廢、白燒一班。
+        //   括號前面多出來的逗號剝掉再試一次（字串裡剛好有「,}」的機會很小，剝錯了也只是跟原本一樣讀不到）
+        try { return JSON.parse(m[0].replace(/,(\s*[\]}])/g, '$1')); }
         catch (e) { return _salvageObjects(raw); }   // 被截斷 → 還是把已經寫完的那幾個撿回來
     }
     // 🚨JSON 被截斷時別整包丟掉:掃出所有「大括號成對且 parse 得過」的物件。
@@ -315,9 +350,10 @@
             '人物:\n' + people + '\n岔路:\n' + nodes + '\n可能的結局:\n' + endings +
             (plan.secret ? '\n祕密與真相:' + plan.secret : '') + '\n';
     }
-    async function _expandWorldText(seed, note, plan) {
-        const prompt =
-            '你是一位資深的跑團世界觀設計師。請把以下世界種子擴寫成一份可以直接拿來跑團的世界檔案。\n' +
+    // 世界檔案這一通拆成三塊：說明書(_worldPrompt)、讀回覆(_readWorld)、世界門自己叫(_expandWorldText)。
+    //   前兩塊也借給 SN 白板的收尾那班用(snKit):走 SN 那條的世界由值班的人照同一份說明書寫,愛麗絲開門時不再生(她 10-29)
+    function _worldPrompt(seed, note, plan) {
+        return '你是一位資深的跑團世界觀設計師。請把以下世界種子擴寫成一份可以直接拿來跑團的世界檔案。\n' +
             _genreLine(seed) +
             _toneLine(seed) +
             '【世界種子】' + JSON.stringify(seed) + '\n' +
@@ -366,17 +402,31 @@
             '結尾第二行 降生地:名稱|方位|一句話 / 名稱|方位|一句話 / …(給 3~4 個,斜線分隔;方位只能是 北/南/東/西/東北/東南/西北/西南/中央 其中一個;' +
             '這些是第二節寫過的區域裡,適合玩家第一次落地的地方,各自感覺要明顯不同;一句話寫「在這裡開場會看到什麼」,不超過20字)\n' +
             '語言:繁體中文。';
+    }
+    // 回覆 → { text, keys, spawns, artPrompt, mapPrompt }(四行程式資料剝掉、世界名排第一個關鍵字)
+    function _readWorld(text, seed) {
+        const r = _parseProgramLines(text);
+        const keys = r.keys;
+        if (!keys.length || keys[0] !== seed.name) keys.unshift(seed.name);
+        return { text: r.text, keys: keys.slice(0, 5), spawns: r.spawns, artPrompt: r.artPrompt, mapPrompt: r.mapPrompt };
+    }
+    // 截斷保險:尾巴那兩行(關鍵字／降生地)都不在＝寫到一半被切斷
+    // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
+    //    舊字串比對不到就會每次都誤判成截斷、白白多燒一次主模型。
+    // 🚨這裡也不能只認標籤:模型省略標籤時會被誤判成截斷,白燒一次續寫。
+    //   降生地那行帶 | 與 / 的長相最好認,拿它當第二道判準。
+    function _worldCut(text) {
+        const _tail = String(text || '').slice(-800);
+        return !/關鍵字[:：]|降生地[:：]/.test(_tail) &&
+            !_tail.split('\n').some(s => s.indexOf('|') >= 0 && s.indexOf('/') >= 0);
+    }
+    async function _expandWorldText(seed, note, plan) {
+        const prompt = _worldPrompt(seed, note, plan);
         _earlyStart();   // 🐣 這一趟的早鳥開張:串流一吐出概念圖那行就開生,不等正文寫完
         let text = _cleanModelOutput(await _callAI(prompt, '世界門展開世界', 'worldgate_expand', true, true, true, _earlyScan));
         if (!text) return null;
         // 截斷保險:尾巴那節沒寫到就接著補完(整份重生太貴,也會換一套設定)
-        // 🚨判斷一定要在「清乾淨之後」的文字上做,而且別綁節名——節名改過一次(冒險引擎→自己在轉的事),
-        //    舊字串比對不到就會每次都誤判成截斷、白白多燒一次主模型。
-        // 🚨這裡也不能只認標籤:模型省略標籤時會被誤判成截斷,白燒一次續寫。
-        //   降生地那行帶 | 與 / 的長相最好認,拿它當第二道判準。
-        const _tail = text.slice(-800);
-        if (!/關鍵字[:：]|降生地[:：]/.test(_tail) &&
-            !_tail.split('\n').some(s => s.indexOf('|') >= 0 && s.indexOf('/') >= 0)) {
+        if (_worldCut(text)) {
             console.warn('[Worldgate③] 世界檔案疑似被截斷,續寫補完');
             const more = await _callAI(
                 '以下是一份寫到一半的跑團世界檔案。請直接接著往下寫完剩下的段落,不要重複已經寫過的內容,不要開場白或結語,不要重寫標題以外的舊段落。' +
@@ -388,10 +438,7 @@
                 '世界門續寫檔案', 'worldgate_expand', true, true, true);
             if (more) text += '\n' + _cleanModelOutput(more);
         }
-        const r = _parseProgramLines(text);
-        const keys = r.keys;
-        if (!keys.length || keys[0] !== seed.name) keys.unshift(seed.name);
-        return { text: r.text, keys: keys.slice(0, 5), spawns: r.spawns, artPrompt: r.artPrompt, mapPrompt: r.mapPrompt };
+        return _readWorld(text, seed);
     }
     // ── 四行程式資料的解析(解析完一律從正文剝掉,留著會被主持AI當成劇情念出來) ──
     // 🚨不能只認行首標籤:模型會把「概念圖:」這種行首當成「標題」一起省掉,
@@ -552,13 +599,22 @@
             'hook 寫這位旅人跟哪個岔路或結局有關、怎麼有關(照企劃寫的;你自己補的那幾位寫空字串),他的 reason、goal、breakup 要跟 hook 接得上。' +
             '岔路與結局只是可能會發生的事,不要寫成他一定會做的事。\n';
     }
-    async function _expandTravelers(seed, worldText, note, pref, plan) {
-        const planT = _planTravLine(plan, !!String((pref && pref.note) || '').trim());
-        const prompt =
-            '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
+    // 說明書／讀回覆拆開(同 _worldPrompt):SN 白板收尾那班也照這份召集
+    // 🧑‍💼 SN 收尾寫的旅人提示（什麼類型的人適合這個世界）：旅人每次都是隨機召集的，所以企劃室只給方向、每一批都照它找（她 10-29）
+    function _travHintLine(hint, hasWish) {
+        hint = String(hint || '').trim();
+        if (!hint) return '';
+        return '【企劃室的旅人提示】' + hint + '——這是規劃這個世界的人寫的方向:照這個方向找,每一批找來的人都要不一樣,下面的配額照樣要滿足' +
+            (hasWish ? ';跟【這一趟想找的人】衝突時以那邊為準' : '') + '。\n';
+    }
+    function _travPrompt(seed, worldText, note, pref, plan, hint) {
+        const wish = !!String((pref && pref.note) || '').trim();
+        const planT = _planTravLine(plan, wish);
+        return '你是一位資深的跑團角色設計師。以下是玩家即將前往的世界檔案,請生成 4 位正在純白大廳等待組隊、準備前往這個世界的同行旅人。\n' +
             _toneLine(seed) +   // 喜劇向的世界配四段悲愴身世會很出戲
             _noteLine(note) +
             planT +
+            _travHintLine(hint, wish) +
             _prefLines(pref) +
             '他們是視差玩家(來自奧瑞亞的普通人),不是這個世界的原住民;世界檔案第九節的核心人物不算在內,不可重複。性格差異明顯。\n' +
             // 🚨這四個人是各自報名、在大廳湊在一起的陌生人,不是一支照著世界主題配好的專業小隊。
@@ -592,11 +648,17 @@
             //   看不到名單當然會撞。不必把那節餵回去(輸入暴增會擠掉輸出額度),列出名字就夠了。
             _coreNamesLine(worldText) +
             '語言:繁體中文。';
+    }
+    function _readTrav(r) {
+        const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
+        return arr.filter(t => t && t.name);
+    }
+    async function _expandTravelers(seed, worldText, note, pref, plan, hint) {
+        const prompt = _travPrompt(seed, worldText, note, pref, plan, hint);
         // 旅人走副模型:四張身分卡＋考題包是照規格填欄位,不是重活,主模型寫這個又慢又貴。
         // 世界檔案那支仍留給主模型——那份是整個世界的地基,後面所有東西都長在它上面。
         const r = await _callAI(prompt, '世界門召集旅人', 'worldgate_travelers', false, false, true);   // 這支也跑兩百多秒,同樣要串流
-        const arr = Array.isArray(r) ? r : (r && Array.isArray(r.travelers) ? r.travelers : []);
-        return arr.filter(t => t && t.name);
+        return _readTrav(r);
     }
     // 只抓第九節的人物「名字」給旅人那支避開：整節餵回去會讓輸入暴增（那正是當初砍掉它的原因），
     //   但完全不給,規則寫再多次「不可重複」它也不知道要避開誰。
@@ -917,14 +979,15 @@
             (seed.genre ? '(題材:' + seed.genre + ')' : '') + (seed.style ? '(風格:' + seed.style + ')' : '') + '\n' +
             '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n';
     }
-    async function _makePanel(S, art, seed, worldText) {
-        const prompt =
-            _PANEL_RULES +
+    // 說明書／讀回覆拆開(同 _worldPrompt):SN 白板收尾那班也照這份做
+    function _panelPrompt(S, art, seed, worldText) {
+        return _PANEL_RULES +
             _screenLine() +
             _worldLines(seed, worldText) +
             S.build(art.styleId, art.layoutId) +
             '語言:繁體中文。';
-        const raw = await _callAI(prompt, '世界門生成活動面板', 'worldgate_panel', false, true, true);
+    }
+    function _readPanel(raw, art) {
         if (!raw) return null;
         const html = _pickTagged(raw, 'panel-html');
         if (!html) { console.warn('[Worldgate③] 面板沒認到 <panel-html>,這個世界先不做面板'); return null; }
@@ -933,6 +996,9 @@
             styleId: art.styleId, layoutId: art.layoutId,
         };
     }
+    async function _makePanel(S, art, seed, worldText) {
+        return _readPanel(await _callAI(_panelPrompt(S, art, seed, worldText), '世界門生成活動面板', 'worldgate_panel', false, true, true), art);
+    }
     // 🎨 劇情介面的說明書只有一份,在創作室(OS_STUDIO.vnTheme;創作室和小機做主題也是讀它)。沒載入就只做結束畫面。
     function _themeKit() {
         const St = win.OS_STUDIO || window.OS_STUDIO;
@@ -940,16 +1006,17 @@
         return (T && typeof T.spec === 'function' && typeof T.pick === 'function') ? T : null;
     }
     // 跟創作室「AI 生成主題」同一份說明書,「用戶想要的風格」換成這個世界＋結束畫面那份美術方向的識別(不帶版型:那是結束畫面的骨架)
-    async function _makeTheme(S, art, T, seed, worldText) {
+    function _themePrompt(S, art, T, seed, worldText) {
         const p = S.get ? S.get(art.styleId) : null;
-        const prompt =
-            T.spec() + '\n' +
+        return T.spec() + '\n' +
             '用戶想要的風格:做成「' + seed.name + '」這個世界裡真的會有的介面,用這個世界自己的材料。\n' +
             _worldLines(seed, worldText) +
             (p ? '【美術方向】這個世界章末的結束畫面走「' + p.name + '」:' + p.metaphor + '。語氣是' + p.tone + '。配色結構:' + p.color + '。\n' +
                 '劇情介面跟結束畫面要看得出是同一個世界的東西:配色與材質語言跟它一致,但你做的是上面說明裡那一套元件,版型照說明,不必照搬結束畫面的排法。\n' : '') +
             '語言:繁體中文。';
-        const raw = await _callAI(prompt, '世界門生成主題', 'worldgate_theme', false, true, true);
+    }
+    async function _makeTheme(S, art, T, seed, worldText) {
+        const raw = await _callAI(_themePrompt(S, art, T, seed, worldText), '世界門生成主題', 'worldgate_theme', false, true, true);
         return raw ? _pickTheme(raw, T) : null;
     }
     // 從回覆裡挑 CSS,再剝掉會把配件推走的寫法(同小機、創作室套用前那道)。
@@ -983,9 +1050,8 @@
     //   名字對得上清單的就是這個世界的成就,對不上的就是原本那種即興成就,兩邊互不干擾。
     // 真正的用途不是收集要素,是「給主持AI 的方向」:清單寫進世界書條目、每一輪都看得到,
     //   它就會朝那些方向鋪機會。全是戰鬥成就的世界,主持AI 也只會給你戰鬥。
-    async function _expandAchv(seed, worldText) {
-        const prompt =
-            '你是一位跑團設計師。請為以下這個世界設計一份成就清單,玩家在這個世界裡達成後會被記錄下來。\n' +
+    function _achvPrompt(seed, worldText) {
+        return '你是一位跑團設計師。請為以下這個世界設計一份成就清單,玩家在這個世界裡達成後會被記錄下來。\n' +
             // 🚨她做這份清單的原因就是這條:預設情況下每個世界都變成打打殺殺,隊友淪為工具人
             '【最重要的一條】這個世界不是只有戰鬥。一般成就裡最多一條跟戰鬥或危險有關,' +
             '其餘要來自這個世界的日常:謀生、手藝、交易、旅行、見識、吃住、打聽消息、跟當地人打交道。\n' +
@@ -1001,7 +1067,11 @@
             '成就名要用這個世界自己的說法,不要用「成就」「達成」「任務」這種字眼。\n' +
             '【世界檔案(節錄)】\n' + _briefWorld(worldText) + '\n' +
             _toneLine(seed) + '語言:繁體中文。';
-        const r = await _callAI(prompt, '世界門設計成就', 'worldgate_achv', false, false, true);
+    }
+    async function _expandAchv(seed, worldText) {
+        return _readAchv(await _callAI(_achvPrompt(seed, worldText), '世界門設計成就', 'worldgate_achv', false, false, true));
+    }
+    function _readAchv(r) {
         if (!r) return null;
         const pick = (arr, n) => (Array.isArray(arr) ? arr : []).slice(0, n)
             .map(x => ({ name: String((x && x.name) || '').slice(0, 12), desc: String((x && x.desc) || ''), how: String((x && x.how) || '') }))
@@ -3468,7 +3538,8 @@
                     (s.twist ? '<div class="wg-card-sub"><i class="fa-solid fa-scale-unbalanced"></i> ' + _esc(s.twist) + '</div>' : '') +
                     '<div class="wg-tags">' + (s.type ? '<span class="wg-tag">' + _esc(s.type) + '</span>' : '') +
                       '<span class="wg-tag">' + (p.nodes || []).length + ' 個岔路</span>' +
-                      '<span class="wg-tag">' + (p.endings || []).length + ' 種結局</span></div>' +
+                      '<span class="wg-tag">' + (p.endings || []).length + ' 種結局</span>' +
+                      (p.built && p.built.world ? '<span class="wg-tag">SN 收尾做好了・直接開門</span>' : '') + '</div>' +
                 '</div>';
             }).join('') +
             '<div class="wg-note">點企劃會照它展開成完整世界並存進檔案庫(呼叫 AI)。</div>';
@@ -3559,6 +3630,19 @@
         if (_busy) return;
         _busy = true;
         note = String(note || '').trim();
+        // 🧑‍💼 SN 收尾做完的企劃：世界檔案、旅人、成就、結束畫面、主題都是值班的人一階段一階段做、審過的，
+        //   愛麗絲照做好的開門，不再叫模型（只在背景照世界檔案寫好的畫面畫兩張圖）。
+        //   她 10-29：世界門＝當下許願當場生、SN＝慢慢做可以審，兩條要各自完整才比得出哪條好，不能做一半丟給世界門生。
+        //   收尾前就送來的舊企劃（沒有 built）照舊由愛麗絲展開。
+        const B = plan && plan.built;
+        if (B && B.world && B.world.text) {
+            // 旅人不在收尾做（她 10-29：旅人本來就是每次隨機召集的）：開門時照企劃室寫的旅人提示召集第一批——開門唯一叫模型的一通
+            _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
+            const trav = await _expandTravelers(seed, B.world.text, '', null, plan, B.travHint || '').catch(e => { console.warn('[Worldgate③] 旅人召集失敗', e); return []; });
+            _busy = false;
+            if (B.panel && B.art) { try { const S = win.OS_UI_STYLE || window.OS_UI_STYLE; if (S && S.remember) S.remember(B.art.styleId, B.art.layoutId); } catch (e) {} }
+            return _saveNewWorld(seed, note, plan, B.world, trav, { panel: B.panel || null, theme: B.theme || null }, B.achv || null, onFail);
+        }
         _loading('正在建構「' + _esc(seed.name) + '」的世界檔案…');
         const r = await _expandWorldText(seed, note, plan);
         if (!r || !r.text) { _busy = false; _toast('世界建構失敗,請重試'); onFail(); return; }
@@ -3572,6 +3656,10 @@
             _expandAchv(seed, r.text).catch(e => { console.warn('[Worldgate③] 成就生成失敗', e); return null; }),
         ]);
         _busy = false;
+        return _saveNewWorld(seed, note, plan, r, trav, pt, achv, onFail);
+    }
+    // 世界檔案、旅人、結束畫面＋主題、成就到齊 → 存進檔案庫、寫條目、背景畫圖（愛麗絲當場生的、SN 收尾做好的都走這裡）
+    async function _saveNewWorld(seed, note, plan, r, trav, pt, achv, onFail) {
         const w = {
             id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
             genre: seed.genre || '', type: seed.type || '',   // 基調要留著:重新召集旅人時得跟著帶,不然新旅人會跟世界不同調
@@ -3591,7 +3679,10 @@
             visits: 0, ts: Date.now(),
             // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
             //   同行旅人那欄也留著：第一批旅人沒召集到時，詳情頁「召集旅人」還要照它召
-            plan: plan ? { from: plan.id, title: plan.title || '', front: plan.front || '', nodes: plan.nodes || [], endings: plan.endings || [], secret: plan.secret || '', people: plan.people || [], travelers: plan.travelers || [] } : null,
+            //   vars＝SN 收尾設計的狀態欄（人在這個世界裡掛成一包，見 _syncPlanPack）
+            plan: plan ? { from: plan.id, title: plan.title || '', front: plan.front || '', nodes: plan.nodes || [], endings: plan.endings || [], secret: plan.secret || '', people: plan.people || [], travelers: plan.travelers || [],
+                vars: (plan.built && Array.isArray(plan.built.vars)) ? plan.built.vars : [], travHint: (plan.built && plan.built.travHint) || '',
+                built: !!(plan.built && plan.built.world) } : null,
         };
         const wrote = await _writeEntry(w, r.text);
         if (!wrote) { _toast('世界條目寫入失敗(確認已匯入' + BOOK_PARA + ')'); onFail(); return; }
@@ -4285,7 +4376,9 @@
                     { name: w.name, genre: w.genre, type: w.type, style: w.style, concept: w.concept, twist: w.twist },
                     w.entryText || entryText || w.concept || w.name,
                     w.note || '',   // 當初展開時的追加要求要跟著帶,不然新召的旅人會跟這個世界對不上
-                    pref, firstBatch ? w.plan : null);
+                    pref, firstBatch ? w.plan : null,
+                    (w.plan && w.plan.travHint) || '');   // SN 收尾的旅人提示：每一批都照它找
+
                 _busy = false;
                 if (!trav.length) { _toast('旅人召集失敗,請再試一次'); _renderDetail(w, 2); return; }
                 // 同名的不重複收（它偶爾會再抽到上一批的人）
@@ -4459,6 +4552,24 @@
         return Array.from(new Set(a.concat(b).filter(Boolean)));
     }
 
+    // 🧑‍💼 給 SN 白板「收尾」那班：愛麗絲當場建世界用的那幾份說明書和讀法，原封不動借出去。
+    //   她 10-29：世界門＝當下許願當場生、SN＝小機一階段一階段做、有人審；兩條要各自完整才比得出哪條好，SN 不能做一半丟給愛麗絲生。
+    //   read 回 null＝這通沒寫成（世界檔案被切斷也算），白板那邊照「這班沒上成」處理。沒有風格庫就沒有 art/panel/theme（收尾跳過那兩樣）
+    function snKit() {
+        const S = win.OS_UI_STYLE || window.OS_UI_STYLE;
+        const T = _themeKit();
+        const look = !!(S && S.pick && S.build);
+        return {
+            world: { prompt: (seed, plan) => _worldPrompt(seed, '', plan),
+                     read: (raw, seed) => { const t = _cleanModelOutput(_stripFences(raw)); return (t && !_worldCut(t)) ? _readWorld(t, seed) : null; } },
+            achv: { prompt: (seed, text) => _achvPrompt(seed, text), read: raw => _readAchv(_extractJSON(raw)) },
+            art: look ? () => { const a = S.pick(); return { styleId: a.styleId, layoutId: a.layoutId }; } : null,
+            panel: look ? { prompt: (seed, text, art) => _panelPrompt(S, art, seed, text), read: (raw, art) => _readPanel(_stripFences(raw), art) } : null,
+            theme: (look && T) ? { prompt: (seed, text, art) => _themePrompt(S, art, T, seed, text), read: raw => _pickTheme(_stripFences(raw), T) } : null,
+            sections: _WORLD_SECTIONS,
+        };
+    }
+
     // 🌐 大廳世界門核心的環繞螢幕要的圖（lobby_stage.js 的 _orbLoad）：只給真的生出來的概念圖——
     //   題材備圖（_fbUrl，10-26 量過那幾張網址是 404）、重開就失效的 blob: 都不給；最近建的排前面
     async function orbitArts(max) {
@@ -4471,7 +4582,7 @@
     }
 
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
-        planCodeNow, markEndingShown, fillPlanLinks, leaveAfterChapter, chapterEnded,
+        planCodeNow, markEndingShown, fillPlanLinks, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

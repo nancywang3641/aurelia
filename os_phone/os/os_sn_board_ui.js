@@ -157,7 +157,8 @@
             (i.state === 'wild' ? '<button class="snb-hatch" data-snb="hatch" data-id="' + esc(i.id) + '"' + (can ? '' : ' disabled') + '><i class="fa-solid fa-egg"></i>' + (can ? '孵化' : '先看完再孵') + '</button>' : '') + '</div>';
     }
     function _draftCard(d) {
-        const tag = d.state === 'check' ? '<span class="snb-tag snb-t-run">挑毛病中</span>' : d.unchecked ? '<span class="snb-tag snb-t-hot">沒人挑過</span>' : '<span class="snb-tag snb-t-hot">等妳看</span>';
+        const tag = d.state === 'check' ? '<span class="snb-tag snb-t-run">挑毛病中</span>' : d.state === 'finish' ? '<span class="snb-tag snb-t-run">收尾中</span>'
+            : d.unchecked ? '<span class="snb-tag snb-t-hot">沒人挑過</span>' : '<span class="snb-tag snb-t-hot">等妳看</span>';
         return '<div class="snb-note snb-w"><button class="snb-note-hit" data-snb="open-draft" data-id="' + esc(d.id) + '">' + tag + '<span class="snb-note-tx">' + esc(d.title) + '</span>' +
             '<span class="snb-meta">' + (d.dest ? esc(S.DESTS[d.dest] || '') + '企劃書・' : '') + esc(d.writer && d.writer.name) + ' 寫' + (d.checker ? '・' + esc(d.checker.name) + ' 挑過' : '') + '・' + _ago(d.at) + '</span></button></div>';
     }
@@ -253,7 +254,33 @@
                 const sm = [ek[e.kind] ? ek[e.kind] + '的結局' : '', e.from && e.from.length ? '從：' + e.from.join('、') : ''].filter(Boolean).join('｜');
                 return '<div class="snb-entry"><b>' + esc(e.name) + '</b>' + (sm ? '<small>' + esc(sm) + '</small>' : '') + '<p>' + esc(e.content) + '</p></div>';
             }).join('') +
-            (d.secret ? '<h5>祕密與真相</h5><div class="snb-entry"><p>' + esc(d.secret) + '</p></div>' : '');
+            (d.secret ? '<h5>祕密與真相</h5><div class="snb-entry"><p>' + esc(d.secret) + '</p></div>' : '') +
+            _builtHtml(d);
+    }
+    // 收尾做好的東西（後台打開時看）：狀態欄整份、旅人提示、成就、世界檔案；結束畫面和主題只說做好了沒（程式碼不攤開）
+    function _builtHtml(d) {
+        const B = d.built;
+        if (!B) return '';
+        const w = B.world && B.world.text ? B.world.text : '';
+        return (B.vars && B.vars.length ? '<h5>狀態欄</h5>' + B.vars.map(v => '<div class="snb-entry"><b>' + esc(v.name) + '</b>' +
+                    (v.defaultValue ? '<small>' + esc('一開始：' + String(v.defaultValue).split('\n').join('；')) + '</small>' : '') + '<p>' + esc(v.desc) + '</p></div>').join('') : '') +
+            (B.travHint ? '<h5>旅人提示</h5><div class="snb-entry"><small>同行旅人是愛麗絲每次隨機召集的，她會照這個方向找</small><p>' + esc(B.travHint) + '</p></div>' : '') +
+            (B.achv ? '<h5>成就</h5><div class="snb-entry"><p>' + esc(['normal', 'bond', 'hidden'].map(g => (B.achv[g] || []).map(x => x.name).join('、')).filter(Boolean).join('／')) + '</p></div>' : '') +
+            (w ? '<h5>世界檔案（' + w.length + ' 字）</h5><div class="snb-entry"><p>' + esc(w) + '</p></div>' : '');
+    }
+    // 收尾做到哪：做好的打勾、正在等的那件框起來、沒做成跳過的劃掉
+    function _finHtml(d) {
+        if (!d.dest || !(d.state === 'finish' || d.built)) return '';
+        const B = d.built || {}, sk = d.finSkip || {};
+        const names = S.FIN_NAME || {};
+        let now = true;
+        return '<h4><i class="fa-solid fa-hammer"></i>收尾</h4><div class="snb-fin">' + (S.FIN || []).map(s => {
+            const on = s === 'wcheck' ? !!d.finChecked : B[s] != null;
+            const skip = !on && (sk[s] || (s === 'wcheck' && d.state !== 'finish'));
+            const cls = on ? 'is-on' : skip ? 'is-skip' : (d.state === 'finish' && now ? (now = false, 'is-now') : '');
+            const who = s === 'wcheck' && d.finChecker ? '・' + d.finChecker.name : s === 'world' && B.worldByName ? '・' + B.worldByName : '';
+            return '<span class="' + cls + '"><i class="fa-solid ' + (on ? 'fa-check' : skip ? 'fa-minus' : 'fa-circle') + '"></i>' + esc((names[s] || s) + who) + '</span>';
+        }).join('') + '</div>';
     }
     async function _planPage(d) {
         const opened = _mode() === 'author' || d.peeked;
@@ -261,7 +288,8 @@
             ? '<div class="snb-back is-open"><h4><i class="fa-solid fa-lock-open"></i>整份企劃書</h4>' + _planHtml(d) + '</div>'
             : '<div class="snb-back"><h4><i class="fa-solid fa-lock"></i>整份企劃書（封起來）</h4><div class="snb-seal"><div class="snb-wax"><i class="fa-solid fa-feather"></i></div>' +
                 '<button class="snb-peek" data-snb="peek" data-id="' + esc(d.id) + '"><i class="fa-solid fa-eye"></i>偷看</button>' +
-                '<small>' + (d.checker ? esc(d.checker.name) + ' 挑過毛病：岔路、結局走不走得到都看過了' : d.state === 'check' ? '還在等另一位挑毛病' : '沒人挑過毛病') + '</small></div></div>';
+                '<small>' + (d.checker ? esc(d.checker.name) + ' 挑過毛病：岔路、結局走不走得到都看過了' : d.state === 'check' ? '還在等另一位挑毛病' : '沒人挑過毛病') +
+                    (d.state === 'finish' ? '；正在收尾' : d.built ? '；收尾做完了' : '') + '</small></div></div>';
         const c = S.countPlan(d);
         const tags = [d.untalked ? '沒討論過' : '', d.unchecked ? '沒人挑過' : ''].filter(Boolean);
         return '<div class="snb-page snb-open">' + _pageHead(d.title, _modeHtml()) +
@@ -269,14 +297,14 @@
                 '<p class="snb-dest-line"><i class="fa-solid fa-door-open"></i>交到：' + esc(S.DESTS[d.dest] || '') + (tags.length ? '・' + tags.join('・') : '') + '</p>' +
                 '<h4><i class="fa-solid fa-diagram-project"></i>企劃書裡有</h4><div class="snb-adds">' +
                 '<span><b>' + c.people + '</b>位人物</span>' + (c.travelers ? '<span><b>' + c.travelers + '</b>位同行旅人</span>' : '') +
-                '<span><b>' + c.nodes + '</b>個岔路</span><span><b>' + c.endings + '</b>種結局</span></div></div>' + back + '</div>' +
+                '<span><b>' + c.nodes + '</b>個岔路</span><span><b>' + c.endings + '</b>種結局</span></div>' + _finHtml(d) + '</div>' + back + '</div>' +
             ((d.talk || []).length ? '<h4 class="snb-h4"><i class="fa-solid fa-comments"></i>討論過的</h4><div class="snb-talk">' + _talkHtml(d.talk) + '</div>' : '') +
-            (d.notes.length ? '<div class="snb-talk">' + d.notes.map(n => '<div class="snb-msg"><span class="snb-ava">' + esc(String(n.name || '?').slice(0, 1)) + '</span><div><u>' + (n.role === 'check' ? '挑毛病的' : '寫的') + '・' + esc(n.name) + '</u>' + esc(n.text) + '</div></div>').join('') + '</div>' : '') +
+            (d.notes.length ? '<div class="snb-talk">' + d.notes.map(n => '<div class="snb-msg"><span class="snb-ava">' + esc(String(n.name || '?').slice(0, 1)) + '</span><div><u>' + (n.role === 'check' ? '挑毛病的' : n.role === 'finish' ? '收尾的' : '寫的') + '・' + esc(n.name) + '</u>' + esc(n.text) + '</div></div>').join('') + '</div>' : '') +
             (d.state === 'wait'
                 ? '<div class="snb-acts"><button class="snb-go" data-snb="approve" data-id="' + esc(d.id) + '"><i class="fa-solid fa-door-open"></i>好，交給愛麗絲</button>' +
                   '<button class="snb-redo" data-snb="redo" data-id="' + esc(d.id) + '"><i class="fa-solid fa-rotate"></i>回爐</button>' +
                   '<button class="snb-drop" data-snb="drop-draft" data-id="' + esc(d.id) + '"><i class="fa-solid fa-xmark"></i>放棄</button></div>'
-                : '<div class="snb-quiet"><i class="fa-solid fa-hourglass-half"></i>還在等另一位挑毛病</div>' +
+                : '<div class="snb-quiet"><i class="fa-solid fa-hourglass-half"></i>' + (d.state === 'finish' ? '正在收尾：把這個世界做出來，做完才交得出去' : '還在等另一位挑毛病') + '</div>' +
                   '<div class="snb-acts"><button class="snb-drop" data-snb="drop-draft" data-id="' + esc(d.id) + '"><i class="fa-solid fa-xmark"></i>放棄</button></div>') + '</div>';
     }
 

@@ -17,14 +17,15 @@
     const BOOK = '【奧瑞亞-白板】';
     const REF_BOOKS = ['【奧瑞亞世界】', '【奧瑞亞-視差】', '【奧瑞亞-人物核心】', BOOK];
     const CAPS = { WAIT: 3, IDEAS: 5, MATS: 20, COMBINE_AT: 10, COMBINE_SHOW: 8, CLIP_MAX: 3, DROPPED: 30, SHIFTS: 40, REFS: 8, REF_CUT: 600, ENTRIES: 8,
-        TALK: 4, PEOPLE: 4, NODES: 7, ENDINGS: 4, MIN_NODES: 3, MIN_ENDINGS: 2, TRAVELERS: 4 };
+        TALK: 4, PEOPLE: 4, NODES: 7, ENDINGS: 4, MIN_NODES: 3, MIN_ENDINGS: 2, TRAVELERS: 4, VARS: 6 };
     const LEN = { MAT: 80, CARD: 120, WHY: 60, SRC: 40, IDEA: 140, KEY: 12, KEYS: 6, TITLE: 24, FRONT: 300, NAME: 30, ENTRY: 1200, NOTE: 120, SAY: 20, REDO: 200,
-        TALK: 600, RAE: 200, PERSON: 900, NODE: 700, WHEN: 80, ENDING: 500, SECRET: 900, PLAYER: 400, TRAVELER: 500, BRIEF: 3000 };
+        TALK: 600, RAE: 200, PERSON: 900, NODE: 700, WHEN: 80, ENDING: 500, SECRET: 900, PLAYER: 400, TRAVELER: 500, BRIEF: 3000, VAR: 400, VAR_DEF: 160, HINT: 400 };
     // 上班須知：她世界書裡的一條，每班整段帶上（不靠關鍵字撈）。內容是她的設定，不寫進程式；條目關著也讀（關著才不會跑進平常的劇情）。
     //   找不到就照舊不帶。她 10-25：「須知照你說的放【奧瑞亞-視差】、叫 SN 上班須知」
     const BRIEF_TITLE = 'SN 上班須知';
     const KINDS = { faction: '勢力', place: '地點', person: '人物', conflict: '衝突', rule: '規矩' };
-    const JOBS = { check: '挑毛病', write: '寫稿', talk: '討論', plan: '寫企劃書', combine: '湊點子', clip: '剪素材', idle: '沒事做' };
+    const JOBS = { check: '挑毛病', fin_world: '收尾：世界檔案', fin_wcheck: '收尾：挑世界檔案的毛病', fin_achv: '收尾：成就',
+        fin_vars: '收尾：狀態欄和旅人提示', fin_panel: '收尾：結束畫面', fin_theme: '收尾：劇情主題', write: '寫稿', talk: '討論', plan: '寫企劃書', combine: '湊點子', clip: '剪素材', idle: '沒事做' };
     // 企劃要交到哪裡（她孵化時選）。這版只開世界門；另外兩個掛著寫「之後」。沒有 dest 的是一版的稿（收進世界書）
     //   二版設計書 docs/sn_board_design_v2.md（只在本機）；她 10-14：「讓用戶在玩其他劇情時，小機們可以提前規劃新世界門…或者委託卡…」
     const DESTS = { gate: '世界門', aurelia: '奧瑞亞委託', card: '角色卡委託' };
@@ -76,9 +77,10 @@
         return -1;
     }
     // 只剩一個人值班：他自己寫、還等人挑的稿直接放進「等妳看」（標沒人挑過），不然永遠卡著
+    //   世界門的企劃書跳過挑毛病、照樣要收尾（收尾誰都能做，他自己也行）
     function unstick(b, soloId) {
         if (!soloId) return b;
-        b.drafts.forEach(d => { if (d.state === 'check' && d.writer && d.writer.id === soloId) { d.state = 'wait'; d.unchecked = true; } });
+        b.drafts.forEach(d => { if (d.state === 'check' && d.writer && d.writer.id === soloId) { d.state = d.dest ? 'finish' : 'wait'; d.unchecked = true; } });
         return b;
     }
     // 討論夠了沒：值班的人講滿 4 段，或兩個不同的人最後一段都說「可以開始規劃了」
@@ -91,10 +93,39 @@
         return ids.length >= 2 && ids.every(k => last[k].ready);
     }
     // o.solo＝只排一格值班：沒人可以討論，跳過討論期直接寫企劃書（企劃書標「沒討論過」）
+    // 🧾 收尾（她 10-29：「討論>>>支線BRANCH寫出來>>>收尾階段」）：企劃書挑完毛病後，把愛麗絲當場建世界會生的東西
+    //   一件一件做出來——世界檔案、（第二位值班的人對著企劃挑世界檔案的毛病）、同行旅人、成就、狀態欄、結束畫面、劇情主題。
+    //   世界門＝她當下許願當場生；SN＝一階段一階段做、有人審。兩條要各自完整才比得出哪條好，所以不能做一半丟給愛麗絲生。
+    //   一件一通（大件塞同一通會被思考吃光），同一班做完一件接著做下一件；做完才進「等妳看」，交給愛麗絲直接開門。
+    //   旅人不在收尾做：旅人是愛麗絲每次隨機召集的，收尾只寫「旅人提示」（什麼類型的人適合，跟狀態欄同一通），她召集時照這個找（她 10-29）。
+    //   d.built＝做好的 {world, worldBy, art, achv, vars, travHint, panel, theme}；d.finChecked＝世界檔案挑過了；d.finSkip＝連兩班做不成、跳過的
+    const FIN = ['world', 'wcheck', 'achv', 'vars', 'panel', 'theme'];
+    const FIN_NAME = { world: '世界檔案', wcheck: '挑世界檔案的毛病', achv: '成就', vars: '狀態欄和旅人提示', panel: '結束畫面', theme: '劇情主題' };
+    // 下一件做哪個；null＝做完了（whoId＝這班的人：世界檔案是他寫的，挑毛病要等另一位，這班先不收）
+    function finStep(d, kit, solo, whoId) {
+        const B = d.built || {}, sk = d.finSkip || {};
+        if (!B.world) return sk.world ? null : 'world';
+        if (!d.finChecked && !sk.wcheck && !solo) return (whoId && B.worldBy === whoId) ? null : 'wcheck';
+        for (const s of ['achv', 'vars', 'panel', 'theme']) {
+            if (B[s] != null || sk[s]) continue;
+            if ((s === 'panel' && !kit.panel) || (s === 'theme' && !kit.theme)) continue;   // 沒有風格庫或主題說明書：這兩樣不做
+            return s;
+        }
+        return null;
+    }
     function pickJob(b, who, o) {
         const id = who && who.id;
         const d = b.drafts.find(x => x.state === 'check' && !(x.writer && x.writer.id === id));
         if (d) return d.dest ? { kind: 'check', draftId: d.id, dest: d.dest } : { kind: 'check', draftId: d.id };
+        // 🧾 收尾：見 FIN。kit＝世界門借的說明書（OS_WORLDGATE.snKit）；世界門還沒載好就先做別的，這份留著下一班再收
+        const f = b.drafts.find(x => x.state === 'finish');
+        if (f && o && o.kit) {
+            const step = finStep(f, o.kit, !!o.solo, id);
+            if (step) {
+                const B = f.built || {};
+                return { kind: 'fin_' + step, draftId: f.id, dest: f.dest, seed: f.seed, art: B.art || null, world: B.world || null };
+            }
+        }
         const h = b.ideas.find(x => x.state === 'hatching');
         if (h && h.dest) return (!h.talkDone && !(o && o.solo)) ? { kind: 'talk', ideaId: h.id } : { kind: 'plan', ideaId: h.id };
         if (h) return { kind: 'write', ideaId: h.id };
@@ -185,8 +216,47 @@
         return _all(text, 'traveler').map(x => _old(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), content: _cutBlock(_plain(x.body), LEN.TRAVELER) })).filter(t => t.name && t.content);
     }
     function _secret(text) { const x = _tag(text, 'secret'); return x ? _cutBlock(_plain(x.body), LEN.SECRET) : ''; }
+    // 挑世界檔案的毛病：<section n="三">改好的整節</section> 換掉世界檔案那一節的內文（標題行留著）；認不到那節標題就不動
+    function _fixSections(text, secs) {
+        let t = String(text || ''), n = 0;
+        const NUM = '一二三四五六七八九十';
+        (secs || []).forEach(s => {
+            const head = new RegExp('(^|\\n)(#+\\s*' + s.n + '[、.][^\\n]*\\n)');
+            const m = t.match(head);
+            if (!m) return;
+            const start = m.index + m[0].length;
+            const rest = t.slice(start);
+            const nx = rest.search(new RegExp('\\n#+\\s*[' + NUM + ']+[、.]'));
+            const end = nx < 0 ? t.length : start + nx;
+            const body = s.body.replace(/^#+\s*[一二三四五六七八九十]+[、.][^\n]*\n/, '');   // 他連標題也寫了：剝掉，用原本那行
+            t = t.slice(0, start) + body + t.slice(end);
+            n++;
+        });
+        return { text: t, n };
+    }
+    // 🧾 收尾補的狀態欄：一格＝世界門那邊一個 AVS 變數 {name,type,defaultValue,desc}。
+    //   每個視差世界本來就有的那幾格（視差預設：所在世界、本趟目標、貨幣、角色狀態）不收，不然同名兩格打架。
+    //   object 的初值寫成「項目: 值；項目: 值」，這裡換成 AVS 讀得懂的一行一項（不包變數名那層＝實際初值，不是每人一份的範本）
+    const VAR_TAKEN = ['所在世界', '本趟目標', '貨幣', '角色狀態'];
+    function _vars(text) {
+        const seen = new Set();
+        return _all(text, 'var').map(x => {
+            const name = _cut(_attr(x.attrs, 'name'), LEN.NAME);
+            let type = _attr(x.attrs, 'type').toLowerCase();
+            if (type !== 'number' && type !== 'object') type = 'string';
+            let def = _cut(_attr(x.attrs, 'default'), LEN.VAR_DEF);
+            if (type === 'number') { const n = parseFloat(def); def = isNaN(n) ? '0' : String(n); }
+            if (type === 'object') {
+                const rows = def.split(/[；;]+/).map(r => r.trim()).filter(Boolean).map(r => r.replace(/\s*[:：]\s*/, ': '));
+                def = rows.filter(r => /: /.test(r)).join('\n');
+                if (!def) type = 'string';
+            }
+            return { name, type, defaultValue: def, desc: _cutBlock(_plain(x.body), LEN.VAR) };
+        }).filter(v => v.name && v.desc && VAR_TAKEN.indexOf(v.name) < 0 && !seen.has(v.name) && seen.add(v.name)).slice(0, CAPS.VARS);
+    }
     function _player(text) { const x = _tag(text, 'player'); return x ? _cutBlock(_plain(x.body), LEN.PLAYER) : ''; }
-    function parseReply(text, job) {
+    // ctx.kit＝收尾那幾件要的世界門讀法（別的班不用帶）
+    function parseReply(text, job, ctx) {
         const t = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
         const s = _tag(t, 'say');
         const say = s ? _cut(_plain(s.body), LEN.SAY) : '';
@@ -237,6 +307,35 @@
             if (!title || !front || !front.body || !seed || !seed.name || !seed.concept) return no(cut || '企劃書缺名字、方向或世界種子');
             if (!people.length || nodes.length < CAPS.MIN_NODES || endings.length < CAPS.MIN_ENDINGS) return no(cut || '企劃書的人物、岔路或結局太少');
             return { ok: true, plan: { title, front: _cutBlock(_plain(front.body), LEN.FRONT), seed, player: _player(x.body), people, travelers: _travelers(x.body).slice(0, CAPS.TRAVELERS), nodes, endings, secret: _secret(x.body), note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
+        }
+        // 收尾那幾件：世界門借的那幾份照世界門的讀法讀（kit），狀態欄和挑世界檔案的毛病是白板自己的格式
+        if (/^fin_/.test(kind || '')) {
+            const step = kind.slice(4);
+            if (step === 'vars') {
+                const x = _tagOrCut(t, 'vars');
+                const vars = x ? _vars(x.body) : [];
+                if (!vars.length) return no(x && x.cut ? '狀態欄寫到一半被切掉了（回覆太長）' : '狀態欄一格都沒寫');
+                const note = x && _tag(x.body, 'note'), hint = x && _tag(x.body, 'hint');
+                return { ok: true, fin: { value: vars, hint: hint ? _cutBlock(_plain(hint.body), LEN.HINT) : '', note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
+            }
+            if (step === 'wcheck') {
+                const x = _tagOrCut(t, 'review');
+                if (!x) return no('沒交挑毛病的結果');
+                const world = (job.world && job.world.text) ? job.world : null;
+                if (!world) return no('世界檔案不見了');
+                // n 寫成阿拉伯數字（3）也認，換成標題上的中文數字
+                const _cn = v => { const n = parseInt(String(v).replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)), 10); return (n >= 1 && n <= 10) ? '一二三四五六七八九十'[n - 1] : String(v).replace(/[^一二三四五六七八九十]/g, ''); };
+                const secs = _all(x.body, 'section').map(s => ({ n: _cn(_attr(s.attrs, 'n')), body: String(s.body || '').trim() })).filter(s => s.n && s.body);
+                const note = _tag(x.body, 'note');
+                const fixed = _fixSections(world.text, secs);
+                return { ok: true, fin: { world: Object.assign({}, world, { text: fixed.text }), changed: fixed.n, note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
+            }
+            const K = ctx && ctx.kit;
+            const part = K && K[step];
+            if (!part || !part.read) return no('世界門還沒載好，' + (FIN_NAME[step] || '這件') + '先不做');
+            const v = step === 'world' ? part.read(t, job.seed || {}) : step === 'panel' ? part.read(t, job.art || {}) : part.read(t);
+            if (!v) return no((FIN_NAME[step] || '這件') + '沒寫成' + (step === 'world' ? '（寫到一半被切掉，或少了最後那兩行）' : ''));
+            return { ok: true, fin: { value: v, note: '' }, say };
         }
         if (kind === 'check') {
             const x = _tagOrCut(t, 'review');
@@ -296,9 +395,10 @@
             const d = { id: _mkId('d'), dest: idea.dest || 'gate', idea: { text: idea.text, keys: idea.keys, from: idea.from, by: idea.by, byName: idea.byName },
                 title: pl.title, front: pl.front, seed: pl.seed, player: pl.player || '', people: pl.people, travelers: pl.travelers || [], nodes: pl.nodes, endings: pl.endings, secret: pl.secret, talk,
                 writer: _who(who), checker: null, notes: pl.note ? [{ by: who.id, name: who.name, role: 'write', text: pl.note }] : [],
-                state: o.solo ? 'wait' : 'check', unchecked: !!o.solo, untalked: !talk.some(t => t.role === 'talk'), peeked: false, at: now };
+                // 只有一個人值班：跳過挑毛病，直接收尾（收尾做完才等妳看）
+                state: o.solo ? 'finish' : 'check', unchecked: !!o.solo, untalked: !talk.some(t => t.role === 'talk'), peeked: false, at: now };
             b.drafts.push(d);
-            return { ok: true, board: b, text: '寫了企劃書「' + d.title + '」', waitTitle: o.solo ? d.title : '' };
+            return { ok: true, board: b, text: '寫了企劃書「' + d.title + '」' };
         }
         if (job.kind === 'check' && job.dest) {
             const d = b.drafts.find(x => x.id === job.draftId && x.state === 'check');
@@ -325,8 +425,29 @@
             if (rv.seed && rv.seed.name && rv.seed.concept) d.seed = rv.seed;
             d.checker = _who(who);
             if (rv.note) d.notes.push({ by: who.id, name: who.name, role: 'check', text: rv.note });
-            d.state = 'wait';
-            return { ok: true, board: b, text: '挑完「' + d.title + '」的毛病', waitTitle: d.title };
+            d.state = 'finish';   // 挑完毛病還沒完：收尾把世界做出來才等妳看
+            return { ok: true, board: b, text: '挑完「' + d.title + '」的毛病，接著收尾' };
+        }
+        if (/^fin_/.test(job.kind)) {
+            const d = b.drafts.find(x => x.id === job.draftId && x.state === 'finish');
+            if (!d) return fail('那份企劃書已經不在收尾了');
+            const step = job.kind.slice(4), v = p.fin || {};
+            const B = d.built = Object.assign({}, d.built || {});
+            if (step === 'world') {
+                B.world = v.value; B.worldBy = who.id; B.worldByName = who.name;
+                if (!B.art && o.kit && o.kit.art) B.art = o.kit.art();   // 結束畫面和主題用同一個風格包，才看得出是同一個世界
+            } else if (step === 'wcheck') {
+                B.world = v.world; d.finChecked = true; d.finChecker = _who(who);
+            } else if (step === 'vars') {
+                B.vars = v.value; B.travHint = v.hint || '';
+            } else B[step] = v.value;
+            if (v.note) d.notes.push({ by: who.id, name: who.name, role: step === 'wcheck' ? 'check' : 'finish', text: v.note });
+            const what = FIN_NAME[step] + (step === 'wcheck' ? (v.changed ? '（改了 ' + v.changed + ' 節）' : '（沒要改的）') : step === 'world' ? '（' + String(B.world.text || '').length + ' 字）' : '');
+            if (o.kit && !finStep(d, o.kit, !!o.solo, null)) {
+                d.state = 'wait';
+                return { ok: true, board: b, text: '收尾「' + d.title + '」：' + what + '，整份做完了', waitTitle: d.title };
+            }
+            return { ok: true, board: b, text: '收尾「' + d.title + '」：' + what };
         }
         if (job.kind === 'check') {
             const d = b.drafts.find(x => x.id === job.draftId && x.state === 'check');
@@ -531,9 +652,12 @@
     function countPlan(d) { return { people: (d.people || []).length, travelers: (d.travelers || []).length, nodes: (d.nodes || []).length, endings: (d.endings || []).length }; }
     function planCountText(c) { return [c.people ? c.people + ' 位人物' : '', c.travelers ? c.travelers + ' 位同行旅人' : '', c.nodes ? c.nodes + ' 個岔路' : '', c.endings ? c.endings + ' 種結局' : ''].filter(Boolean).join('、'); }
     // 交給愛麗絲那份（她那邊存進世界門的「白板送來的企劃」）
+    // built＝收尾做好的那份（世界檔案、旅人、成就、狀態欄、結束畫面、主題）：愛麗絲收到就照它開門，不再生
     function planOf(d) {
+        const B = d.built || null;
         return { id: d.id, title: d.title, front: d.front, seed: d.seed, player: d.player || '', people: d.people, travelers: d.travelers || [], nodes: d.nodes, endings: d.endings, secret: d.secret || '',
-            by: [d.writer && d.writer.name, d.checker && d.checker.name].filter(Boolean) };
+            built: (B && B.world) ? { world: B.world, art: B.art || null, achv: B.achv || null, vars: B.vars || [], travHint: B.travHint || '', panel: B.panel || null, theme: B.theme || '' } : null,
+            by: [d.writer && d.writer.name, d.checker && d.checker.name, d.finChecker && d.finChecker.name].filter(Boolean) };
     }
     function markSent(b, draftId, now) {
         const d = b.drafts.find(x => x.id === draftId && x.dest);
@@ -725,7 +849,41 @@
                 '格式：', '<review>', SEED_FMT, '<player>改好的玩家是誰</player>', '<person name="名字" ' + OLD + '>改好的整段</person>',
                 '<traveler name="名字" ' + OLD + '>改好的整段</traveler>', '<node name="名字" ' + OLD + ' after="接在哪個岔路後面，一進來就碰得到寫開頭" when="什麼情況下會碰到">改好的整段</node>',
                 '<ending name="名字" ' + OLD + ' kind="good、bad、surprise 三選一" from="從哪幾個岔路走到，用、隔開">改好的整段</ending>', '<secret>改好的祕密與真相</secret>',
-                '<note>給寫的人和' + U + '的一句話：你看了什麼、改了什麼</note>', '</review>', SAY_FMT);
+                '<note>給寫的人和' + U + '的一句話：你看了什麼、改了什麼（不要寫出祕密和結局的內容：這句不會封起來，' + U + '當玩家時也看得到）</note>', '</review>', SAY_FMT);
+        } else if (/^fin_/.test(job.kind)) {
+            // 收尾：世界門借的那幾件照世界門的說明書寫（跟愛麗絲當場生的同一份），前面先講清楚這是哪份企劃的收尾
+            const d = b.drafts.find(x => x.id === job.draftId) || { title: '', nodes: [], endings: [], people: [] };
+            const step = job.kind.slice(4), K = ctx.kit || {}, B = d.built || {};
+            const seed = d.seed || {}, text = (B.world && B.world.text) || '';
+            const head = '【這班：收尾——' + FIN_NAME[step] + '】企劃書「' + d.title + '」寫好、挑過毛病了。收尾是把這個世界真的做出來：' +
+                '交給愛麗絲以後她直接開門，不會再改，所以照企劃寫，企劃寫過的人物、岔路、結局、祕密都要對得上。';
+            if (step === 'world') L.push(head, K.world.prompt(seed, d));
+            else if (step === 'achv') L.push(head, K.achv.prompt(seed, text));
+            else if (step === 'panel') L.push(head, K.panel.prompt(seed, text, B.art || {}));
+            else if (step === 'theme') L.push(head, K.theme.prompt(seed, text, B.art || {}));
+            else if (step === 'wcheck') {
+                L.push('【這班：收尾——挑世界檔案的毛病】' + (B.worldByName || '同事') + '照企劃書寫好了這個世界的世界檔案，你對著企劃挑毛病：',
+                    GATE_WHAT, '企劃書：', planText(d), '世界檔案：', text,
+                    '檢查：', '・企劃寫的人物、玩家是誰、祕密，檔案裡有沒有寫錯、漏掉、互相矛盾；祕密有沒有被寫成大家都知道',
+                    '・每個岔路「什麼情況下會碰到」需要的人、地方、勢力、條件，檔案裡有沒有；結局走不走得到',
+                    '・價格、規矩、地理前後有沒有對不上；有沒有哪節只寫了標題或一句話帶過',
+                    '有問題就交那一整節改好的版本：n 寫那節標題上的中文數字（一到十），內容寫改好的整節（不用寫標題）。改的時候只動有問題的句子，其餘照原文抄，不要順手改寫法。' +
+                        '一個問題牽到好幾節就每節各放一個 section。要補寫的內容要從企劃書和檔案其他節推得出來；推不出來的寫進 note。沒問題的節不要放；整份都沒問題就只寫 note。',
+                    '格式：', '<review>', '<section n="三">改好的整節</section>', '<note>給寫的人和' + U + '的一句話：你看了什麼、改了什麼（不要寫出祕密和結局的內容：這句不會封起來，' + U + '當玩家時也看得到）</note>', '</review>', SAY_FMT);
+            } else if (step === 'vars') {
+                L.push('【這班：收尾——狀態欄和旅人提示】企劃書「' + d.title + '」寫好了，你來設計這個世界的狀態欄，再寫一段旅人提示。',
+                    '狀態欄是劇情進行時，每一章有人照實際發生的事更新的幾格，' + U + '在狀態面板上看得到，寫正文的 AI 每一輪也看得到。',
+                    GATE_WHAT, '企劃書：', planText(d), text ? '世界檔案（節錄）：\n' + text.slice(0, 2400) : '',
+                    '・var：3～' + CAPS.VARS + ' 格，挑這個世界真的要盯的事：人和人之間、人和玩家之間發生過的事（誰欠誰、站在哪邊、說破了沒，不是分數），祕密有誰知道了，岔路要的條件裡已經滿足了哪幾項，有進度的事走到哪一步。',
+                    '・這幾格每個世界本來就有，不要再做：所在世界、本趟目標、貨幣、角色狀態（每個角色的形態、外貌、身分、好感度）。',
+                    '・' + U + '看得到狀態面板：祕密那種格子只記「誰知道了」，不要把祕密的內容寫進格子。',
+                    '・type 寫 string（一句話）、number（一個數字）或 object（好幾項，例如每個人各記一個值）。default 寫一開始的樣子，裡面不要用雙引號；object 的 default 寫成「項目: 值；項目: 值」。',
+                    '・內容寫：這格記什麼、什麼時候改、怎麼改。只記已經發生的事，不要寫成接下來應該發生什麼。',
+                    '・hint：旅人提示。跟' + U + '同一趟進去的同行旅人，是愛麗絲每次照這個世界隨機召集的奧瑞亞人，你不用寫出具體的人，寫提示就好：' +
+                        '什麼類型的奧瑞亞人會想報名這個世界、為什麼；哪幾種人會讓企劃的岔路或結局變得不一樣。寫類型，不要寫名字和身世，兩三句。',
+                    '・note：給' + U + '的一句話（不要寫出祕密和結局的內容：這句不會封起來）。',
+                    '格式：', '<vars>', '<var name="這格叫什麼" type="string、number、object 三選一" default="一開始的樣子">記什麼、什麼時候改、怎麼改</var>', '<hint>旅人提示</hint>', '<note>一句話</note>', '</vars>', SAY_FMT);
+            }
         } else if (job.kind === 'check') {
             const d = b.drafts.find(x => x.id === job.draftId);
             L.push('【這班：挑毛病】', ((d && d.writer && d.writer.name) || '同事') + '寫了這份稿，你來挑毛病：', d ? _draftText(d) : '');
@@ -962,6 +1120,11 @@
         const G = _g('OS_WORLDGATE');
         try { return (G && G.usedNames) ? ((await G.usedNames()) || []).slice(0, 20) : []; } catch (e) { return []; }
     }
+    // 收尾借的世界門說明書（世界檔案、旅人、成就、結束畫面、主題）。世界門沒載好＝null，收尾那份先留著
+    function _kit() {
+        const G = _g('OS_WORLDGATE');
+        try { return (G && G.snKit) ? G.snKit() : null; } catch (e) { return null; }
+    }
 
     // ── 叫人 ──
     function _withTimeout(ms, run) {
@@ -984,7 +1147,7 @@
         if (!A || !A.chat) return Promise.reject(new Error('沒有模型可以叫'));
         const config = Object.assign({}, who.conn.config, { route: 'sn_board' });
         // 寫稿、挑毛病要整份交回來（最多 8 條、每條上千字）：門卡預設 1000～2000 會被切掉 → 至少 8192（同 chatMain）
-        const long = kind === 'write' || kind === 'check' || kind === 'plan';
+        const long = kind === 'write' || kind === 'check' || kind === 'plan' || /^fin_/.test(kind || '');   // 收尾那幾件都是整份交回來的大件
         const mt = parseInt(config.maxTokens, 10);
         const old = long ? Math.max(isNaN(mt) ? 0 : mt, 8192) : mt;   // 沒有思考位子時本來會送的
         const fmt = String(config.apiFormat || 'openai');
@@ -1176,12 +1339,13 @@
         const solo = st.slots.filter(Boolean).length === 1;
         const after = nextSlot(st.slots, 1 - idx);   // 下一班從另一格開始；另一格空著就還是他
         const rec = { id: _mkId('s'), at: now, who: { type: pick.type, id: pick.id, name: pick.name }, did: 'idle', ok: false, error: '', text: '', say: '', quota: pick.type === 'dorm' };
+        const kit = _kit();
         const plan = await _lockData(async () => {
             const b = await getBoard();
             const before = JSON.stringify(b.drafts);
             unstick(b, solo ? pick.id : null);
             if (JSON.stringify(b.drafts) !== before) await saveBoard(b);
-            return { job: pickJob(b, pick, { solo }), board: b };
+            return { job: pickJob(b, pick, { solo, kit }), board: b };
         });
         rec.did = plan.job.kind;
         if (rec.did === 'idle') {
@@ -1201,38 +1365,53 @@
             }
         }
         await saveStaff({ running: Date.now(), runningJob: rec.did, runningWho: pick.id });
-        let waitTitle = '', reply = '';
+        let waitTitle = '', reply = '', job = plan.job;
+        const done = [];   // 收尾一班接著做好幾件：做好的那幾件
         try {
             const who = await resolve(pick);
             if (!who) throw new Error('找不到' + pick.name);
-            const refs = (rec.did === 'write' || rec.did === 'check') ? await worldRefs(refTerms(plan.job, plan.board)) : [];
-            const ctx = rec.did === 'plan' ? { usedNames: await _gateNames() } : {};
-            try { ctx.brief = await shiftBrief(); } catch (e) {}
-            const msgs = buildMessages(plan.job, who, plan.board, refs, who.user, ctx);
-            reply = who.type === 'xiaoji' ? await _callXiaoji(who, msgs, rec.did) : await _callDorm(who, msgs);
-            const p = parseReply(reply, plan.job);
-            if (!p.ok) throw new Error(p.why);
-            // 叫模型那幾分鐘她可能按了東西：鎖住、重讀、再套
-            const r = await _lockData(async () => {
-                const res = applyResult(await getBoard(), plan.job, p, who, Date.now(), { solo });
-                if (res.ok) await saveBoard(res.board);
-                return res;
-            });
-            if (!r.ok) throw new Error(r.why);
-            rec.ok = true; rec.text = r.text; rec.say = p.say || ''; waitTitle = r.waitTitle || '';
+            for (let i = 0; ; i++) {
+                const board = i ? await getBoard() : plan.board;
+                const refs = (job.kind === 'write' || job.kind === 'check') ? await worldRefs(refTerms(job, board)) : [];
+                const ctx = job.kind === 'plan' ? { usedNames: await _gateNames() } : {};
+                ctx.kit = kit;
+                try { ctx.brief = await shiftBrief(); } catch (e) {}
+                const msgs = buildMessages(job, who, board, refs, who.user, ctx);
+                reply = who.type === 'xiaoji' ? await _callXiaoji(who, msgs, job.kind) : await _callDorm(who, msgs);
+                const p = parseReply(reply, job, ctx);
+                if (!p.ok) throw new Error(p.why);
+                // 叫模型那幾分鐘她可能按了東西：鎖住、重讀、再套
+                const r = await _lockData(async () => {
+                    const res = applyResult(await getBoard(), job, p, who, Date.now(), { solo, kit });
+                    if (res.ok) await saveBoard(res.board);
+                    return res;
+                });
+                if (!r.ok) throw new Error(r.why);
+                done.push(r.text); if (p.say) rec.say = p.say; waitTitle = r.waitTitle || '';
+                // 🧾 收尾：這份還沒收完就同一班、同一個人接著做下一件（一件一通）；輪到要另一位挑毛病就停，下一班換人接
+                if (!/^fin_/.test(job.kind) || waitTitle) break;
+                const nj = pickJob(await getBoard(), pick, { solo, kit });
+                if (!/^fin_/.test(nj.kind) || nj.draftId !== job.draftId) break;
+                job = nj; rec.did = nj.kind;
+                await saveStaff({ running: Date.now(), runningJob: nj.kind, runningWho: pick.id });   // 一班拖長了：上班中的記號跟著更新，不然十分鐘後被當成當掉
+            }
+            rec.ok = true;
         } catch (e) {
             rec.error = String((e && e.message) || e).replace(/^[A-Z_]+:/, '').slice(0, 120);
         }
+        rec.text = done.join('；');
         // 撞到額度上限不是稿的問題：不算這份寫不成（不然連兩班就被放回去），只跟她說一聲
         const capped = !rec.ok && pick.type === 'dorm' && _isCapped(rec.error, reply);
         if (capped) rec.error = '額度到上限，這班沒上成（不算這份寫不成）';
         await _logShift(rec);
         // 寫稿／挑毛病那種「同一件」連著失敗：每一班都會挑到同一件、每一班都花一通 → 連兩班就停手（放回去、告訴她）
-        const failKey = (rec.did === 'write' || rec.did === 'talk' || rec.did === 'plan') ? rec.did + ':' + plan.job.ideaId : rec.did === 'check' ? 'check:' + plan.job.draftId : '';
+        //   收尾看的是「卡在哪一件」（job＝這班最後做的那件）
+        const failKey = (job.kind === 'write' || job.kind === 'talk' || job.kind === 'plan') ? job.kind + ':' + job.ideaId
+            : (job.kind === 'check' || /^fin_/.test(job.kind)) ? job.kind + ':' + job.draftId : '';
         let fail = capped ? (st.fail || null) : null, gaveUp = '';   // 撞上限那班不動之前的失敗次數
         if (!rec.ok && failKey && !capped) {
             const n = (st.fail && st.fail.key === failKey ? st.fail.n : 0) + 1;
-            if (n >= FAIL_GIVEUP) { try { gaveUp = await _giveUp(plan.job); } catch (e) {} }
+            if (n >= FAIL_GIVEUP) { try { gaveUp = await _giveUp(job, kit); } catch (e) {} }
             else fail = { key: failKey, n };
         }
         try {
@@ -1245,13 +1424,26 @@
         if (rec.ok && pick.type === 'dorm') _rememberDorm(pick, rec, now);
         if (waitTitle) _notify('白板多一份等妳看：「' + waitTitle + '」');
         else if (gaveUp) _notify(gaveUp, true);
-        else if (rec.error) _notify(pick.name + '這班沒上成：' + rec.error, true);
+        else if (rec.error) _notify(pick.name + '這班' + (done.length ? '做好了 ' + done.length + ' 件，接著那件' : '') + '沒上成：' + rec.error, true);
         return rec;
     }
     const FAIL_GIVEUP = 2;
-    function _giveUp(job) {
+    function _giveUp(job, kit) {
         return _lockData(async () => {
             const b = await getBoard();
+            // 收尾某一件連兩班做不成：跳過那件，其他照做；世界檔案寫不成就整份收不了，先放進等妳看
+            //   （沒有世界檔案的企劃交給愛麗絲時照舊由她當場展開）
+            if (/^fin_/.test(job.kind)) {
+                const d = b.drafts.find(x => x.id === job.draftId && x.state === 'finish');
+                if (!d) return '';
+                const step = job.kind.slice(4);
+                d.finSkip = Object.assign({}, d.finSkip || {}, { [step]: true });
+                const left = kit ? finStep(d, kit, false, null) : null;
+                if (step === 'world' || !left) { d.state = 'wait'; if (step === 'world') d.unfinished = true; }
+                await saveBoard(b);
+                return '「' + d.title + '」收尾的' + FIN_NAME[step] + '連兩班都沒做成，' +
+                    (step === 'world' ? '先放進等妳看（交給愛麗絲的話會由她當場展開）。' : '先跳過' + (left ? '，接著做別的。' : '，整份放進等妳看。'));
+            }
             if (job.kind === 'write' || job.kind === 'talk' || job.kind === 'plan') {
                 const i = b.ideas.find(x => x.id === job.ideaId && x.state === 'hatching');
                 if (!i) return '';
@@ -1457,7 +1649,8 @@
         runShift, tick, start, worldRefs, shiftBrief, isBusy: () => !!_busy,
         prepareWorld, commitWorld, undoWorld, attach, isAttached, deliverGate, takeBackGate, gateStatus, countPlan, planCountText, seedText: _seedText,
         _lockDataForTest: _lockData, _saveBoardForTest: saveBoard,
-        _pure: { emptyBoard, normBoard, waitCount, canHatch, isAsleep, nextSlot, unstick, pickJob, parseReply, applyResult, talkDone, addTalk,
+        FIN, FIN_NAME,
+        _pure: { emptyBoard, normBoard, waitCount, canHatch, isAsleep, nextSlot, unstick, pickJob, parseReply, applyResult, talkDone, addTalk, finStep, fixSections: _fixSections,
             addMaterial, hatch, redo, drop, countKinds, countText, markWorld, markSent, planOf, planText, countPlan, refTerms, pickRefs, buildMessages,
             safeLink, youTubeUrl, youTubeStart, noteSong, cutNice: _cutNice, materialFrom, watchMessages, lyricPlan, lyricsMessages, songAt,
             BOOK, REF_BOOKS, BRIEF_TITLE, CAPS, LEN, LYR, KINDS, JOBS, DESTS, SEED_LEN, SLEEP_MS },
