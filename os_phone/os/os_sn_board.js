@@ -743,7 +743,7 @@
     // ── 資料（OS_DB 通用資料，不升版）──────────────────────────────
     const DEF_STAFF = { slots: [null, null], times: ['12:00', '20:00'], next: 0, on: false, lastAt: 0, running: 0, runningJob: '', runningWho: '', lastVisit: 0, unread: false, says: {}, fail: null };
     const RUN_STALE = 10 * 60000;   // 「上班中」超過這麼久當作沒在跑（分頁中途被關）。要比兩種逾時都長
-    const _cfg = { XIAOJI_TIMEOUT: 180000, DORM_TIMEOUT: 480000, VIDEO_TIMEOUT: 240000, YT_TIMEOUT: 30000 };
+    const _cfg = { XIAOJI_TIMEOUT: 180000, XIAOJI_LONG_TIMEOUT: 480000, DORM_TIMEOUT: 480000, VIDEO_TIMEOUT: 240000, YT_TIMEOUT: 30000 };
     const VIDEO_TASK = 'sn_board_video';   // 名冊 LLM_TASKS 那一列「白板看影片／讀歌詞」
     const _listeners = new Set();
     function _emit() { _listeners.forEach(f => { try { f(); } catch (e) {} }); }
@@ -974,16 +974,33 @@
                 e => { if (over) return; clearTimeout(timer); reject(e); });
         });
     }
+    // 🧠 Claude 原生、Gemini 原生每一班都拉到這麼高：這一代不送思考參數也會先想，想的也算在上限裡。
+    //   10-29 官方 API 實測寫一份企劃書：Sonnet 5.5 想了 2.2 萬、總共 2.8 萬，Haiku 5.5 總共 1.4 萬——8192 一定被切；
+    //   討論、剪素材這種短的，門卡預設 1000～2000 也會被想光（世界門抽種子同一個坑）。只按真的寫出來的字算錢，開高不多花。
+    //   OpenAI 相容那條不拉：常接 DeepSeek 這種上限 8192 的站，填超過會被退件。
+    const THINK_ROOM = 48000;
     function _callXiaoji(who, msgs, kind) {
         const A = _g('OS_API');
         if (!A || !A.chat) return Promise.reject(new Error('沒有模型可以叫'));
         const config = Object.assign({}, who.conn.config, { route: 'sn_board' });
         // 寫稿、挑毛病要整份交回來（最多 8 條、每條上千字）：門卡預設 1000～2000 會被切掉 → 至少 8192（同 chatMain）
-        if (kind === 'write' || kind === 'check' || kind === 'plan') config.maxTokens = Math.max(parseInt(config.maxTokens, 10) || 0, 8192);
-        return _withTimeout(_cfg.XIAOJI_TIMEOUT, signal => new Promise((res, rej) => {
-            A.chat(msgs, config, null, t => res(t), e => rej(e),
+        const long = kind === 'write' || kind === 'check' || kind === 'plan';
+        const mt = parseInt(config.maxTokens, 10);
+        const old = long ? Math.max(isNaN(mt) ? 0 : mt, 8192) : mt;   // 沒有思考位子時本來會送的
+        const fmt = String(config.apiFormat || 'openai');
+        const need = (fmt === 'anthropic' || fmt === 'gemini') ? THINK_ROOM : (long ? 8192 : 0);
+        let lifted = false;
+        if (need && (isNaN(mt) || mt < need)) { config.maxTokens = need; lifted = need !== old; }
+        // 長活連想帶寫要四、五分鐘（2.8 萬字約 100 字／秒），三分鐘就掐會白跑一趟：放到跟宿舍住戶一樣（RUN_STALE 十分鐘還是比它長）
+        const go = cfg => _withTimeout(long ? _cfg.XIAOJI_LONG_TIMEOUT : _cfg.XIAOJI_TIMEOUT, signal => new Promise((res, rej) => {
+            A.chat(msgs, cfg, null, t => res(t), e => rej(e),
                 Object.assign({}, who.conn.options, { label: '白板值班', keepCodeFences: true, signal }));   // 🚨 第六格就是 options
         }));
+        return go(config).catch(e => {
+            // 舊型號寫不到這麼長（Opus 4.1 只到 32000、Gemini 2.0 只到 8192），拉高的上限會被退件 → 照原本的上限再送一次（同世界門）
+            if (!lifted || !/max_tokens|max.?output.?tokens|output tokens/i.test(String((e && e.message) || e))) throw e;
+            return go(Object.assign({}, config, { maxTokens: isNaN(old) ? undefined : old }));
+        });
     }
     function _callDorm(who, msgs) {
         const CT = _g('ClaudeTerminal');
