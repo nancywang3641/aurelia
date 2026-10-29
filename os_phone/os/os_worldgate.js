@@ -1265,7 +1265,8 @@
             return { code: 'E' + (i + 1), name: String(e.name || ''), kind: _ENDING_KIND[e.kind] ? (e.kind === 'twist' ? 'surprise' : e.kind) : '', from: from.length ? from : leaves.slice() };
         });
         const linked = !!p.linksFilled || (p.nodes || []).some(n => Array.isArray(n.after)) || (p.endings || []).some(e => Array.isArray(e.from));
-        return { nodes, endings, linked, hit: Object.assign({}, w.planHit || {}) };
+        // backfill＝岔路標記出來之前就在玩的世界，前面走過的還沒補亮（第一次打開岔路圖時 backfillPlan 叫副模型讀前面的章節補一次）
+        return { nodes, endings, linked, backfill: w.planBackfill !== 'done', hit: Object.assign({}, w.planHit || {}) };
     }
     // 現在這個世界的岔路圖,放在手邊給播放器同步查:播到 [Ending|E1] 那一刻要當場跳卡,
     //   等資料庫回來的那幾毫秒她點一下就會把下一句先播掉(syncTheme 會叫 _setPlanNow,時機剛好是換世界那幾個)
@@ -1387,6 +1388,97 @@
         if (_planNow && _planNow.id === id) _setPlanNow(fresh);
         console.log('[Worldgate③] 🌳「' + fresh.name + '」的岔路圖補好線了');
         return _planTree(fresh);
+    }
+    // 🌳 補亮：岔路標記是 10-29 才有的，之前就在玩的世界，前面走過的岔路舊章節裡沒有標記、圖上不會亮。
+    //   她「補亮」→ 第一次打開岔路圖時叫一次副模型，讀這個聊天室進世界以後的章節，判斷哪幾個岔路、結局已經發生過、在第幾章。
+    //   補過（不管有沒有找到）就記 planBackfill:'done' 不再叫；讀不到章節、模型沒回成就這次開著不重叫，下次打開再試。
+    //   已經發生過的結局只亮在圖上、記成卡跳過了（舊事不跳卡）。
+    let _backTry = {};
+    async function backfillPlan() {
+        const id = await _getCurrentId();
+        const w = id ? await _worldById(id) : null;
+        const T = _planTree(w);
+        if (!T) return null;
+        if (!T.backfill || _backTry[id]) return T;
+        _backTry[id] = true;
+        const chs = await _planChapters(w.name);
+        if (!chs.length) { console.warn('[Worldgate③] 補亮:讀不到這個世界的章節'); return T; }
+        const per = Math.max(800, Math.floor(40000 / chs.length));   // 整包壓在四萬字左右,章節太多就每章少帶一點
+        const prompt =
+            '下面是一個故事世界事先規劃的岔路和可能的結局,以及玩家進到這個世界以後的劇情(每章前面標了第幾章)。\n' +
+            '判斷哪幾個岔路的情況已經在劇情裡真的發生過(玩家碰上了「什麼情況下會碰到」寫的那個情況),哪個結局已經真的成了定局。\n' +
+            '只算劇情裡寫出來、已經發生的;快要發生、可能會發生的不算。拿不準就不要算。\n' +
+            '只回傳純 JSON:{"hit":[{"code":"代號","ch":第幾章}]}——ch 寫它第一次發生在第幾章;一個都沒有就回 {"hit":[]}。\n' +
+            '【岔路】\n' + T.nodes.map(n => '- ' + n.code + ' ' + n.name + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '')).join('\n') +
+            '\n【可能的結局】\n' + T.endings.map(e => {
+                const src = ((w.plan && w.plan.endings) || []).find(x => x && x.name === e.name);
+                return '- ' + e.code + ' ' + e.name + (src && src.content ? ':' + String(src.content).slice(0, 160) : '');
+            }).join('\n') +
+            '\n【劇情】\n' + chs.map(c => '第' + c.ch + '章:' + c.text.slice(0, per)).join('\n\n') +
+            '\n語言:繁體中文。';
+        const r = await _callAI(prompt, '世界門補亮岔路', 'worldgate_backfill', false, false, true);
+        if (!r || !Array.isArray(r.hit)) { console.warn('[Worldgate③] 補亮:副模型沒回成,這次先不補'); return T; }
+        const fresh = await _worldById(id);
+        if (!fresh) return T;
+        const codes = new Set(T.nodes.concat(T.endings).map(x => x.code));
+        const chSet = new Set(chs.map(c => c.ch));
+        const hit = Object.assign({}, fresh.planHit || {});
+        let n = 0;
+        r.hit.forEach(h => {
+            const c = String((h && h.code) || '').trim().toUpperCase();
+            if (!codes.has(c) || hit[c]) return;
+            const ch = parseInt(h.ch, 10);
+            hit[c] = Object.assign({ at: Date.now(), backfill: true }, chSet.has(ch) ? { ch } : {}, c[0] === 'E' ? { shown: true } : {});
+            n++;
+        });
+        fresh.planHit = hit;
+        fresh.planBackfill = 'done';
+        await _saveWorld(fresh, ['planHit', 'planBackfill']);
+        if (_planNow && _planNow.id === id) _setPlanNow(fresh);
+        if (n && !_pwa() && fresh.entryText) { try { await _writeEntry(fresh, fresh.entryText); } catch (e) {} }   // 條目的「已經標過的」跟著更新
+        console.log('[Worldgate③] 🌳「' + fresh.name + '」補亮了 ' + n + ' 個(讀了 ' + chs.length + ' 章)');
+        return _planTree(fresh);
+    }
+    // 這個世界的章節 → [{ch, text}]：從最後一次「進入視差世界「世界名」」那一則之後算起（之前是在奧瑞亞或別的世界）。
+    //   第幾章跟 _chapterNo 同一套：酒館＝這個聊天室第幾則模型回覆，網頁版＝這段故事第幾章。劇本標籤剝成看得懂的字
+    async function _planChapters(name) {
+        const marker = '進入視差世界「' + name + '」';
+        const out = [];
+        try {
+            if (_pwa()) {
+                const db = _db();
+                if (!db || !db.getAllVnChapters) return out;
+                const sid = _cid();
+                const list = (await db.getAllVnChapters()).filter(c => c && c.storyId === sid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                let from = 0;
+                list.forEach((c, i) => { if (JSON.stringify(c).indexOf(marker) >= 0) from = i; });
+                list.forEach((c, i) => { if (i >= from) out.push({ ch: i + 1, text: _plainChapter(c.content) }); });
+                return out.filter(c => c.text);
+            }
+            const R = win.VN_READER || window.VN_READER;
+            const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
+            if (!Array.isArray(msgs)) return out;
+            let from = -1;
+            msgs.forEach((m, i) => { if (m && m.is_user && String(m.mes || m.message || '').indexOf(marker) >= 0) from = i; });
+            let n = 0;
+            msgs.forEach((m, i) => {
+                if (!m || m.is_user) return;
+                n++;
+                if (i > from) out.push({ ch: n, text: _plainChapter(m.mes || m.message || '') });
+            });
+            return out.filter(c => c.text);
+        } catch (e) { return out; }
+    }
+    function _plainChapter(raw) {
+        let s = String(raw || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+        const cm = s.match(/<content>([\s\S]*?)<\/content>/i);
+        if (cm) s = cm[1];
+        s = s.replace(/\[Char\|([^|\]\n]*)\|[^\]\n]*?(「[^」\n]*」)[^\]\n]*\]/g, '$1：$2')
+             .replace(/\[(?:Nar|Inner\|[^|\]\n]*)\|([^|\]\n]+)(?:\|[^\]\n]*)?\]/g, '$1')
+             .replace(/\[[^\[\]\n]{1,120}\]/g, '')
+             .replace(/<[^>]+>/g, '')
+             .replace(/\n{2,}/g, '\n').trim();
+        return s;
     }
     // 結局卡上按「撤離回奧瑞亞」:這一章演完才撤(酒館撤離會重新載入聊天,播到一半撤會把劇情打斷)
     let _leaveAfter = false;
@@ -3694,6 +3786,7 @@
             vnTheme: pt.theme || '',   // 🎨 這個世界的劇情主題(對話框那套 CSS),跟結束畫面同時生的(兩通);空=照舊用這本故事的主題
             achv: achv || null,     // 🏅 這個世界的成就清單;解鎖仍走既有的成就標記,這裡只是清單
             visits: 0, ts: Date.now(), planBlockV: PLAN_BLOCK_V,   // 新建的條目本來就是新的岔路標記說明（_upgradePlanBlock 不用再寫一次）
+            planBackfill: 'done',   // 新世界從第一章就有標記，沒有舊章節要補亮
             // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
             //   同行旅人那欄也留著：第一批旅人沒召集到時，詳情頁「召集旅人」還要照它召
             //   vars＝SN 收尾設計的狀態欄（人在這個世界裡掛成一包，見 _syncPlanPack）
@@ -4599,7 +4692,7 @@
     }
 
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
-        planCodeNow, markEndingShown, fillPlanLinks, leaveAfterChapter, chapterEnded, snKit,
+        planCodeNow, markEndingShown, fillPlanLinks, backfillPlan, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

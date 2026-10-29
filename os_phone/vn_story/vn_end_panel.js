@@ -458,16 +458,22 @@
         root.appendChild(box);
         root.classList.add('vnep-sheet-open');
         paint();
-        // 10-29 以前的企劃沒寫「接在誰後面」：第一次打開叫世界門補一次線（叫模型），補好重畫；補不成照順序排
+        // 10-29 以前的世界第一次打開：①企劃沒寫「接在誰後面」→ 叫世界門補線 ②岔路標記出來前就在玩 → 叫副模型讀前面的章節補亮走過的。
+        //   各叫一次模型、一件做完重畫一次再做下一件；補不成照現在的樣子畫
         const WG = _wg();
-        if (_hasPlan(w) && !w.plan.linked && WG && typeof WG.fillPlanLinks === 'function') {
-            body.insertAdjacentHTML('afterbegin', '<div class="vnep-tr-note">這份企劃是舊的，正在把岔路連起來……</div>');
-            WG.fillPlanLinks().then(T => {
-                if (T) w.plan = T;
+        const jobs = [];
+        if (_hasPlan(w) && !w.plan.linked && WG && typeof WG.fillPlanLinks === 'function') jobs.push(['這份企劃是舊的，正在把岔路連起來……', () => WG.fillPlanLinks()]);
+        if (_hasPlan(w) && w.plan.backfill && WG && typeof WG.backfillPlan === 'function') jobs.push(['正在讀前面的章節，把已經走過的岔路補亮……', () => WG.backfillPlan()]);
+        const note = t => { body.querySelector('.vnep-tr-note')?.remove(); if (t && tab === 'tree') body.insertAdjacentHTML('afterbegin', '<div class="vnep-tr-note">' + t + '</div>'); };
+        (async () => {
+            for (const [t, run] of jobs) {
+                if (!box.isConnected) return;
+                note(t);
+                try { const T = await run(); if (T) w.plan = T; } catch (e) {}
                 if (box.isConnected && tab === 'tree') paint();
-                else body.querySelector('.vnep-tr-note')?.remove();
-            }).catch(() => { body.querySelector('.vnep-tr-note')?.remove(); });
-        }
+            }
+            note('');
+        })();
     }
 
     // ── 🌳 岔路圖 ──
