@@ -204,6 +204,21 @@
             .filter(t => t && !/background$/i.test(t) && !/^background\b/i.test(t))
             .join(', ');
     }
+    // 單張立姿圖＝只有一個人、全身、站著：這幾個字由這裡補，不靠預設包寫。
+    //   沒寫的時候 Anima 把「chibi」配上一段大人外觀畫成角色設定表（一個正常比例的大人＋旁邊幾個小Q版）：
+    //   10-29 她的「Q版人物」包連生 13 張都是這樣；同一套模型補了這幾個字，12 張裡 11 張只剩一個Q版。
+    //   背景：預設包底詞寫了就聽包的，沒寫才補白底（沒寫時常給灰漸層或角色殘影，去背也髒）。
+    //   走路圖（3×4）不經過這裡：一張裡本來就有十二個他。
+    function _standeePromptOf(prompt, base) {
+        const p = String(prompt || '').trim(), b = String(base || '');
+        const has = (re) => re.test(p) || re.test(b);
+        const head = [];
+        if (!has(/\bsolo\b/i)) head.push('solo');
+        if (!has(/\bfull[\s_-]?body\b/i)) head.push('full body');
+        if (!has(/\bstanding\b/i)) head.push('standing');
+        const tail = has(/background/i) ? [] : ['simple background', 'white background'];
+        return head.concat(p ? [p] : [], tail).join(', ');
+    }
     function _dressPresetsOf(src) {
         const M = _imgMgr();
         if (!M?.config) return [];
@@ -343,6 +358,12 @@
     async function _renderSpriteImage(prompt, src, preset, kind) {
         const M = _imgMgr();
         if (!M) throw new Error('生圖引擎還沒載入');
+        if (kind !== 'sheet') {
+            const base = src === 'novelai'
+                ? (preset.charBasePrompt !== undefined ? preset.charBasePrompt : (M.config.novelai || {}).charBasePrompt)
+                : (preset.basePrompt != null ? preset.basePrompt : (M.config.comfyuiDirect || {}).basePrompt);
+            prompt = _standeePromptOf(prompt, base);
+        }
         let imgUrl = '';
         if (src === 'novelai') {
             const nai = M.config.novelai || (M.config.novelai = {});
