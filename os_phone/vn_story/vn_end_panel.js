@@ -448,6 +448,11 @@
             body.innerHTML = _treeHtml(T, w.name);
             const wrap = body.querySelector('.vnep-tr-wrap');   // 比圖紙寬（手機）：一打開先捲到正中間，最上面的開頭才看得到
             if (wrap) wrap.scrollLeft = Math.max(0, (wrap.scrollWidth - wrap.clientWidth) / 2);
+            const S = win.VN_EndShow || window.VN_EndShow;      // 亮著的結局點一下＝重看片尾
+            if (S && _motionOk()) body.querySelectorAll('.vnep-tr-n.is-end.is-on').forEach(g => {
+                g.classList.add('can-replay');
+                g.addEventListener('click', () => S.replay(g.getAttribute('data-c')));
+            });
         };
         box.querySelectorAll('.vnep-ac-tab').forEach(t => t.addEventListener('click', () => { tab = t.dataset.tab; paint(); }));
         // 面板漏做的入口會用原本的基本鍵補（#vn-end-basic，跟面板同一層、排在後面）：圖紙開著時把面板墊高，不然那幾顆疊在圖紙上
@@ -473,6 +478,17 @@
                 if (box.isConnected && tab === 'tree') paint();
             }
             note('');
+            // 🎬 還沒在導覽裡演過的格子（新走到的、剛補亮的）→ 鏡頭沿路跟過去、新的那幾格火燒解鎖（vn_end_show.js，演完它會記下來）
+            const S = win.VN_EndShow || window.VN_EndShow, T = w.plan;
+            if (!box.isConnected || tab !== 'tree' || !S || typeof S.tour !== 'function' || !_hasPlan(w)) return;
+            const fresh = Object.keys(T.hit || {}).filter(c => !(T.toured || {})[c]);
+            if (!fresh.length) return;
+            try {
+                if (await S.tour({ tree: T, world: w.name, fresh })) {
+                    T.toured = Object.assign({}, T.toured || {});
+                    fresh.forEach(c => { T.toured[c] = Date.now(); });
+                }
+            } catch (e) { console.warn('[VN末尾面板] 岔路圖導覽沒演成：' + e.message); }
         })();
     }
 
@@ -538,7 +554,7 @@
         }));
         const box = (c, cls, t1, t2, tip) => {
             const p = L.pos[c];
-            return '<g class="vnep-tr-n ' + cls + '">' + (tip ? '<title>' + _esc(tip) + '</title>' : '') +
+            return '<g class="vnep-tr-n ' + cls + '" data-c="' + c + '">' + (tip ? '<title>' + _esc(tip) + '</title>' : '') +
                 '<rect x="' + p.x + '" y="' + p.y + '" width="' + W + '" height="' + H + '" rx="4"/>' +
                 '<text class="t1" x="' + (p.x + W / 2) + '" y="' + (p.y + (t2 ? 18 : H / 2 + 1)) + '">' + _esc(t1) + '</text>' +
                 (t2 ? '<text class="t2" x="' + (p.x + W / 2) + '" y="' + (p.y + 34) + '">' + _esc(t2) + '</text>' : '') + '</g>';
@@ -555,16 +571,26 @@
                 ? box(e.code, 'is-end is-on k-' + k, _clip(e.name, 7), label + (when(e.code) ? '・' + when(e.code) : ''), e.name)
                 : box(e.code, 'is-end is-off k-' + k, label, '？？？', ''));
         });
+        const replay = _motionOk() && T.endings.some(e => hit[e.code]) && (win.VN_EndShow || window.VN_EndShow);
         return '<div class="vnep-tr-wrap"><svg class="vnep-tr" width="' + L.width + '" height="' + L.height + '" viewBox="0 0 ' + L.width + ' ' + L.height + '">' +
             edges.join('') + nodes.join('') + '</svg></div>' +
-            '<div class="vnep-tr-legend"><span class="on">走過的</span><span class="off">還鎖著</span>' + (T.linked ? '' : '<span class="flat">線照企劃順序排</span>') + '</div>';
+            '<div class="vnep-tr-legend"><span class="on">走過的</span><span class="off">還鎖著</span>' + (T.linked ? '' : '<span class="flat">線照企劃順序排</span>') +
+            (replay ? '<span class="flat">點亮著的結局重看片尾</span>' : '') + '</div>';
     }
 
-    // ── 🎬 結局卡 ──
-    //   劇情播到 [Ending|E1] 那一句時跳（像委託完成卡），只跳一次（世界門記 shown）。
-    //   「留下來」關卡接著播；「撤離回奧瑞亞」也是先接著播，這一章演完世界門才撤
+    // ── 🎬 結局 ──
+    //   劇情播到 [Ending|E1] 那一句時演（只演一次，世界門記 shown）：
+    //   演出動畫開著＝片尾（vn_end_show.js：插圖回顧＋名單→結局圖→岔路圖導覽→選擇），關著或片尾拿不到料＝下面這張結局卡。
+    //   「留下來」接著播；「撤離回奧瑞亞」也是先接著播，這一章演完世界門才撤
     //   （酒館撤離會重新載入聊天，播到一半撤會把劇情打斷）。
     function showEnding(h, onClose) {
+        const S = win.VN_EndShow || window.VN_EndShow;
+        if (S && typeof S.ending === 'function' && _motionOk()) {
+            try { S.ending(h, onClose, () => _endingCard(h, onClose)); return; } catch (e) { console.warn('[VN末尾面板] 片尾沒開成：' + e.message); }
+        }
+        _endingCard(h, onClose);
+    }
+    function _endingCard(h, onClose) {
         document.getElementById('vnep-ending')?.remove();
         const k = _EKIND[h.kind] ? h.kind : 'other';
         const el = document.createElement('div');
@@ -651,6 +677,8 @@
         root.innerHTML = '';
     }
 
-    win.VN_EndPanel = window.VN_EndPanel = { render, clear, showEnding };
+    // _b：岔路圖的排法和畫法借給片尾導覽（vn_end_show.js），兩邊畫出來是同一張圖
+    win.VN_EndPanel = window.VN_EndPanel = { render, clear, showEnding,
+        _b: { treeLayout: _treeLayout, treeHtml: _treeHtml, TR: _TR, motionOk: _motionOk } };
     console.log('[VN末尾面板] 模組就緒');
 })();

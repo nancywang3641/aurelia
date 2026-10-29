@@ -1207,34 +1207,37 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         @container vnep (max-width: 520px) { #vn-end-panel .vnep-ac-head { flex-wrap: wrap; row-gap: 8px; } #vn-end-panel .vnep-ac-x { margin-left: auto; } #vn-end-panel .vnep-ac-count { order: 3; margin-left: 0; } }
         #vn-end-panel .vnep-tr-wrap { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; padding-bottom: 4px; }
         #vn-end-panel .vnep-tr { display: block; margin: 0 auto; font-family: inherit; }
-        #vn-end-panel .vnep-tr-edge { fill: none; stroke: rgba(42,74,128,0.38); stroke-width: 1.2; stroke-dasharray: 4 4; }
-        #vn-end-panel .vnep-tr-edge.on { stroke: #2a4a80; stroke-width: 2; stroke-dasharray: none; }
-        #vn-end-panel .vnep-tr-n rect { fill: #f7fafd; stroke: rgba(42,74,128,0.5); stroke-width: 1.2; stroke-dasharray: 4 3; }
-        #vn-end-panel .vnep-tr-n text { text-anchor: middle; dominant-baseline: central; fill: #6d84ad; }
-        #vn-end-panel .vnep-tr-n .t1 { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; }
-        #vn-end-panel .vnep-tr-n .t2 { font-size: 11px; letter-spacing: 0.05em; }
-        #vn-end-panel .vnep-tr-n.is-off .t1 { font-weight: 400; letter-spacing: 0.2em; }
-        #vn-end-panel .vnep-tr-n.is-on rect { fill: #fff; stroke: #2a4a80; stroke-width: 1.6; stroke-dasharray: none; }
-        #vn-end-panel .vnep-tr-n.is-on text { fill: #1f3a68; }
-        #vn-end-panel .vnep-tr-n.is-now rect { stroke: #b8564a; stroke-width: 2.2; }
-        #vn-end-panel .vnep-tr-n.is-now .t2 { fill: #b8564a; }
-        #vn-end-panel .vnep-tr-n.is-start rect { fill: #2a4a80; stroke: #2a4a80; stroke-dasharray: none; }
-        #vn-end-panel .vnep-tr-n.is-start text { fill: #fff; }
+        #vn-end-panel .vnep-tr-edge, .vnes-world .vnep-tr-edge { fill: none; stroke: rgba(42,74,128,0.38); stroke-width: 1.2; stroke-dasharray: 4 4; }
+        #vn-end-panel .vnep-tr-edge.on, .vnes-world .vnep-tr-edge.on { stroke: #2a4a80; stroke-width: 2; stroke-dasharray: none; }
+        #vn-end-panel .vnep-tr-n rect, .vnes-world .vnep-tr-n rect { fill: #f7fafd; stroke: rgba(42,74,128,0.5); stroke-width: 1.2; stroke-dasharray: 4 3; }
+        #vn-end-panel .vnep-tr-n text, .vnes-world .vnep-tr-n text { text-anchor: middle; dominant-baseline: central; fill: #6d84ad; }
+        #vn-end-panel .vnep-tr-n .t1, .vnes-world .vnep-tr-n .t1 { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; }
+        #vn-end-panel .vnep-tr-n .t2, .vnes-world .vnep-tr-n .t2 { font-size: 11px; letter-spacing: 0.05em; }
+        #vn-end-panel .vnep-tr-n.is-off .t1, .vnes-world .vnep-tr-n.is-off .t1 { font-weight: 400; letter-spacing: 0.2em; }
+        #vn-end-panel .vnep-tr-n.is-on rect, .vnes-world .vnep-tr-n.is-on rect { fill: #fff; stroke: #2a4a80; stroke-width: 1.6; stroke-dasharray: none; }
+        #vn-end-panel .vnep-tr-n.is-on text, .vnes-world .vnep-tr-n.is-on text { fill: #1f3a68; }
+        #vn-end-panel .vnep-tr-n.is-now rect, .vnes-world .vnep-tr-n.is-now rect { stroke: #b8564a; stroke-width: 2.2; }
+        #vn-end-panel .vnep-tr-n.is-now .t2, .vnes-world .vnep-tr-n.is-now .t2 { fill: #b8564a; }
+        #vn-end-panel .vnep-tr-n.is-start rect, .vnes-world .vnep-tr-n.is-start rect { fill: #2a4a80; stroke: #2a4a80; stroke-dasharray: none; }
+        #vn-end-panel .vnep-tr-n.is-start text, .vnes-world .vnep-tr-n.is-start text { fill: #fff; }
         /* 結局：沒走到也看得出好壞（虛線框跟著那個顏色），走到了整格換成那個顏色的印章框 */
-        #vn-end-panel .vnep-tr-n.is-end.k-good { --k: #2f7a55; }
-        #vn-end-panel .vnep-tr-n.is-end.k-bad { --k: #b8564a; }
-        #vn-end-panel .vnep-tr-n.is-end.k-surprise { --k: #8a5aa8; }
-        #vn-end-panel .vnep-tr-n.is-end.k-other { --k: #46639b; }
-        #vn-end-panel .vnep-tr-n.is-end rect { stroke: var(--k); }
-        #vn-end-panel .vnep-tr-n.is-end text { fill: var(--k); }
-        #vn-end-panel .vnep-tr-n.is-end.is-on rect { stroke: var(--k); stroke-width: 2.2; }
-        #vn-end-panel .vnep-tr-n.is-end.is-on text { fill: var(--k); }
+        #vn-end-panel .vnep-tr-n.is-end.k-good, .vnes-world .vnep-tr-n.is-end.k-good { --k: #2f7a55; }
+        #vn-end-panel .vnep-tr-n.is-end.k-bad, .vnes-world .vnep-tr-n.is-end.k-bad { --k: #b8564a; }
+        #vn-end-panel .vnep-tr-n.is-end.k-surprise, .vnes-world .vnep-tr-n.is-end.k-surprise { --k: #8a5aa8; }
+        #vn-end-panel .vnep-tr-n.is-end.k-other, .vnes-world .vnep-tr-n.is-end.k-other { --k: #46639b; }
+        #vn-end-panel .vnep-tr-n.is-end rect, .vnes-world .vnep-tr-n.is-end rect { stroke: var(--k); }
+        #vn-end-panel .vnep-tr-n.is-end text, .vnes-world .vnep-tr-n.is-end text { fill: var(--k); }
+        #vn-end-panel .vnep-tr-n.is-end.is-on rect, .vnes-world .vnep-tr-n.is-end.is-on rect { stroke: var(--k); stroke-width: 2.2; }
+        #vn-end-panel .vnep-tr-n.is-end.is-on text, .vnes-world .vnep-tr-n.is-end.is-on text { fill: var(--k); }
+        /* 亮著的結局點一下重看片尾（vn_end_show.js）*/
+        #vn-end-panel .vnep-tr-n.can-replay { cursor: pointer; }
+        #vn-end-panel .vnep-tr-n.can-replay:hover rect { fill: #f3f8f4; }
         #vn-end-panel .vnep-tr-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; margin-top: 10px; font-size: 0.72rem; color: #46639b; letter-spacing: 0.1em; }
         #vn-end-panel .vnep-tr-legend span::before { content: ''; display: inline-block; width: 18px; height: 0; vertical-align: middle; margin-right: 6px; }
         #vn-end-panel .vnep-tr-legend .on::before { border-top: 2px solid #2a4a80; }
         #vn-end-panel .vnep-tr-legend .off::before { border-top: 1.4px dashed rgba(42,74,128,0.6); }
         #vn-end-panel .vnep-tr-legend .flat::before { display: none; }
-        #vn-end-panel .vnep-tr-note { text-align: center; font-size: 0.78rem; color: #46639b; letter-spacing: 0.1em; margin: 2px 0 10px; }
+        #vn-end-panel .vnep-tr-note, .vnes-world .vnep-tr-note { text-align: center; font-size: 0.78rem; color: #46639b; letter-spacing: 0.1em; margin: 2px 0 10px; }
         /* === 🎬 結局卡：劇情播到 [Ending|代號] 那一句時跳，疊在劇情最上層（跟委託完成卡同一層），只跳一次 === */
         .vnep-ending { position: fixed; inset: 0; z-index: 100050; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(6,9,16,0.66); animation: vnepEndIn .35s ease-out; }
         .vnep-ending.out { animation: vnepEndOut .26s ease-in forwards; }

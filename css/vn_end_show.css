@@ -1,0 +1,92 @@
+/* ----------------------------------------------------------------
+   vn_end_show.css — 🎬 結局片尾＋岔路圖導覽（vn_end_show.js）
+   滿版蓋在最上面（跟結局卡、委託完成卡同一層）。字跟著畫面大小縮放（cqmin），手機直放時插圖排上面、名單排下面。
+   岔路圖的格子、線借成就頁那張的樣式（css/vn_styles.css 的 .vnep-tr-*，選擇器多掛了 .vnes-world）。
+   ---------------------------------------------------------------- */
+.vnes { position: fixed; inset: 0; z-index: 100050; overflow: hidden; background: #05070c; color: #f4efe3;
+    container: vnes / size;
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif; }
+.vnes-skip { position: absolute; top: 14px; right: 14px; z-index: 20; padding: 6px 16px; border: 1px solid rgba(244,239,227,0.45); border-radius: 3px;
+    background: rgba(5,7,12,0.55); color: #f4efe3; font: inherit; font-size: 0.85rem; letter-spacing: 0.25em; cursor: pointer; }
+.vnes-skip:hover { background: rgba(244,239,227,0.15); }
+
+/* ── 片尾：左邊插圖輪流放、右邊捲名單；最後停在結局那張圖 ── */
+.vnes-ed { position: absolute; inset: 0; }
+.vnes-slides { position: absolute; left: 0; top: 0; bottom: 0; width: 64%; overflow: hidden; }
+.vnes-slide { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.vnes-side { position: absolute; right: 0; top: 0; bottom: 0; width: 36%; overflow: hidden; background: #07090f; }
+.vnes-ed.no-slides .vnes-slides { display: none; }
+.vnes-ed.no-slides .vnes-side { width: 100%; background: transparent; }
+.vnes-roll { position: absolute; left: 0; right: 0; top: 100%; padding: 0 8%; text-align: center; }
+.vnes-roll .vnes-big { font-size: clamp(20px, 4.2cqmin, 40px); font-weight: 700; letter-spacing: 0.3em; margin-bottom: 14cqh; }
+.vnes-roll h3 { margin: 0 0 1.6cqh; font-size: clamp(11px, 1.9cqmin, 16px); font-weight: 500; letter-spacing: 0.45em; color: #8f97a8; }
+.vnes-roll ul { list-style: none; margin: 0 0 9cqh; padding: 0; }
+.vnes-roll li { font-size: clamp(14px, 2.8cqmin, 24px); letter-spacing: 0.16em; line-height: 2.1; }
+.vnes-roll li small { display: block; margin-top: -0.5em; margin-bottom: 0.3em; font-size: 0.55em; letter-spacing: 0.25em; color: #8f97a8; line-height: 1.6; }
+.vnes-roll li.off { font-size: clamp(12px, 2.1cqmin, 18px); color: #5d6577; }
+.vnes-endcg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; }
+.vnes-shade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(to top, rgba(4,6,12,0.9) 0%, rgba(4,6,12,0.55) 34%, rgba(4,6,12,0) 62%); }
+.vnes-ed.no-cg .vnes-shade { display: none; }
+.vnes-title { position: absolute; left: 6cqw; right: 6cqw; bottom: 9cqh; }
+.vnes-ed.no-cg .vnes-title { top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.vnes-world-label { font-size: clamp(12px, 2.2cqmin, 18px); letter-spacing: 0.4em; color: #c9d3e6; opacity: 0; }
+.vnes-name { margin-top: 1.4cqh; font-size: clamp(26px, 6.4cqmin, 60px); font-weight: 700; letter-spacing: 0.14em; color: #fbf7ee; text-shadow: 0 2px 12px rgba(0,0,0,0.6); }
+.vnes-name span { display: inline-block; opacity: 0; }
+.vnes-row { display: flex; align-items: center; gap: 2.4cqmin; margin-top: 2.6cqh; }
+.vnes-ed.no-cg .vnes-row { justify-content: center; }
+.vnes-stamp { --k: #46639b; display: inline-block; padding: 0.25em 1em; border: 2px solid var(--k); border-radius: 3px; color: var(--k); background: rgba(250,248,240,0.92);
+    font-weight: 700; font-size: clamp(12px, 2.2cqmin, 18px); letter-spacing: 0.35em; transform: rotate(-4deg); }
+.vnes-stamp.k-good { --k: #2f7a55; } .vnes-stamp.k-bad { --k: #b8564a; } .vnes-stamp.k-surprise { --k: #8a5aa8; }
+.vnes-title .vnes-stamp, .vnes-meta { opacity: 0; }
+.vnes-meta { font-size: clamp(11px, 1.9cqmin, 16px); letter-spacing: 0.15em; color: #c9d3e6; }
+/* 手機直放：插圖排上面、名單排下面 */
+@container vnes (max-aspect-ratio: 1/1) {
+    .vnes-slides { width: 100%; bottom: auto; height: 56%; }
+    .vnes-side { width: 100%; top: auto; height: 44%; }
+    .vnes-ed.no-slides .vnes-side { height: 100%; }
+    .vnes-roll .vnes-big { margin-bottom: 6cqh; }
+    .vnes-roll ul { margin-bottom: 5cqh; }
+}
+
+/* ── 岔路圖導覽：鏡頭＝.vnes-world 的 translate＋scale ── */
+.vnes-stage { position: absolute; inset: 0; overflow: hidden; background: #0a0d15; }
+.vnes-world { position: absolute; left: 0; top: 0; transform-origin: 0 0; border: 2px solid #2a4a80; box-shadow: 0 14px 36px rgba(0,0,0,0.5); color: #1f3a68;
+    background:
+        repeating-linear-gradient(0deg, transparent 0 17px, rgba(90,140,210,0.13) 17px 18px),
+        repeating-linear-gradient(90deg, transparent 0 17px, rgba(90,140,210,0.13) 17px 18px),
+        linear-gradient(178deg, #ffffff 0%, #f7fafd 60%, #eef4fb 100%); }
+/* 圖紙四周多留的 60px＝vn_end_show.js 的 M */
+.vnes-base, .vnes-fx { position: absolute; left: 60px; top: 60px; overflow: visible; }
+.vnes-base svg { display: block; }
+.vnes-fx { pointer-events: none; }
+.vnes-pen { fill: none; stroke: #2a4a80; stroke-width: 2.4; }
+.vnes-ring { fill: none; }
+.vnes-dim { position: absolute; inset: 0; background: rgba(8,11,18,0.5); opacity: 0; pointer-events: none; transition: opacity .3s; }
+.vnes-dim.on { opacity: 1; }
+
+/* 解鎖卡片：跳出來→火燒開→名字浮上來→縮回那一格 */
+.vnes-card { position: absolute; left: 50%; top: 50%; z-index: 5; width: min(460px, 82cqw, 92cqh); padding: 10px; transform: translate(-50%, -50%);
+    background: #fff; border: 2px solid #2a4a80; outline: 1px solid rgba(42,74,128,0.4); outline-offset: 3px; box-shadow: 0 14px 40px rgba(0,0,0,0.55); }
+.vnes-pic { position: relative; aspect-ratio: 1216 / 832; background: #0b0e15; }
+.vnes-pic-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
+.vnes-pic-plate { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; padding: 8%; text-align: center;
+    background: radial-gradient(circle at 50% 40%, #33558f 0%, #1f3a68 70%); color: #f4efe3; font-size: clamp(18px, 3.4cqmin, 30px); font-weight: 700; letter-spacing: 0.18em; }
+.vnes-cover { position: absolute; inset: 0; width: 100%; height: 100%; }
+.vnes-ash { position: absolute; left: -10%; bottom: -10%; width: 120%; height: 180%; pointer-events: none; }
+.vnes-ccap { padding: 10px 4px 2px; text-align: center; opacity: 0; transform: translateY(6px); transition: opacity .35s, transform .35s; }
+.vnes-card.cap-on .vnes-ccap { opacity: 1; transform: none; }
+.vnes-cn { font-size: clamp(16px, 2.6cqmin, 22px); font-weight: 700; letter-spacing: 0.14em; color: #1f3a68; }
+.vnes-cm { margin-top: 4px; font-size: clamp(11px, 1.6cqmin, 14px); letter-spacing: 0.2em; color: #46639b; }
+.vnes-card.k-good .vnes-cm { color: #2f7a55; } .vnes-card.k-bad .vnes-cm { color: #b8564a; } .vnes-card.k-surprise .vnes-cm { color: #8a5aa8; }
+
+/* 最後那排：結局名＋留下來／撤離（重看只有關掉） */
+.vnes-final { position: absolute; left: 0; right: 0; bottom: 0; z-index: 10; padding: 14px 16px 22px; text-align: center;
+    background: linear-gradient(to top, rgba(5,7,12,0.95) 55%, rgba(5,7,12,0)); }
+.vnes-final-name { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px 14px; margin-bottom: 12px;
+    font-size: clamp(13px, 2.2cqmin, 17px); letter-spacing: 0.18em; color: #e9e4d8; }
+.vnes-final-name .vnes-stamp { font-size: 0.8rem; }
+.vnes-final-btns { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+.vnes-final-btns button { min-width: 180px; padding: 10px 18px; border: 1.4px solid #2a4a80; border-radius: 3px; background: rgba(8,12,22,0.6); color: #f4efe3;
+    font: inherit; font-size: 0.9rem; letter-spacing: 0.15em; cursor: pointer; }
+.vnes-final-btns button[data-k="stay"], .vnes-final-btns button[data-k="close"] { background: #2a4a80; color: #fff; }
+.vnes-final-btns button:hover { background: #1e3554; color: #f4efe3; }

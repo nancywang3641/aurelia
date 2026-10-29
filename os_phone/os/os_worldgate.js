@@ -1266,7 +1266,8 @@
         });
         const linked = !!p.linksFilled || (p.nodes || []).some(n => Array.isArray(n.after)) || (p.endings || []).some(e => Array.isArray(e.from));
         // backfill＝岔路標記出來之前就在玩的世界，前面走過的還沒補亮（第一次打開岔路圖時 backfillPlan 叫副模型讀前面的章節補一次）
-        return { nodes, endings, linked, backfill: w.planBackfill !== 'done', hit: Object.assign({}, w.planHit || {}) };
+        // toured＝哪幾格已經在岔路圖導覽裡解鎖演過（vn_end_show 演完記 markPlanToured；沒演過的下次打開岔路圖會演）
+        return { nodes, endings, linked, backfill: w.planBackfill !== 'done', hit: Object.assign({}, w.planHit || {}), toured: Object.assign({}, w.planToured || {}) };
     }
     // 現在這個世界的岔路圖,放在手邊給播放器同步查:播到 [Ending|E1] 那一刻要當場跳卡,
     //   等資料庫回來的那幾毫秒她點一下就會把下一句先播掉(syncTheme 會叫 _setPlanNow,時機剛好是換世界那幾個)
@@ -1442,6 +1443,10 @@
     // 這個世界的章節 → [{ch, text}]：從最後一次「進入視差世界「世界名」」那一則之後算起（之前是在奧瑞亞或別的世界）。
     //   第幾章跟 _chapterNo 同一套：酒館＝這個聊天室第幾則模型回覆，網頁版＝這段故事第幾章。劇本標籤剝成看得懂的字
     async function _planChapters(name) {
+        return (await _planRawChapters(name)).map(c => ({ ch: c.ch, text: _plainChapter(c.raw) })).filter(c => c.text);
+    }
+    // 同上，劇本原文不剝（找插圖 [Scene|…]、說話的人 [Char|…] 要用）
+    async function _planRawChapters(name) {
         const marker = '進入視差世界「' + name + '」';
         const out = [];
         try {
@@ -1452,8 +1457,8 @@
                 const list = (await db.getAllVnChapters()).filter(c => c && c.storyId === sid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
                 let from = 0;
                 list.forEach((c, i) => { if (JSON.stringify(c).indexOf(marker) >= 0) from = i; });
-                list.forEach((c, i) => { if (i >= from) out.push({ ch: i + 1, text: _plainChapter(c.content) }); });
-                return out.filter(c => c.text);
+                list.forEach((c, i) => { if (i >= from) out.push({ ch: i + 1, raw: String(c.content || '') }); });
+                return out;
             }
             const R = win.VN_READER || window.VN_READER;
             const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
@@ -1464,10 +1469,50 @@
             msgs.forEach((m, i) => {
                 if (!m || m.is_user) return;
                 n++;
-                if (i > from) out.push({ ch: n, text: _plainChapter(m.mes || m.message || '') });
+                if (i > from) out.push({ ch: n, raw: String(m.mes || m.message || '') });
             });
-            return out.filter(c => c.text);
+            return out;
         } catch (e) { return out; }
+    }
+    // 🎬 結局片尾、岔路圖導覽要的料（vn_end_show.js）：這個世界一路上生過的插圖（第幾章）、說過話的人（說得多的排前面）。
+    //   只讀已經有的，不叫模型、不生圖；插圖只給代號，圖由畫面那邊自己到相簿拿。
+    async function planRecap() {
+        try {
+            const id = await _getCurrentId();
+            const w = id ? await _worldById(id) : null;
+            const T = _planTree(w);
+            if (!T) return null;
+            const chs = await _planRawChapters(w.name);
+            const scenes = [], seen = {}, talk = {}, mc = {};
+            chs.forEach(c => {
+                const s = c.raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                let m;
+                const reS = /\[Scene\|([^|\]\n]+)/g;
+                while ((m = reS.exec(s))) { const k = m[1].trim(); if (k && !seen[k]) { seen[k] = 1; scenes.push({ id: k, ch: c.ch }); } }
+                const reC = /\[Char\|([^|\]\n]{1,16})\|/g;
+                while ((m = reC.exec(s))) { const k = m[1].replace(/[*_`]/g, '').trim(); if (k) talk[k] = (talk[k] || 0) + 1; }
+                const reP = /\[Protagonist\|([^|\]\n]{1,16})/g;
+                while ((m = reP.exec(s))) mc[m[1].trim()] = 1;
+            });
+            // 主角自己不放進「一路上的人」
+            try { const n = win.OS_PERSONA?.getName?.(); if (n) mc[String(n).trim()] = 1; } catch (e) {}
+            try { const n = win.SillyTavern?.getContext?.()?.name1; if (n) mc[String(n).trim()] = 1; } catch (e) {}
+            const key = s => { try { return win.OS_ZH?.key ? win.OS_ZH.key(s) : s; } catch (e) { return s; } };
+            const mcK = new Set(Object.keys(mc).filter(Boolean).map(key));
+            const cast = Object.keys(talk).filter(n => !mcK.has(key(n)) && !/^(?:旁白|系統|\?+|？+|\{\{.*\}\})$/.test(n))
+                .sort((a, b) => talk[b] - talk[a]).slice(0, 10);
+            return { world: String(w.name || ''), tree: T, scenes, cast, art: w.art || _fbUrl(w, 'art') };
+        } catch (e) { console.warn('[Worldgate③] 片尾的料沒拿到：' + e.message); return null; }
+    }
+    // 岔路圖導覽演完了哪幾格：記下來，下次打開岔路圖只演新走到的
+    async function markPlanToured(codes) {
+        const id = await _getCurrentId();
+        const w = id ? await _worldById(id) : null;
+        if (!w || !Array.isArray(codes) || !codes.length) return;
+        w.planToured = Object.assign({}, w.planToured || {});
+        codes.forEach(c => { const k = String(c || '').toUpperCase(); if (/^[NE]\d{1,2}$/.test(k)) w.planToured[k] = Date.now(); });
+        await _saveWorld(w, ['planToured']);
+        if (_planNow && _planNow.id === id) _setPlanNow(w);
     }
     function _plainChapter(raw) {
         let s = String(raw || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
@@ -4692,7 +4737,7 @@
     }
 
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
-        planCodeNow, markEndingShown, fillPlanLinks, backfillPlan, leaveAfterChapter, chapterEnded, snKit,
+        planCodeNow, markEndingShown, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
     console.log('[Worldgate③] 世界門面板就緒');
 })();
