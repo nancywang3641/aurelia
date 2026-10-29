@@ -1168,6 +1168,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-end-panel.vnep-still .vnep-ui *:not(#vnep-x) { animation: none; }
         /* === 🏅 成就頁：疊在面板之上的固定樣式表（資料清單維持一致外觀，不交給生成端做） === */
         /* 🏅 成就頁=航行圖紙皮(同世界門檔案庫的白藍工程紙):深幕+格紙+測繪紀錄行+紅印章 */
+        #vn-end-panel.vnep-sheet-open { z-index: 2; }   /* 圖紙開著：蓋過補位的基本鍵（#vn-end-basic 跟面板同層、排在後面） */
         #vn-end-panel .vnep-achv { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; padding: 18px; background: rgba(8,11,18,0.6); backdrop-filter: blur(2px); }
         #vn-end-panel .vnep-ac-sheet { position: relative; width: min(560px, 96%); max-height: 88%; display: flex; flex-direction: column;
             border: 2px solid #2a4a80; outline: 1px solid rgba(42,74,128,0.4); outline-offset: 4px;
@@ -1197,6 +1198,67 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #vn-end-panel .vnep-ac-row.done::after { content: '達成'; position: absolute; right: 12px; top: 50%; transform: translateY(-50%) rotate(-6deg); padding: 2px 9px; border: 1.6px solid #b8564a; border-radius: 3px; color: #b8564a; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.2em; background: rgba(184,86,74,0.05); }
         #vn-end-panel .vnep-ac-row.done .vnep-ac-n { color: #1f3a68; }
         #vn-end-panel .vnep-ac-row.done .vnep-ac-d { color: #46639b; opacity: 1; }
+        /* === 🌳 岔路圖：成就頁的第一個分頁（白板企劃展開的世界才有），同一張圖紙 === */
+        #vn-end-panel .vnep-ac-tabs { display: flex; gap: 4px; }
+        #vn-end-panel .vnep-ac-tab { padding: 3px 12px; border: 1.2px solid rgba(42,74,128,0.45); border-radius: 2px; color: #46639b; font-size: 0.85rem; letter-spacing: 0.2em; cursor: pointer; background: rgba(247,250,253,0.7); white-space: nowrap; }
+        #vn-end-panel .vnep-ac-tab.on { color: #fff; background: #2a4a80; border-color: #2a4a80; font-weight: 700; }
+        #vn-end-panel .vnep-ac-body.is-tree { padding: 12px 10px 16px; }
+        /* 窄（手機、聊天欄縮起來）：分頁＋計數＋✕ 擠不下一行，計數換到第二行，✕ 留在右上 */
+        @container vnep (max-width: 520px) { #vn-end-panel .vnep-ac-head { flex-wrap: wrap; row-gap: 8px; } #vn-end-panel .vnep-ac-x { margin-left: auto; } #vn-end-panel .vnep-ac-count { order: 3; margin-left: 0; } }
+        #vn-end-panel .vnep-tr-wrap { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; padding-bottom: 4px; }
+        #vn-end-panel .vnep-tr { display: block; margin: 0 auto; font-family: inherit; }
+        #vn-end-panel .vnep-tr-edge { fill: none; stroke: rgba(42,74,128,0.38); stroke-width: 1.2; stroke-dasharray: 4 4; }
+        #vn-end-panel .vnep-tr-edge.on { stroke: #2a4a80; stroke-width: 2; stroke-dasharray: none; }
+        #vn-end-panel .vnep-tr-n rect { fill: #f7fafd; stroke: rgba(42,74,128,0.5); stroke-width: 1.2; stroke-dasharray: 4 3; }
+        #vn-end-panel .vnep-tr-n text { text-anchor: middle; dominant-baseline: central; fill: #6d84ad; }
+        #vn-end-panel .vnep-tr-n .t1 { font-size: 13px; font-weight: 700; letter-spacing: 0.05em; }
+        #vn-end-panel .vnep-tr-n .t2 { font-size: 11px; letter-spacing: 0.05em; }
+        #vn-end-panel .vnep-tr-n.is-off .t1 { font-weight: 400; letter-spacing: 0.2em; }
+        #vn-end-panel .vnep-tr-n.is-on rect { fill: #fff; stroke: #2a4a80; stroke-width: 1.6; stroke-dasharray: none; }
+        #vn-end-panel .vnep-tr-n.is-on text { fill: #1f3a68; }
+        #vn-end-panel .vnep-tr-n.is-now rect { stroke: #b8564a; stroke-width: 2.2; }
+        #vn-end-panel .vnep-tr-n.is-now .t2 { fill: #b8564a; }
+        #vn-end-panel .vnep-tr-n.is-start rect { fill: #2a4a80; stroke: #2a4a80; stroke-dasharray: none; }
+        #vn-end-panel .vnep-tr-n.is-start text { fill: #fff; }
+        /* 結局：沒走到也看得出好壞（虛線框跟著那個顏色），走到了整格換成那個顏色的印章框 */
+        #vn-end-panel .vnep-tr-n.is-end.k-good { --k: #2f7a55; }
+        #vn-end-panel .vnep-tr-n.is-end.k-bad { --k: #b8564a; }
+        #vn-end-panel .vnep-tr-n.is-end.k-surprise { --k: #8a5aa8; }
+        #vn-end-panel .vnep-tr-n.is-end.k-other { --k: #46639b; }
+        #vn-end-panel .vnep-tr-n.is-end rect { stroke: var(--k); }
+        #vn-end-panel .vnep-tr-n.is-end text { fill: var(--k); }
+        #vn-end-panel .vnep-tr-n.is-end.is-on rect { stroke: var(--k); stroke-width: 2.2; }
+        #vn-end-panel .vnep-tr-n.is-end.is-on text { fill: var(--k); }
+        #vn-end-panel .vnep-tr-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; margin-top: 10px; font-size: 0.72rem; color: #46639b; letter-spacing: 0.1em; }
+        #vn-end-panel .vnep-tr-legend span::before { content: ''; display: inline-block; width: 18px; height: 0; vertical-align: middle; margin-right: 6px; }
+        #vn-end-panel .vnep-tr-legend .on::before { border-top: 2px solid #2a4a80; }
+        #vn-end-panel .vnep-tr-legend .off::before { border-top: 1.4px dashed rgba(42,74,128,0.6); }
+        #vn-end-panel .vnep-tr-legend .flat::before { display: none; }
+        #vn-end-panel .vnep-tr-note { text-align: center; font-size: 0.78rem; color: #46639b; letter-spacing: 0.1em; margin: 2px 0 10px; }
+        /* === 🎬 結局卡：劇情播到 [Ending|代號] 那一句時跳，疊在劇情最上層（跟委託完成卡同一層），只跳一次 === */
+        .vnep-ending { position: fixed; inset: 0; z-index: 100050; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(6,9,16,0.66); animation: vnepEndIn .35s ease-out; }
+        .vnep-ending.out { animation: vnepEndOut .26s ease-in forwards; }
+        .vnep-ending.still, .vnep-ending.still .vnep-end-card { animation: none; }
+        .vnep-end-card { position: relative; width: min(380px, 100%); padding: 26px 22px 20px; text-align: center; color: #1f3a68;
+            font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
+            border: 2px solid #2a4a80; outline: 1px solid rgba(42,74,128,0.4); outline-offset: 4px; box-shadow: 0 14px 36px rgba(10,20,40,0.55);
+            background:
+                repeating-linear-gradient(0deg, transparent 0 17px, rgba(90,140,210,0.13) 17px 18px),
+                repeating-linear-gradient(90deg, transparent 0 17px, rgba(90,140,210,0.13) 17px 18px),
+                linear-gradient(178deg, #ffffff 0%, #f7fafd 60%, #eef4fb 100%);
+            animation: vnepEndRise .45s cubic-bezier(.2,.9,.3,1.1); }
+        .vnep-end-card.k-good { --k: #2f7a55; } .vnep-end-card.k-bad { --k: #b8564a; } .vnep-end-card.k-surprise { --k: #8a5aa8; } .vnep-end-card.k-other { --k: #46639b; }
+        .vnep-end-world { font-size: 0.78rem; letter-spacing: 0.3em; color: #46639b; }
+        .vnep-end-name { font-size: 1.45rem; font-weight: 700; letter-spacing: 0.12em; margin: 10px 0 14px; color: #1f3a68; }
+        .vnep-end-kind { display: inline-block; padding: 3px 14px; border: 1.8px solid var(--k); border-radius: 3px; color: var(--k); transform: rotate(-4deg); font-weight: 700; letter-spacing: 0.3em; font-size: 0.85rem; background: rgba(255,255,255,0.6); }
+        .vnep-end-meta { margin: 16px 0 18px; font-size: 0.78rem; color: #46639b; letter-spacing: 0.1em; }
+        .vnep-end-btns { display: flex; flex-direction: column; gap: 8px; }
+        .vnep-end-btns button { padding: 10px 12px; border: 1.4px solid #2a4a80; border-radius: 3px; background: #fff; color: #1f3a68; font: inherit; font-size: 0.9rem; letter-spacing: 0.15em; cursor: pointer; }
+        .vnep-end-btns button[data-k="stay"] { background: #2a4a80; color: #fff; }
+        .vnep-end-btns button:hover { background: #1e3554; color: #f4efe3; }
+        @keyframes vnepEndIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes vnepEndOut { to { opacity: 0; } }
+        @keyframes vnepEndRise { from { opacity: 0; transform: translateY(18px) scale(.97); } to { opacity: 1; transform: none; } }
 
         /* 面板做了但程式還沒接上的入口（例：成就）：看得出來還沒開，而不是點了沒反應 */
         #vn-end-panel .vnep-dead { opacity: 0.35; pointer-events: none; filter: grayscale(1); }

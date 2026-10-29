@@ -409,6 +409,9 @@
                    '<span class="vnep-ac-d">' + _esc(d) + '</span></div>';
         }).join('');
     }
+    function _hasAchv(w) { const a = w && w.achv; return !!(a && ((a.normal || []).length || (a.bond || []).length || (a.hidden || []).length)); }
+    function _hasPlan(w) { const p = w && w.plan; return !!(p && ((p.nodes || []).length || (p.endings || []).length)); }
+    // 白板企劃展開的世界多一個分頁「岔路圖」，預設先看它；兩樣只有一樣就不出分頁
     function _openAchv(root, w) {
         root.querySelector('.vnep-achv')?.remove();
         const a = w.achv || {}, done = w.achvDone || {};
@@ -416,22 +419,176 @@
         const got = all.filter(x => done[x.name]).length;
         const sec = (title, list, hidden) => (list && list.length)
             ? '<div class="vnep-ac-sec">' + title + '</div>' + _achvRows(list, done, hidden) : '';
+        const tabs = _hasPlan(w) && _hasAchv(w);
+        let tab = _hasPlan(w) ? 'tree' : 'achv';
         const box = document.createElement('div');
         box.className = 'vnep-achv';
         // 📐 航行圖紙皮(同世界門檔案庫):深幕+白藍格紙,成就=測繪紀錄行,達成=紅色審查印章
         box.innerHTML =
             '<div class="vnep-ac-sheet">' +
-              '<div class="vnep-ac-head"><span class="vnep-ac-title">這個世界的成就</span>' +
-                '<span class="vnep-ac-count">已測繪 ' + got + ' / ' + all.length + '</span>' +
+              '<div class="vnep-ac-head">' +
+                (tabs ? '<span class="vnep-ac-tabs"><span class="vnep-ac-tab" data-tab="tree">岔路圖</span><span class="vnep-ac-tab" data-tab="achv">成就</span></span>'
+                      : '<span class="vnep-ac-title">' + (tab === 'tree' ? '這個世界的岔路圖' : '這個世界的成就') + '</span>') +
+                '<span class="vnep-ac-count"></span>' +
                 '<span class="vnep-ac-x">✕</span></div>' +
-              '<div class="vnep-ac-body">' +
-                sec('一般', a.normal, false) + sec('與同行者之間', a.bond, false) + sec('隱藏', a.hidden, true) +
-              '</div>' +
+              '<div class="vnep-ac-body"></div>' +
             '</div>';
-        box.querySelector('.vnep-ac-x').addEventListener('click', () => box.remove());
+        const body = box.querySelector('.vnep-ac-body'), count = box.querySelector('.vnep-ac-count');
+        const paint = () => {
+            box.querySelectorAll('.vnep-ac-tab').forEach(t => t.classList.toggle('on', t.dataset.tab === tab));
+            body.classList.toggle('is-tree', tab === 'tree');
+            if (tab === 'achv') {
+                count.textContent = '已測繪 ' + got + ' / ' + all.length;
+                body.innerHTML = sec('一般', a.normal, false) + sec('與同行者之間', a.bond, false) + sec('隱藏', a.hidden, true);
+                return;
+            }
+            const T = w.plan;
+            const hn = T.nodes.filter(n => T.hit[n.code]).length, he = T.endings.filter(e => T.hit[e.code]).length;
+            count.textContent = '岔路 ' + hn + ' / ' + T.nodes.length + '・結局 ' + he + ' / ' + T.endings.length;
+            body.innerHTML = _treeHtml(T, w.name);
+            const wrap = body.querySelector('.vnep-tr-wrap');   // 比圖紙寬（手機）：一打開先捲到正中間，最上面的開頭才看得到
+            if (wrap) wrap.scrollLeft = Math.max(0, (wrap.scrollWidth - wrap.clientWidth) / 2);
+        };
+        box.querySelectorAll('.vnep-ac-tab').forEach(t => t.addEventListener('click', () => { tab = t.dataset.tab; paint(); }));
+        // 面板漏做的入口會用原本的基本鍵補（#vn-end-basic，跟面板同一層、排在後面）：圖紙開著時把面板墊高，不然那幾顆疊在圖紙上
+        const close = () => { box.remove(); root.classList.remove('vnep-sheet-open'); };
+        box.querySelector('.vnep-ac-x').addEventListener('click', close);
         // 點深幕空白處也能關(圖紙本體不關)
-        box.addEventListener('click', (e) => { if (e.target === box) box.remove(); });
+        box.addEventListener('click', (e) => { if (e.target === box) close(); });
         root.appendChild(box);
+        root.classList.add('vnep-sheet-open');
+        paint();
+        // 10-29 以前的企劃沒寫「接在誰後面」：第一次打開叫世界門補一次線（叫模型），補好重畫；補不成照順序排
+        const WG = _wg();
+        if (_hasPlan(w) && !w.plan.linked && WG && typeof WG.fillPlanLinks === 'function') {
+            body.insertAdjacentHTML('afterbegin', '<div class="vnep-tr-note">這份企劃是舊的，正在把岔路連起來……</div>');
+            WG.fillPlanLinks().then(T => {
+                if (T) w.plan = T;
+                if (box.isConnected && tab === 'tree') paint();
+                else body.querySelector('.vnep-tr-note')?.remove();
+            }).catch(() => { body.querySelector('.vnep-tr-note')?.remove(); });
+        }
+    }
+
+    // ── 🌳 岔路圖 ──
+    //   開頭在最上面，岔路照「接在誰後面」一層層往下，結局排在最底下一排（像遊戲的 BRANCH 圖）。
+    //   走過的實線、寫第幾章；沒走過的虛線、？？？；結局沒走到只露好／壞／意外。最近走到的那一格標「目前」。
+    //   太寬就在圖紙裡左右捲，不縮字（手機上縮到看不清比捲還糟）。
+    const _TR = { W: 112, H: 46, GX: 18, GY: 34, PAD: 14 };
+    const _EKIND = { good: '好結局', bad: '壞結局', surprise: '意外結局' };
+    function _clip(s, n) { s = String(s || ''); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+    function _treeLayout(T) {
+        const byCode = {};
+        T.nodes.forEach(n => { byCode[n.code] = n; });
+        const depth = {}, busy = {};
+        const dep = c => {
+            if (depth[c]) return depth[c];
+            if (busy[c]) return 1;   // 接成一圈的：當成接在開頭，不然算不完
+            busy[c] = true;
+            const ps = byCode[c].after.filter(p => byCode[p]);
+            const d = 1 + (ps.length ? Math.max.apply(null, ps.map(dep)) : 0);
+            busy[c] = false;
+            return (depth[c] = d);
+        };
+        T.nodes.forEach(n => dep(n.code));
+        const maxD = T.nodes.length ? Math.max.apply(null, T.nodes.map(n => depth[n.code])) : 0;
+        const rows = [['S']];
+        for (let d = 1; d <= maxD; d++) rows.push(T.nodes.filter(n => depth[n.code] === d).map(n => n.code));
+        if (T.endings.length) rows.push(T.endings.map(e => e.code));
+        const parentsOf = c => {
+            if (c === 'S') return [];
+            if (c[0] === 'E') { const e = T.endings.find(x => x.code === c); return (e.from || []).length ? e.from : ['S']; }
+            const ps = byCode[c].after.filter(p => byCode[p]);
+            return ps.length ? ps : ['S'];
+        };
+        const { W, H, GX, GY, PAD } = _TR;
+        const widest = Math.max.apply(null, rows.map(r => r.length));
+        const width = PAD * 2 + widest * W + (widest - 1) * GX;
+        const pos = {};
+        rows.forEach((row, ri) => {
+            // 照爸爸們的平均位置排，線才不會交叉成一團
+            if (ri > 0) {
+                const avg = c => { const ps = parentsOf(c).filter(p => pos[p]); return ps.length ? ps.reduce((s, p) => s + pos[p].x, 0) / ps.length : 0; };
+                row.sort((a, b) => avg(a) - avg(b));
+            }
+            const rw = row.length * W + (row.length - 1) * GX;
+            row.forEach((c, i) => { pos[c] = { x: (width - rw) / 2 + i * (W + GX), y: PAD + ri * (H + GY) }; });
+        });
+        return { rows, pos, parentsOf, width, height: PAD * 2 + rows.length * H + (rows.length - 1) * GY };
+    }
+    function _treeHtml(T, worldName) {
+        const L = _treeLayout(T);
+        const { W, H } = _TR;
+        const hit = T.hit || {};
+        const latest = Object.keys(hit).filter(c => c[0] === 'N' && hit[c].at).sort((a, b) => hit[b].at - hit[a].at)[0];
+        const lit = c => c === 'S' || !!hit[c];
+        const when = c => { const h = hit[c] || {}; if (h.ch) return '第 ' + h.ch + ' 章'; if (h.at) { const d = new Date(h.at); return (d.getMonth() + 1) + '/' + d.getDate(); } return ''; };
+        const edges = [];
+        Object.keys(L.pos).forEach(c => L.parentsOf(c).forEach(p => {
+            if (!L.pos[p]) return;
+            const a = L.pos[p], b = L.pos[c];
+            const x1 = a.x + W / 2, y1 = a.y + H, x2 = b.x + W / 2, y2 = b.y, my = (y1 + y2) / 2;
+            edges.push('<path class="vnep-tr-edge' + (lit(p) && lit(c) ? ' on' : '') + '" d="M' + x1 + ' ' + y1 + ' C' + x1 + ' ' + my + ' ' + x2 + ' ' + my + ' ' + x2 + ' ' + (y2 - 2) + '"/>');
+        }));
+        const box = (c, cls, t1, t2, tip) => {
+            const p = L.pos[c];
+            return '<g class="vnep-tr-n ' + cls + '">' + (tip ? '<title>' + _esc(tip) + '</title>' : '') +
+                '<rect x="' + p.x + '" y="' + p.y + '" width="' + W + '" height="' + H + '" rx="4"/>' +
+                '<text class="t1" x="' + (p.x + W / 2) + '" y="' + (p.y + (t2 ? 18 : H / 2 + 1)) + '">' + _esc(t1) + '</text>' +
+                (t2 ? '<text class="t2" x="' + (p.x + W / 2) + '" y="' + (p.y + 34) + '">' + _esc(t2) + '</text>' : '') + '</g>';
+        };
+        const nodes = [box('S', 'is-start', _clip(worldName || '降生', 7), '降生', worldName)];
+        T.nodes.forEach(n => {
+            nodes.push(hit[n.code]
+                ? box(n.code, 'is-on' + (n.code === latest ? ' is-now' : ''), _clip(n.name, 7), [when(n.code), n.code === latest ? '目前' : ''].filter(Boolean).join('・'), n.name)
+                : box(n.code, 'is-off', '？？？', '', ''));
+        });
+        T.endings.forEach(e => {
+            const k = _EKIND[e.kind] ? e.kind : 'other', label = _EKIND[e.kind] || '結局';
+            nodes.push(hit[e.code]
+                ? box(e.code, 'is-end is-on k-' + k, _clip(e.name, 7), label + (when(e.code) ? '・' + when(e.code) : ''), e.name)
+                : box(e.code, 'is-end is-off k-' + k, label, '？？？', ''));
+        });
+        return '<div class="vnep-tr-wrap"><svg class="vnep-tr" width="' + L.width + '" height="' + L.height + '" viewBox="0 0 ' + L.width + ' ' + L.height + '">' +
+            edges.join('') + nodes.join('') + '</svg></div>' +
+            '<div class="vnep-tr-legend"><span class="on">走過的</span><span class="off">還鎖著</span>' + (T.linked ? '' : '<span class="flat">線照企劃順序排</span>') + '</div>';
+    }
+
+    // ── 🎬 結局卡 ──
+    //   劇情播到 [Ending|E1] 那一句時跳（像委託完成卡），只跳一次（世界門記 shown）。
+    //   「留下來」關卡接著播；「撤離回奧瑞亞」也是先接著播，這一章演完世界門才撤
+    //   （酒館撤離會重新載入聊天，播到一半撤會把劇情打斷）。
+    function showEnding(h, onClose) {
+        document.getElementById('vnep-ending')?.remove();
+        const k = _EKIND[h.kind] ? h.kind : 'other';
+        const el = document.createElement('div');
+        el.id = 'vnep-ending';
+        el.className = 'vnep-ending' + (_motionOk() ? '' : ' still');
+        el.innerHTML =
+            '<div class="vnep-end-card k-' + k + '">' +
+              '<div class="vnep-end-world">' + _esc(h.world || '') + '・結局</div>' +
+              '<div class="vnep-end-name">' + _esc(h.name) + '</div>' +
+              '<div class="vnep-end-kind">' + (_EKIND[h.kind] || '結局') + '</div>' +
+              '<div class="vnep-end-meta">' + (h.ch ? '第 ' + h.ch + ' 章・' : '') + '走過 ' + h.nodesHit + ' / ' + h.nodesTotal + ' 個岔路</div>' +
+              '<div class="vnep-end-btns"><button type="button" data-k="stay">留下來繼續過日子</button><button type="button" data-k="leave">撤離回奧瑞亞</button></div>' +
+            '</div>';
+        let closing = false;
+        el.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+            if (closing) return;
+            closing = true;
+            if (b.dataset.k === 'leave') {
+                const WG = _wg();
+                if (WG && WG.leaveAfterChapter) WG.leaveAfterChapter(true);
+                const A = win.AUI || window.AUI;
+                if (A && A.toast) A.toast('這一章演完就送妳回奧瑞亞');
+            }
+            el.classList.add('out');
+            setTimeout(() => {   // 等收起的動畫跑完（不靠 animationend：動畫被關掉時它不會來）
+                el.remove();
+                if (typeof onClose === 'function') { try { onClose(); } catch (e) {} }
+            }, el.classList.contains('still') ? 0 : 260);
+        }));
+        document.body.appendChild(el);
     }
 
     async function render(acts) {
@@ -458,8 +615,8 @@
         root.appendChild(ui);
         _applyBg(root, w);
         _lockSysLabels(root);
-        // 成就頁的資料就在手上，不必繞回 vn_core 再拿一次；沒有清單就不接，那顆維持暗的
-        const acts2 = (w.achv && (w.achv.normal || w.achv.bond || w.achv.hidden))
+        // 成就頁的資料就在手上，不必繞回 vn_core 再拿一次；沒有清單（也沒有岔路圖）就不接，那顆維持暗的
+        const acts2 = (_hasAchv(w) || _hasPlan(w))
             ? Object.assign({}, acts, { achv: () => _openAchv(root, w) }) : acts;
         const found = _bindActs(root, acts2);
         _toggleNative(found);
@@ -482,12 +639,12 @@
         _unwatch();
         _toggleNative([]);   // 原生系統鍵先還原，不然面板拆了按鈕也跟著不見
         if (!root) return;
-        root.classList.remove('active', 'has-bg', 'vnep-still');
+        root.classList.remove('active', 'has-bg', 'vnep-still', 'vnep-sheet-open');
         _enterUntil = 0;
         root.style.removeProperty('--vnep-bg');
         root.innerHTML = '';
     }
 
-    win.VN_EndPanel = window.VN_EndPanel = { render, clear };
+    win.VN_EndPanel = window.VN_EndPanel = { render, clear, showEnding };
     console.log('[VN末尾面板] 模組就緒');
 })();

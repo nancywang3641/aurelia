@@ -162,14 +162,22 @@
     function _people(text) {
         return _all(text, 'person').map(x => _old(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), content: _cutBlock(_plain(x.body), LEN.PERSON) })).filter(p => p.name && p.content);
     }
+    // 🌳 岔路接在哪個岔路後面（after）、結局從哪幾個岔路走到（from）：世界裡章末那張岔路樹照這兩格畫線（10-29 她要 BRANCH 那種）。
+    //   寫名字，好幾個用、隔開；一開始就碰得到寫「開頭」＝[]。沒寫這格＝不放這個欄位（挑毛病的人改那段時沒帶，合併時留原本的）
+    function _links(attrs, name) {
+        if (!new RegExp('\\b' + name + '\\s*=', 'i').test(String(attrs || ''))) return null;
+        return Array.from(new Set(String(_attr(attrs, name)).split(/[、,，\/／;；]+/).map(s => _cut(s.replace(/[「」『』]/g, ''), LEN.NAME))
+            .filter(s => s && !/^(開頭|一開始|起點|無|沒有|none|start)$/i.test(s))));
+    }
+    function _withLink(x, o, name) { const l = _links(x.attrs, name); if (l) o[name] = l; return o; }
     function _nodes(text) {
-        return _all(text, 'node').map(x => _old(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), when: _cutNice(_attr(x.attrs, 'when'), LEN.WHEN), content: _cutBlock(_plain(x.body), LEN.NODE) })).filter(n => n.name && n.content);
+        return _all(text, 'node').map(x => _old(x, _withLink(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), when: _cutNice(_attr(x.attrs, 'when'), LEN.WHEN), content: _cutBlock(_plain(x.body), LEN.NODE) }, 'after'))).filter(n => n.name && n.content);
     }
     function _endings(text) {
         return _all(text, 'ending').map(x => {
             let k = _attr(x.attrs, 'kind').toLowerCase();
             if (k === 'twist') k = 'surprise';
-            return _old(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), kind: ENDING_KINDS[k] ? k : '', content: _cutBlock(_plain(x.body), LEN.ENDING) });
+            return _old(x, _withLink(x, { name: _cut(_attr(x.attrs, 'name'), LEN.NAME), kind: ENDING_KINDS[k] ? k : '', content: _cutBlock(_plain(x.body), LEN.ENDING) }, 'from'));
         }).filter(e => e.name && e.content);
     }
     // 同行旅人：陪她從奧瑞亞進去的人（愛麗絲召集旅人時照這欄）。舊企劃沒有這欄，不算缺
@@ -297,14 +305,21 @@
             if (!d) return fail('那份企劃書已經不在了');
             const rv = p.review;
             // 同名的換掉；沒有的補上（缺結局就補一個），補的不超過上限
-            const merge = (list, add, cap) => add.forEach(x0 => {
+            // link：岔路的 after／結局的 from。改那段時沒帶這格就留原本的；岔路改名的話，別的岔路、結局寫到它的地方跟著改
+            const merge = (list, add, cap, link) => add.forEach(x0 => {
                 const x = Object.assign({}, x0), key = x.old || x.name;
                 delete x.old;
                 const i = list.findIndex(y => y.name === key);
+                if (link && i >= 0 && !x[link] && list[i][link]) x[link] = list[i][link];
                 if (i >= 0) list[i] = x; else if (list.length < cap) list.push(x);
+                if (link === 'after' && x0.old && x0.old !== x.name) {
+                    const ren = l => l && l.map(n => n === x0.old ? x.name : n);
+                    d.nodes.forEach(n => { if (n.after) n.after = ren(n.after); });
+                    d.endings.forEach(e => { if (e.from) e.from = ren(e.from); });
+                }
             });
             if (!Array.isArray(d.travelers)) d.travelers = [];   // 加這欄之前寫的企劃書：挑毛病的人可以補上
-            merge(d.people, rv.people, CAPS.PEOPLE); merge(d.travelers, rv.travelers || [], CAPS.TRAVELERS); merge(d.nodes, rv.nodes, CAPS.NODES); merge(d.endings, rv.endings, CAPS.ENDINGS);
+            merge(d.people, rv.people, CAPS.PEOPLE); merge(d.travelers, rv.travelers || [], CAPS.TRAVELERS); merge(d.nodes, rv.nodes, CAPS.NODES, 'after'); merge(d.endings, rv.endings, CAPS.ENDINGS, 'from');
             if (rv.secret) d.secret = rv.secret;
             if (rv.player) d.player = rv.player;
             if (rv.seed && rv.seed.name && rv.seed.concept) d.seed = rv.seed;
@@ -589,8 +604,8 @@
         return '標題：' + d.title + '\n方向：' + d.front + '\n世界種子：' + _seedText(d.seed) + '\n玩家是誰：' + (d.player || '（還沒寫）') +
             '\n人物：\n' + (d.people || []).map(p => '（' + p.name + '）' + p.content).join('\n') +
             '\n同行旅人：\n' + ((d.travelers || []).length ? d.travelers.map(t => '（' + t.name + '）' + t.content).join('\n') : '（還沒寫）') +
-            '\n岔路：\n' + (d.nodes || []).map(n => '（' + n.name + (n.when ? '｜什麼情況下會碰到：' + n.when : '') + '）' + n.content).join('\n') +
-            '\n可能的結局：\n' + (d.endings || []).map(e => '（' + e.name + (e.kind ? '｜' + ENDING_KINDS[e.kind] : '') + '）' + e.content).join('\n') +
+            '\n岔路：\n' + (d.nodes || []).map(n => '（' + n.name + (n.after ? '｜接在：' + (n.after.length ? n.after.join('、') : '開頭') : '') + (n.when ? '｜什麼情況下會碰到：' + n.when : '') + '）' + n.content).join('\n') +
+            '\n可能的結局：\n' + (d.endings || []).map(e => '（' + e.name + (e.kind ? '｜' + ENDING_KINDS[e.kind] : '') + (e.from && e.from.length ? '｜從：' + e.from.join('、') : '') + '）' + e.content).join('\n') +
             (d.secret ? '\n祕密與真相：' + d.secret : '');
     }
     function _talkText(talk, U) { return (talk || []).map(t => (t.role === 'rae' ? U : t.name) + '：' + t.text).join('\n'); }
@@ -675,14 +690,16 @@
                 '・player：' + U + '進去以後是誰、為什麼會在那裡。討論裡' + U + '說了想當什麼，就照她說的寫。',
                 '・person：' + Math.max(3, CAPS.PEOPLE - 1) + '～' + CAPS.PEOPLE + ' 位這個世界的人。每位都要寫到' + PERSON_NEED + '；寫成講這個人的一段話，不用照這個順序一項一項列。只寫外人看得到、打聽得到的；他瞞著別人的事只寫進 secret。',
                 '・traveler：' + _travelerNeed(U) + '寫成講這個人的一段話，不用照這個順序一項一項列。討論裡' + U + '說了想跟誰一起進去，就照她說的寫，跟上面的要求衝突時以她說的為準。',
-                '・node：' + (CAPS.MIN_NODES + 1) + '～' + CAPS.NODES + ' 個岔路。每個寫：什麼情況下會碰到（寫條件，不是第幾章）、那時候的局面、玩家可能怎麼做、各自通往哪裡，還有玩家什麼都不做的話會怎樣。每個至少兩條路。不要有不管玩家怎麼做都只會走到同一個結果的岔路。',
-                '・ending：' + (CAPS.MIN_ENDINGS + 1) + '～' + CAPS.ENDINGS + ' 種可能的結局，要有好的、壞的、出乎意料的，kind 寫 good、bad 或 surprise。每個一定要寫怎麼走到、世界會留下什麼後果。沒有哪一個是保證會發生的。',
+                '・node：' + (CAPS.MIN_NODES + 1) + '～' + CAPS.NODES + ' 個岔路。每個寫：什麼情況下會碰到（寫條件，不是第幾章）、那時候的局面、玩家可能怎麼做、各自通往哪裡，還有玩家什麼都不做的話會怎樣。每個至少兩條路。不要有不管玩家怎麼做都只會走到同一個結果的岔路。' +
+                    'after 寫這個岔路接在哪個岔路後面：要先經過哪個岔路才會碰到它，就寫那個岔路的名字，好幾個用、隔開；玩家一進這個世界就可能碰到的，寫「開頭」。至少要有一個寫「開頭」。after 只寫名字，情況寫在 when。這格會拿去畫成一張岔路圖給' + U + '看，名字要跟岔路的 name 一字不差，所以岔路的名字裡不要用頓號。',
+                '・ending：' + (CAPS.MIN_ENDINGS + 1) + '～' + CAPS.ENDINGS + ' 種可能的結局，要有好的、壞的、出乎意料的，kind 寫 good、bad 或 surprise。每個一定要寫怎麼走到、世界會留下什麼後果。沒有哪一個是保證會發生的。' +
+                    'from 寫哪幾個岔路會通往這個結局，要跟岔路裡寫的「各自通往哪裡」對得上；寫岔路的名字，用、隔開，名字一樣要一字不差。',
                 '・secret：祕密與真相，一定要寫誰知道、什麼情況下會被發現。',
                 '・note：給挑毛病那位同事的一句話。',
                 '格式：', '<plan title="企劃書的名字，十個字以內">', '<front>方向</front>', SEED_FMT, '<player>玩家是誰、為什麼會在那裡</player>',
                 '<person name="名字或外號">這個人的背景</person>', '<traveler name="名字或外號">這位旅人的一段話</traveler>',
-                '<node name="岔路的名字" when="什麼情況下會碰到">那時候的局面；玩家可能怎麼做、各自通往哪裡；什麼都不做會怎樣</node>',
-                '<ending name="結局的名字" kind="good、bad、surprise 三選一">怎麼走到；世界留下什麼後果</ending>', '<secret>祕密與真相</secret>', '<note>一句話</note>', '</plan>', SAY_FMT);
+                '<node name="岔路的名字" after="接在哪個岔路後面，一進來就碰得到寫開頭" when="什麼情況下會碰到">那時候的局面；玩家可能怎麼做、各自通往哪裡；什麼都不做會怎樣</node>',
+                '<ending name="結局的名字" kind="good、bad、surprise 三選一" from="從哪幾個岔路走到，用、隔開">怎麼走到；世界留下什麼後果</ending>', '<secret>祕密與真相</secret>', '<note>一句話</note>', '</plan>', SAY_FMT);
         } else if (job.kind === 'check' && job.dest) {
             const d = b.drafts.find(x => x.id === job.draftId);
             L.push('【這班：挑毛病】', ((d && d.writer && d.writer.name) || '同事') + '寫了這份世界門的企劃書，你來挑毛病：', GATE_WHAT, d ? planText(d) : '');
@@ -698,6 +715,7 @@
                 '・同行旅人照不照這個要求：' + _travelerNeed(U) + '還沒寫同行旅人的話就補上。',
                 '・有沒有岔路不管玩家怎麼做都只會走到同一個結果（換句話說的同一條路也算）',
                 '・每個結局走不走得到：有沒有岔路或條件通往它',
+                '・每個岔路的 after（接在哪個岔路後面）、每個結局的 from（從哪幾個岔路走到）有沒有寫、寫的名字跟岔路的名字對不對得上；有沒有岔路從開頭怎麼走都到不了',
                 '・壞的結局是不是真的會發生，還是寫成最後一定會被救回來',
                 '・人物、岔路、結局、祕密之間有沒有矛盾；有沒有碰到素材界線',
                 '・玩家是誰有沒有寫清楚' + (raeSaid ? '；討論裡' + U + '說想當什麼、想跟誰一起進去，企劃書有沒有照她說的（跟上面的要求衝突時以她說的為準）' : ''),
@@ -705,8 +723,8 @@
                     '少了結局、岔路或同行旅人就補新的：name 寫新取的名字，不寫 old。種子有問題就整個 seed 重寫。',
                 '只放有改的段落，沒改的整個不要出現，也不要寫「沒問題」當內容；整份都沒問題就只寫 note。',
                 '格式：', '<review>', SEED_FMT, '<player>改好的玩家是誰</player>', '<person name="名字" ' + OLD + '>改好的整段</person>',
-                '<traveler name="名字" ' + OLD + '>改好的整段</traveler>', '<node name="名字" ' + OLD + ' when="什麼情況下會碰到">改好的整段</node>',
-                '<ending name="名字" ' + OLD + ' kind="good、bad、surprise 三選一">改好的整段</ending>', '<secret>改好的祕密與真相</secret>',
+                '<traveler name="名字" ' + OLD + '>改好的整段</traveler>', '<node name="名字" ' + OLD + ' after="接在哪個岔路後面，一進來就碰得到寫開頭" when="什麼情況下會碰到">改好的整段</node>',
+                '<ending name="名字" ' + OLD + ' kind="good、bad、surprise 三選一" from="從哪幾個岔路走到，用、隔開">改好的整段</ending>', '<secret>改好的祕密與真相</secret>',
                 '<note>給寫的人和' + U + '的一句話：你看了什麼、改了什麼</note>', '</review>', SAY_FMT);
         } else if (job.kind === 'check') {
             const d = b.drafts.find(x => x.id === job.draftId);

@@ -1148,9 +1148,15 @@
             _lookBlock(recruited) + _pcBlock(w) + _achvBlock(w) + _planBlock(w);
     }
     const _ENDING_KIND = { good: '好', bad: '壞', surprise: '意外', twist: '意外' };
+    // 🌳 每個岔路、結局一個代號(岔路 N1…、結局 E1…),照企劃裡的順序推,不另外存——跟成就代號同一招:
+    //   主持AI 在劇本裡寫 [Branch|代號]／[Ending|代號],程式靠代號認是哪一個(繁簡、改寫都不影響),
+    //   畫岔路圖、跳結局卡。10-29 她要的是「遊戲結束跳 BRANCH 那種,開過的解鎖、沒開的鎖著」。
     function _planBlock(w) {
         const p = w && w.plan;
         if (!p || !((p.nodes || []).length || (p.endings || []).length)) return '';
+        const hit = w.planHit || {};
+        const T = _planTree(w);
+        const done = T.nodes.concat(T.endings).filter(x => hit[x.code]).map(x => x.code + ' ' + x.name);
         return '\n\n## 這個世界事先規劃的岔路與可能結局(SN 白板企劃,給主持AI的導演參考,玩家看不到)\n' +
             '以下是可能性,不是劇本:\n' +
             '- 走到哪個岔路由玩家的行動決定;岔路裡寫的做法只是舉例,玩家用別的辦法也算數。玩家沒碰到的岔路可以永遠不發生,不要為了讓它發生去製造巧合。\n' +
@@ -1158,9 +1164,168 @@
             '- 壞的結局與失敗是真的可以發生的,不要在最後一刻替玩家救回來。\n' +
             '- 玩家什麼都不碰、只在這裡過日子也可以。\n' +
             '- 祕密等條件到了才揭露:在那之前旁白不提,知情的角色也不會自己說出來。\n' +
-            '### 岔路\n' + (p.nodes || []).map(n => '- ' + n.name + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '') + ':' + n.content).join('\n') +
-            '\n### 可能的結局\n' + (p.endings || []).map(e => '- ' + e.name + (_ENDING_KIND[e.kind] ? '(' + _ENDING_KIND[e.kind] + ')' : '') + ':' + e.content).join('\n') +
-            (p.secret ? '\n### 祕密與真相\n' + p.secret : '');
+            '### 岔路\n' + (p.nodes || []).map((n, i) => '- N' + (i + 1) + ' ' + n.name + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '') + ':' + n.content).join('\n') +
+            '\n### 可能的結局\n' + (p.endings || []).map((e, i) => '- E' + (i + 1) + ' ' + e.name + (_ENDING_KIND[e.kind] ? '(' + _ENDING_KIND[e.kind] + ')' : '') + ':' + e.content).join('\n') +
+            (p.secret ? '\n### 祕密與真相\n' + p.secret : '') +
+            // 🚨標記只記「已經發生的事」:寫成「走到時要標」它會為了標而把劇情推過去,跟上面「不要推向任何結局」打架
+            '\n### 岔路與結局的標記(程式靠它畫岔路圖給玩家看)\n' +
+            '- 上面每個岔路、結局前面那個 N 或 E 開頭的編號是它的代號。\n' +
+            '- 某個岔路的局面在這一章真的發生了(玩家碰上了「什麼情況下會碰到」寫的那個情況;以那個情況為準,不必等岔路名字講的事演完),就在發生的那一句後面單獨寫一行 [Branch|代號]。\n' +
+            '- 某個結局在這一章真的成了定局(已經發生、收不回來,不是快要發生),就在定局的那一句後面單獨寫一行 [Ending|代號]。玩家用別的辦法走到同樣的結果,也算這個結局。結局之後玩家可能繼續留在這個世界,故事照常往下寫。\n' +
+            '- 只標已經發生的,同一個代號只標一次;沒發生就不標,不要為了能標而讓它發生。走出清單以外的路不用標。標記那一行不會被當成劇情顯示。\n' +
+            (done.length ? '- 已經標過的(不要再標):' + done.join('、') + '\n' : '');
+    }
+    // 企劃 → 有代號的岔路圖:{ nodes:[{code,name,when,after:[代號]}], endings:[{code,name,kind,from:[代號]}], linked, hit }
+    //   after/from 是白板寫的名字,這裡換成代號;寫錯名字的丟掉。
+    //   岔路一條都沒接上＝接在開頭;結局一條都沒接上＝接在最底層那幾個岔路(沒有別的岔路接在它後面的)。
+    //   linked＝這份企劃有沒有連線(10-29 以前寫的企劃沒有,第一次打開岔路圖時 fillPlanLinks 叫模型補一次)
+    function _planTree(w) {
+        const p = w && w.plan;
+        if (!p || !((p.nodes || []).length || (p.endings || []).length)) return null;
+        const nodes = (p.nodes || []).map((n, i) => ({ code: 'N' + (i + 1), name: String(n.name || ''), when: String(n.when || ''), _raw: n.after }));
+        const byKey = {};
+        nodes.forEach(n => { byKey[_achvKey(n.name)] = n.code; });
+        const look = (l, self) => Array.from(new Set((Array.isArray(l) ? l : []).map(x => byKey[_achvKey(x)]).filter(c => c && c !== self)));
+        nodes.forEach(n => { n.after = look(n._raw, n.code); delete n._raw; });
+        const parents = new Set();
+        nodes.forEach(n => n.after.forEach(c => parents.add(c)));
+        const leaves = nodes.filter(n => !parents.has(n.code)).map(n => n.code);
+        const endings = (p.endings || []).map((e, i) => {
+            const from = look(e.from);
+            return { code: 'E' + (i + 1), name: String(e.name || ''), kind: _ENDING_KIND[e.kind] ? (e.kind === 'twist' ? 'surprise' : e.kind) : '', from: from.length ? from : leaves.slice() };
+        });
+        const linked = !!p.linksFilled || (p.nodes || []).some(n => Array.isArray(n.after)) || (p.endings || []).some(e => Array.isArray(e.from));
+        return { nodes, endings, linked, hit: Object.assign({}, w.planHit || {}) };
+    }
+    // 現在這個世界的岔路圖,放在手邊給播放器同步查:播到 [Ending|E1] 那一刻要當場跳卡,
+    //   等資料庫回來的那幾毫秒她點一下就會把下一句先播掉(syncTheme 會叫 _setPlanNow,時機剛好是換世界那幾個)
+    let _planNow = null;   // { id, name, tree }
+    function _setPlanNow(w) {
+        const T = w ? _planTree(w) : null;
+        _planNow = T ? { id: w.id, name: String(w.name || ''), tree: T } : null;
+    }
+    function _planProgress(T, plus) {
+        const has = c => !!T.hit[c] || c === plus;
+        return { nodesHit: T.nodes.filter(n => has(n.code)).length, nodesTotal: T.nodes.length,
+                 endingsHit: T.endings.filter(e => has(e.code)).length, endingsTotal: T.endings.length };
+    }
+    // 播放器播到 [Branch|N2]／[Ending|E1]:回這一個是誰(問不到回 null,播放器照常往下播)
+    function planCodeNow(code) {
+        const c = String(code || '').trim().toUpperCase();
+        if (!_planNow || !/^[NE]\d{1,2}$/.test(c)) return null;
+        const T = _planNow.tree;
+        const x = (c[0] === 'N' ? T.nodes : T.endings).find(y => y.code === c);
+        if (!x) return null;
+        const h = T.hit[c] || {};
+        return Object.assign({ code: c, type: c[0] === 'N' ? 'node' : 'ending', name: x.name, kind: x.kind || '', world: _planNow.name,
+            ch: h.ch || 0, shown: !!h.shown }, _planProgress(T, c));
+    }
+    // 結局卡跳過了:記下來,重看舊章、重新生成同一章都不再跳
+    async function markEndingShown(code) {
+        const c = String(code || '').trim().toUpperCase();
+        if (!_planNow) return;
+        const w = await _worldById(_planNow.id);
+        if (!w) return;
+        w.planHit = Object.assign({}, w.planHit || {});
+        w.planHit[c] = Object.assign({ at: Date.now() }, w.planHit[c] || {}, { shown: true });
+        await _saveWorld(w, ['planHit']);
+        _setPlanNow(w);
+    }
+    // 掃這一章:[Branch|代號]、[Ending|代號] 記進 planHit(第一次碰到的時間、第幾章)。跟成就同一個掛勾(_initLaunchHook)
+    async function _scanPlan(text, pwaChapterId) {
+        const s = String(text || '');
+        if (!/\[(?:Branch|Ending)\|/i.test(s)) return;
+        const id = await _getCurrentId();
+        if (!id) return;
+        const w = await _worldById(id);
+        const T = _planTree(w);
+        if (!T) return;
+        const codes = new Set(T.nodes.concat(T.endings).map(x => x.code));
+        const re = /\[(?:Branch|Ending)\|\s*([NEne]\d{1,2})\s*(?:\|[^\]\n]*)?\]/g;
+        const got = [];
+        let m;
+        while ((m = re.exec(s))) { const c = m[1].toUpperCase(); if (codes.has(c) && got.indexOf(c) < 0) got.push(c); }
+        const need = got.filter(c => !(T.hit[c] && T.hit[c].ch));   // 第一次碰到的才記;播放器先記了(還沒有章數)的補上章數
+        if (!need.length) return;
+        const ch = await _chapterNo(s, pwaChapterId);
+        const fresh = (await _worldById(id)) || w;
+        const hit = Object.assign({}, fresh.planHit || {});
+        need.forEach(c => { hit[c] = Object.assign({ at: Date.now() }, hit[c] || {}, ch ? { ch } : {}); });
+        fresh.planHit = hit;
+        await _saveWorld(fresh, ['planHit']);
+        if (_planNow && _planNow.id === id) _setPlanNow(fresh);
+        console.log('[Worldgate③] 🌳「' + fresh.name + '」走到 ' + need.join('、') + (ch ? '(第 ' + ch + ' 章)' : ''));
+        // 條目裡「已經標過的」跟著更新(網頁版不落地,組提示詞時現組,不用寫)
+        if (!_pwa() && fresh.entryText) { try { await _writeEntry(fresh, fresh.entryText); } catch (e) {} }
+    }
+    // 第幾章:酒館＝這個聊天室裡第幾則模型回覆(章節面板也是這樣數);網頁版＝這段故事的第幾章。數不出來回 0(畫面改寫日期)
+    async function _chapterNo(text, pwaChapterId) {
+        try {
+            if (_pwa()) {
+                const db = _db();
+                if (!pwaChapterId || !db || !db.getAllVnChapters) return 0;
+                const sid = _cid();
+                const list = (await db.getAllVnChapters()).filter(c => c && c.storyId === sid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                const i = list.findIndex(c => c.id === pwaChapterId);
+                return i >= 0 ? i + 1 : 0;
+            }
+            const R = win.VN_READER || window.VN_READER;
+            const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
+            if (!Array.isArray(msgs) || !msgs.length) return 0;
+            const tag = (String(text).match(/\[(?:Branch|Ending)\|[^\]\n]*\]/i) || [''])[0];
+            let n = 0, at = 0;
+            msgs.forEach(m => {
+                if (!m || m.is_user) return;
+                n++;
+                if (tag && String(m.mes || m.message || '').indexOf(tag) >= 0) at = n;
+            });
+            return at;
+        } catch (e) { return 0; }
+    }
+    // 10-29 以前的企劃沒有「接在誰後面」:第一次打開岔路圖時叫一次副模型補線,補好存回世界(之後不再叫)。
+    //   叫不成就照沒有線的樣子畫(全部接在開頭),這次開著的期間不再重試(一按就燒一次錢不划算)
+    let _linkTry = {};
+    async function fillPlanLinks() {
+        const id = await _getCurrentId();
+        const w = id ? await _worldById(id) : null;
+        const T = _planTree(w);
+        if (!T) return null;
+        if (T.linked || _linkTry[id]) return T;
+        _linkTry[id] = true;
+        const p = w.plan;
+        const prompt =
+            '下面是一個故事世界事先規劃的岔路(劇情可能走到的局面)和可能的結局。替它們畫一張岔路圖:\n' +
+            '- 每個岔路接在哪個岔路後面:要先經過哪個岔路才會碰到它,就寫那個岔路;玩家一進這個世界就可能碰到的,after 寫空陣列。至少要有一個岔路的 after 是空陣列。\n' +
+            '- 每個結局從哪幾個岔路走到。\n' +
+            '名字一字不差照抄下面寫的。只回傳純 JSON:\n' +
+            '{"nodes":[{"name":"{岔路名}","after":["{岔路名}"]}],"endings":[{"name":"{結局名}","from":["{岔路名}"]}]}\n' +
+            '【岔路】\n' + (p.nodes || []).map(n => '- ' + n.name + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '') + ':' + n.content).join('\n') +
+            '\n【可能的結局】\n' + (p.endings || []).map(e => '- ' + e.name + (_ENDING_KIND[e.kind] ? '(' + _ENDING_KIND[e.kind] + ')' : '') + ':' + e.content).join('\n') +
+            '\n語言:繁體中文。';
+        const r = await _callAI(prompt, '世界門補岔路圖', 'worldgate_plan_links', false, false, true);
+        if (!r || !Array.isArray(r.nodes)) { console.warn('[Worldgate③] 岔路圖的線沒補成,照順序排'); return T; }
+        const fresh = await _worldById(id);
+        if (!fresh || !fresh.plan) return T;
+        const key = s => _achvKey(s);
+        const pick = (arr, name) => (arr || []).find(x => x && key(x.name) === key(name));
+        fresh.plan = Object.assign({}, fresh.plan, {
+            nodes: (fresh.plan.nodes || []).map(n => { const g = pick(r.nodes, n.name); return Object.assign({}, n, { after: (g && Array.isArray(g.after)) ? g.after.map(String) : [] }); }),
+            endings: (fresh.plan.endings || []).map(e => { const g = pick(r.endings, e.name); return (g && Array.isArray(g.from)) ? Object.assign({}, e, { from: g.from.map(String) }) : e; }),
+            linksFilled: true,
+        });
+        await _saveWorld(fresh, ['plan']);
+        if (_planNow && _planNow.id === id) _setPlanNow(fresh);
+        console.log('[Worldgate③] 🌳「' + fresh.name + '」的岔路圖補好線了');
+        return _planTree(fresh);
+    }
+    // 結局卡上按「撤離回奧瑞亞」:這一章演完才撤(酒館撤離會重新載入聊天,播到一半撤會把劇情打斷)
+    let _leaveAfter = false;
+    function leaveAfterChapter(on) { _leaveAfter = on !== false; }
+    async function chapterEnded() {
+        if (!_leaveAfter) return;
+        _leaveAfter = false;
+        const r = await _leaveWorld();
+        _toast((r && r.msg) || '已返回主世界');
     }
     async function _writeEntry(w, entryText) {
         if (_pwa()) return true;   // 網頁版不寫世界書：檔案庫裡的原文就是正本，組提示詞時現組（pwaWorldLore）
@@ -1638,10 +1803,11 @@
     //   進出世界都經過 _setCurrentId,換聊天室走 _resync,VN 每次開播也會叫一次(重整後第一次開劇情)。
     //   在世界裡用創作室或小機改主題,改的是世界那份(save 寫回世界檔案)。
     async function syncTheme() {
-        const VT = win.VN_Theme || window.VN_Theme;
-        if (!VT || typeof VT.setWorld !== 'function') return;
         let w = null;
         try { const id = await _getCurrentId(); if (id) w = await _worldById(id); } catch (e) { w = null; }
+        _setPlanNow(w);   // 🌳 叫這支的時機也正是岔路圖要換的時機:一起放到手邊(播到記號時同步查,見 planCodeNow)
+        const VT = win.VN_Theme || window.VN_Theme;
+        if (!VT || typeof VT.setWorld !== 'function') return;
         if (!w || !w.vnTheme) { VT.setWorld(null); return; }
         const id = w.id;
         VT.setWorld({ id, css: w.vnTheme, save: (css) => { _saveTheme(id, css).catch(e => console.warn('[Worldgate③] 劇情介面存檔失敗', e)); } });
@@ -2324,6 +2490,7 @@
                     if (!d.storyId || d.storyId !== _cid()) return;   // 不是這段故事（小劇場那類換過編號的）就不管
                     await _verifyWorldState();
                     await _scanAchv(d.content || '');
+                    await _scanPlan(d.content || '', d.id);
                     await _scanLaunchArt(d.content || '');
                 } catch (err) {}
             });
@@ -2343,6 +2510,7 @@
                 const _t = m.message || m.mes || '';
                 await _verifyWorldState();    // 🩺 每輪先確認書掛對了沒:錯的話下一輪主持AI 就讀到別的世界
                 await _scanAchv(_t);          // 先記成就:生圖那支會等好幾十秒,不要卡著它
+                await _scanPlan(_t);          // 🌳 岔路、結局的標記
                 await _scanLaunchArt(_t);
             } catch (e) {}
         });
@@ -3271,14 +3439,20 @@
         });
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
-            const r = await _gate()?.exitParallax?.();
-            await _syncFreeMode();     // 立繪模式疊回她在藏書選的那個（大廳的固定角色有圖庫）
-            await _setCurrentId('');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
-            await _syncWorldLamps('', '撤離');   // 世界條目全部關掉，免得回到主世界還在吃異世界設定
-            try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
+            const r = await _leaveWorld();
             _toast(r?.msg || '已返回主世界');
             _refreshModePill(); _renderList();
         });
+    }
+    // 撤離視差（世界門面板那顆、結局卡「撤離回奧瑞亞」章末那一下共用）
+    async function _leaveWorld() {
+        _leaveAfter = false;
+        const r = await _gate()?.exitParallax?.();
+        await _syncFreeMode();     // 立繪模式疊回她在藏書選的那個（大廳的固定角色有圖庫）
+        await _setCurrentId('');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
+        await _syncWorldLamps('', '撤離');   // 世界條目全部關掉，免得回到主世界還在吃異世界設定
+        try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
+        return r;
     }
 
     // ── P2 種子抽選 ──
@@ -4235,6 +4409,7 @@
                 panel: w.panel ? Object.assign({}, w.panel, { css: _cleanPanelCss(w.panel.css || '') }) : null,
                 achv: w.achv || null,            // 這個世界的成就清單
                 achvDone: w.achvDone || null,    // {成就名:達成時間}——名字對得上清單的那幾條
+                plan: _planTree(w),              // 🌳 岔路圖(白板企劃展開的世界才有;只有名字、代號、連線、走到哪,沒有內容和祕密)
                 launchArt: w.launchArt || null,  // {teamKey,url} — 這趟隊伍的啟航群像
                 // 退路底圖:世界概念圖(無人遠景)。真的沒有就給這個題材的備圖——
                 // 末尾畫面寧可掛一張題材圖,也不要空手回去讓它變成一片色塊。
@@ -4296,6 +4471,7 @@
     }
 
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
+        planCodeNow, markEndingShown, fillPlanLinks, leaveAfterChapter, chapterEnded,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

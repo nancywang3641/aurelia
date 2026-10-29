@@ -245,8 +245,14 @@
             (d.player ? '<h5>妳在裡面是誰</h5><div class="snb-entry"><p>' + esc(d.player) + '</p></div>' : '') +
             '<h5>人物</h5>' + (d.people || []).map(p => '<div class="snb-entry"><b>' + esc(p.name) + '</b><p>' + esc(p.content) + '</p></div>').join('') +
             ((d.travelers || []).length ? '<h5>同行旅人</h5>' + d.travelers.map(t => '<div class="snb-entry"><b>' + esc(t.name) + '</b><p>' + esc(t.content) + '</p></div>').join('') : '') +
-            '<h5>岔路</h5>' + (d.nodes || []).map(n => '<div class="snb-entry"><b>' + esc(n.name) + '</b>' + (n.when ? '<small>什麼情況下會碰到：' + esc(n.when) + '</small>' : '') + '<p>' + esc(n.content) + '</p></div>').join('') +
-            '<h5>可能的結局</h5>' + (d.endings || []).map(e => '<div class="snb-entry"><b>' + esc(e.name) + '</b>' + (ek[e.kind] ? '<small>' + ek[e.kind] + '的結局</small>' : '') + '<p>' + esc(e.content) + '</p></div>').join('') +
+            '<h5>岔路</h5>' + (d.nodes || []).map(n => {
+                const sm = [n.after ? '接在：' + (n.after.length ? n.after.join('、') : '開頭') : '', n.when ? '什麼情況下會碰到：' + n.when : ''].filter(Boolean).join('｜');
+                return '<div class="snb-entry"><b>' + esc(n.name) + '</b>' + (sm ? '<small>' + esc(sm) + '</small>' : '') + '<p>' + esc(n.content) + '</p></div>';
+            }).join('') +
+            '<h5>可能的結局</h5>' + (d.endings || []).map(e => {
+                const sm = [ek[e.kind] ? ek[e.kind] + '的結局' : '', e.from && e.from.length ? '從：' + e.from.join('、') : ''].filter(Boolean).join('｜');
+                return '<div class="snb-entry"><b>' + esc(e.name) + '</b>' + (sm ? '<small>' + esc(sm) + '</small>' : '') + '<p>' + esc(e.content) + '</p></div>';
+            }).join('') +
             (d.secret ? '<h5>祕密與真相</h5><div class="snb-entry"><p>' + esc(d.secret) + '</p></div>' : '');
     }
     async function _planPage(d) {

@@ -2599,7 +2599,7 @@
         },
 
         // 手機五個面（chat/call/browser/nav/moments）裡不該出現的正文層行：看到就當容器已關（見 next 裡的逃生口）
-        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav|moments)\b)/i,
+        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Branch|Ending|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav|moments)\b)/i,
 
         next: function () {
             this.clearTimers();
@@ -2615,6 +2615,8 @@
                 if (panelWrapper) panelWrapper.style.display = 'none';
                 this._stageClear();   // 章節結束 → 清空兩格立繪
                 try { if (window.OS_FX) window.OS_FX.stopWeather(); } catch (e) {}   // ⚡ 章節結束 → 持續型特效(含循環音效)跟著收，別播到末尾畫面上
+                // 🌳 結局卡上按了「撤離回奧瑞亞」：演完這一章才撤（世界門那邊記著；沒按過就什麼都不做）
+                try { const _wgc = win.OS_WORLDGATE || window.OS_WORLDGATE; if (_wgc && _wgc.chapterEnded) _wgc.chapterEnded().catch(() => {}); } catch (e) {}
                 const endOverlay = document.getElementById('vn-end-overlay');
                 if (endOverlay) {
                     endOverlay.classList.add('active');
@@ -3205,6 +3207,28 @@
                 this.next(); return;
             }
 
+            // 🌳 視差世界的岔路／結局標記：[Branch|N2]、[Ending|E1]（白板企劃展開的世界，條目教主持AI 在發生的那一句後面寫）。
+            //    記下走到哪由世界門掃整章做（_scanPlan）；這裡只管播到那一句時給她看：岔路飄一張小卡接著播，
+            //    結局跳結局卡、她按了才接著播（只跳一次）。同步查世界門手邊那份，跳卡前不留空檔給點擊把下一句先播掉。
+            if (/^\[(Branch|Ending)\|/i.test(line)) {
+                const _pm = line.match(/^\[(Branch|Ending)\|\s*([^|\]]*)/i);
+                const _wgp = win.OS_WORLDGATE || window.OS_WORLDGATE;
+                const _h = (_pm && _wgp && _wgp.planCodeNow) ? _wgp.planCodeNow(_pm[2]) : null;
+                if (_h && _h.type === 'node') {
+                    this.launchQuestToast(_h.name, '走過 ' + _h.nodesHit + '／' + _h.nodesTotal + ' 個岔路', '岔路', 'fa-code-branch');
+                    this.addLog('岔路', _h.name);
+                } else if (_h && _h.type === 'ending') {
+                    this.addLog('結局', _h.name);
+                    const _EP = win.VN_EndPanel || window.VN_EndPanel;
+                    if (!_h.shown && _EP && typeof _EP.showEnding === 'function') {
+                        try { _wgp.markEndingShown(_h.code).catch(() => {}); } catch (e) {}
+                        _EP.showEnding(_h, () => this.next());
+                        return;
+                    }
+                }
+                this.next(); return;
+            }
+
             // 🧭 支線提示：[Quest|支線名|一句線索]
             //    跟成就/彈幕同一路：飄一張小卡、幾秒後自己走、不吃點擊、立刻 next()。
             //    舊的「委託面板」整張卡（委託人/獎勵/接受委託鈕，會卡住劇情等按）已拆，AI 從來沒被教過寫它。
@@ -3613,16 +3637,18 @@
         },
         // 🧭 支線提示小卡：上方置中滑入、停幾秒、自己淡出。pointer-events 全關，不擋點擊也不吃點擊。
         //    連續幾張就往下堆（容器是 column flex），各自到點各自走；離開動畫走 CSS class，animationend 後拆節點。
-        launchQuestToast: function(name, hint) {
+        // label／icon 不給＝支線那張；視差世界的岔路也借這張（'岔路'、'fa-code-branch'）
+        launchQuestToast: function(name, hint, label, icon) {
             const stack = document.getElementById('quest-toast-stack');
             if (!stack) return;
             const card = document.createElement('div');
             card.className = 'quest-toast';
             const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const ic = /^fa-[a-z0-9-]+$/.test(icon || '') ? icon : 'fa-signs-post';
             card.innerHTML =
-                `<i class="fa-solid fa-signs-post quest-toast-icon"></i>` +
+                `<i class="fa-solid ${ic} quest-toast-icon"></i>` +
                 `<div class="quest-toast-body">` +
-                    `<div class="quest-toast-head"><span class="quest-toast-label">支線</span><span class="quest-toast-name">${esc(name)}</span></div>` +
+                    `<div class="quest-toast-head"><span class="quest-toast-label">${esc(label || '支線')}</span><span class="quest-toast-name">${esc(name)}</span></div>` +
                     (hint ? `<div class="quest-toast-hint">${esc(hint)}</div>` : '') +
                 `</div>`;
             stack.appendChild(card);
