@@ -195,3 +195,51 @@
     vertical-align: middle;
 }
 .aui-help:hover, .aui-help:focus-visible { opacity: .9; }
+
+/* ▾ 手機框裡的下拉單（core/aurelia_dialog.js 的 openSelect）：掛在手機框裡，位置、寬高由程式量好給；
+ *   最多約十行，再多就在單子裡捲，不會從手機框蹦出去。顏色跟手機主題走。 */
+.aud-sel-pop {
+    position: absolute;
+    z-index: 2147483000;
+    box-sizing: border-box;
+    width: max-content;
+    min-width: var(--aud-sel-minw, 120px);
+    max-width: var(--aud-sel-maxw, 320px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px;
+    border-radius: 10px;
+    background: var(--os-surface, #fffdf8);
+    color: var(--os-ink, #3e4b41);
+    border: 1px solid rgba(var(--os-ink-rgb, 62, 75, 65), 0.18);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+    font-size: var(--aud-sel-fs, 13px);
+    line-height: 1.35;
+    text-align: left;
+}
+.aud-sel-item {
+    padding: 7px 28px 7px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    position: relative;
+}
+.aud-sel-item.in-group { padding-left: 20px; }
+.aud-sel-item.is-active { background: rgba(var(--os-ink-rgb, 62, 75, 65), 0.09); }
+.aud-sel-item.is-sel { font-weight: 700; }
+.aud-sel-item.is-sel::after {
+    content: "\f00c";
+    font-family: "Font Awesome 6 Free", "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 0.85em;
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    opacity: 0.7;
+}
+.aud-sel-item.is-off { opacity: 0.4; cursor: default; }
+.aud-sel-group { padding: 8px 10px 3px; font-size: 0.85em; font-weight: 700; opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

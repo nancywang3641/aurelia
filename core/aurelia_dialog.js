@@ -441,5 +441,162 @@
         return tpl.innerHTML;
     }
 
-    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset, lsSet, safeHtml };
+    // ▾ 手機框裡的下拉單：原生那張選項單是瀏覽器自己畫的，選項一多就從手機框整個蹦出去，CSS 也管不到它
+    //   （10-29 她：「下拉單總是蹦老長，以後每個下拉單限制一下喔，手機框裡的必須限制」）。
+    //   所以滑鼠點手機框裡的 <select>，改開這裡畫的單子：貼在下拉底下（下面不夠就翻上去），
+    //   最多約十行、也不超過手機框，其他捲；選了照原生那樣改 value、發 input／change，各頁的 onchange 照常跑。
+    //   新寫的下拉什麼都不用做，放進手機框就自動套用。手指點（手機）照舊開系統的：那是螢幕底下的滾輪，本來就在框裡。
+    //   要原生的就在 <select> 加 data-aud-native。
+    const SEL_BOUND = '.aps-screen, #aurelia-phone-screen, #aurelia-phone-frame';
+    const SEL_ROWS = 10;
+    let _sel = null;          // 開著的那張：{ el, box, doc, items, active, off }
+    let _lastPtr = '';
+    function _selClose() {
+        const s = _sel; if (!s) return;
+        _sel = null;
+        try { s.off(); } catch (e) {}
+        try { s.box.remove(); } catch (e) {}
+    }
+    function _selPick(s, i) {
+        const it = s.items[i]; if (!it || it.opt.disabled) return;
+        const el = s.el;
+        _selClose();
+        if (el.selectedIndex !== it.idx) {
+            el.selectedIndex = it.idx;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        try { el.focus({ preventScroll: true }); } catch (e) {}
+    }
+    function _selActive(s, i, scroll) {
+        if (!s.items.length) return;
+        i = Math.max(0, Math.min(s.items.length - 1, i));
+        if (s.items[s.active]) s.items[s.active].div.classList.remove('is-active');
+        s.active = i;
+        const d = s.items[i].div;
+        d.classList.add('is-active');
+        if (scroll) {
+            const top = d.offsetTop, bot = top + d.offsetHeight;
+            if (top < s.box.scrollTop) s.box.scrollTop = top - 4;
+            else if (bot > s.box.scrollTop + s.box.clientHeight) s.box.scrollTop = bot - s.box.clientHeight + 4;
+        }
+    }
+    function openSelect(el) {
+        _selClose();
+        const bound = el && el.closest && el.closest(SEL_BOUND);
+        if (!bound || !el.options) return false;
+        const doc = el.ownerDocument, W = doc.defaultView || window;
+        const box = doc.createElement('div');
+        box.className = 'aud-sel-pop';
+        box.setAttribute('role', 'listbox');
+        const cs = W.getComputedStyle(el);
+        box.style.setProperty('--aud-sel-fs', cs.fontSize);
+        const items = [];
+        const addOpt = function (opt, inGroup) {
+            if (opt.hidden) return;
+            const d = doc.createElement('div');
+            d.className = 'aud-sel-item' + (inGroup ? ' in-group' : '') + (opt.disabled ? ' is-off' : '') + (opt.index === el.selectedIndex ? ' is-sel' : '');
+            d.setAttribute('role', 'option');
+            d.textContent = opt.textContent;
+            if (opt.textContent.length > 16) d.title = opt.textContent;
+            d.dataset.i = String(items.length);
+            items.push({ opt: opt, idx: opt.index, div: d });
+            box.appendChild(d);
+        };
+        Array.prototype.forEach.call(el.children, function (c) {
+            if (c.tagName === 'OPTGROUP') {
+                const g = doc.createElement('div'); g.className = 'aud-sel-group'; g.textContent = c.label || '';
+                box.appendChild(g);
+                Array.prototype.forEach.call(c.children, function (o) { if (o.tagName === 'OPTION') addOpt(o, true); });
+            } else if (c.tagName === 'OPTION') addOpt(c, false);
+        });
+        if (!items.length) return false;
+        bound.appendChild(box);
+
+        // 位置：手機框可能被縮放（.aps-frame 矮螢幕會 scale），量出來的是畫面上的大小，換回框裡的座標
+        const br = bound.getBoundingClientRect(), sr = el.getBoundingClientRect();
+        const k = (bound.offsetWidth && br.width) ? (br.width / bound.offsetWidth) : 1;
+        const M = 8;
+        // 上下多留一點：浮動手機的螢幕是大圓角，貼到底的那一角會被切掉
+        const MV = Math.max(M, Math.min(28, (parseFloat(W.getComputedStyle(bound).borderBottomLeftRadius) || 0) * 0.7));
+        const rowH = (items[0].div.offsetHeight || 30);
+        const want = Math.min(box.scrollHeight, rowH * SEL_ROWS + 8);
+        const below = (br.bottom - sr.bottom) / k - MV, above = (sr.top - br.top) / k - MV;
+        const down = below >= Math.min(want, 160) || below >= above;
+        const h = Math.max(rowH + 8, Math.min(want, down ? below : above));
+        const maxW = bound.clientWidth - M * 2;
+        const minW = Math.min(maxW, Math.max(sr.width / k, 120));
+        box.style.setProperty('--aud-sel-minw', minW + 'px');
+        box.style.setProperty('--aud-sel-maxw', maxW + 'px');
+        box.style.maxHeight = h + 'px';
+        const w = box.offsetWidth;
+        let left = (sr.left - br.left) / k;
+        left = Math.max(M, Math.min(left, bound.clientWidth - M - w));
+        const top = down ? (sr.bottom - br.top) / k + 2 : (sr.top - br.top) / k - 2 - Math.min(box.offsetHeight, h);
+        box.style.left = left + 'px';
+        box.style.top = top + 'px';
+
+        const s = { el: el, box: box, doc: doc, items: items, active: -1, off: null };
+        _sel = s;
+        const cur = items.findIndex(function (it) { return it.idx === el.selectedIndex; });
+        _selActive(s, cur < 0 ? 0 : cur, false);
+        if (cur > 0) box.scrollTop = Math.max(0, items[cur].div.offsetTop - box.clientHeight / 2 + rowH / 2);
+
+        box.addEventListener('mousedown', function (e) { e.preventDefault(); });   // 點單子不讓下拉失焦
+        box.addEventListener('click', function (e) {
+            const d = e.target.closest && e.target.closest('.aud-sel-item');
+            if (d) _selPick(s, Number(d.dataset.i));
+        });
+        box.addEventListener('mousemove', function (e) {
+            const d = e.target.closest && e.target.closest('.aud-sel-item');
+            if (d && Number(d.dataset.i) !== s.active) _selActive(s, Number(d.dataset.i), false);
+        });
+        const onDown = function (e) { if (!box.contains(e.target) && e.target !== el) _selClose(); };
+        const onScroll = function (e) { if (e.target !== box && !box.contains(e.target)) _selClose(); };
+        const onKey = function (e) {
+            if (_sel !== s) return;
+            const k2 = e.key;
+            if (k2 === 'Escape' || k2 === 'Tab') { if (k2 === 'Escape') { e.preventDefault(); e.stopPropagation(); } _selClose(); return; }
+            let to = null;
+            if (k2 === 'ArrowDown') to = s.active + 1;
+            else if (k2 === 'ArrowUp') to = s.active - 1;
+            else if (k2 === 'PageDown') to = s.active + SEL_ROWS;
+            else if (k2 === 'PageUp') to = s.active - SEL_ROWS;
+            else if (k2 === 'Home') to = 0;
+            else if (k2 === 'End') to = s.items.length - 1;
+            else if (k2 === 'Enter' || k2 === ' ') { e.preventDefault(); e.stopPropagation(); _selPick(s, s.active); return; }
+            if (to !== null) { e.preventDefault(); e.stopPropagation(); _selActive(s, to, true); }
+        };
+        const onBlur = function () { _selClose(); };
+        doc.addEventListener('mousedown', onDown, true);
+        doc.addEventListener('scroll', onScroll, true);
+        doc.addEventListener('keydown', onKey, true);
+        W.addEventListener('resize', onBlur);
+        W.addEventListener('blur', onBlur);
+        s.off = function () {
+            doc.removeEventListener('mousedown', onDown, true);
+            doc.removeEventListener('scroll', onScroll, true);
+            doc.removeEventListener('keydown', onKey, true);
+            W.removeEventListener('resize', onBlur);
+            W.removeEventListener('blur', onBlur);
+        };
+        return true;
+    }
+    function _onSelPtr(e) { _lastPtr = e.pointerType || ''; }
+    function _onSelDown(e) {
+        const el = e.target;
+        if (!el || el.tagName !== 'SELECT' || e.button !== 0) return;
+        if (_lastPtr === 'touch' || el.multiple || el.size > 1 || el.disabled || el.hasAttribute('data-aud-native')) return;
+        if (!el.closest(SEL_BOUND)) return;
+        e.preventDefault();   // 不開原生那張
+        if (_sel && _sel.el === el) { _selClose(); return; }   // 再點一次＝收起來
+        try { el.focus({ preventScroll: true }); } catch (err) {}
+        // 等這一下其他的 mousedown／focus 處理跑完（有的頁是點下去才把選項填進來）再量
+        setTimeout(function () { if (el.isConnected) openSelect(el); }, 0);
+    }
+    [document, (function () { try { return window.parent && window.parent.document; } catch (e) { return null; } })()]
+        .filter((d, i, a) => d && a.indexOf(d) === i)
+        .forEach(d => { d.addEventListener('pointerdown', _onSelPtr, true); d.addEventListener('mousedown', _onSelDown, true); });
+
+    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset, lsSet, safeHtml, openSelect };
 })();
