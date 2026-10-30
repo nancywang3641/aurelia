@@ -149,9 +149,13 @@
             return [label, desc].filter(Boolean).join(', ') || null;
         },
 
-        // [Item|名稱|描述] → 生圖提示詞 = 名稱 + 描述（描述沒有就只用名稱）。名稱仍兼任快取ID。
-        _itemGenPrompt: function(name, desc) {
-            return [name, desc].filter(Boolean).join(', ');
+        // [Item|✒️名稱|描述|外觀] → 生圖提示詞 = 外觀（劇情 AI 用英文寫的物件長相）；舊章沒這格就只用名稱。名稱仍兼任快取ID。
+        //   描述是寫給玩家看的前因後果，以前整段拿去翻譯生圖：專有名詞被翻壞、
+        //   畫不出來的劇情也塞進去，還連 ✒️ 一起送。描述從此不進生圖。
+        _itemGenPrompt: function(name, look) {
+            look = String(look || '').trim();
+            if (look) return look;
+            return String(name || '').replace(/[\p{Extended_Pictographic}️‍]/gu, '').trim();
         },
 
         // 去重包裝：同一 cacheId 若已在生成中(預熱/現場)，共用同一個 promise，
@@ -389,17 +393,17 @@
                 const itemName = _ip[0];
                 if (!itemName || seen.has(itemName)) continue;
                 seen.add(itemName);
-                tasks.push({ name: itemName, desc: _ip[1] || '' });
+                tasks.push({ name: itemName, look: _ip[2] || '' });
             }
             if (!tasks.length) return;
             console.log(`[VN] 預熱道具圖：共 ${tasks.length} 張，依序生成中...`);
             (async () => {
                 this._imgScanStart();
                 try {
-                    for (const { name: itemName, desc } of tasks) {
+                    for (const { name: itemName, look } of tasks) {
                         // 走 _safeFetchItem：與現場 [Item|] 共用 in-flight promise，防重複生成
                         this._imgJobStart();
-                        try { await this._safeFetchItem(itemName, desc); } finally { this._imgJobEnd(); }
+                        try { await this._safeFetchItem(itemName, look); } finally { this._imgJobEnd(); }
                     }
                 } finally { this._imgScanEnd(); }
                 console.log('[VN] 所有道具圖預熱完成');
@@ -696,16 +700,16 @@
         },
 
         // 去重包裝：同一道具若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
-        _safeFetchItem: function(itemName, desc) {
+        _safeFetchItem: function(itemName, look) {
             if (this._itemMemCache[itemName]) return Promise.resolve(this._itemMemCache[itemName]);
             if (this._itemInflight[itemName]) return this._itemInflight[itemName];
             const self = this;
-            const p = this._doFetchItem(itemName, desc);
+            const p = this._doFetchItem(itemName, look);
             this._itemInflight[itemName] = p;
             p.then(function () {}, function () {}).then(function () { delete self._itemInflight[itemName]; });
             return p;
         },
-        _doFetchItem: async function(itemName, desc) {
+        _doFetchItem: async function(itemName, look) {
             if (this._itemMemCache[itemName]) return this._itemMemCache[itemName];
             const cached = await VN_Cache.get('item_cache', itemName);
             if (cached && cached.url && !cached.url.startsWith('blob:')) {
@@ -728,7 +732,7 @@
             if (cached && cached.url && cached.url.startsWith('blob:')) {
                 await VN_Cache.delete('item_cache', itemName);
             }
-            const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, desc));
+            const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, look));
             if (!raw) return '';
             // 先轉成可存的圖再去背：去背吐的是新的 PNG，原本那顆 blob 用不上了
             let src = '';

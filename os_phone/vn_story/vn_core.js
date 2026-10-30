@@ -3277,7 +3277,7 @@
                 } else {
                     (async () => {
                         // 走 _safeFetchItem：預熱還在生同一張時共用同一個 promise，不再重複生成
-                        const url = await this._safeFetchItem(itemName, parts[1] || '');
+                        const url = await this._safeFetchItem(itemName, parts[2] || '');   // 第三段＝外觀（生圖用）；描述 parts[1] 只給玩家看
                         if (url) this._itemShowImg(itemName, url);
                     })();
                 }
