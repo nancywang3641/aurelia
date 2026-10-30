@@ -13,6 +13,8 @@
 //     → VN_DynamicParser.init（畫面才認得）→ 酒館正則匯入過的照新內容重寫（OS_STUDIO.refreshTavernRegex）。
 //     修改前那份推進組件自己的 history（創作室的「歷史」看得到、可以退回）。
 //   ・改回去：新增的整個拿掉（OS_STUDIO.purgeTemplateFully），修改的換回改前那份；提出後被改過＝作廢，不蓋掉。
+//   ・換標籤（edit 的 new_tag，10-30）：樣式前綴、正文寫法和說明裡的標籤名一起換；同意時酒館裡舊名字那條正則改成新名字，
+//     改回去再換回來。還沒同意的草稿記在新標籤底下，舊標籤收在 aliases，用舊名字也找得到。
 // 暴露：window.OS_AURELIA_VN = { note, tools, run, propose, apply, undo, verb, text, what, noun, cards, detail, mountPreview }
 //   單子 prop.mod === 'vn'，OS_AURELIA_EDIT 看到就轉過來（同意、改回去、那一行的字、小窗的格子、修改紀錄）。
 // ----------------------------------------------------------------
@@ -92,22 +94,36 @@
         return o;
     }
     function _draftsSave(o) { try { localStorage.setItem(DRAFT_KEY, JSON.stringify(o)); } catch (e) {} }
+    // 標籤對到的那份草稿；改標籤的草稿記在新標籤底下，舊標籤收在 aliases（用舊名字也找得到）
+    function _draftOf(o, k) {
+        if (o[k]) return o[k];
+        return Object.keys(o).map(function (x) { return o[x]; }).find(function (d) { return (d.aliases || []).indexOf(k) !== -1; }) || null;
+    }
     function _draftFor(key) {
         const k = _one(key).toLowerCase(), o = _drafts();
         if (!k) return null;
-        if (o[k]) return o[k];
+        const d = _draftOf(o, k);
+        if (d) return d;
         return Object.keys(o).map(function (x) { return o[x]; }).find(function (d) { return _one(d.after && d.after.title).toLowerCase() === k; }) || null;
     }
+    // prop.from＝這次改之前的標籤（有換標籤時跟 prop.title 不一樣）
     function _draftPut(prop) {
-        const o = _drafts();
-        o[prop.title.toLowerCase()] = { id: prop.id, kind: prop.kind, tag: prop.title, tplId: prop.tplId || null, before: prop.before, after: prop.after, at: Date.now() };
+        const o = _drafts(), k = prop.title.toLowerCase(), from = String(prop.from || '').toLowerCase();
+        const prev = _draftOf(o, from || k);
+        let aliases = (prev && prev.aliases) || [];
+        if (from && from !== k) {
+            aliases = aliases.concat([from]);
+            Object.keys(o).forEach(function (x) { if (x === from || o[x] === prev) delete o[x]; });
+        }
+        aliases = aliases.filter(function (x, i, a) { return x && x !== k && a.indexOf(x) === i; });
+        o[k] = { id: prop.id, kind: prop.kind, tag: prop.title, tplId: prop.tplId || null, before: prop.before, after: prop.after, at: Date.now(), aliases: aliases };
         _draftsSave(o);
     }
     function _draftDrop(tag) { const o = _drafts(); delete o[String(tag || '').toLowerCase()]; _draftsSave(o); }
     // 這張是不是已經有新的一版（還在等她的才算）
     function superseded(prop) {
         if (!prop || (prop.state !== 'wait' && prop.state !== 'no')) return false;
-        const d = _drafts()[String(prop.title || '').toLowerCase()];
+        const d = _draftOf(_drafts(), String(prop.title || '').toLowerCase());
         return !!(d && d.id !== prop.id);
     }
 
@@ -117,7 +133,9 @@
         const saved = {};
         all.forEach(function (t) { saved[String(t.tagId || '').toLowerCase()] = 1; });
         const drafts = Object.keys(o).filter(function (k) { return !saved[k]; }).map(function (k) {
-            return '・' + o[k].tag + '「' + ((o[k].after && o[k].after.title) || '') + '」｜草稿：單子還沒被同意，還沒寫進去';
+            const from = (o[k].kind === 'edit' && o[k].before) ? o[k].before.tagId : '';
+            return '・' + o[k].tag + '「' + ((o[k].after && o[k].after.title) || '') + '」｜草稿：單子還沒被同意，還沒寫進去'
+                + (from && from !== o[k].tag ? '（是把 ' + from + ' 改成這個標籤的單子）' : '');
         });
         if (!all.length && !drafts.length) return '對方還沒有任何 VN 組件。';
         return '對方的 VN 組件（標籤｜名字｜哪一型｜開著沒）：\n' + drafts.concat(all.map(function (t) {
@@ -125,7 +143,7 @@
             return '・' + t.tagId + '「' + (t.title || '') + '」｜' + ty + '｜' + (t.isActive !== false ? '開著' : '關著') + (can ? '' : '｜這種只能看，要在創作室改')
                 + (t.usageDesc ? '\n  用途：' + _cut(t.usageDesc, 90) : '')
                 + (t.demoFormat ? '\n  正文裡的寫法：' + _cut(String(t.demoFormat).split('\n')[0], 90) : '')
-                + (o[String(t.tagId || '').toLowerCase()] ? '\n  （有一張改它的單子還沒被同意，read 看到的是那份）' : '');
+                + (_draftOf(o, String(t.tagId || '').toLowerCase()) ? '\n  （有一張改它的單子還沒被同意，read 看到的是那份）' : '');
         })).join('\n');
     }
     // 寫法（spec）一次給整份：聊天 app 的角色每個結果只完整看一次、下一輪就收成一行，分段的話看到第 3 頁時前兩頁早就不見了，
@@ -209,7 +227,7 @@
     // 要改的是哪一份：還沒被同意的單子（草稿）優先，不然是存著的那個。回 { kind, tplId, before, base } 或 { err }
     async function _base(key, justLook) {
         const d = _draftFor(key);
-        if (d) return { kind: d.kind, tplId: d.tplId, before: d.before, base: d.after };
+        if (d) return { kind: d.kind, tplId: d.tplId, before: d.before, base: d.after, draftId: d.id };
         const f = await _find(key);
         if (f.err) return { err: f.err };
         const t = f.t;
@@ -235,7 +253,29 @@
             if (b === undefined) return 'enabled 只能是 true（打開）或 false（關掉）。';
             after.isActive = b;
         }
+        // 換標籤（10-30 她：小機取錯標籤名，事後要能改）。排在最後：同一次用 find 改的那段先照舊名字找到。
+        //   跟著標籤走的機械部分一起換：樣式的「.vn-dynamic-panel-標籤」前綴、正文寫法和說明裡的 <標籤>／[標籤|。
+        //   讀資料的方式、說明的意思不動——那要看新標籤底下實際寫什麼，交給提單子的人自己改。
+        if (args.new_tag != null && _one(args.new_tag) !== '') {
+            const nt = _one(args.new_tag), ot = after.tagId;
+            if (_safeTag(nt) !== nt) return 'new_tag 只能用英文字母、數字、底線、連字號。';
+            if (nt !== ot) {
+                const cls = new RegExp('vn-dynamic-panel-' + ot + '(?![A-Za-z0-9_-])', 'g');
+                ['html', 'css', 'js'].forEach(function (k) { after[k] = after[k].replace(cls, 'vn-dynamic-panel-' + nt); });
+                const mark = new RegExp('(<\\/?|\\[\\/?)' + ot + '(?=[>\\]|])', 'g');
+                ['demoFormat', 'usageDesc'].forEach(function (k) { after[k] = after[k].replace(mark, '$1' + nt); });
+                after.tagId = nt;
+            }
+        }
         if (['html', 'css', 'js', 'demoFormat', 'usageDesc'].some(function (k) { return after[k].length > TEXT_MAX; })) return '改完有一欄太長了（每欄最多 ' + TEXT_MAX + ' 字）。';
+        return '';
+    }
+    // 換成的標籤有沒有被別的組件、別張還沒同意的單子用掉。回錯誤訊息，沒撞到回空字串
+    async function _tagTaken(tag, selfTplId, selfDraftId) {
+        const k = String(tag || '').toLowerCase();
+        if ((await _all()).some(function (t) { return t.id !== selfTplId && String(t.tagId || '').toLowerCase() === k; })) return '已經有標籤是「' + tag + '」的組件了，換一個標籤。';
+        const d = _draftOf(_drafts(), k);
+        if (d && d.id !== selfDraftId) return '有一張用「' + tag + '」這個標籤的單子還沒被同意，換一個標籤。';
         return '';
     }
     async function _proposeAdd(args) {
@@ -260,10 +300,18 @@
         if (e) return _no(e);
         if (JSON.stringify(base) === JSON.stringify(after)) return _no('跟現在一模一樣，沒有要改的地方。');
         if (before && JSON.stringify(before) === JSON.stringify(after)) return _no('改完跟已經存著的那份一模一樣，不用再提單子。');
+        if (after.tagId !== base.tagId) {
+            const taken = await _tagTaken(after.tagId, b.tplId, b.draftId);
+            if (taken) return _no(taken);
+        }
         // 新增的全部要過；修改只擋這次新冒出來的問題（舊組件本來就有的不算）
-        const old = before ? _issues(before) : [], bad = _issues(after).filter(function (m) { return old.indexOf(m) === -1; });
+        //   換了標籤：檢查的字裡帶著標籤名，拿「改前那份換上新標籤」來比，舊毛病才不會因為名字不同被當成新的
+        let ref = before;
+        if (before && before.tagId !== after.tagId) { ref = JSON.parse(JSON.stringify(before)); _change(ref, { new_tag: after.tagId }); }
+        const old = ref ? _issues(ref) : [], bad = _issues(after).filter(function (m) { return old.indexOf(m) === -1; });
         if (bad.length) return _no('改完會出問題，改好再提：\n- ' + bad.join('\n- '));
-        const prop = { id: _newId(), mod: 'vn', kind: b.kind, book: 'VN 組件', tplId: b.tplId, title: after.tagId, name: after.title || '', before: before, after: after, state: 'wait', at: Date.now() };
+        const prop = { id: _newId(), mod: 'vn', kind: b.kind, book: 'VN 組件', tplId: b.tplId, title: after.tagId, name: after.title || '', before: before, after: after, state: 'wait', at: Date.now(),
+            from: base.tagId !== after.tagId ? base.tagId : '' };
         _draftPut(prop);
         return { ok: true, prop: prop };
     }
@@ -345,13 +393,18 @@
             } else {
                 const cur = await _byId(prop.tplId);
                 if (!cur || !_same(cur, prop.before)) return _stale(prop, '這個組件在提出之後被改過了，這張作廢，沒有蓋掉');
+                if (prop.after.tagId.toLowerCase() !== prop.before.tagId.toLowerCase()
+                    && (await _all()).some(function (t) { return t.id !== cur.id && String(t.tagId || '').toLowerCase() === prop.after.tagId.toLowerCase(); })) {
+                    return _stale(prop, '在那之後已經有別的組件用了「' + prop.after.tagId + '」這個標籤，沒有改');
+                }
                 const b = prop.before;
                 cur.history = (Array.isArray(cur.history) ? cur.history : []).concat([{ ts: Date.now(), html: b.html, css: b.css, js: b.js, demoFormat: b.demoFormat,
                     usageDesc: b.usageDesc, isBlock: b.isBlock, tagId: b.tagId, note: (prop.by || '小機') + ' 改之前' }]).slice(-30);
                 await D.saveVNTagTemplate(_write(cur, prop.after));
             }
             await _after();
-            try { const S = _S(); if (S && S.refreshTavernRegex) await S.refreshTavernRegex(prop.after); } catch (e) {}
+            // 換了標籤：酒館裡舊名字那條正則換成新名字（第二個參數＝原本的標籤）
+            try { const S = _S(); if (S && S.refreshTavernRegex) await S.refreshTavernRegex(prop.after, prop.before ? prop.before.tagId : ''); } catch (e) {}
         } catch (e) { return { ok: false, text: '寫不進去：' + ((e && e.message) || '不知道為什麼') }; }
         prop.state = 'done'; prop.doneAt = Date.now();
         _draftDrop(prop.title);
@@ -367,9 +420,13 @@
                 if (!S || !S.purgeTemplateFully) return { ok: false, text: '創作室還沒載好' };
                 await S.purgeTemplateFully(cur.id);
             } else {
+                const bt = prop.before.tagId.toLowerCase();
+                if (bt !== prop.after.tagId.toLowerCase() && (await _all()).some(function (t) { return t.id !== cur.id && String(t.tagId || '').toLowerCase() === bt; })) {
+                    return { ok: false, text: '原本的標籤「' + prop.before.tagId + '」在那之後被別的組件用了，改不回去' };
+                }
                 await D.saveVNTagTemplate(_write(cur, prop.before));
                 await _after();
-                try { if (S && S.refreshTavernRegex) await S.refreshTavernRegex(prop.before); } catch (e) {}
+                try { if (S && S.refreshTavernRegex) await S.refreshTavernRegex(prop.before, prop.after.tagId); } catch (e) {}
             }
         } catch (e) { return { ok: false, text: '改不回去：' + ((e && e.message) || '不知道為什麼') }; }
         prop.state = 'undone'; prop.undoneAt = Date.now();
@@ -393,7 +450,12 @@
             if (prop.state === 'no') return who + ' 提出要' + v + what + '，對方沒有同意，沒有改';
             if (prop.state === 'undone') return who + ' ' + v + '了' + what + '，後來對方改回去了';
             if (prop.state === 'stale') return who + ' 提出要' + v + what + '，但那個組件後來被改過，沒有寫進去';
-            return who + ' 提出要' + v + what + '，還在等對方決定';
+            const b = prop.before, a = prop.after;
+            const ren = (b && a && b.tagId !== a.tagId)
+                ? '。標籤從 ' + b.tagId + ' 換成 ' + a.tagId + '：同意之後寫故事的模型改寫 <' + a.tagId + '>，故事裡以前寫的 <' + b.tagId + '> 不會再畫成面板；'
+                    + '正文裡的寫法、說明、js 讀資料的方式只換了標籤名，內容沒動，新標籤底下實際寫的東西跟它們對不上的話要一起改'
+                : '';
+            return who + ' 提出要' + v + what + '，還在等對方決定' + ren;
         }
         if (prop.state === 'done' || prop.state === 'undone') return who + ' ' + v + '了' + what;
         return who + ' 想' + v + what;
@@ -417,6 +479,7 @@
             return out;
         }
         const b = prop.before || {}, ch = _changed(prop);
+        if (b.tagId !== a.tagId) out.push({ lab: '標籤（故事裡寫的那個名字）', from: b.tagId, to: a.tagId });
         if (ch.some(function (k) { return LOOK.indexOf(k) !== -1; })) {
             out.push({ lab: '改前的樣子', preview: 'before' });
             out.push({ lab: '改後的樣子', preview: 'after' });
@@ -432,6 +495,7 @@
     function detail(prop) {
         if (prop.kind === 'add') return ['正文裡的寫法：「' + _cut(prop.after.demoFormat || '（單行標籤）', 120) + '」', '用途：「' + _cut(prop.after.usageDesc, 120) + '」'];
         const b = prop.before || {}, a = prop.after || {}, out = [];
+        if (b.tagId !== a.tagId) out.push('標籤：「' + b.tagId + '」改成「' + a.tagId + '」');
         if (b.title !== a.title) out.push('名字：「' + b.title + '」改成「' + a.title + '」');
         if (b.isActive !== a.isActive) out.push(a.isActive ? '打開了' : '關掉了');
         const ch = _changed(prop);
@@ -489,6 +553,7 @@
               find: { type: 'string', description: '跟 aurelia_vn_edit 一樣' },
               replace: { type: 'string', description: '跟 aurelia_vn_edit 一樣' },
               title: { type: 'string', description: '名字' },
+              new_tag: { type: 'string', description: '跟 aurelia_vn_edit 一樣：換成的新標籤' },
               html: { type: 'string', description: 'html（整欄）' },
               css: { type: 'string', description: '樣式（整欄）' },
               js: { type: 'string', description: '程式（整欄）' },
@@ -511,7 +576,7 @@
               spec: { type: 'string', description: '看完 aurelia_vn_spec 之後，說明書最後給的那串字' } },
             required: ['tag', 'html', 'js', 'usage_desc', 'spec'] } },
         { name: 'aurelia_vn_edit', label: '改 VN 組件', propose: true,
-          description: '提出修改一個已經有的 VN 組件（對方看過改前改後的預覽、按同意才會改）。只改一段：field 寫哪一欄、find 寫原文、replace 寫換成什麼；整欄重寫：直接給那一欄（html、css、js、demo_format、usage_desc）；也可以改名字、觸發詞，或用 enabled 關掉、打開。',
+          description: '提出修改一個已經有的 VN 組件（對方看過改前改後的預覽、按同意才會改）。只改一段：field 寫哪一欄、find 寫原文、replace 寫換成什麼；整欄重寫：直接給那一欄（html、css、js、demo_format、usage_desc）；也可以改名字、觸發詞、標籤（new_tag），或用 enabled 關掉、打開。',
           inputSchema: { type: 'object', properties: {
               tag: { type: 'string', description: '要改的組件的標籤或名字' },
               field: { type: 'string', description: '用 find 時要改哪一欄：html、css、js、demo_format、usage_desc' },
@@ -524,6 +589,7 @@
               usage_desc: { type: 'string', description: '整欄重寫：新的說明' },
               title: { type: 'string', description: '新的名字' },
               keywords: { type: 'string', description: '新的觸發詞，逗號隔開（會整組換掉）' },
+              new_tag: { type: 'string', description: '新的標籤（英文字母、數字、底線、連字號，不能跟別的組件重複）：寫故事的模型之後照這個名字寫。樣式的 .vn-dynamic-panel- 前綴和正文寫法、說明裡的標籤名會跟著換；讀資料的方式和說明的內容不會自己變，新標籤底下寫的東西不一樣的話要一起改' },
               enabled: { type: 'boolean', description: 'true 打開、false 關掉（關掉＝故事裡不會再出現，但沒有刪掉）' } },
             required: ['tag'] } },
     ];

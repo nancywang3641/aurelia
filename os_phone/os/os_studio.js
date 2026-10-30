@@ -3548,6 +3548,13 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         } catch (e) { console.warn('[Studio] 清舊制世界書說明條目失敗', e); return false; }
     }
 
+    // 酒館正則找哪一段（匯入和小機改標籤共用一份）。
+    // 向下兼容：開合標籤角括號 <XXX></XXX> 或方括號 [XXX][/XXX] 都收（AI 常被其他 tag 帶歪吐方括號）。
+    // 用字元類 [<\[] / [>\]] 保持單一 capture group（$1=內容），渲染替換邏輯零影響。
+    function _vnFindRegex(safeTagId) {
+        return `/[<\\[]${safeTagId}[>\\]]([\\s\\S]*?)[<\\[]\\/${safeTagId}[>\\]]/gi`;
+    }
+
     // 一鍵寫入酒館全局正則 + 同步至主世界書
     async function importToSillyTavern(data) {
         const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
@@ -3559,9 +3566,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         if (!data || !data.tagId) return;
 
         const safeTagId = data.tagId.replace(/[^a-zA-Z0-9_-]/g, '');
-        // 向下兼容：開合標籤角括號 <XXX></XXX> 或方括號 [XXX][/XXX] 都收（AI 常被其他 tag 帶歪吐方括號）。
-        // 用字元類 [<\[] / [>\]] 保持單一 capture group（$1=內容），渲染替換邏輯零影響。
-        const searchRegex = `/[<\\[]${safeTagId}[>\\]]([\\s\\S]*?)[<\\[]\\/${safeTagId}[>\\]]/gi`;
+        const searchRegex = _vnFindRegex(safeTagId);
         const replacement = generateRegexReplacement(data);
 
         const regexObj = {
@@ -4611,20 +4616,29 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return out;
     }
     // 酒館正則：她匯入過（有 [VN面板] <tagId> 那條）才照新內容重寫一次，沒匯入過不動；不跳視窗
-    async function _vnRefreshTavernRegex(data) {
+    //   fromTag＝換標籤前的名字（小機改標籤）：舊名字那條匯入過＝改名、改找新標籤、換新內容，開關和其他設定照舊；
+    //   新名字底下如果還留著一條舊殘留，讓舊名字那條接手、殘留拿掉。舊制世界書說明條目順手清。
+    async function _vnRefreshTavernRegex(data, fromTag) {
         const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
         if (!th || !th.updateTavernRegexesWith || !data || !data.tagId) return false;
-        const sn = '[VN面板] ' + String(data.tagId).replace(/[^a-zA-Z0-9_-]/g, '');
+        const safe = function (s) { return String(s || '').replace(/[^a-zA-Z0-9_-]/g, ''); };
+        const nt = safe(data.tagId), ot = safe(fromTag) || nt;
+        const sn = '[VN面板] ' + nt, osn = '[VN面板] ' + ot;
         let hit = false;
         try {
             await th.updateTavernRegexesWith(function (regexes) {
-                return regexes.map(function (r) {
-                    if (r.script_name !== sn) return r;
+                const renaming = ot !== nt && regexes.some(function (r) { return r.script_name === osn; });
+                const out = [];
+                regexes.forEach(function (r) {
+                    if (renaming && r.script_name === sn) return;
+                    if (r.script_name !== (renaming ? osn : sn)) { out.push(r); return; }
                     hit = true;
-                    return Object.assign({}, r, { replace_string: generateRegexReplacement(data) });
+                    out.push(Object.assign({}, r, { script_name: sn, find_regex: _vnFindRegex(nt), replace_string: generateRegexReplacement(data) }));
                 });
+                return out;
             }, { type: 'global' });
         } catch (e) { return false; }
+        if (ot !== nt) { try { await _deleteWbUsageEntry(th, ot); } catch (e) {} }
         return hit;
     }
 
