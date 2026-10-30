@@ -3665,18 +3665,56 @@
         b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
             const r = await _leaveWorld();
             _toast(r?.msg || '已返回主世界');
-            _refreshModePill(); _renderList();
+            _refreshModePill();
+            if (r && r.back === 'sent') closeGate();   // 回程章開寫了：跟 DIVE 一樣收面板，讓她看劇情
+            else _renderList();
         });
     }
     // 撤離視差（世界門面板那顆、結局卡「撤離回奧瑞亞」章末那一下共用）
     async function _leaveWorld() {
         _leaveAfter = false;
+        // 撤離完「現在在哪個世界」就清空了，回程章要用的那個世界先在這裡拿
+        let from = null;
+        try { const id = await _getCurrentId(); from = id ? await _worldById(id) : null; } catch (e) {}
         const r = await _gate()?.exitParallax?.();
         await _syncFreeMode();     // 立繪模式疊回她在藏書選的那個（大廳的固定角色有圖庫）
         await _setCurrentId('');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
         await _syncWorldLamps('', '撤離');   // 世界條目全部關掉，免得回到主世界還在吃異世界設定
         try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
-        return r;
+        if (!from || !r || !r.ok) return r;
+        // 🧳 回程章：書和燈都切回主世界了才送（同 DIVE 點燈要在送出之前那條）
+        const sent = await _toChat(_returnPrompt(from));
+        if (sent === 'sent') return { ok: true, back: sent, msg: '已返回主世界，回程這一章開始寫了' };
+        if (sent === 'stuck') return { ok: true, back: sent, msg: '已返回主世界，但回程指令送不出去（還沒設定 AI？）。內容留在輸入框，設定好再按送出就接得上。' };
+        const why = { noapi: '還沒設定 AI', busy: '劇情那邊正在寫上一段', nofield: _pwa() ? '劇情畫面打不開' : '找不到酒館輸入框' };
+        return { ok: true, back: sent, msg: '已返回主世界，回程這一章沒送出去（' + (why[sent] || why.nofield) + '），下一章照常玩就好' };
+    }
+    // 🧳 回程章（10-30 她：「在世界門按掉回去，這樣又沒有了回程章」）：撤離跟 DIVE 對稱——
+    //   DIVE 送「世界啟動」讓主持AI 寫進去的第一章，撤離送「撤離回程」讓它寫回到奧瑞亞的這一章。
+    //   不多叫模型：這一章本來就是她下一章；送進聊天是一則訊息，重新生成照樣帶得到。
+    //   送的時候視差那本和世界條目已經收掉了（跑團主持規範讀不到），所以帶不回來的東西、旅人回來是誰，
+    //   照規範第 6、8 條在這裡講一次——只講回程用得到的，不複述整份。
+    function _returnPrompt(w) {
+        const T = _planTree(w);
+        let end = null;   // 走過好幾個結局（從岔路圖重看片尾那種）取最近那個
+        if (T) T.endings.forEach(e => { const h = T.hit[e.code]; if (h && (!end || (h.at || 0) > end.at)) end = { name: e.name, at: h.at || 0 }; });
+        const team = (w.travelers || []).filter(t => t && t.recruited && !t.gone).map(t => String(t.name || '')).filter(Boolean);
+        const rules = [
+            '這一章是回程:從撤離那一刻寫起,寫到玩家的意識回到奧瑞亞城裡自己的身體為止。這一章之後劇情在奧瑞亞接著走,不再接著寫「' + w.name + '」。',
+            '撤離的路:意識先回到純白大廳,這一趟在大廳結算,再回到身體所在的地方。',
+            '傷勢、Buff、在「' + w.name + '」拿到的物品都屬於那個世界,不會帶進奧瑞亞。',
+        ];
+        if (team.length) rules.push('同行旅人是戴頸環進去的奧瑞亞人,撤離後一樣回到奧瑞亞,回來還是他們自己,性格、關係、說話方式照舊;這一趟跟誰處得怎麼樣,照前面的劇情。');
+        rules.push('「' + w.name + '」的人只活在那個世界,不會跟到奧瑞亞;奧瑞亞這邊沒去過的人,不知道這一趟發生了什麼,除非有人告訴他們。');
+        rules.push('【輸出格式】用 VN 面板格式輸出,章節開頭給 [Chapter|…],其餘照這張卡既有的 VN 規範走。');
+        return '🌌 NEXUS PARALLAX · 撤離回程\n' +
+            '━━━━━━━━━━━━━━━━━━━━━\n' +
+            '[System:玩家從視差世界「' + w.name + '」撤離,回到奧瑞亞]\n' +
+            (end && end.name ? '這一趟走到的結局:「' + end.name + '」\n' : '') +
+            (team.length ? '同行旅人:' + team.join('、') + '\n' : '') + '\n' +
+            '【指令】\n' +
+            rules.map((t, i) => (i + 1) + '. ' + t).join('\n') + '\n' +
+            '━━━━━━━━━━━━━━━━━━━━━';
     }
 
     // ── P2 種子抽選 ──
