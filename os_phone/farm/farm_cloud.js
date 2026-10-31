@@ -362,7 +362,9 @@
         var pk = st.parked || (/^額度到上限/.test(st.error || '') ? String(st.error).split('：')[0] : '');
         if (pk) return fa('fa-hourglass-half') + '上次醒來：' + when(st.at) + '・' + esc(pk);
         var where = st.where === 'pc' ? '在宿舍' : st.where === 'vps' ? '在伺服器上' : '';
-        var what = st.code === 0 ? where + '顧完了' : st.code === 124 ? '顧太久被叫停了' : st.where === 'pc' ? '在宿舍沒顧成' : '沒叫起來（可能還沒登入）';
+        // 伺服器那邊 10-31 起會寫原因（例如登入過期、要雙擊哪支 bat 重新登入）；沒寫的舊紀錄照舊猜
+        var vpsWhy = (st.code !== 0 && st.where === 'vps' && st.error) ? String(st.error) : '';
+        var what = st.code === 0 ? where + '顧完了' : st.code === 124 ? '顧太久被叫停了' : st.where === 'pc' ? '在宿舍沒顧成' : vpsWhy ? '沒醒成：' + esc(vpsWhy) : '沒叫起來（可能還沒登入）';
         return fa(st.code === 0 ? 'fa-circle-check' : 'fa-triangle-exclamation') + '上次醒來：' + when(st.at) + '・' + what;
     }
     // opts：{ app, openCloud() }
