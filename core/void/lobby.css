@@ -572,14 +572,18 @@
 /* 留言板有新紙條時宿舍那顆右上角的點。房間查到就叫 markAiNews，進去看過就清掉。
    刻意只有一顆點：不彈窗、不出聲，錯過也不會怎樣。 */
 #lb-dock-ai, #void-ai-btn { position: relative; }
-#lb-dock-ai.lb-ai-news::after, #lb-dock-ai.lb-ai-news-prop::after,
-#void-ai-btn.lb-ai-news::after, #void-ai-btn.lb-ai-news-prop::after {
+#lb-dock-ai.lb-ai-news::after, #lb-dock-ai.lb-ai-news-prop::after, #lb-dock-ai.lb-ai-news-msg::after,
+#void-ai-btn.lb-ai-news::after, #void-ai-btn.lb-ai-news-prop::after, #void-ai-btn.lb-ai-news-msg::after {
     content: ""; position: absolute; top: 6px; right: 6px;
     width: 8px; height: 8px; border-radius: 50%;
     background: #8fb6ff; box-shadow: 0 0 6px rgba(143, 182, 255, 0.9);
 }
 #lb-dock-ai.lb-ai-news-prop::after, #void-ai-btn.lb-ai-news-prop::after {
     background: #ffcf6b; box-shadow: 0 0 7px rgba(255, 207, 107, 0.95);
+}
+/* 住戶醒來傳訊息給妳、還沒進他房間看（房間 dorm.js 判斷）：紅點，三種同時有的時候它贏 */
+#lb-dock-ai.lb-ai-news-msg::after, #void-ai-btn.lb-ai-news-msg::after {
+    background: #ff5a4f; box-shadow: 0 0 7px rgba(255, 90, 79, 0.95);
 }
 
 /* 宿舍叫不出來時的說明卡。只在壞掉的時候出現，所以直接掛 body、蓋在最上層。 */
@@ -1643,7 +1647,7 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
     }
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock .lb-dock-label { font-size:10px; letter-spacing:1px; color:#4f5d82; }
     /* 收進更多的那幾顆有新東西（成就待兌換、宿舍有紙條）→ 更多這顆亮點，不然藏起來就看不到了 */
-    #lb-dock:has(.lb-dock-btn[data-more].has-pending, #lb-dock-ai.lb-ai-news:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-prop:not(.lb-entry-off)) #lb-dock-more::after {
+    #lb-dock:has(.lb-dock-btn[data-more].has-pending, #lb-dock-ai.lb-ai-news:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-prop:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-msg:not(.lb-entry-off)) #lb-dock-more::after {
         content:''; position:absolute; top:6px; right:7px; width:7px; height:7px; border-radius:50%;
         background:#e0a52e; box-shadow:0 0 6px rgba(224,165,46,.8);
     }

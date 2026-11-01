@@ -781,7 +781,7 @@
         src.forEach((b, i) => {
             const lab = b.querySelector('.lb-dock-label');
             const name = (is404 && lab && lab.getAttribute('data-cn-404')) || (lab ? lab.textContent.trim() : b.title);
-            const dot = b.classList.contains('has-pending') || b.classList.contains('lb-ai-news') || b.classList.contains('lb-ai-news-prop');
+            const dot = b.classList.contains('has-pending') || b.classList.contains('lb-ai-news') || b.classList.contains('lb-ai-news-prop') || b.classList.contains('lb-ai-news-msg');
             const item = document.createElement('button');
             item.type = 'button';
             item.className = 'lb-more-item' + (dot ? ' has-dot' : '');

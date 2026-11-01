@@ -2537,12 +2537,21 @@ ${sections}`;
 
     // 留言板上有新東西時，宿舍那顆點一下 —— 房間查到之後叫這支（它以前是畫在自己的浮球上，
     // 浮球收掉之後那個提醒就沒地方站了）。最軟的提醒：不彈窗、不出聲，進去看過就消失。
+    //   kind：'news' 板子上的紙條（藍）、'prop' 想跟妳說的（金）、'msg' 住戶醒來傳訊息給妳（紅，房間 dorm.js 判斷誰還沒看）
+    const _AI_NEWS_CLS = { prop: 'lb-ai-news-prop', msg: 'lb-ai-news-msg' };
     VoidTerminal.markAiNews = function (kind) {
         try {
             const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
             for (let i = 0; i < els.length; i++) {
-                els[i].classList.add(kind === 'prop' ? 'lb-ai-news-prop' : 'lb-ai-news');
+                els[i].classList.add(_AI_NEWS_CLS[kind] || 'lb-ai-news');
             }
+        } catch (e) {}
+    };
+    // 那幾則都看過了（例如進了傳訊息那位的房間）：只熄那一種，別的照亮
+    VoidTerminal.clearAiNews = function (kind) {
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.remove(_AI_NEWS_CLS[kind] || 'lb-ai-news');
         } catch (e) {}
     };
 
@@ -2559,7 +2568,7 @@ ${sections}`;
     function _clearAiNews() {
         try {
             const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
-            for (let i = 0; i < els.length; i++) els[i].classList.remove('lb-ai-news', 'lb-ai-news-prop');
+            for (let i = 0; i < els.length; i++) els[i].classList.remove('lb-ai-news', 'lb-ai-news-prop', 'lb-ai-news-msg');
         } catch (e) {}
     }
     VoidTerminal.openAiDorm = function () {
