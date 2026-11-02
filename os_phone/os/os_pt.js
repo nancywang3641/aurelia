@@ -384,6 +384,73 @@
         }
     }
 
+    // ── 🧳 視差帶回來的戰利品：撤離時「回程行李」選了換 PT 的那幾件，先放在白兔櫃檯，按「估值」才估 ──
+    //   撤離那一下不叫模型（os_wg_pack.js 只交到這裡）；估值跟成就同一套：一次把櫃檯上的全部送一通，白兔逐件開價。
+    const K_LOOT = 'loot';   // [{id,name,desc,world,at}]
+    async function getLoot() {
+        try { const db = _db(); const v = db?.getAppData ? await db.getAppData(APP_ID, K_LOOT) : null; return Array.isArray(v) ? v : []; }
+        catch (e) { return []; }
+    }
+    async function addLoot(list) {
+        const add = (Array.isArray(list) ? list : []).filter(x => x && x.name).map(x => ({
+            id: 'lt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            name: String(x.name), desc: String(x.desc || ''), world: String(x.world || ''), at: _now() }));
+        if (!add.length) return 0;
+        const db = _db();
+        if (!db?.saveAppData) return 0;
+        await db.saveAppData(APP_ID, K_LOOT, (await getLoot()).concat(add));
+        return add.length;
+    }
+    async function evaluateLootPT() {
+        const pending = await getLoot();
+        if (!pending.length) return { ok: false, msg: '櫃檯上沒有等估值的東西' };
+        const api = win.OS_API || window.OS_API;
+        if (!api) return { ok: false, msg: 'API 尚未初始化' };
+        const cc = PT_CFG.achvCaps;
+        const list = pending.map((x, i) => `${i + 1}. 「${x.name}」（從視差世界「${x.world || '不明'}」帶回來）\n   說明：${x.desc || '（沒有說明）'}`).join('\n');
+        const rabbitExtra = (() => { try { return (win.OS_PROMPTS?.loadRabbit?.() || '').trim(); } catch (e) { return ''; } })();
+        const systemPrompt = '你是「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，斯文、守時、照章辦事。' +
+            '你不擺架子、不勸說、不奉承，只把價碼算清楚攤在客人面前。點評一句話講完：精算、守時、帶一點看戲的興味。' +
+            (rabbitExtra ? `\n【補充人設】\n${rabbitExtra}\n` : '') +
+            '客人從視差世界撤離時，把在那裡拿到的東西交給交易所收購（實物留在交易所，客人拿 PT）。你的工作是逐件開收購價。' +
+            `評分標準：尋常的東西 5~${cc.normal} PT，少見或有用的 ${cc.normal + 5}~${cc.great} PT，稀有珍品 ${cc.great + 10}~${cc.legend} PT。` +
+            '請以 JSON 陣列格式回覆，每筆格式如下：{"name":"東西的名字","pt":整數,"comment":"白兔先生的一句話點評"}' +
+            '只回傳 JSON 陣列，不要加任何 markdown 或說明文字。';
+        try {
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `以下是客人交到櫃檯的東西：\n${list}\n\n請逐件開價並回傳 JSON 陣列。` },
+            ];
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            const config = OS ? { ...OS.getConfig(), route: 'rabbit_eval' } : { route: 'rabbit_eval' };
+            const raw = await new Promise((res, rej) => api.chat(messages, config, null, res, rej, { task: 'loot_eval' }));
+            let results = null;
+            try { const m = String(raw || '').match(/\[[\s\S]*\]/); results = m ? JSON.parse(m[0]) : null; } catch (e) { results = null; }
+            if (!results || !Array.isArray(results)) return { ok: false, msg: '白兔先生的估價單看不懂，再按一次' };
+            // 對東西：同成就那套（名字一樣 → 洗掉標點再比 → 筆數一樣照順序）
+            const _nk = (s) => String(s || '').replace(/[\s「」『』""''、，。,.!！?？:：]/g, '').toLowerCase();
+            const used = new Set(), picks = [];
+            results.forEach((r, i) => {
+                if (!r) return;
+                let x = pending.find(y => !used.has(y) && y.name === r.name) || pending.find(y => !used.has(y) && _nk(y.name) === _nk(r.name));
+                if (!x && results.length === pending.length && pending[i] && !used.has(pending[i])) x = pending[i];
+                if (!x) return;
+                used.add(x);
+                picks.push({ name: x.name, pt: Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0)), comment: String(r.comment || '') });
+            });
+            if (!picks.length) return { ok: false, msg: '白兔先生的估價單對不上櫃檯上的東西，再按一次' };
+            const totalPT = picks.reduce((s, p) => s + p.pt, 0);
+            // 先入帳、成功了才從櫃檯收走（同成就那條）
+            if (totalPT > 0) await addPT(totalPT, { reason: '戰利品收購（交易所）', items: picks });
+            const left = (await getLoot()).filter(y => !pending.some(p => used.has(p) && p.id === y.id));
+            await _db().saveAppData(APP_ID, K_LOOT, left);
+            return { ok: true, picks, totalPT, left: left.length };
+        } catch (e) {
+            console.error('[PT] evaluateLootPT 失敗:', e);
+            return { ok: false, msg: '系統異常：' + (e.message || e) };
+        }
+    }
+
     // ── 交易所面板 ───────────────────────────────────────
     let _shopOpen = false;
     async function openExchange() {
@@ -453,6 +520,11 @@
         const achBtn = pendingN
             ? '<button class="osx-card-btn gold" id="os-pt-redeem-ach">兌換 ' + pendingN + ' 個</button>'
             : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
+        // 🧳 視差帶回來、回程行李選了換 PT 的東西
+        const lootN = (await getLoot()).length;
+        const lootBtn = lootN
+            ? '<button class="osx-card-btn gold" id="os-pt-redeem-loot">估值 ' + lootN + ' 件</button>'
+            : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
 
         // 一張卡＝圖示、名字、一句它是做什麼的、按鈕（插圖圖片退役，圖示用 FA）
         const card = (cls, icon, name, desc, btn) =>
@@ -465,6 +537,7 @@
         itemsEl.innerHTML =
             card('house' + (built ? ' done' : ''), 'fa-house-chimney', '蓋你的房', built ? '視差城市裡已經有你的家' : '在視差城市擁有一間自己的房子', houseBtn) +
             card('ach', 'fa-award', '成就兌換', '成就交給白兔估值換 PT；異常成就找 404 的柴郡', achBtn) +
+            card('loot', 'fa-suitcase-rolling', '戰利品估值', '從視差世界帶回來、選了換 PT 的東西', lootBtn) +
             card('soon locked', 'fa-gift', '限時商品', '之後會開', '<button class="osx-card-btn locked" disabled>敬請期待</button>');
 
         if (msgEl) {
@@ -506,6 +579,25 @@
             const _m = mask.querySelector('#os-pt-shop-msg');
             if (_m) { _m.className = 'm ok'; _m.textContent = '蓋章完成，入帳 ' + r.totalPT + ' PT。點評寫在成就票券上了。'; }
         });
+
+        const lootRedeem = mask.querySelector('#os-pt-redeem-loot');
+        if (lootRedeem) lootRedeem.addEventListener('click', async () => {
+            lootRedeem.disabled = true;
+            lootRedeem.textContent = '估值中…';
+            if (msgEl) { msgEl.className = 'm'; msgEl.textContent = '白兔先生正在一件一件看，稍等…'; }
+            const r = await evaluateLootPT();
+            if (!r.ok) {
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = r.msg || '估值失敗，再試一次'; }
+                lootRedeem.disabled = false;
+                lootRedeem.textContent = '估值';
+                return;
+            }
+            await _renderShopBody(mask);
+            const _m = mask.querySelector('#os-pt-shop-msg');
+            // 點評沒有票券可以寫：挑開價最高那件的那句講出來，其他的在帳本明細裡
+            const top = r.picks.slice().sort((a, b) => b.pt - a.pt)[0];
+            if (_m) { _m.className = 'm ok'; _m.textContent = '收購完成，入帳 ' + r.totalPT + ' PT。' + (top && top.comment ? '「' + top.name + '」：' + top.comment : ''); }
+        });
     }
 
     // ── 對外 API ─────────────────────────────────────────
@@ -514,6 +606,7 @@
         getPlotBuilt, setPlotBuilt,
         settleSummary,
         evaluateAchievementsPT,
+        getLoot, addLoot, evaluateLootPT,
         openExchange, closeExchange,
         _cfg: PT_CFG,
         _showSettleCard,   // 診斷用：不跑結算也能把卡叫出來看位置

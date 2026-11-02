@@ -77,8 +77,8 @@
 .osx-msg .m.ok { color: #2f8a58; }
 .osx-msg .m.bad { color: #c2506a; }
 
-/* ── 三張商品卡：同高、同寬，一排三張 ── */
-.osx-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+/* ── 四張商品卡：同高、同寬，兩張一排（寬的時候一排四張，見下面）── */
+.osx-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .osx-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
     padding: 18px 12px 14px; border-radius: 18px;
     background: #fff; border: 1px solid rgba(110, 140, 210, .2);
@@ -88,6 +88,7 @@
     display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
     background: linear-gradient(135deg, #8cbcff, #4a6fd1); box-shadow: 0 6px 14px rgba(74, 111, 209, .3); }
 .osx-card.ach .osx-card-ic { background: linear-gradient(135deg, #ffd978, #d49a26); box-shadow: 0 6px 14px rgba(212, 154, 38, .32); }
+.osx-card.loot .osx-card-ic { background: linear-gradient(135deg, #9fb4e8, #2c4a7e); box-shadow: 0 6px 14px rgba(44, 74, 126, .32); }
 .osx-card.locked .osx-card-ic { background: linear-gradient(135deg, #d9dde8, #aab2c6); box-shadow: none; }
 .osx-card-tx { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .osx-card-name { font-size: 15px; font-weight: 800; letter-spacing: .08em; color: #2b3663; }
@@ -114,7 +115,7 @@
     .osx-coin span { font-size: 24px; }
     .osx-bal-n { font-size: 42px; }
     .osx-msg { font-size: 14px; }
-    .osx-cards { gap: 16px; }
+    .osx-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
     .osx-card { padding: 28px 16px 18px; gap: 12px; }
     .osx-card-ic { width: 74px; height: 74px; font-size: 30px; }
     .osx-card-name { font-size: 17px; }

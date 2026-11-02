@@ -544,8 +544,10 @@
                 const code = String(h.code || '').toUpperCase();
                 x = _byCode(R.tree)[code];
                 if (!x) { bail('岔路圖裡沒有 ' + code); return; }
-                // 播到的這一格世界門可能還沒記（記帳在整章掃完之後）：先當它已經走到，章數用播放器給的
-                if (!R.tree.hit[code]) R.tree.hit[code] = { at: Date.now(), ch: h.ch || 0 };
+                // 播到的這一格世界門可能還沒記（記帳在整章掃完之後）：先當它已經走到。章數用播放器給的，
+                //   沒有就自己數一次（不然岔路圖那格空著、片尾挑插圖也不知道從哪章挑）
+                const hc = R.tree.hit[code] || (R.tree.hit[code] = { at: Date.now() });
+                if (!hc.ch) { const WGc = _wg(); hc.ch = h.ch || ((WGc && WGc.chapterNow) ? await WGc.chapterNow() : 0); chk(); }
                 fresh = _route(R.tree).filter(c => !(R.tree.toured || {})[c]);
                 if (replay && fresh.indexOf(code) < 0) fresh.push(code);   // 重看：結局那格再燒一次
                 const end = await _firstUrl(_endSceneIds(R, code, !replay), chk);

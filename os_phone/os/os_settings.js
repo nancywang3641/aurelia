@@ -241,6 +241,7 @@
         { group: '大廳與世界', id: 'worldgate',    name: '世界門',                     def: 'sec'  },
         { group: '大廳與世界', id: 'pt',           name: 'PT 結算',                    def: 'sec'  },
         { group: '大廳與世界', id: 'achievement',  name: '成就估值',                   def: 'main' },
+        { group: '大廳與世界', id: 'loot_eval',    name: '戰利品估值',                 def: 'main' },   // 視差撤離時選了換 PT 的東西，交易所白兔一次估完（os_pt.js evaluateLootPT）
         { group: '大廳與世界', id: 'store404',     name: '404 商店',                   def: 'main' },
         { group: '宿舍',       id: 'xiaoji',       name: 'API 小機',                   def: 'main' },
         // only:'sims'＝只有模擬市民模式（os_sims.js，網址帶 ?sims=1）才列出來；聊天本身走上面的「手機聊天」

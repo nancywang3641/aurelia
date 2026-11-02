@@ -9,7 +9,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-const CACHE_VERSION = 994;                        // ← 每次部署 +1
+const CACHE_VERSION = 995;                        // ← 每次部署 +1
 const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
 
 // App Shell 核心資源（用於離線備援）
@@ -28,6 +28,7 @@ const SHELL_ASSETS = [
     './css/os_journal.css',
     './css/os_story_tools.css',
     './css/os_exchange.css',
+    './css/os_wg_pack.css',
     './css/vn_fx.css',
     './css/vn_battle.css',
     './css/vn_gallery.css',

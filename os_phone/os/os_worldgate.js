@@ -1302,16 +1302,33 @@
         return Object.assign({ code: c, type: c[0] === 'N' ? 'node' : 'ending', name: x.name, kind: x.kind || '', world: _planNow.name,
             ch: h.ch || 0, shown: !!h.shown }, _planProgress(T, c));
     }
-    // 結局卡跳過了:記下來,重看舊章、重新生成同一章都不再跳
+    // 結局卡跳過了:記下來,重看舊章、重新生成同一章都不再跳。整章掃完的帳還沒進來(沒有章數)就自己數一次,岔路圖才寫得出第幾章
     async function markEndingShown(code) {
         const c = String(code || '').trim().toUpperCase();
         if (!_planNow) return;
-        const w = await _worldById(_planNow.id);
+        const id = _planNow.id;
+        const cur = (await _worldById(id)) || {};
+        const ch = ((cur.planHit || {})[c] || {}).ch ? 0 : await chapterNow();
+        const w = await _worldById(id);   // 數章數那段期間整章掃描可能剛存過,重讀再寫
         if (!w) return;
         w.planHit = Object.assign({}, w.planHit || {});
-        w.planHit[c] = Object.assign({ at: Date.now() }, w.planHit[c] || {}, { shown: true });
+        w.planHit[c] = Object.assign({ at: Date.now() }, ch ? { ch } : {}, w.planHit[c] || {}, { shown: true });
         await _saveWorld(w, ['planHit']);
         _setPlanNow(w);
+    }
+    // 現在播的這一章是第幾章(跟 _chapterNo 同一套數法;結局片尾只在最新那章跳,所以取最後一章)。數不出來回 0
+    async function chapterNow() {
+        try {
+            if (_pwa()) {
+                const db = _db();
+                if (!db || !db.getAllVnChapters) return 0;
+                const sid = _cid();
+                return (await db.getAllVnChapters()).filter(c => c && c.storyId === sid).length;
+            }
+            const R = win.VN_READER || window.VN_READER;
+            const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
+            return Array.isArray(msgs) ? msgs.filter(m => m && !m.is_user).length : 0;
+        } catch (e) { return 0; }
     }
     // 掃這一章:[Branch|代號]、[Ending|代號] 記進 planHit(第一次碰到的時間、第幾章)。跟成就同一個掛勾(_initLaunchHook)
     async function _scanPlan(text, pwaChapterId) {
@@ -3672,8 +3689,12 @@
             _renderList();
         });
         b.querySelector('[data-act="draw"]')?.addEventListener('click', _renderSeedPage);
-        b.querySelector('[data-act="leave"]')?.addEventListener('click', async () => {
+        b.querySelector('[data-act="leave"]')?.addEventListener('click', async (ev) => {
+            const btn = ev.currentTarget;
+            if (btn.disabled) return;
+            btn.disabled = true;   // 行李頁開著的期間別再疊一頁
             const r = await _leaveWorld();
+            btn.disabled = false;
             _toast(r?.msg || '已返回主世界');
             _refreshModePill();
             if (r && r.back === 'sent') closeGate();   // 回程章開寫了：跟 DIVE 一樣收面板，讓她看劇情
@@ -3686,43 +3707,89 @@
         // 撤離完「現在在哪個世界」就清空了，回程章要用的那個世界先在這裡拿
         let from = null;
         try { const id = await _getCurrentId(); from = id ? await _worldById(id) : null; } catch (e) {}
+        // 🧳 回程行李（10-30 她說好的）：真的撤之前先問這趟要帶什麼回去、跟哪幾位旅人留聯絡；
+        //   按「再待一下」＝這次不撤，什麼都沒動。頁面不叫模型，東西從這趟的劇本裡撈（[Item|…]）
+        const P = win.OS_WG_PACK || window.OS_WG_PACK;
+        let pack = null;
+        if (from && P && P.open) {
+            let items = [];
+            try { items = await _tripItems(from); } catch (e) {}
+            pack = await P.open({ world: from.name, items, travelers: (from.travelers || []).filter(t => t && t.recruited && !t.gone && !t.home) });
+            if (!pack) return { ok: false, stay: true, msg: '先不撤離，想走再按一次撤離' };
+        }
         const r = await _gate()?.exitParallax?.();
         await _syncFreeMode();     // 立繪模式疊回她在藏書選的那個（大廳的固定角色有圖庫）
         await _setCurrentId('');   // 回主世界＝不再屬於任何異世界，模組條目跟著切回大廳那組
         await _syncWorldLamps('', '撤離');   // 世界條目全部關掉，免得回到主世界還在吃異世界設定
         try { window.WORLD_RULES && window.WORLD_RULES.sync('撤離'); } catch (e) {}
         if (!from || !r || !r.ok) return r;
+        // 行李撤離成功了才收：紀念品、交給白兔的、通訊錄（撤不成就什麼都沒寫）
+        if (pack) { try { pack.done = await P.settle(from.name, pack, _tripEnd(from)); } catch (e) { console.warn('[Worldgate③] 回程行李沒收好', e); } }
         // 🧳 回程章：書和燈都切回主世界了才送（同 DIVE 點燈要在送出之前那條）
-        const sent = await _toChat(_returnPrompt(from));
+        const sent = await _toChat(_returnPrompt(from, pack));
         if (sent === 'sent') return { ok: true, back: sent, msg: '已返回主世界，回程這一章開始寫了' };
         if (sent === 'stuck') return { ok: true, back: sent, msg: '已返回主世界，但回程指令送不出去（還沒設定 AI？）。內容留在輸入框，設定好再按送出就接得上。' };
         const why = { noapi: '還沒設定 AI', busy: '劇情那邊正在寫上一段', nofield: _pwa() ? '劇情畫面打不開' : '找不到酒館輸入框' };
         return { ok: true, back: sent, msg: '已返回主世界，回程這一章沒送出去（' + (why[sent] || why.nofield) + '），下一章照常玩就好' };
+    }
+    // 這一趟走到的結局(走過好幾個的話——從岔路圖重看片尾那種——取最近那個)。沒有回 ''
+    function _tripEnd(w) {
+        const T = _planTree(w);
+        let end = null;
+        if (T) T.endings.forEach(e => { const h = T.hit[e.code]; if (h && (!end || (h.at || 0) > end.at)) end = { name: e.name, at: h.at || 0 }; });
+        return end ? end.name : '';
+    }
+    // 🧳 這一趟拿到的東西:進這個世界以後的劇本裡所有 [Item|名字|說明|外觀],同名的留最後一次寫的
+    async function _tripItems(w) {
+        const seen = {}, out = [];
+        (await _planRawChapters(w.name)).forEach(c => {
+            const s = String(c.raw || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+            const re = /\[Item\|([^\]\n]*)\]/g;
+            let m;
+            while ((m = re.exec(s))) {
+                const p = m[1].split('|').map(x => x.trim());
+                if (!p[0]) continue;
+                const it = { name: p[0], desc: p[1] || '', look: p[2] || '' };
+                if (seen[it.name] != null) out[seen[it.name]] = it; else { seen[it.name] = out.length; out.push(it); }
+            }
+        });
+        return out;
     }
     // 🧳 回程章（10-30 她：「在世界門按掉回去，這樣又沒有了回程章」）：撤離跟 DIVE 對稱——
     //   DIVE 送「世界啟動」讓主持AI 寫進去的第一章，撤離送「撤離回程」讓它寫回到奧瑞亞的這一章。
     //   不多叫模型：這一章本來就是她下一章；送進聊天是一則訊息，重新生成照樣帶得到。
     //   送的時候視差那本和世界條目已經收掉了（跑團主持規範讀不到），所以帶不回來的東西、旅人回來是誰，
     //   照規範第 6、8 條在這裡講一次——只講回程用得到的，不複述整份。
-    function _returnPrompt(w) {
-        const T = _planTree(w);
-        let end = null;   // 走過好幾個結局（從岔路圖重看片尾那種）取最近那個
-        if (T) T.endings.forEach(e => { const h = T.hit[e.code]; if (h && (!end || (h.at || 0) > end.at)) end = { name: e.name, at: h.at || 0 }; });
-        const team = (w.travelers || []).filter(t => t && t.recruited && !t.gone).map(t => String(t.name || '')).filter(Boolean);
+    function _returnPrompt(w, pack) {
+        const endName = _tripEnd(w);
+        const teamAll = (w.travelers || []).filter(t => t && t.recruited && !t.gone);
+        const team = teamAll.map(t => String(t.name || '')).filter(Boolean);
+        // 🧳 回程行李頁她選的（沒有那頁＝舊的寫法，照這一趟處得怎麼樣自己寫）
+        const keep = pack ? (pack.items || []).filter(it => it.mode === 'keep').map(it => it.name) : [];
+        const sell = pack ? (pack.items || []).filter(it => it.mode === 'pt').map(it => it.name) : [];
+        const call = pack ? (pack.contacts || []).map(t => String(t.name || '')).filter(Boolean) : [];
+        const bye = pack ? teamAll.filter(t => !t.home && call.indexOf(String(t.name || '')) < 0).map(t => String(t.name || '')).filter(Boolean) : [];
         // 10-30 她：「回奧瑞亞之前，是不是得先回到視差大廳？」——規範第 6 條本來就是撤離後回大廳結算，
         //   大廳是中途站，所以這一章主場在純白大廳，最後才下線回身體（不另做一個「人在大廳」的狀態，她選的）
         const rules = [
             '這一章是回程,照順序走:離開「' + w.name + '」;回到純白大廳,這一章主要寫在大廳;最後玩家下線,意識回到奧瑞亞城裡自己的身體醒來為止。這一章之後劇情在奧瑞亞接著走,不再接著寫「' + w.name + '」。',
             '這一趟在純白大廳結算,結算的數字不用在正文裡寫出來。',
         ];
-        if (team.length) rules.push('同行旅人也是撤離回到大廳的玩家,是戴頸環進去的奧瑞亞人,下線後一樣回到奧瑞亞,回來還是他們自己,性格、關係、說話方式照舊。在大廳怎麼分開、之後還聯不聯絡,照這一趟跟誰處得怎麼樣。');
+        if (team.length) {
+            rules.push('同行旅人也是撤離回到大廳的玩家,是戴頸環進去的奧瑞亞人,下線後一樣回到奧瑞亞,回來還是他們自己,性格、關係、說話方式照舊。' +
+                (pack ? '' : '在大廳怎麼分開、之後還聯不聯絡,照這一趟跟誰處得怎麼樣。'));
+            if (call.length) rules.push('玩家在大廳跟' + call.join('、') + '交換了聯絡方式,回奧瑞亞以後還會傳訊息;道別照這一趟彼此處得怎麼樣寫。');
+            if (bye.length) rules.push('玩家沒有跟' + bye.join('、') + '留聯絡,在大廳道別就分開了。');
+        }
         rules.push('傷勢、Buff、在「' + w.name + '」拿到的物品都屬於那個世界,不會帶進奧瑞亞。');
+        if (keep.length) rules.push('玩家帶回這些東西的照片和紀錄當紀念,實物留在「' + w.name + '」:' + keep.join('、') + '。');
+        if (sell.length) rules.push('這些東西在大廳交給交易所的白兔先生,等他估價收購、換成 PT(這一章不寫價錢):' + sell.join('、') + '。');
         rules.push('「' + w.name + '」的人只活在那個世界,不會跟到大廳和奧瑞亞;奧瑞亞這邊沒去過的人,不知道這一趟發生了什麼,除非有人告訴他們。');
         rules.push('【輸出格式】用 VN 面板格式輸出,章節開頭給 [Chapter|…],其餘照這張卡既有的 VN 規範走。');
         return '🌌 NEXUS PARALLAX · 撤離回程\n' +
             '━━━━━━━━━━━━━━━━━━━━━\n' +
             '[System:玩家從視差世界「' + w.name + '」撤離,回到純白大廳,再下線回奧瑞亞]\n' +
-            (end && end.name ? '這一趟走到的結局:「' + end.name + '」\n' : '') +
+            (endName ? '這一趟走到的結局:「' + endName + '」\n' : '') +
             (team.length ? '同行旅人:' + team.join('、') + '\n' : '') + '\n' +
             '【指令】\n' +
             rules.map((t, i) => (i + 1) + '. ' + t).join('\n') + '\n' +
@@ -4787,7 +4854,7 @@
     }
 
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
-        planCodeNow, markEndingShown, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
+        planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

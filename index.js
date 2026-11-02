@@ -248,6 +248,7 @@ const PHONE_FILES = [
     'os/os_landlord_book.js', // 🏢 房產手帳窗口：大廳 dock 開啟的獨立窗口＝收租帳+戶卡+藍圖冊（白藍視差皮）
     'os/os_farm.js',          // 🌱 後院（農場＋牧場）入口：只登記這一支，os_phone/farm/ 那批與 farm.css 第一次打開才自己載
     'os/os_worldgate.js',     // 🌌 世界門③：愛麗絲面板=種子抽選+世界落地視差書+旅人招募+DIVE（依賴 OS_DB/OS_API/AURELIA_WORLDGATE；設計書 docs/parallax_worldgate_design.md）
+    'os/os_wg_pack.js',       // 🧳 視差撤離前的回程行李頁＋紀念品清單（世界門 _leaveWorld 叫；我的家布置、交易所估值讀它存的）
 
     // === 📖 VN 視覺小說系統 ===
     'vn_story/vn_styles.js',
@@ -548,6 +549,7 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_exchange.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_wg_pack.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_story_tools.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_monitor.css');
 

@@ -35,9 +35,10 @@
             '  color:#f0e2c6;font-size:13px;font-family:inherit;cursor:pointer}',
             '.llr-fab:hover{border-color:#d98fb0}',
             '.llr-fab:disabled{opacity:.5;cursor:default}',
-            // 布置模式的工具列：螢幕座標，不跟著舞台縮放
-            '.llr-bar{position:absolute;left:0;right:0;bottom:0;z-index:62;display:flex;gap:8px;justify-content:center;',
+            // 布置模式的工具列：螢幕座標，不跟著舞台縮放。手機放不下一排就換行（字不准被擠成直的一個字一行）
+            '.llr-bar{position:absolute;left:0;right:0;bottom:0;z-index:62;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;',
             '  padding:12px 14px;background:linear-gradient(180deg,rgba(14,16,21,0) 0%,rgba(14,16,21,.9) 45%)}',
+            '.llr-bar .llr-btn{white-space:nowrap}',
             '.llr-btn{display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:10px;',
             '  border:1px solid #2c3140;background:#20242e;color:#e7eaf1;font-size:13px;font-family:inherit;cursor:pointer}',
             '.llr-btn:hover{border-color:#d98fb0}',
@@ -80,6 +81,17 @@
             '.llr-cap{position:absolute;left:0;top:0;right:0;bottom:0;z-index:61;cursor:crosshair;touch-action:none}',
             '.llr-bar-wrap{flex-wrap:wrap}',
             '.llr-btn.is-on{border-color:rgba(217,176,106,.8);color:#f0e2c6;background:#2d2a24}',
+            // 紀念品小窗：一件一列，多了在小窗裡捲
+            '.llr-souv-list{display:flex;flex-direction:column;gap:6px;max-height:min(52vh,360px);overflow-y:auto;overscroll-behavior:contain}',
+            '.llr-souv{display:flex;align-items:center;gap:10px;width:100%;padding:6px 8px;border:1px solid #2c3140;border-radius:10px;',
+            '  background:#20242e;color:#e7eaf1;font-family:inherit;text-align:left;cursor:pointer}',
+            '.llr-souv:hover{border-color:#d98fb0}',
+            '.llr-souv.is-placed{opacity:.6}',
+            '.llr-souv-pic{flex:none;width:40px;height:40px;border-radius:8px;background:#0e1015;display:flex;align-items:center;justify-content:center;color:#cdbf9f;overflow:hidden}',
+            '.llr-souv-pic img{width:100%;height:100%;object-fit:contain}',
+            '.llr-souv-tx{min-width:0;display:flex;flex-direction:column;gap:2px}',
+            '.llr-souv-tx b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+            '.llr-souv-tx small{font-size:11px;color:#9aa1b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
             '.llr-busy{position:absolute;left:0;top:0;right:0;bottom:0;z-index:75;background:rgba(8,10,14,.8);',
             '  display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;',
             '  color:#e7eaf1;font-size:14px;line-height:1.8}',
@@ -762,6 +774,19 @@
             say();
         }
 
+        // 🧳 自己家才有：視差撤離時選了「留紀念」的東西（os_wg_pack.js），點一件就變成一個包裹，名稱和樣子先填好。
+        //   一件都沒有就不出這顆（清單是非同步撈的，撈到了才插在「添加包裹」旁邊）
+        const PK = win.OS_WG_PACK || window.OS_WG_PACK;
+        if (_ctx.unitId === HOME_ID && PK && PK.souvenirs) {
+            PK.souvenirs().then(function (list) {
+                if (!list.length || !_ctx || !_ctx.deco || _ctx.deco.bar !== bar) return;
+                const souv = _btn('fa-solid fa-gem', '放紀念品');
+                souv.onclick = function () { _openSouvenirs(list, redraw, say); };
+                bar.insertBefore(souv, add.nextSibling);
+                _ctx.deco.btns.push(souv);
+            }).catch(function () {});
+        }
+
         cancel.onclick = function () { _endDeco(); };
         add.onclick = function () {
             if (_ctx.items.length >= MAX_ITEMS) { say('一間房最多放 ' + MAX_ITEMS + ' 個包裹，先拿走一個再放。'); return; }
@@ -1119,6 +1144,40 @@
             it.content = String(content.value || '').trim();
             close(); redraw();
         };
+    }
+
+    // 紀念品小窗：一件一列（縮圖＋名字＋哪個世界帶回來的），點了就放一個包裹；房裡已經有同名包裹的那件標「已擺」
+    function _openSouvenirs(list, redraw, say) {
+        const root = _ctx.deco && _ctx.deco.root;
+        if (!root) return;
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '放哪一件紀念品？';
+        const box = d.createElement('div'); box.className = 'llr-souv-list';
+        const close = function () { box.querySelectorAll('img').forEach(function (im) { im.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='; }); try { sheet.remove(); } catch (e) {} };
+        list.slice().reverse().forEach(function (s) {   // 最近帶回來的排上面
+            const name = String(s.name || '').slice(0, 20);
+            const placed = _ctx.items.some(function (it) { return it.name === name; });
+            const b = d.createElement('button'); b.type = 'button'; b.className = 'llr-souv' + (placed ? ' is-placed' : '');
+            b.innerHTML = '<span class="llr-souv-pic">' + (s.thumb ? '<img alt="" src="' + _esc(s.thumb) + '">' : '<i class="fa-solid fa-gem"></i>') + '</span>' +
+                '<span class="llr-souv-tx"><b>' + _esc(name) + '</b><small>' + _esc(s.world || '') + (placed ? '・已擺' : '') + '</small></span>';
+            b.onclick = function () {
+                if (_ctx.items.length >= MAX_ITEMS) { close(); say('一間房最多放 ' + MAX_ITEMS + ' 個包裹，先拿走一個再放。'); return; }
+                const spot = _freeSpot();
+                _ctx.items.push({ id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name,
+                    content: String(s.look || s.desc || '').slice(0, 120), x: spot.x, y: spot.y });
+                close(); redraw();
+                say('「' + name + '」放進來了，拖到你要的位置，再按配送。');
+            };
+            box.appendChild(b);
+        });
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const cancel = _btn('fa-solid fa-xmark', '取消');
+        cancel.onclick = close;
+        bar.appendChild(cancel);
+        card.appendChild(title); card.appendChild(box); card.appendChild(bar);
+        sheet.appendChild(card);
+        root.appendChild(sheet);
     }
 
     // ── 生圖那一段：訂單 → 整房一次生圖 → 存起來 → 就地換成新的房間 ──

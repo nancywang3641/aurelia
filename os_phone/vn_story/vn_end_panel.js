@@ -544,7 +544,8 @@
         const hit = T.hit || {};
         const latest = Object.keys(hit).filter(c => c[0] === 'N' && hit[c].at).sort((a, b) => hit[b].at - hit[a].at)[0];
         const lit = c => c === 'S' || !!hit[c];
-        const when = c => { const h = hit[c] || {}; if (h.ch) return '第 ' + h.ch + ' 章'; if (h.at) { const d = new Date(h.at); return (d.getMonth() + 1) + '/' + d.getDate(); } return ''; };
+        // 只寫第幾章（10-30 她：當下走到的那格寫成「10/30」看不懂）；數不出章數的（補亮時模型沒給）就空著
+        const when = c => { const h = hit[c] || {}; return h.ch ? '第 ' + h.ch + ' 章' : ''; };
         const edges = [];
         Object.keys(L.pos).forEach(c => L.parentsOf(c).forEach(p => {
             if (!L.pos[p]) return;

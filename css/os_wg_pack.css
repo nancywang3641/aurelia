@@ -1,0 +1,70 @@
+/* ----------------------------------------------------------------
+   os_wg_pack.css — 🧳 視差撤離前的「回程行李」頁（os_wg_pack.js）
+   跟世界門檔案庫同一張航行圖紙（白底藍格、深藍框線、明體）：這一頁是視差系統的出關單，不是那個世界的畫面。
+   蓋在最上層（比結局片尾 100050 再高一層：從片尾選撤離、章末跳出來時片尾可能還沒收完）。
+   手機窄版：三段切換換到名字底下整排，名字不被擠成一個字一行。
+   ---------------------------------------------------------------- */
+.wgpk { position: fixed; inset: 0; z-index: 100060; display: flex; align-items: center; justify-content: center;
+    padding: 16px; background: rgba(6, 9, 16, 0.62); animation: wgpkIn .25s ease-out; }
+@keyframes wgpkIn { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .wgpk { animation: none; } }
+
+.wgpk-paper { position: relative; width: min(640px, 100%); max-height: min(86vh, 760px); display: flex; flex-direction: column;
+    color: #1A1C28; font-family: "Noto Serif TC", "Source Han Serif TC", "Songti TC", "PMingLiU", serif;
+    border: 2px solid #2a4a80; box-shadow: 0 16px 44px rgba(15, 30, 60, 0.5);
+    background: repeating-linear-gradient(0deg, transparent 0 23px, rgba(90, 140, 210, 0.13) 23px 24px),
+        repeating-linear-gradient(90deg, transparent 0 23px, rgba(90, 140, 210, 0.13) 23px 24px),
+        linear-gradient(178deg, #ffffff 0%, #f7fafd 60%, #eef4fb 100%); }
+.wgpk-paper::before { content: ""; position: absolute; inset: 5px; border: 1px solid rgba(42, 74, 128, 0.45); pointer-events: none; }
+
+.wgpk-hd { position: relative; display: flex; align-items: center; gap: 12px; margin: 18px 22px 0; padding-bottom: 10px;
+    border-bottom: 1.6px solid #2a4a80; }
+.wgpk-ic { flex: none; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+    border: 1.6px solid #2a4a80; border-radius: 50%; color: #2a4a80; font-size: 17px; }
+.wgpk-tt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wgpk-tt b { font-size: 19px; letter-spacing: 0.3em; color: #1f3a68; }
+.wgpk-tt small { font-size: 12px; letter-spacing: 0.12em; color: #46639b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wgpk-body { position: relative; flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 22px 10px; }
+.wgpk-sec { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 0 4px;
+    font-size: 14px; font-weight: 700; letter-spacing: 0.25em; color: #1f3a68; }
+.wgpk-sec em { font-style: normal; font-weight: 400; font-size: 11px; letter-spacing: 0.12em; color: #46639b; }
+.wgpk-empty { padding: 8px 0 6px; font-size: 13px; letter-spacing: 0.08em; color: #46639b; }
+
+.wgpk-row { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px dashed rgba(42, 74, 128, 0.35); }
+.wgpk-thumb { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; overflow: hidden;
+    border: 1.4px solid #2a4a80; background: #fff; color: #46639b; font-size: 18px; }
+.wgpk-thumb img { width: 100%; height: 100%; object-fit: contain; }
+.wgpk-thumb.face { border-radius: 50%; font-size: 17px; font-weight: 700; color: #1f3a68; }
+.wgpk-thumb.face img { object-fit: cover; object-position: center 20%; }
+.wgpk-tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wgpk-tx b { font-size: 14px; color: #1A1C28; overflow-wrap: anywhere; }
+.wgpk-tx small { font-size: 12px; line-height: 1.5; color: #46639b; overflow: hidden;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+.wgpk-seg { display: flex; border: 1.4px solid #2a4a80; border-radius: 3px; overflow: hidden; background: #fff; }
+.wgpk-seg button, .wgpk-tog { appearance: none; margin: 0; background: #fff; color: #1f3a68; font: inherit; font-size: 12px;
+    letter-spacing: 0.08em; padding: 7px 10px; cursor: pointer; white-space: nowrap; }
+.wgpk-seg button { border: none; border-left: 1px solid rgba(42, 74, 128, 0.4); }
+.wgpk-seg button:first-child { border-left: none; }
+.wgpk-tog { display: flex; align-items: center; gap: 6px; border: 1.4px solid #2a4a80; border-radius: 3px; }
+.wgpk-seg button.on, .wgpk-tog.on { background: #1e3554; color: #f4efe3; }
+.wgpk-seg button:not(.on):hover, .wgpk-tog:not(.on):hover { background: rgba(42, 74, 128, 0.08); }
+
+.wgpk-ft { position: relative; display: flex; gap: 8px; margin: 0 22px; padding: 12px 0 18px; border-top: 1.6px solid #2a4a80; }
+.wgpk-btn { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 0; cursor: pointer;
+    border: 1px solid #1e3554; border-radius: 3px; background: linear-gradient(180deg, #2c4a7e, #1e3554); color: #fff;
+    font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 0.2em; }
+.wgpk-btn.ghost { background: #fff; color: #1f3a68; border: 1.4px solid #2a4a80; }
+
+@media (max-width: 520px) {
+    .wgpk { padding: 10px; }
+    .wgpk-hd { margin: 14px 16px 0; }
+    .wgpk-body { padding: 2px 16px 8px; }
+    .wgpk-ft { margin: 0 16px; padding-bottom: 14px; }
+    .wgpk-row[data-i] { grid-template-columns: 44px minmax(0, 1fr); }
+    .wgpk-row[data-i] .wgpk-seg { grid-column: 1 / -1; }
+    .wgpk-row[data-i] .wgpk-seg button { flex: 1; }
+    .wgpk-thumb { width: 44px; height: 44px; }
+}

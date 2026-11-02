@@ -332,7 +332,8 @@
             this.script = [];
             this.index = -1;
             this._pendingLeave = [];   // 清掉上一份劇本殘留的 |Leave 待離場
-            this._jevStage = null;     // 🎭 上一章 Jev 排的收立繪時間表作廢（晚到的也不收：看 _jevStageSeq）
+            this._endingAtEnd = null;  // 🎬 上一章播到結局記號、還沒演到章末就換章了：片尾作廢（沒記 shown，下次播到還會演）
+            this._jevStage = null;    // 🎭 上一章 Jev 排的收立繪時間表作廢（晚到的也不收：看 _jevStageSeq）
             this._jevSfx = null;       // 🎵 上一章 Jev 排的音效／音樂時間表作廢（同一個序號）
             this._jevSfxNow = null;
             this._jevSfxWait = false;  // 🎵 Jev 的時間表還在路上（這段期間 AI 寫的 [BGM|] 先扣著，見 [BGM| 那段）
@@ -2615,6 +2616,20 @@
                 if (panelWrapper) panelWrapper.style.display = 'none';
                 this._stageClear();   // 章節結束 → 清空兩格立繪
                 try { if (window.OS_FX) window.OS_FX.stopWeather(); } catch (e) {}   // ⚡ 章節結束 → 持續型特效(含循環音效)跟著收，別播到末尾畫面上
+                // 🎬 這一章播過 [Ending|E#]：整章演完才放片尾（10-30 她：播到一半先跳會把後面的劇情打斷）。
+                //    放完回到這裡再走一次，那時已經清掉了，接著走下面章末那一串。這時候才重問一次世界門：章數多半已經記好了
+                const _endCode = this._endingAtEnd;
+                if (_endCode) {
+                    this._endingAtEnd = null;
+                    const _wge = win.OS_WORLDGATE || window.OS_WORLDGATE;
+                    const _EPe = win.VN_EndPanel || window.VN_EndPanel;
+                    const _he = (_wge && _wge.planCodeNow) ? _wge.planCodeNow(_endCode) : null;
+                    if (_he && !_he.shown && _EPe && typeof _EPe.showEnding === 'function') {
+                        try { _wge.markEndingShown(_he.code).catch(() => {}); } catch (e) {}
+                        _EPe.showEnding(_he, () => this.next());
+                        return;
+                    }
+                }
                 // 🌳 結局卡上按了「撤離回奧瑞亞」：演完這一章才撤（世界門那邊記著；沒按過就什麼都不做）
                 try { const _wgc = win.OS_WORLDGATE || window.OS_WORLDGATE; if (_wgc && _wgc.chapterEnded) _wgc.chapterEnded().catch(() => {}); } catch (e) {}
                 const endOverlay = document.getElementById('vn-end-overlay');
@@ -3208,8 +3223,8 @@
             }
 
             // 🌳 視差世界的岔路／結局標記：[Branch|N2]、[Ending|E1]（白板企劃展開的世界，條目教主持AI 在發生的那一句後面寫）。
-            //    記下走到哪由世界門掃整章做（_scanPlan）；這裡只管播到那一句時給她看：岔路飄一張小卡接著播，
-            //    結局跳結局卡、她按了才接著播（只跳一次）。同步查世界門手邊那份，跳卡前不留空檔給點擊把下一句先播掉。
+            //    記下走到哪由世界門掃整章做（_scanPlan）；這裡只管播到那一句時給她看：岔路飄一張小卡接著播；
+            //    結局先記著、照常往下播，整章演完才放片尾（見上面章末那段，只演一次）。同步查世界門手邊那份，不留空檔。
             if (/^\[(Branch|Ending)\|/i.test(line)) {
                 const _pm = line.match(/^\[(Branch|Ending)\|\s*([^|\]]*)/i);
                 const _wgp = win.OS_WORLDGATE || window.OS_WORLDGATE;
@@ -3219,12 +3234,7 @@
                     this.addLog('岔路', _h.name);
                 } else if (_h && _h.type === 'ending') {
                     this.addLog('結局', _h.name);
-                    const _EP = win.VN_EndPanel || window.VN_EndPanel;
-                    if (!_h.shown && _EP && typeof _EP.showEnding === 'function') {
-                        try { _wgp.markEndingShown(_h.code).catch(() => {}); } catch (e) {}
-                        _EP.showEnding(_h, () => this.next());
-                        return;
-                    }
+                    if (!_h.shown) this._endingAtEnd = _h.code;
                 }
                 this.next(); return;
             }
