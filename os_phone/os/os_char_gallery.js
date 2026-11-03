@@ -6,9 +6,10 @@
 //
 // 🔴 找圖順序只有一份（2026-09-14 她定）：本地上傳 → 世界書 → 網址庫 → 立繪庫 → AI 頭像。
 //    舞台（vn_core_stage.js）、圖鑑、之後的插圖參考圖都照這個順序。改順序三邊一起改。
-//    表情格：本地上傳(表情) → 【素材-角色表情立繪】 → 立繪目錄/名字_表情.png
+//    表情格：本地上傳(表情) → 【素材-角色表情立繪】 → 立繪目錄/名字_表情.png → 意思最近的表情（nearExp）
 //    預設格：本地上傳(預設) → 【素材-角色預設立繪素材】 → 角色預設圖目錄/名字_presets.png → 立繪庫
 //    表情格找不到時舞台會往下用預設格。
+// 🎭 生一組表情（11-04）：拿預設那張，ComfyUI 只重畫臉那一圈，存成本地上傳的表情格（EXPR_SET；畫法在 OS_IMAGE_MANAGER.comfyInpaint）
 // 樣式在 css/os_char_gallery.css；class 一律 acg- 開頭。
 // ----------------------------------------------------------------
 (function () {
@@ -43,7 +44,8 @@
         const va = variants(a), vb = variants(b);
         return va.some(x => vb.indexOf(x) >= 0);
     }
-    const expLabel = (exp) => (exp === DEFAULT_EXP ? '預設' : exp);
+    // 「生一組表情」那幾種寫中文（劇情裡照樣寫英文，對照在 EXPR_SET），其他照她取的名字
+    const expLabel = (exp) => (exp === DEFAULT_EXP ? '預設' : ((EXPR_SET.find(x => x.exp === exp) || {}).zh || exp));
 
     // 🔒 奧瑞亞官方立繪（管理員＋丹、雷伊在大廳那張）：名冊在 LobbyNpcs.official，名單最後一區，只能看、不能換。
     //   跟上面那套找圖順序無關：官方那張只在小劇場的舞台用（VN_Core._officialSprite），她故事裡同名的別人照舊。
@@ -53,7 +55,8 @@
     try {
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
-            acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' }
+            acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n要用 ComfyUI：設置→圖片「每個地方用什麼」的「立繪表情」選 ComfyUI 的包；沒選就跟「立繪」那列用同一個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -424,6 +427,7 @@
 
     function close() {
         if (!S) return;
+        if (S.ex) S.ex.stop = true;   // 生表情生到一半：做好的已經存了，後面的不排了
         const st = S; S = null;
         doc.removeEventListener('keydown', onKey, true);
         st.root.remove();
@@ -432,7 +436,9 @@
     function onKey(ev) {
         if (ev.key !== 'Escape' || !S) return;
         if (doc.querySelector('.aud-mask.on, .opv-root')) return;   // 小窗或看圖開著時先關那個
-        ev.preventDefault(); close();
+        ev.preventDefault();
+        if (S.ex) { exClose(); return; }   // 生表情那頁開著：先回圖鑑
+        close();
     }
     // 關掉時如果改過圖，舞台上現在站著的人重新找一次圖
     function refreshStage() {
@@ -550,8 +556,12 @@
               + (stranger ? '<div class="acg-note acg-note-stranger"><i class="fa-solid fa-circle-exclamation"></i> 這個故事沒有叫這個名字的角色</div>' : '')
               + '</div>';
 
+        const M = win.OS_IMAGE_MANAGER;
+        const canExpr = !!(M && M.comfyInpaint) && (info.slots.some(s => s.exp === DEFAULT_EXP && s.used) || info.gen.length > 0);
         h += '<div class="acg-slots">' + info.slots.map(slotCard).join('')
-           + '<button class="acg-slot acg-slot-add" type="button" data-act="add-exp"><i class="fa-solid fa-plus"></i><span>加表情</span></button></div>';
+           + '<button class="acg-slot acg-slot-add" type="button" data-act="add-exp"><i class="fa-solid fa-plus"></i><span>加表情</span></button>'
+           + (canExpr ? '<button class="acg-slot acg-slot-add" type="button" data-act="expr-open"><i class="fa-solid fa-wand-magic-sparkles"></i><span>生表情</span></button>' : '')
+           + '</div>';
 
         if (info.gen.length) {
             h += '<section class="acg-sec"><div class="acg-sec-title">生成過的圖</div><div class="acg-gen">'
@@ -649,6 +659,17 @@
         const ch = S.sel;
         try {
             if (act === 'close') { close(); return; }
+            if (act === 'expr-open') { await exOpen(ch); return; }
+            if (act === 'expr-close') { exClose(); return; }
+            if (act === 'expr-pick') { exPick(b.dataset.exp); return; }
+            if (act === 'expr-go') { await exGo(); return; }
+            if (act === 'expr-view') {
+                const done = S.ex ? S.ex.done.filter(r => r.url) : [];
+                const PV = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER;
+                const r = done.find(x => x.exp === b.dataset.exp);
+                if (PV && r) PV.open(done.map(x => ({ src: x.url, who: S.ex.ch, desc: x.zh })), done.indexOf(r), { fromEl: b.querySelector('img') });
+                return;
+            }
             if (act === 'pick') { S.sel = b.dataset.name; S.offSel = null; renderList(); await renderMain(); return; }
             if (act === 'pick-official') { S.offSel = b.dataset.key; renderList(); await renderMain(); return; }
             if (act === 'view-official') {
@@ -822,6 +843,290 @@
         }
     }
 
+    // ================================================================
+    // 🎭 生一組表情（11-04 她：「把表情都生了? 但不動身體?」）
+    //   拿預設那張 → ComfyUI 找臉 → 她看圈對不對（可以拖） → 一個一個表情：裁臉那塊放大到 1024、只重畫圈裡、
+    //   縮回去羽化貼回原圖。圈外一點都不動；原圖去背過的，透明度照原圖套回去。存進本地上傳的表情格。
+    //   不帶角色描述：只給畫風＋表情就認得出是同一張臉（11-04 試過），描述裡手上的東西反而會被畫到臉上。
+    // ================================================================
+    const EXPR_PRE = 'close-up portrait, face focus, solo, ';
+    const EXPR_SET = [
+        { exp: 'Happy',     zh: '微笑', d: 0.7, tags: '(gentle smile:1.3), closed mouth smile, soft eyes, happy' },
+        { exp: 'Laughing',  zh: '大笑', d: 0.8, tags: '(laughing:1.3), open mouth, big smile, closed eyes, happy' },
+        { exp: 'Shy',       zh: '害羞', d: 0.7, tags: '(embarrassed:1.3), (blush:1.3), looking away, wavy mouth' },
+        { exp: 'Angry',     zh: '生氣', d: 0.8, tags: '(angry:1.4), furrowed brows, glaring, clenched teeth, frown' },
+        { exp: 'Sad',       zh: '難過', d: 0.8, tags: '(sad:1.4), downturned eyebrows, teary eyes, frown, looking down' },
+        { exp: 'Surprised', zh: '驚訝', d: 0.8, tags: '(surprised:1.4), wide eyes, raised eyebrows, open mouth' },
+        { exp: 'Crying',    zh: '哭',   d: 0.8, tags: '(crying:1.4), tears streaming down face, frown, wet eyes' },
+    ];
+    // 劇情寫的表情 → 上面哪一張（照順序比：大笑、哭要排在微笑、難過前面；Unhappy 要先被難過接走）
+    const NEAR_EXP = [
+        [/laugh|giggl|chuckl/i, 'Laughing'],
+        [/cry|tear|weep|sob/i, 'Crying'],
+        [/shy|embarrass|blush|bashful|fluster/i, 'Shy'],
+        [/ang|mad|furious|rage|irritat|annoy|frustrat|glar/i, 'Angry'],
+        [/surpris|shock|amaz|astonish|startl|stun/i, 'Surprised'],
+        [/sad|sorrow|grief|depress|melanchol|gloom|upset|disappoint|hurt|unhappy/i, 'Sad'],
+        [/happy|smil|joy|pleas|cheer|delight|glad|grin|excite/i, 'Happy'],
+    ];
+    function nearExp(exp) {
+        const e = String(exp || '');
+        for (const [re, name] of NEAR_EXP) if (re.test(e)) return name;
+        return '';
+    }
+
+    function loadImg(src) {
+        return new Promise((res, rej) => {
+            const i = new Image();
+            if (/^https?:/i.test(src)) i.crossOrigin = 'anonymous';   // 別的網站的圖要能畫進畫布再拿出來
+            i.onload = () => res(i); i.onerror = () => rej(new Error('圖讀不到'));
+            i.src = src;
+        });
+    }
+    function canvasOf(w, h) { const c = doc.createElement('canvas'); c.width = w; c.height = h; return c; }
+    // 羽化的橢圓：中間全白、最外 soft 那段漸漸透明（不用 ctx.filter：iPhone 的畫布不吃）
+    function softOval(g, cx, cy, rx, ry, soft) {
+        g.save(); g.translate(cx, cy); g.scale(1, ry / rx);
+        const gr = g.createRadialGradient(0, 0, Math.max(0, rx - soft), 0, 0, rx);
+        gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
+        g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill(); g.restore();
+    }
+    // 圈（原圖像素）→ 要裁的正方形：邊長是圈的 2.2 倍，夾在圖裡
+    function cropOf(ring, W, H) {
+        const side = Math.max(16, Math.min(W, H, Math.round(Math.max(ring.rx, ring.ry) * 2 * 2.2)));
+        return { side, L: Math.round(Math.max(0, Math.min(W - side, ring.cx - side / 2))), T: Math.round(Math.max(0, Math.min(H - side, ring.cy - side / 2))) };
+    }
+    async function makeExpr(ex, item, seed) {
+        const M = win.OS_IMAGE_MANAGER;
+        const src = ex.img, W = ex.W, H = ex.H, ring = ex.ring;
+        const { side, L, T } = cropOf(ring, W, H);
+        const P = 1024, k = P / side;
+        const crop = canvasOf(P, P), cg = crop.getContext('2d');
+        cg.fillStyle = '#fff'; cg.fillRect(0, 0, P, P);   // 去背過的透明處墊白，模型看不懂透明
+        cg.drawImage(src, L, T, side, side, 0, 0, P, P);
+        const mask = canvasOf(P, P), mg = mask.getContext('2d');
+        mg.fillStyle = '#000'; mg.fillRect(0, 0, P, P);
+        softOval(mg, (ring.cx - L) * k, (ring.cy - T) * k, ring.rx * k, ring.ry * k, P * 0.01);
+        // 裁的那塊送 JPEG：整份工作流要經酒館的代理，PNG 一張一兩 MB；圈外那圈最後貼回的是原圖，壓縮只碰得到要重畫的地方
+        const out = await M.comfyInpaint(crop.toDataURL('image/jpeg', 0.95), mask.toDataURL('image/png'), EXPR_PRE + item.tags, { denoise: item.d, seed });
+        const gen = await loadImg(out);
+        // 貼回：生出來那塊縮回原大小，只留羽化圈裡的部分
+        const patch = canvasOf(side, side), pg = patch.getContext('2d');
+        pg.drawImage(gen, 0, 0, side, side);
+        pg.globalCompositeOperation = 'destination-in';
+        softOval(pg, ring.cx - L, ring.cy - T, ring.rx, ring.ry, side * 0.03);
+        const res = canvasOf(W, H), rg = res.getContext('2d');
+        rg.drawImage(src, 0, 0);
+        rg.drawImage(patch, L, T);
+        rg.globalCompositeOperation = 'destination-in';   // 透明度照原圖
+        rg.drawImage(src, 0, 0);
+        return await shrink(res.toDataURL('image/png'));
+    }
+    // 結果卡片只放臉那塊：整個人縮成小圖，表情根本看不出來
+    async function faceThumb(ex, url) {
+        const img = await loadImg(url);
+        const { side, L, T } = cropOf(ex.ring, ex.W, ex.H);
+        const c = canvasOf(240, 240);
+        c.getContext('2d').drawImage(img, L, T, side, side, 0, 0, 240, 240);
+        return c.toDataURL('image/webp', 0.85);
+    }
+
+    // 預設那張（舞台平常用的）；預設格空著就拿生成過的第一張（立繪庫排在頭像前面）
+    async function exprSource(info) {
+        const def = info.slots.find(s => s.exp === DEFAULT_EXP);
+        if (def && def.used) return def.used.url;
+        const C = Cache();
+        for (const g of info.gen) {
+            if (!g.url && C) { const full = await C.getRaw(g.store, g.key); g.url = (full && full.url) || ''; }
+            if (g.url && g.url.indexOf('blob:') !== 0) return g.url;
+        }
+        return '';
+    }
+    async function exOpen(ch) {
+        if (!S || !ch || S.ex) return;
+        const info = S.info[ch];
+        const url = info && await exprSource(info);
+        if (!url) { toast('這個角色還沒有圖', 'warn'); return; }
+        let img;
+        try { img = await loadImg(url); } catch (e) { toast('這張圖讀不到', 'error'); return; }
+        try { const t = canvasOf(1, 1); t.getContext('2d').drawImage(img, 0, 0); t.toDataURL(); }   // 別的網站沒開放的圖畫進去就拿不出來
+        catch (e) { toast('這張圖放在別的網站、拿不進來；先用「上傳」把它放進圖鑑再做', 'warn'); return; }
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const has = {};
+        info.slots.forEach(s => { if (s.used) has[s.exp] = true; });
+        const ex = { ch, img, W, H, has, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false,
+                     ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null };
+        S.ex = ex;
+        const A = AUIx();
+        const el = doc.createElement('div');
+        el.className = 'acg-ex is-finding';
+        el.innerHTML =
+            '<div class="acg-head">'
+          +   '<button class="acg-back" type="button" data-act="expr-close" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>'
+          +   '<div class="acg-title">生一組表情</div>'
+          +   (A && A.helpBtn ? A.helpBtn('acg_expr') : '')
+          +   '<span class="acg-head-sp"></span>'
+          + '</div>'
+          + '<div class="acg-ex-body">'
+          +   '<div class="acg-ex-who">' + esc(ch) + '</div>'
+          +   '<div class="acg-ex-stage"><div class="acg-ex-frame">'
+          +     '<img class="acg-ex-img" alt="">'
+          +     '<svg class="acg-ex-ring" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">'
+          +       '<ellipse class="acg-ex-oval" vector-effect="non-scaling-stroke"></ellipse>'
+          +       '<circle class="acg-ex-knob" vector-effect="non-scaling-stroke"></circle>'
+          +     '</svg>'
+          +   '</div></div>'
+          +   '<div class="acg-ex-note">找臉中…</div>'
+          +   '<div class="acg-ex-picks">' + EXPR_SET.map(x =>
+                  '<button class="acg-ex-chip" type="button" data-act="expr-pick" data-exp="' + x.exp + '">' + esc(x.zh)
+                + (has[x.exp] ? '<span class="acg-ex-has">有了</span>' : '') + '</button>').join('') + '</div>'
+          +   '<div class="acg-ex-foot"><button class="acg-btn acg-btn-main acg-ex-go" type="button" data-act="expr-go"></button></div>'
+          +   '<div class="acg-gen acg-ex-out"></div>'
+          + '</div>';
+        S.root.appendChild(el);
+        ex.el = el;
+        el.querySelector('.acg-ex-img').src = img.src;
+        exBindRing(ex);
+        exPaint(ex);
+        // 找臉（ComfyUI 沒裝找臉的外掛、或不是 ComfyUI → 圈先放在上面中間，她自己拖）
+        const M = win.OS_IMAGE_MANAGER;
+        let box = null, why = '';
+        try {
+            const t = canvasOf(W, H), tg = t.getContext('2d');
+            tg.fillStyle = '#fff'; tg.fillRect(0, 0, W, H); tg.drawImage(img, 0, 0);
+            box = await M.comfyFindFace(t.toDataURL('image/jpeg', 0.9));
+        }
+        catch (e) { why = (e && e.message) || String(e); }
+        if (S !== null && S.ex === ex) {
+            if (box) {
+                const bw = box.x1 - box.x0, bh = box.y1 - box.y0;
+                const l = box.x0 + bw * 0.08, r = box.x1 - bw * 0.08, t = box.y0 + bh * 0.28, b = box.y1 + bh * 0.02;   // 眉毛到下巴，瀏海留在外面
+                ex.ring = { cx: (l + r) / 2, cy: (t + b) / 2, rx: (r - l) / 2, ry: (b - t) / 2 };
+            }
+            ex.found = box ? 'yes' : 'no';
+            ex.blocked = why;
+            el.classList.remove('is-finding');
+            exPaint(ex);
+        }
+    }
+    function exClose() {
+        if (!S || !S.ex) return;
+        const ex = S.ex;
+        ex.stop = true;
+        ex.el && ex.el.remove();
+        S.ex = null;
+        if (ex.done.length) afterChange(ex.ch);   // 做好的已經存了：重畫這個角色，表情格會多出來
+    }
+    function exPick(exp) {
+        const ex = S && S.ex;
+        if (!ex || ex.busy) return;
+        const i = ex.picks.indexOf(exp);
+        if (i >= 0) ex.picks.splice(i, 1); else ex.picks.push(exp);
+        exPaint(ex);
+    }
+    function exPaint(ex) {
+        const el = ex.el; if (!el) return;
+        const r = ex.ring;
+        const oval = el.querySelector('.acg-ex-oval'), knob = el.querySelector('.acg-ex-knob');
+        oval.setAttribute('cx', r.cx); oval.setAttribute('cy', r.cy); oval.setAttribute('rx', r.rx); oval.setAttribute('ry', r.ry);
+        knob.setAttribute('cx', r.cx + r.rx * 0.7071); knob.setAttribute('cy', r.cy + r.ry * 0.7071); knob.setAttribute('r', Math.max(ex.W, ex.H) * 0.016);
+        el.querySelectorAll('.acg-ex-chip').forEach(c => { c.classList.toggle('is-on', ex.picks.indexOf(c.dataset.exp) >= 0); c.disabled = ex.busy; });
+        el.classList.toggle('is-busy', ex.busy);
+        // blocked＝設定不對（不是 ComfyUI 之類），整頁做不了；err＝這一輪有一張沒做成，可以再按一次補
+        const note = el.querySelector('.acg-ex-note');
+        const warn = ex.blocked || ex.err;
+        note.classList.toggle('is-warn', !!warn || ex.found === 'no');
+        note.textContent = warn ? warn
+            : ex.found === null ? '找臉中…'
+            : ex.busy ? '圈裡的地方會重畫'
+            : ex.found === 'no' ? '沒找到臉，把圈拖到眉毛到下巴那塊'
+            : '圈裡的地方會重畫，不對可以拖';
+        const go = el.querySelector('.acg-ex-go');
+        const n = ex.picks.length;
+        const finished = !ex.busy && ex.ranAll && !n && ex.done.length > 0;
+        go.disabled = ex.busy || ex.found === null || (!finished && (!!ex.blocked || !n));
+        go.dataset.act = finished ? 'expr-close' : 'expr-go';
+        go.textContent = ex.busy ? ('生成中 ' + (ex.done.length - ex.base) + '／' + ex.total)
+            : finished ? '完成' : (n ? (ex.err ? '再生成剩下的（' : '開始生成（') + n + ' 個）' : '選要哪幾個表情');
+    }
+    // 拖圈：按在圈上（或空白處）＝搬，按右下的圓點＝改大小；座標換成原圖像素
+    function exBindRing(ex) {
+        const svg = ex.el.querySelector('.acg-ex-ring');
+        let drag = null;
+        const at = (ev) => { const b = svg.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * ex.W, y: (ev.clientY - b.top) / b.height * ex.H }; };
+        const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        svg.addEventListener('pointerdown', (ev) => {
+            if (ex.busy || ex.found === null) return;
+            const p = at(ev);
+            const r = ex.ring;
+            if (ev.target.classList.contains('acg-ex-knob')) drag = { mode: 'size' };
+            else {
+                const inside = ((p.x - r.cx) / r.rx) ** 2 + ((p.y - r.cy) / r.ry) ** 2 <= 1;
+                if (!inside) { r.cx = p.x; r.cy = p.y; }
+                drag = { mode: 'move', dx: p.x - r.cx, dy: p.y - r.cy };
+            }
+            try { svg.setPointerCapture(ev.pointerId); } catch (e) {}
+            ev.preventDefault();
+            exPaint(ex);
+        });
+        svg.addEventListener('pointermove', (ev) => {
+            if (!drag) return;
+            const p = at(ev), r = ex.ring;
+            if (drag.mode === 'move') { r.cx = clamp(p.x - drag.dx, 0, ex.W); r.cy = clamp(p.y - drag.dy, 0, ex.H); }
+            else { r.rx = clamp(Math.abs(p.x - r.cx) / 0.7071, ex.W * 0.03, ex.W * 0.5); r.ry = clamp(Math.abs(p.y - r.cy) / 0.7071, ex.H * 0.02, ex.H * 0.5); }
+            exPaint(ex);
+        });
+        const end = () => { drag = null; };
+        svg.addEventListener('pointerup', end);
+        svg.addEventListener('pointercancel', end);
+    }
+    async function exGo() {
+        const ex = S && S.ex;
+        if (!ex || ex.busy || !ex.picks.length) return;
+        const list = EXPR_SET.filter(x => ex.picks.indexOf(x.exp) >= 0);
+        ex.done = ex.done.filter(r => !list.some(x => x.exp === r.exp));   // 這一輪要重做的先拿掉
+        const doneBefore = ex.done.length;
+        ex.busy = true; ex.ranAll = false; ex.total = list.length; ex.base = doneBefore; ex.err = '';
+        const out = ex.el.querySelector('.acg-ex-out');
+        const cardOf = (exp, zh, thumb) =>
+            '<div class="acg-gen-card acg-ex-card" data-exp="' + exp + '">'
+          +   '<div class="acg-gen-img acg-ex-cell" data-exp="' + exp + '"' + (thumb ? ' data-act="expr-view"' : '') + '>'
+          +     (thumb ? '<img src="' + esc(thumb) + '" alt="">' : '<i class="fa-solid fa-hourglass-half"></i>') + '</div>'
+          +   '<div class="acg-ex-cap">' + esc(zh) + '</div>'
+          + '</div>';
+        out.innerHTML = ex.done.map(r => cardOf(r.exp, r.zh, r.thumb)).join('') + list.map(x => cardOf(x.exp, x.zh, '')).join('');
+        exPaint(ex);
+        const seed = Math.floor(Math.random() * 1e15);   // 同一輪同一顆種子，幾張的筆觸比較像
+        for (const item of list) {
+            if (ex.stop || !S || S.ex !== ex) break;
+            const card = out.querySelector('.acg-ex-card[data-exp="' + item.exp + '"]');
+            const cell = card.querySelector('.acg-ex-cell');
+            card.classList.add('is-run');
+            cell.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+            try {
+                const data = await makeExpr(ex, item, seed);
+                await localSave(ex.ch, item.exp, data, 'file');
+                if (S) S.changed = true;
+                const thumb = await faceThumb(ex, data);
+                ex.done = ex.done.filter(r => r.exp !== item.exp).concat({ exp: item.exp, zh: item.zh, url: data, thumb });
+                ex.picks = ex.picks.filter(p => p !== item.exp);
+                cell.dataset.act = 'expr-view';
+                cell.innerHTML = '<img src="' + esc(thumb) + '" alt="">';
+                card.classList.remove('is-run');
+            } catch (e) {
+                card.classList.remove('is-run'); card.classList.add('is-fail');
+                cell.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+                ex.err = '「' + item.zh + '」沒做成：' + ((e && e.message) || e);
+                break;   // 多半是設定或連線的問題，後面的也會一樣失敗；沒做的留在選取裡，可以再按一次
+            }
+            exPaint(ex);
+        }
+        ex.busy = false;
+        ex.ranAll = true;
+        if (S && S.ex === ex) exPaint(ex);
+        else if (S && ex.done.length > doneBefore) afterChange(ex.ch);   // 生到一半按了返回：最後那張是返回之後才存好的
+    }
+
     // 插圖參考圖用：只看她自己放的圖（本地上傳 → 世界書 → 網址庫），不拿立繪庫與 AI 頭像。
     //   預設格優先（最完整的一張），沒有再看 Neutral 表情。回傳第一張打得開的網址，沒有就回空字串。
     async function userRefUrl(name) {
@@ -842,6 +1147,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar } };
+    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();

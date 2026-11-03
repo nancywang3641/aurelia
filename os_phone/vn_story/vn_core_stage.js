@@ -265,7 +265,7 @@
             this._applyStageLighting(idx, { grantSolo: isNew ? idx : -1 });   // 說話者亮、另一格變暗；置中只授予「進場當下就是獨角」的
         },
 
-        // 單格圖片解析鏈（圖鑑本地上傳(表情) → 表情立繪條目 → spriteBase → 圖鑑本地上傳(預設) → 預設立繪條目 → charDefaultBase → sprite_cache → fallbackToAI），
+        // 單格圖片解析鏈（圖鑑本地上傳(表情) → 表情立繪條目 → spriteBase → 意思最近的表情(本地上傳、條目) → 圖鑑本地上傳(預設) → 預設立繪條目 → charDefaultBase → sprite_cache → fallbackToAI），
         // 順序只有一份，圖鑑 os_char_gallery.js 照抄；改這裡要一起改那邊。
         // 條目層＝世界書【素材-角色表情立繪】/【素材-角色預設立繪素材】（重構前的老邏輯，2026-08-26 接回）；守衛改用「這格還是不是同角色」
         // 🔴 2026-09-14 她定：自備圖（世界書條目／網址庫）一律最先。「會放上去都是因為我做好才放上去的，不可能反過來」。
@@ -294,6 +294,13 @@
             if (_cg && _cg.localUrl) { const lu = await _cg.localUrl(name, exp); if (_stale()) return; if (lu) urls.push(lu); }
             this._nameVariants(name).forEach(v => { const u = this._lorebookExpCache[`${v}_${exp}`]; if (u && !urls.includes(u)) urls.push(u); });
             if (VN_Config.data.spriteBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.spriteBase}${v}_${exp}.png`));
+            // 寫的表情沒有那張：照意思找最近的（Smiling→Happy、Furious→Angry），圖鑑「生一組表情」做的那幾張靠這個接上
+            const near = (_cg && _cg.nearExp) ? _cg.nearExp(exp) : '';
+            if (near && near !== exp) {
+                const ln = await _cg.localUrl(name, near); if (_stale()) return;
+                if (ln && !urls.includes(ln)) urls.push(ln);
+                this._nameVariants(name).forEach(v => { const u = this._lorebookExpCache[`${v}_${near}`]; if (u && !urls.includes(u)) urls.push(u); });
+            }
             if (urls.length) this._tryLoad(img, urls, () => this.handleImgError(img), triggerAnim, _stale);
             else this.handleImgError(img);   // 沒有表情層來源 → 直接進預設立繪層（重構前行為：條目層不依賴 spriteBase 有沒有填）
         },

@@ -376,6 +376,7 @@
             { id: 'map',    name: '小地圖',     type: 'map'   },
             { id: 'phone',  name: '手機照片',   type: 'scene' },
             { id: 'app',    name: '應用裡的圖', type: 'item'  },
+            { id: 'expr',   name: '立繪表情',   type: 'char'  },   // 角色圖鑑「生一組表情」：只重畫臉，只認 ComfyUI（comfyInpaint）
         ],
         useOf: function(id) { return this.USES.find(u => u.id === id) || null; },
         _ROUTES_KEY: 'os_img_routes',
@@ -1133,6 +1134,112 @@
             const dataUrl = await new Promise(function (resolve, reject) { const fr = new FileReader(); fr.onload = function () { resolve(fr.result); }; fr.onerror = reject; fr.readAsDataURL(blob); });
             console.log('[ImageManager] ✅ ComfyUI 瀏覽器直連生圖成功');
             return dataUrl;
+        },
+
+        // ════════════════════════════════════════════════════════════════
+        // 🎭 立繪換表情（角色圖鑑「生一組表情」，11-04）：原圖不動，只重畫臉那一圈
+        //   圖跟遮罩用 ETN_LoadImageBase64／ETN_LoadMaskBase64（comfyui-tooling-nodes；酒館自己生圖的 %char_avatar% 也靠它）
+        //   直接塞進工作流：酒館的代理只收工作流、收不了上傳檔，PWA 直連也走同一條。
+        //   找臉用 Impact Pack 的 face_yolov8m（插圖修臉同一顆）。只認 ComfyUI 直連、自動組的包。
+        // ════════════════════════════════════════════════════════════════
+        // 「立繪表情」那列沒改過＝跟「立繪」那列走同一組：同一個包畫的臉才接得上原圖
+        exprUse: function() { return this.getRoutes().expr ? 'expr' : 'sprite'; },
+        // 這一列實際用的 ComfyUI 參數；不是 ComfyUI、自帶工作流的包、沒網址沒模型就丟錯（字是給她看的）
+        _comfyCfgForInpaint: async function(prompt, options) {
+            const opts = Object.assign({}, options);
+            prompt = await this._applyUse(prompt, opts);
+            const svc = opts.provider || this.legacyServiceOf(opts.use);
+            if (svc !== 'comfyui_direct') throw new Error('只重畫臉要用 ComfyUI：到設置→圖片「每個地方用什麼」，把「立繪表情」選成 ComfyUI 的包');
+            const cfg = opts._comfyPreset ? this._comfyCfgFromPreset(opts._comfyPreset)
+                : opts._comfyCurrent ? (this.config.comfyuiDirect || {})
+                : this._comfyCfgFor('char');
+            if (!String(cfg.url || '').trim()) throw new Error('ComfyUI 還沒填網址');
+            if (cfg.workflowMode === 'custom') throw new Error('這個包用的是自帶工作流，沒辦法只重畫一塊；「立繪表情」換一個自動組的包');
+            if (!cfg.model) throw new Error('這個包沒選模型');
+            return { cfg: cfg, prompt: prompt, opts: opts };
+        },
+        // 跑一份工作流、拿第一張圖（排進 GPU 佇列；酒館走代理、PWA 直連）。出錯丟錯、不跳提示，呼叫端自己講給她聽
+        _comfyRunWf: async function(wf, url) {
+            const out = await win.AURELIA_GPU_QUEUE.run(async () => {
+                const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const timer = ac ? setTimeout(() => { try { ac.abort(); } catch (e) {} }, 180000) : null;
+                try {
+                    try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                    if (this._comfyDirectBrowser()) return await this._genComfyuiBrowserDirect(wf, url, ac);
+                    const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                    const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+                    const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers,
+                        body: JSON.stringify({ url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' }), signal: ac ? ac.signal : undefined });
+                    if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error('ComfyUI 回 ' + res.status + (t ? '：' + String(t).slice(0, 160) : '')); }
+                    const j = await res.json();
+                    if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+                    throw new Error('ComfyUI 沒回圖');
+                } catch (e) {
+                    if (e && e.name === 'AbortError') throw new Error('等了 180 秒 ComfyUI 還沒出圖');
+                    throw e;
+                } finally {
+                    if (timer) clearTimeout(timer);
+                    try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
+                    this._lastComfyJobAt = Date.now();
+                }
+            }, 1, undefined, 'img:char');
+            if (!out) throw new Error('排隊太久被放行了，ComfyUI 沒回圖');   // 佇列逾時是 resolve(undefined)
+            return out;
+        },
+        // 找臉：回 { x0, y0, x1, y1 }（原圖像素）；ComfyUI 沒裝 Impact Pack、圖裡找不到臉都回 null（她自己拖圈）
+        comfyFindFace: async function(imageDataUrl) {
+            const r = await this._comfyCfgForInpaint('face', { use: this.exprUse() });
+            const wf = {
+                '1': { class_type: 'ETN_LoadImageBase64', inputs: { image: String(imageDataUrl).replace(/^data:[^,]*,/, '') } },
+                '2': { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: 'bbox/face_yolov8m.pt' } },
+                '3': { class_type: 'BboxDetectorSEGS', inputs: { bbox_detector: ['2', 0], image: ['1', 0], threshold: 0.4, dilation: 0, crop_factor: 1.0, drop_size: 10, labels: 'all' } },
+                '4': { class_type: 'SegsToCombinedMask', inputs: { segs: ['3', 0] } },
+                '5': { class_type: 'MaskToImage', inputs: { mask: ['4', 0] } },
+                '6': { class_type: 'PreviewImage', inputs: { images: ['5', 0] } },
+            };
+            let maskUrl;
+            try { maskUrl = await this._comfyRunWf(wf, String(r.cfg.url).trim()); }
+            catch (e) { console.warn('[ImageManager] 找臉沒成功（沒裝 Impact Pack？）', e); return null; }
+            // 臉的位置＝遮罩上白的那塊的外框
+            const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = maskUrl; });
+            const w = img.naturalWidth, h = img.naturalHeight;
+            const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+            const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+            const px = g.getImageData(0, 0, w, h).data;
+            let x0 = w, y0 = h, x1 = -1, y1 = -1;
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                if (px[(y * w + x) * 4] > 128) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            }
+            return x1 < 0 ? null : { x0: x0, y0: y0, x1: x1 + 1, y1: y1 + 1 };
+        },
+        // 只重畫一塊：image＝要改的圖（不透明），mask＝同大小黑白圖（白＝重畫），回同大小的新圖 dataURL。
+        //   用的是自動組那份工作流，只把空白畫布換成「原圖編碼＋遮罩」，denoise 照呼叫端（表情 0.7～0.8）
+        comfyInpaint: async function(imageDataUrl, maskDataUrl, prompt, options) {
+            options = Object.assign({ use: this.exprUse() }, options || {});
+            const r = await this._comfyCfgForInpaint(prompt, options);
+            const cfg = r.cfg;
+            const posText = this._composePos(cfg, r.prompt, 'expr');
+            const negText = r.opts.negativePrompt || cfg.negPrompt || '';
+            const seed = options.seed || Math.floor(Math.random() * 1e15);
+            const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 1024, height: 1024, seed: seed }, cfg);
+            if (!wf || !wf['3'] || !wf['8']) throw new Error('工作流組不出來');
+            delete wf['5'];   // 空白畫布不要了
+            wf['90'] = { class_type: 'ETN_LoadImageBase64', inputs: { image: String(imageDataUrl).replace(/^data:[^,]*,/, '') } };
+            wf['91'] = { class_type: 'ETN_LoadMaskBase64', inputs: { mask: String(maskDataUrl).replace(/^data:[^,]*,/, '') } };
+            wf['92'] = { class_type: 'VAEEncode', inputs: { pixels: ['90', 0], vae: wf['8'].inputs.vae } };
+            wf['93'] = { class_type: 'SetLatentNoiseMask', inputs: { samples: ['92', 0], mask: ['91', 0] } };
+            wf['3'].inputs.latent_image = ['93', 0];
+            wf['3'].inputs.denoise = (options.denoise != null) ? options.denoise : 0.75;
+            if (wf['9']) { wf['9'].class_type = 'PreviewImage'; delete wf['9'].inputs.filename_prefix; }   // 半成品不進 output 資料夾
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'comfyui_direct', type: 'char' }); } catch (e) {}
+            try { return await this._comfyRunWf(wf, String(cfg.url).trim()); }
+            catch (e) {
+                // 少了 comfyui-tooling-nodes 時 ComfyUI 會說找不到 ETN_ 開頭的節點（酒館代理只回一句 500，看不到原因）
+                const m = String((e && e.message) || e);
+                if (/ETN_|500/.test(m)) throw new Error(m + '（ComfyUI 沒裝 comfyui-tooling-nodes 這個外掛的話要先裝：ComfyUI Manager 搜 tooling nodes）');
+                throw e;
+            }
         },
 
         // 抓 ComfyUI 清單（模型/採樣器/排程/VAE/LoRA）：直連時自己解析 /object_info，酒館內走代理。回 {models,samplers,schedulers,vaes,loras}
