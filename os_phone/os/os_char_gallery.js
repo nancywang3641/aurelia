@@ -56,7 +56,7 @@
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
-            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n要用 ComfyUI：設置→圖片「每個地方用什麼」的「立繪表情」選 ComfyUI 的包；沒選就跟「立繪」那列用同一個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n要用 ComfyUI：設置→圖片「每個地方用什麼」的「立繪表情」選 ComfyUI 的包；沒選就跟「立繪」那列用同一個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -662,6 +662,7 @@
             if (act === 'expr-open') { await exOpen(ch); return; }
             if (act === 'expr-close') { exClose(); return; }
             if (act === 'expr-pick') { exPick(b.dataset.exp); return; }
+            if (act === 'expr-style') { exStyle(b.dataset.style); return; }
             if (act === 'expr-go') { await exGo(); return; }
             if (act === 'expr-view') {
                 const done = S.ex ? S.ex.done.filter(r => r.url) : [];
@@ -850,15 +851,34 @@
     //   不帶角色描述：只給畫風＋表情就認得出是同一張臉（11-04 試過），描述裡手上的東西反而會被畫到臉上。
     // ================================================================
     const EXPR_PRE = 'close-up portrait, face focus, solo, ';
+    // tags＝一般；quiet＝內收（靦腆、冷淡、壓抑的角色：動作小、嘴巴多半閉著。11-04 同一張圖對照過她說「好，加上去」）
     const EXPR_SET = [
-        { exp: 'Happy',     zh: '微笑', d: 0.7, tags: '(gentle smile:1.3), closed mouth smile, soft eyes, happy' },
-        { exp: 'Laughing',  zh: '大笑', d: 0.8, tags: '(laughing:1.3), open mouth, big smile, closed eyes, happy' },
-        { exp: 'Shy',       zh: '害羞', d: 0.7, tags: '(embarrassed:1.3), (blush:1.3), looking away, wavy mouth' },
-        { exp: 'Angry',     zh: '生氣', d: 0.8, tags: '(angry:1.4), furrowed brows, glaring, clenched teeth, frown' },
-        { exp: 'Sad',       zh: '難過', d: 0.8, tags: '(sad:1.4), downturned eyebrows, teary eyes, frown, looking down' },
-        { exp: 'Surprised', zh: '驚訝', d: 0.8, tags: '(surprised:1.4), wide eyes, raised eyebrows, open mouth' },
-        { exp: 'Crying',    zh: '哭',   d: 0.8, tags: '(crying:1.4), tears streaming down face, frown, wet eyes' },
+        { exp: 'Happy',     zh: '微笑', d: 0.7, tags: '(gentle smile:1.3), closed mouth smile, soft eyes, happy',
+                                            quiet: 'faint smile, (slight smile:1.2), closed mouth, calm soft eyes' },
+        { exp: 'Laughing',  zh: '大笑', d: 0.8, tags: '(laughing:1.3), open mouth, big smile, closed eyes, happy',
+                                            quiet: 'stifled laugh, (closed mouth smile:1.2), (eyes curved:1.2), holding back laughter' },
+        { exp: 'Shy',       zh: '害羞', d: 0.7, tags: '(embarrassed:1.3), (blush:1.3), looking away, wavy mouth',
+                                            quiet: '(light blush:1.1), averted gaze, looking down, closed mouth, shy' },
+        { exp: 'Angry',     zh: '生氣', d: 0.8, tags: '(angry:1.4), furrowed brows, glaring, clenched teeth, frown',
+                                            quiet: 'cold stare, (slightly furrowed brows:1.2), closed mouth, serious expression' },
+        { exp: 'Sad',       zh: '難過', d: 0.8, tags: '(sad:1.4), downturned eyebrows, teary eyes, frown, looking down',
+                                            quiet: 'downcast eyes, (slight frown:1.2), closed mouth, melancholic' },
+        { exp: 'Surprised', zh: '驚訝', d: 0.8, tags: '(surprised:1.4), wide eyes, raised eyebrows, open mouth',
+                                            quiet: '(slightly widened eyes:1.2), lips slightly parted, mild surprise' },
+        { exp: 'Crying',    zh: '哭',   d: 0.8, tags: '(crying:1.4), tears streaming down face, frown, wet eyes',
+                                            quiet: 'eyes glistening with tears, single tear, holding back tears, closed mouth' },
     ];
+    // 每個角色選一般還是內收：{ 名字: 'quiet' }，一般的不存
+    const STYLE_KEY = 'acg_expr_style';
+    function styleMap() { try { const v = JSON.parse(localStorage.getItem(STYLE_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+    function styleOf(ch) { const m = styleMap(); const k = Object.keys(m).find(n => sameChar(n, ch)); return (k && m[k] === 'quiet') ? 'quiet' : 'normal'; }
+    function styleSave(ch, style) {
+        const m = styleMap();
+        Object.keys(m).forEach(n => { if (sameChar(n, ch)) delete m[n]; });
+        if (style === 'quiet') m[ch] = 'quiet';
+        const A = AUIx();
+        return A && A.lsSet ? A.lsSet(STYLE_KEY, JSON.stringify(m), '角色表情的個性') : false;
+    }
     // 劇情寫的表情 → 上面哪一張（照順序比：大笑、哭要排在微笑、難過前面；Unhappy 要先被難過接走）
     const NEAR_EXP = [
         [/laugh|giggl|chuckl/i, 'Laughing'],
@@ -908,7 +928,8 @@
         mg.fillStyle = '#000'; mg.fillRect(0, 0, P, P);
         softOval(mg, (ring.cx - L) * k, (ring.cy - T) * k, ring.rx * k, ring.ry * k, P * 0.01);
         // 裁的那塊送 JPEG：整份工作流要經酒館的代理，PNG 一張一兩 MB；圈外那圈最後貼回的是原圖，壓縮只碰得到要重畫的地方
-        const out = await M.comfyInpaint(crop.toDataURL('image/jpeg', 0.95), mask.toDataURL('image/png'), EXPR_PRE + item.tags, { denoise: item.d, seed });
+        const words = ex.style === 'quiet' ? item.quiet : item.tags;
+        const out = await M.comfyInpaint(crop.toDataURL('image/jpeg', 0.95), mask.toDataURL('image/png'), EXPR_PRE + words, { denoise: item.d, seed });
         const gen = await loadImg(out);
         // 貼回：生出來那塊縮回原大小，只留羽化圈裡的部分
         const patch = canvasOf(side, side), pg = patch.getContext('2d');
@@ -954,7 +975,7 @@
         const W = img.naturalWidth, H = img.naturalHeight;
         const has = {};
         info.slots.forEach(s => { if (s.used) has[s.exp] = true; });
-        const ex = { ch, img, W, H, has, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false,
+        const ex = { ch, img, W, H, has, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false, style: styleOf(ch),
                      ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null };
         S.ex = ex;
         const A = AUIx();
@@ -977,6 +998,10 @@
           +     '</svg>'
           +   '</div></div>'
           +   '<div class="acg-ex-note">找臉中…</div>'
+          +   '<div class="acg-ex-seg">'
+          +     '<button class="acg-ex-seg-btn" type="button" data-act="expr-style" data-style="normal">一般</button>'
+          +     '<button class="acg-ex-seg-btn" type="button" data-act="expr-style" data-style="quiet">內收</button>'
+          +   '</div>'
           +   '<div class="acg-ex-picks">' + EXPR_SET.map(x =>
                   '<button class="acg-ex-chip" type="button" data-act="expr-pick" data-exp="' + x.exp + '">' + esc(x.zh)
                 + (has[x.exp] ? '<span class="acg-ex-has">有了</span>' : '') + '</button>').join('') + '</div>'
@@ -1017,6 +1042,15 @@
         S.ex = null;
         if (ex.done.length) afterChange(ex.ch);   // 做好的已經存了：重畫這個角色，表情格會多出來
     }
+    // 換個性＝整組要照新的重做：七個全選（做過的也選，她不要的再點掉）
+    function exStyle(style) {
+        const ex = S && S.ex;
+        if (!ex || ex.busy || style === ex.style) return;
+        ex.style = style === 'quiet' ? 'quiet' : 'normal';
+        styleSave(ex.ch, ex.style);
+        ex.picks = EXPR_SET.map(x => x.exp);
+        exPaint(ex);
+    }
     function exPick(exp) {
         const ex = S && S.ex;
         if (!ex || ex.busy) return;
@@ -1031,6 +1065,7 @@
         oval.setAttribute('cx', r.cx); oval.setAttribute('cy', r.cy); oval.setAttribute('rx', r.rx); oval.setAttribute('ry', r.ry);
         knob.setAttribute('cx', r.cx + r.rx * 0.7071); knob.setAttribute('cy', r.cy + r.ry * 0.7071); knob.setAttribute('r', Math.max(ex.W, ex.H) * 0.016);
         el.querySelectorAll('.acg-ex-chip').forEach(c => { c.classList.toggle('is-on', ex.picks.indexOf(c.dataset.exp) >= 0); c.disabled = ex.busy; });
+        el.querySelectorAll('.acg-ex-seg-btn').forEach(c => { c.classList.toggle('is-on', c.dataset.style === ex.style); c.disabled = ex.busy; });
         el.classList.toggle('is-busy', ex.busy);
         // blocked＝設定不對（不是 ComfyUI 之類），整頁做不了；err＝這一輪有一張沒做成，可以再按一次補
         const note = el.querySelector('.acg-ex-note');

@@ -213,6 +213,16 @@
 .acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob { display: none; }
 .acg-ex-note { font-size: 13px; color: var(--acg-sub); text-align: center; }
 .acg-ex-note.is-warn { color: var(--acg-warn); }
+/* 一般／內收：一條兩格的切換，選中那格實心 */
+.acg-ex-seg { display: flex; justify-content: center; }
+.acg-ex-seg-btn {
+    min-width: 88px; padding: 7px 16px; border: 1px solid var(--acg-line); background: var(--acg-card);
+    color: var(--acg-sub); font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.acg-ex-seg-btn:first-child { border-radius: 9px 0 0 9px; }
+.acg-ex-seg-btn:last-child { border-radius: 0 9px 9px 0; border-left: 0; }
+.acg-ex-seg-btn.is-on { background: var(--acg-accent); border-color: var(--acg-accent); color: var(--acg-bg); }
+.acg-ex-seg-btn:disabled { cursor: default; opacity: .6; }
 .acg-ex-picks { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .acg-ex-chip {
     display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: 999px;
