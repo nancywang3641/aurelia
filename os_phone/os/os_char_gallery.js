@@ -56,7 +56,7 @@
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
-            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n要用 ComfyUI：設置→圖片「每個地方用什麼」的「立繪表情」選 ComfyUI 的包；沒選就跟「立繪」那列用同一個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n要用 ComfyUI：設置→圖片「每個地方用什麼」的「立繪表情」選 ComfyUI 的包；沒選就跟「立繪」那列用同一個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -894,6 +894,12 @@
         for (const [re, name] of NEAR_EXP) if (re.test(e)) return name;
         return '';
     }
+    // 這個角色有上面那幾種表情的哪幾張（本地上傳＋表情條目）：副模型補表情時只讓它挑真的有圖的
+    async function exprHave(name) {
+        const locals = (await localAll()).filter(r => r && sameChar(r.name, name));
+        const V = VN(), lore = (V && V._lorebookExpCache) || {};
+        return EXPR_SET.filter(x => locals.some(r => r.exp === x.exp) || variants(name).some(v => lore[v + '_' + x.exp])).map(x => x.exp);
+    }
 
     function loadImg(src) {
         return new Promise((res, rej) => {
@@ -1182,6 +1188,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf } };
+    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();

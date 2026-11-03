@@ -131,6 +131,7 @@
         'vn_charvoices::',            // 角色的固定聲線（每本故事）
         'vn_theme_css::',             // 劇情面板的自訂樣式（每本故事）
         'vn_free_mode_',              // 這張卡的自由模式（酒館）
+        'vn_expr_side_',              // 這張卡的表情交給副模型
         'wx_custom_contacts_v1__', 'wx_contact_tags__',             // 聊天 app 通訊錄、標籤（每本故事、常駐角色）
         'wx_chat_settings_',          // 每間聊天室的設定
         'wx_bubble_style_', 'vn_bubble_room::',                     // 每間聊天室的泡泡
@@ -600,7 +601,7 @@
           ls: ['aurelia_custom_worlds', 'vn_current_story_id', 'vn_current_story_title', 'os_personas',
                'os_persona_current', 'vn_current_world_id', 'vn_story_index', 'os_vn_gen_presets', 'vn_free_history',
                'aurelia_greet_replace_rules', 'aurelia_map_theater_log'],
-          prefixes: ['vn_charvoices::', 'vn_theme_css::', 'vn_free_mode_'] },
+          prefixes: ['vn_charvoices::', 'vn_theme_css::', 'vn_free_mode_', 'vn_expr_side_'] },
         { k: 'phone', label: '手機 app（聊天、微博、各 app 的資料、收藏的語音）', stores: ['api_chats', 'wb_posts', 'phone_apps', 'app_memory', 'app_data'],
           ls: ['aurelia_phone_apps', 'aurelia_phone_layout', 'aurelia_phone_theme', 'aurelia_phone_user_themes', 'aurelia_widgets', 'aurelia_widget_cfg',
                'os_unified_contacts', 'wx_custom_contacts_v1', 'wx_contact_tags', 'wx_user_profile', 'wx_room_fix', 'wx_room_id_remap',

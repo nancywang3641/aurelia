@@ -1448,6 +1448,14 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .ctx-autosum-every { flex: 0 0 auto; width: 46px; }
         .ctx-autosum-unit { color: #555; font-size: 0.65rem; white-space: nowrap; }
         .ctx-autosum-row.off .ctx-autosum-every, .ctx-autosum-row.off .ctx-autosum-unit { display: none; }
+        /* 🎭 表情交給誰：三顆小鈕，亮的那顆是這張卡現在用的；視差世界裡鎖住（disabled），亮的照樣看得出來 */
+        .ctx-expr-row { display: flex; align-items: center; gap: 4px; margin-top: 6px; padding-top: 5px; border-top: 1px solid rgba(255,255,255,0.05); }
+        .ctx-expr-row .ctx-limit-label { flex: 1; }
+        .ctx-expr-row.ctx-expr-none { display: none; }
+        .ctx-expr-btn { flex: 0 0 auto; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 3px; color: #888; font-size: 0.65rem; padding: 2px 6px; cursor: pointer; font-family: inherit; }
+        .ctx-expr-btn:hover:not(:disabled) { border-color: rgba(212,175,55,0.4); color: #ddd; }
+        .ctx-expr-btn.on { border-color: var(--gold, #d4af37); color: var(--gold, #d4af37); background: rgba(212,175,55,0.1); }
+        .ctx-expr-btn:disabled { cursor: default; opacity: 0.6; }
 
         /* 對話內文也是優雅字體 */
         #dialogue-text { font-family: var(--font-classic); font-size: 1.3rem; line-height: 1.9; letter-spacing: 1px; color: var(--text-color, #dcd8d0); font-weight: 300; }

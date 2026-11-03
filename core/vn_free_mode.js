@@ -8,6 +8,7 @@
 //      PWA 的歷史是 os_api_engine 從章節拼的，由它呼叫 stripEmotionCol。
 //   ③ 引擎端表情格容錯常駐（vn_core._normCharParts），三欄四欄都吃。
 // 模式按「storyId=這張卡」記（不是 chatId：同卡開新聊天該記得模式，不用重選）。
+// 11-04 起表情三選一：主模型寫／副模型補（自由模式＋副模型讀劇本時順便挑）／不要，見檔尾 exprMode。
 // 2026-09-14 VN 指令從酒館全域世界書搬進程式，這支不再讀寫世界書。
 // ----------------------------------------------------------------
 (function () {
@@ -179,7 +180,100 @@
             .replace(/\[Char\|([^|\]]+)\|\s*[A-Za-z]+\s*\|/g, '[Char|$1|');
     }
 
-    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId, inParallax: _inParallax, effectiveFree: _effectiveFree, stripEmotionCol };
+    // ══ 表情交給誰（11-04 她：「可以圖庫走主模型安排，或者教給副模型」）══════════════
+    //   三選一，按這張卡記：main＝主模型寫（就是原本的「圖庫」）、side＝主模型不寫、副模型讀劇本時順便挑、
+    //   off＝不要表情（原本的「自由」）。side 只多存一把 vn_expr_side_<id>；主模型寫不寫照舊看上面那把，舊的兩種選擇原封不動。
+    //   視差世界逼成自由時，選 main 的卡改由副模型補：主模型寫不了，就退給本來就要讀一次劇本的那一通。
+    function _sideKey(id) { return 'vn_expr_side_' + id; }
+    function exprMode(id) {
+        id = id || _storyId();
+        if (!isFree(id)) return 'main';
+        try { return localStorage.getItem(_sideKey(id)) === '1' ? 'side' : 'off'; } catch (e) { return 'off'; }
+    }
+    async function setExprMode(mode, id) {
+        const target = id || _storyId();
+        if (!target) return false;
+        if (mode === 'side') { if (!win.AUI.lsSet(_sideKey(target), '1', '表情交給副模型')) return false; }
+        else { try { localStorage.removeItem(_sideKey(target)); } catch (e) {} }
+        return await set(mode !== 'main', target);
+    }
+    // 現在實際是誰在管表情（畫面顯示用；視差世界裡 main 會變成 side）
+    function exprModeNow() {
+        const m = exprMode();
+        return (m === 'main' && _inParallax()) ? 'side' : m;
+    }
+    function fillOn() { return exprModeNow() === 'side'; }
+
+    // 副模型挑好的表情：{ 名字｜台詞開頭 → 表情 }，按聊天存在 app_data（重看舊章不用再問）。
+    //   播劇本時 vn_core._normCharParts 要補表情格就先問 lookupExpr；沒有才是 Neutral。
+    const FILL_APP = 'vn_expr_fill';
+    let _fill = { chat: '', map: {} }, _fillLoading = '';
+    const _fillChat = () => { try { return String((win.OS_STATE_RUNTIME && win.OS_STATE_RUNTIME.chatId && win.OS_STATE_RUNTIME.chatId()) || ''); } catch (e) { return ''; } };
+    const _lineKey = (name, text) => String(name || '').trim() + '｜' + String(text || '').replace(/[「」『』“”"'*（）()\s]/g, '').slice(0, 40);
+    function _fillLoad(cid) {
+        if (!cid || _fillLoading === cid || !win.OS_DB || !win.OS_DB.getAppData) return Promise.resolve();
+        _fillLoading = cid;
+        return win.OS_DB.getAppData(FILL_APP, 'map', cid).then(v => {
+            // 讀回來時已經換到別的聊天＝這份過期了，別蓋掉現在那份
+            if (_fillLoading === cid && _fillChat() === cid) _fill = { chat: cid, map: (v && typeof v === 'object') ? v : {} };
+        }).catch(() => {}).finally(() => { if (_fillLoading === cid) _fillLoading = ''; });
+    }
+    function lookupExpr(name, text) {
+        const cid = _fillChat();
+        if (!cid) return '';
+        if (cid !== _fill.chat) { _fillLoad(cid); return ''; }   // 換了聊天：背景讀進來，這一句先照舊
+        return _fill.map[_lineKey(name, text)] || '';
+    }
+    // 給副模型的那一段：這章沒寫表情、而且那個人有表情圖的台詞。回 { block, lines, have } 或 null（不用做＝一個字都不加）
+    async function fillTask(content) {
+        if (!fillOn()) return null;
+        const G = win.OS_CHAR_GALLERY, V = win.VN_Core;
+        if (!G || !G.exprHave) return null;
+        const isLine = (t) => (V && V._looksLikeDialogue) ? V._looksLikeDialogue(t) : /^[「『（(*“”"']/.test(String(t || '').trim());
+        const rows = [];
+        String(content || '').split('\n').forEach(raw => {
+            const s = raw.trim();
+            if (s.indexOf('[Char|') !== 0 || s.slice(-1) !== ']') return;
+            const p = s.slice(6, -1).split('|');
+            const last = String(p[p.length - 1] || '').trim().toLowerCase();
+            const eff = (last === 'stay' || last === 'leave') ? p.length - 1 : p.length;
+            if (eff > 2 && !isLine(p[1])) return;   // 主模型寫了表情，不用補
+            if (p.length >= 2 && String(p[1]).trim()) rows.push({ name: String(p[0]).trim(), text: String(p[1]).trim() });
+        });
+        const have = {};
+        for (const r of rows) if (!(r.name in have)) { try { have[r.name] = await G.exprHave(r.name); } catch (e) { have[r.name] = []; } }
+        const lines = rows.filter(r => have[r.name] && have[r.name].length).slice(0, 60);
+        if (!lines.length) return null;
+        const who = Object.keys(have).filter(n => have[n].length && lines.some(l => l.name === n));
+        const block = '\n\n【表情（順便做）】\n這一章的劇本沒寫角色表情。下面這幾個角色有準備表情圖，請照每句台詞說出口那一刻的情緒，替他挑一張。'
+            + '\n每個角色能用的表情（只能用這些英文字）：\n' + who.map(n => '- ' + n + '：' + have[n].concat('Neutral').join('、')).join('\n')
+            + '\n台詞：\n' + lines.map((l, i) => 'F' + (i + 1) + ' ' + l.name + ' ' + l.text.slice(0, 50)).join('\n')
+            + '\n輸出：在同一個 JSON 裡多放一個 "faces"，鍵是上面的 F 編號，值是那個角色能用的其中一個英文字。情緒不明顯、或沒有貼切的那張，就寫 Neutral。';
+        return { block, lines, have };
+    }
+    // 副模型回的 faces 存起來；挑了那個人沒有的表情就不記
+    async function commitFill(task, faces, cid) {
+        if (!task || !faces || typeof faces !== 'object') return 0;
+        cid = cid || _fillChat();
+        if (!cid) return 0;
+        if (_fill.chat !== cid) await _fillLoad(cid);
+        if (_fill.chat !== cid) _fill = { chat: cid, map: {} };
+        let n = 0;
+        task.lines.forEach((l, i) => {
+            const v = String(faces['F' + (i + 1)] || '').trim();
+            const ok = (task.have[l.name] || []).concat('Neutral');
+            const hit = ok.find(e => e.toLowerCase() === v.toLowerCase());
+            if (hit) { _fill.map[_lineKey(l.name, l.text)] = hit; n++; }
+        });
+        const keys = Object.keys(_fill.map);
+        if (keys.length > 3000) keys.slice(0, keys.length - 3000).forEach(k => { delete _fill.map[k]; });   // 一個聊天最多記三千句，舊的先丟
+        try { await win.OS_DB.saveAppData(FILL_APP, 'map', _fill.map, cid); } catch (e) { console.warn('[表情] 副模型挑的表情沒存成:', e); }
+        console.log('🎭 [表情] 副模型這章挑了 ' + n + '／' + task.lines.length + ' 句');
+        return n;
+    }
+
+    win.VN_FREE_MODE = { isFree, set, applyForCurrent, storyId: _storyId, inParallax: _inParallax, effectiveFree: _effectiveFree, stripEmotionCol,
+        exprMode, setExprMode, exprModeNow, fillOn, lookupExpr, fillTask, commitFill };
     window.VN_FREE_MODE = win.VN_FREE_MODE;
     console.log('🎲 [VN自由模式] 模組就緒');
 })();

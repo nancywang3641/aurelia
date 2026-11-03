@@ -1434,6 +1434,11 @@ ${numberedText}`;
                 }
             } catch (e) {}
 
+            // 🎭 表情搭便車：這張卡選「副模型補表情」（或視差世界裡主模型寫不了）就附上那幾句台詞，不另開一通。
+            //    獨立插圖副模型開著時讓那條做：劇情開播會等那條，表情來得及在播之前就位。
+            let _faces = null;
+            try { if (!(_sceneCfg.standaloneEnabled && String(_sceneCfg.standaloneSpec || '').trim())) { _faces = await win.VN_FREE_MODE?.fillTask?.(_lastFull || lastContent || ''); if (_faces) prompt += _faces.block; } } catch (e) {}
+
             // 🧵 線索帳搭便車：這一章輪到這通記（酒館 AVS 開；PWA 記憶關、AVS 開）就附上，不另開一通
             let _thr = null;
             try {
@@ -1529,6 +1534,7 @@ ${numberedText}`;
             try { if (_npc && win.OS_NPC_DOSSIER?.commit) await win.OS_NPC_DOSSIER.commit(_npc, json.npc_files); } catch (e) {}
             // 🧵 線索帳落地（存在自己那一格，不碰 state_data，順序無所謂）
             try { if (_thr && _thr.handle) await win.OS_STORY_THREADS.commit(_thr.handle, json.threads); } catch (e) {}
+            try { if (_faces) await win.VN_FREE_MODE.commitFill(_faces, json.faces, chatId); } catch (e) {}
 
             // --- 記憶入庫（結合觸發）---
             if (wantMemory) {
@@ -1701,7 +1707,17 @@ ${numberedText}`;
             const charList = entries.length ? entries.map(e => `##${e.code}## ${e.name}`).join('｜') : '（無已登記角色，全部 NPC 自己寫外觀）';
             // 系統訊息 = 你貼的完整規範 + 對接層（只動我這邊：佔位用 ##名##、輸出 scenes JSON）；大佬規範的 {{}} 權重一概不碰
             const _override = `\n\n────────\n【本系統對接（最高優先，覆蓋上面規範裡衝突的部分，含覆蓋「每個角色一律用代號」這種說法）】\n- 你只生成插圖提示詞、不寫劇情正文、不續寫、不解釋。\n- 下面 user 會給「已登記角色清單」(每個附代號 C1/C2…)。**只有清單裡的角色才有代號**：畫到他→**只寫 ##代號##**(如 ##C1##；系統自動填外觀、跟頭像一致)，不要自己寫這些人的固定長相/DNA，只寫動作/姿勢/表情/服裝/裸露/站位/互動。\n- **清單裡「沒有」的角色(沒代號)→ 直接用英文寫他的完整外觀(種族/年齡/髮色/眼色/體型/服裝)，他的名字「絕對不要」用 ## 包起來**——沒代號就沒得填，包了系統認不得、會把 ##名字## 原樣送進 NAI 壞掉。一句話：**有代號才用 ##，沒代號就寫外觀、不准包名字**。\n- 只有「代號」要用井號 ## 包(如 ##C1##)，**不要用 {{ }}**——{{ }} 是 NAI 權重語法、會壞；## 跟你規範裡的 {{}} 權重互不衝突。\n- 只輸出一個 JSON、前後不要任何文字：{ "scenes": [ { "after_paragraph": 數字, "prompt": "..." } ] }。after_paragraph 從用戶給的編號段落挑數字、不要抄原文。上方規範若要求每張插圖先輸出 summary/pov 等思考欄位，照規範加進每個 scene、放在 "prompt" 之前（系統只讀 after_paragraph 與 prompt，多的欄位無害）。`;
-            const userMsg = `【已登記角色（畫到就用 ##代號## 或 ##角色名##，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
+            let userMsg = `【已登記角色（畫到就用 ##代號## 或 ##角色名##，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
+            // 🎭 表情搭這通（選了「副模型補表情」才有）：開播會等這條，表情在播之前就位。台詞要看整章，酒館那邊讀完整正文
+            let _faces = null, _facesNote = '';
+            try {
+                if (win.VN_FREE_MODE?.fillOn?.()) {
+                    let _full = lastContent || '';
+                    if (!_isStandalone()) { try { const _lm = await win.TavernHelper?.getChatMessages?.(lastId); _full = String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || '') || _full; } catch (e) {} }
+                    _faces = await win.VN_FREE_MODE.fillTask(_full);
+                    if (_faces) { userMsg += _faces.block; _facesNote = '\n- 這一輪 user 最後還附了「表情」那段：照它的說明，在同一個 JSON 多放 "faces"（scenes 照舊）。'; }
+                }
+            } catch (e) {}
             // 插圖來源是自訂接口時，補上「哪些落點不要選」——跟搭便車那條共用同一份（OS_API.sceneSafeRules）。
             // 這條路的系統訊息是她貼的規範＋對接層，不會經過 os_api_engine 的組裝，所以要自己接上，
             // 漏了的話開著獨立插圖副模型就等於這條規則沒生效。
@@ -1711,7 +1727,7 @@ ${numberedText}`;
                 _safe = win.OS_API?.sceneSafeRules ? win.OS_API.sceneSafeRules(_svc) : '';
             } catch (e) {}
             const messages = [
-                { role: 'system', content: spec + _override + _safe },
+                { role: 'system', content: spec + _override + _facesNote + _safe },
                 { role: 'user', content: userMsg }
             ];
             const raw = await new Promise((res, rej) => {
@@ -1723,6 +1739,7 @@ ${numberedText}`;
                     { task: 'illust' });
             });
             const json = extractJSON(raw);
+            try { if (_faces && json) await win.VN_FREE_MODE.commitFill(_faces, json.faces, chatId); } catch (e) {}   // 這章沒挑到插圖也照存表情
             if (!json || !Array.isArray(json.scenes) || !json.scenes.length) { console.warn('[獨立插圖] 輸出不含 scenes'); return; }
             const mapped = json.scenes.map(s => {
                 let after = '';
@@ -2938,6 +2955,8 @@ _directorSpec(castNames);
 
     win.OS_STATE_RUNTIME = {
         isEnabled, setEnabled,
+        chatId: getChatId,   // 副模型挑的表情按聊天存（VN_FREE_MODE.lookupExpr）：跟這裡記狀態用同一把
+
         // 手機類 app（VN 手機／微信／微博）的圖片描述也用同一份登記表展開 ##角色名## / ##C1##，外觀跟劇情插圖一致
         expandLooks: async function (str) {
             if (!str || String(str).indexOf('##') < 0) return str;

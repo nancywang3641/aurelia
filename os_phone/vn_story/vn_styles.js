@@ -134,6 +134,12 @@
                         <span class="ctx-autosum-unit">輪</span>
                         <span class="ctx-autosum-unit" id="ctx-memtidy-left"></span>
                     </div>
+                    <div class="ctx-expr-row" id="ctx-expr-row">
+                        <span class="ctx-limit-label"><i class="fa-regular fa-face-smile"></i> 表情</span>
+                        <button class="ctx-expr-btn" type="button" data-mode="main" onclick="window.VN_CtxMonitor._setExpr('main'); event.stopPropagation();">主模型</button>
+                        <button class="ctx-expr-btn" type="button" data-mode="side" onclick="window.VN_CtxMonitor._setExpr('side'); event.stopPropagation();">副模型</button>
+                        <button class="ctx-expr-btn" type="button" data-mode="off" onclick="window.VN_CtxMonitor._setExpr('off'); event.stopPropagation();">不寫</button>
+                    </div>
                     <div class="ctx-row" id="ctx-usage-row"><span class="ctx-label">本輪 API · 生圖</span><span class="ctx-val" id="ctx-usage-cnt">—</span></div>
                     <div id="ctx-breakdown" class="ctx-breakdown">
                         <div class="ctx-bd-head"><span>上下文組成</span><button class="ctx-bd-all" type="button" onclick="window.VN_CtxMonitor.showSegments(); event.stopPropagation();">逐段看 <i class="fa-solid fa-chevron-right"></i></button></div>

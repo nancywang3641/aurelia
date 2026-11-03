@@ -315,9 +315,10 @@
                     <button class="se-swipe-btn" id="se-swipe-next" type="button" title="下一個開場"><i class="fa-solid fa-chevron-right"></i></button>
                 </div>
                 <div id="se-mode-bar" class="se-hidden">
-                    <span id="se-mode-label">本卡模式</span>
-                    <button class="se-mode-chip" id="se-mode-lib" type="button" title="有準備圖庫的卡：表情立繪照舊，AI 輸出表情格">圖庫（表情立繪）</button>
-                    <button class="se-mode-chip" id="se-mode-free" type="button" title="世界卡/隨機NPC：立繪純生成，AI 不輸出表情格、省字">自由（純生成）</button>
+                    <span id="se-mode-label">表情</span>
+                    <button class="se-mode-chip" data-mode="main" type="button">主模型寫</button>
+                    <button class="se-mode-chip" data-mode="side" type="button">副模型補</button>
+                    <button class="se-mode-chip" data-mode="off" type="button">不寫</button>
                 </div>
                 <div id="se-content-area"></div>
                 <div id="se-input-area"></div>
@@ -401,20 +402,21 @@
                 if (!FM || !FM.storyId()) { bar.classList.add('se-hidden'); return; }
                 // 人在視差世界裡＝世界門把模式壓成自由（旅人隨機生成、沒圖庫）→ 這裡要顯示「真的在跑的那個」，
                 // 而且鎖住不給改：她存的選擇沒被動到，撤離就會回來，此時給按只會看起來壞掉。
+                // 11-04 起三選一（VN_FREE_MODE.exprMode）：主模型寫＝原本的圖庫、不寫＝原本的自由、副模型補＝主模型不寫、副模型讀劇本時順便挑。
+                //   視差世界裡主模型固定不寫，選主模型的卡改由副模型補：亮的是 exprModeNow（真的在跑的那個）。
                 const locked = !!FM.inParallax?.();
-                const free = locked ? true : FM.isFree();
-                const libBtn = bar.querySelector('#se-mode-lib'), freeBtn = bar.querySelector('#se-mode-free');
-                libBtn.classList.toggle('active', !free);
-                freeBtn.classList.toggle('active', free);
-                [libBtn, freeBtn].forEach(b => {
+                const now = FM.exprModeNow ? FM.exprModeNow() : (FM.isFree() ? 'off' : 'main');
+                const TIP = { main: '主模型寫劇情時每句台詞自己帶表情（多幾個字）', side: '主模型不寫；副模型本來就要讀一次劇本，順便替有表情圖的角色挑表情', off: '不要表情：立繪一直用同一張，主模型也省字' };
+                bar.querySelectorAll('.se-mode-chip').forEach(b => {
+                    b.classList.toggle('active', b.dataset.mode === now);
                     b.classList.toggle('locked', locked);
-                    b.title = locked
-                        ? '現在人在視差世界裡：同行的旅人是隨機生成的、沒有表情圖庫，所以固定用自由。撤離回主世界就會回到你選的模式。'
-                        : (b === libBtn ? '有準備圖庫的卡：表情立繪照舊，AI 輸出表情格'
-                                        : '世界卡/隨機NPC：立繪純生成，AI 不輸出表情格、省字');
+                    b.title = locked ? '現在人在視差世界裡：主模型固定不寫表情，選了主模型的卡改由副模型補。撤離回主世界就會回到你選的那個。' : TIP[b.dataset.mode];
+                    b.onclick = async () => {
+                        if (locked || !FM.setExprMode || FM.exprMode() === b.dataset.mode) return;
+                        await FM.setExprMode(b.dataset.mode);
+                        this._refreshModeBar(rootWrapper);
+                    };
                 });
-                libBtn.onclick = async () => { if (locked || !FM.isFree()) return; await FM.set(false); this._refreshModeBar(rootWrapper); };
-                freeBtn.onclick = async () => { if (locked || FM.isFree()) return; await FM.set(true); this._refreshModeBar(rootWrapper); };
                 bar.classList.remove('se-hidden');
             } catch (e) { console.warn('[StoryExtractor] 模式列失敗:', e); }
         },

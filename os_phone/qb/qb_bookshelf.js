@@ -1073,9 +1073,10 @@ status = "正常"`;
                 </div>
 
                 <div id="qb-sprite-mode-row" class="qb-spmode-row">
-                    <span class="qb-spmode-label">立繪</span>
-                    <button class="qb-spmode-btn" data-free="0">圖庫</button>
-                    <button class="qb-spmode-btn" data-free="1">自由</button>
+                    <span class="qb-spmode-label">表情</span>
+                    <button class="qb-spmode-btn" data-mode="main">主模型寫</button>
+                    <button class="qb-spmode-btn" data-mode="side">副模型補</button>
+                    <button class="qb-spmode-btn" data-mode="off">不寫</button>
                 </div>
 
                 <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;">
@@ -1325,17 +1326,17 @@ status = "正常"`;
             const FM = window.VN_FREE_MODE;
             const standalone = window.OS_API?.isStandalone?.() ?? false;
             if (!FM || !standalone) { row.style.display = 'none'; return; }
+            // 11-04 起三選一（VN_FREE_MODE.exprMode）：主模型寫＝原本的圖庫、不寫＝原本的自由、副模型補＝主模型不寫、副模型讀劇本時順便挑
             const btns = row.querySelectorAll('.qb-spmode-btn');
+            const TIP = { main: '主模型寫劇情時每句台詞自己帶表情（多幾個字）', side: '主模型不寫；副模型本來就要讀一次劇本，順便替有表情圖的角色挑表情', off: '不要表情：立繪一直用同一張，主模型也省字' };
             const paint = () => {
-                const free = FM.isFree(w.id);
-                btns.forEach(b => b.classList.toggle('on', (b.dataset.free === '1') === free));
+                const m = FM.exprMode ? FM.exprMode(w.id) : (FM.isFree(w.id) ? 'off' : 'main');
+                btns.forEach(b => b.classList.toggle('on', b.dataset.mode === m));
             };
             btns.forEach(b => {
-                b.title = b.dataset.free === '1'
-                    ? '角色是隨機/新登場的：立繪直接生成，AI 不用每句寫表情，省字'
-                    : '這本有準備好的表情圖庫：照舊用圖庫的表情立繪';
+                b.title = TIP[b.dataset.mode];
                 b.onclick = async () => {
-                    await FM.set(b.dataset.free === '1', w.id);
+                    if (FM.setExprMode) await FM.setExprMode(b.dataset.mode, w.id);
                     paint();
                 };
             });

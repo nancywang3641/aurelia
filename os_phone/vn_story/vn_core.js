@@ -2419,7 +2419,12 @@
             const last = String(p[p.length - 1] == null ? '' : p[p.length - 1]).trim().toLowerCase();
             const eff = (last === 'stay' || last === 'leave') ? p.length - 1 : p.length;
             // 名字後面只剩一格＝那格一定是台詞（沒有表情格）；兩格以上才需要分辨第二格是哪個
-            if (eff <= 2 || this._looksLikeDialogue(p[1])) p.splice(1, 0, 'Neutral');
+            //   🎭 沒寫表情時先問副模型有沒有替這句挑過（表情交給副模型那個選項，VN_FREE_MODE.lookupExpr），沒有才 Neutral
+            if (eff <= 2 || this._looksLikeDialogue(p[1])) {
+                let fill = '';
+                try { const F = win.VN_FREE_MODE || window.VN_FREE_MODE; fill = (F && F.lookupExpr) ? F.lookupExpr(p[0], p[1]) : ''; } catch (e) {}
+                p.splice(1, 0, fill || 'Neutral');
+            }
             return p;
         },
 

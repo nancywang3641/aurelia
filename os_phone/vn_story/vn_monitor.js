@@ -764,11 +764,38 @@
             } catch (e) {}
         },
 
+        // 🎭 表情交給誰那一行（11-04）：三選一按這張卡記，跟藏書開頭那排同一份（VN_FREE_MODE.exprMode）；劇情中途改，下一章生效
+        _setExpr: async function(mode) {
+            try {
+                const FM = win.VN_FREE_MODE || window.VN_FREE_MODE;
+                if (!FM || !FM.setExprMode || FM.inParallax?.() || FM.exprMode() === mode) return;
+                await FM.setExprMode(mode);
+            } catch (e) {}
+            this._initExprUI();
+        },
+        _initExprUI: function() {
+            try {
+                const row = document.getElementById('ctx-expr-row');
+                const FM = win.VN_FREE_MODE || window.VN_FREE_MODE;
+                if (!row) return;
+                if (!FM || !FM.exprModeNow || !FM.storyId()) { row.classList.add('ctx-expr-none'); return; }
+                row.classList.remove('ctx-expr-none');
+                const locked = !!FM.inParallax?.();
+                const now = FM.exprModeNow();
+                row.querySelectorAll('.ctx-expr-btn').forEach(b => {
+                    b.classList.toggle('on', b.dataset.mode === now);
+                    b.disabled = locked;
+                    b.title = locked ? '在視差世界裡主模型固定不寫表情，選了主模型的卡改由副模型補；撤離回主世界就照妳選的' : '';
+                });
+            } catch (e) {}
+        },
+
         // 點開 Ctx 時呼叫（async：原生算 token 是非同步的）
         poll: async function() {
             this.breakdown = null;
             this._bindContentClicks();
             this._initAutoSumUI();
+            this._initExprUI();
             this._initMemTidyUI();
             const isStandalone = win.OS_API?.isStandalone?.() ?? false;
             if (isStandalone) {
