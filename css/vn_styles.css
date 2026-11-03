@@ -159,8 +159,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            結構：白廳全景背景 → 頂部星軌 → 置中標題 → 薄片輪播（選中置中放大、鄰卡縮小退後）
                  → 節點頁點 → 底部資訊列（章節資訊＋進入按鈕）
            素材：sound-files/aseets/chapter_ui/（阿洛生成；黑底裝飾已離線還原成真透明 RGBA 再裁緊）
-           畫法分工照阿洛交接：玻璃底板／陰影／文字／縮圖／進度條／按鈕本體全 CSS 畫（縮放不裂），
+           畫法分工照阿洛交接：玻璃底板／陰影／文字／縮圖全 CSS 畫（縮放不裂），
                  圖片只當裝飾件；白霧與可讀性遮罩用 CSS 疊、不烤進背景圖。
+           11-04：卡框（以前四角方塊、頂上大星、底下稜鏡）和「進入章節」鈕（以前整張圖、兩端大寶石）
+                 改由 core/void/frames.js 照實際大小畫 svg（chapterCard／chapterEnter），顏色在這裡用 .chx-vf-* 上。
            模式：預設＝瀅瀅白廳；#aurelia-phone-screen.mode-404＝柴郡終端（同一套 DOM，
                  CSS 變數換皮＋裝飾件濾鏡轉綠；舊書本/終端 PNG 底圖全數退役）。
            尺寸：#chapter-window 是 size container，內部一律 cqw/cqh —— 酒館 #sheld 與 PWA
@@ -187,6 +189,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             --chx-accent: #4a86c8;                   /* 進度／按鈕藍 */
             --chx-deco-filter: none;                 /* 裝飾件濾鏡（404 轉綠用） */
             --chx-font: inherit;
+            --chx-btn-top: #c4dffb;                  /* 進入鈕：上→下的藍 */
+            --chx-btn-bot: #7fb1ec;
+            --chx-btn-hi: rgba(255, 255, 255, 0.6);  /* 進入鈕上半的亮光 */
+            --chx-btn-edge: #e2c48c;                 /* 進入鈕外框金線 */
+            --chx-btn-line: rgba(255, 255, 255, 0.85);
             position: absolute; inset: 0; overflow: hidden;
             container-type: size; container-name: chwin;
             background: #edf1f6;
@@ -281,7 +288,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 
         /* 玻璃底板（CSS 畫，非圖） */
         .chx-card-glass {
-            position: absolute; inset: 0; border-radius: 3.2%;
+            position: absolute; inset: 0; border-radius: 6px;
             background: var(--chx-glass);
             border: 1px solid var(--chx-line);
             box-shadow: 0 1.6cqh 3.6cqh var(--chx-shadow), inset 0 0 0 1px rgba(255, 255, 255, 0.55);
@@ -293,27 +300,23 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             box-shadow: 0 2.2cqh 4.6cqh var(--chx-shadow), 0 0 2.4cqh rgba(184, 150, 90, 0.18),
                         inset 0 0 0 1px rgba(255, 255, 255, 0.7);
         }
-        /* 四張獨立角花（阿洛：左上世界光源、非鏡像複製） */
-        .chx-corner {
-            position: absolute; width: 22%; pointer-events: none;
-            filter: var(--chx-deco-filter);
-            user-select: none; -webkit-user-drag: none;
+        /* 卡框：frames.js 的 chapterCard 照卡片大小畫（內線＋凹角小星，選中那張上下各一顆小菱形）。
+           壓在內容上面一層，但線都在卡邊 5px 內、菱形貼在卡的上下邊，碰不到縮圖跟字 */
+        .chx-card > .aurelia-vframe {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            overflow: visible; pointer-events: none; z-index: 1;
         }
-        .chx-c-tl { top: -2.5%; left: -3%; }
-        .chx-c-tr { top: -2.5%; right: -3%; }
-        .chx-c-bl { bottom: -2.5%; left: -3%; }
-        .chx-c-br { bottom: -2.5%; right: -3%; }
-        /* 選中卡專屬：頂飾＋底部稜鏡（非選中不渲染，藏起來就好） */
-        .chx-sel-top, .chx-sel-prism {
-            position: absolute; left: 50%; transform: translateX(-50%);
-            pointer-events: none; opacity: 0; transition: opacity 0.3s;
-            filter: var(--chx-deco-filter);
-            user-select: none; -webkit-user-drag: none;
-        }
-        .chx-sel-top { top: -9%; width: 52%; }
-        .chx-sel-prism { bottom: -13%; width: 20%; }
-        .chx-card[data-off="0"] .chx-sel-top,
-        .chx-card[data-off="0"] .chx-sel-prism { opacity: 1; }
+        .chx-vf-in { fill: none; stroke: var(--chx-line); stroke-width: 1; }
+        .chx-vf-corner { fill: var(--chx-line); }
+        .chx-card[data-off="0"] .chx-vf-in { stroke: var(--chx-gold); stroke-opacity: 0.7; }
+        .chx-card[data-off="0"] .chx-vf-corner { fill: var(--chx-gold); }
+        .chx-vf-gem { opacity: 0; transition: opacity 0.3s; }
+        .chx-card[data-off="0"] .chx-vf-gem { opacity: 1; }
+        .chx-vf-gem-line { fill: none; stroke: var(--chx-gold); stroke-width: 1; stroke-linecap: round; }
+        .chx-vf-gem-dot { fill: var(--chx-gold); opacity: 0.85; }
+        .chx-vf-gem-out { fill: var(--chx-glass-strong); stroke: var(--chx-gold); stroke-width: 1.2; }
+        .chx-vf-gem-in { fill: var(--chx-accent); stroke: var(--chx-gold); stroke-width: 0.8; }
+        .chx-vf-gem-hi { fill: rgba(255, 255, 255, 0.5); }
 
         /* 卡片內容 */
         .chx-card-cap {
@@ -326,8 +329,9 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             font-size: clamp(16px, 4.4cqh, 34px); letter-spacing: 0.1em;
             color: var(--chx-ink); font-weight: 600; line-height: 1.15;
         }
+        /* 11-04 底下那條永遠是滿的藍線和節點圖拿掉了 → 縮圖拉長、標題往下補位 */
         .chx-thumb {
-            position: absolute; top: 26%; left: 6.5%; right: 6.5%; height: 38%;
+            position: absolute; top: 25%; left: 6.5%; right: 6.5%; height: 49%;
             border-radius: 4px; border: 1px solid var(--chx-line);
             /* 底色（時段漸層）跟真實快取圖都走變數疊層：JS 不能碰 background 簡寫，
                否則 cover/center 會被洗成 auto/左上，圖只剩一角 */
@@ -335,24 +339,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             background-size: cover; background-position: center; background-repeat: no-repeat;
         }
         .chx-card-title {
-            position: absolute; top: 68%; left: 7%; right: 7%; text-align: center;
+            position: absolute; top: 79%; left: 7%; right: 7%; text-align: center;
             font-size: clamp(11px, 2.3cqh, 18px); letter-spacing: 0.3em; text-indent: 0.3em;
             color: var(--chx-ink);
             white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-        }
-        .chx-card-bar {
-            position: absolute; bottom: 9%; left: 16%; right: 16%; height: 3px; border-radius: 2px;
-            background: color-mix(in srgb, var(--chx-accent) 18%, transparent);
-        }
-        .chx-card-bar i {
-            position: absolute; inset: 0; width: 100%; border-radius: 2px;
-            background: var(--chx-accent);
-        }
-        .chx-card-node {
-            position: absolute; bottom: 3%; left: 50%; transform: translateX(-50%);
-            width: 5.5%; min-width: 10px; pointer-events: none;
-            filter: var(--chx-deco-filter);
-            user-select: none; -webkit-user-drag: none;
         }
 
         /* ── 左右翻頁 ── */
@@ -425,21 +415,31 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             font-size: clamp(9px, 1.8cqh, 14px); letter-spacing: 0.2em; color: var(--chx-sub);
         }
         .chx-status i { color: var(--chx-accent); }
-        /* 進入按鈕：整殼直接用圖（阿洛 16/17，兩枚同畫布同輪廓）。
-           之前是 CSS 按鈕身＋左右端帽拼裝，端帽跟身體對不齊；整圖只縮放不拼接就沒這個問題。
-           文字由程式疊、不烤進圖（README 契約），所以佈局照常是 <span> 置中。 */
+        /* 進入按鈕：鈕身由 frames.js 的 chapterEnter 照實際大小畫（11-04 以前是阿洛 16/17 整張圖，兩端各卡一顆大寶石）。
+           isolation 讓墊在 -1 的 svg 留在按鈕自己這層，不會掉到資訊列玻璃後面；文字照常是 <span> 置中。 */
         .chx-enter {
-            position: relative; flex-shrink: 0;
-            height: 8.6cqh; aspect-ratio: 720 / 142;
+            position: relative; flex-shrink: 0; isolation: isolate;
+            height: 7.6cqh; aspect-ratio: 720 / 142;
             display: flex; align-items: center; justify-content: center;
             padding: 0; border: none; cursor: pointer;
-            background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/16-enter-chapter-normal.png') center / 100% 100% no-repeat;
+            background: none;
             color: #24557f; font-family: var(--chx-font); font-weight: 600;
             font-size: clamp(11px, 2.2cqh, 17px); letter-spacing: 0.34em; text-indent: 0.34em;
             text-shadow: 0 1px 2px rgba(255, 255, 255, 0.55);
             transition: filter 0.2s, transform 0.2s;
         }
         .chx-enter:hover { filter: brightness(1.08); transform: translateY(-1px); }
+        .chx-enter > .aurelia-vframe {
+            position: absolute; inset: 0; width: 100%; height: 100%;
+            overflow: visible; pointer-events: none; z-index: -1;
+            filter: drop-shadow(0 0.5cqh 1cqh var(--chx-shadow));
+        }
+        .chx-vf-btn-top { stop-color: var(--chx-btn-top); }
+        .chx-vf-btn-bot { stop-color: var(--chx-btn-bot); }
+        .chx-vf-btn-hi { stop-color: var(--chx-btn-hi); }
+        .chx-vf-btn-edge { stroke: var(--chx-btn-edge); stroke-width: 1.5; }
+        .chx-vf-btn-line { fill: none; stroke: var(--chx-btn-line); stroke-width: 1; }
+        .chx-vf-btn-star { fill: var(--chx-btn-line); }
 
         /* ── 進入章節穿越轉場的畫布（vn_chapter_warp 動態掛上；蓋整窗、吃掉點擊防連按） ──
            🚨 z 必須壓過章節面板(100)與開場 loading(900)：60 的話整場演出都在面板後面，
@@ -522,6 +522,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             /* 冰藍/金裝飾 → 終端綠：先 sepia 拉成同色相再轉 */
             --chx-deco-filter: sepia(1) saturate(2.6) hue-rotate(85deg) brightness(0.92);
             --chx-font: 'Courier New', 'Consolas', monospace;
+            --chx-btn-top: rgba(8, 52, 30, 0.95);
+            --chx-btn-bot: rgba(3, 24, 14, 0.95);
+            --chx-btn-hi: rgba(0, 255, 136, 0.16);
+            --chx-btn-edge: rgba(0, 255, 136, 0.75);
+            --chx-btn-line: rgba(0, 255, 136, 0.4);
             background: #04120b;
         }
         /* 404 專屬背景：柴郡塗鴉大廳（有專圖就不用把白廳整張壓黑硬轉色了）；
@@ -539,7 +544,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
                 radial-gradient(120% 100% at 50% 0%, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
         }
         #aurelia-phone-screen.mode-404 .chx-enter {
-            background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/17-enter-chapter-404.png');
             color: #00ff88; text-shadow: 0 0 6px rgba(0, 255, 136, 0.6);
         }
         #aurelia-phone-screen.mode-404 .chx-card-num,
@@ -585,7 +589,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             .chx-bg {
                 background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/bg-mobile.png');
             }
-            .chx-nav, .chx-dots, .chx-info, .chx-sel-top, .chx-sel-prism { display: none !important; }
+            .chx-nav, .chx-dots, .chx-info, .chx-vf-gem { display: none !important; }
             .chx-stage { top: 24cqh; height: 71cqh; }
             .chx-track {
                 position: absolute; left: 50%; transform: translateX(-50%);
@@ -605,31 +609,25 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             /* 清單式版型每張都看得見 → 毛玻璃一律關掉（幾十片模糊層在手機上更吃力，
                底板本身就是半透明奶白，看起來一樣是磨砂卡） */
             .chx-card .chx-card-glass { backdrop-filter: none; -webkit-backdrop-filter: none; }
-            .chx-corner { width: 34px; }
-            .chx-c-tl { top: -5px; left: -5px; }
-            .chx-c-tr { display: none; }
-            .chx-c-bl { display: none; }
-            .chx-c-br { bottom: -5px; right: -5px; }
             .chx-card-cap { display: none; }
             .chx-card-num {
                 top: 50%; left: 14px; right: auto; transform: translateY(-50%);
                 font-size: 20px; text-align: left; width: 52px;
             }
             .chx-thumb {
-                top: 8px; bottom: 8px; height: auto; left: auto; right: 8px; width: 92px;
+                top: 10px; bottom: 10px; height: auto; left: auto; right: 10px; width: 92px;   /* 讓開卡框的內線和凹角小星 */
             }
             .chx-card-title {
-                top: 50%; left: 72px; right: 110px; transform: translateY(-50%);
+                top: 50%; left: 72px; right: 112px; transform: translateY(-50%);
                 font-size: 13px; text-align: left; letter-spacing: 0.14em; text-indent: 0;
             }
-            .chx-card-bar, .chx-card-node { display: none; }
         }
         @media (max-width: 768px) {
             #chapter-window .chx-bg {
                 background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/bg-mobile.png');
             }
             #chapter-window .chx-nav, #chapter-window .chx-dots, #chapter-window .chx-info,
-            #chapter-window .chx-sel-top, #chapter-window .chx-sel-prism { display: none !important; }
+            #chapter-window .chx-vf-gem { display: none !important; }
             #chapter-window .chx-stage { top: 24cqh; height: 71cqh; }
             #chapter-window .chx-track {
                 position: absolute; left: 50%; transform: translateX(-50%);
@@ -645,24 +643,18 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             }
             #chapter-window .chx-card.chx-far { display: block; pointer-events: auto; }
             #chapter-window .chx-card .chx-card-glass { backdrop-filter: none; -webkit-backdrop-filter: none; }
-            #chapter-window .chx-corner { width: 34px; }
-            #chapter-window .chx-c-tl { top: -5px; left: -5px; }
-            #chapter-window .chx-c-tr { display: none; }
-            #chapter-window .chx-c-bl { display: none; }
-            #chapter-window .chx-c-br { bottom: -5px; right: -5px; }
             #chapter-window .chx-card-cap { display: none; }
             #chapter-window .chx-card-num {
                 top: 50%; left: 14px; right: auto; transform: translateY(-50%);
                 font-size: 20px; text-align: left; width: 52px;
             }
             #chapter-window .chx-thumb {
-                top: 8px; bottom: 8px; height: auto; left: auto; right: 8px; width: 92px;
+                top: 10px; bottom: 10px; height: auto; left: auto; right: 10px; width: 92px;   /* 讓開卡框的內線和凹角小星 */
             }
             #chapter-window .chx-card-title {
-                top: 50%; left: 72px; right: 110px; transform: translateY(-50%);
+                top: 50%; left: 72px; right: 112px; transform: translateY(-50%);
                 font-size: 13px; text-align: left; letter-spacing: 0.14em; text-indent: 0;
             }
-            #chapter-window .chx-card-bar, #chapter-window .chx-card-node { display: none; }
         }
 
         /* --- 角色快取管理面板 (正方形黑金頭像) --- */

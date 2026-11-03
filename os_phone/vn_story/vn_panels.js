@@ -1027,7 +1027,7 @@
         list.className = 'chx-track';
         list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-hourglass-half"></i><div>讀取中…</div></div>';
         if (subheader) subheader.textContent = '酒館數據庫';
-        const CHX = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/';
+        const FRAMES = window.AURELIA_FRAMES || win.AURELIA_FRAMES;   // core/void/frames.js（兩份載入清單都排在這支前面）
 
         const TIME_GRAD = {
             '黎明': 'linear-gradient(160deg,#c4a68a,#e8c4a0)',
@@ -1159,20 +1159,13 @@
             _chs.forEach((ch, i) => {
                 const card = document.createElement('div');
                 card.className = 'chx-card chx-far';
+                // 卡框（內線、凹角小星、選中那張上下的小菱形）由 AURELIA_FRAMES 照卡片大小畫，不再貼角花／星飾／稜鏡圖
                 card.innerHTML = `
                     <div class="chx-card-glass"></div>
-                    <img class="chx-corner chx-c-tl" src="${CHX}05-card-corner-upper-left.png" alt="">
-                    <img class="chx-corner chx-c-tr" src="${CHX}06-card-corner-upper-right.png" alt="">
-                    <img class="chx-corner chx-c-bl" src="${CHX}07-card-corner-lower-left.png" alt="">
-                    <img class="chx-corner chx-c-br" src="${CHX}08-card-corner-lower-right.png" alt="">
-                    <img class="chx-sel-top" src="${CHX}03-selected-card-top-ornament.png" alt="">
-                    <img class="chx-sel-prism" src="${CHX}04-selected-card-bottom-prism.png" alt="">
                     <div class="chx-card-cap">CHAPTER</div>
                     <div class="chx-card-num">${String(ch.index).padStart(2, '0')}</div>
                     <div class="chx-thumb"></div>
-                    <div class="chx-card-title">${_esc(ch.title)}</div>
-                    <div class="chx-card-bar"><i></i></div>
-                    <img class="chx-card-node" src="${CHX}09-node-completed.png" alt="">`;
+                    <div class="chx-card-title">${_esc(ch.title)}</div>`;
                 card.onclick = () => {
                     if (_isMobile() || i === _sel) { _loadChapter(ch, card.querySelector('.chx-thumb')); return; }
                     _sel = i;
@@ -1180,6 +1173,7 @@
                 };
                 card.dataset.cid = ch.cacheId || '';
                 list.appendChild(card);
+                if (FRAMES) FRAMES.mount(card, 'chapterCard');
                 // 場景縮圖：先鋪時段/季節漸層打底；真實快取圖由 _applySelection／捲動觀察者按需補上
                 const thumb = card.querySelector('.chx-thumb');
                 if (thumb && ch.bg) thumb.style.setProperty('--chx-thumb-base', ch.bg);
@@ -1199,6 +1193,7 @@
             const prevBtn = document.getElementById('ch-nav-prev');
             if (prevBtn) prevBtn.onclick = () => { _sel = (_sel - 1 + _chs.length) % _chs.length; _applySelection(); };
             const enterBtn = document.getElementById('chx-enter');
+            if (enterBtn && FRAMES) FRAMES.mount(enterBtn, 'chapterEnter');
             if (enterBtn) enterBtn.onclick = () => {
                 if (!_chs[_sel]) return;
                 const selCard = list.querySelectorAll('.chx-card')[_sel];

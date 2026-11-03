@@ -4,8 +4,10 @@
 // 成就那顆大菱形還擋住標題。她：「把這個原本是用素材圖做成的框 改 成CSS UI」→ 看過比較頁（tmp/frames_compare.html，本地）說可以。
 // 做法：一層 svg 墊在窗的最底下（z-index:-1；窗本身有 transform＋z-index，自成一層，所以墊得進去），
 //   ResizeObserver 照實際寬高重畫；角、拱、花飾固定大小，只有直線跟著伸長。形狀照原圖量的（原圖 794 寬、遊戲 340 寬＝0.43 倍）。
-// 用法：AURELIA_FRAMES.mount(元素, 'theater' | 'achievement')；同一個元素再 mount 只會重畫，不會疊兩層。
-//   svg 的定位寫在各自的 css（lobby_stage.css、void_achievement.css 的 .aurelia-vframe）。
+// 用法：AURELIA_FRAMES.mount(元素, 'theater' | 'achievement' | 'chapterCard' | 'chapterEnter')；同一個元素再 mount 只會重畫，不會疊兩層。
+//   svg 的定位寫在各自的 css（lobby_stage.css、void_achievement.css、vn_styles.css 的 .aurelia-vframe）。
+// 11-04 章節選擇的卡片和「進入章節」鈕也改這套（以前四角方塊、頂上大星、底下稜鏡、鈕兩端大寶石都是圖，卡片一縮放就對不齊）。
+//   這兩種的顏色不寫死，只給 class（.chx-vf-*），由 vn_styles.css 吃 --chx-* 變數上色，404 換皮跟著轉綠。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -40,6 +42,11 @@
     function star(cx, cy, r, w) {
         const c = r * (w || 0.16);
         return `M${cx},${cy - r} Q${cx + c},${cy - c} ${cx + r},${cy} Q${cx + c},${cy + c} ${cx},${cy + r} Q${cx - c},${cy + c} ${cx - r},${cy} Q${cx - c},${cy - c} ${cx},${cy - r} Z`;
+    }
+    // 菱形寶石的輪廓（四邊微微往內彎）
+    function kite(cx, cy, w, h) {
+        return `M${cx},${cy - h} Q${cx + w * 0.22},${cy - h * 0.22} ${cx + w},${cy} Q${cx + w * 0.22},${cy + h * 0.22} ${cx},${cy + h}`
+            + ` Q${cx - w * 0.22},${cy + h * 0.22} ${cx - w},${cy} Q${cx - w * 0.22},${cy - h * 0.22} ${cx},${cy - h} Z`;
     }
 
     // ── 小劇場：左右透明邊 5、上緣 26、下緣 20、四角缺口 13、內線往內 6.5（上下偏金、兩側藍灰）──
@@ -82,14 +89,12 @@
     //   上下的大菱形／羅盤（以前兩張小圖）她說擋標題 → 換成貼在框頂邊、底邊的同一顆小菱形
     const AC = { R: 16, band: 9, Ri: 13, line2: 4, k: 6, f: 6 };
     function gem(cx, cy, id) {
-        const kite = (w, h) => `M${cx},${cy - h} Q${cx + w * 0.22},${cy - h * 0.22} ${cx + w},${cy} Q${cx + w * 0.22},${cy + h * 0.22} ${cx},${cy + h}`
-            + ` Q${cx - w * 0.22},${cy + h * 0.22} ${cx - w},${cy} Q${cx - w * 0.22},${cy - h * 0.22} ${cx},${cy - h} Z`;
         return `<g stroke="#d6b06e" stroke-width="1" fill="none" stroke-linecap="round">
               <path d="M${cx - 13},${cy} L${cx - 30},${cy}"/><path d="M${cx + 13},${cy} L${cx + 30},${cy}"/>
             </g>
             <path d="${star(cx - 33, cy, 3.2)}" fill="#e7c98c"/><path d="${star(cx + 33, cy, 3.2)}" fill="#e7c98c"/>
-            <path d="${kite(10, 13)}" fill="#fdfcf8" stroke="#d6b06e" stroke-width="1.2"/>
-            <path d="${kite(5.6, 7.4)}" fill="url(#${id}-gem)" stroke="#c99a52" stroke-width=".8"/>
+            <path d="${kite(cx, cy, 10, 13)}" fill="#fdfcf8" stroke="#d6b06e" stroke-width="1.2"/>
+            <path d="${kite(cx, cy, 5.6, 7.4)}" fill="url(#${id}-gem)" stroke="#c99a52" stroke-width=".8"/>
             <path d="M${cx},${cy - 7.4} L${cx},${cy + 7.4} M${cx - 5.6},${cy} L${cx + 5.6},${cy}" stroke="rgba(255,255,255,.55)" stroke-width=".5"/>`;
     }
     function achievement(W, H, id) {
@@ -115,11 +120,52 @@
             ${gem(W / 2, 1, id)}${gem(W / 2, H - 1, id)}`;
     }
 
-    const DRAW = { theater, achievement };
+    // ── 章節選擇的卡片：內線往內 5、四角內凹 7，凹角裡一顆小四角星；
+    //   選中那張頂邊、底邊正中間各一顆小菱形（跟成就同一種，換掉以前壓到 CHAPTER 字的大星飾和掛在卡外的稜鏡）
+    const CC = { d: 5, R: 7, dot: 2.6 };
+    function cardGem(cx, cy) {
+        const w = 8, h = 10.5, wi = 4.4, hi = 6;
+        return `<path class="chx-vf-gem-line" d="M${cx - 11},${cy} L${cx - 22},${cy} M${cx + 11},${cy} L${cx + 22},${cy}"/>`
+            + `<path class="chx-vf-gem-dot" d="${star(cx - 25, cy, 2.6)} ${star(cx + 25, cy, 2.6)}"/>`
+            + `<path class="chx-vf-gem-out" d="${kite(cx, cy, w, h)}"/>`
+            + `<path class="chx-vf-gem-in" d="${kite(cx, cy, wi, hi)}"/>`
+            + `<path class="chx-vf-gem-hi" d="M${cx},${cy - hi} Q${cx - wi * 0.22},${cy - hi * 0.22} ${cx - wi},${cy} L${cx},${cy} Z"/>`;
+    }
+    function chapterCard(W, H) {
+        const { d, R, dot } = CC, x0 = d, y0 = d, x1 = W - d, y1 = H - d;
+        const dots = [[x0, y0], [x1, y0], [x0, y1], [x1, y1]].map(([x, y]) => star(x, y, dot)).join(' ');
+        return `<path class="chx-vf-in" d="${outline(x0, y0, x1, y1, R)}"/>
+            <path class="chx-vf-corner" d="${dots}"/>
+            <g class="chx-vf-gem">${cardGem(W / 2, 0.5)}${cardGem(W / 2, H - 0.5)}</g>`;
+    }
+
+    // ── 「進入章節」鈕：兩端削尖的長條，外框金線、裡面一條白線、上半一抹亮光，兩端各一顆小四角星（以前是兩顆大寶石）──
+    function hexBar(W, H, c, i) {   // 往內縮 i 的削角長條：兩條斜邊照法線往內平移，頂點才不會歪
+        const m = H / 2, e = i * Math.sqrt(1 / (c * c) + 1 / (m * m));
+        const xl = c * e, xt = c * (1 + e - i / m);
+        return `M${xl},${m} L${xt},${i} L${W - xt},${i} L${W - xl},${m} L${W - xt},${H - i} L${xt},${H - i} Z`;
+    }
+    function chapterEnter(W, H, id) {
+        const c = H * 0.36, m = H / 2, r = Math.min(5, H * 0.1);
+        return `<defs>
+              <linearGradient id="${id}-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" class="chx-vf-btn-top"/><stop offset="1" class="chx-vf-btn-bot"/>
+              </linearGradient>
+              <linearGradient id="${id}-hi" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" class="chx-vf-btn-hi"/><stop offset=".5" class="chx-vf-btn-hi" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="${hexBar(W, H, c, 0.75)}" fill="url(#${id}-fill)" class="chx-vf-btn-edge"/>
+            <path d="${hexBar(W, H, c, 3)}" fill="url(#${id}-hi)"/>
+            <path d="${hexBar(W, H, c, 4)}" class="chx-vf-btn-line"/>
+            <path class="chx-vf-btn-star" d="${star(c * 0.62, m, r)} ${star(W - c * 0.62, m, r)}"/>`;
+    }
+
+    const DRAW = { theater, achievement, chapterCard, chapterEnter };
 
     function mount(el, kind) {
         if (!el || !DRAW[kind]) return;
-        if (el._avf) { el._avf.draw(true); return; }
+        if (el._avf) { el._avf.watch(); el._avf.draw(true); return; }
         const doc = el.ownerDocument || document;
         const svg = doc.createElementNS(NS, 'svg');
         svg.setAttribute('class', 'aurelia-vframe');
@@ -136,8 +182,19 @@
             svg.innerHTML = DRAW[kind](W, H, id);
         };
         const RO = (doc.defaultView && doc.defaultView.ResizeObserver) || window.ResizeObserver;
-        if (RO) new RO(() => draw()).observe(el);
-        el._avf = { draw };
+        let ro = null;
+        // 元素被拿出畫面就放掉觀察者：章節卡每開一次面板整批重建，不放的話舊卡跟著觀察者一直留在記憶體裡。
+        //   還會再顯示的窗（小劇場、成就）每次打開都會再 mount，到時候重新接上
+        const watch = () => {
+            if (ro || !RO) return;
+            ro = new RO(() => {
+                if (!el.isConnected) { ro.disconnect(); ro = null; return; }
+                draw();
+            });
+            ro.observe(el);
+        };
+        el._avf = { draw, watch };
+        watch();
         draw();
     }
 
