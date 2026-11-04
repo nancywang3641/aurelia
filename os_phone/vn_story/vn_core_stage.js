@@ -746,20 +746,23 @@
             if (cache.has(key)) return cache.get(key);
             let fr = null;
             try {
-                const e = G && G.mouthFor ? await G.mouthFor(name, img) : null;
+                const load = (s, cors) => new Promise((res, rej) => { const i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = s; });
+                // 🚨 網址圖（世界書立繪放在 GitHub Pages、catbox 那種）：舞台那張 <img> 是普通讀法，畫進畫布會被瀏覽器擋，
+                //   比對、疊嘴都做不了（11-04 她：「還是沒動」）。另外用跨站讀法載一份同樣的圖來用；圖鑑做嘴時也是這樣讀的，讀得到才做得出嘴
+                const pic = /^https?:/i.test(base) ? await load(base, true) : img;
+                const e = G && G.mouthFor ? await G.mouthFor(name, pic) : null;
                 if (e) {
-                    const W = img.naturalWidth, H = img.naturalHeight;
-                    const load = (s) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = s; });
+                    const W = pic.naturalWidth, H = pic.naturalHeight;
                     const make = async (patch) => {
                         const p = await load(patch);
                         const c = document.createElement('canvas'); c.width = W; c.height = H;
-                        const g = c.getContext('2d'); g.drawImage(img, 0, 0); g.drawImage(p, e.box.x, e.box.y, e.box.w, e.box.h);
+                        const g = c.getContext('2d'); g.drawImage(pic, 0, 0); g.drawImage(p, e.box.x, e.box.y, e.box.w, e.box.h);
                         const blob = await new Promise(r => c.toBlob(r, 'image/png'));
                         return URL.createObjectURL(blob);
                     };
                     fr = { half: await make(e.half), open: await make(e.open) };
                 }
-            } catch (err) { fr = null; }   // 別的網站的圖畫不進畫布 → 這張不動嘴
+            } catch (err) { fr = null; }   // 跨站也讀不到的網址圖 → 這張不動嘴
             cache.set(key, fr);
             if (cache.size > 12) {   // 最多留 12 張圖的嘴，舊的放掉
                 const k0 = cache.keys().next().value, v0 = cache.get(k0);
@@ -775,7 +778,7 @@
             const tok = this._mouthTok;
             if (!name) return;
             const said = String(text || '').replace(/<[^>]+>/g, '').replace(/[\s「」『』“”"*（）()]/g, '').length;
-            const talkMs = Math.max(600, Math.min(5000, said * 90));
+            const talkMs = Math.max(800, Math.min(5000, said * 90));
             let talkUntil = 0;   // 從嘴真的開始動才算（等圖、疊嘴那段不算進去）
             const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             let img = null, base = '';
