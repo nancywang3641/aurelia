@@ -750,7 +750,15 @@
                 // 🚨 網址圖（世界書立繪放在 GitHub Pages、catbox 那種）：舞台那張 <img> 是普通讀法，畫進畫布會被瀏覽器擋，
                 //   比對、疊嘴都做不了（11-04 她：「還是沒動」）。另外用跨站讀法載一份同樣的圖來用；圖鑑做嘴時也是這樣讀的，讀得到才做得出嘴
                 const pic = /^https?:/i.test(base) ? await load(base, true) : img;
-                const e = G && G.mouthFor ? await G.mouthFor(name, pic) : null;
+                // 這張是哪一筆：圖鑑做嘴時記了照哪一筆做的，一字不差最準（11-04 她酒館裡只靠縮圖比，重生過的那張分不清）。
+                //   AI 生的立繪在舞台上是轉出來的 blob 網址：照名字找回頭像快取裡原本那筆
+                let key = (G && G.srcKey) ? G.srcKey(base) : '';
+                if (!key && /^blob:/.test(base) && VN_Cache) {
+                    for (const v of this._nameVariants(name)) {
+                        if (this._avatarMemCache && this._avatarMemCache[v] === base) { const c = await VN_Cache.get('avatar_cache', v); if (c && c.url) key = G.srcKey(c.url); break; }
+                    }
+                }
+                const e = G && G.mouthFor ? await G.mouthFor(name, pic, key) : null;
                 if (e) {
                     const W = pic.naturalWidth, H = pic.naturalHeight;
                     const make = async (patch) => {

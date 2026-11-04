@@ -584,6 +584,29 @@
         main.innerHTML = h;
         main.scrollTop = 0;
         fillGenThumbs(info, tk);
+        fillMouthTags(info, tk);
+    }
+    // 表情格標「會動嘴」：那張圖有對得上的嘴才亮（背景一格一格算，要讀圖比對）
+    async function fillMouthTags(info, tk) {
+        let names = [];
+        try { names = (await mouthNames()).filter(k => sameChar(k, info.name)); } catch (e) { return; }
+        if (!names.length) return;
+        const entries = [];
+        for (const n of names) { const d = await mouthLoad(n); Object.keys(d.entries).forEach(k => entries.push({ exp: k, e: d.entries[k] })); }
+        for (const sl of info.slots) {
+            if (!S || tk !== S.token || S.sel !== info.name) return;
+            if (!sl.used) continue;
+            const cand = entries.filter(x => x.exp === sl.exp);
+            if (!cand.length) continue;
+            let im = null;
+            try { im = await loadImg(sl.used.url); } catch (e) { continue; }
+            const key = srcKey(sl.used.url);
+            let ok = false;
+            try { ok = cand.some(x => mouthFits(x.e, im, key)); } catch (e) {}
+            if (!S || tk !== S.token) return;   // 等讀圖的時候圖鑑被關掉了
+            const card = S.root.querySelector('.acg-slot[data-exp="' + sl.exp + '"]');
+            if (card) card.classList.toggle('has-mouth', ok);
+        }
     }
     async function fillGenThumbs(info, tk) {
         const C = Cache(); if (!C) return;
@@ -591,6 +614,7 @@
             if (!S || tk !== S.token || S.sel !== info.name) return;
             const g = info.gen[i];
             if (!g.url) { const full = await C.getRaw(g.store, g.key); g.url = (full && full.url) || ''; }
+            if (!S || tk !== S.token) return;   // 等讀圖的時候圖鑑被關掉了
             const box = S.root.querySelector('.acg-gen-img[data-gen="' + i + '"]');
             if (box && g.url) box.innerHTML = '<img src="' + esc(g.url) + '" alt="" loading="lazy">';
         }
@@ -602,12 +626,13 @@
         if (s.broken.length) state = '<div class="acg-slot-state acg-state-bad"><i class="fa-solid fa-link-slash"></i> ' + esc(s.broken.map(b => b.label).join('、')) + '的網址打不開</div>';
         else if (!u) state = '<div class="acg-slot-state">' + (s.exp === DEFAULT_EXP ? '沒有圖' : '沒有圖，會用預設') + '</div>';
         const localUsed = u && u.source === 'local';
-        return '<div class="' + cls + '">'
+        return '<div class="' + cls + '" data-exp="' + esc(s.exp) + '">'
           + '<div class="acg-slot-img"' + (u ? ' data-act="view" data-exp="' + esc(s.exp) + '"' : '') + '>'
           +   (u ? '<img src="' + esc(u.url) + '" alt="" loading="lazy">' : '<i class="fa-regular fa-image"></i>')
           + '</div>'
           + '<div class="acg-slot-meta"><span class="acg-slot-exp">' + esc(expLabel(s.exp)) + '</span>'
-          +   (u ? '<span class="acg-src acg-src-' + u.source + '">' + esc(u.label) + '</span>' : '') + '</div>'
+          +   (u ? '<span class="acg-src acg-src-' + u.source + '">' + esc(u.label) + '</span>' : '')
+          +   '<span class="acg-mouth-tag" title="講話會動嘴"><i class="fa-solid fa-comment-dots"></i></span></div>'
           + state
           + '<div class="acg-slot-acts">'
           +   '<button class="acg-mini" type="button" data-act="upload" data-exp="' + esc(s.exp) + '"><i class="fa-solid fa-upload"></i> 上傳</button>'
@@ -1000,6 +1025,23 @@
         if (e.msig && sigDiff(faceSig(img, e.box), e.msig) >= 4) return 999;
         return d;
     }
+    // 圖本身的身分證：本機的圖（data:）＝長度＋雜湊，網址＝網址本身；blob 那種沒得認回空。
+    //   11-04 她酒館裡：舞台那張微笑跟做嘴那張縮圖差 4.45（微笑後來重生過、嘴是照舊的那張做的）——只靠縮圖像不像分不夠開。
+    //   做嘴時記下照哪一筆做的（e.src），舞台先比這個；一字不差才算，對上了就不用再比縮圖
+    function srcKey(s) {
+        s = String(s || '');
+        if (/^https?:/i.test(s)) return 'u:' + s;
+        if (s.indexOf('data:') !== 0) return '';
+        let h = 0x811c9dc5;
+        for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+        return 'd:' + s.length + ':' + h.toString(16);
+    }
+    // 這組嘴是不是做給這張圖的：照哪一筆做的一字不差就是；不然再比縮圖（同一張圖換了網址寫法、轉成 blob 的那種）
+    function mouthFits(e, img, key) {
+        if (!e) return false;
+        if (e.src && key && e.src === key) return true;
+        return !!img && sameShot(img, e) < 999;
+    }
     const _mouthMem = {};
     async function mouthLoad(name) {
         if (_mouthMem[name]) return _mouthMem[name];
@@ -1026,10 +1068,16 @@
         _mouthNamesRev = _mouthRev;
         return (_mouthNames = rows.map(r => r.key).filter(Boolean));
     }
-    async function mouthFor(name, img) {
+    // key＝舞台那張圖的 srcKey（舞台算好帶過來；blob 的那種舞台會先找回原本那筆）
+    async function mouthFor(name, img, key) {
         if (!img || !img.naturalWidth) return null;
         let best = null;
-        for (const n of (await mouthNames()).filter(k => sameChar(k, name))) {
+        const names = (await mouthNames()).filter(k => sameChar(k, name));
+        for (const n of names) {   // 先找一字不差那筆
+            const data = await mouthLoad(n);
+            for (const exp of Object.keys(data.entries)) { const e = data.entries[exp]; if (e && e.src && key && e.src === key) return e; }
+        }
+        for (const n of names) {
             const data = await mouthLoad(n);
             for (const exp of Object.keys(data.entries)) {
                 const e = data.entries[exp];
@@ -1058,7 +1106,7 @@
         const fx = Math.max(0, Math.round(ring.cx - ring.rx)), fy = Math.max(0, Math.round(ring.cy - ring.ry));
         const face = { x: fx, y: fy, w: Math.max(1, Math.min(W - fx, Math.round(ring.rx * 2))), h: Math.max(1, Math.min(H - fy, Math.round(ring.ry * 2))) };
         const box = { x: bx, y: by, w: bw, h: bh };
-        const out = { w: W, h: H, face, sig: faceSig(src, face), box, msig: faceSig(src, box) };
+        const out = { w: W, h: H, face, sig: faceSig(src, face), box, msig: faceSig(src, box), src: srcKey(url) };   // src：照哪一筆做的
         for (const sh of MOUTH_SHAPES) {
             const r = await M.comfyInpaint(cropUrl, maskUrl, EXPR_PRE + (MOUTH_MOOD[exp] || MOUTH_MOOD.default) + ', ' + sh.tags, { denoise: sh.d, seed });
             const gen = await loadImg(r);
@@ -1082,13 +1130,13 @@
     // 這次打開時哪幾張圖還沒有對得上的嘴（預設那張＋已經有的表情格，大笑驚訝除外）
     async function mouthMissing(ex, info) {
         const need = [];
-        const list = [{ exp: DEFAULT_EXP, url: ex.img.src }].concat(info.slots.filter(s => s.used && s.exp !== DEFAULT_EXP && MOUTH_SKIP.indexOf(s.exp) < 0).map(s => ({ exp: s.exp, url: s.used.url })));
+        const list = [{ exp: DEFAULT_EXP, url: ex.srcUrl || ex.img.src }].concat(info.slots.filter(s => s.used && s.exp !== DEFAULT_EXP && MOUTH_SKIP.indexOf(s.exp) < 0).map(s => ({ exp: s.exp, url: s.used.url })));
         const data = await mouthLoad(ex.ch);
         for (const it of list) {
             let im;
             try { im = await loadImg(it.url); faceSig(im, { x: 0, y: 0, w: 1, h: 1 }); } catch (err) { continue; }   // 讀不到、別的網站畫不進來的跳過
             if (im.naturalWidth !== ex.W || im.naturalHeight !== ex.H) continue;   // 跟預設那張不一樣大：臉圈對不上，不做
-            if (sameShot(im, data.entries[it.exp]) >= 999) need.push(it);
+            if (!mouthFits(data.entries[it.exp], im, srcKey(it.url))) need.push(it);
         }
         return need;
     }
@@ -1116,7 +1164,7 @@
         const W = img.naturalWidth, H = img.naturalHeight;
         const has = {};
         info.slots.forEach(s => { if (s.used) has[s.exp] = true; });
-        const ex = { ch, img, W, H, has, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false, style: styleOf(ch),
+        const ex = { ch, img, W, H, has, srcUrl: url, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false, style: styleOf(ch),
                      ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null,
                      mouth: mouthOn(), mouthNeed: null };   // mouthNeed：還沒對得上動嘴的那幾張（算好之前是 null）
         S.ex = ex;
@@ -1370,6 +1418,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, mouthRev, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, sigDiff } };
+    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, mouthRev, srcKey, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, sigDiff } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();
