@@ -966,16 +966,23 @@
         const words = ex.style === 'quiet' ? item.quiet : item.tags;
         const out = await M.comfyInpaint(crop.toDataURL('image/jpeg', 0.95), mask.toDataURL('image/png'), EXPR_PRE + words, { denoise: item.d, seed });
         const gen = await loadImg(out);
-        // 貼回：生出來那塊縮回原大小，只留羽化圈裡的部分
+        // 貼回：生出來那塊縮回原大小，逐點只換羽化圈裡的顏色，透明度一律照原圖。
+        //   以前是「畫原圖 → 疊補丁 → destination-in 再畫一次原圖」：原圖半透明的點透明度被乘兩次（128 變 64），
+        //   去背立繪整圈外輪廓、髮絲每張表情都變淡（11-04 tmp/expr_alpha_test.cjs）。圈外的點現在一個都不碰。
         const patch = canvasOf(side, side), pg = patch.getContext('2d');
         pg.drawImage(gen, 0, 0, side, side);
-        pg.globalCompositeOperation = 'destination-in';
-        softOval(pg, ring.cx - L, ring.cy - T, ring.rx, ring.ry, side * 0.03);
+        const mk = canvasOf(side, side), mkg = mk.getContext('2d');
+        softOval(mkg, ring.cx - L, ring.cy - T, ring.rx, ring.ry, side * 0.03);
+        const mA = mkg.getImageData(0, 0, side, side).data, pA = pg.getImageData(0, 0, side, side).data;
         const res = canvasOf(W, H), rg = res.getContext('2d');
         rg.drawImage(src, 0, 0);
-        rg.drawImage(patch, L, T);
-        rg.globalCompositeOperation = 'destination-in';   // 透明度照原圖
-        rg.drawImage(src, 0, 0);
+        const area = rg.getImageData(L, T, side, side), d = area.data;
+        for (let i = 0; i < d.length; i += 4) {
+            const m = mA[i + 3] / 255;
+            if (!m) continue;
+            d[i] = d[i] * (1 - m) + pA[i] * m; d[i + 1] = d[i + 1] * (1 - m) + pA[i + 1] * m; d[i + 2] = d[i + 2] * (1 - m) + pA[i + 2] * m;
+        }
+        rg.putImageData(area, L, T);
         return await shrink(res.toDataURL('image/png'));
     }
     // 結果卡片只放臉那塊：整個人縮成小圖，表情根本看不出來
