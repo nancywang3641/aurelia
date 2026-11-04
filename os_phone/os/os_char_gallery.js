@@ -42,7 +42,10 @@
     }
     function sameChar(a, b) {
         const va = variants(a), vb = variants(b);
-        return va.some(x => vb.indexOf(x) >= 0);
+        if (va.some(x => vb.indexOf(x) >= 0)) return true;
+        // 劇情寫簡體（指令規定）、圖鑑和世界書多半是繁體：折成同一把鑰匙也算同一個人（11-04 動嘴對不上名字）
+        const Z = win.OS_ZH || window.OS_ZH;
+        return !!(Z && Z.key && a && b && Z.key(a) === Z.key(b));
     }
     // 「生一組表情」那幾種寫中文（劇情裡照樣寫英文，對照在 EXPR_SET），其他照她取的名字
     const expLabel = (exp) => (exp === DEFAULT_EXP ? '預設' : ((EXPR_SET.find(x => x.exp === exp) || {}).zh || exp));
@@ -1014,17 +1017,25 @@
         _mouthRev++;
     }
     // 舞台問：這個人現在這張圖（img 已經載好）有沒有做過動嘴。回 { box, half, open } 或 null
+    // 存了嘴的是哪幾個名字（舞台的名字跟圖鑑存的可能差簡繁、全名短名，用 sameChar 對；存新的嘴就重讀）
+    let _mouthNames = null, _mouthNamesRev = -1;
+    async function mouthNames() {
+        if (_mouthNames && _mouthNamesRev === _mouthRev) return _mouthNames;
+        let rows = [];
+        try { rows = (await DB().getAppDataByApp(MOUTH_APP)) || []; } catch (e) {}
+        _mouthNamesRev = _mouthRev;
+        return (_mouthNames = rows.map(r => r.key).filter(Boolean));
+    }
     async function mouthFor(name, img) {
         if (!img || !img.naturalWidth) return null;
         let best = null;
-        for (const v of variants(name)) {
-            const data = await mouthLoad(v);
+        for (const n of (await mouthNames()).filter(k => sameChar(k, name))) {
+            const data = await mouthLoad(n);
             for (const exp of Object.keys(data.entries)) {
                 const e = data.entries[exp];
                 let d; try { d = sameShot(img, e); } catch (err) { return null; }   // 別的網站的圖畫不進來
                 if (d < 999 && (!best || d < best.d)) best = { d, e };
             }
-            if (best) break;
         }
         return best ? best.e : null;
     }
