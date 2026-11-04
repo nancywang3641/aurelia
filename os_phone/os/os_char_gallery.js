@@ -586,23 +586,19 @@
         fillGenThumbs(info, tk);
         fillMouthTags(info, tk);
     }
-    // 表情格標「會動嘴」：那張圖有對得上的嘴才亮（背景一格一格算，要讀圖比對）
+    // 表情格標「會動嘴」：劇情裡這張講話嘴會不會動（自己的嘴、借來的都算；跟劇情畫面同一套 mouthPick）。背景一格一格算，要讀圖比對
     async function fillMouthTags(info, tk) {
-        let names = [];
-        try { names = (await mouthNames()).filter(k => sameChar(k, info.name)); } catch (e) { return; }
-        if (!names.length) return;
-        const entries = [];
-        for (const n of names) { const d = await mouthLoad(n); Object.keys(d.entries).forEach(k => entries.push({ exp: k, e: d.entries[k] })); }
+        let entries = [];
+        try { entries = await mouthList(info.name); } catch (e) { return; }
+        if (!entries.length) return;
         for (const sl of info.slots) {
             if (!S || tk !== S.token || S.sel !== info.name) return;
             if (!sl.used) continue;
-            const cand = entries.filter(x => x.exp === sl.exp);
-            if (!cand.length) continue;
             let im = null;
             try { im = await loadImg(sl.used.url); } catch (e) { continue; }
             const key = srcKey(sl.used.url);
             let ok = false;
-            try { ok = cand.some(x => mouthFits(x.e, im, key)); } catch (e) {}
+            try { ok = !!mouthPick(entries, im, key, sl.exp); } catch (e) {}
             if (!S || tk !== S.token) return;   // 等讀圖的時候圖鑑被關掉了
             const card = S.root.querySelector('.acg-slot[data-exp="' + sl.exp + '"]');
             if (card) card.classList.toggle('has-mouth', ok);
@@ -1027,7 +1023,7 @@
     //   每張圖另外只重畫嘴那一小塊兩次（微張、張開），存成兩塊小圖＋位置（app_data vn_mouth／角色名）；
     //   舞台講話時把它們疊回立繪輪流換（vn_core_stage.js 的 _mouthTalk 來問 mouthFor）。
     //   嘴的位置照臉圈推（臉圈＝眉毛到下巴）：圈的中線、圈心往下 0.32 個半高，11-04 那張立繪量過對得上。
-    //   大笑、驚訝嘴本來就開著，不做。
+    //   大笑、驚訝嘴本來就開著，不做；講話時借別張的（mouthPick）。
     // ================================================================
     const MOUTH_APP = 'vn_mouth';
     const MOUTH_KEY = 'acg_expr_mouth';            // '0'＝生表情時不順便做動嘴
@@ -1052,7 +1048,7 @@
         return t / a.length;
     }
     // 同一張才算：臉那塊差不到 2.5、嘴那塊差不到 4（11-04 量過：同一張 0、存成 WebP 再讀不到 1、微笑對預設 5.7）。
-    //   嘴那塊另外比：表情沒做動嘴時，絕不能借別張的嘴貼上去
+    //   這裡只認「這張自己的嘴」；自己沒有的，下面 mouthPick 再借同一個人別張的
     function sameShot(img, e) {
         if (!e || e.w !== img.naturalWidth || e.h !== img.naturalHeight) return 999;
         const d = sigDiff(faceSig(img, e.face), e.sig);
@@ -1070,16 +1066,6 @@
         let h = 0x811c9dc5;
         for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
         return 'd:' + s.length + ':' + h.toString(16);
-    }
-    // 這組嘴是不是做給這張圖的：照哪一筆做的一字不差就是；不然再比縮圖（同一張圖換了網址寫法、轉成 blob 的那種）
-    //   🚨 圖鑑這邊（列「補動嘴」、標「會動嘴」）認得出這張是哪一筆時，一定要一字不差才算：
-    //   沒記照哪一筆做的舊嘴，只靠縮圖比在圖鑑跟劇情畫面上會比出不一樣的結果（11-04 她的应子骞、桑芮：
-    //   圖鑑這張比 0、劇情畫面那張比 14，圖鑑以為對得上不列補動嘴，劇情裡嘴就是不動）→ 一律列進「補動嘴」補一次。
-    //   劇情畫面那邊（mouthFor）照舊兩種都認，舊嘴對得上的照常動
-    function mouthFits(e, img, key) {
-        if (!e) return false;
-        if (key) return e.src === key;
-        return !!img && sameShot(img, e) < 999;   // 認不出是哪一筆的圖（blob 那種）才只能比縮圖
     }
     const _mouthMem = {};
     async function mouthLoad(name) {
@@ -1107,24 +1093,67 @@
         _mouthNamesRev = _mouthRev;
         return (_mouthNames = rows.map(r => r.key).filter(Boolean));
     }
-    // key＝舞台那張圖的 srcKey（舞台算好帶過來；blob 的那種舞台會先找回原本那筆）
-    async function mouthFor(name, img, key) {
-        if (!img || !img.naturalWidth) return null;
+    // 🗣 講話就要動嘴，跟表情無關（11-05 她：「講話就要動嘴，跟表情什麼關係，難道生氣就閉上嘴？」）
+    //   這張圖自己沒有嘴（大笑、驚訝本來就不做；表情後來重生過；只做了幾張）→ 借同一個人別張的嘴：
+    //   嘴角往上那幾種（微笑、害羞、大笑）先借同一類，往下那幾種（生氣、難過、哭）先借同一類，再來預設，都沒有就隨便一張。
+    //   只借給「同一張立繪改出來的」：臉框四個角（臉圈外面，生表情不會動到的頭髮、背景）要一樣，不然嘴會貼到臉以外的地方
+    const MOUTH_UP = ['Happy', 'Shy', 'Laughing'], MOUTH_DOWN = ['Angry', 'Sad', 'Crying'];
+    function borrowOrder(exp) {
+        const n = (exp === DEFAULT_EXP || EXPR_SET.some(x => x.exp === exp)) ? exp : (nearExp(exp) || DEFAULT_EXP);
+        const fam = MOUTH_UP.indexOf(n) >= 0 ? MOUTH_UP : (MOUTH_DOWN.indexOf(n) >= 0 ? MOUTH_DOWN : []);
+        return [n].concat(fam.filter(k => k !== n), [DEFAULT_EXP]);
+    }
+    // 同比例、不同大小（表情存檔時長邊縮到 1600）：嘴的位置照比例換算
+    function mouthScaled(e, img) {
+        const W = img.naturalWidth, H = img.naturalHeight;
+        if (!e || !e.w || !e.h || !e.face || !e.box) return null;
+        if (e.w === W && e.h === H) return e;
+        if (Math.abs(e.w / e.h - W / H) > 0.01) return null;
+        const s = W / e.w, sc = (b) => ({ x: Math.round(b.x * s), y: Math.round(b.y * s), w: Math.max(1, Math.round(b.w * s)), h: Math.max(1, Math.round(b.h * s)) });
+        return Object.assign({}, e, { w: W, h: H, face: sc(e.face), box: sc(e.box) });
+    }
+    // 臉框縮圖只比橢圓外那幾格（四個角）：同一張立繪改出來的表情，那裡一點都沒動
+    function cornerDiff(a, b) {
+        if (!a || !b || a.length !== b.length) return 999;
+        let t = 0, n = 0;
+        for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) {
+            if (((x + 0.5 - 10) / 10) ** 2 + ((y + 0.5 - 10) / 10) ** 2 < 1.15) continue;
+            const i = (y * 20 + x) * 4;
+            for (let k = 0; k < 4; k++) t += Math.abs(a[i + k] - b[i + k]);
+            n += 4;
+        }
+        return n ? t / n : 999;
+    }
+    function samePose(img, e) {
+        const a = faceSig(img, e.face);
+        return cornerDiff(a, e.sig) < 8 && sigDiff(a, e.sig) < 30;
+    }
+    // 這張圖講話用哪組嘴。list＝[{ exp, e }]（這個人存的每組嘴）；回 { e, own }（own＝這張自己的）或 null
+    //   畫不進畫布的（別的網站的圖）會丟例外，呼叫的人接
+    function mouthPick(list, img, key, exp) {
+        for (const x of list) if (x.e && x.e.src && key && x.e.src === key) return { e: x.e, own: true };
         let best = null;
-        const names = (await mouthNames()).filter(k => sameChar(k, name));
-        for (const n of names) {   // 先找一字不差那筆
-            const data = await mouthLoad(n);
-            for (const exp of Object.keys(data.entries)) { const e = data.entries[exp]; if (e && e.src && key && e.src === key) return e; }
+        for (const x of list) { const d = sameShot(img, x.e); if (d < 999 && (!best || d < best.d)) best = { d, e: x.e }; }
+        if (best) return { e: best.e, own: true };
+        const order = borrowOrder(exp), rank = (k) => { const i = order.indexOf(k); return i < 0 ? 99 : i; };
+        const cand = list.map(x => ({ exp: x.exp, e: mouthScaled(x.e, img) })).filter(o => o.e && samePose(img, o.e));
+        cand.sort((p, q) => rank(p.exp) - rank(q.exp));
+        return cand.length ? { e: cand[0].e, own: false } : null;
+    }
+    async function mouthList(name) {
+        const list = [];
+        for (const n of (await mouthNames()).filter(k => sameChar(k, name))) {
+            const d = await mouthLoad(n);
+            Object.keys(d.entries).forEach(k => { if (d.entries[k]) list.push({ exp: k, e: d.entries[k] }); });
         }
-        for (const n of names) {
-            const data = await mouthLoad(n);
-            for (const exp of Object.keys(data.entries)) {
-                const e = data.entries[exp];
-                let d; try { d = sameShot(img, e); } catch (err) { return null; }   // 別的網站的圖畫不進來
-                if (d < 999 && (!best || d < best.d)) best = { d, e };
-            }
-        }
-        return best ? best.e : null;
+        return list;
+    }
+    // key＝舞台那張圖的 srcKey（舞台算好帶過來；blob 的那種舞台會先找回原本那筆）；exp＝劇情寫的表情（借嘴時先借同一類）
+    async function mouthFor(name, img, key, exp) {
+        if (!img || !img.naturalWidth) return null;
+        const list = await mouthList(name);
+        if (!list.length) return null;
+        try { const p = mouthPick(list, img, key, exp); return p ? p.e : null; } catch (err) { return null; }   // 別的網站的圖畫不進來
     }
     // 嘴的位置（原圖像素）：mo＝嘴那顆橢圓、box＝切下來存的那塊、face＝認圖用的臉框。ComfyUI、GPT 兩條同一份
     function mouthGeom(ring, W, H) {
@@ -1178,16 +1207,16 @@
         const full = c.toDataURL('image/png');
         return { full, thumb: await faceThumb(ex, full) };
     }
-    // 這次打開時哪幾張圖還沒有對得上的嘴（預設那張＋已經有的表情格，大笑驚訝除外）
+    // 這次打開時哪幾張圖講話嘴不會動（預設那張＋已經有的表情格，大笑驚訝除外）：自己沒嘴、也借不到別張的才要補
     async function mouthMissing(ex, info) {
         const need = [];
         const list = [{ exp: DEFAULT_EXP, url: ex.srcUrl || ex.img.src }].concat(info.slots.filter(s => s.used && s.exp !== DEFAULT_EXP && MOUTH_SKIP.indexOf(s.exp) < 0).map(s => ({ exp: s.exp, url: s.used.url })));
-        const data = await mouthLoad(ex.ch);
+        const entries = await mouthList(ex.ch);
         for (const it of list) {
             let im;
             try { im = await loadImg(it.url); faceSig(im, { x: 0, y: 0, w: 1, h: 1 }); } catch (err) { continue; }   // 讀不到、別的網站畫不進來的跳過
             if (im.naturalWidth !== ex.W || im.naturalHeight !== ex.H) continue;   // 跟預設那張不一樣大：臉圈對不上，不做
-            if (!mouthFits(data.entries[it.exp], im, srcKey(it.url))) need.push(it);
+            if (!mouthPick(entries, im, srcKey(it.url), it.exp)) need.push(it);
         }
         return need;
     }
