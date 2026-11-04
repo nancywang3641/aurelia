@@ -4129,7 +4129,7 @@
             this.typewriter(dtEl, this._tlHtml(t));   // 外語台詞的翻譯拆到下面一行
             // 👄 出聲的台詞才動嘴（內心話 *…* 不動），旁白／內心那句先把上一個人的嘴收起來（vn_core_stage 的 _mouthTalk）
             try {
-                if (n && mode !== 'inner' && !/^\s*\*/.test(String(t || ''))) this._mouthTalk && this._mouthTalk(n);
+                if (n && mode !== 'inner' && !/^\s*\*/.test(String(t || ''))) this._mouthTalk && this._mouthTalk(n, t);
                 else this._mouthHalt && this._mouthHalt();
             } catch (e) {}
         },

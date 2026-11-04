@@ -1004,10 +1004,14 @@
         try { v = await DB().getAppData(MOUTH_APP, name); } catch (e) {}
         return (_mouthMem[name] = (v && v.entries) ? v : { entries: {} });
     }
+    // 每存一組嘴就 +1：舞台把「這張圖沒有嘴」記在快取裡，版號變了才會重問（不然先看過劇情、才回來做嘴，要重整才會動）
+    let _mouthRev = 0;
+    const mouthRev = () => _mouthRev;
     async function mouthSave(name, exp, data) {
         const v = await mouthLoad(name);
         v.entries[exp] = data;
         await DB().saveAppData(MOUTH_APP, name, v);
+        _mouthRev++;
     }
     // 舞台問：這個人現在這張圖（img 已經載好）有沒有做過動嘴。回 { box, half, open } 或 null
     async function mouthFor(name, img) {
@@ -1355,6 +1359,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, sigDiff } };
+    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, mouthRev, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, sigDiff } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();

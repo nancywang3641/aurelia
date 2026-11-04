@@ -740,11 +740,12 @@
         },
         _mouthFramesFor: async function(name, img, base) {
             const cache = this._mouthFrameCache || (this._mouthFrameCache = new Map());
-            const key = name + '｜' + base.length + base.slice(-64);
+            const G = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
+            // 鍵帶圖鑑的嘴版號：先看過劇情（記了「這張沒有嘴」）、才去圖鑑做嘴，回來要重問，不能等整頁重整
+            const key = name + '｜' + (G && G.mouthRev ? G.mouthRev() : 0) + '｜' + base.length + base.slice(-64);
             if (cache.has(key)) return cache.get(key);
             let fr = null;
             try {
-                const G = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
                 const e = G && G.mouthFor ? await G.mouthFor(name, img) : null;
                 if (e) {
                     const W = img.naturalWidth, H = img.naturalHeight;
@@ -767,10 +768,15 @@
             }
             return fr;
         },
-        _mouthTalk: async function(name) {
+        // text＝這句台詞：嘴至少動完「大約唸完這句」的時間（一個字 90ms、最少 0.6 秒、最多 5 秒），
+        //   字一下就跑完（打字快、她點了跳過）也看得到在講；下一句一開始就停
+        _mouthTalk: async function(name, text) {
             this._mouthHalt();
             const tok = this._mouthTok;
             if (!name) return;
+            const said = String(text || '').replace(/<[^>]+>/g, '').replace(/[\s「」『』“”"*（）()]/g, '').length;
+            const talkMs = Math.max(600, Math.min(5000, said * 90));
+            let talkUntil = 0;   // 從嘴真的開始動才算（等圖、疊嘴那段不算進去）
             const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             let img = null, base = '';
             for (let i = 0; i < 20; i++) {   // 立繪可能還在換：最多等 2 秒它上來
@@ -786,7 +792,8 @@
             const fr = await this._mouthFramesFor(name, img, base);
             if (!fr || tok !== this._mouthTok || img.getAttribute('src') !== base) return;
             const run = this._mouthRun = { img, base, half: fr.half, open: fr.open };
-            const speaking = () => !!this._twTimer || this._voiceBusy();
+            talkUntil = Date.now() + talkMs;
+            const speaking = () => !!this._twTimer || this._voiceBusy() || Date.now() < talkUntil;
             let last = 'closed', quiet = 0;
             // 閉 → 微 → 開 → 微…，偶爾跳一格、間隔有快有慢，不要像節拍器
             const NEXT = { closed: () => (Math.random() < 0.7 ? 'half' : 'open'), half: () => (Math.random() < 0.6 ? 'open' : 'closed'), open: () => 'half' };
