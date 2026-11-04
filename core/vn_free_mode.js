@@ -184,23 +184,38 @@
     //   三選一，按這張卡記：main＝主模型寫（就是原本的「圖庫」）、side＝主模型不寫、副模型讀劇本時順便挑、
     //   off＝不要表情（原本的「自由」）。side 只多存一把 vn_expr_side_<id>；主模型寫不寫照舊看上面那把，舊的兩種選擇原封不動。
     //   視差世界逼成自由時，選 main 的卡改由副模型補：主模型寫不了，就退給本來就要讀一次劇本的那一通。
+    //   在視差世界裡也能切副模型／不寫，存在另一把（見 _pxKey），撤離回來主世界那個原封不動。
     function _sideKey(id) { return 'vn_expr_side_' + id; }
     function exprMode(id) {
         id = id || _storyId();
         if (!isFree(id)) return 'main';
         try { return localStorage.getItem(_sideKey(id)) === '1' ? 'side' : 'off'; } catch (e) { return 'off'; }
     }
+    // 視差世界裡另存一把 vn_expr_px_<id>（side／off）：在世界裡切不動主世界的選擇（她 11-04：「好像綁定要回主世界才會放行修改」）。
+    //   沒存過就照主世界那個推：選主模型或副模型的卡＝副模型補，選不寫的＝不寫。
+    function _pxKey(id) { return 'vn_expr_px_' + id; }
+    function _pxMode(id) {
+        let v = '';
+        try { v = localStorage.getItem(_pxKey(id)) || ''; } catch (e) {}
+        if (v === 'side' || v === 'off') return v;
+        return exprMode(id) === 'off' ? 'off' : 'side';
+    }
     async function setExprMode(mode, id) {
-        const target = id || _storyId();
+        const cur = _storyId();
+        const target = id || cur;
         if (!target) return false;
+        // 人在視差世界裡、改的是現在這張卡：主模型本來就寫不了，只在副模型／不寫之間切，存世界那一把
+        if (target === cur && _inParallax()) {
+            if (mode !== 'side' && mode !== 'off') return false;
+            return !!win.AUI.lsSet(_pxKey(target), mode, '視差世界裡的表情');
+        }
         if (mode === 'side') { if (!win.AUI.lsSet(_sideKey(target), '1', '表情交給副模型')) return false; }
         else { try { localStorage.removeItem(_sideKey(target)); } catch (e) {} }
         return await set(mode !== 'main', target);
     }
-    // 現在實際是誰在管表情（畫面顯示用；視差世界裡 main 會變成 side）
+    // 現在實際是誰在管表情（畫面顯示、要不要補都看這個）：視差世界裡看世界那一把
     function exprModeNow() {
-        const m = exprMode();
-        return (m === 'main' && _inParallax()) ? 'side' : m;
+        return _inParallax() ? _pxMode(_storyId()) : exprMode();
     }
     function fillOn() { return exprModeNow() === 'side'; }
 

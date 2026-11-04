@@ -764,11 +764,13 @@
             } catch (e) {}
         },
 
-        // 🎭 表情交給誰那一行（11-04）：三選一按這張卡記，跟藏書開頭那排同一份（VN_FREE_MODE.exprMode）；劇情中途改，下一章生效
+        // 🎭 表情交給誰那一行（11-04）：三選一按這張卡記，跟藏書開頭那排同一份（VN_FREE_MODE.exprMode）；劇情中途改，下一章生效。
+        //   視差世界裡只鎖主模型那顆：副模型／不寫照樣能切，存世界那一把，撤離回來主世界的不變
         _setExpr: async function(mode) {
             try {
                 const FM = win.VN_FREE_MODE || window.VN_FREE_MODE;
-                if (!FM || !FM.setExprMode || FM.inParallax?.() || FM.exprMode() === mode) return;
+                if (!FM || !FM.setExprMode || FM.exprModeNow() === mode) return;
+                if (FM.inParallax?.() && mode === 'main') return;
                 await FM.setExprMode(mode);
             } catch (e) {}
             this._initExprUI();
@@ -783,9 +785,11 @@
                 const locked = !!FM.inParallax?.();
                 const now = FM.exprModeNow();
                 row.querySelectorAll('.ctx-expr-btn').forEach(b => {
+                    const lockThis = locked && b.dataset.mode === 'main';
                     b.classList.toggle('on', b.dataset.mode === now);
-                    b.disabled = locked;
-                    b.title = locked ? '在視差世界裡主模型固定不寫表情，選了主模型的卡改由副模型補；撤離回主世界就照妳選的' : '';
+                    b.disabled = lockThis;
+                    b.title = lockThis ? '在視差世界裡主模型固定不寫表情，撤離回主世界才能選這個'
+                        : (locked ? '只管視差世界，撤離回來照主世界選的' : '');
                 });
             } catch (e) {}
         },

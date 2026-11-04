@@ -403,16 +403,19 @@
                 // 人在視差世界裡＝世界門把模式壓成自由（旅人隨機生成、沒圖庫）→ 這裡要顯示「真的在跑的那個」，
                 // 而且鎖住不給改：她存的選擇沒被動到，撤離就會回來，此時給按只會看起來壞掉。
                 // 11-04 起三選一（VN_FREE_MODE.exprMode）：主模型寫＝原本的圖庫、不寫＝原本的自由、副模型補＝主模型不寫、副模型讀劇本時順便挑。
-                //   視差世界裡主模型固定不寫，選主模型的卡改由副模型補：亮的是 exprModeNow（真的在跑的那個）。
+                //   視差世界裡主模型固定不寫：亮的是 exprModeNow（真的在跑的那個，視差世界裡看世界那一把）。
                 const locked = !!FM.inParallax?.();
                 const now = FM.exprModeNow ? FM.exprModeNow() : (FM.isFree() ? 'off' : 'main');
                 const TIP = { main: '主模型寫劇情時每句台詞自己帶表情（多幾個字）', side: '主模型不寫；副模型本來就要讀一次劇本，順便替有表情圖的角色挑表情', off: '不要表情：立繪一直用同一張，主模型也省字' };
+                //   視差世界裡只鎖「主模型寫」（那裡的主模型固定不寫）；副模型／不寫照樣能切，只管視差世界，撤離回來照主世界選的
                 bar.querySelectorAll('.se-mode-chip').forEach(b => {
+                    const lockThis = locked && b.dataset.mode === 'main';
                     b.classList.toggle('active', b.dataset.mode === now);
-                    b.classList.toggle('locked', locked);
-                    b.title = locked ? '現在人在視差世界裡：主模型固定不寫表情，選了主模型的卡改由副模型補。撤離回主世界就會回到你選的那個。' : TIP[b.dataset.mode];
+                    b.classList.toggle('locked', lockThis);
+                    b.title = lockThis ? '現在人在視差世界裡：主模型固定不寫表情。撤離回主世界才能選這個。'
+                        : TIP[b.dataset.mode] + (locked ? '（只管視差世界，撤離回來照主世界選的）' : '');
                     b.onclick = async () => {
-                        if (locked || !FM.setExprMode || FM.exprMode() === b.dataset.mode) return;
+                        if (lockThis || !FM.setExprMode || FM.exprModeNow() === b.dataset.mode) return;
                         await FM.setExprMode(b.dataset.mode);
                         this._refreshModeBar(rootWrapper);
                     };
