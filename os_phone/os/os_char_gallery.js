@@ -1072,10 +1072,14 @@
         return 'd:' + s.length + ':' + h.toString(16);
     }
     // 這組嘴是不是做給這張圖的：照哪一筆做的一字不差就是；不然再比縮圖（同一張圖換了網址寫法、轉成 blob 的那種）
+    //   🚨 圖鑑這邊（列「補動嘴」、標「會動嘴」）認得出這張是哪一筆時，一定要一字不差才算：
+    //   沒記照哪一筆做的舊嘴，只靠縮圖比在圖鑑跟劇情畫面上會比出不一樣的結果（11-04 她的应子骞、桑芮：
+    //   圖鑑這張比 0、劇情畫面那張比 14，圖鑑以為對得上不列補動嘴，劇情裡嘴就是不動）→ 一律列進「補動嘴」補一次。
+    //   劇情畫面那邊（mouthFor）照舊兩種都認，舊嘴對得上的照常動
     function mouthFits(e, img, key) {
         if (!e) return false;
-        if (e.src && key && e.src === key) return true;
-        return !!img && sameShot(img, e) < 999;
+        if (key) return e.src === key;
+        return !!img && sameShot(img, e) < 999;   // 認不出是哪一筆的圖（blob 那種）才只能比縮圖
     }
     const _mouthMem = {};
     async function mouthLoad(name) {
