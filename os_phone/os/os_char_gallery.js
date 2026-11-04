@@ -59,7 +59,7 @@
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
-            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「講話會動嘴」開著的話，每張圖會順便做微張、張開兩種嘴；劇情裡他講話時，字在跑、配音在響，嘴就會開合。圈裡那個小圈就是嘴的位置，跟著大圈走。大笑、驚訝嘴本來就開著，不做。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著講話會動嘴的話再多畫一次做嘴。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「講話會動嘴」開著的話，每張圖會順便做微張、張開兩種嘴；劇情裡他講話時，字在跑、配音在響，嘴就會開合。圈裡那個小圈就是嘴的位置，跟著大圈走。大笑、驚訝嘴本來就開著，不做。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著講話會動嘴的話再多畫一次做嘴。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -951,6 +951,32 @@
         const side = Math.max(16, Math.min(W, H, Math.round(Math.max(ring.rx, ring.ry) * 2 * 2.2)));
         return { side, L: Math.round(Math.max(0, Math.min(W - side, ring.cx - side / 2))), T: Math.round(Math.max(0, Math.min(H - side, ring.cy - side / 2))) };
     }
+    // 🎨 顏色對齊（11-04 她：「anima肉眼看其實有色差，眼睛顏色色差，皮膚顏色色差」「好，加」）
+    //   ComfyUI 只重畫圈裡、圈外照原圖，所以偏的不是接縫外面，是整張臉照模型自己的膚色畫（原圖不是同一個包畫的就更明顯）。
+    //   拿圈裡靠邊那一圈（臉頰外緣、下巴、眉梢：表情不太動的地方）跟原圖同一圈比，平均和深淺照原圖校，整塊一起套。
+    //   o＝那顆橢圓在 patch 裡的位置；只看原圖不透明的點；校的幅度有上下限，不會把臉整個換色
+    function rimMatch(patch, orig, o, r0, r1) {
+        const w = patch.width, h = patch.height;
+        const pg = patch.getContext('2d'), P = pg.getImageData(0, 0, w, h), O = orig.getContext('2d').getImageData(0, 0, w, h);
+        const st = (d) => {
+            const m = [0, 0, 0], q = [0, 0, 0]; let n = 0;
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                const r = Math.sqrt(((x + 0.5 - o.cx) / o.rx) ** 2 + ((y + 0.5 - o.cy) / o.ry) ** 2);
+                const i = (y * w + x) * 4;
+                if (r < r0 || r > r1 || O.data[i + 3] < 200) continue;
+                for (let k = 0; k < 3; k++) { m[k] += d[i + k]; q[k] += d[i + k] * d[i + k]; } n++;
+            }
+            return n < 30 ? null : [0, 1, 2].map(k => { const mu = m[k] / n; return { mu, sd: Math.sqrt(Math.max(1, q[k] / n - mu * mu)) }; });
+        };
+        const want = st(O.data), have = st(P.data);
+        if (!want || !have) return patch;
+        const gain = [0, 1, 2].map(k => Math.max(0.85, Math.min(1.18, want[k].sd / have[k].sd)));
+        const off = [0, 1, 2].map(k => Math.max(-40, Math.min(40, want[k].mu - gain[k] * have[k].mu)));
+        const d = P.data;
+        for (let i = 0; i < d.length; i += 4) for (let k = 0; k < 3; k++) d[i + k] = Math.max(0, Math.min(255, d[i + k] * gain[k] + off[k]));
+        pg.putImageData(P, 0, 0);
+        return patch;
+    }
     async function makeExpr(ex, item, seed) {
         const M = win.OS_IMAGE_MANAGER;
         const src = ex.img, W = ex.W, H = ex.H, ring = ex.ring;
@@ -971,6 +997,8 @@
         //   去背立繪整圈外輪廓、髮絲每張表情都變淡（11-04 tmp/expr_alpha_test.cjs）。圈外的點現在一個都不碰。
         const patch = canvasOf(side, side), pg = patch.getContext('2d');
         pg.drawImage(gen, 0, 0, side, side);
+        const oc = canvasOf(side, side); oc.getContext('2d').drawImage(src, L, T, side, side, 0, 0, side, side);
+        rimMatch(patch, oc, { cx: ring.cx - L, cy: ring.cy - T, rx: ring.rx, ry: ring.ry }, 0.78, 0.98);
         const mk = canvasOf(side, side), mkg = mk.getContext('2d');
         softOval(mkg, ring.cx - L, ring.cy - T, ring.rx, ring.ry, side * 0.03);
         const mA = mkg.getImageData(0, 0, side, side).data, pA = pg.getImageData(0, 0, side, side).data;
@@ -1124,11 +1152,13 @@
         const cropUrl = crop.toDataURL('image/jpeg', 0.95), maskUrl = mask.toDataURL('image/png');
         const bx = geo.box.x, by = geo.box.y, bw = geo.box.w, bh = geo.box.h;
         const out = mouthEntryBase(src, url, geo);   // src：照哪一筆做的
+        const ob = canvasOf(bw, bh); ob.getContext('2d').drawImage(src, bx, by, bw, bh, 0, 0, bw, bh);   // 顏色對齊照這張圖嘴那塊
         for (const sh of MOUTH_SHAPES) {
             const r = await M.comfyInpaint(cropUrl, maskUrl, EXPR_PRE + (MOUTH_MOOD[exp] || MOUTH_MOOD.default) + ', ' + sh.tags, { denoise: sh.d, seed });
             const gen = await loadImg(r);
             const pc = canvasOf(bw, bh), pg = pc.getContext('2d');
             pg.drawImage(gen, (bx - L) * k, (by - T) * k, bw * k, bh * k, 0, 0, bw, bh);
+            rimMatch(pc, ob, { cx: mo.cx - bx, cy: mo.cy - by, rx: mo.rx, ry: mo.ry }, 0.6, 0.98);   // 嘴邊那圈的膚色照原圖，講話時嘴那塊才不會一閃一閃換色
             pg.globalCompositeOperation = 'destination-in';
             softOval(pg, mo.cx - bx, mo.cy - by, mo.rx, mo.ry, Math.max(2, mo.rx * 0.3));
             pg.drawImage(src, bx, by, bw, bh, 0, 0, bw, bh);   // 再乘一次原圖的透明度
