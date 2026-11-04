@@ -75,6 +75,7 @@
         _stageNarr: function() { this._stageInit(); this._stageTick++; this._staleSweep(); this._applyStageLighting(-1); },
         _clearSlot: function(i) {
             this._stageInit();
+            if (this._mouthRun && this._mouthRun.img === this._slotEl(i)) this._mouthHalt();   // 正在講話的那格要撤：先換回原圖
             this._stage[i] = null;
             const el = this._slotEl(i);
             if (el) { this._hideEl(el); el.classList.remove('vn-dim', 'vn-active', 'vn-solo', 'vn-avatar', 'vn-far', 'vn-near'); }
@@ -237,6 +238,7 @@
         // 公開入口（[Char]/[Inner] 呼叫）：把說話角色放上舞台、渲染、打燈、清滯留
         updateSprite: function(name, exp) {
             this._stageInit();
+            this._mouthHalt();   // 👄 上一句還在動嘴：先換回原圖，下面換圖時才認得是同一張、不會重淡入
             this._stageTick++;
             if (this._singleSlot() && this._stage[1]) this._clearSlot(1);   // 📱 手機單格：清掉右格殘留(防桌面→手機切換留圖)
             const idx = this._stageIndexFor(name);
@@ -713,6 +715,95 @@
             for (let i = 0; i < 2; i++) { const el = this._slotEl ? this._slotEl(i) : null; if (el) el.classList.remove('vn-cc-shift-l', 'vn-cc-shift-r'); }
             if (this._ccOutside) { document.removeEventListener('pointerdown', this._ccOutside, true); this._ccOutside = null; }
             this._ccIdx = null;
+        },
+
+        // ===== 👄 講話動嘴（11-04）=====
+        //   角色圖鑑「生表情」開了動嘴，會替每張圖存微張、張開兩小塊嘴（OS_CHAR_GALLERY.mouthFor 認得出是哪張）。
+        //   說話那格現在那張對得上，就把兩塊各疊回一份完整的圖（object URL），講話時在三張之間換 src：
+        //   字還在打（_twTimer）、或配音還在響，嘴就動；停了就換回原圖。
+        //   🚨 只直接換 img.src，不走 _showEl／_swapImage（那兩支會重跑淡入）；舞台要換圖之前先 _mouthHalt 換回原圖，
+        //      不然 _swapImage 看到 src 不是原圖，同一張也會重淡入一次。
+        _mouthTok: 0,
+        _mouthRun: null,
+        _mouthHalt: function() {
+            this._mouthTok++;
+            const r = this._mouthRun;
+            this._mouthRun = null;
+            if (!r || !r.img) return;
+            const cur = r.img.getAttribute('src');
+            if (cur === r.half || cur === r.open) r.img.src = r.base;
+        },
+        _voiceBusy: function() {
+            try { const VC = win.OS_VOICE_CAST; if (VC && VC.isPlaying && VC.isPlaying()) return true; } catch (e) {}
+            try { const a = win.VN_TTS && win.VN_TTS._currentAudio; if (a && !a.paused && !a.ended) return true; } catch (e) {}
+            return false;
+        },
+        _mouthFramesFor: async function(name, img, base) {
+            const cache = this._mouthFrameCache || (this._mouthFrameCache = new Map());
+            const key = name + '｜' + base.length + base.slice(-64);
+            if (cache.has(key)) return cache.get(key);
+            let fr = null;
+            try {
+                const G = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
+                const e = G && G.mouthFor ? await G.mouthFor(name, img) : null;
+                if (e) {
+                    const W = img.naturalWidth, H = img.naturalHeight;
+                    const load = (s) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = s; });
+                    const make = async (patch) => {
+                        const p = await load(patch);
+                        const c = document.createElement('canvas'); c.width = W; c.height = H;
+                        const g = c.getContext('2d'); g.drawImage(img, 0, 0); g.drawImage(p, e.box.x, e.box.y, e.box.w, e.box.h);
+                        const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+                        return URL.createObjectURL(blob);
+                    };
+                    fr = { half: await make(e.half), open: await make(e.open) };
+                }
+            } catch (err) { fr = null; }   // 別的網站的圖畫不進畫布 → 這張不動嘴
+            cache.set(key, fr);
+            if (cache.size > 12) {   // 最多留 12 張圖的嘴，舊的放掉
+                const k0 = cache.keys().next().value, v0 = cache.get(k0);
+                cache.delete(k0);
+                if (v0 && !(this._mouthRun && (this._mouthRun.half === v0.half))) { try { URL.revokeObjectURL(v0.half); URL.revokeObjectURL(v0.open); } catch (e) {} }
+            }
+            return fr;
+        },
+        _mouthTalk: async function(name) {
+            this._mouthHalt();
+            const tok = this._mouthTok;
+            if (!name) return;
+            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+            let img = null, base = '';
+            for (let i = 0; i < 20; i++) {   // 立繪可能還在換：最多等 2 秒它上來
+                const idx = (this._stage || []).findIndex(s => s && s.name === name);
+                img = idx >= 0 ? this._slotEl(idx) : null;
+                base = img ? (img.getAttribute('src') || '') : '';
+                if (base && img.complete && img.naturalWidth && img.style.opacity === '1') break;
+                base = '';
+                await sleep(100);
+                if (tok !== this._mouthTok) return;
+            }
+            if (!base) return;
+            const fr = await this._mouthFramesFor(name, img, base);
+            if (!fr || tok !== this._mouthTok || img.getAttribute('src') !== base) return;
+            const run = this._mouthRun = { img, base, half: fr.half, open: fr.open };
+            const speaking = () => !!this._twTimer || this._voiceBusy();
+            let last = 'closed', quiet = 0;
+            // 閉 → 微 → 開 → 微…，偶爾跳一格、間隔有快有慢，不要像節拍器
+            const NEXT = { closed: () => (Math.random() < 0.7 ? 'half' : 'open'), half: () => (Math.random() < 0.6 ? 'open' : 'closed'), open: () => 'half' };
+            const tick = () => {
+                if (tok !== this._mouthTok || this._mouthRun !== run) return;
+                const cur = img.getAttribute('src');
+                if (cur !== base && cur !== run.half && cur !== run.open) { this._mouthRun = null; return; }   // 舞台已經換別張了
+                if (!speaking()) {
+                    quiet = quiet || Date.now();
+                    if (Date.now() - quiet > 180) { if (cur !== base) img.src = base; this._mouthRun = null; return; }
+                    last = 'closed';
+                } else { quiet = 0; last = NEXT[last](); }
+                const url = last === 'closed' ? base : run[last];
+                if (cur !== url) img.src = url;
+                setTimeout(tick, 80 + Math.random() * 70);
+            };
+            tick();
         }
     });
 })();

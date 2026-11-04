@@ -60,7 +60,7 @@
         'os_sprite_tpl_prefix', 'os_sprite_tpl_suffix', 'os_sprite_tpl_neg',
         'os_sprite_size', 'os_sprite_hires', 'os_sprite_upscale_ratio', 'os_trio_tpl',   // 立繪工作室
         'wg_sprite_pack_v1',          // 世界門旅人畫風
-        'acg_expr_style',             // 角色圖鑑生表情：每個角色選一般還是內收
+        'acg_expr_style', 'acg_expr_mouth',                       // 角色圖鑑生表情：每個角色選一般還是內收、要不要順便做動嘴
         'aurelia_room_style_preset', 'aurelia_room_route',          // 包租婆房間的畫風、接口
         'lstage_dress_gen_v1',        // 大廳裝扮室生小人用哪個接口
         'avs_sticker_gen_v1',         // 變數工坊的世界貼紙

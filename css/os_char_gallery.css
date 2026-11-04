@@ -209,8 +209,10 @@
 .acg-ex-ring { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: move; }
 .acg-ex-oval { fill: rgba(255, 255, 255, 0.14); stroke: var(--acg-accent); stroke-width: 2; stroke-dasharray: 6 4; }
 .acg-ex-knob { fill: var(--acg-accent); stroke: #fff; stroke-width: 2; cursor: nwse-resize; }
+.acg-ex-mouth { fill: none; stroke: var(--acg-accent); stroke-width: 1.5; stroke-dasharray: 3 3; pointer-events: none; display: none; }
+.acg-ex.is-mouth .acg-ex-mouth { display: inline; }
 .acg-ex.is-finding .acg-ex-ring, .acg-ex.is-busy .acg-ex-ring { pointer-events: none; }
-.acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob { display: none; }
+.acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob, .acg-ex.is-finding .acg-ex-mouth { display: none; }
 .acg-ex-note { font-size: 13px; color: var(--acg-sub); text-align: center; }
 .acg-ex-note.is-warn { color: var(--acg-warn); }
 /* 一般／內收：一條兩格的切換，選中那格實心 */
@@ -232,6 +234,14 @@
 .acg-ex-chip.is-on { background: var(--acg-ink); border-color: var(--acg-ink); color: var(--acg-bg); }
 .acg-ex-chip:disabled { cursor: default; opacity: .6; }
 .acg-ex-has { font-size: 11px; font-weight: 600; opacity: .7; }
+/* 講話會動嘴：一顆開關，開著實心 */
+.acg-ex-opts { display: flex; justify-content: center; }
+.acg-ex-toggle {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px;
+    border: 1px dashed var(--acg-line); background: transparent; color: var(--acg-sub); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.acg-ex-toggle.is-on { border-style: solid; border-color: var(--acg-accent); color: var(--acg-accent); background: color-mix(in srgb, var(--acg-accent) 12%, transparent); }
+.acg-ex-toggle:disabled { cursor: default; opacity: .6; }
 .acg-ex-foot { display: flex; justify-content: center; }
 .acg-ex-go { min-width: 200px; }
 .acg-ex-out:empty { display: none; }

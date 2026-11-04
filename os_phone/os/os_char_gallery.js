@@ -56,7 +56,7 @@
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
-            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n要用 ComfyUI：設置→圖片「每個地方用什麼」的「立繪表情」選 ComfyUI 的包；沒選就跟「立繪」那列用同一個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「講話會動嘴」開著的話，每張圖會順便做微張、張開兩種嘴；劇情裡他講話時，字在跑、配音在響，嘴就會開合。圈裡那個小圈就是嘴的位置，跟著大圈走。大笑、驚訝嘴本來就開著，不做。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n要用 ComfyUI：設置→圖片「每個地方用什麼」的「立繪表情」選 ComfyUI 的包；沒選就跟「立繪」那列用同一個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -663,6 +663,7 @@
             if (act === 'expr-close') { exClose(); return; }
             if (act === 'expr-pick') { exPick(b.dataset.exp); return; }
             if (act === 'expr-style') { exStyle(b.dataset.style); return; }
+            if (act === 'expr-mouth') { exMouth(); return; }
             if (act === 'expr-go') { await exGo(); return; }
             if (act === 'expr-view') {
                 const done = S.ex ? S.ex.done.filter(r => r.url) : [];
@@ -958,6 +959,125 @@
         return c.toDataURL('image/webp', 0.85);
     }
 
+    // ================================================================
+    // 👄 講話動嘴（11-04 她：「生成三張開嘴中開微張 搞那啥開合動嘴?」「好，接進去」）
+    //   每張圖另外只重畫嘴那一小塊兩次（微張、張開），存成兩塊小圖＋位置（app_data vn_mouth／角色名）；
+    //   舞台講話時把它們疊回立繪輪流換（vn_core_stage.js 的 _mouthTalk 來問 mouthFor）。
+    //   嘴的位置照臉圈推（臉圈＝眉毛到下巴）：圈的中線、圈心往下 0.32 個半高，11-04 那張立繪量過對得上。
+    //   大笑、驚訝嘴本來就開著，不做。
+    // ================================================================
+    const MOUTH_APP = 'vn_mouth';
+    const MOUTH_KEY = 'acg_expr_mouth';            // '0'＝生表情時不順便做動嘴
+    const MOUTH_SKIP = ['Laughing', 'Surprised'];
+    const MOUTH_MOOD = { default: 'neutral expression', Happy: 'smile', Shy: 'embarrassed, blush', Angry: 'angry, frown', Sad: 'sad, frown', Crying: 'crying, tears' };
+    const MOUTH_SHAPES = [
+        { k: 'half', d: 0.6,  tags: '(slightly open mouth:1.3), talking, small mouth opening' },
+        { k: 'open', d: 0.75, tags: '(open mouth:1.3), talking, speaking' },
+    ];
+    const mouthOn = () => { try { return localStorage.getItem(MOUTH_KEY) !== '0'; } catch (e) { return true; } };
+    function mouthOval(ring) { return { cx: ring.cx, cy: ring.cy + ring.ry * 0.324, rx: ring.rx * 0.357, ry: ring.ry * 0.243 }; }
+    // 認圖：只看臉那塊、縮成 20×20 存下來。舞台那張同一塊縮一樣大來比，差很少＝同一張
+    //   （存成 WebP、轉成 blob 網址都認得；同一個人不同表情差在臉，一比就分得開）
+    function faceSig(img, f) {
+        const c = canvasOf(20, 20), g = c.getContext('2d');
+        g.drawImage(img, f.x, f.y, f.w, f.h, 0, 0, 20, 20);
+        return Array.from(g.getImageData(0, 0, 20, 20).data);
+    }
+    function sigDiff(a, b) {
+        if (!a || !b || a.length !== b.length) return 999;
+        let t = 0; for (let i = 0; i < a.length; i++) t += Math.abs(a[i] - b[i]);
+        return t / a.length;
+    }
+    // 同一張才算：臉那塊差不到 2.5、嘴那塊差不到 4（11-04 量過：同一張 0、存成 WebP 再讀不到 1、微笑對預設 5.7）。
+    //   嘴那塊另外比：表情沒做動嘴時，絕不能借別張的嘴貼上去
+    function sameShot(img, e) {
+        if (!e || e.w !== img.naturalWidth || e.h !== img.naturalHeight) return 999;
+        const d = sigDiff(faceSig(img, e.face), e.sig);
+        if (d >= 2.5) return 999;
+        if (e.msig && sigDiff(faceSig(img, e.box), e.msig) >= 4) return 999;
+        return d;
+    }
+    const _mouthMem = {};
+    async function mouthLoad(name) {
+        if (_mouthMem[name]) return _mouthMem[name];
+        let v = null;
+        try { v = await DB().getAppData(MOUTH_APP, name); } catch (e) {}
+        return (_mouthMem[name] = (v && v.entries) ? v : { entries: {} });
+    }
+    async function mouthSave(name, exp, data) {
+        const v = await mouthLoad(name);
+        v.entries[exp] = data;
+        await DB().saveAppData(MOUTH_APP, name, v);
+    }
+    // 舞台問：這個人現在這張圖（img 已經載好）有沒有做過動嘴。回 { box, half, open } 或 null
+    async function mouthFor(name, img) {
+        if (!img || !img.naturalWidth) return null;
+        let best = null;
+        for (const v of variants(name)) {
+            const data = await mouthLoad(v);
+            for (const exp of Object.keys(data.entries)) {
+                const e = data.entries[exp];
+                let d; try { d = sameShot(img, e); } catch (err) { return null; }   // 別的網站的圖畫不進來
+                if (d < 999 && (!best || d < best.d)) best = { d, e };
+            }
+            if (best) break;
+        }
+        return best ? best.e : null;
+    }
+    // 這張圖做一組嘴：微張、張開各重畫一次嘴那一小塊，切下來羽化。透明度照原圖
+    async function makeMouth(ex, exp, url, seed) {
+        const M = win.OS_IMAGE_MANAGER;
+        const src = await loadImg(url);
+        const W = src.naturalWidth, H = src.naturalHeight, ring = ex.ring, mo = mouthOval(ring);
+        const { side, L, T } = cropOf(ring, W, H);
+        const P = 1024, k = P / side;
+        const crop = canvasOf(P, P), cg = crop.getContext('2d');
+        cg.fillStyle = '#fff'; cg.fillRect(0, 0, P, P);
+        cg.drawImage(src, L, T, side, side, 0, 0, P, P);
+        const mask = canvasOf(P, P), mg = mask.getContext('2d');
+        mg.fillStyle = '#000'; mg.fillRect(0, 0, P, P);
+        softOval(mg, (mo.cx - L) * k, (mo.cy - T) * k, mo.rx * k, mo.ry * k, P * 0.008);
+        const cropUrl = crop.toDataURL('image/jpeg', 0.95), maskUrl = mask.toDataURL('image/png');
+        const bx = Math.max(0, Math.floor(mo.cx - mo.rx * 1.15)), by = Math.max(0, Math.floor(mo.cy - mo.ry * 1.15));
+        const bw = Math.min(W - bx, Math.ceil(mo.rx * 2.3)), bh = Math.min(H - by, Math.ceil(mo.ry * 2.3));
+        const fx = Math.max(0, Math.round(ring.cx - ring.rx)), fy = Math.max(0, Math.round(ring.cy - ring.ry));
+        const face = { x: fx, y: fy, w: Math.max(1, Math.min(W - fx, Math.round(ring.rx * 2))), h: Math.max(1, Math.min(H - fy, Math.round(ring.ry * 2))) };
+        const box = { x: bx, y: by, w: bw, h: bh };
+        const out = { w: W, h: H, face, sig: faceSig(src, face), box, msig: faceSig(src, box) };
+        for (const sh of MOUTH_SHAPES) {
+            const r = await M.comfyInpaint(cropUrl, maskUrl, EXPR_PRE + (MOUTH_MOOD[exp] || MOUTH_MOOD.default) + ', ' + sh.tags, { denoise: sh.d, seed });
+            const gen = await loadImg(r);
+            const pc = canvasOf(bw, bh), pg = pc.getContext('2d');
+            pg.drawImage(gen, (bx - L) * k, (by - T) * k, bw * k, bh * k, 0, 0, bw, bh);
+            pg.globalCompositeOperation = 'destination-in';
+            softOval(pg, mo.cx - bx, mo.cy - by, mo.rx, mo.ry, Math.max(2, mo.rx * 0.3));
+            pg.drawImage(src, bx, by, bw, bh, 0, 0, bw, bh);   // 再乘一次原圖的透明度
+            out[sh.k] = pc.toDataURL('image/png');
+        }
+        return out;
+    }
+    // 結果卡片：嘴張開那張的臉（full＝整張，點開看用）
+    async function mouthThumb(ex, url, m) {
+        const base = await loadImg(url), p = await loadImg(m.open);
+        const c = canvasOf(m.w, m.h), g = c.getContext('2d');
+        g.drawImage(base, 0, 0); g.drawImage(p, m.box.x, m.box.y, m.box.w, m.box.h);
+        const full = c.toDataURL('image/png');
+        return { full, thumb: await faceThumb(ex, full) };
+    }
+    // 這次打開時哪幾張圖還沒有對得上的嘴（預設那張＋已經有的表情格，大笑驚訝除外）
+    async function mouthMissing(ex, info) {
+        const need = [];
+        const list = [{ exp: DEFAULT_EXP, url: ex.img.src }].concat(info.slots.filter(s => s.used && s.exp !== DEFAULT_EXP && MOUTH_SKIP.indexOf(s.exp) < 0).map(s => ({ exp: s.exp, url: s.used.url })));
+        const data = await mouthLoad(ex.ch);
+        for (const it of list) {
+            let im;
+            try { im = await loadImg(it.url); faceSig(im, { x: 0, y: 0, w: 1, h: 1 }); } catch (err) { continue; }   // 讀不到、別的網站畫不進來的跳過
+            if (im.naturalWidth !== ex.W || im.naturalHeight !== ex.H) continue;   // 跟預設那張不一樣大：臉圈對不上，不做
+            if (sameShot(im, data.entries[it.exp]) >= 999) need.push(it);
+        }
+        return need;
+    }
+
     // 預設那張（舞台平常用的）；預設格空著就拿生成過的第一張（立繪庫排在頭像前面）
     async function exprSource(info) {
         const def = info.slots.find(s => s.exp === DEFAULT_EXP);
@@ -982,7 +1102,8 @@
         const has = {};
         info.slots.forEach(s => { if (s.used) has[s.exp] = true; });
         const ex = { ch, img, W, H, has, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false, style: styleOf(ch),
-                     ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null };
+                     ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null,
+                     mouth: mouthOn(), mouthNeed: null };   // mouthNeed：還沒對得上動嘴的那幾張（算好之前是 null）
         S.ex = ex;
         const A = AUIx();
         const el = doc.createElement('div');
@@ -1000,6 +1121,7 @@
           +     '<img class="acg-ex-img" alt="">'
           +     '<svg class="acg-ex-ring" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">'
           +       '<ellipse class="acg-ex-oval" vector-effect="non-scaling-stroke"></ellipse>'
+          +       '<ellipse class="acg-ex-mouth" vector-effect="non-scaling-stroke"></ellipse>'
           +       '<circle class="acg-ex-knob" vector-effect="non-scaling-stroke"></circle>'
           +     '</svg>'
           +   '</div></div>'
@@ -1011,6 +1133,7 @@
           +   '<div class="acg-ex-picks">' + EXPR_SET.map(x =>
                   '<button class="acg-ex-chip" type="button" data-act="expr-pick" data-exp="' + x.exp + '">' + esc(x.zh)
                 + (has[x.exp] ? '<span class="acg-ex-has">有了</span>' : '') + '</button>').join('') + '</div>'
+          +   '<div class="acg-ex-opts"><button class="acg-ex-toggle" type="button" data-act="expr-mouth"><i class="fa-solid fa-comment-dots"></i> 講話會動嘴</button></div>'
           +   '<div class="acg-ex-foot"><button class="acg-btn acg-btn-main acg-ex-go" type="button" data-act="expr-go"></button></div>'
           +   '<div class="acg-gen acg-ex-out"></div>'
           + '</div>';
@@ -1019,6 +1142,8 @@
         el.querySelector('.acg-ex-img').src = img.src;
         exBindRing(ex);
         exPaint(ex);
+        // 哪幾張還沒有對得上的動嘴（背景算，算好再更新按鈕上的數字）
+        mouthMissing(ex, info).then(n => { ex.mouthNeed = n; if (S && S.ex === ex) exPaint(ex); }, () => { ex.mouthNeed = []; });
         // 找臉（ComfyUI 沒裝找臉的外掛、或不是 ComfyUI → 圈先放在上面中間，她自己拖）
         const M = win.OS_IMAGE_MANAGER;
         let box = null, why = '';
@@ -1070,6 +1195,10 @@
         const oval = el.querySelector('.acg-ex-oval'), knob = el.querySelector('.acg-ex-knob');
         oval.setAttribute('cx', r.cx); oval.setAttribute('cy', r.cy); oval.setAttribute('rx', r.rx); oval.setAttribute('ry', r.ry);
         knob.setAttribute('cx', r.cx + r.rx * 0.7071); knob.setAttribute('cy', r.cy + r.ry * 0.7071); knob.setAttribute('r', Math.max(ex.W, ex.H) * 0.016);
+        const mo = mouthOval(r), mEl = el.querySelector('.acg-ex-mouth');   // 圈裡那個小圈＝嘴（跟著大圈走）
+        mEl.setAttribute('cx', mo.cx); mEl.setAttribute('cy', mo.cy); mEl.setAttribute('rx', mo.rx); mEl.setAttribute('ry', mo.ry);
+        el.classList.toggle('is-mouth', ex.mouth);
+        const tg = el.querySelector('.acg-ex-toggle'); tg.classList.toggle('is-on', ex.mouth); tg.disabled = ex.busy;
         el.querySelectorAll('.acg-ex-chip').forEach(c => { c.classList.toggle('is-on', ex.picks.indexOf(c.dataset.exp) >= 0); c.disabled = ex.busy; });
         el.querySelectorAll('.acg-ex-seg-btn').forEach(c => { c.classList.toggle('is-on', c.dataset.style === ex.style); c.disabled = ex.busy; });
         el.classList.toggle('is-busy', ex.busy);
@@ -1083,12 +1212,27 @@
             : ex.found === 'no' ? '沒找到臉，把圈拖到眉毛到下巴那塊'
             : '圈裡的地方會重畫，不對可以拖';
         const go = el.querySelector('.acg-ex-go');
-        const n = ex.picks.length;
-        const finished = !ex.busy && ex.ranAll && !n && ex.done.length > 0;
-        go.disabled = ex.busy || ex.found === null || (!finished && (!!ex.blocked || !n));
+        const n = ex.picks.length, m = mouthJobs(ex).length;
+        const finished = !ex.busy && ex.ranAll && !n && !m && ex.done.length > 0;
+        go.disabled = ex.busy || ex.found === null || (!finished && (!!ex.blocked || (!n && !m)));
         go.dataset.act = finished ? 'expr-close' : 'expr-go';
         go.textContent = ex.busy ? ('生成中 ' + (ex.done.length - ex.base) + '／' + ex.total)
-            : finished ? '完成' : (n ? (ex.err ? '再生成剩下的（' : '開始生成（') + n + ' 個）' : '選要哪幾個表情');
+            : finished ? '完成'
+            : n ? (ex.err ? '再生成剩下的（' : '開始生成（') + n + ' 個表情' + (m ? '＋' + m + ' 組動嘴' : '') + '）'
+            : m ? '補動嘴（' + m + ' 組）' : '選要哪幾個表情';
+    }
+    // 這一輪要做的動嘴：要生的表情（大笑驚訝除外）＋還沒對得上的那幾張（預設那張也算）
+    function mouthJobs(ex) {
+        if (!ex.mouth) return [];
+        return ex.picks.filter(e => MOUTH_SKIP.indexOf(e) < 0).map(e => ({ exp: e, url: '' }))
+            .concat((ex.mouthNeed || []).filter(it => ex.picks.indexOf(it.exp) < 0));
+    }
+    function exMouth() {
+        const ex = S && S.ex;
+        if (!ex || ex.busy) return;
+        ex.mouth = !ex.mouth;
+        const A = AUIx(); if (A && A.lsSet) A.lsSet(MOUTH_KEY, ex.mouth ? '1' : '0', '生表情時順便做動嘴');
+        exPaint(ex);
     }
     // 拖圈：按在圈上（或空白處）＝搬，按右下的圓點＝改大小；座標換成原圖像素
     function exBindRing(ex) {
@@ -1123,41 +1267,64 @@
     }
     async function exGo() {
         const ex = S && S.ex;
-        if (!ex || ex.busy || !ex.picks.length) return;
+        if (!ex || ex.busy) return;
         const list = EXPR_SET.filter(x => ex.picks.indexOf(x.exp) >= 0);
-        ex.done = ex.done.filter(r => !list.some(x => x.exp === r.exp));   // 這一輪要重做的先拿掉
+        const mJobs = mouthJobs(ex);
+        if (!list.length && !mJobs.length) return;
+        // 一件一張卡：表情一張、動嘴一張（卡的鍵：動嘴那張多個 ~m）
+        const zhOf = (exp) => exp === DEFAULT_EXP ? '預設' : ((EXPR_SET.find(x => x.exp === exp) || {}).zh || exp);
+        const jobs = [];
+        list.forEach(x => {
+            jobs.push({ kind: 'face', key: x.exp, exp: x.exp, zh: x.zh, item: x });
+            if (mJobs.some(j => j.exp === x.exp)) jobs.push({ kind: 'mouth', key: x.exp + '~m', exp: x.exp, zh: x.zh + '・動嘴', url: '' });
+        });
+        mJobs.filter(j => !list.some(x => x.exp === j.exp)).forEach(j => jobs.push({ kind: 'mouth', key: j.exp + '~m', exp: j.exp, zh: zhOf(j.exp) + '・動嘴', url: j.url }));
+        ex.done = ex.done.filter(r => !jobs.some(j => j.key === r.exp));   // 這一輪要重做的先拿掉
         const doneBefore = ex.done.length;
-        ex.busy = true; ex.ranAll = false; ex.total = list.length; ex.base = doneBefore; ex.err = '';
+        ex.busy = true; ex.ranAll = false; ex.total = jobs.length; ex.base = doneBefore; ex.err = '';
         const out = ex.el.querySelector('.acg-ex-out');
-        const cardOf = (exp, zh, thumb) =>
-            '<div class="acg-gen-card acg-ex-card" data-exp="' + exp + '">'
-          +   '<div class="acg-gen-img acg-ex-cell" data-exp="' + exp + '"' + (thumb ? ' data-act="expr-view"' : '') + '>'
+        const cardOf = (key, zh, thumb) =>
+            '<div class="acg-gen-card acg-ex-card" data-exp="' + key + '">'
+          +   '<div class="acg-gen-img acg-ex-cell" data-exp="' + key + '"' + (thumb ? ' data-act="expr-view"' : '') + '>'
           +     (thumb ? '<img src="' + esc(thumb) + '" alt="">' : '<i class="fa-solid fa-hourglass-half"></i>') + '</div>'
           +   '<div class="acg-ex-cap">' + esc(zh) + '</div>'
           + '</div>';
-        out.innerHTML = ex.done.map(r => cardOf(r.exp, r.zh, r.thumb)).join('') + list.map(x => cardOf(x.exp, x.zh, '')).join('');
+        out.innerHTML = ex.done.map(r => cardOf(r.exp, r.zh, r.thumb)).join('') + jobs.map(j => cardOf(j.key, j.zh, '')).join('');
         exPaint(ex);
         const seed = Math.floor(Math.random() * 1e15);   // 同一輪同一顆種子，幾張的筆觸比較像
-        for (const item of list) {
+        const madeUrl = {};                                // 這一輪剛生的表情圖：動嘴要拿它當底
+        for (const j of jobs) {
             if (ex.stop || !S || S.ex !== ex) break;
-            const card = out.querySelector('.acg-ex-card[data-exp="' + item.exp + '"]');
+            const card = out.querySelector('.acg-ex-card[data-exp="' + j.key + '"]');
             const cell = card.querySelector('.acg-ex-cell');
             card.classList.add('is-run');
             cell.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
             try {
-                const data = await makeExpr(ex, item, seed);
-                await localSave(ex.ch, item.exp, data, 'file');
+                let rec;
+                if (j.kind === 'face') {
+                    const data = await makeExpr(ex, j.item, seed);
+                    await localSave(ex.ch, j.exp, data, 'file');
+                    madeUrl[j.exp] = data;
+                    ex.picks = ex.picks.filter(p => p !== j.exp);
+                    rec = { exp: j.key, zh: j.zh, url: data, thumb: await faceThumb(ex, data) };
+                } else {
+                    const base = j.url || madeUrl[j.exp];
+                    if (!base) throw new Error('表情那張沒做成，嘴先不做');
+                    const m = await makeMouth(ex, j.exp, base, seed);
+                    await mouthSave(ex.ch, j.exp, m);
+                    if (ex.mouthNeed) ex.mouthNeed = ex.mouthNeed.filter(it => it.exp !== j.exp);
+                    const t = await mouthThumb(ex, base, m);
+                    rec = { exp: j.key, zh: j.zh, url: t.full, thumb: t.thumb };
+                }
                 if (S) S.changed = true;
-                const thumb = await faceThumb(ex, data);
-                ex.done = ex.done.filter(r => r.exp !== item.exp).concat({ exp: item.exp, zh: item.zh, url: data, thumb });
-                ex.picks = ex.picks.filter(p => p !== item.exp);
+                ex.done = ex.done.filter(r => r.exp !== j.key).concat(rec);
                 cell.dataset.act = 'expr-view';
-                cell.innerHTML = '<img src="' + esc(thumb) + '" alt="">';
+                cell.innerHTML = '<img src="' + esc(rec.thumb) + '" alt="">';
                 card.classList.remove('is-run');
             } catch (e) {
                 card.classList.remove('is-run'); card.classList.add('is-fail');
                 cell.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
-                ex.err = '「' + item.zh + '」沒做成：' + ((e && e.message) || e);
+                ex.err = '「' + j.zh + '」沒做成：' + ((e && e.message) || e);
                 break;   // 多半是設定或連線的問題，後面的也會一樣失敗；沒做的留在選取裡，可以再按一次
             }
             exPaint(ex);
@@ -1188,6 +1355,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf } };
+    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, sigDiff } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();
