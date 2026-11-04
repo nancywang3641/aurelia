@@ -4267,9 +4267,11 @@
         // 淡入顯示（fade-in，避免閃爍）
         _showEl: function(el, src) {
             if (!el) return;
-            const sameSrc = (src === undefined) || (el.getAttribute('src') === src);
+            // 正在動嘴、眨眼（顯示的是原圖疊出來的那幾份，vn_core_stage 的 _faceBase）也算同一張，不重淡入
+            const sameSrc = (src === undefined) || (el.getAttribute('src') === src) || (!!this._faceBase && this._faceBase(el) === src);
             const visible = el.style.display !== 'none' && el.style.display !== '' && el.style.opacity !== '0';
             const isSlot = el.id === 'game-char' || el.id === 'game-char-2';
+            if (isSlot && this._blinkStart) this._blinkStart();
             // 圖真正冒出來的那一刻重打一次燈：晚到的圖立即拿到正確版位（獨角置中/雙格近遠），
             // 不用等下一句對話才補正（治「單人先卡左位、隔幾句才滑去中間」）
             const relight = () => { if (isSlot) { try { this._applyStageLighting(this._lastLightIdx != null ? this._lastLightIdx : -1); } catch (e) {} } };
@@ -4300,7 +4302,7 @@
                 if (onShown) onShown();
             };
             const visible = img.style.display !== 'none' && img.style.display !== '' && img.style.opacity !== '0';
-            if (img.getAttribute('src') === url && visible) { apply(); return; }   // 已是同圖且顯示中 → 直接套用
+            if ((img.getAttribute('src') === url || (!!this._faceBase && this._faceBase(img) === url)) && visible) { apply(); return; }   // 已是同圖且顯示中（含動嘴、眨眼中）→ 直接套用
             const tmp = new Image();
             tmp.onload = apply;
             // 探測失敗絕不上圖：此時 handleImgError 多半已把 onerror 拆掉，死連結一上就是永久破圖標

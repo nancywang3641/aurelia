@@ -120,9 +120,11 @@
 }
 .acg-src-local { background: color-mix(in srgb, var(--acg-accent) 14%, transparent); color: var(--acg-accent); }
 .acg-src-official { display: inline-flex; align-items: center; gap: 4px; }
-/* 這張有對得上的嘴（講話會動嘴）才亮 */
+/* 這張有對得上的嘴（講話會動嘴）、閉眼（會眨眼）才亮；兩個一起靠右 */
 .acg-mouth-tag { display: none; flex-shrink: 0; font-size: 12px; color: var(--acg-accent); margin-left: auto; }
-.acg-slot.has-mouth .acg-mouth-tag { display: inline-flex; }
+.acg-slot.has-mouth .acg-mouth-tag:not(.acg-blink-tag) { display: inline-flex; }
+.acg-slot.has-blink .acg-blink-tag { display: inline-flex; }
+.acg-slot.has-mouth .acg-blink-tag { margin-left: 0; }
 .acg-src-official i { font-size: 9px; }
 .acg-slot-state { font-size: 11px; color: var(--acg-sub); }
 .acg-state-bad { color: var(--acg-bad); }

@@ -5,7 +5,8 @@
 //   表情：臉裁下來（跟 ComfyUI 那條同一個圈、同一種裁法）排成 3×3，中間那格叫它不准動，一通畫完七個
 //         → 找黑線切九格 → 每格拿臉外面（頭髮、耳朵、衣領、背景）跟原圖比，量它挪了多少、放大多少，拉回原位
 //         → 臉圈外面那一圈的顏色照原圖對齊 → 只換臉圈裡的顏色，透明度一律照原圖，身體一個點都不碰。
-//   動嘴：第二通 4×3，每張圖（預設、各表情）左右一對：左＝微張、右＝張開；只拿嘴那一小塊（位置由圖鑑算好給）。
+//   動嘴、閉眼：第二通 3×4（直的），每張圖（預設、各表情）一排三格：左＝嘴微張、中＝嘴張開、右＝閉眼；
+//         只拿嘴那一小塊、兩隻眼睛那一塊（位置由圖鑑算好給）。一通最多四張圖（11-05 加閉眼前是 4×3、六張）。
 //   她 11-04 在 參考資料/EXPR_GPT_LAB.js 試過：「比anima準好多...簡直原生圖，anima肉眼看其實有色差」。
 // ----------------------------------------------------------------
 (function () {
@@ -15,7 +16,8 @@
 
     const LINE = 10;
     const FACE_GRID = { cols: 3, rows: 3, W: 1024, H: 1024 };
-    const MOUTH_GRID = { cols: 4, rows: 3, W: 1536, H: 1024 };
+    const MOUTH_GRID = { cols: 3, rows: 4, W: 1024, H: 1536 };
+    const MOUTH_PER_CALL = MOUTH_GRID.rows;
     const POS9 = ['top left', 'top middle', 'top right', 'middle left', 'center', 'middle right', 'bottom left', 'bottom middle', 'bottom right'];
     // 九格（左到右、上到下）。表情跟圖鑑 EXPR_SET 同七種；GPT 聽句子不聽標籤，所以寫成白話英文。
     //   quiet＝內收（靦腆、冷淡、壓抑的角色：動作小、嘴巴多半閉著）
@@ -63,10 +65,16 @@
     }
     function mouthPrompt() {
         return [
-            'This image is a grid of twelve close-up crops of one character\'s face, four panels across and three rows down, separated by thick black lines. The panels come in pairs side by side: in each row, the first two panels show the same face and the last two panels show the same face.',
+            'This image is a grid of twelve close-up crops of one character\'s face, three panels across and four rows down, separated by thick black lines. The three panels in a row show the same face.',
             '',
-            'Make this character look like they are talking. In the left panel of each pair, open the mouth slightly, as if in the middle of saying a word. In the right panel of each pair, open the mouth wider, as if speaking clearly. If a mouth is already open, the left panel opens it a little more than it is now and the right panel clearly wider.',
-            'Change only the lips and the inside of the mouth. Keep each face\'s mood by keeping the direction of the mouth corners and the shape of the lips; only change how far the lips and jaw open. The two panels of a pair stay identical everywhere except the mouth. Keep the eyes, eyebrows, cheeks and any blush or tears exactly as they are. ' + KEEP,
+            'In every row, do this:',
+            '- Left panel: the character is talking. Open the mouth slightly, as if in the middle of saying a word. If the mouth is already open, open it a little more than it is now.',
+            '- Middle panel: the character is talking. Open the mouth wider, as if speaking clearly; clearly wider than the left panel.',
+            '- Right panel: the character is blinking. Close both eyes all the way, so the upper eyelids meet the lower ones and only the eyelashes show. Do not open the mouth.',
+            '',
+            'In the left and middle panels, change only the lips and the inside of the mouth. Keep each face\'s mood by keeping the direction of the mouth corners and the shape of the lips; only change how far the lips and jaw open. Keep the eyes, eyebrows, cheeks and any blush or tears exactly as they are.',
+            'In the right panel, change only the eyes and eyelids. Keep the eyebrows, mouth, cheeks and any blush or tears exactly as they are.',
+            'Apart from that, the three panels of a row stay identical. ' + KEEP,
             LINES,
         ].join('\n');
     }
@@ -285,32 +293,39 @@
         });
         return { faces, usage, cuts: { found: cuts.found, total: cuts.total } };
     }
-    // 動嘴一通：bases＝[{ img }]（最多 6 張，同樣大小、同一個臉圈）、mo＝嘴的橢圓、box＝要切下來的那塊（都是原圖像素，圖鑑算好）
-    //   回 [{ half: dataURL, open: dataURL }]（box 那麼大、只剩嘴那圈、透明度照原圖），順序跟 bases 一樣
-    async function makeMouths(bases, ring, mo, box) {
+    // 動嘴、閉眼一通：bases＝[{ img }]（最多四張，同樣大小、同一個臉圈）、mo＝嘴的橢圓、box＝嘴要切下來的那塊、
+    //   eyes＝兩隻眼睛的橢圓、eye＝眼睛要切下來的那塊（都是原圖像素，圖鑑算好）
+    //   回 [{ half, open, shut }]（dataURL，各自那塊那麼大、只剩橢圓裡、透明度照原圖），順序跟 bases 一樣
+    async function makeMouths(bases, ring, mo, box, eyes, eye) {
         if (!bases.length) return [];
-        if (bases.length > 6) throw new Error('一通最多六張');
+        if (bases.length > MOUTH_PER_CALL) throw new Error('一通最多' + MOUTH_PER_CALL + '張');
         const cs = cellSize(MOUTH_GRID);
         const { w, h } = sizeOf(bases[0].img);
         const rect = cropRect(ring, w, h, cs.w / cs.h);
         const crops = bases.map(b => cropCanvas(b.img, rect));
-        const cells = [];   // 每張兩格（左微張、右張開）；不滿六張就從頭重複，多的不用
-        for (let i = 0; i < 6; i++) { const c = crops[i % crops.length]; cells.push(c, c); }
+        const cells = [];   // 每張一排三格（嘴微張、嘴張開、閉眼）；不滿四張就從頭重複，多的不用
+        for (let i = 0; i < MOUTH_PER_CALL; i++) { const c = crops[i % crops.length]; cells.push(c, c, c); }
         const { raw } = await callGrid(makeMother(MOUTH_GRID, cells), mouthPrompt(), MOUTH_GRID);
         const cuts = findCuts(raw, MOUTH_GRID);
-        const cut = (img, i) => {
-            const patch = cellPatch(raw, cuts, i, crops[Math.floor(i / 2) % crops.length], rect).patch;
-            const pc = canvasOf(box.w, box.h), pg = pc.getContext('2d');
-            pg.drawImage(patch, box.x - rect.L, box.y - rect.T, box.w, box.h, 0, 0, box.w, box.h);
+        const cut = (img, i, b, ovals) => {
+            const patch = cellPatch(raw, cuts, i, crops[Math.floor(i / 3) % crops.length], rect).patch;
+            const pc = canvasOf(b.w, b.h), pg = pc.getContext('2d');
+            pg.drawImage(patch, b.x - rect.L, b.y - rect.T, b.w, b.h, 0, 0, b.w, b.h);
+            const mk = canvasOf(b.w, b.h), mg = mk.getContext('2d');
+            ovals.forEach(o => softOval(mg, o.cx - b.x, o.cy - b.y, o.rx, o.ry, Math.max(2, o.rx * 0.3)));
             pg.globalCompositeOperation = 'destination-in';
-            softOval(pg, mo.cx - box.x, mo.cy - box.y, mo.rx, mo.ry, Math.max(2, mo.rx * 0.3));
-            pg.drawImage(img, box.x, box.y, box.w, box.h, 0, 0, box.w, box.h);   // 再乘一次原圖的透明度（跟 ComfyUI 那條同一種嘴）
+            pg.drawImage(mk, 0, 0);
+            pg.drawImage(img, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);   // 再乘一次原圖的透明度（跟 ComfyUI 那條同一種）
             return pc.toDataURL('image/png');
         };
-        return bases.map((b, k) => ({ half: cut(b.img, k * 2), open: cut(b.img, k * 2 + 1) }));
+        return bases.map((b, k) => ({
+            half: cut(b.img, k * 3, box, [mo]),
+            open: cut(b.img, k * 3 + 1, box, [mo]),
+            shut: (eyes && eye) ? cut(b.img, k * 3 + 2, eye, eyes) : '',
+        }));
     }
 
-    win.OS_EXPR_GRID = { makeFaces, makeMouths, facePrompt, mouthPrompt,
+    win.OS_EXPR_GRID = { makeFaces, makeMouths, facePrompt, mouthPrompt, MOUTH_PER_CALL,
         _test: { cropRect, cellBox, cellSize, makeMother, findCuts, register, FACE_GRID, MOUTH_GRID } };
     if (window !== win) window.OS_EXPR_GRID = win.OS_EXPR_GRID;
 })();

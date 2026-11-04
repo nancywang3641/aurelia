@@ -78,6 +78,8 @@
             if (this._mouthRun && this._mouthRun.img === this._slotEl(i)) this._mouthHalt();   // 正在講話的那格要撤：先換回原圖
             this._stage[i] = null;
             const el = this._slotEl(i);
+            const fb = this._faceBase(el); if (fb) el.src = fb;   // 眨眼眨到一半也換回原圖
+            if (this._blinks) this._blinks[i] = null;
             if (el) { this._hideEl(el); el.classList.remove('vn-dim', 'vn-active', 'vn-solo', 'vn-avatar', 'vn-far', 'vn-near'); }
         },
         _stageRemove: function(name) {
@@ -239,6 +241,7 @@
         updateSprite: function(name, exp) {
             this._stageInit();
             this._mouthHalt();   // 👄 上一句還在動嘴：先換回原圖，下面換圖時才認得是同一張、不會重淡入
+            this._blinkStart();  // 👁 有人上場就開始眨眼（兩格都沒人自己停）
             this._stageTick++;
             if (this._singleSlot() && this._stage[1]) this._clearSlot(1);   // 📱 手機單格：清掉右格殘留(防桌面→手機切換留圖)
             const idx = this._stageIndexFor(name);
@@ -717,68 +720,175 @@
             this._ccIdx = null;
         },
 
-        // ===== 👄 講話動嘴（11-04）=====
-        //   角色圖鑑「生表情」開了動嘴，會替每張圖存微張、張開兩小塊嘴（OS_CHAR_GALLERY.mouthFor 認得出是哪張）。
-        //   說話那格現在那張對得上，就把兩塊各疊回一份完整的圖（object URL），講話時在三張之間換 src：
-        //   字還在打（_twTimer）、或配音還在響，嘴就動；停了就換回原圖。
+        // ===== 👄 講話動嘴（11-04）／👁 眨眼（11-05）=====
+        //   角色圖鑑「生表情」會替每張圖存嘴（微張、張開）和閉眼的小塊（OS_CHAR_GALLERY.faceFor 認得出是哪張；自己沒有的借同一類表情的）。
+        //   這格現在那張對得上，就疊成幾份完整的圖（object URL）：嘴微張、嘴張開、閉眼、閉眼＋嘴微張、閉眼＋嘴張開。
+        //   講話時（字還在打、配音還在響）嘴在三種之間換；平常隔幾秒閉一下眼（0.1 秒，偶爾連眨兩下），講話時照樣眨。
+        //   嘴、眼各自只改狀態，該顯示哪一份由 _faceApply 算。
         //   🚨 只直接換 img.src，不走 _showEl／_swapImage（那兩支會重跑淡入）；舞台要換圖之前先 _mouthHalt 換回原圖，
-        //      不然 _swapImage 看到 src 不是原圖，同一張也會重淡入一次。
+        //      _showEl／_swapImage 也會用 _faceBase 認出「這是原圖疊出來的那幾份」，當作同一張、不重淡入。
         _mouthTok: 0,
         _mouthRun: null,
+        // 這格現在顯示的是疊出來的哪一份 → 回原圖網址；不是疊出來的回空字串
+        _faceBase: function(el) {
+            const s = el && el.getAttribute && el.getAttribute('src');
+            return (s && this._frameBase && this._frameBase.get(s)) || '';
+        },
+        // 照嘴、眼現在的狀態換成該顯示的那一份
+        _faceApply: function(img) {
+            if (!img) return;
+            const run = (this._mouthRun && this._mouthRun.img === img) ? this._mouthRun : null;
+            const b = (this._blinks || []).find(x => x && x.img === img) || null;
+            const base = run ? run.base : (b ? b.base : '');
+            const fr = run ? run.fr : (b ? b.fr : null);
+            if (!base || !fr) return;
+            const cur = img.getAttribute('src') || '';
+            if (cur !== base && this._faceBase(img) !== base) return;   // 舞台已經換了別張：不碰
+            const m = run ? run.mouth : 'closed';
+            const shut = !!(b && b.shut && b.base === base && fr.shut);
+            let url = base;
+            if (shut) url = m === 'closed' ? fr.shut : (fr[m === 'half' ? 'shutHalf' : 'shutOpen'] || fr[m] || fr.shut);
+            else if (m !== 'closed' && fr[m]) url = fr[m];
+            if (cur !== url) img.src = url;
+        },
         _mouthHalt: function() {
             this._mouthTok++;
-            const r = this._mouthRun;
             this._mouthRun = null;
-            if (!r || !r.img) return;
-            const cur = r.img.getAttribute('src');
-            if (cur === r.half || cur === r.open) r.img.src = r.base;
+            // 講話的那格、眨眼眨到一半的那格：都換回原圖
+            (this._blinks || []).forEach(b => { if (b) b.shut = false; });
+            for (let i = 0; i < 2; i++) { const el = this._slotEl(i), base = this._faceBase(el); if (base) el.src = base; }
         },
         _voiceBusy: function() {
             try { const VC = win.OS_VOICE_CAST; if (VC && VC.isPlaying && VC.isPlaying()) return true; } catch (e) {}
             try { const a = win.VN_TTS && win.VN_TTS._currentAudio; if (a && !a.paused && !a.ended) return true; } catch (e) {}
             return false;
         },
-        // exp＝劇情寫的表情：這張圖自己沒有嘴時，圖鑑借同一個人同一類表情的嘴（講話就要動嘴，跟表情無關）
+        // 這張圖疊好的那幾份：{ half, open, shut, shutHalf, shutOpen }（沒有的那樣不在；嘴、眼都沒有回 null）。
+        //   exp＝劇情寫的表情：這張圖自己沒有時，圖鑑借同一個人同一類表情的（講話就要動嘴，跟表情無關）
+        //   講話時、眨眼時同一張圖同時來問，只疊一次
         _mouthFramesFor: async function(name, img, base, exp) {
             const cache = this._mouthFrameCache || (this._mouthFrameCache = new Map());
+            const pend = this._mouthFramePend || (this._mouthFramePend = new Map());
+            const fb = this._frameBase || (this._frameBase = new Map());
             const G = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
             // 鍵帶圖鑑的嘴版號：先看過劇情（記了「這張沒有嘴」）、才去圖鑑做嘴，回來要重問，不能等整頁重整
             const key = name + '｜' + (exp || '') + '｜' + (G && G.mouthRev ? G.mouthRev() : 0) + '｜' + base.length + base.slice(-64);
             if (cache.has(key)) return cache.get(key);
-            let fr = null;
-            try {
-                const load = (s, cors) => new Promise((res, rej) => { const i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = s; });
-                // 🚨 網址圖（世界書立繪放在 GitHub Pages、catbox 那種）：舞台那張 <img> 是普通讀法，畫進畫布會被瀏覽器擋，
-                //   比對、疊嘴都做不了（11-04 她：「還是沒動」）。另外用跨站讀法載一份同樣的圖來用；圖鑑做嘴時也是這樣讀的，讀得到才做得出嘴
-                const pic = /^https?:/i.test(base) ? await load(base, true) : img;
-                // 這張是哪一筆：圖鑑做嘴時記了照哪一筆做的，一字不差最準（11-04 她酒館裡只靠縮圖比，重生過的那張分不清）。
-                //   AI 生的立繪在舞台上是轉出來的 blob 網址：照名字找回頭像快取裡原本那筆
-                let key = (G && G.srcKey) ? G.srcKey(base) : '';
-                if (!key && /^blob:/.test(base) && VN_Cache) {
-                    for (const v of this._nameVariants(name)) {
-                        if (this._avatarMemCache && this._avatarMemCache[v] === base) { const c = await VN_Cache.get('avatar_cache', v); if (c && c.url) key = G.srcKey(c.url); break; }
+            if (pend.has(key)) return pend.get(key);
+            const job = (async () => {
+                let fr = null;
+                try {
+                    const load = (s, cors) => new Promise((res, rej) => { const i = new Image(); if (cors) i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = s; });
+                    // 🚨 網址圖（世界書立繪放在 GitHub Pages、catbox 那種）：舞台那張 <img> 是普通讀法，畫進畫布會被瀏覽器擋，
+                    //   比對、疊嘴都做不了（11-04 她：「還是沒動」）。另外用跨站讀法載一份同樣的圖來用；圖鑑做嘴時也是這樣讀的，讀得到才做得出嘴
+                    const pic = /^https?:/i.test(base) ? await load(base, true) : img;
+                    // 這張是哪一筆：圖鑑做嘴時記了照哪一筆做的，一字不差最準（11-04 她酒館裡只靠縮圖比，重生過的那張分不清）。
+                    //   AI 生的立繪在舞台上是轉出來的 blob 網址：照名字找回頭像快取裡原本那筆
+                    let sk = (G && G.srcKey) ? G.srcKey(base) : '';
+                    if (!sk && /^blob:/.test(base) && VN_Cache) {
+                        for (const v of this._nameVariants(name)) {
+                            if (this._avatarMemCache && this._avatarMemCache[v] === base) { const c = await VN_Cache.get('avatar_cache', v); if (c && c.url) sk = G.srcKey(c.url); break; }
+                        }
+                    }
+                    const F = (G && G.faceFor) ? await G.faceFor(name, pic, sk, exp)
+                        : { mouth: (G && G.mouthFor) ? await G.mouthFor(name, pic, sk, exp) : null, eyes: null };
+                    const M = F.mouth, E = (F.eyes && F.eyes.eye) ? F.eyes : null;
+                    if (M || E) {
+                        const W = pic.naturalWidth, H = pic.naturalHeight;
+                        const lm = M ? { half: await load(M.half), open: await load(M.open) } : null;
+                        const le = E ? await load(E.shut) : null;
+                        const make = async (m, shut) => {
+                            const c = document.createElement('canvas'); c.width = W; c.height = H;
+                            const g = c.getContext('2d'); g.drawImage(pic, 0, 0);
+                            if (m) g.drawImage(lm[m], M.box.x, M.box.y, M.box.w, M.box.h);
+                            if (shut) g.drawImage(le, E.eye.x, E.eye.y, E.eye.w, E.eye.h);
+                            const blob = await new Promise(r => c.toBlob(r, 'image/png'));
+                            const u = URL.createObjectURL(blob);
+                            fb.set(u, base);
+                            return u;
+                        };
+                        fr = {};
+                        if (lm) { fr.half = await make('half', false); fr.open = await make('open', false); }
+                        if (le) fr.shut = await make(null, true);
+                        // 閉眼＋講話那兩份背後再疊：講話剛好眨眼才用得到，還沒好那一下就照樣換嘴、先不閉
+                        if (lm && le) (async () => {
+                            try {
+                                for (const m of ['half', 'open']) {
+                                    const u = await make(m, true);
+                                    if (fr._gone) { try { URL.revokeObjectURL(u); } catch (e) {} fb.delete(u); return; }
+                                    fr[m === 'half' ? 'shutHalf' : 'shutOpen'] = u;
+                                }
+                            } catch (e) {}
+                        })();
+                    }
+                } catch (err) { fr = null; }   // 跨站也讀不到的網址圖 → 這張不動嘴、不眨眼
+                pend.delete(key);
+                cache.set(key, fr);
+                if (cache.size > 6) {   // 最多留 6 張圖疊好的（一張五份），舊的放掉（還在畫面上、還在用的不放）；手機記憶體有限
+                    const k0 = cache.keys().next().value, v0 = cache.get(k0);
+                    cache.delete(k0);
+                    if (v0) {
+                        const urls = ['half', 'open', 'shut', 'shutHalf', 'shutOpen'].map(k => v0[k]).filter(Boolean);
+                        const shown = [0, 1].map(i => { const el = this._slotEl(i); return el ? el.getAttribute('src') : ''; });
+                        const busy = (this._mouthRun && this._mouthRun.fr === v0) || (this._blinks || []).some(b => b && b.fr === v0) || urls.some(u => shown.indexOf(u) >= 0);
+                        if (!busy) { v0._gone = true; urls.forEach(u => { try { URL.revokeObjectURL(u); } catch (e) {} fb.delete(u); }); }
                     }
                 }
-                const e = G && G.mouthFor ? await G.mouthFor(name, pic, key, exp) : null;
-                if (e) {
-                    const W = pic.naturalWidth, H = pic.naturalHeight;
-                    const make = async (patch) => {
-                        const p = await load(patch);
-                        const c = document.createElement('canvas'); c.width = W; c.height = H;
-                        const g = c.getContext('2d'); g.drawImage(pic, 0, 0); g.drawImage(p, e.box.x, e.box.y, e.box.w, e.box.h);
-                        const blob = await new Promise(r => c.toBlob(r, 'image/png'));
-                        return URL.createObjectURL(blob);
-                    };
-                    fr = { half: await make(e.half), open: await make(e.open) };
+                return fr;
+            })();
+            pend.set(key, job);
+            return job;
+        },
+        // ===== 👁 眨眼：舞台兩格各自隔幾秒閉一下眼 =====
+        //   有圖上場（_showEl、updateSprite）就開始跑；兩格都沒人就停。畫面在背景、圖還沒淡入完的時候不眨
+        _blinks: null,
+        _blinkTimer: 0,
+        _blinkStart: function() {
+            if (this._blinkTimer) return;
+            const tick = () => {
+                this._blinkTimer = 0;
+                let busy = false;
+                try { busy = this._blinkTick(); } catch (e) {}
+                if (busy !== null) this._blinkTimer = setTimeout(tick, busy ? 120 : 1000);
+            };
+            this._blinkTimer = setTimeout(tick, 120);
+        },
+        // 回 true＝有圖在畫面上（下一下 0.12 秒後）、false＝人在場但看不到（1 秒後再看）、null＝兩格都沒人（停）
+        _blinkTick: function() {
+            this._stageInit();
+            const bl = this._blinks || (this._blinks = [null, null]);
+            const G = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
+            const rev = G && G.mouthRev ? G.mouthRev() : 0;
+            const now = Date.now();
+            let anyone = false, shown = false;
+            for (let i = 0; i < 2; i++) {
+                const st = this._stage[i], img = this._slotEl(i);
+                if (!st || !img || !img.isConnected) { bl[i] = null; continue; }
+                anyone = true;
+                let b = bl[i];
+                if (!b || b.img !== img || b.name !== st.name) b = bl[i] = { img, name: st.name, base: '', exp: '', rev: -1, fr: null, shut: false, next: now + 1500 + Math.random() * 2500 };
+                if (document.hidden || img.style.display === 'none' || img.style.opacity !== '1' || !img.getClientRects().length || !img.complete || !img.naturalWidth) continue;
+                shown = true;
+                const base = this._faceBase(img) || img.getAttribute('src') || '';
+                const exp = String(st.exp || '');
+                if (!base) continue;
+                if (b.base !== base || b.exp !== exp || b.rev !== rev) {   // 換了張圖（或圖鑑剛做了新的）：問這張有沒有閉眼
+                    b.base = base; b.exp = exp; b.rev = rev; b.fr = null; b.shut = false;
+                    this._mouthFramesFor(st.name, img, base, exp).then(fr => { if (b.base === base && b.exp === exp) b.fr = fr; }, () => {});
+                    continue;
                 }
-            } catch (err) { fr = null; }   // 跨站也讀不到的網址圖 → 這張不動嘴
-            cache.set(key, fr);
-            if (cache.size > 12) {   // 最多留 12 張圖的嘴，舊的放掉
-                const k0 = cache.keys().next().value, v0 = cache.get(k0);
-                cache.delete(k0);
-                if (v0 && !(this._mouthRun && (this._mouthRun.half === v0.half))) { try { URL.revokeObjectURL(v0.half); URL.revokeObjectURL(v0.open); } catch (e) {} }
+                if (!b.fr || !b.fr.shut || b.shut || now < b.next) continue;
+                // 閉 0.1 秒左右；兩成機率接著再眨一下
+                b.shut = true; b.next = Infinity;
+                this._faceApply(img);
+                const again = Math.random() < 0.2;
+                setTimeout(() => {
+                    b.shut = false;
+                    this._faceApply(img);
+                    b.next = Date.now() + (again ? 160 : 2500 + Math.random() * 3500);
+                }, 100 + Math.random() * 40);
             }
-            return fr;
+            return anyone ? shown : null;
         },
         // text＝這句台詞：嘴至少動完「大約唸完這句」的時間（一個字 90ms、最少 0.6 秒、最多 5 秒），
         //   字一下就跑完（打字快、她點了跳過）也看得到在講；下一句一開始就停
@@ -788,6 +898,7 @@
             this._mouthHalt();
             const tok = this._mouthTok;
             if (!name) return;
+            this._blinkStart();
             const said = String(text || '').replace(/<[^>]+>/g, '').replace(/[\s「」『』“”"*（）()]/g, '').length;
             const talkMs = Math.max(800, Math.min(5000, said * 90));
             const t0 = Date.now();
@@ -795,9 +906,11 @@
             const sleep = (ms) => new Promise(r => setTimeout(r, ms));
             const live = () => tok === this._mouthTok;
             let run = null, noMouth = '', last = 'closed', quiet = 0;
-            const drop = () => {   // 這張不講了：換回原圖
-                if (run) { const c = run.img.getAttribute('src'); if (c === run.half || c === run.open) run.img.src = run.base; }
-                if (this._mouthRun === run) this._mouthRun = null;
+            const drop = () => {   // 這張不講了：嘴閉上（眼睛照眨眼那邊的狀態）
+                if (run) {
+                    run.mouth = 'closed';
+                    if (this._mouthRun === run) { this._faceApply(run.img); this._mouthRun = null; }
+                }
                 run = null;
             };
             // 閉 → 微 → 開 → 微…，偶爾跳一格、間隔有快有慢，不要像節拍器
@@ -806,9 +919,8 @@
                 const idx = (this._stage || []).findIndex(s => s && s.name === name);
                 const img = idx >= 0 ? this._slotEl(idx) : null;
                 const exp = idx >= 0 ? String(this._stage[idx].exp || '') : '';
-                const cur = img ? (img.getAttribute('src') || '') : '';
-                // 這格「本來」那張：正在動嘴的話是 run.base
-                const base = (run && run.img === img && (cur === run.half || cur === run.open)) ? run.base : cur;
+                // 這格「本來」那張：正在顯示疊出來的那幾份（講話、眨眼）的話是它的原圖
+                const base = img ? (this._faceBase(img) || img.getAttribute('src') || '') : '';
                 const ready = !!(img && base && img.complete && img.naturalWidth && img.style.opacity === '1');
                 // 還沒動過就先等新圖上來（最多多等 2 秒）
                 const speaking = !!this._twTimer || this._voiceBusy() || Date.now() < (talkUntil || (t0 + talkMs + 2000));
@@ -820,16 +932,16 @@
                     drop();   // 換了張圖：上一張的嘴收掉，換這張的
                     const fr = await this._mouthFramesFor(name, img, base, exp);
                     if (!live()) return;
-                    if (img.getAttribute('src') !== base) continue;   // 等的時候又換了圖：重來
-                    if (!fr) { noMouth = base; continue; }
-                    run = this._mouthRun = { img, base, half: fr.half, open: fr.open };
+                    if ((this._faceBase(img) || img.getAttribute('src')) !== base) continue;   // 等的時候又換了圖：重來
+                    if (!fr || !fr.half) { noMouth = base; continue; }
+                    run = this._mouthRun = { img, base, fr, mouth: 'closed' };
                     if (!talkUntil) talkUntil = Date.now() + talkMs;
                     last = 'closed';
                 }
                 if (run && run.img === img && run.base === base) {   // 舞台換圖換到一半（base 跟 run 不同）不碰
                     last = (speaking && !quiet) ? NEXT[last]() : 'closed';
-                    const url = last === 'closed' ? run.base : run[last];
-                    if (img.getAttribute('src') !== url) img.src = url;
+                    run.mouth = last;
+                    this._faceApply(img);
                 }
                 await sleep(80 + Math.random() * 70);
             }
