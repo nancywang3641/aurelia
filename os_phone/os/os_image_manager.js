@@ -376,7 +376,7 @@
             { id: 'map',    name: '小地圖',     type: 'map'   },
             { id: 'phone',  name: '手機照片',   type: 'scene' },
             { id: 'app',    name: '應用裡的圖', type: 'item'  },
-            { id: 'expr',   name: '立繪表情',   type: 'char'  },   // 角色圖鑑「生一組表情」：只重畫臉，只認 ComfyUI（comfyInpaint）
+            { id: 'expr',   name: '立繪表情',   type: 'char'  },   // 角色圖鑑「生一組表情」：只重畫臉；ComfyUI（comfyInpaint）或自訂接口 GPT 九宮格（capiEdit＋OS_EXPR_GRID），看 exprEngine
         ],
         useOf: function(id) { return this.USES.find(u => u.id === id) || null; },
         _ROUTES_KEY: 'os_img_routes',
@@ -1186,9 +1186,76 @@
             if (!out) throw new Error('排隊太久被放行了，ComfyUI 沒回圖');   // 佇列逾時是 resolve(undefined)
             return out;
         },
+        // 「立繪表情」那列用哪一種畫：'comfy'＝ComfyUI 一張一張重畫臉；'gpt'＝自訂接口（GPT 那種帶圖編輯）一通九宮格（OS_EXPR_GRID）；
+        //   '' ＝兩種都不是（Pollinations、NAI…），生表情做不了
+        exprEngine: function() {
+            const svc = this.serviceForUse(this.exprUse());
+            return svc === 'comfyui_direct' ? 'comfy' : (svc === 'custom_api' ? 'gpt' : '');
+        },
+        // 🎭 帶圖編輯（自訂接口那種，GPT）：給 use 那一列選的那組，送圖＋一段話，回 { image: dataURL, usage }。
+        //   圖鑑生表情的 GPT 九宮格用。不套畫風、不翻譯、不接底詞（圖本身就是畫風）；出錯丟錯（字是給她看的），
+        //   說法跟 _genCustomApi 同一套；5xx／斷線重試一次，4xx 不重試（再送只會多花一次錢）。
+        capiEdit: async function(use, prompt, images, size) {
+            const r = this.getRoutes()[use];
+            const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
+            const svc = hit ? hit.provider : this.legacyServiceOf(use);
+            if (svc !== 'custom_api') throw new Error('這一列沒選自訂接口');
+            const cfg = (hit && hit.customApi) || this.config.customApi || {};
+            const base = String(cfg.url || '').trim().replace(/\/+$/, '');
+            if (!base) throw new Error('自訂接口還沒填網址');
+            if (/\/sdapi(\/|$)/.test(base)) throw new Error('這組自訂接口是 SD WebUI 那種，不收帶圖的請求；換 GPT 那種的接口');
+            const url = /\/images\/edits$/.test(base) ? base : (/\/images\/generations$/.test(base) ? base.replace(/\/images\/generations$/, '/images/edits') : base + '/images/edits');
+            const model = String(cfg.model || '').trim(), key = String(cfg.apiKey || '').trim();
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: 'char' }); } catch (e) {}   // 📊 長期用量帳
+            const toBlob = (u) => { const m = String(u).match(/^data:([^;]+);base64,(.*)$/); const bin = atob(m[2]); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: m[1] }); };
+            const once = async () => {
+                const fd = new FormData();
+                if (model) fd.append('model', model);
+                fd.append('prompt', prompt);
+                fd.append('n', '1');
+                fd.append('size', size);
+                if (/^gpt-image/i.test(model)) { const q = String(cfg.quality || 'medium').toLowerCase(); fd.append('quality', (q === 'low' || q === 'high') ? q : 'medium'); }
+                (images || []).forEach((u, i) => fd.append('image[]', toBlob(u), 'image' + (i + 1) + '.png'));   // 帶圖這條不收 moderation，不送
+                const resp = await fetch(url, { method: 'POST', headers: key ? { Authorization: 'Bearer ' + key } : {}, body: fd });
+                const text = await resp.text();
+                if (!resp.ok) {
+                    const blocked = /safety system|content[_ ]policy|moderation_blocked|image_generation_user_error/i.test(text);
+                    const quota = /insufficient_quota|billing_hard_limit|exceeded your current quota/i.test(text);
+                    const e = new Error(blocked ? '這張被站方的內容審查擋掉了'
+                        : quota ? '生圖的額度用完了（或是這個月的上限到了）'
+                        : (resp.status === 404 || resp.status === 405) ? '這個接口不收帶圖的請求（' + resp.status + '）'
+                        : (resp.status + ' ' + text.slice(0, 200)));
+                    e.status = resp.status;
+                    throw e;
+                }
+                let data; try { data = JSON.parse(text); } catch (e) { throw new Error('回應不是 JSON（多半是網址填錯）：' + text.slice(0, 120)); }
+                const first = data && Array.isArray(data.data) ? data.data[0] : null;
+                let image = '';
+                if (first && first.b64_json) image = 'data:image/png;base64,' + first.b64_json;
+                else if (first && first.url) {
+                    const b = await (await fetch(first.url)).blob();
+                    image = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
+                }
+                if (!image) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
+                return { image: image, usage: data.usage || null };
+            };
+            try { return await once(); }
+            catch (e1) {
+                const st = e1 && e1.status;
+                if (st && st < 500) throw e1;
+                console.warn('[ImageManager] 帶圖編輯第一次沒成功，等 2 秒重試一次：' + ((e1 && e1.message) || e1));
+                await new Promise(r2 => setTimeout(r2, 2000));
+                return await once();
+            }
+        },
         // 找臉：回 { x0, y0, x1, y1 }（原圖像素）；ComfyUI 沒裝 Impact Pack、圖裡找不到臉都回 null（她自己拖圈）
+        //   表情走 GPT 的時候：ComfyUI 頁有填網址就借它找臉，沒填回 null，不丟錯（GPT 那條不需要 ComfyUI）
         comfyFindFace: async function(imageDataUrl) {
-            const r = await this._comfyCfgForInpaint('face', { use: this.exprUse() });
+            let faceUrl = '';
+            if (this.exprEngine() === 'comfy') faceUrl = String((await this._comfyCfgForInpaint('face', { use: this.exprUse() })).cfg.url).trim();
+            else faceUrl = String((this.config.comfyuiDirect || {}).url || '').trim();
+            if (!faceUrl) return null;
+            const r = { cfg: { url: faceUrl } };
             const wf = {
                 '1': { class_type: 'ETN_LoadImageBase64', inputs: { image: String(imageDataUrl).replace(/^data:[^,]*,/, '') } },
                 '2': { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: 'bbox/face_yolov8m.pt' } },

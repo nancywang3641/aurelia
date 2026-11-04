@@ -219,6 +219,7 @@ const PHONE_FILES = [
     'os/os_phone_image.js',       // 手機類 app 共用的圖片描述→卡片→生圖管道
     'os/os_voice_input.js',       // 🎙 麥克風錄音→轉成字（轉字方式可換；SenseVoice 在網頁裡跑，聲音不離開裝置）
     'os/os_photo_viewer.js',      // 點圖放大看（iOS 相簿那樣：滑動換張、縮放、下拉關閉）
+    'os/os_expr_grid.js',         // 🎭 GPT 九宮格表情：圖鑑「生表情」的「立繪表情」選自訂接口時，一通畫七個表情、一通做嘴
     'os/os_char_gallery.js',      // 🎭 角色圖鑑：每個角色舞台用哪張立繪、缺圖壞網址、上傳與改世界書條目（舞台讀它的本地上傳，排在 vn_core_stage 前）
     'os/os_chat_tidy.js',         // 🧹 聊天記錄整理（酒館版）：列出每張卡的聊天、各佔幾張圖，連同奧瑞亞綁的資料一起刪；清掉聊天已不在的遺留圖
     'os/os_control_room.js',     // 🎛️ 控制室：監控/遙控桌面控制塔（SoVITS+ComfyUI）
