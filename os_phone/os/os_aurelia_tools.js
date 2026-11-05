@@ -818,6 +818,7 @@
         // 給 os_aurelia_edit.js 用：同一個範圍、同一套繁簡比對
         books: _wbBooks,
         allBooks: _wbAllBooks,
+        entries: _wbEntries,   // 給大總結補頭像用：照名字找這個人的人設條目（os_story_tools.js 的 fillMissingAvatars）
         fold: _fold,
         jump: jump,
     };

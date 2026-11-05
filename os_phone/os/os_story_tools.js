@@ -1879,6 +1879,41 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
     //    大總結存檔後自動觸發；只補「有正式人名、avatar_cache 還沒」的；每次最多 N 張(預設5、成本控管)。
     //    語言橋：角色表是中文、生圖只吃英文 booru tag → 中間用副模型轉成 [Avatar|名|英文tags] 再餵現有生圖管線。
     // ====================================================================
+    // 世界書裡「這個人自己那條」。她的人物卡標題常用暱稱（「【放養群-丹·卡莱尔】」，關鍵字只有「丹」），
+    //   但人物卡開頭都有 <character name="全名 …">：照那個認最準；其次標題拿掉「分類-」前綴後剛好是他的名字，
+    //   再來標題裡有他的全名（名字那段帶「團隊、群組」這種字的往後排——「角色團隊-丹尼爾·卡萊爾」講的是一群人）、關鍵字剛好是他。
+    //   同分時挑內容裡有寫長相的。回條目原文（截 1200 字）或 ''
+    function _personEntry(list, name, T) {
+        // 簡繁折成同一把：OS_ZH.key（約四千字的對照表，總結寫簡體「丹尼尔·卡莱尔」、人設寫繁體也對得上）；聊天 app 那支表小，沒收「尔、莱」
+        const fold = s => {
+            s = String(s == null ? '' : s).toLowerCase();
+            try { const Z = win.OS_ZH || window.OS_ZH; if (Z && Z.key) return Z.key(s); } catch (e) {}
+            try { return (T && T.fold) ? T.fold(s) : s; } catch (e) { return s; }
+        };
+        const strip = s => fold(s).replace(/[\s【】\[\]「」（）()]/g, '');
+        const full = strip(name);
+        if (!full || !Array.isArray(list) || !list.length) return '';
+        const parts = String(name).split(/[·・．.\s]/).map(strip).filter(p => p.length >= 2 && p !== full);
+        const LOOK = /髮|发|眼|瞳|膚|肤|戴|穿|身高|cm|體型|体型|外貌|外觀|外观|長相|长相/;
+        const GROUP = /團隊|团队|群|組|组|家族|名單|名单|成員|成员|關係|关系|一覽|一览|×|x/;   // 名字那段講的是一群人、一對人
+        let best = null, bestScore = 0;
+        for (const e of list) {
+            if (!e || !e.content) continue;
+            const t = strip(e.title), keys = String(e.keys || '').split(',').map(strip).filter(Boolean);
+            const core = t.replace(/^[^-－]*[-－]/, '');   // 拿掉「分類-」前綴
+            const card = (String(e.content).slice(0, 300).match(/<character\s+name\s*=\s*["“]([^"”(（]+)/i) || [])[1];
+            let s = 0;
+            if (card && strip(card) === full) s = 6;
+            else if (core === full) s = 5;
+            else if (core.indexOf(full) !== -1 && core.length <= full.length + 8 && !GROUP.test(core)) s = 4;
+            else if (t.indexOf(full) !== -1 || keys.indexOf(full) !== -1) s = 3;
+            else if (parts.some(p => core === p || keys.indexOf(p) !== -1)) s = 2;
+            else continue;
+            if (LOOK.test(e.content)) s += 0.5;
+            if (s > bestScore) { best = e; bestScore = s; }
+        }
+        return best ? String(best.content).slice(0, 1200) : '';
+    }
     let _fillingAvatars = false;
     API.fillMissingAvatars = async function (summaryContent) {
         try {
@@ -1919,26 +1954,41 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
             }
             if (!missing.length) return;
 
+            // 🔎 人設：照名字找這個人在故事掛的世界書裡的條目，外觀以它為準。
+            //   11-06 她：丹尼爾戴眼鏡，大總結補的頭像卻是淺棕亂髮、連帽衛衣——補頭像這通看不到人設，規則又叫它「表裡沒寫就依身份合理補」，
+            //   編出來的長相存進頭像快取就再也不換，之後每張插圖都照它畫（插圖的外觀登記表讀頭像快取那段描述）。
+            //   所以：表格和人設都沒寫長相的人不補（留給劇情 AI 第一次寫他的 [Avatar] 時再生），不准猜。
+            const T = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS;
+            let wb = [];
+            try { wb = (T && T.entries) ? (((await T.entries(false)) || {}).list || []) : []; } catch (e) {}
+            for (const r of missing) r.wb = _personEntry(wb, r.name, T);
+            const LOOK_RE = /髮|发|眼|瞳|膚|肤|戴|穿|身高|cm|體型|体型|鬍|胡|疤|耳釘|耳钉|眼鏡|眼镜/;
+            const known = missing.filter(r => r.wb || LOOK_RE.test(r.row.split('|').slice(1).join('|')));
+            if (!known.length) { console.log(`[補頭像] 缺 ${missing.length} 張，但表格和人設都沒寫長相，先不補（等劇情 AI 寫）：${missing.map(r => r.name).join('、')}`); return; }
+
             // 成本控管：每次最多 N 張
             let maxN = parseInt(localStorage.getItem('sp_autoavatar_max'));
             if (isNaN(maxN) || maxN < 1) maxN = 5;
-            const batch = missing.slice(0, maxN);
+            const batch = known.slice(0, maxN);
 
             _fillingAvatars = true;
-            console.log(`[補頭像] 缺 ${missing.length} 張，這次補 ${batch.length} 張：${batch.map(r => r.name).join('、')}`);
+            console.log(`[補頭像] 缺 ${missing.length} 張，這次補 ${batch.length} 張：${batch.map(r => r.name + (r.wb ? '（有人設）' : '')).join('、')}`);
 
-            // 副模型：中文角色表 → 英文 [Avatar|名|tags]（翻譯+轉 booru 一步到位）
+            // 副模型：中文角色表＋人設 → 英文 [Avatar|名|tags]（翻譯+轉 booru 一步到位）
             const tableText = (header ? header + '\n' : '') + batch.map(r => r.row).join('\n');
+            const wbText = batch.filter(r => r.wb).map(r => '【' + r.name + '】\n' + r.wb).join('\n\n');
             const sys = '你是頭像提示詞轉換助手。只輸出要求的 [Avatar|...] 行，不要任何解釋、前言或多餘文字。';
-            const usr = '下面是一份中文角色表，請為其中「有正式人名」的角色，各輸出一行頭像生成提示詞，格式嚴格為：\n'
+            const usr = '下面是一份中文角色表' + (wbText ? '，和其中幾個人在世界書裡的人設' : '') + '，請為其中「有正式人名」的角色，各輸出一行頭像生成提示詞，格式嚴格為：\n'
                 + '[Avatar|角色名|英文Danbooru標籤]\n\n'
                 + '規則：\n'
                 + '- 角色名用我下面給的「完全相同」的名字、不要改寫或翻譯。\n'
-                + '- 標籤用英文、小寫、逗號分隔、單行；描述「單人肖像」：髮色、髮型/長度、瞳色、年齡層(如 mature male / young woman)、體型、明顯特徵(疤/角/種族特徵等)、代表性服裝。不要寫背景、不要寫動作。\n'
-                + '- 只憑表裡的中文外觀(髮色/髮型/眼色等)與身份合理轉成標籤；表裡沒寫的就依角色身份合理補、別留空。\n'
+                + '- 標籤用英文、小寫、逗號分隔、單行；描述「單人肖像」：髮色、髮型/長度、瞳色、年齡層(如 mature male / young woman)、體型、明顯特徵(疤/角/種族特徵等)、眼鏡耳環這類戴在身上的東西、代表性服裝。不要寫背景、不要寫動作。\n'
+                + '- 外觀只照表格和人設裡寫的轉成標籤；兩邊寫的不一樣時照人設。人設寫了的髮色、瞳色、眼鏡、服裝都要寫進去，一樣都不能漏。\n'
+                + '- 表格和人設都沒寫這個人長相的，不要輸出那一行，不要依身份猜。\n'
                 + '- 純代號／未具名／路人角色(沒有正式人名的)請「不要」輸出那一行。\n'
                 + '- 除了 [Avatar|...] 行以外，什麼都別輸出。\n\n'
-                + '角色表：\n' + tableText;
+                + '角色表：\n' + tableText
+                + (wbText ? '\n\n人設（世界書原文，外觀以這個為準）：\n' + wbText : '');
 
             let out = '';
             try {
@@ -1967,7 +2017,11 @@ ${getSummaryTemplate().replace(/\{\{count\}\}/g, String(newCount))}`;
                     if (!VCore.avatars) VCore.avatars = {};
                     if (!VCore.avatars[j.nm]) VCore.avatars[j.nm] = j.tags;   // 沒現成宣告才用我們轉的英文 tag
                     const r = await VCore._genAvatarToCache(j.nm);      // 走現有管線：底詞自動加、存 avatar_cache、有去重+GPU佇列
-                    if (r) done++;                                      // 成功才計(失敗回 '')
+                    if (r) {
+                        done++;                                         // 成功才計(失敗回 '')
+                        // 記號：這張是大總結補的。之後劇情 AI 正式寫了這個人的 [Avatar]，播放器會把存著的那段描述換成劇情寫的（vn_core._refreshGuessedLook）
+                        try { const rec = await VC.get('avatar_cache', j.nm); if (rec) await VC.set('avatar_cache', j.nm, Object.assign({}, rec, { src: 'summary' })); } catch (e) {}
+                    }
                 } catch (e) { console.warn('[補頭像] 生成失敗:', j.nm, e?.message || e); }
             }
             console.log(`[補頭像] ✅ 完成 ${done} 張`);

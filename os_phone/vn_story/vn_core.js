@@ -1838,6 +1838,7 @@
                 // 第一輪：IDB / 世界書快取（同步快，先全跑完）
                 const needGen = [];
                 for (const name of names) {
+                    await this._refreshGuessedLook(name);   // 🧾 大總結猜的長相 → 換成劇情這章寫的（放在最前面：她自己放了圖的角色也要換，插圖讀的是這段描述）
                     if (this._avatarMemCache[name]) continue;
                     const _sf = this._spriteFirst(name);   // 開了跳過頭像、這個人有外觀可生：頭像那兩種（世界書頭像素材、人設頭像）不搶在立繪前面
                     const lbUrl = _sf ? null : (this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])]);
@@ -1877,6 +1878,23 @@
                 console.log('[VN] 所有頭像預熱完成');
                 } finally { this._imgScanEnd(); }
             })();
+        },
+
+        // 🧾 大總結補的頭像（avatar_cache 那筆帶 src:'summary'）：那段外觀是副模型照角色表推的，不一定對
+        //   （11-06 她：丹尼爾戴眼鏡，補出來的卻是淺棕亂髮、連帽衛衣，之後每張插圖都照它畫）。
+        //   劇情 AI 正式寫了這個人的 [Avatar] → 存著的那段描述換成劇情寫的、拿掉記號（插圖的外觀登記表讀這一段）。
+        //   圖不重畫、不花錢；要換圖她自己在頭像快取按重生。她按過重生的那筆沒有記號，不會被換
+        _refreshGuessedLook: async function (name) {
+            try {
+                const d = this.avatars && this.avatars[name];
+                if (!d || /^none$/i.test(String(d).trim())) return;
+                const rec = await VN_Cache.get('avatar_cache', name);
+                if (!rec || rec.src !== 'summary' || rec.prompt === d) return;
+                const nrec = Object.assign({}, rec, { prompt: d });
+                delete nrec.src;
+                await VN_Cache.set('avatar_cache', name, nrec);
+                console.log(`[VN] ${name} 的頭像是大總結補的 → 外觀描述換成劇情這章寫的（圖不重畫）`);
+            } catch (e) {}
         },
 
         // ── 頭像生成共用管線（loadScript 預熱 / 早鳥監聽 共用；立繪模式也走這條，只在 _makeCharImage 換生成）──
@@ -2325,6 +2343,7 @@
                 const name = p.name, desc = p.desc;
                 if (!name || !desc) continue;
                 if (!this.avatars[name]) this.avatars[name] = desc;   // 先登記，loadScript 再解析到也只是覆寫同值
+                await this._refreshGuessedLook(name);   // 🧾 同預熱：大總結猜的長相換成劇情寫的
                 if (this._avatarMemCache[name] || this._avatarInflight[name]) continue;
                 try {
                     // 與預熱第一輪同序的快速快取檢查：世界書素材 → IDB → persona URL，命中就不生
