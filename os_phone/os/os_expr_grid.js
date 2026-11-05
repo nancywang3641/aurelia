@@ -21,13 +21,14 @@
     const POS9 = ['top left', 'top middle', 'top right', 'middle left', 'center', 'middle right', 'bottom left', 'bottom middle', 'bottom right'];
     // 九格（左到右、上到下）。表情跟圖鑑 EXPR_SET 同七種；GPT 聽句子不聽標籤，所以寫成白話英文。
     //   quiet＝內收（靦腆、冷淡、壓抑的角色：動作小、嘴巴多半閉著）
+    //   🚨 只寫臉長什麼樣，不寫「忍住笑／忍住淚」：畫出來常是手摀嘴、手擦淚（11-06 ComfyUI 那條抓到的，圖鑑 EXPR_SET 同一件）
     const FACE_CELLS = [
         { exp: 'Happy',
           normal: 'a gentle, warm smile with the mouth closed and soft, relaxed eyes.',
           quiet: 'a faint, barely visible smile; mouth closed, calm soft eyes.' },
         { exp: 'Laughing',
           normal: 'laughing happily: mouth open in a big smile, eyes squeezed shut into happy curves.',
-          quiet: 'holding back a laugh: lips pressed together in a smile, eyes curved with amusement.' },
+          quiet: 'a quiet, closed-mouth laugh: eyes squeezed shut into happy curves, a wide smile with the lips together, cheeks lifted.' },
         { exp: 'Shy',
           normal: 'embarrassed: cheeks flushed pink, eyes glancing away to the side, a small wavering mouth.',
           quiet: 'quietly shy: a light blush, gaze lowered and turned aside, mouth closed.' },
@@ -43,14 +44,14 @@
           quiet: 'mildly surprised: eyes slightly widened, eyebrows a little raised, lips slightly parted.' },
         { exp: 'Crying',
           normal: 'crying: tears streaming down both cheeks, brows knotted, mouth open and trembling.',
-          quiet: 'holding back tears: eyes glistening, a single tear on one cheek, mouth pressed closed.' },
+          quiet: 'quiet tears: eyes glistening and wet, brows drawn up in the middle, a single tear on one cheek, mouth pressed closed.' },
         // 右下這格不用（嘴另外一通做），字照 LAB 她試成功那份原樣留著：整段提示詞跟她看過的一字不差
         { exp: '_talk',
           normal: 'exactly the same face as the center panel, but with the mouth slightly open as if in the middle of saying a word. Nothing else changes.',
           quiet: 'exactly the same face as the center panel, but with the mouth slightly open as if in the middle of saying a word. Nothing else changes.' },
     ];
     const KEEP = 'In every panel keep these exactly as they are: the hair and every strand of the bangs; the head\'s position, size and angle inside the panel; the ears, neck, collar and clothes; the background; the lighting; and the art style, meaning the line weight, the coloring and the shading.';
-    const LINES = 'Keep the black lines and the outer black frame exactly where they are. Nothing crosses a line. No text, labels, speech bubbles, symbols or extra people.';
+    const LINES = 'Keep the black lines and the outer black frame exactly where they are. Nothing crosses a line. No hands, text, labels, speech bubbles, symbols or extra people.';
     function facePrompt(style) {
         const lines = FACE_CELLS.map((c, i) => '- ' + POS9[i] + ': ' + (c.exp === '_ref' ? 'leave this panel exactly as it is. It is the reference for all the others.' : (style === 'quiet' ? c.quiet : c.normal)));
         return [

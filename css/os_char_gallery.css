@@ -203,17 +203,25 @@
 .acg-ex-body > * { width: 100%; max-width: 560px; }
 .acg-ex-who { font-size: 20px; font-weight: 800; word-break: break-word; }
 .acg-ex-stage {
-    display: flex; justify-content: center; padding: 8px; border-radius: 12px; border: 1px solid var(--acg-line);
+    position: relative; display: flex; justify-content: center; padding: 8px; border-radius: 12px; border: 1px solid var(--acg-line);
     background-color: rgb(var(--os-tint-rgb));
     background-image: linear-gradient(45deg, rgba(var(--os-ink-rgb), 0.12) 25%, transparent 25%), linear-gradient(-45deg, rgba(var(--os-ink-rgb), 0.12) 25%, transparent 25%),
                       linear-gradient(45deg, transparent 75%, rgba(var(--os-ink-rgb), 0.12) 75%), linear-gradient(-45deg, transparent 75%, rgba(var(--os-ink-rgb), 0.12) 75%);
     background-size: 16px 16px; background-position: 0 0, 0 8px, 8px -8px, -8px 0;
 }
-.acg-ex-frame { position: relative; line-height: 0; }
-.acg-ex-img { display: block; width: auto; height: auto; max-width: 100%; max-height: 56vh; user-select: none; -webkit-user-drag: none; }
-.acg-ex-ring { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: move; }
+/* 圖和圈同一張 SVG：一律正方形，看整張＝整張縮進來，放大頭部＝只看臉附近（JS 改 viewBox）；手機上佔滿寬度 */
+.acg-ex-ring { display: block; width: min(100%, 56vh); height: auto; aspect-ratio: 1 / 1; touch-action: none; cursor: move; user-select: none; -webkit-user-select: none; }
+.acg-ex-img { pointer-events: none; }
 .acg-ex-oval { fill: rgba(255, 255, 255, 0.14); stroke: var(--acg-accent); stroke-width: 2; stroke-dasharray: 6 4; }
-.acg-ex-knob { fill: var(--acg-accent); stroke: #fff; stroke-width: 2; cursor: nwse-resize; }
+.acg-ex-knob { fill: var(--acg-accent); stroke: #fff; stroke-width: 2; cursor: nwse-resize; pointer-events: none; }
+.acg-ex-knob-hit { fill: transparent; cursor: nwse-resize; pointer-events: all; }
+/* 右上角：看整張／放大頭部 */
+.acg-ex-zoom {
+    position: absolute; top: 14px; right: 14px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
+    border: 1px solid var(--acg-line); background: color-mix(in srgb, var(--acg-card) 88%, transparent); color: var(--acg-ink);
+    font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.acg-ex-zoom[hidden] { display: none; }
 .acg-ex-mouth { fill: none; stroke: var(--acg-accent); stroke-width: 1.5; stroke-dasharray: 3 3; display: none; }
 /* 小圈（嘴、兩隻眼睛）可以各自拖：整個圈裡都按得到 */
 .acg-ex.is-mouth .acg-ex-mouth { pointer-events: all; cursor: grab; }
@@ -221,7 +229,7 @@
 .acg-ex.is-mouth .acg-ex-mouth:active { cursor: grabbing; }
 .acg-ex.is-mouth .acg-ex-mouth { display: inline; }
 .acg-ex.is-finding .acg-ex-ring, .acg-ex.is-busy .acg-ex-ring { pointer-events: none; }
-.acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob, .acg-ex.is-finding .acg-ex-mouth { display: none; }
+.acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob, .acg-ex.is-finding .acg-ex-knob-hit, .acg-ex.is-finding .acg-ex-mouth { display: none; }
 .acg-ex-note { font-size: 13px; color: var(--acg-sub); text-align: center; }
 .acg-ex-note.is-warn { color: var(--acg-warn); }
 /* 一般／內收：一條兩格的切換，選中那格實心 */
@@ -288,5 +296,4 @@
     .acg-wb-row, .acg-wb-row-exp { grid-template-columns: minmax(0, 1fr) auto; }
     .acg-wb-row .acg-in-url { grid-column: 1 / -1; grid-row: 1; }
     .acg-ex-body { padding: 14px 14px 32px; }
-    .acg-ex-img { max-height: 40vh; }
 }

@@ -59,7 +59,7 @@
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
-            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「講話動嘴、會眨眼」開著的話，每張圖會順便做微張、張開兩種嘴和一張閉眼；劇情裡他講話時，字在跑、配音在響，嘴就會開合，平常隔幾秒眨一下眼。圈裡的小圈是嘴和兩隻眼睛的位置，跟著大圈走；哪個沒套到就直接拖那個小圈，嘴和兩隻眼睛各拖各的，下次打開這個角色還記得。想回到原本的位置，按「小圈放回原位」。大笑、驚訝嘴本來就開著，不做嘴；大笑眼睛瞇著，不做閉眼。沒做到的表情，講話、眨眼時借同一個人差不多的表情來用。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著動嘴眨眼的話再多畫一到兩次做嘴和閉眼（一次四張圖）。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。找到臉會自動放大到只看頭部，圈比較好拉；想看整張圖按右上角「看整張」。\n「講話動嘴、會眨眼」開著的話，每張圖會順便做微張、張開兩種嘴和一張閉眼；劇情裡他講話時，字在跑、配音在響，嘴就會開合，平常隔幾秒眨一下眼。圈裡的小圈是嘴和兩隻眼睛的位置，跟著大圈走；哪個沒套到就直接拖那個小圈，嘴和兩隻眼睛各拖各的，下次打開這個角色還記得。想回到原本的位置，按「小圈放回原位」。大笑、驚訝嘴本來就開著，不做嘴；大笑眼睛瞇著，不做閉眼。沒做到的表情，講話、眨眼時借同一個人差不多的表情來用。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著動嘴眨眼的話再多畫一到兩次做嘴和閉眼（一次四張圖）。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -690,6 +690,7 @@
             if (act === 'expr-style') { exStyle(b.dataset.style); return; }
             if (act === 'expr-mouth') { exMouth(); return; }
             if (act === 'expr-lay-reset') { exLayReset(); return; }
+            if (act === 'expr-zoom') { exZoom(); return; }
             if (act === 'expr-go') { await exGo(); return; }
             if (act === 'expr-view') {
                 const done = S.ex ? S.ex.done.filter(r => r.url) : [];
@@ -879,11 +880,15 @@
     // ================================================================
     const EXPR_PRE = 'close-up portrait, face focus, solo, ';
     // tags＝一般；quiet＝內收（靦腆、冷淡、壓抑的角色：動作小、嘴巴多半閉著。11-04 同一張圖對照過她說「好，加上去」）
+    // 🚨 只寫臉長什麼樣，不寫「忍住」這種動作：stifled laugh／holding back laughter／holding back tears 在動漫模型裡畫出來就是手摀嘴、手擦淚
+    //   （11-06 她：「表情面膜大笑每次都跑出手來摀嘴」→ ComfyUI /history 她那晚 11 張內收大笑 8 張有手；
+    //    同一張裁圖、同一個遮罩、同一顆種子只換詞：改成只寫臉的 0 張有手，tmp/expr_laugh_hand/）。
+    //   她的包是 CFG 1 的 Turbo，負面詞完全沒作用，擋手只能從正面詞下手
     const EXPR_SET = [
         { exp: 'Happy',     zh: '微笑', d: 0.7, tags: '(gentle smile:1.3), closed mouth smile, soft eyes, happy',
                                             quiet: 'faint smile, (slight smile:1.2), closed mouth, calm soft eyes' },
         { exp: 'Laughing',  zh: '大笑', d: 0.8, tags: '(laughing:1.3), open mouth, big smile, closed eyes, happy',
-                                            quiet: 'stifled laugh, (closed mouth smile:1.2), (eyes curved:1.2), holding back laughter' },
+                                            quiet: '(closed mouth smile:1.3), (eyes curved:1.3), (closed eyes:1.1), wide smile, amused, happy' },
         { exp: 'Shy',       zh: '害羞', d: 0.7, tags: '(embarrassed:1.3), (blush:1.3), looking away, wavy mouth',
                                             quiet: '(light blush:1.1), averted gaze, looking down, closed mouth, shy' },
         { exp: 'Angry',     zh: '生氣', d: 0.8, tags: '(angry:1.4), furrowed brows, glaring, clenched teeth, frown',
@@ -893,7 +898,7 @@
         { exp: 'Surprised', zh: '驚訝', d: 0.8, tags: '(surprised:1.4), wide eyes, raised eyebrows, open mouth',
                                             quiet: '(slightly widened eyes:1.2), lips slightly parted, mild surprise' },
         { exp: 'Crying',    zh: '哭',   d: 0.8, tags: '(crying:1.4), tears streaming down face, frown, wet eyes',
-                                            quiet: 'eyes glistening with tears, single tear, holding back tears, closed mouth' },
+                                            quiet: 'eyes glistening with tears, (teary eyes:1.3), single tear, closed mouth, sad' },
     ];
     // 每個角色選一般還是內收：{ 名字: 'quiet' }，一般的不存
     const STYLE_KEY = 'acg_expr_style';
@@ -1338,7 +1343,9 @@
         const ex = { ch, img, W, H, has, srcUrl: url, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false, style: styleOf(ch),
                      ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null,
                      mouth: mouthOn(), mouthNeed: null,   // mouthNeed：還沒對得上動嘴的那幾張（算好之前是 null）
-                     lay: layOf(ch) || layCopy(LAY_DEF) };   // 嘴、眼睛小圈的位置（她拖過就記在這個角色身上）
+                     lay: layOf(ch) || layCopy(LAY_DEF),     // 嘴、眼睛小圈的位置（她拖過就記在這個角色身上）
+                     zoom: 'full', view: null };              // 畫面看整張（找臉時）還是放大頭部（找到臉就放大）
+        ex.view = exFullView(ex);
         S.ex = ex;
         const A = AUIx();
         const el = doc.createElement('div');
@@ -1352,16 +1359,19 @@
           + '</div>'
           + '<div class="acg-ex-body">'
           +   '<div class="acg-ex-who">' + esc(ch) + '</div>'
-          +   '<div class="acg-ex-stage"><div class="acg-ex-frame">'
-          +     '<img class="acg-ex-img" alt="">'
-          +     '<svg class="acg-ex-ring" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">'
+          // 圖和圈畫在同一張 SVG 裡：座標一律是原圖像素，放大頭部＝只改 viewBox（看原圖哪一塊），存下來的位置不受畫面大小影響
+          +   '<div class="acg-ex-stage">'
+          +     '<svg class="acg-ex-ring" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">'
+          +       '<image class="acg-ex-img" x="0" y="0" width="' + W + '" height="' + H + '" preserveAspectRatio="none"></image>'
           +       '<ellipse class="acg-ex-oval" vector-effect="non-scaling-stroke"></ellipse>'
           +       '<ellipse class="acg-ex-mouth" vector-effect="non-scaling-stroke"></ellipse>'
           +       '<ellipse class="acg-ex-mouth acg-ex-eye" vector-effect="non-scaling-stroke"></ellipse>'
           +       '<ellipse class="acg-ex-mouth acg-ex-eye" vector-effect="non-scaling-stroke"></ellipse>'
           +       '<circle class="acg-ex-knob" vector-effect="non-scaling-stroke"></circle>'
+          +       '<circle class="acg-ex-knob-hit"></circle>'
           +     '</svg>'
-          +   '</div></div>'
+          +     '<button class="acg-ex-zoom" type="button" data-act="expr-zoom"></button>'
+          +   '</div>'
           +   '<div class="acg-ex-note">找臉中…</div>'
           +   '<div class="acg-ex-seg">'
           +     '<button class="acg-ex-seg-btn" type="button" data-act="expr-style" data-style="normal">一般</button>'
@@ -1377,9 +1387,11 @@
           + '</div>';
         S.root.appendChild(el);
         ex.el = el;
-        el.querySelector('.acg-ex-img').src = img.src;
+        const pic = el.querySelector('.acg-ex-img');
+        pic.setAttribute('href', img.src);
+        try { pic.setAttributeNS('http://www.w3.org/1999/xlink', 'xlink:href', img.src); } catch (e) {}   // 舊的 Safari 只認 xlink:href
         exBindRing(ex);
-        exPaint(ex);
+        exSetView(ex, ex.view, false);
         // 哪幾張還沒有對得上的動嘴（背景算，算好再更新按鈕上的數字）
         mouthMissing(ex, info).then(n => { ex.mouthNeed = n; if (S && S.ex === ex) exPaint(ex); }, () => { ex.mouthNeed = []; });
         // 用什麼畫：「立繪表情」那列選 ComfyUI＝一張一張重畫臉；選自訂接口（GPT）＝一通九宮格（OS_EXPR_GRID）；別的做不了
@@ -1404,8 +1416,53 @@
             ex.found = box ? 'yes' : 'no';
             ex.blocked = why;
             el.classList.remove('is-finding');
-            exPaint(ex);
+            // 找到臉＝放大到只剩頭（手機上整張立繪縮那麼小，圈根本拉不準）；沒找到先看整張，讓她把圈拖到頭上
+            ex.zoom = box ? 'head' : 'full';
+            exSetView(ex, box ? exHeadView(ex) : exFullView(ex), true);
         }
+    }
+    // ── 生表情頁看原圖哪一塊（原圖像素的正方形 {x, y, s}）──
+    //   11-06 她：「表情面膜可以放大給我頭部就好嗎？手機窗口那麼小，還要我用那小面膜拉」
+    //   head＝以臉圈為中心、往上多留一點頭髮，圈的直徑約占畫面六成；full＝整張放得下
+    const HEAD_VIEW = 1.75;   // 畫面邊長＝圈的直徑的幾倍
+    function exFullView(ex) {
+        const s = Math.max(ex.W, ex.H);
+        return { x: (ex.W - s) / 2, y: (ex.H - s) / 2, s };
+    }
+    function exHeadView(ex) {
+        const r = ex.ring, s = Math.min(Math.max(r.rx, r.ry) * 2 * HEAD_VIEW, Math.max(ex.W, ex.H));
+        let x = r.cx - s / 2, y = r.cy - r.ry * 0.25 - s / 2;
+        if (s <= ex.W) x = Math.max(0, Math.min(ex.W - s, x));   // 圖夠大就別看到圖外面
+        if (s <= ex.H) y = Math.max(0, Math.min(ex.H - s, y));
+        return { x, y, s };
+    }
+    // 換看的那塊：滑過去（0.24 秒）；減少動態、或第一次畫就直接到。座標換算一律讀 SVG 當下的 viewBox，滑到一半拖也對得上
+    function exSetView(ex, v, anim) {
+        const svg = ex.el && ex.el.querySelector('.acg-ex-ring');
+        if (!svg || !v) return;
+        const from = ex.view;
+        ex.view = v;
+        const id = ex.viewRun = (ex.viewRun || 0) + 1;
+        const put = (b) => svg.setAttribute('viewBox', b.x + ' ' + b.y + ' ' + b.s + ' ' + b.s);
+        let still = !anim || !from;
+        try { if (win.matchMedia && win.matchMedia('(prefers-reduced-motion: reduce)').matches) still = true; } catch (e) {}
+        exPaint(ex);
+        if (still) { put(v); return; }
+        const t0 = Date.now(), D = 240;
+        const step = () => {
+            if (ex.viewRun !== id) return;
+            const k = Math.min(1, (Date.now() - t0) / D), e = 1 - Math.pow(1 - k, 3);
+            put({ x: from.x + (v.x - from.x) * e, y: from.y + (v.y - from.y) * e, s: from.s + (v.s - from.s) * e });
+            if (k < 1) win.requestAnimationFrame(step);
+        };
+        win.requestAnimationFrame(step);
+        setTimeout(() => { if (ex.viewRun === id) put(v); }, D + 150);   // 看不到的時候 rAF 不跑，照樣停在終點
+    }
+    function exZoom() {
+        const ex = S && S.ex;
+        if (!ex || ex.found === null) return;
+        ex.zoom = ex.zoom === 'head' ? 'full' : 'head';
+        exSetView(ex, ex.zoom === 'head' ? exHeadView(ex) : exFullView(ex), true);
     }
     function exClose() {
         if (!S || !S.ex) return;
@@ -1434,9 +1491,22 @@
     function exPaint(ex) {
         const el = ex.el; if (!el) return;
         const r = ex.ring;
-        const oval = el.querySelector('.acg-ex-oval'), knob = el.querySelector('.acg-ex-knob');
+        const oval = el.querySelector('.acg-ex-oval');
         oval.setAttribute('cx', r.cx); oval.setAttribute('cy', r.cy); oval.setAttribute('rx', r.rx); oval.setAttribute('ry', r.ry);
-        knob.setAttribute('cx', r.cx + r.rx * 0.7071); knob.setAttribute('cy', r.cy + r.ry * 0.7071); knob.setAttribute('r', Math.max(ex.W, ex.H) * 0.016);
+        // 拉大小的圓點跟著畫面大小走（不跟原圖）：放大頭部時才不會變成一大顆；外面一圈看不見的比較大，手指好按
+        const vs = (ex.view || exFullView(ex)).s;
+        [['.acg-ex-knob', 0.026], ['.acg-ex-knob-hit', 0.065]].forEach(([q, k]) => {
+            const c = el.querySelector(q); if (!c) return;
+            c.setAttribute('cx', r.cx + r.rx * 0.7071); c.setAttribute('cy', r.cy + r.ry * 0.7071); c.setAttribute('r', vs * k);
+        });
+        const zb = el.querySelector('.acg-ex-zoom');
+        if (zb) {
+            zb.hidden = ex.found === null;
+            if (zb.dataset.zoom !== ex.zoom) {   // 拖圈時每動一下都會重畫，鈕的字只在換的時候換
+                zb.dataset.zoom = ex.zoom;
+                zb.innerHTML = ex.zoom === 'head' ? '<i class="fa-solid fa-expand"></i> 看整張' : '<i class="fa-solid fa-magnifying-glass-plus"></i> 放大頭部';
+            }
+        }
         // 圈裡的小圈＝嘴、兩隻眼睛（跟著大圈走）
         const small = [mouthOval(r, ex.lay)].concat(eyeOvals(r, ex.lay));
         el.querySelectorAll('.acg-ex-mouth').forEach((mEl, i) => { const o = small[i]; if (!o) return; mEl.setAttribute('cx', o.cx); mEl.setAttribute('cy', o.cy); mEl.setAttribute('rx', o.rx); mEl.setAttribute('ry', o.ry); });
@@ -1490,10 +1560,16 @@
         exPaint(ex);
     }
     // 拖圈：按在小圈上＝搬那個小圈，按在大圈上（或空白處）＝搬大圈，按右下的圓點＝改大小；座標換成原圖像素
+    //   畫面看的是原圖哪一塊照 SVG 當下的 viewBox 換算（放大頭部、滑到一半都對得上），k＝原圖一點在畫面上幾點
     function exBindRing(ex) {
         const svg = ex.el.querySelector('.acg-ex-ring');
         let drag = null;
-        const at = (ev) => { const b = svg.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * ex.W, y: (ev.clientY - b.top) / b.height * ex.H }; };
+        const at = (ev) => {
+            const b = svg.getBoundingClientRect(), vb = svg.viewBox.baseVal;
+            const k = Math.min(b.width / vb.width, b.height / vb.height) || 1;
+            const ox = (b.width - vb.width * k) / 2, oy = (b.height - vb.height * k) / 2;   // meet：上下或左右可能留白
+            return { x: vb.x + (ev.clientX - b.left - ox) / k, y: vb.y + (ev.clientY - b.top - oy) / k, k };
+        };
         const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
         // 按到哪個小圈：按在圈上；用手指的話圈外一圈 10 點以內也算（手機上小圈只有十幾點寬，按不準）；都不是回 null
         //   🚨 滑鼠不放寬：大圈正中間離嘴的小圈只差幾點，放寬的話按圈心想搬大圈會變成搬嘴
@@ -1503,7 +1579,7 @@
             const i = Array.prototype.indexOf.call(ex.el.querySelectorAll('.acg-ex-mouth'), ev.target);
             if (i >= 0) return parts[i] || null;
             if (ev.pointerType === 'mouse') return null;
-            const sc = svg.getBoundingClientRect().width / ex.W;   // 原圖一點＝畫面幾點
+            const sc = p.k;   // 原圖一點＝畫面幾點
             let best = null, bd = 10;
             parts.forEach(pt => {
                 const o = ovalAt(ex.ring, pt);
@@ -1516,7 +1592,7 @@
             if (ex.busy || ex.found === null) return;
             const p = at(ev);
             const r = ex.ring;
-            if (ev.target.classList.contains('acg-ex-knob')) drag = { mode: 'size' };
+            if (ev.target.classList.contains('acg-ex-knob') || ev.target.classList.contains('acg-ex-knob-hit')) drag = { mode: 'size' };
             else if (nearPart(ev, p)) {
                 // 小圈（嘴、兩隻眼睛）各自拖：記成離圈心幾個半徑，大圈之後怎麼搬、縮放都跟著走
                 const part = nearPart(ev, p);
@@ -1546,6 +1622,12 @@
         });
         const end = () => {
             if (drag && drag.mode === 'part' && drag.moved) { laySave(ex.ch, ex.lay); exPaint(ex); }   // 拖完記在這個角色身上
+            // 放大頭部時：大圈搬到快出畫面、或拉得太大太小，放手後畫面跟過去（圈回到畫面中間、約占六成）
+            if (drag && drag.mode !== 'part' && ex.zoom === 'head') {
+                const v = ex.view, r = ex.ring, m = v.s * 0.04, d = Math.max(r.rx, r.ry) * 2 / v.s;
+                const inside = r.cx - r.rx >= v.x + m && r.cx + r.rx <= v.x + v.s - m && r.cy - r.ry >= v.y + m && r.cy + r.ry <= v.y + v.s - m;
+                if (!inside || d < 0.42 || d > 0.72) exSetView(ex, exHeadView(ex), true);
+            }
             drag = null;
         };
         svg.addEventListener('pointerup', end);
