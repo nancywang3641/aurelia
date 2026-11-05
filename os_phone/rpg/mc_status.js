@@ -629,6 +629,17 @@
             return true;
         });
     }
+    // 一次結束好幾件（撤離視差時把那個世界裡約的收掉：世界門 _leaveWorld）。how＝'cancel'｜'done'；已經結束的不動
+    function endEvents(ids, how) {
+        return run(async () => {
+            const st = await load();
+            const set = new Set((ids || []).map(String));
+            let n = 0;
+            st.events.forEach(e => { if (set.has(String(e.id)) && !e.done) { e.done = how === 'done' ? 'done' : 'cancel'; e.doneTs = Date.now(); n++; } });
+            if (n) await save();
+            return n;
+        });
+    }
     function removeEvent(id) {
         return run(async () => { const st = await load(); const i = st.events.findIndex(e => e.id === id); if (i >= 0) { st.events.splice(i, 1); await save(); } });
     }
@@ -870,7 +881,7 @@
 
     const API = {
         load: load, save: save, onMessage: onMessage, rollbackByIds: rollbackByIds, listSnapshotIds: listSnapshotIds, reconcileWithTavern: reconcileWithTavern,
-        setDate: setDate, setHp: setHp, setBuff: setBuff, addEvent: addEvent, updateEvent: updateEvent, removeEvent: removeEvent, applyStatusBlock: applyStatusBlock,
+        setDate: setDate, setHp: setHp, setBuff: setBuff, addEvent: addEvent, updateEvent: updateEvent, removeEvent: removeEvent, endEvents: endEvents, applyStatusBlock: applyStatusBlock,
         upcoming: upcoming, undated: undated, doneLabel: doneLabel, sigOf: sigOf, summary: summary, buildBlock: buildBlock, injectStatus: injectStatus, renderHud: renderHud,
         parseDate: parseDate, parseTime: parseTime, fmtDate: fmtDate, dateKey: dateKey, dayDiff: dayDiff, getChatId: getChatId,
         missionStart: missionStart, missionEnd: missionEnd, todayPlansText: todayPlansText, nowDate: nowDate,

@@ -21,6 +21,7 @@
                                  //   填鑰匙、選插入位置，然後條目一多就再也找不到）。這裡建完立刻能勾。
     const K_PLANS = 'sn_plans';  // 🧑‍💼 SN 32 樓白板送來、還沒展開的企劃：[{id,title,front,seed,player,people,travelers,nodes,endings,secret,by,at}]（跨聊天室，跟 K_WORLDS 同層；travelers 10-25 才有）
     const K_CURRENT = 'current'; // 這個聊天室目前在哪個世界（世界 id；撤離清空）— world_rules_injector 依此翻模組條目
+    const K_TRIP = 'trip_start'; // 這個聊天室這一趟什麼時候 DIVE 的 { id, at }（撤離時拿來認哪些約定是在那個世界裡約的；撤離清空）
     const BOOK_PARA = '【奧瑞亞-視差】';
     const BOOK_CORE = '【奧瑞亞-人物核心】';   // 她的熟人檔案庫（視差模式刻意不掛這本＝認知隔離，
                                               //   所以帶熟人同行是把那一條的內容「複製」進世界條目，只有點名的人會進去）
@@ -2891,6 +2892,8 @@
         await _setCurrentId(w.id);
         await _syncWorldLamps(w.id, 'DIVE');   // 這個世界改成常駐、其餘關掉——不靠關鍵字，也不用人記得切
         try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
+        // 這一趟從這刻開始：撤離時這之後劇情寫進日曆、還沒赴的約定算那個世界的（_tripPlans）
+        try { const c = _cid(); if (c) await _set(K_TRIP, { id: w.id, at: Date.now() }, c); } catch (e) {}
         const sent = await _toChat(_divePrompt(w));
         if (sent === 'nofield' || (_pwa() && sent !== 'sent')) {
             await gate.exitParallax();
@@ -3725,12 +3728,50 @@
         if (!from || !r || !r.ok) return r;
         // 行李撤離成功了才收：紀念品、交給白兔的、通訊錄（撤不成就什麼都沒寫）
         if (pack) { try { pack.done = await P.settle(from.name, pack, _tripEnd(from)); } catch (e) { console.warn('[Worldgate③] 回程行李沒收好', e); } }
+        // 📅 那個世界裡約好、還沒赴的：先列進回程指令讓主角在走之前交代，再標成取消（不然回奧瑞亞還掛在「近期約定」）
+        let left = [];
+        try { left = await _tripPlans(from); } catch (e) {}
+        if (left.length) { try { await (win.OS_MC_STATUS || window.OS_MC_STATUS).endEvents(left.map(x => x.id), 'cancel'); } catch (e) { console.warn('[Worldgate③] 那個世界的約定沒收掉', e); } }
+        try { await _set(K_TRIP, null, _cid()); } catch (e) {}
         // 🧳 回程章：書和燈都切回主世界了才送（同 DIVE 點燈要在送出之前那條）
-        const sent = await _toChat(_returnPrompt(from, pack));
+        const sent = await _toChat(_returnPrompt(from, pack, left));
         if (sent === 'sent') return { ok: true, back: sent, msg: '已返回主世界，回程這一章開始寫了' };
         if (sent === 'stuck') return { ok: true, back: sent, msg: '已返回主世界，但回程指令送不出去（還沒設定 AI？）。內容留在輸入框，設定好再按送出就接得上。' };
         const why = { noapi: '還沒設定 AI', busy: '劇情那邊正在寫上一段', nofield: _pwa() ? '劇情畫面打不開' : '找不到酒館輸入框' };
         return { ok: true, back: sent, msg: '已返回主世界，回程這一章沒送出去（' + (why[sent] || why.nofield) + '），下一章照常玩就好' };
+    }
+    // 📅 這一趟在那個世界裡約好、還沒赴的約定（劇情寫進日曆的那種；她自己記的、聊天 app 說好的、委託卡不算）。
+    //   11-06 她說「好，收掉」：撤離後那個世界的約定還掛在主角狀態「近期約定」，回奧瑞亞每輪都送給模型。
+    //   認法：DIVE 那刻記了時間（K_TRIP）就看約定是不是那之後記的；這版之前就進去的沒記，
+    //   酒館看 DIVE 那則是第幾樓（約定記著是哪一樓寫的）、網頁版看進世界那章的時間。回 [{ id, text }]
+    async function _tripPlans(w) {
+        const S = win.OS_MC_STATUS || window.OS_MC_STATUS;
+        if (!w || !S || !S.load) return [];
+        let since = 0, fromMsg = -1;
+        try { const rec = await _get(K_TRIP, null, _cid()); if (rec && rec.id === w.id && rec.at) since = rec.at; } catch (e) {}
+        if (!since) {
+            const marker = '進入視差世界「' + w.name + '」';
+            try {
+                if (_pwa()) {
+                    const db = _db(), sid = _cid();
+                    const list = (db && db.getAllVnChapters) ? (await db.getAllVnChapters()).filter(c => c && c.storyId === sid) : [];
+                    list.forEach(c => { if (JSON.stringify(c).indexOf(marker) >= 0 && (c.createdAt || 0) > since) since = c.createdAt || 0; });
+                } else {
+                    const R = win.VN_READER || window.VN_READER;
+                    const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
+                    // 讀檔版第一筆是聊天室的表頭（沒有內文），樓號要扣掉它；有自己的樓號就用樓號
+                    const off = (Array.isArray(msgs) && msgs[0] && msgs[0].mes == null && msgs[0].message == null) ? 1 : 0;
+                    if (Array.isArray(msgs)) msgs.forEach((m, i) => {
+                        if (m && m.is_user && String(m.mes || m.message || '').indexOf(marker) >= 0) fromMsg = (m.message_id != null ? Number(m.message_id) : i - off);
+                    });
+                }
+            } catch (e) {}
+        }
+        if (!since && fromMsg < 0) return [];
+        const st = await S.load();
+        return (st.events || [])
+            .filter(e => e && !e.done && e.src === 'ai' && ((since && (e.ts || 0) >= since) || (fromMsg >= 0 && e.msg != null && Number(e.msg) > fromMsg)))
+            .map(e => ({ id: e.id, text: ((e.date && S.fmtDate) ? S.fmtDate(e.date) + ' ' : '') + (e.time ? e.time + ' ' : '') + String(e.title || '') }));
     }
     // 🧳 這個世界自己怎麼離開：世界檔案第十段（「這個世界自己在轉的事」）寫的那句（歸門、渡口、季風、儀式那種）。
     //   撤離時世界條目已經關了，回程章要用就從這裡抄過去；很舊的世界沒有原文、或沒寫到，回 ''
@@ -3775,7 +3816,7 @@
     //   不多叫模型：這一章本來就是她下一章；送進聊天是一則訊息，重新生成照樣帶得到。
     //   送的時候視差那本和世界條目已經收掉了（跑團主持規範讀不到），所以帶不回來的東西、旅人回來是誰，
     //   照規範第 6、8 條在這裡講一次——只講回程用得到的，不複述整份。
-    function _returnPrompt(w, pack) {
+    function _returnPrompt(w, pack, left) {
         const endName = _tripEnd(w);
         const teamAll = (w.travelers || []).filter(t => t && t.recruited && !t.gone);
         const team = teamAll.map(t => String(t.name || '')).filter(Boolean);
@@ -3790,9 +3831,13 @@
         //   而且送的時候世界條目已經關了，主持AI 看不到這個世界自己怎麼離開（世界檔案第十段寫的歸門、渡口那些），
         //   開頭兩句就把人傳送到大廳。現在從世界檔案把那句抄過來，三段都要演：在世界裡交代、照它的方式離開 → 回大廳的過程 → 大廳、下線
         const way = _exitWay(w);
+        const plans = (left || []).map(x => String((x && x.text) || '').trim()).filter(Boolean);
         const rules = [
             '這一章是回程,從主角還在「' + w.name + '」寫起,照順序寫完三段,每一段都要演出來,不要開場就已經人在大廳、也不要一兩句就換場:(一)在「' + w.name + '」把事情交代完、照這個世界的方式離開;(二)離開那一刻到回到純白大廳;(三)在純白大廳結算、跟旅人分開,最後下線,意識回到奧瑞亞城裡自己的身體醒來為止。這一章之後劇情在奧瑞亞接著走,不再接著寫「' + w.name + '」。',
-            '(一)走之前先把在「' + w.name + '」還沒了的事交代掉:答應過的人、主角狀態「近期約定」裡還沒赴的約,一件一件當面說一聲、留話或託人轉告;跟這裡的人道別,照他們聽得懂的說法講(他們不知道視差系統)。',
+            (plans.length
+                ? '(一)走之前先把在「' + w.name + '」還沒了的事交代掉。這些約定主角赴不了了,系統已經記成取消:「' + plans.join('」「') + '」;一件一件當面跟對方說一聲、留話或託人轉告,其他答應過的人也一樣。'
+                : '(一)走之前先把在「' + w.name + '」還沒了的事交代掉:答應過的人、主角狀態「近期約定」裡還沒赴的約,一件一件當面說一聲、留話或託人轉告。') +
+                '跟這裡的人道別,照他們聽得懂的說法講(他們不知道視差系統)。',
             '(一)離開的方式照這個世界自己的' + (way ? ',世界設定是這樣寫的:「' + way + '」這是設定,用你自己的描寫演出來,不要照抄這句。' : ':在這個世界裡找到能離開的地方再走。') +
                 '要做的事一步一步演出來,不要直接傳送走' + (team.length ? ';同行旅人跟主角一起走' : '') + '。這一章辦不到的條件(要等某個日子、要付很大的代價),就讓主角找個能獨處的地方用視差系統下線,一樣先把上一條的事做完再走。',
             '(二)離開那一刻:「' + w.name + '」的景物、聲音、身體的感覺怎麼退掉,純白大廳怎麼出現,把這段過程寫出來。',
