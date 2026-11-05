@@ -786,12 +786,17 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #game-char.vn-avatar.vn-solo, #game-char-2.vn-avatar.vn-solo { left: 0; right: 0; margin-left: auto; margin-right: auto; }
         /* 🫁 呼吸（11-05）：立繪以屁股那條線（圖高 86%）為準上下微微伸縮——那條線以下幾乎不動，往上越來越明顯，
            肩膀約起伏圖高的 0.65%、頭再多一點。用獨立的 scale 屬性，不碰 transform（別的效果要用）；
-           兩格週期錯開，兩個人不會一起吸氣。頭像框（vn-avatar）不呼吸；系統設了「減少動態」也不呼吸 */
-        #game-char, #game-char-2 { transform-origin: 50% 86%; animation: vnBreath 3.8s ease-in-out infinite; }
-        #game-char-2 { animation-duration: 4.3s; animation-delay: -1.6s; }
-        #game-char.vn-avatar, #game-char-2.vn-avatar { animation: none; }
+           兩格週期錯開，兩個人不會一起吸氣。頭像框（vn-avatar）不呼吸；系統設了「減少動態」也不呼吸。
+           呼吸寫成變數 --vn-breath：搖晃／嚇一跳／滑進來那幾個 class 要把它跟自己的動畫寫在同一行，不然會把呼吸（或自己）蓋掉。
+           頭不跟著拉長（11-06）：圖停穩時 vn_core_stage.js 的 _breath* 在同一格上面疊一張 .vn-breath-head 只露脖子以上、跟著脖子平移，
+           原本這張剪掉脖子以上（伸縮倍數 JS 從這份關鍵影格讀，改這裡不用改 JS） */
+        #game-char   { --vn-breath: vnBreath 3.8s ease-in-out infinite; }
+        #game-char-2 { --vn-breath: vnBreath 4.3s ease-in-out -1.6s infinite; }
+        #game-char.vn-avatar, #game-char-2.vn-avatar { --vn-breath: none; }
+        @media (prefers-reduced-motion: reduce) { #game-char, #game-char-2 { --vn-breath: none; } }
+        #game-char, #game-char-2 { transform-origin: 50% 86%; animation: var(--vn-breath); }
         @keyframes vnBreath { 0%, 100% { scale: 1 1; } 50% { scale: 1 1.011; } }
-        @media (prefers-reduced-motion: reduce) { #game-char, #game-char-2 { animation: none; } }
+        #game-char-container .vn-breath-head { position: absolute; display: none; margin: 0; padding: 0; border: 0; right: auto; bottom: auto; max-width: none; max-height: none; pointer-events: none; user-select: none; transition: none; animation: none; }
         /* 雙擊立繪 → 立繪滑開讓位 */
         #game-char.vn-cc-shift-l { left: -14%; right: auto; }
         #game-char-2.vn-cc-shift-r { right: -14%; left: auto; }
@@ -963,6 +968,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             100% { transform: scale(1) translateY(0); filter: brightness(1); }
         }
         .sprite-jumpscare { animation: anim-sprite-jumpscare 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
+        /* 舞台兩格：上面那三個 class 比 #game-char 的呼吸規則弱，11-05 加呼吸後搖晃／嚇一跳／滑進來都被蓋掉了。
+           這裡把呼吸（--vn-breath，排第一個才不會每次重來）跟它們寫在同一行 */
+        #game-char.sprite-shake, #game-char-2.sprite-shake { animation: var(--vn-breath), anim-sprite-shake 0.4s ease-in-out; }
+        #game-char.sprite-slide-in-right, #game-char-2.sprite-slide-in-right { animation: var(--vn-breath), anim-sprite-slide-in-right 0.45s cubic-bezier(.22,1,.36,1) both; }
+        #game-char.sprite-jumpscare, #game-char-2.sprite-jumpscare { animation: var(--vn-breath), anim-sprite-jumpscare 0.5s cubic-bezier(0.2, 0.8, 0.2, 1); }
 
         /* 方形頭像 (char-portrait) - 注意原本有 translate(-50%, -50%) 的中心定位 */
         @keyframes anim-portrait-shake {

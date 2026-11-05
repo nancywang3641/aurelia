@@ -808,6 +808,9 @@
                             return u;
                         };
                         fr = {};
+                        // 呼吸分頭和身體用（_breathNeck）：臉圈底下再一點＝脖子（圖高的幾成）
+                        const FE = M || E;
+                        if (FE && FE.face && (FE.h || H)) fr.neck = Math.min(0.95, (FE.face.y + FE.face.h * 1.1) / (FE.h || H));
                         if (lm) { fr.half = await make('half', false); fr.open = await make('open', false); }
                         if (le) fr.shut = await make(null, true);
                         // 閉眼＋講話那兩份背後再疊：講話剛好眨眼才用得到，還沒好那一下就照樣換嘴、先不閉
@@ -869,6 +872,7 @@
                 if (!b || b.img !== img || b.name !== st.name) b = bl[i] = { img, name: st.name, base: '', exp: '', rev: -1, fr: null, shut: false, next: now + 1500 + Math.random() * 2500 };
                 if (document.hidden || img.style.display === 'none' || img.style.opacity !== '1' || !img.getClientRects().length || !img.complete || !img.naturalWidth) continue;
                 shown = true;
+                try { this._breathTick(img, st); } catch (e) {}   // 🫁 停穩了就把頭跟身體分開呼吸（頭不拉長）
                 const base = this._faceBase(img) || img.getAttribute('src') || '';
                 const exp = String(st.exp || '');
                 if (!base) continue;
@@ -889,6 +893,187 @@
                 }, 100 + Math.random() * 40);
             }
             return anyone ? shown : null;
+        },
+        // ===== 🫁 呼吸時頭不拉長（11-06）=====
+        //   CSS 的 vnBreath 是整張以屁股那條線為準上下伸縮，頭也跟著被拉長一點（她：「脖子上能不能也衰減一下，不然頭有拉伸感」）。
+        //   圖停穩的時候，在這格上面疊一張一樣的圖（.vn-breath-head）只露脖子以上、跟著脖子那一點平移不伸縮，蓋住底下被拉長的頭。
+        //   這格自己不動（照舊整張伸縮、影子也由它出）；頭那張不帶影子。脖子在哪：圖鑑記的臉圈（做過動嘴、眨眼的）→
+        //   去背輪廓頭底下最窄那排再往下到開始變寬（肩膀）那排 → 都認不出就不疊（照舊整張伸縮）。
+        //   一有變化（換表情、淡入淡出、換位置、搖晃、換說話的人、視窗大小變了）當場收起來，停穩 0.3 秒再疊；
+        //   講話、眨眼換的那幾份（_faceBase 認得的）只照抄過去，不收。
+        //   🚨 兩張都帶影子、各剪一半的做法試過（11-06）：換手那條線上影子會疊兩次或缺一塊，背景上看得到一條線，所以影子只留一份
+        _breathSt: null,
+        _breathSig: function(img) {   // 這格的樣子（class＋行內樣式）：變了就收起來
+            //   空白全拿掉：同樣的樣式瀏覽器排出來的字，尾巴有時多一個空格
+            return img.className + '|' + String(img.style.cssText || '').replace(/\s+/g, '');
+        },
+        _breathOf: function(img) {
+            const S = this._breathSt || (this._breathSt = new Map());
+            let s = S.get(img);
+            if (s) return s;
+            s = { img, head: null, on: false, busy: false, base: '', sig: this._breathSig(img), changed: Date.now(), anim: null };
+            S.set(img, s);
+            new MutationObserver(recs => {
+                let other = false, src = false;
+                recs.forEach(r => { if (r.attributeName === 'src') src = true; else other = true; });
+                if (other) {
+                    const sig = this._breathSig(img);
+                    if (sig !== s.sig) { s.sig = sig; s.changed = Date.now(); this._breathOff(s); return; }
+                }
+                if (src && s.on) {
+                    const base = this._faceBase(img) || img.getAttribute('src') || '';
+                    if (base !== s.base) { s.changed = Date.now(); this._breathOff(s); return; }
+                    s.head.src = img.getAttribute('src');   // 講話、眨眼換的那幾份：頭那張跟著換（同一輪、畫面上不會差一格）
+                }
+            }).observe(img, { attributes: true, attributeFilter: ['src', 'class', 'style'] });
+            if (!this._breathWatch) {   // 視窗、劇情畫面大小變了：位置要重算，先全部收回
+                this._breathWatch = true;
+                const off = () => { (this._breathSt || new Map()).forEach(x => { x.changed = Date.now(); this._breathOff(x); }); };
+                try { (img.ownerDocument.defaultView || window).addEventListener('resize', off); } catch (e) {}
+                try { const box = img.parentNode, RO = (img.ownerDocument.defaultView || window).ResizeObserver; if (box && RO) new RO(off).observe(box); } catch (e) {}
+            }
+            return s;
+        },
+        _breathOff: function(s) {
+            if (!s || !s.on) return;
+            s.on = false;
+            if (s.anim) { try { s.anim.cancel(); } catch (e) {} s.anim = null; }
+            if (s.head) s.head.style.display = 'none';
+        },
+        // 眨眼那邊每 0.12 秒巡一次（圖在畫面上才叫）
+        _breathTick: function(img, st) {
+            const s = this._breathOf(img);
+            if (s.on || s.busy) return;
+            if (Date.now() - s.changed < 300) return;
+            if (img.style.display !== 'block' || img.style.opacity !== '1' || !img.complete || !img.naturalWidth) return;
+            if (!img.getAnimations) return;
+            const anims = img.getAnimations();
+            const br = anims.find(a => a.animationName === 'vnBreath');
+            if (!br || br.playState !== 'running' || br.startTime == null) return;   // 不呼吸（頭像框、減少動態）就不用分
+            if (anims.some(a => a !== br && a.playState === 'running')) return;      // 淡入、換位置、搖晃還在跑
+            const base = this._faceBase(img) || img.getAttribute('src') || '';
+            if (!base) return;
+            const C = this._breathNeckCache || (this._breathNeckCache = new Map());
+            s.busy = true;
+            const done = () => { s.busy = false; };
+            if (!C.has(base)) { this._breathNeck(img, base, st).then(done, done); return; }
+            const neck = C.get(base);
+            if (!neck) { done(); return; }   // 認不出脖子：照舊整張伸縮
+            this._breathSplit(s, br, base, neck).then(done, () => { done(); this._breathOff(s); });
+        },
+        // 脖子：{ frac＝在圖高的幾成, spans＝那一排人身上（不透明）的幾段 [左, 右]（圖寬的幾成）}；認不出記 null
+        //   要讀得到這張圖的點才分（接縫要知道哪裡是人）：別的網站沒開放的圖照舊整張伸縮
+        _breathNeck: async function(img, base, st) {
+            const C = this._breathNeckCache || (this._breathNeckCache = new Map());
+            let out = null;
+            try {
+                const fr = st ? await this._mouthFramesFor(st.name, img, base, String(st.exp || '')) : null;
+                const pic = /^https?:/i.test(base)
+                    ? await new Promise((res, rej) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => res(i); i.onerror = rej; i.src = base; })
+                    : await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = base; });
+                out = this._breathSilNeck(pic, fr && fr.neck);
+            } catch (e) { out = null; }
+            C.set(base, out);
+            if (C.size > 24) C.delete(C.keys().next().value);
+        },
+        // 去背輪廓：每排有幾點不透明。頭最寬那排往下找最窄那排，再往下到「開始變寬」（肩膀）那排＝脖子。
+        //   最窄那排不一定是脖子：肩膀高、頭微低的人，下巴旁邊就是肩膀，最窄的是嘴巴那排（11-06 測試員就是）。
+        //   given＝圖鑑臉圈推的（做過動嘴、眨眼的），有就用它，這裡只算那排的人在哪幾段。沒去背、長髮蓋住脖子（不變窄）→ null
+        _breathSilNeck: function(pic, given) {
+            const nh = pic.naturalHeight, nw = pic.naturalWidth;
+            if (!nh || !nw) return null;
+            const H0 = 240, W0 = Math.max(8, Math.round(nw * H0 / nh));
+            const c = document.createElement('canvas'); c.width = W0; c.height = H0;
+            const g = c.getContext('2d', { willReadFrequently: true });
+            g.drawImage(pic, 0, 0, W0, H0);
+            let d;
+            try { d = g.getImageData(0, 0, W0, H0).data; } catch (e) { return null; }   // 別的網站的圖讀不到
+            const A = (x, y) => d[(y * W0 + x) * 4 + 3];
+            const w = new Array(H0).fill(0);
+            let clear = 0;
+            for (let y = 0; y < H0; y++) for (let x = 0; x < W0; x++) { if (A(x, y) > 40) w[y]++; else clear++; }
+            if (clear < W0 * H0 * 0.05) return null;
+            let ny = -1;
+            if (given > 0 && given < 1) ny = Math.min(H0 - 1, Math.floor(given * H0));
+            else {
+                let top = w.findIndex(v => v > 0), bot = H0 - 1;
+                if (top < 0) return null;
+                while (bot > top && !w[bot]) bot--;
+                const F = bot - top;
+                if (F < 40) return null;
+                const sm = w.map((v, i) => ((w[i - 1] != null ? w[i - 1] : v) + v + (w[i + 1] != null ? w[i + 1] : v)) / 3);
+                let hy = top, hmax = 0;
+                for (let y = top; y <= top + F * 0.25; y++) if (sm[y] > hmax) { hmax = sm[y]; hy = y; }
+                let nmin = Infinity, my = -1;
+                for (let y = hy + 1; y <= top + F * 0.45; y++) if (sm[y] < nmin) { nmin = sm[y]; my = y; }
+                if (my < 0 || nmin > hmax * 0.8) return null;
+                for (let y = my + 1; y <= Math.min(bot, my + F * 0.2); y++) if (sm[y] > nmin * 1.3) { ny = y - 1; break; }
+                if (ny < 0) return null;
+            }
+            // 那一排人身上的幾段（不透明＞一半）
+            const spans = [];
+            let a = -1;
+            for (let x = 0; x <= W0; x++) {
+                const on = x < W0 && A(x, ny) > 128;
+                if (on && a < 0) a = x;
+                if (!on && a >= 0) { spans.push([a / W0, x / W0]); a = -1; }
+            }
+            if (!spans.length) return null;
+            return { frac: (ny + 0.5) / H0, spans };
+        },
+        _breathSplit: async function(s, br, base, neck) {
+            const img = s.img, doc = img.ownerDocument, view = doc.defaultView || window;
+            const cs = view.getComputedStyle(img);
+            const W = parseFloat(cs.width), H = parseFloat(cs.height), nw = img.naturalWidth, nh = img.naturalHeight;
+            if (!(W > 0 && H > 0 && nw && nh)) return;
+            // 圖畫在框裡的哪裡（object-fit: contain＋object-position，靠底）
+            let dw = W, dh = H;
+            if (cs.objectFit === 'contain') { const k = Math.min(W / nw, H / nh); dw = nw * k; dh = nh * k; }
+            const op = String(cs.objectPosition || '50% 50%').split(/\s+/);
+            const at = (v, free) => /%$/.test(v || '') ? free * parseFloat(v) / 100 : (parseFloat(v) || 0);
+            const left0 = at(op[0] || '50%', W - dw), top = at(op[1] || '50%', H - dh);
+            const neckY = top + neck.frac * dh;
+            const oy = parseFloat(String(cs.transformOrigin).split(/\s+/)[1]);
+            if (!(oy > neckY)) return;
+            // 頭那張的動畫：照 CSS 那份關鍵影格逐格換算（scale: 1 sy → 脖子那點往上移多少），時間跟這格的呼吸對齊
+            const kf = br.effect.getKeyframes();
+            const hk = kf.map(k => {
+                const p = String(k.scale || '1').trim().split(/\s+/), sy = parseFloat(p[1] || p[0]) || 1;
+                // 🚨 scale 那格不能省：動畫有 scale 的圖，瀏覽器對齊像素的方式跟只有 translate 的不一樣，
+                //   省掉的話頭那張會跟底下那張差 0.2～0.4 點，邊緣有重影（11-06 三種螢幕量過，帶上就剛好疊在一起）。
+                //   每格都寫 1 1 的話瀏覽器當它沒在動、照樣不對齊，所以吸氣那格多一點點（十萬分之一，600 點高差不到 0.01 點）
+                return { offset: k.computedOffset, easing: k.easing || 'linear', scale: sy === 1 ? '1 1' : '1 1.00001', translate: '0px ' + (-(sy - 1) * (oy - neckY)).toFixed(3) + 'px' };
+            });
+            let h = s.head;
+            if (!h || !h.isConnected) {
+                h = s.head = doc.createElement('img');
+                h.className = 'vn-breath-head'; h.alt = ''; h.draggable = false; h.setAttribute('aria-hidden', 'true');
+                img.after(h);
+            }
+            const cur = img.getAttribute('src');
+            if (h.getAttribute('src') !== cur) h.src = cur;
+            if (!h.complete || !h.naturalWidth) { try { await h.decode(); } catch (e) { return; } }
+            // 等的時候變了：這次不分
+            if (s.on || this._breathSig(img) !== s.sig || Date.now() - s.changed < 300 || (this._faceBase(img) || img.getAttribute('src')) !== base || br.playState !== 'running') return;
+            h.src = img.getAttribute('src');
+            // 左右照實際位置（有小數；呼吸只拉高度，左右不受影響），上下照框（靠底）
+            const parent = img.offsetParent || img.parentNode;
+            const r = img.getBoundingClientRect(), pr = parent.getBoundingClientRect();
+            const left = r.left - pr.left - (parent.clientLeft || 0);
+            const topPx = (cs.bottom && cs.bottom !== 'auto') ? (parent.clientHeight - parseFloat(cs.bottom) - H) : img.offsetTop;
+            const hs = h.style;
+            hs.left = left + 'px'; hs.top = topPx + 'px'; hs.width = W + 'px'; hs.height = H + 'px';
+            hs.objectFit = cs.objectFit; hs.objectPosition = cs.objectPosition; hs.transformOrigin = cs.transformOrigin;
+            // 影子只由這格自己出（它不剪，整張照舊伸縮）：頭那張不帶影子，只蓋在上面。
+            //   兩張各帶影子的話，換手那條線上影子會疊兩次或缺一塊，背景上看得到一條線（11-06 試過剪齊、只在人身上重疊都還在）
+            const f = String(cs.filter || '').replace(/drop-shadow\((?:[^()]|\([^()]*\))*\)/g, '').trim();
+            hs.filter = f || 'none'; hs.zIndex = cs.zIndex; hs.opacity = '1';
+            hs.clipPath = 'polygon(-50% -50%, 150% -50%, 150% ' + neckY.toFixed(2) + 'px, -50% ' + neckY.toFixed(2) + 'px)';
+            const t = br.effect.getTiming();
+            s.anim = h.animate(hk, { duration: t.duration, delay: t.delay || 0, iterations: Infinity, fill: 'both' });
+            s.anim.startTime = br.startTime;
+            hs.display = 'block';
+            s.on = true; s.base = base;
         },
         // text＝這句台詞：嘴至少動完「大約唸完這句」的時間（一個字 90ms、最少 0.6 秒、最多 5 秒），
         //   字一下就跑完（打字快、她點了跳過）也看得到在講；下一句一開始就停
