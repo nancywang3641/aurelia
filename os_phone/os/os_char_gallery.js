@@ -59,7 +59,7 @@
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
-            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。找到臉會自動放大到只看頭部，圈比較好拉；想看整張圖按右上角「看整張」。\n「講話動嘴、會眨眼」開著的話，每張圖會順便做微張、張開兩種嘴和一張閉眼；劇情裡他講話時，字在跑、配音在響，嘴就會開合，平常隔幾秒眨一下眼。圈裡的小圈是嘴和兩隻眼睛的位置，跟著大圈走；哪個沒套到就直接拖那個小圈，嘴和兩隻眼睛各拖各的，下次打開這個角色還記得。想回到原本的位置，按「小圈放回原位」。大笑、驚訝嘴本來就開著，不做嘴；大笑眼睛瞇著，不做閉眼。沒做到的表情，講話、眨眼時借同一個人差不多的表情來用。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著動嘴眨眼的話再多畫一到兩次做嘴和閉眼（一次四張圖）。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。找到臉會自動放大到只看頭部，圈比較好拉；想看整張圖按右上角「看整張」。\n「講話動嘴、會眨眼」開著的話，每張圖會順便做微張、張開兩種嘴和一張閉眼；劇情裡他講話時，字在跑、配音在響，嘴就會開合，平常隔幾秒眨一下眼。圈裡的小圈是嘴和兩隻眼睛的位置，跟著大圈走；哪個沒套到就直接拖那個小圈，嘴和兩隻眼睛各拖各的，下次打開這個角色還記得。\n側臉：只看得到一隻眼睛的話，按下面「左邊眼睛」或「右邊眼睛」把看不到的那隻關掉，眨眼就只做看得到的那隻；頭歪的立繪，拖大圈正上方那顆空心圓點把圈轉正對著臉，小圈跟著一起轉。想回到原本的位置和角度，按「圈放回原位」。大笑、驚訝嘴本來就開著，不做嘴；大笑眼睛瞇著，不做閉眼。沒做到的表情，講話、眨眼時借同一個人差不多的表情來用。\n「眼睛顏色」「臉上要留著的」：重畫時會照這幾樣畫，眼鏡才不會被畫掉、眼睛不會換顏色。AI 生的立繪會從它的外觀描述自動勾好，不對就點掉或改選；你改過就照你選的。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著動嘴眨眼的話再多畫一到兩次做嘴和閉眼（一次四張圖）。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -691,6 +691,9 @@
             if (act === 'expr-mouth') { exMouth(); return; }
             if (act === 'expr-lay-reset') { exLayReset(); return; }
             if (act === 'expr-zoom') { exZoom(); return; }
+            if (act === 'expr-eyeoff') { exEyeOff(+b.dataset.i); return; }
+            if (act === 'expr-eyecolor') { exLook('eye', b.dataset.k); return; }
+            if (act === 'expr-acc') { exLook('acc', b.dataset.k); return; }
             if (act === 'expr-go') { await exGo(); return; }
             if (act === 'expr-view') {
                 const done = S.ex ? S.ex.done.filter(r => r.url) : [];
@@ -912,6 +915,98 @@
         const A = AUIx();
         return A && A.lsSet ? A.lsSet(STYLE_KEY, JSON.stringify(m), '角色表情的個性') : false;
     }
+    // 👓 臉上本來就有的（11-06 她：「眼鏡也是大問題，完全會被吃掉」）
+    //   生表情不帶角色描述（描述裡手上的東西會被畫到臉上），所以模型不知道這張臉戴眼鏡、眼睛什麼顏色：
+    //   圈裡整個重畫，眼鏡就不見、棕眼睛變藍（11-06 她那晚 20 張戴眼鏡的全壞、約 18 張換了眼睛顏色）。
+    //   → 每個角色記「眼睛顏色＋臉上要留著的東西」，只把這幾樣帶進重畫的詞。沒記過就從生成立繪時的描述自動帶出來，她可以改。
+    const LOOK_KEY = 'acg_expr_look';
+    const EYE_COLORS = [
+        { k: 'brown', zh: '棕', tag: 'brown eyes', re: /\b(brown|hazel|amber)\b|棕|褐|咖啡|琥珀/ },
+        { k: 'black', zh: '黑', tag: 'black eyes', re: /\bblack\b|黑/ },
+        { k: 'blue', zh: '藍', tag: 'blue eyes', re: /\b(blue|azure)\b|藍|蓝/ },
+        { k: 'green', zh: '綠', tag: 'green eyes', re: /\bgreen\b|綠|绿/ },
+        { k: 'grey', zh: '灰', tag: 'grey eyes', re: /\b(grey|gray|silver)\b|灰|銀|银/ },
+        { k: 'red', zh: '紅', tag: 'red eyes', re: /\b(red|crimson|scarlet)\b|紅|红/ },
+        { k: 'gold', zh: '金', tag: 'yellow eyes', re: /\b(gold|golden|yellow)\b|金|黃|黄/ },
+        { k: 'purple', zh: '紫', tag: 'purple eyes', re: /\b(purple|violet)\b|紫/ },
+        { k: 'pink', zh: '粉', tag: 'pink eyes', re: /\bpink\b|粉/ },
+    ];
+    // tag＝送給模型的詞；re＝從描述認出來（英文、中文都認）
+    const FACE_ACCS = [
+        { k: 'glasses', zh: '眼鏡', tag: 'glasses', re: /glasses|spectacles|eyewear|眼鏡|眼镜/ },
+        { k: 'sunglasses', zh: '墨鏡', tag: 'sunglasses', re: /sunglasses|墨鏡|墨镜/ },
+        { k: 'monocle', zh: '單邊眼鏡', tag: 'monocle', re: /monocle|單邊眼鏡|單片眼鏡|单片眼镜/ },
+        { k: 'eyepatch', zh: '眼罩', tag: 'eyepatch', re: /eye ?patch|眼罩/ },
+        { k: 'hairover', zh: '瀏海遮眼', tag: 'hair over one eye', re: /hair over (one |an |the )?eyes?|瀏海.{0,4}[遮蓋]|刘海.{0,4}[遮盖]/ },
+        { k: 'scar', zh: '疤', tag: 'scar on face', re: /\bscars?\b|疤/ },
+        { k: 'mole', zh: '痣', tag: 'mole', re: /\bmole\b|beauty mark|痣/ },
+        { k: 'freckles', zh: '雀斑', tag: 'freckles', re: /freckle|雀斑/ },
+        { k: 'beard', zh: '鬍子', tag: 'facial hair', re: /beard|stubble|mustache|moustache|goatee|鬍|胡子|胡渣/ },
+        { k: 'mask', zh: '面具', tag: 'mask', re: /\b(half[- ]?)?mask\b|面具/ },
+        { k: 'makeup', zh: '妝', tag: 'makeup', re: /makeup|lipstick|eyeshadow|eyeliner|口紅|眼影|[妝妆]/ },
+        { k: 'facemark', zh: '臉上花紋', tag: 'facial mark', re: /facial (mark|tattoo)|face paint|tattoo on (the )?face|臉上.{0,3}(紋|彩繪)|面紋/ },
+    ];
+    function lookMap() { try { const v = JSON.parse(localStorage.getItem(LOOK_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+    function lookFix(v) {
+        if (!v || typeof v !== 'object') return null;
+        return { eye: EYE_COLORS.some(c => c.k === v.eye) ? v.eye : '', acc: Array.isArray(v.acc) ? v.acc.filter(k => FACE_ACCS.some(a => a.k === k)) : [],
+                 phrase: (v.phrase && typeof v.phrase === 'object') ? v.phrase : {} };
+    }
+    function lookOf(ch) { const m = lookMap(); const k = Object.keys(m).find(n => sameChar(n, ch)); return k ? lookFix(m[k]) : null; }
+    function lookSave(ch, look) {
+        const m = lookMap();
+        Object.keys(m).forEach(n => { if (sameChar(n, ch)) delete m[n]; });
+        if (look) m[ch] = { eye: look.eye || '', acc: look.acc || [], phrase: look.phrase || {} };
+        const A = AUIx();
+        return A && A.lsSet ? A.lsSet(LOOK_KEY, JSON.stringify(m), '生表情時角色臉上要留著的東西') : false;
+    }
+    // 從立繪生成時的描述認出眼睛顏色和臉上的東西（英文的話連前面的形容一起留，像 thin black-framed glasses）
+    function lookFromText(text) {
+        const t = String(text || '').toLowerCase(), out = { eye: '', acc: [], phrase: {} };
+        if (!t) return out;
+        // 眼睛顏色：英文找「○○ eyes」、中文找「○色的眼睛／瞳」；兩種以上（異色瞳）不猜
+        const eyeBits = [];
+        (t.match(/\b([a-z]+)[- ](eyes|eyed|pupils|irises)\b/g) || []).forEach(s => eyeBits.push(s));
+        (t.match(/([一-鿿]{1,3})色?的?(眼睛|眼眸|瞳孔|瞳|眸)/g) || []).forEach(s => eyeBits.push(s));
+        const hit = EYE_COLORS.filter(c => eyeBits.some(s => c.re.test(s)));
+        if (hit.length === 1) out.eye = hit[0].k;
+        let rest = t;
+        // 墨鏡、單邊眼鏡先認：認到就從字裡拿掉，後面才不會又算成一般眼鏡
+        FACE_ACCS.slice().sort((a, b) => (/^(sunglasses|monocle)$/.test(b.k) ? 1 : 0) - (/^(sunglasses|monocle)$/.test(a.k) ? 1 : 0)).forEach(a => {
+            if (!a.re.test(rest)) return;
+            out.acc.push(a.k);
+            const m = rest.match(new RegExp('((?:[a-z]+[- ]){0,3})(' + a.re.source + ')'));
+            if (m && /^[a-z -]+$/.test(m[0]) && m[1]) out.phrase[a.k] = m[0].trim();
+            if (a.k === 'sunglasses' || a.k === 'monocle') rest = rest.replace(a.re, ' ');   // 墨鏡、單邊眼鏡不要再被算成一般眼鏡
+        });
+        return out;
+    }
+    async function lookAuto(info) {
+        const C = Cache();
+        if (!C || !info) return null;
+        for (const g of (info.gen || []).slice().sort((a, b) => (a.store === 'avatar_cache' ? 0 : 1) - (b.store === 'avatar_cache' ? 0 : 1))) {
+            try { const full = await C.getRaw(g.store, g.key); if (full && full.prompt) return lookFromText(full.prompt); } catch (e) {}
+        }
+        return null;
+    }
+    // 送給模型的詞：眼睛顏色（只有表情那張要，閉眼、動嘴不用）＋臉上的東西
+    function lookTags(look, withEye) {
+        if (!look) return '';
+        const t = [];
+        if (withEye && look.eye) t.push((EYE_COLORS.find(c => c.k === look.eye) || {}).tag);
+        (look.acc || []).forEach(k => { const a = FACE_ACCS.find(x => x.k === k); if (a) t.push('(' + ((look.phrase || {})[k] || a.tag) + ':1.2)'); });
+        return t.filter(Boolean).map(s => s + ', ').join('');
+    }
+    // 臉的角度：只看得到一隻眼睛＝側臉；兩隻眼睛都往同一邊拖＝斜側；大圈轉了＝歪頭。重畫時照這個角度畫，不會轉回正面
+    function viewTags(lay) {
+        if (!lay) return '';
+        const t = [];
+        if (lay.eyes.some(e => e.off)) t.push('from side');
+        else if (Math.abs((lay.eyes[0].u + lay.eyes[1].u) / 2) > 0.15) t.push('three-quarter view');
+        if (Math.abs(lay.rot || 0) > 0.14) t.push('head tilt');
+        return t.map(s => s + ', ').join('');
+    }
+
     // 劇情寫的表情 → 上面哪一張（照順序比：大笑、哭要排在微笑、難過前面；Unhappy 要先被難過接走）
     const NEAR_EXP = [
         [/laugh|giggl|chuckl/i, 'Laughing'],
@@ -944,8 +1039,8 @@
     }
     function canvasOf(w, h) { const c = doc.createElement('canvas'); c.width = w; c.height = h; return c; }
     // 羽化的橢圓：中間全白、最外 soft 那段漸漸透明（不用 ctx.filter：iPhone 的畫布不吃）
-    function softOval(g, cx, cy, rx, ry, soft) {
-        g.save(); g.translate(cx, cy); g.scale(1, ry / rx);
+    function softOval(g, cx, cy, rx, ry, soft, rot) {
+        g.save(); g.translate(cx, cy); if (rot) g.rotate(rot); g.scale(1, ry / rx);   // rot＝頭歪的時候圈跟著轉（弧度）
         const gr = g.createRadialGradient(0, 0, Math.max(0, rx - soft), 0, 0, rx);
         gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
         g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill(); g.restore();
@@ -967,7 +1062,7 @@
             const m = [0, 0, 0], q = [0, 0, 0]; let n = 0;
             for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
                 let r = 1e9;
-                for (const v of os) r = Math.min(r, Math.sqrt(((x + 0.5 - v.cx) / v.rx) ** 2 + ((y + 0.5 - v.cy) / v.ry) ** 2));
+                for (const v of os) r = Math.min(r, ovalDist(v, x + 0.5, y + 0.5));
                 const i = (y * w + x) * 4;
                 if (r < r0 || r > r1 || O.data[i + 3] < 200) continue;
                 for (let k = 0; k < 3; k++) { m[k] += d[i + k]; q[k] += d[i + k] * d[i + k]; } n++;
@@ -983,6 +1078,28 @@
         pg.putImageData(P, 0, 0);
         return patch;
     }
+    // 🎚 重畫的力道分區（11-06 她：「反正我生成十次，八次糟糕」）：她那晚 75 張，眉毛臉型走樣、平白冒汗珠、臉紅、眼鏡不見，
+    //   都是整圈用同一個力道（0.7～0.8）把整張臉重畫的副作用。眼睛連眉毛、嘴才是表情在的地方給全力；
+    //   臉頰、臉型、鼻子只給一部分（DifferentialDiffusion：遮罩越灰的地方改得越少）。害羞要臉紅、哭要淚痕，臉頰多給一點。
+    const DIFF = { on: true, base: 0.55, cheek: { Shy: 0.8, Crying: 0.8, Laughing: 0.7 } };
+    function exprMask(ex, item, L, T, k, P) {
+        const ring = ex.ring, lay = ex.lay || LAY_DEF;
+        const mask = canvasOf(P, P), mg = mask.getContext('2d');
+        mg.fillStyle = '#000'; mg.fillRect(0, 0, P, P);
+        const put = (g, o, soft) => softOval(g, (o.cx - L) * k, (o.cy - T) * k, o.rx * k, o.ry * k, soft, o.rot);
+        if (!DIFF.on) { put(mg, ring, P * 0.01); return mask; }
+        mg.globalAlpha = DIFF.cheek[item.exp] || DIFF.base; put(mg, ring, P * 0.01); mg.globalAlpha = 1;
+        // 全力的那幾塊另外畫，再剪成大圈裡面：眉毛那塊常超出大圈頂，不剪的話瀏海也會被重畫（瀏海留在圈外是原本的規矩）
+        const fc = canvasOf(P, P), fg = fc.getContext('2d');
+        lay.eyes.forEach(e => { if (!e.off) put(fg, ovalAt(ring, { u: e.u, v: e.v - e.b * 0.7, a: e.a * 1.35, b: e.b * 2.2 }), P * 0.02); });   // 眼睛連眉毛
+        put(fg, ovalAt(ring, { u: lay.mouth.u, v: lay.mouth.v, a: lay.mouth.a * 1.5, b: lay.mouth.b * 1.8 }), P * 0.02);
+        fg.globalCompositeOperation = 'destination-in';
+        put(fg, ring, P * 0.01);
+        mg.drawImage(fc, 0, 0);
+        return mask;
+    }
+    // 表情那張送的詞：取景＋臉的角度＋這張臉本來就有的（眼睛顏色、眼鏡…）＋表情
+    function exprPrompt(ex, words) { return EXPR_PRE + viewTags(ex.lay) + lookTags(ex.look, true) + words; }
     async function makeExpr(ex, item, seed) {
         const M = win.OS_IMAGE_MANAGER;
         const src = ex.img, W = ex.W, H = ex.H, ring = ex.ring;
@@ -991,12 +1108,10 @@
         const crop = canvasOf(P, P), cg = crop.getContext('2d');
         cg.fillStyle = '#fff'; cg.fillRect(0, 0, P, P);   // 去背過的透明處墊白，模型看不懂透明
         cg.drawImage(src, L, T, side, side, 0, 0, P, P);
-        const mask = canvasOf(P, P), mg = mask.getContext('2d');
-        mg.fillStyle = '#000'; mg.fillRect(0, 0, P, P);
-        softOval(mg, (ring.cx - L) * k, (ring.cy - T) * k, ring.rx * k, ring.ry * k, P * 0.01);
+        const mask = exprMask(ex, item, L, T, k, P);
         // 裁的那塊送 JPEG：整份工作流要經酒館的代理，PNG 一張一兩 MB；圈外那圈最後貼回的是原圖，壓縮只碰得到要重畫的地方
         const words = ex.style === 'quiet' ? item.quiet : item.tags;
-        const out = await M.comfyInpaint(crop.toDataURL('image/jpeg', 0.95), mask.toDataURL('image/png'), EXPR_PRE + words, { denoise: item.d, seed });
+        const out = await M.comfyInpaint(crop.toDataURL('image/jpeg', 0.95), mask.toDataURL('image/png'), exprPrompt(ex, words), { denoise: item.d, seed, diff: DIFF.on });
         const gen = await loadImg(out);
         // 貼回：生出來那塊縮回原大小，逐點只換羽化圈裡的顏色，透明度一律照原圖。
         //   以前是「畫原圖 → 疊補丁 → destination-in 再畫一次原圖」：原圖半透明的點透明度被乘兩次（128 變 64），
@@ -1004,9 +1119,9 @@
         const patch = canvasOf(side, side), pg = patch.getContext('2d');
         pg.drawImage(gen, 0, 0, side, side);
         const oc = canvasOf(side, side); oc.getContext('2d').drawImage(src, L, T, side, side, 0, 0, side, side);
-        rimMatch(patch, oc, { cx: ring.cx - L, cy: ring.cy - T, rx: ring.rx, ry: ring.ry }, 0.78, 0.98);
+        rimMatch(patch, oc, { cx: ring.cx - L, cy: ring.cy - T, rx: ring.rx, ry: ring.ry, rot: ring.rot }, 0.78, 0.98);
         const mk = canvasOf(side, side), mkg = mk.getContext('2d');
-        softOval(mkg, ring.cx - L, ring.cy - T, ring.rx, ring.ry, side * 0.03);
+        softOval(mkg, ring.cx - L, ring.cy - T, ring.rx, ring.ry, side * 0.03, ring.rot);
         const mA = mkg.getImageData(0, 0, side, side).data, pA = pg.getImageData(0, 0, side, side).data;
         const res = canvasOf(W, H), rg = res.getContext('2d');
         rg.drawImage(src, 0, 0);
@@ -1048,17 +1163,27 @@
         { k: 'open', d: 0.75, tags: '(open mouth:1.3), talking, speaking' },
     ];
     const EYE_SHAPE = { k: 'shut', d: 0.7, tags: '(closed eyes:1.4), eyelashes, sleeping eyes' };   // 11-05 小樣那份
+    const EYE_GROW = 1.3;   // 閉眼重畫那塊比小圈大一點（見 mouthGeom）
     const mouthOn = () => { try { return localStorage.getItem(MOUTH_KEY) !== '0'; } catch (e) { return true; } };
     // 嘴、兩隻眼睛在臉圈裡的位置：u、v＝中心離圈心多少個半徑（左右、上下），a、b＝大小是半徑的幾倍。
     //   每張臉比例不一樣，固定比例常常顧了嘴、眼睛就歪（11-06 她：「圈好嘴，眼睛圈沒對上，移到眼睛圈，嘴又沒圈上」）
     //   → 生表情頁三個小圈可以各自拖，每個角色記一份（LAY_KEY），跟著大圈搬、縮放
     const LAY_KEY = 'acg_expr_lay';
+    //   側臉（11-06 她：「面膜只適合正面？你有沒有想過有側臉一說？」）：
+    //   eyes[i].off＝這隻眼睛看不到（全側臉只剩一隻），閉眼、眼睛那塊只做看得到的；rot＝大圈轉了幾度（弧度，頭歪的立繪），小圈跟著轉。
+    //   兩個都是選填：以前存的（兩隻眼睛、沒轉）照樣讀得進來
     const LAY_DEF = { mouth: { u: 0, v: 0.324, a: 0.357, b: 0.243 }, eyes: [{ u: -0.42, v: -0.64, a: 0.32, b: 0.2 }, { u: 0.42, v: -0.64, a: 0.32, b: 0.2 }] };
     const layCopy = (l) => JSON.parse(JSON.stringify(l));
     function layFix(l) {
         const ok = (p) => p && ['u', 'v', 'a', 'b'].every(k => typeof p[k] === 'number' && isFinite(p[k]));
-        return (l && ok(l.mouth) && Array.isArray(l.eyes) && l.eyes.length === 2 && l.eyes.every(ok)) ? l : null;
+        if (!(l && ok(l.mouth) && Array.isArray(l.eyes) && l.eyes.length === 2 && l.eyes.every(ok))) return null;
+        l.eyes.forEach(e => { if (e.off !== true) delete e.off; });
+        if (l.eyes.every(e => e.off)) l.eyes.forEach(e => { delete e.off; });   // 兩隻都關＝壞掉的存檔，當兩隻都看得到
+        if (!(typeof l.rot === 'number' && isFinite(l.rot)) || !l.rot) delete l.rot;
+        return l;
     }
+    // 位置一樣（不算哪隻眼睛關掉）：決定「圈放回原位」要不要出現
+    const layPosKey = (l) => JSON.stringify({ m: l.mouth, e: l.eyes.map(e => [e.u, e.v, e.a, e.b]), r: l.rot || 0 });
     function layMap() { try { const v = JSON.parse(localStorage.getItem(LAY_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
     function layOf(ch) { const m = layMap(); const k = Object.keys(m).find(n => sameChar(n, ch)); return k ? layFix(m[k]) : null; }
     function laySave(ch, lay) {
@@ -1068,10 +1193,29 @@
         const A = AUIx();
         return A && A.lsSet ? A.lsSet(LAY_KEY, JSON.stringify(m), '生表情時嘴和眼睛小圈的位置') : false;
     }
-    function ovalAt(ring, p) { return { cx: ring.cx + p.u * ring.rx, cy: ring.cy + p.v * ring.ry, rx: p.a * ring.rx, ry: p.b * ring.ry }; }
+    // 小圈在原圖的位置：u、v 是大圈自己的方向（大圈轉了，小圈跟著繞圈心轉、自己也一起斜）
+    function ovalAt(ring, p) {
+        const t = ring.rot || 0, c = Math.cos(t), s = Math.sin(t), dx = p.u * ring.rx, dy = p.v * ring.ry;
+        const o = { cx: ring.cx + dx * c - dy * s, cy: ring.cy + dx * s + dy * c, rx: p.a * ring.rx, ry: p.b * ring.ry };
+        if (t) o.rot = t;
+        if (p.off) o.off = true;
+        return o;
+    }
     function mouthOval(ring, lay) { return ovalAt(ring, (lay || LAY_DEF).mouth); }
     // 兩隻眼睛（也照臉圈推，預設在 LAY_DEF）：圈心往上 0.64 個半高、左右各 0.42 個半寬（11-05 那張立繪量過：眼睛中心對得上）
+    //   回兩隻（關掉的帶 off）；要畫遮罩、切那塊的用 eyesOn（只有看得到的）
     function eyeOvals(ring, lay) { return (lay || LAY_DEF).eyes.map(p => ovalAt(ring, p)); }
+    function eyesOn(ring, lay) { return eyeOvals(ring, lay).filter(o => !o.off); }
+    // 斜的橢圓的外框半寬、半高
+    function ovalHalf(o) {
+        const t = o.rot || 0, c = Math.cos(t), s = Math.sin(t);
+        return { w: Math.sqrt((o.rx * c) ** 2 + (o.ry * s) ** 2), h: Math.sqrt((o.rx * s) ** 2 + (o.ry * c) ** 2) };
+    }
+    // 點 (x, y) 在橢圓自己的座標裡離圈心幾個半徑（1＝剛好在圈上）
+    function ovalDist(o, x, y) {
+        const t = o.rot || 0, c = Math.cos(t), s = Math.sin(t), dx = x - o.cx, dy = y - o.cy;
+        return Math.hypot((dx * c + dy * s) / o.rx, (-dx * s + dy * c) / o.ry);
+    }
     // 認圖：只看臉那塊、縮成 20×20 存下來。舞台那張同一塊縮一樣大來比，差很少＝同一張
     //   （存成 WebP、轉成 blob 網址都認得；同一個人不同表情差在臉，一比就分得開）
     function faceSig(img, f) {
@@ -1216,17 +1360,26 @@
         } catch (err) { return none; }
     }
     // 嘴的位置（原圖像素）：mo＝嘴那顆橢圓、box＝切下來存的那塊、face＝認圖用的臉框。ComfyUI、GPT 兩條同一份
+    //   斜的圈（頭歪）照外框算；眼睛只算看得到的那幾隻，每隻照自己的高度（11-06：以前眼睛那塊只看第一隻的高度，
+    //   側臉兩眼不同高時另一隻被切掉一半，她那晚斜側臉那個角色 6 張閉眼都只閉了一隻）
     function mouthGeom(ring, W, H, lay) {
-        const mo = mouthOval(ring, lay);
-        const bx = Math.max(0, Math.floor(mo.cx - mo.rx * 1.15)), by = Math.max(0, Math.floor(mo.cy - mo.ry * 1.15));
-        const bw = Math.min(W - bx, Math.ceil(mo.rx * 2.3)), bh = Math.min(H - by, Math.ceil(mo.ry * 2.3));
-        const fx = Math.max(0, Math.round(ring.cx - ring.rx)), fy = Math.max(0, Math.round(ring.cy - ring.ry));
-        const face = { x: fx, y: fy, w: Math.max(1, Math.min(W - fx, Math.round(ring.rx * 2))), h: Math.max(1, Math.min(H - fy, Math.round(ring.ry * 2))) };
-        // 眼睛：兩顆橢圓，切下來存的是包住兩隻眼睛那一塊
-        const eyes = eyeOvals(ring, lay);
-        const ex0 = Math.max(0, Math.floor(Math.min(eyes[0].cx - eyes[0].rx, eyes[1].cx - eyes[1].rx) - eyes[0].rx * 0.15));
-        const ex1 = Math.min(W, Math.ceil(Math.max(eyes[0].cx + eyes[0].rx, eyes[1].cx + eyes[1].rx) + eyes[0].rx * 0.15));
-        const ey0 = Math.max(0, Math.floor(eyes[0].cy - eyes[0].ry * 1.15)), ey1 = Math.min(H, Math.ceil(eyes[0].cy + eyes[0].ry * 1.15));
+        const mo = mouthOval(ring, lay), mh = ovalHalf(mo);
+        const bx = Math.max(0, Math.floor(mo.cx - mh.w * 1.15)), by = Math.max(0, Math.floor(mo.cy - mh.h * 1.15));
+        const bw = Math.min(W - bx, Math.ceil(mh.w * 2.3)), bh = Math.min(H - by, Math.ceil(mh.h * 2.3));
+        const rh = ovalHalf(ring);
+        const fx = Math.max(0, Math.round(ring.cx - rh.w)), fy = Math.max(0, Math.round(ring.cy - rh.h));
+        const face = { x: fx, y: fy, w: Math.max(1, Math.min(W - fx, Math.round(rh.w * 2))), h: Math.max(1, Math.min(H - fy, Math.round(rh.h * 2))) };
+        // 眼睛：看得到的那幾顆橢圓（重畫、切那塊時放大 EYE_GROW 倍），切下來存的是包住它們的那一塊
+        //   11-06：她那晚斜側臉那個角色閉眼 6 張都只閉一隻——遠的那隻眼睛輪廓超出小圈一點，模型就不肯把它畫閉。
+        //   同一份工作流試過：力道 0.85、一次一隻都還是閉不上，小圈放大 1.3 倍 6 張都閉上了（tmp/expr_audit/eyevar_b08.png）
+        const eyes = eyesOn(ring, lay).map(o => Object.assign({}, o, { rx: o.rx * EYE_GROW, ry: o.ry * EYE_GROW }));
+        let ex0 = W, ex1 = 0, ey0 = H, ey1 = 0;
+        eyes.forEach(o => {
+            const h = ovalHalf(o);
+            ex0 = Math.min(ex0, o.cx - h.w - o.rx * 0.15); ex1 = Math.max(ex1, o.cx + h.w + o.rx * 0.15);
+            ey0 = Math.min(ey0, o.cy - h.h * 1.15); ey1 = Math.max(ey1, o.cy + h.h * 1.15);
+        });
+        ex0 = Math.max(0, Math.floor(ex0)); ex1 = Math.min(W, Math.ceil(ex1)); ey0 = Math.max(0, Math.floor(ey0)); ey1 = Math.min(H, Math.ceil(ey1));
         return { mo, box: { x: bx, y: by, w: bw, h: bh }, face, eyes, eye: { x: ex0, y: ey0, w: Math.max(1, ex1 - ex0), h: Math.max(1, ey1 - ey0) } };
     }
     // 一組嘴除了兩塊圖以外的那些：認圖用的縮圖、照哪一筆做的（src）、眼睛那塊在哪（eye）
@@ -1239,11 +1392,11 @@
         const pc = canvasOf(b.w, b.h), pg = pc.getContext('2d');
         pg.drawImage(gen, (b.x - L) * k, (b.y - T) * k, b.w * k, b.h * k, 0, 0, b.w, b.h);
         const ob = canvasOf(b.w, b.h); ob.getContext('2d').drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);
-        const local = ovals.map(o => ({ cx: o.cx - b.x, cy: o.cy - b.y, rx: o.rx, ry: o.ry }));
+        const local = ovals.map(o => ({ cx: o.cx - b.x, cy: o.cy - b.y, rx: o.rx, ry: o.ry, rot: o.rot }));
         rimMatch(pc, ob, local, r0, 0.98);
         pg.globalCompositeOperation = 'destination-in';
         const mk = canvasOf(b.w, b.h), mg = mk.getContext('2d');
-        local.forEach(o => softOval(mg, o.cx, o.cy, o.rx, o.ry, Math.max(2, o.rx * 0.3)));
+        local.forEach(o => softOval(mg, o.cx, o.cy, o.rx, o.ry, Math.max(2, o.rx * 0.3), o.rot));
         pg.drawImage(mk, 0, 0);
         pg.drawImage(src, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);   // 再乘一次原圖的透明度
         return pc.toDataURL('image/png');
@@ -1265,20 +1418,22 @@
         const maskOf = (ovals) => {
             const mask = canvasOf(P, P), mg = mask.getContext('2d');
             mg.fillStyle = '#000'; mg.fillRect(0, 0, P, P);
-            ovals.forEach(o => softOval(mg, (o.cx - L) * k, (o.cy - T) * k, o.rx * k, o.ry * k, P * 0.008));
+            ovals.forEach(o => softOval(mg, (o.cx - L) * k, (o.cy - T) * k, o.rx * k, o.ry * k, P * 0.008, o.rot));
             return mask.toDataURL('image/png');
         };
         const mood = MOUTH_MOOD[exp] || MOUTH_MOOD.default;
+        // 臉的角度、臉上本來就有的（眼鏡…）也帶上：閉眼那塊蓋到鏡框，不說的話鏡框就被畫掉，眨眼時眼鏡一閃一閃
+        const pre = EXPR_PRE + viewTags(ex.lay) + lookTags(ex.look, false);
         const out = mouthEntryBase(src, url, geo);   // src：照哪一筆做的
         if (parts.mouth) {
             const maskUrl = maskOf([geo.mo]);
             for (const sh of MOUTH_SHAPES) {
-                const r = await M.comfyInpaint(cropUrl, maskUrl, EXPR_PRE + mood + ', ' + sh.tags, { denoise: sh.d, seed });
+                const r = await M.comfyInpaint(cropUrl, maskUrl, pre + mood + ', ' + sh.tags, { denoise: sh.d, seed });
                 out[sh.k] = cutPatch(await loadImg(r), src, geo.box, [geo.mo], L, T, k, 0.6);
             }
         }
         if (parts.eyes) {
-            const r = await M.comfyInpaint(cropUrl, maskOf(geo.eyes), EXPR_PRE + mood + ', ' + EYE_SHAPE.tags, { denoise: EYE_SHAPE.d, seed });
+            const r = await M.comfyInpaint(cropUrl, maskOf(geo.eyes), pre + mood + ', ' + EYE_SHAPE.tags, { denoise: EYE_SHAPE.d, seed });
             out.shut = cutPatch(await loadImg(r), src, geo.eye, geo.eyes, L, T, k, 0.6);
         }
         return out;
@@ -1345,8 +1500,11 @@
                      ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null,
                      mouth: mouthOn(), mouthNeed: null,   // mouthNeed：還沒對得上動嘴的那幾張（算好之前是 null）
                      lay: layOf(ch) || layCopy(LAY_DEF),     // 嘴、眼睛小圈的位置（她拖過就記在這個角色身上）
-                     zoom: 'full', view: null };              // 畫面看整張（找臉時）還是放大頭部（找到臉就放大）
+                     zoom: 'full', view: null,                // 畫面看整張（找臉時）還是放大頭部（找到臉就放大）
+                     look: lookOf(ch) };                      // 眼睛顏色、臉上要留著的（她改過才有；沒改過下面從立繪描述自動帶）
+        if (ex.lay.rot) ex.ring.rot = ex.lay.rot;
         ex.view = exFullView(ex);
+        if (!ex.look) lookAuto(info).then(l => { if (!ex.lookTouched) { ex.look = l; if (S && S.ex === ex) exPaint(ex); } }, () => {});
         S.ex = ex;
         const A = AUIx();
         const el = doc.createElement('div');
@@ -1368,7 +1526,10 @@
           +       '<ellipse class="acg-ex-mouth" vector-effect="non-scaling-stroke"></ellipse>'
           +       '<ellipse class="acg-ex-mouth acg-ex-eye" vector-effect="non-scaling-stroke"></ellipse>'
           +       '<ellipse class="acg-ex-mouth acg-ex-eye" vector-effect="non-scaling-stroke"></ellipse>'
+          +       '<line class="acg-ex-rotline" vector-effect="non-scaling-stroke"></line>'
+          +       '<circle class="acg-ex-rot" vector-effect="non-scaling-stroke"></circle>'
           +       '<circle class="acg-ex-knob" vector-effect="non-scaling-stroke"></circle>'
+          +       '<circle class="acg-ex-rot-hit"></circle>'
           +       '<circle class="acg-ex-knob-hit"></circle>'
           +     '</svg>'
           +     '<button class="acg-ex-zoom" type="button" data-act="expr-zoom"></button>'
@@ -1378,11 +1539,23 @@
           +     '<button class="acg-ex-seg-btn" type="button" data-act="expr-style" data-style="normal">一般</button>'
           +     '<button class="acg-ex-seg-btn" type="button" data-act="expr-style" data-style="quiet">內收</button>'
           +   '</div>'
+          // 這張臉本來就有的：重畫時帶進詞裡，眼鏡才不會被吃掉、眼睛不會換顏色（沒改過＝從立繪描述自動勾）
+          +   '<div class="acg-ex-look">'
+          +     '<div class="acg-ex-look-row"><span class="acg-ex-look-k">眼睛顏色</span><div class="acg-ex-look-chips">'
+          +       EYE_COLORS.map(c => '<button class="acg-ex-trait" type="button" data-act="expr-eyecolor" data-k="' + c.k + '">' + esc(c.zh) + '</button>').join('')
+          +     '</div></div>'
+          +     '<div class="acg-ex-look-row"><span class="acg-ex-look-k">臉上要留著的</span><div class="acg-ex-look-chips">'
+          +       FACE_ACCS.map(a => '<button class="acg-ex-trait" type="button" data-act="expr-acc" data-k="' + a.k + '">' + esc(a.zh) + '</button>').join('')
+          +     '</div></div>'
+          +   '</div>'
           +   '<div class="acg-ex-picks">' + EXPR_SET.map(x =>
                   '<button class="acg-ex-chip" type="button" data-act="expr-pick" data-exp="' + x.exp + '">' + esc(x.zh)
                 + (has[x.exp] ? '<span class="acg-ex-has">有了</span>' : '') + '</button>').join('') + '</div>'
           +   '<div class="acg-ex-opts"><button class="acg-ex-toggle" type="button" data-act="expr-mouth"><i class="fa-solid fa-comment-dots"></i> 講話動嘴、會眨眼</button>'
-          +     '<button class="acg-ex-layreset" type="button" data-act="expr-lay-reset"><i class="fa-solid fa-rotate-left"></i> 小圈放回原位</button></div>'
+          // 側臉只看得到一隻眼睛：把看不到的那隻關掉，閉眼只做看得到的（左右＝畫面上的左右）
+          +     '<button class="acg-ex-eyeon" type="button" data-act="expr-eyeoff" data-i="0"></button>'
+          +     '<button class="acg-ex-eyeon" type="button" data-act="expr-eyeoff" data-i="1"></button>'
+          +     '<button class="acg-ex-layreset" type="button" data-act="expr-lay-reset"><i class="fa-solid fa-rotate-left"></i> 圈放回原位</button></div>'
           +   '<div class="acg-ex-foot"><button class="acg-btn acg-btn-main acg-ex-go" type="button" data-act="expr-go"></button></div>'
           +   '<div class="acg-gen acg-ex-out"></div>'
           + '</div>';
@@ -1413,6 +1586,7 @@
                 const bw = box.x1 - box.x0, bh = box.y1 - box.y0;
                 const l = box.x0 + bw * 0.08, r = box.x1 - bw * 0.08, t = box.y0 + bh * 0.28, b = box.y1 + bh * 0.02;   // 眉毛到下巴，瀏海留在外面
                 ex.ring = { cx: (l + r) / 2, cy: (t + b) / 2, rx: (r - l) / 2, ry: (b - t) / 2 };
+                if (ex.lay.rot) ex.ring.rot = ex.lay.rot;   // 這個角色轉過圈（頭歪）就照轉過的角度
             }
             ex.found = box ? 'yes' : 'no';
             ex.blocked = why;
@@ -1491,15 +1665,23 @@
     }
     function exPaint(ex) {
         const el = ex.el; if (!el) return;
-        const r = ex.ring;
-        const oval = el.querySelector('.acg-ex-oval');
-        oval.setAttribute('cx', r.cx); oval.setAttribute('cy', r.cy); oval.setAttribute('rx', r.rx); oval.setAttribute('ry', r.ry);
-        // 拉大小的圓點跟著畫面大小走（不跟原圖）：放大頭部時才不會變成一大顆；外面一圈看不見的比較大，手指好按
+        const r = ex.ring, t = r.rot || 0, cs = Math.cos(t), sn = Math.sin(t);
+        const world = (lx, ly) => [r.cx + lx * cs - ly * sn, r.cy + lx * sn + ly * cs];   // 大圈自己的座標 → 原圖
+        const putOval = (node, o) => {
+            node.setAttribute('cx', o.cx); node.setAttribute('cy', o.cy); node.setAttribute('rx', o.rx); node.setAttribute('ry', o.ry);
+            if (o.rot) node.setAttribute('transform', 'rotate(' + (o.rot * 180 / Math.PI) + ' ' + o.cx + ' ' + o.cy + ')'); else node.removeAttribute('transform');
+        };
+        putOval(el.querySelector('.acg-ex-oval'), r);
+        // 拉大小的圓點（右下）、轉的圓點（正上方，頭歪的立繪轉這個）跟著畫面大小走（不跟原圖）：放大頭部時才不會變成一大顆；
+        //   外面一圈看不見的比較大，手指好按
         const vs = (ex.view || exFullView(ex)).s;
-        [['.acg-ex-knob', 0.026], ['.acg-ex-knob-hit', 0.065]].forEach(([q, k]) => {
+        const kn = world(r.rx * 0.7071, r.ry * 0.7071), top = world(0, -r.ry), rk = world(0, -r.ry - vs * 0.08);
+        [['.acg-ex-knob', 0.026, kn], ['.acg-ex-knob-hit', 0.065, kn], ['.acg-ex-rot', 0.022, rk], ['.acg-ex-rot-hit', 0.06, rk]].forEach(([q, k, at]) => {
             const c = el.querySelector(q); if (!c) return;
-            c.setAttribute('cx', r.cx + r.rx * 0.7071); c.setAttribute('cy', r.cy + r.ry * 0.7071); c.setAttribute('r', vs * k);
+            c.setAttribute('cx', at[0]); c.setAttribute('cy', at[1]); c.setAttribute('r', vs * k);
         });
+        const rl = el.querySelector('.acg-ex-rotline');
+        if (rl) { rl.setAttribute('x1', top[0]); rl.setAttribute('y1', top[1]); rl.setAttribute('x2', rk[0]); rl.setAttribute('y2', rk[1]); }
         const zb = el.querySelector('.acg-ex-zoom');
         if (zb) {
             zb.hidden = ex.found === null;
@@ -1508,12 +1690,25 @@
                 zb.innerHTML = ex.zoom === 'head' ? '<i class="fa-solid fa-expand"></i> 看整張' : '<i class="fa-solid fa-magnifying-glass-plus"></i> 放大頭部';
             }
         }
-        // 圈裡的小圈＝嘴、兩隻眼睛（跟著大圈走）
+        // 圈裡的小圈＝嘴、兩隻眼睛（跟著大圈走、跟著轉）；關掉的那隻眼睛不畫
         const small = [mouthOval(r, ex.lay)].concat(eyeOvals(r, ex.lay));
-        el.querySelectorAll('.acg-ex-mouth').forEach((mEl, i) => { const o = small[i]; if (!o) return; mEl.setAttribute('cx', o.cx); mEl.setAttribute('cy', o.cy); mEl.setAttribute('rx', o.rx); mEl.setAttribute('ry', o.ry); });
+        el.querySelectorAll('.acg-ex-mouth').forEach((mEl, i) => { const o = small[i]; if (!o) return; putOval(mEl, o); mEl.classList.toggle('is-off', !!o.off); });
         el.classList.toggle('is-mouth', ex.mouth);
         const lr = el.querySelector('.acg-ex-layreset');
-        if (lr) { lr.hidden = !ex.mouth || JSON.stringify(ex.lay) === JSON.stringify(LAY_DEF); lr.disabled = ex.busy; }
+        if (lr) { lr.hidden = layPosKey(ex.lay) === layPosKey(LAY_DEF) || (!ex.mouth && !ex.lay.rot); lr.disabled = ex.busy; }
+        // 看得到哪幾隻眼睛（動嘴眨眼開著才有小圈，才出現）；剩一隻時那隻不能再關
+        el.querySelectorAll('.acg-ex-eyeon').forEach(b => {
+            const i = +b.dataset.i, off = !!ex.lay.eyes[i].off, other = ex.lay.eyes[1 - i];
+            b.hidden = !ex.mouth;
+            b.classList.toggle('is-on', !off);
+            b.disabled = ex.busy || (!off && !!other.off);
+            const want = (off ? 'off' : 'on') + i;
+            if (b.dataset.st !== want) { b.dataset.st = want; b.innerHTML = '<i class="fa-solid ' + (off ? 'fa-eye-slash' : 'fa-eye') + '"></i> ' + (i ? '右邊眼睛' : '左邊眼睛'); }
+        });
+        // 眼睛顏色、臉上要留著的
+        const lk = ex.look || {};
+        el.querySelectorAll('[data-act="expr-eyecolor"]').forEach(b => { b.classList.toggle('is-on', lk.eye === b.dataset.k); b.disabled = ex.busy; });
+        el.querySelectorAll('[data-act="expr-acc"]').forEach(b => { b.classList.toggle('is-on', (lk.acc || []).indexOf(b.dataset.k) >= 0); b.disabled = ex.busy; });
         const tg = el.querySelector('.acg-ex-toggle'); tg.classList.toggle('is-on', ex.mouth); tg.disabled = ex.busy;
         el.querySelectorAll('.acg-ex-chip').forEach(c => { c.classList.toggle('is-on', ex.picks.indexOf(c.dataset.exp) >= 0); c.disabled = ex.busy; });
         el.querySelectorAll('.acg-ex-seg-btn').forEach(c => { c.classList.toggle('is-on', c.dataset.style === ex.style); c.disabled = ex.busy; });
@@ -1553,11 +1748,38 @@
         const A = AUIx(); if (A && A.lsSet) A.lsSet(MOUTH_KEY, ex.mouth ? '1' : '0', '生表情時順便做動嘴、閉眼');
         exPaint(ex);
     }
+    // 圈放回原位：小圈的位置、大圈轉的角度回到原本；哪隻眼睛關掉照留（那是看不看得到，不是位置）
     function exLayReset() {
         const ex = S && S.ex;
         if (!ex || ex.busy) return;
+        const offs = ex.lay.eyes.map(e => !!e.off);
         ex.lay = layCopy(LAY_DEF);
-        laySave(ex.ch, null);
+        offs.forEach((o, i) => { if (o) ex.lay.eyes[i].off = true; });
+        delete ex.ring.rot;
+        laySave(ex.ch, offs.some(Boolean) ? ex.lay : null);
+        exPaint(ex);
+    }
+    // 側臉：關掉看不到的那隻眼睛（另一隻不能也關）；存在這個角色的小圈位置裡
+    function exEyeOff(i) {
+        const ex = S && S.ex;
+        if (!ex || ex.busy) return;
+        const e = ex.lay.eyes[i], other = ex.lay.eyes[1 - i];
+        if (!e) return;
+        if (e.off) delete e.off;
+        else if (!other.off) e.off = true;
+        else return;
+        laySave(ex.ch, ex.lay);
+        exPaint(ex);
+    }
+    // 眼睛顏色（再按一次＝不指定）、臉上要留著的（可以好幾樣）：她改過就記在這個角色身上，之後不再自動帶
+    function exLook(kind, k) {
+        const ex = S && S.ex;
+        if (!ex || ex.busy) return;
+        const look = lookFix(ex.look) || { eye: '', acc: [], phrase: {} };
+        if (kind === 'eye') look.eye = look.eye === k ? '' : k;
+        else { const i = look.acc.indexOf(k); if (i >= 0) { look.acc.splice(i, 1); delete look.phrase[k]; } else look.acc.push(k); }
+        ex.look = look; ex.lookTouched = true;
+        lookSave(ex.ch, look);
         exPaint(ex);
     }
     // 拖圈：按在小圈上＝搬那個小圈，按在大圈上（或空白處）＝搬大圈，按右下的圓點＝改大小；座標換成原圖像素
@@ -1578,29 +1800,34 @@
             if (!ex.mouth) return null;
             const parts = [ex.lay.mouth].concat(ex.lay.eyes);
             const i = Array.prototype.indexOf.call(ex.el.querySelectorAll('.acg-ex-mouth'), ev.target);
-            if (i >= 0) return parts[i] || null;
+            if (i >= 0) return (parts[i] && !parts[i].off) ? parts[i] : null;
             if (ev.pointerType === 'mouse') return null;
             const sc = p.k;   // 原圖一點＝畫面幾點
             let best = null, bd = 10;
             parts.forEach(pt => {
+                if (pt.off) return;   // 關掉的眼睛沒畫出來，抓不到
                 const o = ovalAt(ex.ring, pt);
-                const d = (Math.hypot((p.x - o.cx) / o.rx, (p.y - o.cy) / o.ry) - 1) * Math.min(o.rx, o.ry) * sc;   // 離圈邊幾點（圈裡是負的）
+                const d = (ovalDist(o, p.x, p.y) - 1) * Math.min(o.rx, o.ry) * sc;   // 離圈邊幾點（圈裡是負的）
                 if (d < bd) { bd = d; best = pt; }
             });
             return best;
         };
+        // 原圖的點 → 大圈自己的座標（大圈轉了也對）
+        const local = (p) => { const r = ex.ring, t = r.rot || 0, c = Math.cos(t), s = Math.sin(t), dx = p.x - r.cx, dy = p.y - r.cy; return { x: dx * c + dy * s, y: -dx * s + dy * c }; };
         svg.addEventListener('pointerdown', (ev) => {
             if (ex.busy || ex.found === null) return;
             const p = at(ev);
             const r = ex.ring;
-            if (ev.target.classList.contains('acg-ex-knob') || ev.target.classList.contains('acg-ex-knob-hit')) drag = { mode: 'size' };
+            const cl = ev.target.classList;
+            if (cl.contains('acg-ex-knob') || cl.contains('acg-ex-knob-hit')) drag = { mode: 'size' };
+            else if (cl.contains('acg-ex-rot') || cl.contains('acg-ex-rot-hit')) drag = { mode: 'rot' };
             else if (nearPart(ev, p)) {
                 // 小圈（嘴、兩隻眼睛）各自拖：記成離圈心幾個半徑，大圈之後怎麼搬、縮放都跟著走
                 const part = nearPart(ev, p);
                 const o = ovalAt(r, part);
                 drag = { mode: 'part', part, dx: p.x - o.cx, dy: p.y - o.cy };
             } else {
-                const inside = ((p.x - r.cx) / r.rx) ** 2 + ((p.y - r.cy) / r.ry) ** 2 <= 1;
+                const inside = ovalDist(r, p.x, p.y) <= 1;
                 if (!inside) { r.cx = p.x; r.cy = p.y; }
                 drag = { mode: 'move', dx: p.x - r.cx, dy: p.y - r.cy };
             }
@@ -1612,21 +1839,31 @@
             if (!drag) return;
             const p = at(ev), r = ex.ring;
             if (drag.mode === 'part') {
-                // 小圈不要拖出大圈太遠（重畫只裁大圈附近那塊）
-                drag.part.u = clamp((p.x - drag.dx - r.cx) / r.rx, -1.3, 1.3);
-                drag.part.v = clamp((p.y - drag.dy - r.cy) / r.ry, -1.3, 1.3);
+                // 小圈的位置記成大圈自己的座標（大圈轉了也對）；不要拖出大圈太遠（重畫只裁大圈附近那塊）
+                const q = local({ x: p.x - drag.dx, y: p.y - drag.dy });
+                drag.part.u = clamp(q.x / r.rx, -1.3, 1.3);
+                drag.part.v = clamp(q.y / r.ry, -1.3, 1.3);
                 drag.moved = true;
             }
             else if (drag.mode === 'move') { r.cx = clamp(p.x - drag.dx, 0, ex.W); r.cy = clamp(p.y - drag.dy, 0, ex.H); }
-            else { r.rx = clamp(Math.abs(p.x - r.cx) / 0.7071, ex.W * 0.03, ex.W * 0.5); r.ry = clamp(Math.abs(p.y - r.cy) / 0.7071, ex.H * 0.02, ex.H * 0.5); }
+            else if (drag.mode === 'rot') {
+                // 轉的圓點在正上方：手指繞著圈心轉多少，圈就轉多少；差 3 度以內吸回正的；最多轉 ±80 度
+                let a = Math.atan2(p.y - r.cy, p.x - r.cx) + Math.PI / 2;
+                if (a > Math.PI) a -= Math.PI * 2;
+                a = clamp(a, -1.4, 1.4);
+                if (Math.abs(a) < 0.052) a = 0;
+                if (a) { r.rot = a; ex.lay.rot = a; } else { delete r.rot; delete ex.lay.rot; }
+                drag.moved = true;
+            }
+            else { const q = local(p); r.rx = clamp(Math.abs(q.x) / 0.7071, ex.W * 0.03, ex.W * 0.5); r.ry = clamp(Math.abs(q.y) / 0.7071, ex.H * 0.02, ex.H * 0.5); }
             exPaint(ex);
         });
         const end = () => {
-            if (drag && drag.mode === 'part' && drag.moved) { laySave(ex.ch, ex.lay); exPaint(ex); }   // 拖完記在這個角色身上
+            if (drag && (drag.mode === 'part' || drag.mode === 'rot') && drag.moved) { laySave(ex.ch, ex.lay); exPaint(ex); }   // 拖完記在這個角色身上
             // 放大頭部時：大圈搬到快出畫面、或拉得太大太小，放手後畫面跟過去（圈回到畫面中間、約占六成）
             if (drag && drag.mode !== 'part' && ex.zoom === 'head') {
-                const v = ex.view, r = ex.ring, m = v.s * 0.04, d = Math.max(r.rx, r.ry) * 2 / v.s;
-                const inside = r.cx - r.rx >= v.x + m && r.cx + r.rx <= v.x + v.s - m && r.cy - r.ry >= v.y + m && r.cy + r.ry <= v.y + v.s - m;
+                const v = ex.view, r = ex.ring, h = ovalHalf(r), m = v.s * 0.04, d = Math.max(r.rx, r.ry) * 2 / v.s;
+                const inside = r.cx - h.w >= v.x + m && r.cx + h.w <= v.x + v.s - m && r.cy - h.h >= v.y + m && r.cy + h.h <= v.y + v.s - m;
                 if (!inside || d < 0.42 || d > 0.72) exSetView(ex, exHeadView(ex), true);
             }
             drag = null;
@@ -1790,6 +2027,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, faceFor, mouthRev, srcKey, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, eyeOvals, mouthGeom, sigDiff } };
+    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, faceFor, mouthRev, srcKey, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, eyeOvals, eyesOn, mouthGeom, sigDiff, ovalDist, layFix, lookFromText, lookTags, viewTags, exprMask, DIFF } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();

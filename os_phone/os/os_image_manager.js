@@ -1314,6 +1314,11 @@
             wf['93'] = { class_type: 'SetLatentNoiseMask', inputs: { samples: ['92', 0], mask: ['91', 0] } };
             wf['3'].inputs.latent_image = ['93', 0];
             wf['3'].inputs.denoise = (options.denoise != null) ? options.denoise : 0.75;
+            // diff：遮罩是深淺不一的（白＝全力重畫、灰＝只改一點），要 DifferentialDiffusion 才照深淺分力道（ComfyUI 內建節點）
+            if (options.diff && wf['3'].inputs.model) {
+                wf['94'] = { class_type: 'DifferentialDiffusion', inputs: { model: wf['3'].inputs.model } };
+                wf['3'].inputs.model = ['94', 0];
+            }
             if (wf['9']) { wf['9'].class_type = 'PreviewImage'; delete wf['9'].inputs.filename_prefix; }   // 半成品不進 output 資料夾
             try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'comfyui_direct', type: 'char' }); } catch (e) {}

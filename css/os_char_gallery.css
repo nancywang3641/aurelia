@@ -215,6 +215,11 @@
 .acg-ex-oval { fill: rgba(255, 255, 255, 0.14); stroke: var(--acg-accent); stroke-width: 2; stroke-dasharray: 6 4; }
 .acg-ex-knob { fill: var(--acg-accent); stroke: #fff; stroke-width: 2; cursor: nwse-resize; pointer-events: none; }
 .acg-ex-knob-hit { fill: transparent; cursor: nwse-resize; pointer-events: all; }
+/* 轉圈的圓點（大圈正上方，頭歪的立繪用）：空心＋一條細線連到圈上，跟拉大小的實心圓點分得開 */
+.acg-ex-rot { fill: var(--acg-bg); stroke: var(--acg-accent); stroke-width: 2.5; pointer-events: none; }
+.acg-ex-rotline { stroke: var(--acg-accent); stroke-width: 1.5; pointer-events: none; }
+.acg-ex-rot-hit { fill: transparent; cursor: grab; pointer-events: all; }
+.acg-ex.is-busy .acg-ex-rot-hit, .acg-ex.is-busy .acg-ex-knob-hit { cursor: default; }
 /* 右上角：看整張／放大頭部 */
 .acg-ex-zoom {
     position: absolute; top: 14px; right: 14px; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px;
@@ -228,8 +233,11 @@
 .acg-ex.is-mouth .acg-ex-mouth:hover, .acg-ex.is-mouth .acg-ex-mouth:active { fill: color-mix(in srgb, var(--acg-accent) 18%, transparent); stroke-width: 2.5; stroke-dasharray: none; }
 .acg-ex.is-mouth .acg-ex-mouth:active { cursor: grabbing; }
 .acg-ex.is-mouth .acg-ex-mouth { display: inline; }
+/* 側臉關掉的那隻眼睛：不畫、抓不到 */
+.acg-ex.is-mouth .acg-ex-mouth.is-off { display: none; }
 .acg-ex.is-finding .acg-ex-ring, .acg-ex.is-busy .acg-ex-ring { pointer-events: none; }
-.acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob, .acg-ex.is-finding .acg-ex-knob-hit, .acg-ex.is-finding .acg-ex-mouth { display: none; }
+.acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob, .acg-ex.is-finding .acg-ex-knob-hit, .acg-ex.is-finding .acg-ex-mouth,
+.acg-ex.is-finding .acg-ex-rot, .acg-ex.is-finding .acg-ex-rot-hit, .acg-ex.is-finding .acg-ex-rotline { display: none; }
 .acg-ex-note { font-size: 13px; color: var(--acg-sub); text-align: center; }
 .acg-ex-note.is-warn { color: var(--acg-warn); }
 /* 一般／內收：一條兩格的切換，選中那格實心 */
@@ -266,6 +274,25 @@
 }
 .acg-ex-layreset[hidden] { display: none; }
 .acg-ex-layreset:disabled { cursor: default; opacity: .6; }
+/* 看得到的眼睛（側臉關掉一隻）：跟「放回原位」同一種小鈕，開著實線、關掉虛線變淡 */
+.acg-ex-eyeon {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px;
+    border: 1px dashed var(--acg-line); background: transparent; color: var(--acg-sub); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.acg-ex-eyeon.is-on { border-style: solid; border-color: var(--acg-accent); color: var(--acg-accent); background: color-mix(in srgb, var(--acg-accent) 12%, transparent); }
+.acg-ex-eyeon[hidden] { display: none; }
+.acg-ex-eyeon:disabled { cursor: default; opacity: .6; }
+/* 這張臉本來就有的：眼睛顏色（單選）、臉上要留著的（多選）。左邊一欄標題、右邊一排小籤，手機上照樣左右切齊 */
+.acg-ex-look { display: flex; flex-direction: column; gap: 8px; }
+.acg-ex-look-row { display: grid; grid-template-columns: 6.5em minmax(0, 1fr); gap: 8px; align-items: start; }
+.acg-ex-look-k { font-size: 13px; font-weight: 700; color: var(--acg-sub); padding-top: 5px; }
+.acg-ex-look-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.acg-ex-trait {
+    padding: 4px 10px; border-radius: 8px; border: 1px solid var(--acg-line); background: var(--acg-card);
+    color: var(--acg-sub); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.acg-ex-trait.is-on { background: var(--acg-accent); border-color: var(--acg-accent); color: var(--acg-bg); }
+.acg-ex-trait:disabled { cursor: default; opacity: .6; }
 .acg-ex-foot { display: flex; justify-content: center; }
 .acg-ex-go { min-width: 200px; }
 .acg-ex-out:empty { display: none; }

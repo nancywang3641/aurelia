@@ -50,7 +50,8 @@
           normal: 'exactly the same face as the center panel, but with the mouth slightly open as if in the middle of saying a word. Nothing else changes.',
           quiet: 'exactly the same face as the center panel, but with the mouth slightly open as if in the middle of saying a word. Nothing else changes.' },
     ];
-    const KEEP = 'In every panel keep these exactly as they are: the hair and every strand of the bangs; the head\'s position, size and angle inside the panel; the ears, neck, collar and clothes; the background; the lighting; and the art style, meaning the line weight, the coloring and the shading.';
+    // 11-06 加：眼睛顏色、臉上戴的畫的（眼鏡、眼罩、疤…）也要照留——ComfyUI 那條她那晚眼鏡全被吃、棕眼睛變藍，這條一起說清楚
+    const KEEP = 'In every panel keep these exactly as they are: the hair and every strand of the bangs; the head\'s position, size and angle inside the panel, so a face turned to the side stays turned the same way; the eye color; anything worn on or marked on the face, such as glasses, an eyepatch, a mask, scars, moles or makeup; the ears, neck, collar and clothes; the background; the lighting; and the art style, meaning the line weight, the coloring and the shading.';
     const LINES = 'Keep the black lines and the outer black frame exactly where they are. Nothing crosses a line. No hands, text, labels, speech bubbles, symbols or extra people.';
     function facePrompt(style) {
         const lines = FACE_CELLS.map((c, i) => '- ' + POS9[i] + ': ' + (c.exp === '_ref' ? 'leave this panel exactly as it is. It is the reference for all the others.' : (style === 'quiet' ? c.quiet : c.normal)));
@@ -90,8 +91,8 @@
             i.src = src;
         });
     }
-    function softOval(g, cx, cy, rx, ry, soft) {
-        g.save(); g.translate(cx, cy); g.scale(1, ry / rx);
+    function softOval(g, cx, cy, rx, ry, soft, rot) {
+        g.save(); g.translate(cx, cy); if (rot) g.rotate(rot); g.scale(1, ry / rx);   // rot＝頭歪時圈跟著轉（圖鑑存的大圈、小圈帶 rot）
         const gr = g.createRadialGradient(0, 0, Math.max(0, rx - soft), 0, 0, rx);
         gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(1, 'rgba(255,255,255,0)');
         g.fillStyle = gr; g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill(); g.restore();
@@ -261,7 +262,7 @@
     function compose(src, ring, rect, patch) {
         const { w, h } = sizeOf(src), cw = rect.cw, ch = rect.ch;
         const mk = canvasOf(cw, ch), mg = mk.getContext('2d');
-        softOval(mg, ring.cx - rect.L, ring.cy - rect.T, ring.rx, ring.ry, Math.max(cw, ch) * 0.03);
+        softOval(mg, ring.cx - rect.L, ring.cy - rect.T, ring.rx, ring.ry, Math.max(cw, ch) * 0.03, ring.rot);
         const M = mg.getImageData(0, 0, cw, ch).data, P = patch.getContext('2d').getImageData(0, 0, cw, ch).data;
         const res = canvasOf(w, h), rg = res.getContext('2d');
         rg.drawImage(src, 0, 0);
@@ -313,7 +314,7 @@
             const pc = canvasOf(b.w, b.h), pg = pc.getContext('2d');
             pg.drawImage(patch, b.x - rect.L, b.y - rect.T, b.w, b.h, 0, 0, b.w, b.h);
             const mk = canvasOf(b.w, b.h), mg = mk.getContext('2d');
-            ovals.forEach(o => softOval(mg, o.cx - b.x, o.cy - b.y, o.rx, o.ry, Math.max(2, o.rx * 0.3)));
+            ovals.forEach(o => softOval(mg, o.cx - b.x, o.cy - b.y, o.rx, o.ry, Math.max(2, o.rx * 0.3), o.rot));
             pg.globalCompositeOperation = 'destination-in';
             pg.drawImage(mk, 0, 0);
             pg.drawImage(img, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h);   // 再乘一次原圖的透明度（跟 ComfyUI 那條同一種）
