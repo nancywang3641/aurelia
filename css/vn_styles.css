@@ -784,6 +784,14 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #game-char-2.vn-avatar { right: 4%; left: auto; }
         /* 單人頭像置中 */
         #game-char.vn-avatar.vn-solo, #game-char-2.vn-avatar.vn-solo { left: 0; right: 0; margin-left: auto; margin-right: auto; }
+        /* 🫁 呼吸（11-05）：立繪以屁股那條線（圖高 86%）為準上下微微伸縮——那條線以下幾乎不動，往上越來越明顯，
+           肩膀約起伏圖高的 0.65%、頭再多一點。用獨立的 scale 屬性，不碰 transform（別的效果要用）；
+           兩格週期錯開，兩個人不會一起吸氣。頭像框（vn-avatar）不呼吸；系統設了「減少動態」也不呼吸 */
+        #game-char, #game-char-2 { transform-origin: 50% 86%; animation: vnBreath 3.8s ease-in-out infinite; }
+        #game-char-2 { animation-duration: 4.3s; animation-delay: -1.6s; }
+        #game-char.vn-avatar, #game-char-2.vn-avatar { animation: none; }
+        @keyframes vnBreath { 0%, 100% { scale: 1 1; } 50% { scale: 1 1.011; } }
+        @media (prefers-reduced-motion: reduce) { #game-char, #game-char-2 { animation: none; } }
         /* 雙擊立繪 → 立繪滑開讓位 */
         #game-char.vn-cc-shift-l { left: -14%; right: auto; }
         #game-char-2.vn-cc-shift-r { right: -14%; left: auto; }
