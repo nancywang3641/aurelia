@@ -377,6 +377,7 @@
             { id: 'phone',  name: '手機照片',   type: 'scene' },
             { id: 'app',    name: '應用裡的圖', type: 'item'  },
             { id: 'expr',   name: '立繪表情',   type: 'char'  },   // 角色圖鑑「生一組表情」：只重畫臉；ComfyUI（comfyInpaint）或自訂接口 GPT 九宮格（capiEdit＋OS_EXPR_GRID），看 exprEngine
+            { id: 'pv',     name: '世界宣傳片', type: 'bg'    },   // SN 收尾做的新世界宣傳片：一句旁白一張畫面（OS_WORLDGATE.pvDraw；阿洛值班時他自己畫，沒畫成才走這列）
         ],
         useOf: function(id) { return this.USES.find(u => u.id === id) || null; },
         _ROUTES_KEY: 'os_img_routes',

@@ -451,8 +451,8 @@
         // 世界的料填進卡片：概念圖、片名下那行、底下的介紹和標籤（不是世界就只有片名＋頻道）
         _pvFill: function (el, it, pv) {
             const box = el.querySelector('.br-vbox');
-            const art = pv && pv.art ? String(pv.art) : '';
-            if (art) box.querySelector('.br-vimg').style.setProperty('--br-vart', 'url("' + art.replace(/["\\\n\r]/g, m => '\\' + m) + '")');
+            const art = this._pvBase(pv);
+            if (art) this._pvSetImg(box.querySelector('.br-vimg'), art);
             else box.classList.add('br-vnoart');
             textOnly(el.querySelector('.br-vttl span'), pv ? 'NEXUS PARALLAX ・ 新世界開放' : (it.ch || ''));
             if (!pv) return;
@@ -464,7 +464,11 @@
             info.classList.remove('br-voff');
         },
 
+        // 底圖：世界的概念圖；沒有就拿 SN 畫的第一張
+        _pvBase: function (pv) { return pv ? String(pv.art || ((pv.imgs || []).find(Boolean)) || '') : ''; },
+        _pvSetImg: function (img, src) { img.style.setProperty('--br-vart', 'url("' + String(src).replace(/["\\\n\r]/g, m => '\\' + m) + '")'); },
         // 播一次：畫面照時間算（不靠動畫排程，預覽窗 rAF 慢也不亂）；一次只播一支，新的開始舊的就停
+        //   SN 收尾畫過畫面的（pv.imgs）一句換一張，沒畫到的那句、片名用底圖
         _pvPlay: function (el, it, pv) {
             this._pvStop();
             const lines = (pv && pv.lines) || [];
@@ -477,11 +481,18 @@
             re.classList.add('br-voff');
             const lerp = (a, b, k) => a + (b - a) * Math.max(0, Math.min(1, k));
             const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
+            const imgs = (pv && pv.imgs) || [], baseImg = this._pvBase(pv);   // 🚨 別叫 base：render 裡下面有一個暗度 base（同名會在宣告前就被讀到而整支停掉）
+            let shown = baseImg;
             const render = (t) => {
                 // 鏡頭：第幾句就用第幾個畫面；片名那段固定一個
-                let seg, k;
+                let seg, k, src = baseImg;
                 if (t >= TL.titleAt && lines.length) { seg = [50, 52, 1.0, 1.05]; k = (t - TL.titleAt) / 4.5; }
-                else { const i = Math.max(0, Math.floor((t - 1.0) / PV_STEP)); seg = PV_CAMS[i % PV_CAMS.length]; k = ((t - 1.0) - i * PV_STEP) / PV_STEP; }
+                else {
+                    const i = Math.max(0, Math.floor((t - 1.0) / PV_STEP));
+                    seg = PV_CAMS[i % PV_CAMS.length]; k = ((t - 1.0) - i * PV_STEP) / PV_STEP;
+                    src = imgs[Math.min(i, lines.length - 1)] || baseImg;
+                }
+                if (src && src !== shown) { this._pvSetImg(img, src); shown = src; }   // 換句的那一下剛好是黑場，換圖看不到跳
                 img.style.backgroundPosition = lerp(seg[0], seg[1], k).toFixed(2) + '% 50%';
                 img.style.transform = 'scale(' + lerp(seg[2], seg[3], k).toFixed(4) + ')';
                 let cut = 0;

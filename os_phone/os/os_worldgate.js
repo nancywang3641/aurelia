@@ -1654,7 +1654,7 @@
     const _pvAsking = new Set();
     async function _pickPvBgm(w) {
         const J = win.OS_JEV_SFX || window.OS_JEV_SFX;
-        if (!w || w.pvBgm || !J || !J.pickBgm || !(J.active && J.active()) || _pvAsking.has(w.id)) return '';
+        if (!w || w.pvBgm || (w.pv && w.pv.bgm) || !J || !J.pickBgm || !(J.active && J.active()) || _pvAsking.has(w.id)) return '';   // SN 已經挑過的不再問
         _pvAsking.add(w.id);
         try {
             const state = { '新世界': w.name + (w.concept ? '：' + w.concept : '') + (w.style ? '（風格：' + w.style + '）' : ''), '宣傳片旁白（逐句）': _pvLines(w) };
@@ -1663,6 +1663,51 @@
             return id;
         } catch (e) { return ''; }
         finally { _pvAsking.delete(w.id); }
+    }
+    // 🎞 SN 收尾做的宣傳片畫面（她 11-06：「畫面 可以啊，而且我剛好有阿洛…如果阿洛也是上班的一員，他自己都能生圖」）：
+    //   一句一張，存在自己一格（pvimg:企劃編號，不跟著世界清單：清單每次讀都整份讀，四張圖會拖著好幾 MB）；
+    //   阿洛畫的、奧瑞亞自己畫的都先縮成 1280×720 的 JPEG 再存
+    function _pvImgKey(id) { return 'pvimg:' + id; }
+    async function pvImgSave(id, arr) { if (id) await _set(_pvImgKey(id), (arr || []).map(x => String(x || ''))); }
+    async function pvImgGet(id) { if (!id) return []; const v = await _get(_pvImgKey(id), []); return Array.isArray(v) ? v : []; }
+    function _pvShrink(src) {
+        return new Promise(res => {
+            if (!src) { res(''); return; }
+            try {
+                const im = new Image();
+                im.onload = () => {
+                    try {
+                        const W = 1280, H = 720, c = document.createElement('canvas');
+                        c.width = W; c.height = H;
+                        const s = Math.max(W / im.naturalWidth, H / im.naturalHeight);
+                        const w = im.naturalWidth * s, h = im.naturalHeight * s;
+                        c.getContext('2d').drawImage(im, (W - w) / 2, (H - h) / 2, w, h);
+                        res(c.toDataURL('image/jpeg', 0.86));
+                    } catch (e) { res(String(src).indexOf('data:') === 0 ? src : ''); }
+                };
+                im.onerror = () => res('');
+                im.src = src;
+            } catch (e) { res(''); }
+        });
+    }
+    const _PV_BASE = 'cinematic film still, establishing shot, atmospheric lighting, painted concept art, highly detailed environment, no text, no watermark';
+    // 奧瑞亞自己畫（走生圖名冊「世界宣傳片」那列，她的錢）：have 裡已經有的格不重畫；一張一張畫，壞一張不擋後面
+    async function pvDraw(shots, have) {
+        const IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+        const out = (have || []).slice();
+        if (!IM || typeof IM.generateBackgroundAsync !== 'function') return out;
+        for (let i = 0; i < (shots || []).length; i++) {
+            if (out[i]) continue;
+            const p = String((shots[i] && shots[i].img) || '').trim();
+            if (!p) continue;
+            const o = { width: _ART_W, height: _ART_H, use: 'pv' };
+            try { const d = win.VN_Config && win.VN_Config.data; if (d && d.bgNegPrompt) o.negativePrompt = d.bgNegPrompt; } catch (e) {}
+            try {
+                let url = await IM.generateBackgroundAsync(_PV_BASE + ', ' + p, o) || '';
+                out[i] = url ? await _pvShrink(url) : '';
+            } catch (e) { console.warn('[Worldgate③] 宣傳片畫面沒畫成', i + 1, e && e.message); out[i] = ''; }
+        }
+        return out;
     }
     // 播到了（重看舊章不叫）：是通知的那扇門的宣傳片 → 記下來，之後不再教主持AI 演（演一次就夠）
     async function pvSeen(title) {
@@ -1680,9 +1725,13 @@
             const w = worlds.find(x => x && x.name && _pvKey(x.name) === k) || worlds.find(x => x && x.name && k.indexOf(_pvKey(x.name)) >= 0);
             if (!w) return null;
             const art = (typeof w.art === 'string' && w.art && !w.artFb && w.art.indexOf(_FB_BASE) !== 0 && w.art.indexOf('blob:') !== 0) ? w.art : '';
-            if (!w.pvBgm) _pickPvBgm(w);   // 通知時沒問到（Jev 那時沒設好、舊通知）：這次先照舊放，問到了下次播就有
-            return { name: String(w.name), art, lines: _pvLines(w), intro: String(w.concept || ''),
-                     tags: [w.style, w.genre || w.type, w.lure].filter(Boolean).map(String).slice(0, 4), bgm: w.pvBgm || '' };
+            // SN 收尾做過宣傳片的世界：旁白、配樂、一句一張的畫面照 SN 那份；沒有的照舊從世界資料湊
+            const sn = (w.pv && Array.isArray(w.pv.shots) && w.pv.shots.length) ? w.pv : null;
+            let imgs = [];
+            if (sn && w.plan && w.plan.from) { try { imgs = await pvImgGet(w.plan.from); } catch (e) {} }
+            if (!w.pvBgm && !(sn && sn.bgm)) _pickPvBgm(w);   // 通知時沒問到（Jev 那時沒設好、舊通知）：這次先照舊放，問到了下次播就有
+            return { name: String(w.name), art, lines: sn ? sn.shots.map(s => String(s.text || '')) : _pvLines(w), imgs, intro: String(w.concept || ''),
+                     tags: [w.style, w.genre || w.type, w.lure].filter(Boolean).map(String).slice(0, 4), bgm: (sn && sn.bgm) || w.pvBgm || '', bySn: !!sn };
         } catch (e) { return null; }
     }
 
@@ -1986,6 +2035,8 @@
         const ids = new Set(list.map(w => w.id));
         const worlds = await _get(K_WORLDS, []);
         await _set(K_WORLDS, worlds.filter(x => !ids.has(x.id)));
+        // 🎞 SN 宣傳片的畫面（自己一格，不在世界清單裡）一起刪
+        for (const w of list) { if (w && w.plan && w.plan.from) { try { const db = _db(); if (db && db.deleteAppData) await db.deleteAppData(APP_ID, _pvImgKey(w.plan.from)); } catch (e) {} } }
         // 這個聊天室記著「現在屬於哪個世界」,刪掉的正好是它就要一起清,
         // 不然 WORLD_RULES 會照著一個已經不存在的 id 去翻模組條目。
         try {
@@ -4206,6 +4257,7 @@
             panel: pt.panel || null,   // 🎴 VN 劇情末尾那一頁的外觀;null=沒生成到,末尾退回原本那幾顆鍵
             vnTheme: pt.theme || '',   // 🎨 這個世界的劇情主題(對話框那套 CSS),跟結束畫面同時生的(兩通);空=照舊用這本故事的主題
             achv: achv || null,     // 🏅 這個世界的成就清單;解鎖仍走既有的成就標記,這裡只是清單
+            pv: (plan && plan.built && plan.built.pv) ? plan.built.pv : null,   // 🎞 SN 收尾寫的宣傳片 { bgm, shots:[{text,img}] }（畫面存在 pvimg:企劃編號）
             visits: 0, ts: Date.now(), planBlockV: PLAN_BLOCK_V,   // 新建的條目本來就是新的岔路標記說明（_upgradePlanBlock 不用再寫一次）
             planBackfill: 'done',   // 新世界從第一章就有標記，沒有舊章節要補亮
             // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
@@ -5118,6 +5170,8 @@
             art: look ? () => { const a = S.pick(); return { styleId: a.styleId, layoutId: a.layoutId }; } : null,
             panel: look ? { prompt: (seed, text, art) => _panelPrompt(S, art, seed, text), read: (raw, art) => _readPanel(_stripFences(raw), art) } : null,
             theme: (look && T) ? { prompt: (seed, text, art) => _themePrompt(S, art, T, seed, text), read: raw => _pickTheme(_stripFences(raw), T) } : null,
+            // 🎞 宣傳片：配樂候選（這個世界題材那份 BGM 清單）、奧瑞亞自己畫、把阿洛畫的縮小、存圖
+            pv: { bgm: seed => _pvBgmChoices(seed || {}), draw: pvDraw, shrink: _pvShrink, save: pvImgSave },
             sections: _WORLD_SECTIONS,
         };
     }
@@ -5136,6 +5190,6 @@
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts,
-        inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen };
+        inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen, pvImgGet };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

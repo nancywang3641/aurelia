@@ -266,6 +266,10 @@
                     (v.defaultValue ? '<small>' + esc('一開始：' + String(v.defaultValue).split('\n').join('；')) + '</small>' : '') + '<p>' + esc(v.desc) + '</p></div>').join('') : '') +
             (B.travHint ? '<h5>旅人提示</h5><div class="snb-entry"><small>同行旅人是愛麗絲每次隨機召集的，她會照這個方向找</small><p>' + esc(B.travHint) + '</p></div>' : '') +
             (B.achv ? '<h5>成就</h5><div class="snb-entry"><p>' + esc(['normal', 'bond', 'hidden'].map(g => (B.achv[g] || []).map(x => x.name).join('、')).filter(Boolean).join('／')) + '</p></div>' : '') +
+            // 🎞 宣傳片：旁白一句一行、配樂、畫了幾張（圖本身在劇情手機裡播的時候看）
+            (B.pv && B.pv.shots ? '<h5>宣傳片</h5><div class="snb-entry"><small>' + esc((B.pv.bgm ? '配樂：' + B.pv.bgm : '配樂：沒挑（照放當時的歌）') +
+                    (B.pvart ? '・畫面 ' + (B.pvart.n || 0) + '／' + (B.pvart.of || 0) + ' 張' + (B.pvart.by ? '（' + B.pvart.by + '畫的）' : '') : '・畫面還沒畫')) + '</small>' +
+                B.pv.shots.map((s, i) => '<p>' + esc((i + 1) + '. ' + s.text) + '</p>').join('') + '</div>' : '') +
             (w ? '<h5>世界檔案（' + w.length + ' 字）</h5><div class="snb-entry"><p>' + esc(w) + '</p></div>' : '');
     }
     // 收尾做到哪：做好的打勾、正在等的那件框起來、沒做成跳過的劃掉
@@ -278,7 +282,9 @@
             const on = s === 'wcheck' ? !!d.finChecked : B[s] != null;
             const skip = !on && (sk[s] || (s === 'wcheck' && d.state !== 'finish'));
             const cls = on ? 'is-on' : skip ? 'is-skip' : (d.state === 'finish' && now ? (now = false, 'is-now') : '');
-            const who = s === 'wcheck' && d.finChecker ? '・' + d.finChecker.name : s === 'world' && B.worldByName ? '・' + B.worldByName : '';
+            const who = s === 'wcheck' && d.finChecker ? '・' + d.finChecker.name : s === 'world' && B.worldByName ? '・' + B.worldByName
+                : s === 'pv' && B.pv && B.pv.byName ? '・' + B.pv.byName
+                : s === 'pvart' && B.pvart ? '・' + (B.pvart.n || 0) + '／' + (B.pvart.of || 0) + ' 張' + (B.pvart.by ? '・' + B.pvart.by : '') : '';
             return '<span class="' + cls + '"><i class="fa-solid ' + (on ? 'fa-check' : skip ? 'fa-minus' : 'fa-circle') + '"></i>' + esc((names[s] || s) + who) + '</span>';
         }).join('') + '</div>';
     }

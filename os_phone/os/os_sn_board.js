@@ -99,8 +99,11 @@
     //   一件一通（大件塞同一通會被思考吃光），同一班做完一件接著做下一件；做完才進「等妳看」，交給愛麗絲直接開門。
     //   旅人不在收尾做：旅人是愛麗絲每次隨機召集的，收尾只寫「旅人提示」（什麼類型的人適合，跟狀態欄同一通），她召集時照這個找（她 10-29）。
     //   d.built＝做好的 {world, worldBy, art, achv, vars, travHint, panel, theme}；d.finChecked＝世界檔案挑過了；d.finSkip＝連兩班做不成、跳過的
-    const FIN = ['world', 'wcheck', 'achv', 'vars', 'panel', 'theme'];
-    const FIN_NAME = { world: '世界檔案', wcheck: '挑世界檔案的毛病', achv: '成就', vars: '狀態欄和旅人提示', panel: '結束畫面', theme: '劇情主題' };
+    //   🎞 宣傳片（她 11-06：「以後這種宣傳片感覺可以到時候再給sn他們寫，挑bgm，或者生成圖片素材」「如果阿洛也是上班的一員，他自己都能生圖」）：
+    //   pv＝值班的人寫四句旁白、每句一個畫面描述、從那個世界題材的 BGM 清單挑配樂；pvart＝畫那四個畫面
+    //   （阿洛值班他用自己的畫圖工具畫；別人值班、或他沒畫成的格，奧瑞亞照描述自己畫）。劇情手機搜這個世界時播（OS_WORLDGATE.pvOf）
+    const FIN = ['world', 'wcheck', 'achv', 'vars', 'panel', 'theme', 'pv', 'pvart'];
+    const FIN_NAME = { world: '世界檔案', wcheck: '挑世界檔案的毛病', achv: '成就', vars: '狀態欄和旅人提示', panel: '結束畫面', theme: '劇情主題', pv: '宣傳片', pvart: '宣傳片的畫面' };
     // 下一件做哪個；null＝做完了（whoId＝這班的人：世界檔案是他寫的，挑毛病要等另一位，這班先不收）
     function finStep(d, kit, solo, whoId) {
         const B = d.built || {}, sk = d.finSkip || {};
@@ -111,6 +114,10 @@
             if ((s === 'panel' && !kit.panel) || (s === 'theme' && !kit.theme)) continue;   // 沒有風格庫或主題說明書：這兩樣不做
             return s;
         }
+        // 🎞 宣傳片：先寫（旁白、畫面描述、配樂），寫好了才畫畫面；世界門太舊沒借這組工具就不做
+        if (!kit.pv) return null;
+        if (B.pv == null && !sk.pv) return 'pv';
+        if (B.pv && B.pvart == null && !sk.pvart) return 'pvart';
         return null;
     }
     function pickJob(b, who, o) {
@@ -318,6 +325,19 @@
                 const note = x && _tag(x.body, 'note'), hint = x && _tag(x.body, 'hint');
                 return { ok: true, fin: { value: vars, hint: hint ? _cutBlock(_plain(hint.body), LEN.HINT) : '', note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
             }
+            if (step === 'pv') {
+                const x = _tagOrCut(t, 'pv');
+                if (!x) return no('沒寫出宣傳片');
+                const shots = _all(x.body, 'shot').map(s => ({ text: _cut(_plain(s.body), 40), img: _cut(String(_attr(s.attrs, 'img') || '').trim(), 400) }))
+                    .filter(s => s.text && s.img).slice(0, 4);
+                if (shots.length < 2) return no(x.cut ? '宣傳片寫到一半被切掉了（回覆太長）' : '宣傳片的旁白或畫面太少');
+                // 配樂只認清單上有的（大小寫不同也算）；清單外的當沒挑，播的時候照舊放現在的歌
+                const list = (ctx && ctx.kit && ctx.kit.pv && ctx.kit.pv.bgm) ? ctx.kit.pv.bgm(job.seed || {}) : [];
+                let bgm = String(_attr(x.attrs, 'bgm') || '').trim();
+                if (bgm && list.indexOf(bgm) < 0) bgm = list.find(b => b.toLowerCase() === bgm.toLowerCase()) || '';
+                const note = _tag(x.body, 'note');
+                return { ok: true, fin: { value: { shots, bgm }, note: note ? _cut(_plain(note.body), LEN.NOTE) : '' }, say };
+            }
             if (step === 'wcheck') {
                 const x = _tagOrCut(t, 'review');
                 if (!x) return no('沒交挑毛病的結果');
@@ -440,9 +460,12 @@
                 B.world = v.world; d.finChecked = true; d.finChecker = _who(who);
             } else if (step === 'vars') {
                 B.vars = v.value; B.travHint = v.hint || '';
+            } else if (step === 'pv') {
+                B.pv = Object.assign({}, v.value, { by: who.id, byName: who.name });
             } else B[step] = v.value;
             if (v.note) d.notes.push({ by: who.id, name: who.name, role: step === 'wcheck' ? 'check' : 'finish', text: v.note });
-            const what = FIN_NAME[step] + (step === 'wcheck' ? (v.changed ? '（改了 ' + v.changed + ' 節）' : '（沒要改的）') : step === 'world' ? '（' + String(B.world.text || '').length + ' 字）' : '');
+            const what = FIN_NAME[step] + (step === 'wcheck' ? (v.changed ? '（改了 ' + v.changed + ' 節）' : '（沒要改的）') : step === 'world' ? '（' + String(B.world.text || '').length + ' 字）'
+                : step === 'pvart' ? '（畫好 ' + (v.value.n || 0) + '／' + (v.value.of || 0) + ' 張' + (v.value.by ? '，' + v.value.by + '畫的' : '') + '）' : '');
             if (o.kit && !finStep(d, o.kit, !!o.solo, null)) {
                 d.state = 'wait';
                 return { ok: true, board: b, text: '收尾「' + d.title + '」：' + what + '，整份做完了', waitTitle: d.title };
@@ -656,7 +679,8 @@
     function planOf(d) {
         const B = d.built || null;
         return { id: d.id, title: d.title, front: d.front, seed: d.seed, player: d.player || '', people: d.people, travelers: d.travelers || [], nodes: d.nodes, endings: d.endings, secret: d.secret || '',
-            built: (B && B.world) ? { world: B.world, art: B.art || null, achv: B.achv || null, vars: B.vars || [], travHint: B.travHint || '', panel: B.panel || null, theme: B.theme || '' } : null,
+            built: (B && B.world) ? { world: B.world, art: B.art || null, achv: B.achv || null, vars: B.vars || [], travHint: B.travHint || '', panel: B.panel || null, theme: B.theme || '',
+                pv: (B.pv && B.pv.shots) ? { shots: B.pv.shots, bgm: B.pv.bgm || '' } : null } : null,   // 🎞 畫面不在這裡：存在世界門那格 pvimg:企劃編號
             by: [d.writer && d.writer.name, d.checker && d.checker.name, d.finChecker && d.finChecker.name].filter(Boolean) };
     }
     function markSent(b, draftId, now) {
@@ -870,6 +894,29 @@
                     '有問題就交那一整節改好的版本：n 寫那節標題上的中文數字（一到十），內容寫改好的整節（不用寫標題）。改的時候只動有問題的句子，其餘照原文抄，不要順手改寫法。' +
                         '一個問題牽到好幾節就每節各放一個 section。要補寫的內容要從企劃書和檔案其他節推得出來；推不出來的寫進 note。沒問題的節不要放；整份都沒問題就只寫 note。',
                     '格式：', '<review>', '<section n="三">改好的整節</section>', '<note>給寫的人和' + U + '的一句話：你看了什麼、改了什麼（不要寫出祕密和結局的內容：這句不會封起來，' + U + '當玩家時也看得到）</note>', '</review>', SAY_FMT);
+            } else if (step === 'pv') {
+                const bgm = (K.pv && K.pv.bgm) ? K.pv.bgm(seed) : [];
+                L.push('【這班：收尾——宣傳片】企劃書「' + d.title + '」的世界做好了，你來寫這個世界的宣傳片。',
+                    '這是 SN 官方在奧瑞亞放的新世界預告，像電影預告片：沒有對白、沒有人唱歌，只有一句一句的旁白字幕，每句配一個畫面，背景放一首音樂。' +
+                        '奧瑞亞的人在手機上搜尋這個世界時會看到它；' + U + '還沒進去玩，看到的就是這支。',
+                    GATE_WHAT, '企劃方向：' + (d.front || ''), d.player ? '玩家是誰：' + d.player : '', text ? '世界檔案（節錄）：\n' + text.slice(0, 2400) : '',
+                    '・旁白剛好 4 句，照順序講：這是什麼地方；這裡跟別處不一樣的規矩；為什麼值得去；一點危險或懸念。每句 26 個字以內，念得出來、看一眼就懂。',
+                    '・不要劇透：岔路怎麼走、會碰上誰、結局、祕密與真相都不寫，只寫一進去就看得到、聽得到的東西。',
+                    '・每句配一個畫面，寫在 img：用英文寫一句給畫圖的人看的描述（地點、時間、天氣和光線、畫面裡有什麼）。可以有遠處的人群或背影，不要畫企劃裡哪個人物的臉，畫面裡不要有字。' +
+                        '四個畫面是同一個世界、同一種畫風，地點和遠近要有變化。',
+                    bgm.length ? '・bgm：從這份清單挑一首當配樂（只看曲名判斷氣氛，一字不差照抄）：' + bgm.join('、') : '・bgm：沒有清單可挑，這格留空。',
+                    '・note：給' + U + '的一句話（不要寫出祕密和結局的內容：這句不會封起來）。',
+                    '格式：', '<pv bgm="曲名">', '<shot img="English description of the picture">旁白一句</shot>', '（一共四個 shot，照旁白的順序）', '<note>一句話</note>', '</pv>', SAY_FMT);
+            } else if (step === 'pvart') {
+                // 只有阿洛（宿舍的 Codex）值班時才會送這一份：叫他用自己的畫圖工具畫；別人值班由奧瑞亞自己畫，不叫模型（_pvArtShift）
+                const pv = B.pv || { shots: [] };
+                const n = pv.shots.length;
+                L.push('【這班：收尾——宣傳片的畫面】' + (pv.byName || '同事') + '寫好了「' + d.title + '」這個世界的宣傳片：像電影預告，一句旁白配一個畫面。你用你的畫圖工具把這 ' + n + ' 個畫面畫出來。',
+                    '・照下面的順序一張一張畫，一個畫面一張，總共 ' + n + ' 張，不要多畫、不要重畫同一張：系統照畫出來的先後把圖對到旁白。',
+                    '・每張都是橫的 16:9，同一個世界、同一種畫風，像電影預告的畫面；畫面裡不要有任何文字、字幕、浮水印。',
+                    '・畫出來就好，不用另外存檔或搬檔案。',
+                    pv.shots.map((s, i) => (i + 1) + '. 畫面：' + s.img + '\n   （配的旁白：' + s.text + '）').join('\n'),
+                    '畫完回：', '<pvart n="畫了幾張">一句話</pvart>', SAY_FMT);
             } else if (step === 'vars') {
                 L.push('【這班：收尾——狀態欄和旅人提示】企劃書「' + d.title + '」寫好了，你來設計這個世界的狀態欄，再寫一段旅人提示。',
                     '狀態欄是劇情進行時，每一章有人照實際發生的事更新的幾格，' + U + '在狀態面板上看得到，寫正文的 AI 每一輪也看得到。',
@@ -900,8 +947,8 @@
 
     // ── 資料（OS_DB 通用資料，不升版）──────────────────────────────
     const DEF_STAFF = { slots: [null, null], times: ['12:00', '20:00'], next: 0, on: false, lastAt: 0, running: 0, runningJob: '', runningWho: '', lastVisit: 0, unread: false, says: {}, fail: null };
-    const RUN_STALE = 10 * 60000;   // 「上班中」超過這麼久當作沒在跑（分頁中途被關）。要比兩種逾時都長
-    const _cfg = { XIAOJI_TIMEOUT: 180000, XIAOJI_LONG_TIMEOUT: 480000, DORM_TIMEOUT: 480000, VIDEO_TIMEOUT: 240000, YT_TIMEOUT: 30000 };
+    const RUN_STALE = 20 * 60000;   // 「上班中」超過這麼久當作沒在跑（分頁中途被關）。要比每一種逾時都長（阿洛畫宣傳片那件最長，15 分鐘）
+    const _cfg = { XIAOJI_TIMEOUT: 180000, XIAOJI_LONG_TIMEOUT: 480000, DORM_TIMEOUT: 480000, DORM_ART_TIMEOUT: 900000, VIDEO_TIMEOUT: 240000, YT_TIMEOUT: 30000 };
     const VIDEO_TASK = 'sn_board_video';   // 名冊 LLM_TASKS 那一列「白板看影片／讀歌詞」
     const _listeners = new Set();
     function _emit() { _listeners.forEach(f => { try { f(); } catch (e) {} }); }
@@ -1170,6 +1217,47 @@
         if (!CT || !CT.sendAs) return Promise.reject(new Error('宿舍還沒載入'));
         return _withTimeout(_cfg.DORM_TIMEOUT, signal => CT.sendAs(who.id, msgs, { signal }).then(r => (r && r.reply) || ''));
     }
+    // 連畫出來的圖一起拿（阿洛用畫圖工具時，橋會把他這回合新畫的圖附在回覆裡；房間太舊的 sendAs 不交圖＝拿到空的，照樣退回奧瑞亞自己畫）
+    function _callDormFull(who, msgs, ms) {
+        const CT = _g('ClaudeTerminal');
+        if (!CT || !CT.sendAs) return Promise.reject(new Error('宿舍還沒載入'));
+        return _withTimeout(ms || _cfg.DORM_TIMEOUT, signal => CT.sendAs(who.id, msgs, { signal }).then(r => ({ reply: (r && r.reply) || '', images: (r && Array.isArray(r.images)) ? r.images : [] })));
+    }
+    function _isCodex(who) {
+        if (!who || who.type !== 'dorm') return false;
+        const r = _roomResidents().find(x => x && x.id === who.id);
+        return !!(r && r.provider === 'codex');
+    }
+    // 🎞 收尾——宣傳片的畫面：阿洛（宿舍的 Codex）值班就請他用自己的畫圖工具畫（她會員的額度）；
+    //   他沒畫成、少畫的格，或值班的是別人 → 奧瑞亞照每句的畫面描述自己畫（生圖名冊「世界宣傳片」那列，她的錢）。
+    //   畫成幾張都算這件做完（沒圖的那句播的時候用概念圖），不為了圖卡住整份收尾。回跟 parseReply 一樣的形狀
+    async function _pvArtShift(job, who, board, ctx) {
+        const K = ctx && ctx.kit && ctx.kit.pv;
+        const d = board.drafts.find(x => x.id === job.draftId) || {};
+        const shots = (d.built && d.built.pv && d.built.pv.shots) || [];
+        let imgs = [], reply = '';
+        const by = [];
+        if (_isCodex(who)) {
+            try {
+                const r = await _callDormFull(who, buildMessages(job, who, board, [], who.user, ctx), _cfg.DORM_ART_TIMEOUT);
+                reply = r.reply;
+                const got = r.images.slice(0, shots.length);
+                for (let i = 0; i < got.length; i++) {
+                    const src = (got[i] && (got[i].thumb || got[i].data)) || '';   // 房間交來的是縮好的 thumb（長邊 1280 的 JPEG）；舊的寫法是 data
+                    imgs[i] = (K && K.shrink) ? await K.shrink(src) : src;
+                }
+                if (imgs.some(Boolean)) by.push(who.name);
+            } catch (e) { console.warn('[SNBoard] ' + who.name + '沒畫成宣傳片畫面，改由奧瑞亞自己畫', (e && e.message) || e); }
+        }
+        const had = imgs.filter(Boolean).length;
+        if (K && K.draw && had < shots.length) {
+            imgs = await K.draw(shots, imgs);
+            if (imgs.filter(Boolean).length > had) by.push('奧瑞亞');
+        }
+        if (K && K.save) await K.save(job.draftId, imgs);
+        const s = _tag(String(reply || ''), 'say');
+        return { reply, p: { ok: true, fin: { value: { n: imgs.filter(Boolean).length, of: shots.length, by: by.join('、') }, note: '' }, say: s ? _cut(_plain(s.body), LEN.SAY) : '' } };
+    }
     // 橋停著哪一池（會員額度到上限，重置前背景都不叫；橋的 /v1/quota 給 parked 跟 rid_account）。
     // 停著回幾點（同一天「19:00」、跨天「10/14 15:00」）；橋沒開、舊橋沒這兩欄都回 null＝照舊叫
     async function _dormParked(rid) {
@@ -1376,9 +1464,15 @@
                 const ctx = job.kind === 'plan' ? { usedNames: await _gateNames() } : {};
                 ctx.kit = kit;
                 try { ctx.brief = await shiftBrief(); } catch (e) {}
-                const msgs = buildMessages(job, who, board, refs, who.user, ctx);
-                reply = who.type === 'xiaoji' ? await _callXiaoji(who, msgs, job.kind) : await _callDorm(who, msgs);
-                const p = parseReply(reply, job, ctx);
+                let p;
+                if (job.kind === 'fin_pvart') {   // 🎞 畫宣傳片畫面：阿洛自己畫，別人值班不叫模型、由奧瑞亞畫
+                    const a = await _pvArtShift(job, who, board, ctx);
+                    reply = a.reply; p = a.p;
+                } else {
+                    const msgs = buildMessages(job, who, board, refs, who.user, ctx);
+                    reply = who.type === 'xiaoji' ? await _callXiaoji(who, msgs, job.kind) : await _callDorm(who, msgs);
+                    p = parseReply(reply, job, ctx);
+                }
                 if (!p.ok) throw new Error(p.why);
                 // 叫模型那幾分鐘她可能按了東西：鎖住、重讀、再套
                 const r = await _lockData(async () => {
@@ -1411,7 +1505,7 @@
         let fail = capped ? (st.fail || null) : null, gaveUp = '';   // 撞上限那班不動之前的失敗次數
         if (!rec.ok && failKey && !capped) {
             const n = (st.fail && st.fail.key === failKey ? st.fail.n : 0) + 1;
-            if (n >= FAIL_GIVEUP) { try { gaveUp = await _giveUp(job, kit); } catch (e) {} }
+            if (n >= FAIL_GIVEUP) { try { gaveUp = await _giveUp(job, kit, solo); } catch (e) {} }
             else fail = { key: failKey, n };
         }
         try {
@@ -1428,7 +1522,8 @@
         return rec;
     }
     const FAIL_GIVEUP = 2;
-    function _giveUp(job, kit) {
+    // solo＝這班只排一個人：剩下的件照一個人的規則算（不等人挑世界檔案的毛病），不然跳過一件後整份會卡在「收尾中」出不來
+    function _giveUp(job, kit, solo) {
         return _lockData(async () => {
             const b = await getBoard();
             // 收尾某一件連兩班做不成：跳過那件，其他照做；世界檔案寫不成就整份收不了，先放進等妳看
@@ -1438,7 +1533,7 @@
                 if (!d) return '';
                 const step = job.kind.slice(4);
                 d.finSkip = Object.assign({}, d.finSkip || {}, { [step]: true });
-                const left = kit ? finStep(d, kit, false, null) : null;
+                const left = kit ? finStep(d, kit, !!solo, null) : null;
                 if (step === 'world' || !left) { d.state = 'wait'; if (step === 'world') d.unfinished = true; }
                 await saveBoard(b);
                 return '「' + d.title + '」收尾的' + FIN_NAME[step] + '連兩班都沒做成，' +
