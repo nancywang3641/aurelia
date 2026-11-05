@@ -883,11 +883,12 @@
     // 🚨 只寫臉長什麼樣，不寫「忍住」這種動作：stifled laugh／holding back laughter／holding back tears 在動漫模型裡畫出來就是手摀嘴、手擦淚
     //   （11-06 她：「表情面膜大笑每次都跑出手來摀嘴」→ ComfyUI /history 她那晚 11 張內收大笑 8 張有手；
     //    同一張裁圖、同一個遮罩、同一顆種子只換詞：改成只寫臉的 0 張有手，tmp/expr_laugh_hand/）。
+    //   一般那套的 (laughing:1.3) 也偶爾帶手（重跑 30 張 1 張）：laughing 這個標籤在圖庫裡常配手摀嘴，改寫成張嘴大笑的樣子（18 張 0 張）。
     //   她的包是 CFG 1 的 Turbo，負面詞完全沒作用，擋手只能從正面詞下手
     const EXPR_SET = [
         { exp: 'Happy',     zh: '微笑', d: 0.7, tags: '(gentle smile:1.3), closed mouth smile, soft eyes, happy',
                                             quiet: 'faint smile, (slight smile:1.2), closed mouth, calm soft eyes' },
-        { exp: 'Laughing',  zh: '大笑', d: 0.8, tags: '(laughing:1.3), open mouth, big smile, closed eyes, happy',
+        { exp: 'Laughing',  zh: '大笑', d: 0.8, tags: '(open mouth:1.3), (big smile:1.3), (closed eyes:1.2), upper teeth, happy, joyful',
                                             quiet: '(closed mouth smile:1.3), (eyes curved:1.3), (closed eyes:1.1), wide smile, amused, happy' },
         { exp: 'Shy',       zh: '害羞', d: 0.7, tags: '(embarrassed:1.3), (blush:1.3), looking away, wavy mouth',
                                             quiet: '(light blush:1.1), averted gaze, looking down, closed mouth, shy' },
