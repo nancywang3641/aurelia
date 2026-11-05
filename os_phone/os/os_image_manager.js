@@ -685,6 +685,32 @@
         // 這條線路背後是不是「讀句子」的模型（官方 GPT Image／DALL·E，Pollinations 那幾顆同名的也是）
         _isNaturalModel: function (model) { return /^(gpt-?image|dall-?e)/i.test(String(model || '')); },
 
+        // 自訂接口回錯 → 給她看的一句話＋站方原話。生圖（_genCustomApi）和帶圖編輯（capiEdit）共用。
+        // 🚨 image_generation_user_error 是 OpenAI 圖片錯誤的「大類」：額度用完（billing_hard_limit_reached）、
+        //    參數不對也掛這一類。以前拿它當「內容被擋」，連測試鈕畫一隻貓都報被擋，真正的原因被蓋掉。
+        //    只認 code 或站方明講的審查說法；額度先認（兩邊都對得上時是額度）；不管認成哪種都附站方原話。
+        _capiErr: function (status, text) {
+            const t = String(text || '');
+            let j = null; try { j = JSON.parse(t); } catch (e) {}
+            const er = (j && typeof j.error === 'object' && j.error) || j || {};
+            const code = String(er.code || '');
+            const said = (typeof er.message === 'string' && er.message)
+                || (j && typeof j.error === 'string' && j.error)
+                || (typeof er.detail === 'string' && er.detail) || (typeof er.msg === 'string' && er.msg) || '';
+            const words = (String(said).trim() || t.replace(/\s+/g, ' ').trim()).slice(0, 240);
+            const quota = /insufficient_quota|billing_hard_limit|exceeded your current quota/i.test(code + ' ' + t);
+            const blocked = !quota && (/^(moderation_blocked|content_policy_violation)$/i.test(code)
+                || /safety system|content[_ ]policy/i.test(said || t));
+            const head = blocked ? '這張的內容被站方擋掉了（站方會記重複違規，常出現就回頭調插圖落點指令）'
+                : quota ? '生圖的額度用完了（或是這個月的上限到了），去這個站的帳單或額度頁看一下'
+                : status === 401 ? '站方不認這把金鑰（401）'
+                : status === 403 ? '站方不讓這把金鑰用這個（403）'
+                : status === 404 ? '網址或模型名站方找不到（404）'
+                : status === 429 ? '站方說太頻繁或排隊滿了，等一下再試（429）'
+                : ('站方回錯誤 ' + status);
+            return { msg: head + (words ? '。站方原話：' + words : ''), blocked: blocked, quota: quota };
+        },
+
         _genCustomApi: async function(prompt, type, options = {}) {
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: type }); } catch (e) {}   // 📊 長期用量帳
             // options.customApi：設置頁的「測試」鈕用的——讓她還沒按儲存就能試，不必先存壞設定
@@ -810,18 +836,11 @@
                     throw e;
                 }
                 if (!resp.ok) {
-                    // 內容被擋是最常撞到的一種，而站方回的是一整包英文 JSON，彈出來看不出是被擋還是設定錯。
-                    // 認出來就講人話：那張圖不會有了，但不是她設定壞了，也不用重試。
-                    const _blocked = /safety system|content[_ ]policy|moderation_blocked|image_generation_user_error/i.test(text);
-                    // 沒額度／被限流要講得很清楚：她會以為是內容被擋，其實是錢用完了。
-                    const _quota = /insufficient_quota|billing_hard_limit|exceeded your current quota/i.test(text);
-                    const e = new Error(_blocked
-                        ? '這張的內容被站方擋掉了（站方會記重複違規，常出現就回頭調插圖落點指令）'
-                        : _quota
-                            ? '生圖的額度用完了（或是這個月的上限到了），去 OpenAI 的帳單頁看一下。'
-                            : (resp.status + ' ' + text.slice(0, 300)));
+                    // 站方回的是一整包英文 JSON：認得出來的講人話（被擋／額度／金鑰…），一律附站方原話（見 _capiErr）
+                    const _ce = this._capiErr(resp.status, text);
+                    const e = new Error(_ce.msg);
                     e.status = resp.status;
-                    e.blocked = _blocked;
+                    e.blocked = _ce.blocked;
                     throw e;
                 }
 
@@ -1220,12 +1239,9 @@
                 const resp = await fetch(url, { method: 'POST', headers: key ? { Authorization: 'Bearer ' + key } : {}, body: fd });
                 const text = await resp.text();
                 if (!resp.ok) {
-                    const blocked = /safety system|content[_ ]policy|moderation_blocked|image_generation_user_error/i.test(text);
-                    const quota = /insufficient_quota|billing_hard_limit|exceeded your current quota/i.test(text);
-                    const e = new Error(blocked ? '這張被站方的內容審查擋掉了'
-                        : quota ? '生圖的額度用完了（或是這個月的上限到了）'
-                        : (resp.status === 404 || resp.status === 405) ? '這個接口不收帶圖的請求（' + resp.status + '）'
-                        : (resp.status + ' ' + text.slice(0, 200)));
+                    const ce = this._capiErr(resp.status, text);
+                    const e = new Error((!ce.blocked && !ce.quota && (resp.status === 404 || resp.status === 405))
+                        ? '這個接口不收帶圖的請求（' + resp.status + '）' : ce.msg);
                     e.status = resp.status;
                     throw e;
                 }
