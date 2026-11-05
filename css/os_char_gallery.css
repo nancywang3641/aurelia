@@ -214,7 +214,11 @@
 .acg-ex-ring { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: move; }
 .acg-ex-oval { fill: rgba(255, 255, 255, 0.14); stroke: var(--acg-accent); stroke-width: 2; stroke-dasharray: 6 4; }
 .acg-ex-knob { fill: var(--acg-accent); stroke: #fff; stroke-width: 2; cursor: nwse-resize; }
-.acg-ex-mouth { fill: none; stroke: var(--acg-accent); stroke-width: 1.5; stroke-dasharray: 3 3; pointer-events: none; display: none; }
+.acg-ex-mouth { fill: none; stroke: var(--acg-accent); stroke-width: 1.5; stroke-dasharray: 3 3; display: none; }
+/* 小圈（嘴、兩隻眼睛）可以各自拖：整個圈裡都按得到 */
+.acg-ex.is-mouth .acg-ex-mouth { pointer-events: all; cursor: grab; }
+.acg-ex.is-mouth .acg-ex-mouth:hover, .acg-ex.is-mouth .acg-ex-mouth:active { fill: color-mix(in srgb, var(--acg-accent) 18%, transparent); stroke-width: 2.5; stroke-dasharray: none; }
+.acg-ex.is-mouth .acg-ex-mouth:active { cursor: grabbing; }
 .acg-ex.is-mouth .acg-ex-mouth { display: inline; }
 .acg-ex.is-finding .acg-ex-ring, .acg-ex.is-busy .acg-ex-ring { pointer-events: none; }
 .acg-ex.is-finding .acg-ex-oval, .acg-ex.is-finding .acg-ex-knob, .acg-ex.is-finding .acg-ex-mouth { display: none; }
@@ -240,13 +244,20 @@
 .acg-ex-chip:disabled { cursor: default; opacity: .6; }
 .acg-ex-has { font-size: 11px; font-weight: 600; opacity: .7; }
 /* 講話會動嘴：一顆開關，開著實心 */
-.acg-ex-opts { display: flex; justify-content: center; }
+.acg-ex-opts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .acg-ex-toggle {
     display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px;
     border: 1px dashed var(--acg-line); background: transparent; color: var(--acg-sub); font-size: 13px; font-weight: 700; cursor: pointer;
 }
 .acg-ex-toggle.is-on { border-style: solid; border-color: var(--acg-accent); color: var(--acg-accent); background: color-mix(in srgb, var(--acg-accent) 12%, transparent); }
 .acg-ex-toggle:disabled { cursor: default; opacity: .6; }
+/* 小圈拖過才出現：放回原位 */
+.acg-ex-layreset {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 999px;
+    border: 1px solid var(--acg-line); background: var(--acg-card); color: var(--acg-sub); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.acg-ex-layreset[hidden] { display: none; }
+.acg-ex-layreset:disabled { cursor: default; opacity: .6; }
 .acg-ex-foot { display: flex; justify-content: center; }
 .acg-ex-go { min-width: 200px; }
 .acg-ex-out:empty { display: none; }

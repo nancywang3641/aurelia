@@ -59,7 +59,7 @@
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
-            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「講話動嘴、會眨眼」開著的話，每張圖會順便做微張、張開兩種嘴和一張閉眼；劇情裡他講話時，字在跑、配音在響，嘴就會開合，平常隔幾秒眨一下眼。圈裡的小圈是嘴和兩隻眼睛的位置，跟著大圈走，眼睛沒套到就把大圈拖一下。大笑、驚訝嘴本來就開著，不做嘴；大笑眼睛瞇著，不做閉眼。沒做到的表情，講話、眨眼時借同一個人差不多的表情來用。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著動嘴眨眼的話再多畫一到兩次做嘴和閉眼（一次四張圖）。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
+            acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。\n「講話動嘴、會眨眼」開著的話，每張圖會順便做微張、張開兩種嘴和一張閉眼；劇情裡他講話時，字在跑、配音在響，嘴就會開合，平常隔幾秒眨一下眼。圈裡的小圈是嘴和兩隻眼睛的位置，跟著大圈走；哪個沒套到就直接拖那個小圈，嘴和兩隻眼睛各拖各的，下次打開這個角色還記得。想回到原本的位置，按「小圈放回原位」。大笑、驚訝嘴本來就開著，不做嘴；大笑眼睛瞇著，不做閉眼。沒做到的表情，講話、眨眼時借同一個人差不多的表情來用。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著動嘴眨眼的話再多畫一到兩次做嘴和閉眼（一次四張圖）。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
     } catch (e) {}
 
@@ -689,6 +689,7 @@
             if (act === 'expr-pick') { exPick(b.dataset.exp); return; }
             if (act === 'expr-style') { exStyle(b.dataset.style); return; }
             if (act === 'expr-mouth') { exMouth(); return; }
+            if (act === 'expr-lay-reset') { exLayReset(); return; }
             if (act === 'expr-go') { await exGo(); return; }
             if (act === 'expr-view') {
                 const done = S.ex ? S.ex.done.filter(r => r.url) : [];
@@ -1042,9 +1043,29 @@
     ];
     const EYE_SHAPE = { k: 'shut', d: 0.7, tags: '(closed eyes:1.4), eyelashes, sleeping eyes' };   // 11-05 小樣那份
     const mouthOn = () => { try { return localStorage.getItem(MOUTH_KEY) !== '0'; } catch (e) { return true; } };
-    function mouthOval(ring) { return { cx: ring.cx, cy: ring.cy + ring.ry * 0.324, rx: ring.rx * 0.357, ry: ring.ry * 0.243 }; }
-    // 兩隻眼睛（也照臉圈推）：圈心往上 0.64 個半高、左右各 0.42 個半寬（11-05 那張立繪量過：眼睛中心對得上）
-    function eyeOvals(ring) { return [-1, 1].map(s => ({ cx: ring.cx + s * ring.rx * 0.42, cy: ring.cy - ring.ry * 0.64, rx: ring.rx * 0.32, ry: ring.ry * 0.2 })); }
+    // 嘴、兩隻眼睛在臉圈裡的位置：u、v＝中心離圈心多少個半徑（左右、上下），a、b＝大小是半徑的幾倍。
+    //   每張臉比例不一樣，固定比例常常顧了嘴、眼睛就歪（11-06 她：「圈好嘴，眼睛圈沒對上，移到眼睛圈，嘴又沒圈上」）
+    //   → 生表情頁三個小圈可以各自拖，每個角色記一份（LAY_KEY），跟著大圈搬、縮放
+    const LAY_KEY = 'acg_expr_lay';
+    const LAY_DEF = { mouth: { u: 0, v: 0.324, a: 0.357, b: 0.243 }, eyes: [{ u: -0.42, v: -0.64, a: 0.32, b: 0.2 }, { u: 0.42, v: -0.64, a: 0.32, b: 0.2 }] };
+    const layCopy = (l) => JSON.parse(JSON.stringify(l));
+    function layFix(l) {
+        const ok = (p) => p && ['u', 'v', 'a', 'b'].every(k => typeof p[k] === 'number' && isFinite(p[k]));
+        return (l && ok(l.mouth) && Array.isArray(l.eyes) && l.eyes.length === 2 && l.eyes.every(ok)) ? l : null;
+    }
+    function layMap() { try { const v = JSON.parse(localStorage.getItem(LAY_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+    function layOf(ch) { const m = layMap(); const k = Object.keys(m).find(n => sameChar(n, ch)); return k ? layFix(m[k]) : null; }
+    function laySave(ch, lay) {
+        const m = layMap();
+        Object.keys(m).forEach(n => { if (sameChar(n, ch)) delete m[n]; });
+        if (lay) m[ch] = lay;
+        const A = AUIx();
+        return A && A.lsSet ? A.lsSet(LAY_KEY, JSON.stringify(m), '生表情時嘴和眼睛小圈的位置') : false;
+    }
+    function ovalAt(ring, p) { return { cx: ring.cx + p.u * ring.rx, cy: ring.cy + p.v * ring.ry, rx: p.a * ring.rx, ry: p.b * ring.ry }; }
+    function mouthOval(ring, lay) { return ovalAt(ring, (lay || LAY_DEF).mouth); }
+    // 兩隻眼睛（也照臉圈推，預設在 LAY_DEF）：圈心往上 0.64 個半高、左右各 0.42 個半寬（11-05 那張立繪量過：眼睛中心對得上）
+    function eyeOvals(ring, lay) { return (lay || LAY_DEF).eyes.map(p => ovalAt(ring, p)); }
     // 認圖：只看臉那塊、縮成 20×20 存下來。舞台那張同一塊縮一樣大來比，差很少＝同一張
     //   （存成 WebP、轉成 blob 網址都認得；同一個人不同表情差在臉，一比就分得開）
     function faceSig(img, f) {
@@ -1189,14 +1210,14 @@
         } catch (err) { return none; }
     }
     // 嘴的位置（原圖像素）：mo＝嘴那顆橢圓、box＝切下來存的那塊、face＝認圖用的臉框。ComfyUI、GPT 兩條同一份
-    function mouthGeom(ring, W, H) {
-        const mo = mouthOval(ring);
+    function mouthGeom(ring, W, H, lay) {
+        const mo = mouthOval(ring, lay);
         const bx = Math.max(0, Math.floor(mo.cx - mo.rx * 1.15)), by = Math.max(0, Math.floor(mo.cy - mo.ry * 1.15));
         const bw = Math.min(W - bx, Math.ceil(mo.rx * 2.3)), bh = Math.min(H - by, Math.ceil(mo.ry * 2.3));
         const fx = Math.max(0, Math.round(ring.cx - ring.rx)), fy = Math.max(0, Math.round(ring.cy - ring.ry));
         const face = { x: fx, y: fy, w: Math.max(1, Math.min(W - fx, Math.round(ring.rx * 2))), h: Math.max(1, Math.min(H - fy, Math.round(ring.ry * 2))) };
         // 眼睛：兩顆橢圓，切下來存的是包住兩隻眼睛那一塊
-        const eyes = eyeOvals(ring);
+        const eyes = eyeOvals(ring, lay);
         const ex0 = Math.max(0, Math.floor(Math.min(eyes[0].cx - eyes[0].rx, eyes[1].cx - eyes[1].rx) - eyes[0].rx * 0.15));
         const ex1 = Math.min(W, Math.ceil(Math.max(eyes[0].cx + eyes[0].rx, eyes[1].cx + eyes[1].rx) + eyes[0].rx * 0.15));
         const ey0 = Math.max(0, Math.floor(eyes[0].cy - eyes[0].ry * 1.15)), ey1 = Math.min(H, Math.ceil(eyes[0].cy + eyes[0].ry * 1.15));
@@ -1234,7 +1255,7 @@
         cg.fillStyle = '#fff'; cg.fillRect(0, 0, P, P);
         cg.drawImage(src, L, T, side, side, 0, 0, P, P);
         const cropUrl = crop.toDataURL('image/jpeg', 0.95);
-        const geo = mouthGeom(ring, W, H);
+        const geo = mouthGeom(ring, W, H, ex.lay);
         const maskOf = (ovals) => {
             const mask = canvasOf(P, P), mg = mask.getContext('2d');
             mg.fillStyle = '#000'; mg.fillRect(0, 0, P, P);
@@ -1316,7 +1337,8 @@
         info.slots.forEach(s => { if (s.used) has[s.exp] = true; });
         const ex = { ch, img, W, H, has, srcUrl: url, picks: EXPR_SET.filter(x => !has[x.exp]).map(x => x.exp), done: [], busy: false, stop: false, style: styleOf(ch),
                      ring: { cx: W / 2, cy: H * 0.2, rx: W * 0.13, ry: W * 0.15 }, found: null, el: null,
-                     mouth: mouthOn(), mouthNeed: null };   // mouthNeed：還沒對得上動嘴的那幾張（算好之前是 null）
+                     mouth: mouthOn(), mouthNeed: null,   // mouthNeed：還沒對得上動嘴的那幾張（算好之前是 null）
+                     lay: layOf(ch) || layCopy(LAY_DEF) };   // 嘴、眼睛小圈的位置（她拖過就記在這個角色身上）
         S.ex = ex;
         const A = AUIx();
         const el = doc.createElement('div');
@@ -1348,7 +1370,8 @@
           +   '<div class="acg-ex-picks">' + EXPR_SET.map(x =>
                   '<button class="acg-ex-chip" type="button" data-act="expr-pick" data-exp="' + x.exp + '">' + esc(x.zh)
                 + (has[x.exp] ? '<span class="acg-ex-has">有了</span>' : '') + '</button>').join('') + '</div>'
-          +   '<div class="acg-ex-opts"><button class="acg-ex-toggle" type="button" data-act="expr-mouth"><i class="fa-solid fa-comment-dots"></i> 講話動嘴、會眨眼</button></div>'
+          +   '<div class="acg-ex-opts"><button class="acg-ex-toggle" type="button" data-act="expr-mouth"><i class="fa-solid fa-comment-dots"></i> 講話動嘴、會眨眼</button>'
+          +     '<button class="acg-ex-layreset" type="button" data-act="expr-lay-reset"><i class="fa-solid fa-rotate-left"></i> 小圈放回原位</button></div>'
           +   '<div class="acg-ex-foot"><button class="acg-btn acg-btn-main acg-ex-go" type="button" data-act="expr-go"></button></div>'
           +   '<div class="acg-gen acg-ex-out"></div>'
           + '</div>';
@@ -1415,9 +1438,11 @@
         oval.setAttribute('cx', r.cx); oval.setAttribute('cy', r.cy); oval.setAttribute('rx', r.rx); oval.setAttribute('ry', r.ry);
         knob.setAttribute('cx', r.cx + r.rx * 0.7071); knob.setAttribute('cy', r.cy + r.ry * 0.7071); knob.setAttribute('r', Math.max(ex.W, ex.H) * 0.016);
         // 圈裡的小圈＝嘴、兩隻眼睛（跟著大圈走）
-        const small = [mouthOval(r)].concat(eyeOvals(r));
+        const small = [mouthOval(r, ex.lay)].concat(eyeOvals(r, ex.lay));
         el.querySelectorAll('.acg-ex-mouth').forEach((mEl, i) => { const o = small[i]; if (!o) return; mEl.setAttribute('cx', o.cx); mEl.setAttribute('cy', o.cy); mEl.setAttribute('rx', o.rx); mEl.setAttribute('ry', o.ry); });
         el.classList.toggle('is-mouth', ex.mouth);
+        const lr = el.querySelector('.acg-ex-layreset');
+        if (lr) { lr.hidden = !ex.mouth || JSON.stringify(ex.lay) === JSON.stringify(LAY_DEF); lr.disabled = ex.busy; }
         const tg = el.querySelector('.acg-ex-toggle'); tg.classList.toggle('is-on', ex.mouth); tg.disabled = ex.busy;
         el.querySelectorAll('.acg-ex-chip').forEach(c => { c.classList.toggle('is-on', ex.picks.indexOf(c.dataset.exp) >= 0); c.disabled = ex.busy; });
         el.querySelectorAll('.acg-ex-seg-btn').forEach(c => { c.classList.toggle('is-on', c.dataset.style === ex.style); c.disabled = ex.busy; });
@@ -1430,8 +1455,8 @@
             : ex.found === null ? '找臉中…'
             : ex.busy ? (ex.engine === 'gpt' ? 'GPT 畫圖中，通常一到兩分鐘' : '圈裡的地方會重畫')
             : ex.found === 'no' ? '沒找到臉，把圈拖到眉毛到下巴那塊' + (ex.engine === 'gpt' ? '（用 GPT：七個表情一起畫）' : '')
-            : ex.engine === 'gpt' ? '圈裡的地方會重畫，不對可以拖（用 GPT：七個表情一起畫）'
-            : '圈裡的地方會重畫，不對可以拖';
+            : ex.engine === 'gpt' ? (ex.mouth ? '大圈會重畫，小圈是嘴和眼睛，都可以拖（用 GPT：七個表情一起畫）' : '圈裡的地方會重畫，不對可以拖（用 GPT：七個表情一起畫）')
+            : ex.mouth ? '大圈會重畫，小圈是嘴和眼睛，都可以拖' : '圈裡的地方會重畫，不對可以拖';
         const go = el.querySelector('.acg-ex-go');
         const n = ex.picks.length, m = mouthJobs(ex).length;
         const finished = !ex.busy && ex.ranAll && !n && !m && ex.done.length > 0;
@@ -1457,18 +1482,47 @@
         const A = AUIx(); if (A && A.lsSet) A.lsSet(MOUTH_KEY, ex.mouth ? '1' : '0', '生表情時順便做動嘴、閉眼');
         exPaint(ex);
     }
-    // 拖圈：按在圈上（或空白處）＝搬，按右下的圓點＝改大小；座標換成原圖像素
+    function exLayReset() {
+        const ex = S && S.ex;
+        if (!ex || ex.busy) return;
+        ex.lay = layCopy(LAY_DEF);
+        laySave(ex.ch, null);
+        exPaint(ex);
+    }
+    // 拖圈：按在小圈上＝搬那個小圈，按在大圈上（或空白處）＝搬大圈，按右下的圓點＝改大小；座標換成原圖像素
     function exBindRing(ex) {
         const svg = ex.el.querySelector('.acg-ex-ring');
         let drag = null;
         const at = (ev) => { const b = svg.getBoundingClientRect(); return { x: (ev.clientX - b.left) / b.width * ex.W, y: (ev.clientY - b.top) / b.height * ex.H }; };
         const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+        // 按到哪個小圈：按在圈上；用手指的話圈外一圈 10 點以內也算（手機上小圈只有十幾點寬，按不準）；都不是回 null
+        //   🚨 滑鼠不放寬：大圈正中間離嘴的小圈只差幾點，放寬的話按圈心想搬大圈會變成搬嘴
+        const nearPart = (ev, p) => {
+            if (!ex.mouth) return null;
+            const parts = [ex.lay.mouth].concat(ex.lay.eyes);
+            const i = Array.prototype.indexOf.call(ex.el.querySelectorAll('.acg-ex-mouth'), ev.target);
+            if (i >= 0) return parts[i] || null;
+            if (ev.pointerType === 'mouse') return null;
+            const sc = svg.getBoundingClientRect().width / ex.W;   // 原圖一點＝畫面幾點
+            let best = null, bd = 10;
+            parts.forEach(pt => {
+                const o = ovalAt(ex.ring, pt);
+                const d = (Math.hypot((p.x - o.cx) / o.rx, (p.y - o.cy) / o.ry) - 1) * Math.min(o.rx, o.ry) * sc;   // 離圈邊幾點（圈裡是負的）
+                if (d < bd) { bd = d; best = pt; }
+            });
+            return best;
+        };
         svg.addEventListener('pointerdown', (ev) => {
             if (ex.busy || ex.found === null) return;
             const p = at(ev);
             const r = ex.ring;
             if (ev.target.classList.contains('acg-ex-knob')) drag = { mode: 'size' };
-            else {
+            else if (nearPart(ev, p)) {
+                // 小圈（嘴、兩隻眼睛）各自拖：記成離圈心幾個半徑，大圈之後怎麼搬、縮放都跟著走
+                const part = nearPart(ev, p);
+                const o = ovalAt(r, part);
+                drag = { mode: 'part', part, dx: p.x - o.cx, dy: p.y - o.cy };
+            } else {
                 const inside = ((p.x - r.cx) / r.rx) ** 2 + ((p.y - r.cy) / r.ry) ** 2 <= 1;
                 if (!inside) { r.cx = p.x; r.cy = p.y; }
                 drag = { mode: 'move', dx: p.x - r.cx, dy: p.y - r.cy };
@@ -1480,11 +1534,20 @@
         svg.addEventListener('pointermove', (ev) => {
             if (!drag) return;
             const p = at(ev), r = ex.ring;
-            if (drag.mode === 'move') { r.cx = clamp(p.x - drag.dx, 0, ex.W); r.cy = clamp(p.y - drag.dy, 0, ex.H); }
+            if (drag.mode === 'part') {
+                // 小圈不要拖出大圈太遠（重畫只裁大圈附近那塊）
+                drag.part.u = clamp((p.x - drag.dx - r.cx) / r.rx, -1.3, 1.3);
+                drag.part.v = clamp((p.y - drag.dy - r.cy) / r.ry, -1.3, 1.3);
+                drag.moved = true;
+            }
+            else if (drag.mode === 'move') { r.cx = clamp(p.x - drag.dx, 0, ex.W); r.cy = clamp(p.y - drag.dy, 0, ex.H); }
             else { r.rx = clamp(Math.abs(p.x - r.cx) / 0.7071, ex.W * 0.03, ex.W * 0.5); r.ry = clamp(Math.abs(p.y - r.cy) / 0.7071, ex.H * 0.02, ex.H * 0.5); }
             exPaint(ex);
         });
-        const end = () => { drag = null; };
+        const end = () => {
+            if (drag && drag.mode === 'part' && drag.moved) { laySave(ex.ch, ex.lay); exPaint(ex); }   // 拖完記在這個角色身上
+            drag = null;
+        };
         svg.addEventListener('pointerup', end);
         svg.addEventListener('pointercancel', end);
     }
@@ -1601,7 +1664,7 @@
         const mj = mouthJobs0.filter(j => j.url || madeUrl[j.exp]);
         if (!mj.length || !live()) return;
         spin(mj); exPaint(ex);
-        const geo = mouthGeom(ex.ring, ex.W, ex.H);
+        const geo = mouthGeom(ex.ring, ex.W, ex.H, ex.lay);
         const per = G.MOUTH_PER_CALL || 4;
         for (let k = 0; k < mj.length; k += per) {
             const part = mj.slice(k, k + per);
