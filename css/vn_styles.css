@@ -2462,6 +2462,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
 :is(#vn-threads-overlay, .sthr-embed) .sthr-pkb.sthr-pk-want.on { color: #ffc2dc; border-color: #ef7fae; background: rgba(239,127,174,0.16); }
 :is(#vn-threads-overlay, .sthr-embed) .sthr-pkb.sthr-pk-hold.on { color: #b9c6d6; border-color: #7d93ad; background: rgba(125,147,173,0.16); }
 :is(#vn-threads-overlay, .sthr-embed) .sthr-sum span.sthr-sum-new { border-color: #e0584f; color: #ff8d84; display: inline-block; }
+/* 🚪 世界門「通知主角」那扇門：固定排最上面，淡藍（大廳世界門那個亮法），不是副模型記的線 */
+:is(#vn-threads-overlay, .sthr-embed) .sthr-row.sthr-gate { cursor: default; margin-bottom: 8px; background: rgba(143,182,216,0.08); border-left-color: #8fb6d8; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-row.sthr-gate.sthr-pk-want { border-left-color: #ef7fae; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-row.sthr-gate .sthr-lb { color: #cfe2f2; }
+:is(#vn-threads-overlay, .sthr-embed) .sthr-c-gate { color: #b8d4ec; border-color: #6f9cc4; }
 
 /* 🎬 新線索演出（story_threads.js 的 _reveal）：拉近的是 .sthr-stage 整層，卡片、「新線索」標、跳過鈕掛在外面不跟著放大 */
 .sthr-embed { position: relative; }

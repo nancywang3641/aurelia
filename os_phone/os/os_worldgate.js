@@ -22,6 +22,7 @@
     const K_PLANS = 'sn_plans';  // 🧑‍💼 SN 32 樓白板送來、還沒展開的企劃：[{id,title,front,seed,player,people,travelers,nodes,endings,secret,by,at}]（跨聊天室，跟 K_WORLDS 同層；travelers 10-25 才有）
     const K_CURRENT = 'current'; // 這個聊天室目前在哪個世界（世界 id；撤離清空）— world_rules_injector 依此翻模組條目
     const K_TRIP = 'trip_start'; // 這個聊天室這一趟什麼時候 DIVE 的 { id, at }（撤離時拿來認哪些約定是在那個世界裡約的；撤離清空）
+    const K_INVITE = 'invite';   // 這個聊天室收到的新世界通知 { id, name, at, pick:''|'want'|'hold' }（一次一扇；DIVE 進那個世界就清掉）
     const BOOK_PARA = '【奧瑞亞-視差】';
     const BOOK_CORE = '【奧瑞亞-人物核心】';   // 她的熟人檔案庫（視差模式刻意不掛這本＝認知隔離，
                                               //   所以帶熟人同行是把那一條的內容「複製」進世界條目，只有點名的人會進去）
@@ -1557,10 +1558,111 @@
     let _leaveAfter = false;
     function leaveAfterChapter(on) { _leaveAfter = on !== false; }
     async function chapterEnded() {
-        if (!_leaveAfter) return;
-        _leaveAfter = false;
-        const r = await _leaveWorld();
-        _toast((r && r.msg) || '已返回主世界');
+        if (_leaveAfter) {
+            _leaveAfter = false;
+            _diveAfter = false;
+            const r = await _leaveWorld();
+            _toast((r && r.msg) || '已返回主世界');
+            return;
+        }
+        if (_diveAfter) {
+            _diveAfter = false;
+            const r = await _diveFromInvite();
+            if (r && r.msg) _toast(r.msg);
+        }
+    }
+
+    // 🚪 門開了、等主角有空再去（11-06 她：「在等愛麗絲生成後，可不可以只是通知？這樣才不會在奧瑞亞跑到一半強制進入」
+    //   「不能跟朋友吃飯途中烙跑，不能已經半夜了還打算進入（除非MC有夜貓子屬性），不能在有事件的途中」
+    //   「排進選項，或者當作線索，我直接按想看」）：
+    //   詳情頁按「通知主角」＝這個聊天室記一筆（一次一扇，新的換掉舊的）→ 每一輪告訴劇情 AI 主角手機收到 SN 的通知、
+    //   什麼時候才能提、怎麼提（列進最後的選項，她挑了才去）；線索頁最上面一張卡給她按想看／先放著。
+    //   主角真的戴上頸環那一刻主持AI 寫一行 [Dive|世界名] → 播放器播到記著，這一章演完才 DIVE（跟章末撤離同一個掛勾）。
+    let _diveAfter = false;
+    async function _invite() {
+        const c = _cid();
+        if (!c) return null;
+        const inv = await _get(K_INVITE, null, c);
+        if (!inv || !inv.id) return null;
+        const w = await _worldById(inv.id);
+        return w ? { inv, w } : null;   // 世界被刪了＝門也沒了
+    }
+    async function _setInvite(v) {
+        const c = _cid();
+        if (!c) return false;
+        await _set(K_INVITE, v, c);
+        try { win.dispatchEvent(new CustomEvent('aurelia:story-threads')); } catch (e) {}   // 線索頁開著就重畫那張卡
+        return true;
+    }
+    // 線索頁那張卡、注入、詳情頁共用：人在世界裡就沒有（主角在別的世界，談不上「有空再去」）
+    //   查到的順手記在 _invCache：播放器播到 [Dive|…] 要「同步」知道有沒有門（有才把網頁版章末的選項拿掉）；
+    //   每一輪生成前注入都會叫這支，所以播那一章時是新的
+    let _invCache = null;   // { cid, on }
+    async function inviteNow() {
+        let res = null;
+        try {
+            if (!(await _getCurrentId())) {
+                const r = await _invite();
+                if (r) res = { id: r.w.id, name: String(r.w.name || ''), concept: String(r.w.concept || ''), pick: r.inv.pick || '' };
+            }
+        } catch (e) { res = null; }
+        _invCache = { cid: _cid(), on: !!res };
+        return res;
+    }
+    // 想看／先放著：再按一次同一顆＝取消（跟線索帳一樣）
+    async function setInvitePick(s) {
+        const r = await _invite();
+        if (!r) return false;
+        return _setInvite(Object.assign({}, r.inv, { pick: (s && r.inv.pick !== s) ? s : '' }));
+    }
+    async function _sendInvite(w) {
+        const old = await _invite();
+        if (!(await _setInvite({ id: w.id, name: w.name, at: Date.now(), pick: '' }))) return { ok: false, msg: '這段故事還沒開始，通知寄不出去（先寫一章再來）' };
+        return { ok: true, msg: (old && old.w.id !== w.id ? '「' + old.w.name + '」那扇收起來了，' : '') + '已通知主角：「' + w.name + '」開門了。劇情告一段落時，最後的選項會出現上線；想快點去就到線索按「想看」' };
+    }
+    async function _dropInvite() { await _setInvite(null); return { ok: true, msg: '通知收回了，劇情裡不會再提這扇門' }; }
+    // 小問號：DIVE 和通知主角差在哪（說明放這裡，不寫在面板上）
+    function _inviteHelp() {
+        const A = win.AUI || window.AUI;
+        if (!A || !A.helpBtn || !A.registerHelp) return '';
+        A.registerHelp({ wg_invite: { title: '通知主角',
+            body: 'DIVE：馬上進去，下一章就在這個世界。\n\n通知主角：劇情裡主角的手機收到開門的通知，眼前的事照常演完。告一段落時，最後的選項會出現「上線」；你選了，那一章主角先把事情收好、回家戴上頸環，演完那一章才進來。太晚了主角會先睡，隔天再去。\n\n想快點去：到劇情的「線索」，最上面那張開門的卡按「想看」。不想被提起：按「先放著」。\n\n一次只開一扇，通知另一個世界會換掉這扇。' } });
+        return A.helpBtn('wg_invite');
+    }
+    // 每一輪交給寫正文的 AI（酒館 os_app_memory_inject、網頁版 _buildStandaloneContext 都叫這支）
+    async function inviteText() {
+        const n = await inviteNow();
+        if (!n) return '';
+        const nm = '「' + n.name + '」';
+        const L = ['視差系統開放了一個新世界' + nm + (n.concept ? '：' + n.concept : '') + '。主角的手機收到了 SN 發的開放通知，主角知道這件事，還沒有去。'];
+        if (n.pick === 'hold') {
+            L.push('玩家（螢幕前的人，不是主角）這段時間不想去：別提這件事，也不要列進選項。');
+            return L.join('\n');
+        }
+        if (n.pick === 'want') L.push('玩家（螢幕前的人，不是主角）想讓主角去' + nm + '：下一個告一段落的地方，就把上線去' + nm + '列進這一章最後的選項。');
+        L.push('上線要戴頸環，在能安心躺下、不會被打擾的地方。主角不會自己決定上線，玩家選了才去' + (n.pick === 'want' ? '' : '；時機對了才列進最後的選項，不用每一章都列') + '。');
+        L.push('時機：主角手上的事告一段落才提。正在跟人相處、事件還沒結束、答應的事還沒辦完，先把眼前的事照常演完，不要為了上線提早收尾或中途離開。故事時間很晚了就照主角平常的作息，該睡就先睡，隔天再找時間。');
+        L.push('玩家選了上線（或玩家那句話說要去）：這一章先把手上的事收好、有人在場就跟他們道別，回到能上線的地方戴上頸環；戴上頸環、意識開始上線的那一刻，正文單獨寫一行 [Dive|' + n.name + ']，這一章就停在這裡，後面不再寫選項，進去之後的事下一章才寫。眼前的事這一章收不完、或已經太晚，這一章就不寫 [Dive|…]：太晚就演到主角睡下，醒來那一章再把上線列進最後的選項；事情沒辦完就先辦，辦完那一章再列。');
+        L.push('還沒要上線的章節不要寫 [Dive|…]。');
+        return L.join('\n');
+    }
+    // 播放器播到 [Dive|…]（重看舊章不叫）：這一章演完才進——酒館切書會重新載入聊天，播到一半切會把劇情打斷
+    //   記號當下就記（章末那一下才真的查通知在不在）；小卡等查到有通知才飄，免得主持AI 亂寫一行就說要進門。
+    //   回 true＝剛查過這個聊天室有開著的門（播放器拿來決定章末選項給不給）
+    function diveSeen() {
+        _diveAfter = true;
+        const on = !!(_invCache && _invCache.on && _invCache.cid === _cid());
+        inviteNow().then(n => {
+            const V = win.VN_Core || window.VN_Core;
+            if (n && V && V.launchQuestToast) V.launchQuestToast('前往「' + n.name + '」', '這一章播完就進門', '上線', 'fa-door-open');
+        }).catch(() => {});
+        return on;
+    }
+    async function _diveFromInvite() {
+        if (await _getCurrentId()) return null;   // 已經在世界裡
+        const got = await _invite();
+        if (!got) return null;                      // 沒收到通知的門（或那個世界被刪了）：不是她排的，不進
+        return _dive(got.w, { fromHome: true });
     }
     async function _writeEntry(w, entryText) {
         if (_pwa()) return true;   // 網頁版不寫世界書：檔案庫裡的原文就是正本，組提示詞時現組（pwaWorldLore）
@@ -2812,7 +2914,9 @@
     }
     _initChatHook();
 
-    function _divePrompt(w) {
+    // fromHome＝收到通知那條（_diveFromInvite）：上一章主角已經在奧瑞亞戴上頸環，這一章從上線那一刻寫起（跟回程章三段對稱）。
+    //   🚨「進入視差世界「名字」」這幾個字兩種都要有：撤離時 _tripPlans 靠它認這一趟從哪一樓開始
+    function _divePrompt(w, fromHome) {
         const teamAll = (w.travelers || []).filter(t => t.recruited && !t.gone);
         const team = teamAll.filter(t => !t.home);
         const homeTeam = teamAll.filter(t => t.home);
@@ -2827,7 +2931,8 @@
         const lookStr = team.filter(t => t.sprite).map(t => '- ' + t.name + ':' + t.sprite).join('\n');
         return '🌌 NEXUS PARALLAX · 世界啟動\n' +
             '━━━━━━━━━━━━━━━━━━━━━\n' +
-            '[System:玩家從純白大廳進入視差世界「' + w.name + '」]\n' +
+            (fromHome ? '[System:玩家在奧瑞亞戴上頸環上線,經過純白大廳進入視差世界「' + w.name + '」]\n'
+                      : '[System:玩家從純白大廳進入視差世界「' + w.name + '」]\n') +
             '世界概念:' + w.concept + '(' + (w.genre ? '題材:' + w.genre + ' ' : '') + '風格:' + w.style + ')\n' +
             (team.length || !homeTeam.length ? '同行旅人:\n' + teamStr + '\n' : '') +
             (homeStr ? '玩家從奧瑞亞帶來的熟人(有共同過去,不是初次見面,檔案見世界條目):\n' + homeStr + '\n' : '') +
@@ -2849,7 +2954,10 @@
             (lookStr ? (w.pc ? '0-2. ' : '0-1. ') + '上面的「視差原樣」是每位旅人本人的樣貌。描寫他們、或輸出 [Avatar] 那行時,' +
                 '髮色髮型、瞳色、年齡檔、體型一律照那串寫,不可另編一個人;種族形態寫改造後的樣子;' +
                 '服裝依這個世界的民族與職業改寫,不必照抄視差那套便服。\n' : '') +
-            '1. 以「' + w.name + '」的世界檔案為準,從' + (w.spawn ? '「' + w.spawn + '」' : '入口區域') + '開場,描寫玩家(與同行旅人)抵達時的所見所感。' +
+            (fromHome ? '1. 上一章玩家已經在奧瑞亞戴上頸環。這一章從上線那一刻寫起,照順序演:意識離開奧瑞亞的身體、純白大廳出現;' +
+                    '在大廳的世界門前由導覽員送進門' + (teamAll.length ? '(同行旅人在大廳會合)' : '') + ';穿過門,抵達「' + w.name + '」。' +
+                    '上線和大廳這兩段要演出來但不用長,不要開場就已經人在世界裡。抵達後以世界檔案為準,從' : '1. 以「' + w.name + '」的世界檔案為準,從') +
+                (w.spawn ? '「' + w.spawn + '」' : '入口區域') + '開場,描寫玩家(與同行旅人)抵達時的所見所感。' +
             (w.genre ? '全篇用「' + w.genre + '」的語彙書寫,不得混入不屬於此題材的科技或現代說法。' : '') + '\n' +
             '2. 遵循視差跑團主持規範:不強推主線、只描述可感知資訊、事件制推進。' +
             '世界檔案裡的法則與危機是這個地方的背景質地,不是玩家的任務——不要拿它當開場鉤子逼玩家表態或選邊,玩家要在這裡做生意、找人、閒晃都可以。\n' +
@@ -2873,7 +2981,8 @@
             (_needLaunchArt(w) ? _launchReq() : '') +
             '━━━━━━━━━━━━━━━━━━━━━';
     }
-    async function _dive(w) {
+    async function _dive(w, opts) {
+        const fromHome = !!(opts && opts.fromHome);
         const gate = _gate();
         if (!gate) return { ok: false, msg: '切書模組不可用' };
         const r = await gate.enterParallax();
@@ -2894,7 +3003,7 @@
         try { window.WORLD_RULES && window.WORLD_RULES.sync('DIVE'); } catch (e) {}
         // 這一趟從這刻開始：撤離時這之後劇情寫進日曆、還沒赴的約定算那個世界的（_tripPlans）
         try { const c = _cid(); if (c) await _set(K_TRIP, { id: w.id, at: Date.now() }, c); } catch (e) {}
-        const sent = await _toChat(_divePrompt(w));
+        const sent = await _toChat(_divePrompt(w, fromHome));
         if (sent === 'nofield' || (_pwa() && sent !== 'sent')) {
             await gate.exitParallax();
             await _syncFreeMode();
@@ -2907,6 +3016,8 @@
         //   世界照樣算進去了——她只要開好 API 再按送出就接得上,不必重來一次。
         //   但一定要講清楚,不然畫面只顯示「已進入」,她會以為是程式壞了。
         w.visits = (w.visits || 0) + 1;
+        // 🚪 進的就是通知的那扇（不管是章末自己進、還是她在詳情頁直接 DIVE）：通知用掉了
+        try { const inv = await _get(K_INVITE, null, _cid()); if (inv && inv.id === w.id) await _setInvite(null); } catch (e) {}
         const worlds = await _get(K_WORLDS, []);
         const i = worlds.findIndex(x => x.id === w.id);
         if (i >= 0) worlds[i] = w;
@@ -3338,9 +3449,14 @@
             // 詳情頁把右下的圖紙標題欄收掉:那塊在檔案庫是裝飾,在這裡會壓住內容(空間留給正文)
             '.wg-win.wgbp.wgbp-sub .wgbp-tb{display:none;}' +
             // 底部兩顆:靠右、各自照內容寬(滿寬平分會變兩條大長條)
-            '.wg-steps-foot{justify-content:flex-end;gap:10px;}' +
+            '.wg-steps-foot{justify-content:flex-end;gap:10px;flex-wrap:wrap;align-items:center;}' +
+            '.wg-steps-foot .aui-help{margin-right:auto;font-size:16px;color:#2a4a80;opacity:.6;}' +
+            '.wg-note.wg-invited{text-align:right;color:#2a4a80;}' +
             // 🚨 width:auto 不能省:.wg-btn 本身是 width:100%,只寫 flex:0 0 auto 的話 basis 讀的還是那個 100%
             '.wg-steps-foot .wg-btn{flex:0 0 auto;width:auto;min-width:132px;padding-left:18px;padding-right:18px;}' +
+            // 第三頁多一顆「通知主角」（她人在奧瑞亞時）：手機寬放不下三顆 132 → 上一步、通知主角一排平分，DIVE 自己一整排
+            '@media (max-width:520px){.wg-steps-foot:has([data-act="invite"],[data-act="uninvite"]) .wg-btn{min-width:0;flex:1 1 38%;padding-left:8px;padding-right:8px;}' +
+              '.wg-steps-foot:has([data-act="invite"],[data-act="uninvite"]) [data-act="dive"]{flex-basis:100%;}}' +
             // ── 🧑‍🤝‍🧑 旅人頁:左編成、右名冊(可直接去找人)+召集(收合) ──
             '.wgt-split{display:grid;grid-template-columns:1.05fr .95fr;gap:16px;align-items:start;}' +
             '.wgt-left,.wgt-side{display:flex;flex-direction:column;gap:8px;min-width:0;}' +
@@ -4515,6 +4631,9 @@
         //   上一輪用 50 找到的人，下一輪把範圍調成 30 就被標成超齡等著被刪，這不合理。
         //   要刪誰，用名冊上他自己的 ✕。
         const figs = (st === 2) ? await _slotFigures(w, team.map(x => x.i)) : {};   // 照隊友真正的編號撈立姿
+        // 🚪 「通知主角」只在人在奧瑞亞、這段故事已經開始（有聊天室／故事 id）時才給：在世界裡按沒有意義
+        const canInvite = (st === 3) && !!_cid() && !(await _getCurrentId());
+        const invited = canInvite ? (((await inviteNow()) || {}).id === w.id) : false;
         const tagsHtml = '<div class="wg-tags">' +
             '<span class="wg-tag"><i class="fa-solid fa-wand-magic-sparkles"></i>' + _esc(w.style) + '</span>' +
             '<span class="wg-tag lure"><i class="fa-solid fa-gem"></i>' + _esc(w.lure) + '</span>' +
@@ -4616,12 +4735,16 @@
             // 刪除世界改由檔案庫的管理模式一次處理（批次刪除本來就在那）：詳情頁是出發用的，
             //   一顆紅色的刪除鈕擺在出發動線上，難得用一次卻每次都看到。
             '<div class="wg-btn-row wg-steps-foot">' +
-
+              (canInvite ? _inviteHelp() : '') +   // 小問號：DIVE 和通知主角差在哪（排最左，按鈕照舊靠右）
               '<button class="wg-btn ghost" data-act="prev">' + (st === 1 ? '返回' : '上一步') + '</button>' +
               (st < 3
                 ? '<button class="wg-btn" data-act="next">繼續 ›</button>'
-                : '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>') +
-            '</div>';
+                : (canInvite ? (invited
+                        ? '<button class="wg-btn ghost" data-act="uninvite"><i class="fa-solid fa-bell-slash"></i> 收回通知</button>'
+                        : '<button class="wg-btn ghost" data-act="invite"><i class="fa-solid fa-bell"></i> 通知主角</button>') : '') +
+                  '<button class="wg-btn" data-act="dive"><i class="fa-solid fa-bolt"></i> DIVE·進入世界</button>') +
+            '</div>' +
+            (invited ? '<div class="wg-note wg-invited"><i class="fa-solid fa-bell"></i> 已通知主角，等劇情告一段落</div>' : '');
 
         // 步驟列可以直接點（回頭改東西不必一步一步退）
         b.querySelectorAll('.wg-step').forEach(el => el.addEventListener('click', () => _renderDetail(w, Number(el.dataset.step))));
@@ -4761,6 +4884,20 @@
                 const tip = b.querySelector('[data-spawn-tip]');
                 if (tip) tip.textContent = w.spawn ? ('降生地：' + w.spawn) : '沒選＝落在哪由主持AI安排';
             }));
+            // 🚪 通知主角／收回：身分照 DIVE 那顆一樣在按下去這刻收（之後章末自己進門時用的就是這份）
+            b.querySelector('[data-act="invite"]')?.addEventListener('click', async () => {
+                if (_busy) return;
+                const _pc = (b.querySelector('[data-wg-pc]')?.value || '').trim().slice(0, 200);
+                if (_pc !== (w.pc || '')) { w.pc = _pc; await _saveWorld(w); }
+                const r = await _sendInvite(w);
+                _toast(r.msg);
+                _renderDetail(w, 3);
+            });
+            b.querySelector('[data-act="uninvite"]')?.addEventListener('click', async () => {
+                const r = await _dropInvite();
+                _toast(r.msg);
+                _renderDetail(w, 3);
+            });
             b.querySelector('[data-act="dive"]').addEventListener('click', async () => {
                 if (_busy) return;
                 _busy = true;
@@ -4924,6 +5061,7 @@
 
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
-        receivePlan, takeBackPlan, planStatus, usedNames, orbitArts };
+        receivePlan, takeBackPlan, planStatus, usedNames, orbitArts,
+        inviteNow, setInvitePick, inviteText, diveSeen };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

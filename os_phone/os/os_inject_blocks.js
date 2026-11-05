@@ -28,6 +28,7 @@
         aurelia_wx_chatroom_ids: '聊天室代號對照',
         aurelia_map_theater: '地圖小劇場',
         aurelia_map_mission: '進行中的委託',
+        aurelia_gate_invite: '新世界通知',   // 世界門「通知主角」（os_worldgate.js 的 inviteText）
         aurelia_state_brief: '狀態面板',
         aurelia_avs_rules: '狀態面板規則',
         aurelia_avatar_reminder: '頭像提醒',

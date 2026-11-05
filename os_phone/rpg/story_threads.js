@@ -580,6 +580,33 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         await _render();
     }
 
+    // 🚪 世界門「通知主角」那扇門（11-06 她：「排進選項，或者當作線索，我直接按想看」）：
+    //   不是副模型記的線，不進這本帳；固定排最上面一張，想看／先放著存在世界門那邊（OS_WORLDGATE.setInvitePick，存好會發 aurelia:story-threads 重畫）
+    async function _gateInvite() {
+        try { const G = win.OS_WORLDGATE || window.OS_WORLDGATE; return (G && G.inviteNow) ? await G.inviteNow() : null; } catch (e) { return null; }
+    }
+    function _gateCard(body, g) {
+        if (!g || !body) return;
+        const d = document.createElement('div');
+        d.className = 'sthr-row sthr-gate' + (g.pick ? ' sthr-pk-' + g.pick : '');
+        d.innerHTML = `
+            <div class="sthr-row-top">
+                <span class="sthr-chip sthr-c-gate"><i class="fa-solid fa-door-open"></i> 新世界</span>
+                <span class="sthr-lb">「${_esc(g.name)}」開門了</span>
+                <span class="sthr-pk">
+                    <button type="button" class="sthr-pkb sthr-pk-want${g.pick === 'want' ? ' on' : ''}" data-s="want">想看</button>
+                    <button type="button" class="sthr-pkb sthr-pk-hold${g.pick === 'hold' ? ' on' : ''}" data-s="hold">先放著</button>
+                </span>
+            </div>
+            ${g.concept ? `<div class="sthr-tx">${_esc(g.concept)}</div>` : ''}`;
+        d.querySelectorAll('.sthr-pkb').forEach(b => b.addEventListener('click', async (ev) => {
+            ev.stopPropagation();
+            const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            if (G && G.setInvitePick) await G.setInvitePick(b.dataset.s);
+        }));
+        body.insertBefore(d, body.firstChild);
+    }
+
     async function _render() {
         if (!_panel) return;
         _rvEnd();
@@ -587,6 +614,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         const body = panel.querySelector('.sthr-body');
         let s = null;
         try { s = await snapshot(); } catch (e) {}
+        const gate = s ? await _gateInvite() : null;
         if (!_panel || _panel !== panel) return;
         if (!s) { body.innerHTML = '<div class="sthr-empty">這裡要在劇情裡打開才看得到。</div>'; return; }
 
@@ -596,6 +624,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
             if (!s.on) why = '記帳現在是關的，打開右上角「每章記一次」就會開始記。';
             else if (!s.site) why = '要打開「劇情記憶」或「狀態面板」其中一個才會記：記帳是搭那一通順便做的。';
             body.innerHTML = `<div class="sthr-empty"><i class="fa-solid fa-diagram-project"></i><div>還沒有記下任何線索</div><div class="sthr-empty-sub">${_esc(why)}</div></div>`;
+            _gateCard(body, gate);
             return;
         }
 
@@ -620,6 +649,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
             <div class="sthr-sum">${chips.map(c => `<span${/^這章新線/.test(c) ? ' class="sthr-sum-new"' : ''}>${_esc(c)}</span>`).join('')}</div>
             ${s.open.length ? '<div class="sthr-graph"></div>' : ''}
             <div class="sthr-list"></div>`;
+        _gateCard(body, gate);
         const list = body.querySelector('.sthr-list');
         const MARK = { new: ['sthr-c-new', '新線'], chg: ['sthr-c-chg', '有變化'], closed_now: ['sthr-c-gone', '這章收場'] };
 

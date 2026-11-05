@@ -844,6 +844,26 @@
         } catch (e) { console.warn('[Map Mission Injector] 失敗:', (e && e.message) || e); }
     }
 
+    // 🚪 世界門「通知主角」：主角手機收到新世界開門的通知、什麼時候能提、戴上頸環那刻寫 [Dive|…]（內容由 OS_WORLDGATE.inviteText 給）。
+    //    這支只管酒館；網頁版同一份字由 os_api_engine 的 _buildStandaloneContext 插在同一個深度。
+    var GATE_INVITE_INJECT_ID = 'aurelia_gate_invite';
+    var _lastGateInviteUninject = null;
+    async function injectGateInvite() {
+        try {
+            try { _lastGateInviteUninject && _lastGateInviteUninject(); } catch (e) {}
+            _lastGateInviteUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            if (!G || !G.inviteText) return;
+            var text = await G.inviteText();
+            if (!text) return;
+            var result = win.TavernHelper.injectPrompts([{ id: GATE_INVITE_INJECT_ID, content: text, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastGateInviteUninject = (result && result.uninject) || null;
+            console.log('🚪 [Gate Invite Injector] 帶上新世界的通知');
+        } catch (e) { console.warn('[Gate Invite Injector] 失敗:', (e && e.message) || e); }
+    }
+
     // 📮 地圖「確認接取」的委託先收著：她下一句送出時接在同一則訊息裡，不另外多一樓
     //    （多一樓的話最新一樓變成委託，資料中心只抓最新一樓，上一章的選項就拿不到了）。
     //    酒館順序：GENERATION_STARTED → 讀輸入框 → 推進聊天 → MESSAGE_SENT（等監聽器做完）→ 畫出來 → 組 prompt，
@@ -896,6 +916,7 @@
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectWxChatrooms); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectMapMission); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectGateInvite); });
             win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(function () { return fillHeldMissionOnEmptySend(type, opts); }); });
         }
         // 第二格 'extension'＝酒館助手 createChatMessages 塞的（聊天 app 的協議訊息那類），不是她送的話，不接委託

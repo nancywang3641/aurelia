@@ -333,6 +333,7 @@
             this.index = -1;
             this._pendingLeave = [];   // 清掉上一份劇本殘留的 |Leave 待離場
             this._endingAtEnd = null;  // 🎬 上一章播到結局記號、還沒演到章末就換章了：片尾作廢（沒記 shown，下次播到還會演）
+            this._diveAtEnd = null;    // 🚪 上一章播到 [Dive|…]：章末不給選項那個記號作廢（進不進門由世界門自己記）
             this._jevStage = null;    // 🎭 上一章 Jev 排的收立繪時間表作廢（晚到的也不收：看 _jevStageSeq）
             this._jevSfx = null;       // 🎵 上一章 Jev 排的音效／音樂時間表作廢（同一個序號）
             this._jevSfxNow = null;
@@ -1557,6 +1558,16 @@
         },
 
         // === 獨立模式：選擇按鈕 ===
+        // 🚪 [Dive|世界名]：主角戴上頸環上線（世界門「通知主角」那條；next() 播到、略過鍵掃到都走這裡）。
+        //   重看舊章不算。世界門說真的有開著的門 → 記成「這章章末進門」：網頁版的選項會擋在章末前面，選項就不給了
+        _seeDive: function(line) {
+            const _dn = ((String(line).match(/^\[Dive\|\s*([^|\]]*)/i) || [])[1] || '').trim();
+            this.addLog('上線', _dn || '視差');
+            if (this._scriptIsReplay) return;
+            const _wgd = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            if (_wgd && _wgd.diveSeen && _wgd.diveSeen(_dn)) this._diveAtEnd = true;
+        },
+
         _showStandaloneChoices: function(line) {
             // 支援兩種格式：
             //   舊格式（向下相容）：[Choice|選項A|選項B|選項C]  ← 一行多選用 | 分隔
@@ -2605,7 +2616,7 @@
         },
 
         // 手機五個面（chat/call/browser/nav/moments）裡不該出現的正文層行：看到就當容器已關（見 next 裡的逃生口）
-        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Branch|Ending|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav|moments)\b)/i,
+        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Branch|Ending|Dive|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav|moments)\b)/i,
 
         next: function () {
             this.clearTimers();
@@ -2636,6 +2647,8 @@
                     }
                 }
                 // 🌳 結局卡上按了「撤離回奧瑞亞」：演完這一章才撤（世界門那邊記著；沒按過就什麼都不做）
+                //    🚪 這一章播過 [Dive|…]（主角戴上頸環）：也是這一下才進門（世界門記著）
+                this._diveAtEnd = null;
                 try { const _wgc = win.OS_WORLDGATE || window.OS_WORLDGATE; if (_wgc && _wgc.chapterEnded) _wgc.chapterEnded().catch(() => {}); } catch (e) {}
                 const endOverlay = document.getElementById('vn-end-overlay');
                 if (endOverlay) {
@@ -3244,6 +3257,10 @@
                 this.next(); return;
             }
 
+            // 🚪 主角戴上頸環上線了：[Dive|世界名]（世界門「通知主角」那條，注入教主持AI 在那一刻寫）。
+            //    這一章演完才進世界（章末叫 OS_WORLDGATE.chapterEnded，跟撤離同一個掛勾）；重看舊章不算。
+            if (/^\[Dive\|/i.test(line)) { this._seeDive(line); this.next(); return; }
+
             // 🧭 支線提示：[Quest|支線名|一句線索]
             //    跟成就/彈幕同一路：飄一張小卡、幾秒後自己走、不吃點擊、立刻 next()。
             //    舊的「委託面板」整張卡（委託人/獎勵/接受委託鈕，會卡住劇情等按）已拆，AI 從來沒被教過寫它。
@@ -3431,6 +3448,8 @@
 
             // 🎮 選擇按鈕
             if (line.startsWith('[Choice|')) {
+                // 🚪 這一章主角已經戴上頸環（[Dive|…]）：選項不給，直接走章末進門
+                if (this._diveAtEnd) { this.index = this.script.length - 1; this.next(); return; }
                 if (win.OS_API?.isStandalone?.() ?? false) {
                     this._showStandaloneChoices(line);
                 } else {
@@ -3900,6 +3919,7 @@
                 if (scanMode === 'chat' || scanMode === 'call') {
                     if (win.VN_Phone) win.VN_Phone.scanLog(line, scanMode, this);
                 } else {
+                    if (/^\[Dive\|/i.test(line)) { this._seeDive(line); continue; }   // 🚪 略過也要認：主角戴上頸環了
                     if (line.startsWith('[Char|'))  { const p = this._normCharParts(line.slice(6,-1).split('|')); const ex=this._extractTextAndSFX(p.slice(2)); this.addLog(p[0], this._stripInlineSFX(ex.text)); }
                     else if (line.startsWith('[Inner|')) { const p = line.slice(7,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(1)); this.addLog(p[0], `*${this._stripInlineSFX(ex.text)}*`); }
                     else if (line.startsWith('[Nar|'))  { const p = line.slice(5,-1).split('|'); const ex=this._extractTextAndSFX(p); this.addLog("旁白", this._stripInlineSFX(ex.text)); }
@@ -3923,7 +3943,7 @@
             if (!this.script[_firstChoiceIdx]?.startsWith('[Choice|')) _firstChoiceIdx++;
 
             const _firstChoiceLine = this.script[_firstChoiceIdx];
-            if (_firstChoiceLine?.startsWith('[Choice|') && (win.OS_API?.isStandalone?.() ?? false)) {
+            if (_firstChoiceLine?.startsWith('[Choice|') && !this._diveAtEnd && (win.OS_API?.isStandalone?.() ?? false)) {
                 this.index = _firstChoiceIdx;
                 this._showStandaloneChoices(_firstChoiceLine);
             } else {
