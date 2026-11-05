@@ -1603,7 +1603,7 @@
         try {
             if (!(await _getCurrentId())) {
                 const r = await _invite();
-                if (r) res = { id: r.w.id, name: String(r.w.name || ''), concept: String(r.w.concept || ''), pick: r.inv.pick || '' };
+                if (r) res = { id: r.w.id, name: String(r.w.name || ''), concept: String(r.w.concept || ''), pick: r.inv.pick || '', pv: !!r.inv.pv };
             }
         } catch (e) { res = null; }
         _invCache = { cid: _cid(), on: !!res };
@@ -1615,9 +1615,81 @@
         if (!r) return false;
         return _setInvite(Object.assign({}, r.inv, { pick: (s && r.inv.pick !== s) ? s : '' }));
     }
+    // ── 🎬 新世界宣傳片（11-06 她挑了「C 搜尋頁」：劇情手機瀏覽器搜這個世界，第一條是 SN 官方宣傳片在播）──
+    //   主持AI 只寫 [Video: 世界名|頻道|彈幕…]；畫面用這個世界的概念圖、旁白從世界種子那幾句來，不另外叫模型。
+    //   音樂（她：「音樂目前可以直接走 bgm 那裏」「目前不都是 jev 幫我選 bgm？或許能讓他也幫我選」）：
+    //   通知主角時問 Jev 一題配哪首（候選＝這個世界題材那份 BGM 清單），存在世界 pvBgm；Jev 沒設好就照舊放現在的歌
+    function _pvKey(s) {
+        const t = String(s || '').replace(/[「」『』《》\s]/g, '');
+        try { return (win.OS_ZH && win.OS_ZH.key) ? win.OS_ZH.key(t) : t; } catch (e) { return t; }
+    }
+    // 旁白：概念、規則的轉折、危機，一句一個畫面；太長的在逗號切開（手機上一行讀得完）
+    function _pvLines(w) {
+        const out = [];
+        [w && w.concept, w && w.twist, w && w.crisis].forEach(s => {
+            String(s || '').replace(/([。！？!?])/g, '$1\n').split('\n').map(x => x.trim()).filter(Boolean).forEach(x => {
+                if (x.length <= 26) { out.push(x); return; }
+                let cur = '';
+                x.replace(/([，,；;、])/g, '$1\n').split('\n').forEach(p => {
+                    if (cur && (cur + p).length > 26) { out.push(cur); cur = p; } else cur += p;
+                });
+                if (cur) out.push(cur);
+            });
+        });
+        return out.filter(Boolean).slice(0, 5);
+    }
+    // 這個世界題材的那份 BGM 清單（題材判斷跟進世界時換清單同一套：WORLD_RULES.planFor）；判斷不了就用現在開著的
+    function _pvBgmChoices(w) {
+        const VR = win.OS_VN_RULES || window.OS_VN_RULES, WR = win.WORLD_RULES || window.WORLD_RULES;
+        if (!VR || !VR.getLists) return [];
+        let label = '';
+        try { const p = WR && WR.planFor ? WR.planFor(w) : null; const n = p ? Array.from(p.on).find(x => /BGM｜/.test(x)) : ''; label = n ? n.split('｜').pop() : ''; } catch (e) {}
+        const all = VR.getLists('bgm') || [];
+        const mine = label ? all.filter(x => x.label === label) : [];
+        const src = mine.length ? mine : all.filter(x => !VR.isOn || VR.isOn(x.id));
+        const out = [];
+        src.forEach(x => String(x.content || '').split('\n').map(l => l.trim()).forEach(l => { if (l && /^[A-Za-z0-9_\-&]+$/.test(l) && out.indexOf(l) < 0) out.push(l); }));
+        return out;
+    }
+    const _pvAsking = new Set();
+    async function _pickPvBgm(w) {
+        const J = win.OS_JEV_SFX || window.OS_JEV_SFX;
+        if (!w || w.pvBgm || !J || !J.pickBgm || !(J.active && J.active()) || _pvAsking.has(w.id)) return '';
+        _pvAsking.add(w.id);
+        try {
+            const state = { '新世界': w.name + (w.concept ? '：' + w.concept : '') + (w.style ? '（風格：' + w.style + '）' : ''), '宣傳片旁白（逐句）': _pvLines(w) };
+            const id = await J.pickBgm(state, _pvBgmChoices(w), '這支新世界宣傳片（像電影預告，沒有對白，只有旁白字幕）的配樂要用哪一首？只看曲名判斷氣氛。');
+            if (id) { const cur = await _worldById(w.id); if (cur) { cur.pvBgm = id; await _saveWorld(cur, ['pvBgm']); } }
+            return id;
+        } catch (e) { return ''; }
+        finally { _pvAsking.delete(w.id); }
+    }
+    // 播到了（重看舊章不叫）：是通知的那扇門的宣傳片 → 記下來，之後不再教主持AI 演（演一次就夠）
+    async function pvSeen(title) {
+        try {
+            const r = await _invite();
+            if (r && !r.inv.pv && _pvKey(r.w.name) === _pvKey(title)) await _setInvite(Object.assign({}, r.inv, { pv: true }));
+        } catch (e) {}
+    }
+    // 播放器問：這支影片是不是哪個世界的宣傳片 → 料；不是回 null（照一般影片放）
+    async function pvOf(title) {
+        try {
+            const k = _pvKey(title);
+            if (!k) return null;
+            const worlds = await _get(K_WORLDS, []);
+            const w = worlds.find(x => x && x.name && _pvKey(x.name) === k) || worlds.find(x => x && x.name && k.indexOf(_pvKey(x.name)) >= 0);
+            if (!w) return null;
+            const art = (typeof w.art === 'string' && w.art && !w.artFb && w.art.indexOf(_FB_BASE) !== 0 && w.art.indexOf('blob:') !== 0) ? w.art : '';
+            if (!w.pvBgm) _pickPvBgm(w);   // 通知時沒問到（Jev 那時沒設好、舊通知）：這次先照舊放，問到了下次播就有
+            return { name: String(w.name), art, lines: _pvLines(w), intro: String(w.concept || ''),
+                     tags: [w.style, w.genre || w.type, w.lure].filter(Boolean).map(String).slice(0, 4), bgm: w.pvBgm || '' };
+        } catch (e) { return null; }
+    }
+
     async function _sendInvite(w) {
         const old = await _invite();
         if (!(await _setInvite({ id: w.id, name: w.name, at: Date.now(), pick: '' }))) return { ok: false, msg: '這段故事還沒開始，通知寄不出去（先寫一章再來）' };
+        _pickPvBgm(w);   // 🎬 宣傳片配樂先問好（不等它）
         return { ok: true, msg: (old && old.w.id !== w.id ? '「' + old.w.name + '」那扇收起來了，' : '') + '已通知主角：「' + w.name + '」開門了。劇情告一段落時，最後的選項會出現上線；想快點去就到線索按「想看」' };
     }
     async function _dropInvite() { await _setInvite(null); return { ok: true, msg: '通知收回了，劇情裡不會再提這扇門' }; }
@@ -1626,7 +1698,7 @@
         const A = win.AUI || window.AUI;
         if (!A || !A.helpBtn || !A.registerHelp) return '';
         A.registerHelp({ wg_invite: { title: '通知主角',
-            body: 'DIVE：馬上進去，下一章就在這個世界。\n\n通知主角：劇情裡主角的手機收到開門的通知，眼前的事照常演完。告一段落時，最後的選項會出現「上線」；你選了，那一章主角先把事情收好、回家戴上頸環，演完那一章才進來。太晚了主角會先睡，隔天再去。\n\n想快點去：到劇情的「線索」，最上面那張開門的卡按「想看」。不想被提起：按「先放著」。\n\n一次只開一扇，通知另一個世界會換掉這扇。' } });
+            body: 'DIVE：馬上進去，下一章就在這個世界。\n\n通知主角：劇情裡主角的手機收到開門的通知，眼前的事照常演完。告一段落時，最後的選項會出現「上線」；你選了，那一章主角先把事情收好、回家戴上頸環，演完那一章才進來。太晚了主角會先睡，隔天再去。\n\n主角第一次查這個世界時，手機會放一支 SN 官方的宣傳片（畫面是這個世界的概念圖，配樂交給 Jev 挑；沒設好 Jev 就照放現在的歌）。\n\n想快點去：到劇情的「線索」，最上面那張開門的卡按「想看」。不想被提起：按「先放著」。\n\n一次只開一扇，通知另一個世界會換掉這扇。' } });
         return A.helpBtn('wg_invite');
     }
     // 每一輪交給寫正文的 AI（酒館 os_app_memory_inject、網頁版 _buildStandaloneContext 都叫這支）
@@ -1640,6 +1712,8 @@
             return L.join('\n');
         }
         if (n.pick === 'want') L.push('玩家（螢幕前的人，不是主角）想讓主角去' + nm + '：下一個告一段落的地方，就把上線去' + nm + '列進這一章最後的選項。');
+        // 🎬 宣傳片：主角第一次查這個世界時演一次（播過就不再教，見 pvSeen）
+        if (!n.pv) L.push('主角點開那則通知、或上網查' + nm + '的時候，用手機瀏覽器演：<browser query="' + n.name + '"> 裡第一條寫 [Video: ' + n.name + '|SN 官方|彈幕|彈幕|…]，這是 SN 官方的宣傳片，畫面、旁白、音樂系統會自己放，你只寫彈幕：奧瑞亞網友看這支宣傳片時留的話，6～12 條、每條十五個字以內，用 | 隔開；後面可以再接幾條一般的搜尋結果。');
         L.push('上線要戴頸環，在能安心躺下、不會被打擾的地方。主角不會自己決定上線，玩家選了才去' + (n.pick === 'want' ? '' : '；時機對了才列進最後的選項，不用每一章都列') + '。');
         L.push('時機：主角手上的事告一段落才提。正在跟人相處、事件還沒結束、答應的事還沒辦完，先把眼前的事照常演完，不要為了上線提早收尾或中途離開。故事時間很晚了就照主角平常的作息，該睡就先睡，隔天再找時間。');
         L.push('玩家選了上線（或玩家那句話說要去）：這一章先把手上的事收好、有人在場就跟他們道別，回到能上線的地方戴上頸環；戴上頸環、意識開始上線的那一刻，正文單獨寫一行 [Dive|' + n.name + ']，這一章就停在這裡，後面不再寫選項，進去之後的事下一章才寫。眼前的事這一章收不完、或已經太晚，這一章就不寫 [Dive|…]：太晚就演到主角睡下，醒來那一章再把上線列進最後的選項；事情沒辦完就先辦，辦完那一章再列。');
@@ -5062,6 +5136,6 @@
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts,
-        inviteNow, setInvitePick, inviteText, diveSeen };
+        inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen };
     console.log('[Worldgate③] 世界門面板就緒');
 })();

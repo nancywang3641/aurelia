@@ -230,6 +230,21 @@
         return out;
     }
 
+    // 🎬 單問一首：世界門新世界的宣傳片配哪首（她 11-06：「目前不都是 jev 幫我選 bgm？或許能讓他也幫我選」）。
+    //   state＝給它看的情境（世界名、宣傳片旁白）；choices＝候選曲名（那個世界題材的那份清單），空的就用現在開著的清單。
+    //   回曲名；沒設好、關著、沒回應回 ''（宣傳片就照舊放現在的歌）。一次一通，呼叫端自己存答案別重問
+    async function pickBgm(state, choices, why) {
+        if (!active()) return '';
+        const list = (Array.isArray(choices) && choices.length ? choices : lists().bgm).filter(Boolean);
+        if (!list.length) return '';
+        const c = {}; list.forEach(b => { c[b] = b; });
+        try {
+            const d = await _ask({ model: _jev().model, state: state || {}, questions: { bgm: { type: 'choice', criteria: c, instructions: why || '這段要配哪一首背景音樂？（只看曲名判斷氣氛）' } } });
+            const a = d && d.answers && d.answers.bgm;
+            return (a && a.choice && list.indexOf(a.choice) >= 0) ? a.choice : '';
+        } catch (e) { return ''; }
+    }
+
     function report(limit) {
         const log = getLog().slice(0, limit || 5);
         const head = '音效和音樂交給 Jev：' + (isOn() ? (_key() ? '開著' : '開著，但決策模型沒設好 → 沒生效') : '關著（正文 AI 自己選）');
@@ -247,6 +262,6 @@
         return L.join('\n');
     }
 
-    win.OS_JEV_SFX = { isOn, setOn, active, feed, plan, lists, report, getLog, clearLog };
+    win.OS_JEV_SFX = { isOn, setOn, active, feed, plan, lists, report, getLog, clearLog, pickBgm };
     if (win !== window) window.OS_JEV_SFX = win.OS_JEV_SFX;
 })();

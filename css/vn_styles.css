@@ -1842,6 +1842,27 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         #br-page-body .br-p { font-size: 0.86rem; line-height: 1.65; color: #1f2937; margin: 0 0 10px; }
         .br-fig { margin: 4px 0 12px; }
         .br-fig-alt { font-size: 0.78rem; color: #6b7280; background: #eee; border-radius: 8px; padding: 10px; }
+        /* 🎬 搜尋結果裡的影片（[Video: 標題|頻道|彈幕…]，世界門新世界宣傳片）：照小樣 C 搜尋頁 */
+        .br-card.br-vid { padding: 10px 10px 12px; cursor: default; }
+        .br-vid .br-vch { display: inline-block; background: #111827; color: #fff; border-radius: 4px; padding: 0 5px; font-size: 0.62rem; line-height: 1.5; }
+        .br-vbox { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #0b0f1a; margin-top: 6px; }
+        .br-vimg { position: absolute; inset: 0; background-image: var(--br-vart, none); background-size: cover; background-repeat: no-repeat; background-position: 50% 50%; will-change: transform; }
+        .br-vbox.br-vnoart .br-vimg { background-image: linear-gradient(160deg, #1e293b, #0f172a 55%, #3b2f4a); }
+        .br-vdim { position: absolute; inset: 0; background: #000; pointer-events: none; }
+        .br-vdm { position: absolute; left: 0; right: 0; top: 4%; height: 55%; overflow: hidden; pointer-events: none; z-index: 2; }
+        .br-vdm span { position: absolute; left: 0; top: 0; visibility: hidden; white-space: nowrap; font-size: 0.68rem; font-weight: 600; color: #fff; text-shadow: 0 0 2px #000, 0 1px 2px #000; will-change: transform; }
+        .br-vdm span.c1 { color: #ffd98a; }
+        .br-vdm span.c2 { color: #9fe0ff; }
+        .br-vcap { position: absolute; left: 6%; right: 6%; bottom: 9%; z-index: 3; text-align: center; font-family: "Noto Serif TC", "Songti TC", "PMingLiU", serif; font-size: 0.8rem; line-height: 1.5; letter-spacing: 0.06em; color: #fff6e6; text-shadow: 0 1px 6px rgba(0,0,0,0.9); pointer-events: none; }
+        .br-vttl { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 0 8%; text-align: center; opacity: 0; pointer-events: none; }
+        .br-vttl b { font-family: "Noto Serif TC", "Songti TC", "PMingLiU", serif; font-size: 1.5rem; line-height: 1.2; color: #fff3dc; text-shadow: 0 2px 10px rgba(0,0,0,0.7); }
+        .br-vttl span { margin-top: 5px; font-size: 0.52rem; letter-spacing: 0.3em; color: #e9d7b8; }
+        .br-vprog { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: #ff5a4f; z-index: 4; }
+        .br-vre { position: absolute; right: 8px; bottom: 8px; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 0.8rem; cursor: pointer; }
+        .br-vre.br-voff, .br-vinfo.br-voff { display: none; }
+        .br-vinfo { margin-top: 8px; }
+        .br-vtags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+        .br-vtags span { font-size: 0.62rem; background: #eef0f5; color: #3c4048; border-radius: 9px; padding: 2px 8px; }
         #br-nar { position: absolute; left: 12px; right: 12px; bottom: 14px; background: rgba(17,17,17,0.82); color: #fff; font-size: 0.82rem; line-height: 1.5; padding: 10px 12px; border-radius: 10px; backdrop-filter: blur(6px); z-index: 5; }
         #br-nar b { color: #fbbf24; margin-right: 6px; }
         #br-nar.hidden { display: none; }
