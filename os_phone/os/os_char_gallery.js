@@ -411,6 +411,7 @@
           +       '<input class="acg-search" type="text" placeholder="找角色">'
           +       '<button class="acg-tool" type="button" data-act="add-char" title="新增角色"><i class="fa-solid fa-user-plus"></i></button>'
           +       '<button class="acg-tool acg-wb-only" type="button" data-act="import" title="匯入清單"><i class="fa-solid fa-file-import"></i></button>'
+          +       '<button class="acg-tool" type="button" data-act="dl-chibi" title="下載全部 Q 版"><i class="fa-solid fa-file-zipper"></i></button>'
           +     '</div>'
           +     '<div class="acg-list"></div>'
           +   '</aside>'
@@ -676,6 +677,93 @@
         }
     }
 
+    // 📦 下載全部 Q 版（11-07 她要拿去給阿洛當頭髮參考）：奧瑞亞裡的 Q 版人物打成一個壓縮檔，存到「下載」資料夾。
+    //   兩個來源：生立繪「一次生三種」切出來的那張（圖片快取每個角色那筆的 chibi）→ 角色/；
+    //   大廳裝扮室給角色換的小人（LobbyStage 的皮膚，圖在 lobby_stage_assets 或網址）→ 大廳/。
+    //   🚨 不整庫一次讀：清單走 getAllMeta、圖一張一張讀（同 VN_Cache 的規矩）。不壓縮（圖本來就壓過），只是包成一個檔。
+    const _CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; } return t; })();
+    function _crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = _CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+    // files：[{ name, data: Uint8Array }] → zip 的 Blob（不壓縮、檔名 UTF-8）
+    function _zipBlob(files) {
+        const enc = new TextEncoder(), parts = [], central = [];
+        const d = new Date();
+        const dt = ((d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1)) & 0xFFFF;
+        const dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
+        let off = 0;
+        for (const f of files) {
+            const nm = enc.encode(f.name), crc = _crc32(f.data), sz = f.data.length;
+            const h = new DataView(new ArrayBuffer(30));
+            h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+            h.setUint16(10, dt, true); h.setUint16(12, dd, true); h.setUint32(14, crc, true); h.setUint32(18, sz, true); h.setUint32(22, sz, true);
+            h.setUint16(26, nm.length, true); h.setUint16(28, 0, true);
+            parts.push(h.buffer, nm, f.data);
+            const c = new DataView(new ArrayBuffer(46));
+            c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+            c.setUint16(12, dt, true); c.setUint16(14, dd, true); c.setUint32(16, crc, true); c.setUint32(20, sz, true); c.setUint32(24, sz, true);
+            c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+            central.push(c.buffer, nm);
+            off += 30 + nm.length + sz;
+        }
+        let csz = 0; central.forEach(p => { csz += p.byteLength; });
+        const e = new DataView(new ArrayBuffer(22));
+        e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, csz, true); e.setUint32(16, off, true);
+        return new Blob(parts.concat(central, [e.buffer]), { type: 'application/zip' });
+    }
+    // 一張圖（data: 或網址）→ { data: Uint8Array, ext }；讀不到回 null
+    async function _imgBytes(src) {
+        const extOf = (mime) => { const m = String(mime || '').toLowerCase(); return m.indexOf('webp') >= 0 ? 'webp' : m.indexOf('jpeg') >= 0 || m.indexOf('jpg') >= 0 ? 'jpg' : m.indexOf('gif') >= 0 ? 'gif' : m.indexOf('svg') >= 0 ? 'svg' : 'png'; };
+        try {
+            const s = String(src || '');
+            const m = s.match(/^data:([^;,]+)(;base64)?,(.*)$/);
+            if (m) {
+                if (!m[2]) return { data: new TextEncoder().encode(decodeURIComponent(m[3])), ext: extOf(m[1]) };
+                const bin = atob(m[3]); const u8 = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+                return { data: u8, ext: extOf(m[1]) };
+            }
+            if (!s) return null;
+            const r = await fetch(s);
+            if (!r.ok) return null;
+            return { data: new Uint8Array(await r.arrayBuffer()), ext: extOf(r.headers.get('content-type') || s.split('?')[0].split('.').pop()) };
+        } catch (e) { return null; }
+    }
+    async function dlChibi() {
+        const VC = win.VN_Cache || window.VN_Cache;
+        const files = [], used = new Set();
+        const clean = (s) => String(s || '').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim().slice(0, 60) || '未命名';
+        const nameOf = (dir, base, ext) => { let n = dir + '/' + base + '.' + ext, i = 2; while (used.has(n)) n = dir + '/' + base + '_' + (i++) + '.' + ext; used.add(n); return n; };
+        toast('正在收集 Q 版…');
+        if (VC && VC.getAllMeta && VC.getRaw) {
+            const list = await VC.getAllMeta('avatar_cache', { partial: true });
+            for (const e of list) {
+                const rec = await VC.getRaw('avatar_cache', e.key);
+                if (!rec || !rec.chibi) continue;
+                const img = await _imgBytes(rec.chibi);
+                if (img) files.push({ name: nameOf('角色', clean(VC.bareKeyOf ? VC.bareKeyOf(e) : e.key), img.ext), data: img.data });
+            }
+        }
+        const LB = (win.LobbyStage || window.LobbyStage || {})._b;
+        if (LB && LB.skins && LB.resolveRef) {
+            const sk = LB.skins() || {};
+            for (const k of Object.keys(sk)) {
+                const one = sk[k];
+                const src = one && await LB.resolveRef(one.ref);
+                const img = src && await _imgBytes(src);
+                if (img) files.push({ name: nameOf('大廳', clean(k) + (one.kind === 'sheet' ? '_走路圖' : ''), img.ext), data: img.data });
+            }
+        }
+        if (!files.length) { toast('還沒有 Q 版可以下載：角色要用「一次生三種」生過立繪，或在大廳裝扮室換過小人', 'warning'); return; }
+        const d = new Date(), p2 = (n) => String(n).padStart(2, '0');
+        const fname = '奧瑞亞Q版人物_' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.zip';
+        const a = doc.createElement('a');
+        a.href = URL.createObjectURL(_zipBlob(files));
+        a.download = fname;
+        (doc.body || doc.documentElement).appendChild(a);
+        a.click();
+        setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} a.remove(); }, 3000);
+        toast('已下載 ' + files.length + ' 張 Q 版：' + fname + '（在「下載」資料夾）', 'success');
+    }
+
     async function onClick(ev) {
         const b = ev.target.closest('[data-act]');
         if (!b || !S || !S.root.contains(b)) return;
@@ -816,6 +904,12 @@
                 await wbSaveMany(S.wb, kind, [{ char: ch, rows }]);
                 toast('世界書存好了', 'success');
                 await afterChange(ch);
+                return;
+            }
+            if (act === 'dl-chibi') {
+                if (b.disabled) return;
+                b.disabled = true;
+                try { await dlChibi(); } finally { b.disabled = false; }
                 return;
             }
             if (act === 'import') {
