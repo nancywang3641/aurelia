@@ -2152,7 +2152,8 @@
         },
 
         // 🤖 AI 去背（@imgly isnet，靠 AI 認人形、吃任何背景）：立繪、物品、一鍵生立繪、立繪工作室全走這一支。
-        //   首次下載 ~40MB 模型(之後快取)。模型函式快取在 _bgRemoverFn。失敗回 null。
+        //   首次下載約 84MB 模型（isnet_fp16，之後從瀏覽器快取讀）＋ 22MB 執行環境。失敗回 null。
+        //   11-06 起在「去背工人」（背景執行緒）裡跑、做完就收掉，見下面 _bgWorker 那段。
         //   🎮 10-07 改用顯卡（device:'gpu'＝WebGPU）：她「大總結生成的立繪…一疊圖送去給小模型去背，簡直要卡成屎」。
         //   以前是 CPU 跑在跟畫面同一條線上，預覽實測一張 12.5 秒、其中 11.4 秒整頁卡死；用顯卡一張 1.4 秒、最多頓 0.13 秒，品質一樣
         //   （tmp/bg_remove_compare.html）。沒有顯卡可用時套件自己退回 CPU；顯卡起得來卻失敗就記下來，之後改走 CPU。
@@ -2174,10 +2175,10 @@
         //   手機被 Safari 整頁重開時程式來不及說話，下次打開還看到這筆＝上次是在這一步斷掉的（10-14 她 iPhone「跑圖時」「會中途重整」，要查是哪一步）
         _heavyOps: 0,
         _heavyBgN: 0,
-        _heavyBegin: function(step) {
+        _heavyBegin: function(step, how) {
             this._heavyOps++;
             if (step === 'bg') this._heavyBgN++;
-            win.AUI.lsSet('vn_heavy_step', JSON.stringify({ step: step, bg: this._heavyBgN, at: Date.now() }), '跑圖進度記號');
+            win.AUI.lsSet('vn_heavy_step', JSON.stringify({ step: step, bg: this._heavyBgN, how: how || '', at: Date.now() }), '跑圖進度記號');
         },
         _heavyEnd: function() {
             this._heavyOps = Math.max(0, this._heavyOps - 1);
@@ -2188,33 +2189,166 @@
             try { m = JSON.parse(localStorage.getItem('vn_heavy_step') || 'null'); localStorage.removeItem('vn_heavy_step'); } catch (e) {}
             if (!m || !m.at || Date.now() - m.at > 30 * 60 * 1000) return;
             const what = m.step === 'trio' ? '把一次生三種的圖切成三格' : '幫立繪去背';
-            const msg = '上次畫面關掉或重開的時候，還在' + what + '（那次打開之後的第 ' + (m.bg || 0) + ' 張去背）。';
+            // how：去背用顯卡還是 CPU、在不在背景工人裡（11-06 起記；她截圖回來就知道是哪一種跑法撐不住）
+            const how = { gpu: '，用顯卡', cpu: '，用 CPU', 'gpu-w': '，在背景用顯卡', 'cpu-w': '，在背景用 CPU' }[m.how] || '';
+            const msg = '上次畫面關掉或重開的時候，還在' + what + '（那次打開之後的第 ' + (m.bg || 0) + ' 張去背' + how + '）。';
             console.warn('[VN] 🧷 ' + msg);
             try { const A = win.AUI || window.AUI; if (A && A.alert) A.alert(msg); } catch (e) {}
         },
+        _BG_LIB: 'https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm',
         _bgRemoverFn: null,
         _bgGpuBroken: false,
         _bgRemoveChain: Promise.resolve(),   // 去背序列化鏈（同 NAI _naiQueue 思路）：一張一張跑，顯卡記憶體與 CPU 都不互搶
+        // 📱 記憶體小的裝置（_lowMemDevice：iPhone／iPad／4GB 以下）去背用 CPU（11-06 量過，tmp/bg_mem/run.cjs）：
+        //   顯卡那條光模型自己就要同時佔 690MB 顯卡記憶體（實驗把 onnxruntime 的暫存池關掉也還是這麼多，是 1024×1024 整張算的份量），
+        //   加暫存池約 900MB，整台瀏覽器一張去背最高約 2.0GB；CPU 那條最高約 1.1GB。iPhone 上顯卡記憶體算在網頁頭上。
+        //   CPU 比較慢（這台電腦一張約 12 秒，顯卡不到 1 秒），但在去背工人裡跑不會卡住畫面，去背結果一模一樣。
+        _bgDevice: function () { return (this._bgGpuBroken || this._lowMemDevice()) ? 'cpu' : 'gpu'; },
         _bgRemoveOpts: function(extra) {
-            return Object.assign({ model: 'isnet_fp16', device: this._bgGpuBroken ? 'cpu' : 'gpu', output: { format: 'image/png', quality: 1.0 } }, extra || {});
+            return Object.assign({ model: 'isnet_fp16', device: this._bgDevice(), output: { format: 'image/png', quality: 1.0 } }, extra || {});
+        },
+        // 🧵 去背工人（11-06 她：「pwa一直在去背的時候重刷，真的無法玩XD」）
+        //   量過（tmp/bg_mem/run.cjs，headless 跑真的這幾支）：模型跑過一次，顯卡那邊就一直留著約 880MB——onnxruntime 把用過的
+        //   顯卡暫存全部留著重用，整頁活著就不還；網頁本身另外留 300～400MB（CPU 那條是執行環境的 480MB）。
+        //   iPhone 上顯卡用的記憶體也算在網頁頭上，這些一直不還、再疊上劇情畫面，Safari 就整頁重開。
+        //   改成在背景執行緒（Worker）裡跑：排著的去背做完、一陣子沒有新的，就把工人整個收掉，模型、執行環境、顯卡暫存一次全還。
+        //   同一個套件、同一版、同樣設定，去背結果一模一樣；CPU 那條也不會再卡住畫面。
+        //   工人起不來（網站規則擋背景執行緒、瀏覽器太舊）才照以前在畫面這條線上跑（_bgRunHere）。
+        _bgWorker: null,          // 開著的工人；收掉＝null，下一張再開新的
+        _bgWorkerJobs: null,      // 送進工人還沒回來的：id → { resolve, progress }
+        _bgWorkerSeq: 0,
+        _bgWorkerOk: false,       // 這頁有工人真的去背成功過（之後的失敗＝那張圖的問題，不是工人的問題）
+        _bgWorkerOff: false,      // 工人在這裡起不來 → 這頁之後都在畫面這條線上跑
+        _bgIdleTimer: 0,
+        _bgIdleMs: 6000,          // 排著的去背做完、這麼久沒有新的就收工人
+        _bgWorkerCode: function () {
+            return [
+                'const LIB = ' + JSON.stringify(this._BG_LIB) + ';',
+                'let rm = null, gpuBroken = false;',
+                'self.onmessage = async function (ev) {',
+                '  const d = ev.data || {}, id = d.id, opts = d.opts || {};',
+                '  if (d.wantProgress) opts.progress = function (k, c, t) { self.postMessage({ id: id, progress: [k, c, t] }); };',
+                '  let stage = "load";',
+                '  try {',
+                '    if (!rm) rm = (await import(LIB)).removeBackground;',
+                '    stage = "run";',
+                '    if (gpuBroken) opts.device = "cpu";',
+                '    let out;',
+                '    try { out = await rm(d.blob, opts); }',
+                '    catch (e) {',
+                '      if (opts.device !== "gpu") throw e;',
+                '      gpuBroken = true; opts.device = "cpu";',
+                '      self.postMessage({ id: id, gpuBroken: String((e && e.message) || e) });',
+                '      out = await rm(d.blob, opts);',
+                '    }',
+                '    self.postMessage({ id: id, out: out });',
+                '  } catch (e) { self.postMessage({ id: id, err: String((e && e.message) || e), stage: stage }); }',
+                '};',
+                'self.postMessage({ ready: true, gpu: !!(self.navigator && self.navigator.gpu) });',
+            ].join('\n');
+        },
+        // 收工人：還在等的單一律回「要在畫面這條線上重跑」（fallback）或失敗
+        _bgRelease: function (why, fallback) {
+            if (this._bgIdleTimer) { clearTimeout(this._bgIdleTimer); this._bgIdleTimer = 0; }
+            const w = this._bgWorker, jobs = this._bgWorkerJobs || {};
+            this._bgWorker = null; this._bgWorkerJobs = null;
+            if (!w) return;
+            try { w.terminate(); } catch (e) {}
+            try { URL.revokeObjectURL(w._vnUrl); } catch (e) {}
+            Object.keys(jobs).forEach(function (id) { jobs[id].resolve({ err: why || '去背工人收掉了', fallback: !!fallback }); });
+            if (why === 'idle') console.log('[VN] 去背工人收工：模型、執行環境、顯卡暫存都還回去了');
+        },
+        _bgIdleRelease: function () {
+            const self = this;
+            if (this._bgIdleTimer) clearTimeout(this._bgIdleTimer);
+            this._bgIdleTimer = setTimeout(function () {
+                self._bgIdleTimer = 0;
+                if (self._bgWorkerJobs && Object.keys(self._bgWorkerJobs).length) return;
+                self._bgRelease('idle');
+            }, this._bgIdleMs);
+        },
+        _bgWorkerGet: function () {
+            if (this._bgWorker) return this._bgWorker;
+            const self = this;
+            const url = URL.createObjectURL(new Blob([this._bgWorkerCode()], { type: 'text/javascript' }));
+            let w;
+            try { w = new Worker(url, { type: 'module' }); }
+            catch (e) { try { URL.revokeObjectURL(url); } catch (e2) {} throw e; }
+            w._vnUrl = url;
+            this._bgWorker = w; this._bgWorkerJobs = {};
+            // 一直沒說「好了」＝這裡跑不起來（被擋、或瀏覽器不收這種寫法）
+            const readyT = setTimeout(function () { if (self._bgWorker === w && !w._vnReady) self._bgRelease('去背工人一直沒起來', !self._bgWorkerOk); }, 20000);
+            w.onmessage = function (ev) {
+                const d = ev.data || {};
+                if (d.ready) {
+                    w._vnReady = true; clearTimeout(readyT);
+                    console.log('[VN] 去背工人起來了（' + (self._bgDevice() === 'cpu' ? '用 CPU' : d.gpu ? '用顯卡' : '背景裡沒有顯卡可用，用 CPU') + '）');
+                    return;
+                }
+                const job = self._bgWorker === w && self._bgWorkerJobs && self._bgWorkerJobs[d.id];
+                if (!job) return;
+                if (d.progress) { try { if (job.progress) job.progress.apply(null, d.progress); } catch (e) {} return; }
+                if (d.gpuBroken) { console.warn('[VN] 顯卡去背失敗，之後改用 CPU:', d.gpuBroken); self._bgGpuBroken = true; return; }
+                delete self._bgWorkerJobs[d.id];
+                if (d.out) { self._bgWorkerOk = true; job.resolve({ out: d.out }); }
+                // 這頁的工人還沒成功過一次就失敗 → 這張先在畫面這條線上再試，分得出是不是工人的問題
+                else job.resolve({ err: d.err || '去背沒成功', fallback: !self._bgWorkerOk, stage: d.stage });
+                if (!Object.keys(self._bgWorkerJobs).length) self._bgIdleRelease();
+            };
+            w.onerror = function (ev) {
+                try { ev.preventDefault(); } catch (e) {}
+                clearTimeout(readyT);
+                if (self._bgWorker === w) self._bgRelease('去背工人出錯：' + ((ev && ev.message) || '起不來'), !self._bgWorkerOk);
+            };
+            return w;
+        },
+        _bgRunInWorker: function (blob, opts, progress) {
+            const self = this;
+            return new Promise(function (resolve) {
+                let w;
+                try { w = self._bgWorkerGet(); }
+                catch (e) { resolve({ err: '開不了去背工人：' + ((e && e.message) || e), fallback: true, noWorker: true }); return; }
+                if (self._bgIdleTimer) { clearTimeout(self._bgIdleTimer); self._bgIdleTimer = 0; }
+                const id = ++self._bgWorkerSeq;
+                self._bgWorkerJobs[id] = { resolve: resolve, progress: progress };
+                try { w.postMessage({ id: id, blob: blob, opts: opts, wantProgress: !!progress }); }
+                catch (e) { delete self._bgWorkerJobs[id]; resolve({ err: '送不進去背工人：' + ((e && e.message) || e), fallback: true }); }
+            });
+        },
+        // 以前的跑法：在畫面這條線上跑（模型留在這頁、不會還）。只在工人起不來時用
+        _bgRunHere: async function (blob, extra) {
+            if (!this._bgRemoverFn) {
+                const m = await import(this._BG_LIB);
+                this._bgRemoverFn = m.removeBackground;
+            }
+            try { return await this._bgRemoverFn(blob, this._bgRemoveOpts(extra)); }
+            catch (e) {
+                if (this._bgGpuBroken) throw e;
+                console.warn('[VN] 顯卡去背失敗，之後改用 CPU:', e?.message || e);
+                this._bgGpuBroken = true;
+                return await this._bgRemoverFn(blob, this._bgRemoveOpts(extra));
+            }
         },
         _stripSpriteBgAI: function(blob, extra) {
-            // 不管上游生成是並行(Pollinations)還是串行，去背永遠一張跑完才下一張；模型只載一次。
+            // 不管上游生成是並行(Pollinations)還是串行，去背永遠一張跑完才下一張；模型在同一個工人裡只載一次。
             const self = this;
             const run = async () => {
-                self._heavyBegin('bg');
+                self._heavyBegin('bg', self._bgDevice() + (self._bgWorkerOff ? '' : '-w'));
                 try {
-                    if (!self._bgRemoverFn) {
-                        const m = await import('https://cdn.jsdelivr.net/npm/@imgly/background-removal@1.7.0/+esm');
-                        self._bgRemoverFn = m.removeBackground;
+                    if (!self._bgWorkerOff) {
+                        const opts = self._bgRemoveOpts(extra);
+                        const progress = (typeof opts.progress === 'function') ? opts.progress : null;
+                        delete opts.progress;   // 函式送不進工人；進度由工人一格一格回報
+                        const r = await self._bgRunInWorker(blob, opts, progress);
+                        if (r.out) return r.out;
+                        if (!r.fallback) { console.warn('[VN] AI 去背失敗:', r.err); return null; }
+                        console.warn('[VN] 去背工人這次沒成功，這張改在畫面這條線上跑:', r.err);
+                        const here = await self._bgRunHere(blob, extra);
+                        // 畫面這條線跑得動、工人不行＝這裡的工人有問題 → 這頁之後都不開工人
+                        if (here && !self._bgWorkerOk) { self._bgWorkerOff = true; self._bgRelease('工人在這裡不能用'); }
+                        return here;
                     }
-                    try { return await self._bgRemoverFn(blob, self._bgRemoveOpts(extra)); }
-                    catch (e) {
-                        if (self._bgGpuBroken) throw e;
-                        console.warn('[VN] 顯卡去背失敗，之後改用 CPU:', e?.message || e);
-                        self._bgGpuBroken = true;
-                        return await self._bgRemoverFn(blob, self._bgRemoveOpts(extra));
-                    }
+                    return await self._bgRunHere(blob, extra);
                 } catch (e) { console.warn('[VN] AI 去背失敗:', e?.message || e); return null; }
                 finally { self._heavyEnd(); }
             };

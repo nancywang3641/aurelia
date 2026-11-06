@@ -1003,7 +1003,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!state.blob) { setStatus('沒圖可去背', true); return; }
                 if (state.isRemoved) { setStatus('已經去過背了', true); return; }
                 enableBtn('sprite-removebg-btn', false);
-                setStatus('載入 AI 模型（第一次 ~40MB，之後快）...');
+                setStatus('載入 AI 模型（第一次約 85MB，之後快）...');
                 try {
                     // 走劇情立繪那支共用的（有顯卡用顯卡、跟其他去背排隊；見 vn_core.js _stripSpriteBgAI）
                     const VC = (window.parent || window).VN_Core || window.VN_Core;
