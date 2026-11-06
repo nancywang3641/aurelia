@@ -2400,6 +2400,90 @@ _directorSpec(castNames);
         return leafSet.size;
     }
 
+    // 🧳 整組欄位收起來／放回去（11-07，世界門用：在某個世界裡建的狀態欄跟著那個世界走，撤離就整組收走、回到那個世界再放回來）。
+    //   takeKeys：這幾個頂層欄位從「底」(base)、每一輪的紀錄(patches)、現在值(current)三處一起拿掉——只拿 current 的話，
+    //     之後刪樓重算（base＋剩下的 patches）會把它們長回來。回傳拿掉之前的值 { 欄位: 值 }。
+    //   putKeys：放回底和現在值；現在已經有這一欄的就不蓋（那是別的檔案正在記的）。回傳放回幾欄。
+    //   欄位名照簡繁折一次再比（劇情寫繁體、存的是簡體也算同一欄）。
+    //   酒館：資料庫那份是正本，寫完叫 adapter 重讀（別用引擎 read 再整份 write——快取還沒對到這一室時會讀到空的、整份寫回去）。
+    //   網頁版：引擎讀的是 localStorage 那份（同步讀、不會撞快取），跟資料庫那份一起改。
+    function _keyFold(k) { const Z = win.OS_ZH; return (Z && typeof Z.key === 'function') ? Z.key(String(k)) : String(k); }
+    async function takeKeys(keys, chatId) {
+        const cid = chatId || getChatId();
+        const want = new Set((Array.isArray(keys) ? keys : []).filter(Boolean).map(_keyFold));
+        const out = {};
+        if (!cid || !want.size) return out;
+        const hit = (path) => want.has(_keyFold(String(path).split('.')[0]));
+        const clone = (v) => (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
+        if (_isStandalone() && win._AVS_ENGINE?.read && win._AVS_ENGINE?.write) {
+            const s = win._AVS_ENGINE.read() || {};
+            let cut = false;
+            for (const k of Object.keys(s)) if (hit(k)) { out[k] = clone(s[k]); delete s[k]; cut = true; }
+            if (cut) { try { await win._AVS_ENGINE.write(s); } catch (e) {} }
+        }
+        if (!win.OS_DB?.getStateData || !win.OS_DB?.saveStateData) return out;
+        const data = await win.OS_DB.getStateData(cid);
+        if (!data) return out;
+        let changed = false;
+        const cur = Object.assign({}, data.current || {});
+        for (const k of Object.keys(cur)) if (hit(k)) { if (!(k in out)) out[k] = clone(cur[k]); delete cur[k]; changed = true; }
+        let base = data.base;
+        if (base && typeof base === 'object') {
+            base = Object.assign({}, base);
+            for (const k of Object.keys(base)) if (hit(k)) { if (!(k in out)) out[k] = clone(base[k]); delete base[k]; changed = true; }
+        }
+        const patches = Array.isArray(data.patches) ? data.patches.map(p => {
+            if (!p || !p.updates || typeof p.updates !== 'object') return p;
+            const u = {}; let cut = false;
+            for (const [k, v] of Object.entries(p.updates)) { if (hit(k)) { cut = true; continue; } u[k] = v; }
+            if (!cut) return p;
+            changed = true;
+            return Object.assign({}, p, { updates: u });
+        }) : data.patches;
+        if (changed) {
+            await win.OS_DB.saveStateData(cid, { ...data, base, patches, current: cur });
+            if (!_isStandalone()) {
+                try { await win.OS_AVS_ADAPTER?.refreshCache?.(); } catch (e) {}
+                try { win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: cur })); } catch (e) {}
+            }
+        }
+        return out;
+    }
+    async function putKeys(values, chatId) {
+        const cid = chatId || getChatId();
+        const ks = (values && typeof values === 'object') ? Object.keys(values) : [];
+        if (!cid || !ks.length) return 0;
+        const clone = (v) => (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
+        const has = (obj, k) => !!obj && Object.keys(obj).some(x => _keyFold(x) === _keyFold(k));
+        let n = 0;
+        if (_isStandalone() && win._AVS_ENGINE?.read && win._AVS_ENGINE?.write) {
+            const s = win._AVS_ENGINE.read() || {};
+            let add = 0;
+            for (const k of ks) if (!has(s, k)) { s[k] = clone(values[k]); add++; }
+            if (add) { try { await win._AVS_ENGINE.write(s); } catch (e) {} }
+            n = add;
+        }
+        if (!win.OS_DB?.getStateData || !win.OS_DB?.saveStateData) return n;
+        const data = (await win.OS_DB.getStateData(cid)) || {};
+        const cur = Object.assign({}, data.current || {});
+        const base = Object.assign({}, data.base || {});
+        let add = 0;
+        for (const k of ks) {
+            if (has(cur, k)) continue;
+            cur[k] = clone(values[k]);
+            if (!has(base, k)) base[k] = clone(values[k]);
+            add++;
+        }
+        if (add) {
+            await win.OS_DB.saveStateData(cid, { ...data, base, current: cur });
+            if (!_isStandalone()) {
+                try { await win.OS_AVS_ADAPTER?.refreshCache?.(); } catch (e) {}
+                try { win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: cur })); } catch (e) {}
+            }
+        }
+        return Math.max(n, add);
+    }
+
     // 🧾 對帳式回滾（刪樓／任何說不準的變動都走這條）
     // 🚨 為什麼不能信事件參數：酒館 MESSAGE_DELETED 傳的是「刪完還剩幾則」(script.js: emit(MESSAGE_DELETED, chat.length))，
     //    不是被刪那則的號碼。拿它當 patch 鍵查 → 只有「剛好刪最後一樓」時數字碰巧相等才會動，
@@ -2966,6 +3050,7 @@ _directorSpec(castNames);
         forceExtract, clearPatches, deepConsolidate,
         injectCurrent, injectRules, extractOnce, directorBlock, repairOpeningText,
         reconcile: _reconcilePatches,   // 對帳回滾：不靠刪除事件，任何「要用狀態」的入口都可以先叫它
+        takeKeys, putKeys,   // 🧳 整組欄位收起來／放回去（世界門：那個世界的狀態欄撤離就收走、回去再放回來）
         // 🧩 依 patch id 回滾（PWA 的 patch id ＝章節 id）：刪章／孤兒對帳呼叫，
         //    把那幾筆 patch 砍掉、並把它們碰過的欄位退回「base＋剩餘 patch」的值。
         //    酒館與獨立版共用同一支，回滾語意只有一份。

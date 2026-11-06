@@ -64,39 +64,259 @@
     }
     async function _setCurrentId(v) {
         const c = _cid();
+        let prev = '';
+        try { prev = await _getCurrentId(); } catch (e) {}   // 換之前在哪個世界：那一趟現在結束了
         _pendingCur = v ? { id: v, ts: Date.now() } : null;   // 撤離(空值)要把手上那筆一起丟掉
         if (c) await _set(K_CURRENT, v, c);
         try { await syncTheme(); } catch (e) {}   // 進世界換上它的劇情介面、撤離換回這本故事的
-        try { await _syncPlanPack(); } catch (e) { console.warn('[Worldgate③] 狀態欄掛不上', e); }   // SN 收尾設計的狀態欄跟著進出
+        let left = null;
+        if (prev && prev !== v) { left = { id: prev, since: 0 }; try { left.since = await _tripSince(prev); } catch (e) {} }
+        try { await _syncWorldPacks(left); } catch (e) { console.warn('[Worldgate③] 狀態欄沒跟著換', e); }   // 那個世界的狀態欄跟著進出
     }
-    // 🧾 SN 收尾設計的狀態欄：人在那個世界裡就替這個聊天室掛一包（AVS 變數包綁 chatId＝只有這一室在用），撤離、換世界就收掉。
-    //   只掛定義：變數說明每一輪由 state_runtime 從綁這一室的包組進提示詞，第一章起抽狀態的副模型照說明填值。
-    //   🚨 初值不由這裡寫：AVS 的 initFromPack 會把整份狀態換掉；自己讀了改再寫，又可能撞上快取還沒對到這一室、讀到空的再整份寫回去。
-    async function _syncPlanPack() {
+
+    // 🧾 狀態欄跟著世界走（11-07 重寫；原本只管 SN 收尾設計的那包）。
+    //   她 11-07：「狀態欄GG了，還留在上一個世界門的狀態欄」——在留句塔裡按「開始追蹤狀態」生的那包綁的是聊天室、不是世界，
+    //   撤離時沒人收：回奧瑞亞每輪還把「塔內時段」「今日留句狀態」的說明和值送給寫劇情的模型。
+    //   規則：人在某個世界裡時建的狀態欄（開始追蹤、預設、自己建、沿用都算）＝那個世界的；SN 收尾設計的那包也是。
+    //     離開那個世界 → 整組收起來交給世界門保管（K_STOW：包、這幾欄的值、原本開著的面板），回到同一個世界再原樣放回來。
+    //     在奧瑞亞建的（或進世界前就有的）不動：照舊跟著人進出世界。
+    //   值要連「底」和每輪紀錄一起收（OS_STATE_RUNTIME.takeKeys），不然之後刪樓重算又會長回來。
+    //   🚨 初值不由這裡寫：AVS 的 initFromPack 會把整份狀態換掉；這裡只搬已經有的值。
+    const K_STOW = 'stowed_packs';     // 這個聊天室收起來的、屬於別的世界的狀態欄：{ [世界id]: { name, at, packs:[整份變數包], values:{欄位:值}, tpls:[原本開著的面板id] } }
+    const K_STOW_SWEPT = 'stow_swept'; // 這版之前就撤離的舊資料認過一次了（1＝認過）
+    // 這包什麼時候建的：變數包 id 是 'pack_' + 建立當下的毫秒（AI 生成、預設、自己建、沿用都是）；認不出回 0（就不靠時間認主）
+    function _packTs(p) {
+        if (p && typeof p.createdAt === 'number') return p.createdAt;
+        const m = String((p && p.id) || '').match(/^pack_(\d{12,14})(?!\d)/);
+        return m ? Number(m[1]) : 0;
+    }
+    // 這包屬於哪個世界：認過主的（wgOwn，只認同一個聊天室的——沿用到別室的那份是新的一包）、SN 收尾那包（pack_wg_世界_聊天室）。'' ＝不屬於任何世界
+    function _packOwner(p, cid) {
+        if (!p || p.chatId !== cid) return '';
+        if (p.wgOwn && p.wgOwn.chat === cid && p.wgOwn.world) return String(p.wgOwn.world);
+        const id = String(p.id || ''), suf = '_' + cid;
+        if (id.indexOf('pack_wg_') === 0 && id.length > 8 + suf.length && id.slice(-suf.length) === suf) return id.slice(8, -suf.length);
+        return '';
+    }
+    // 聊天裡每一次進門、撤離的那一則（她送出去的開場／回程指令）：[{ kind:'in'|'out', name, at }]，照順序；讀不到聊天回 null。
+    //   酒館讀整個聊天檔（繞過懶載入），時間用那則的 send_date；網頁版看章節的 request（她送的指令），時間用章節 createdAt。
+    //   🚨 認的是兩支指令裡寫死的字：「進入視差世界「名」」（_divePrompt 兩個版本都有）、「從視差世界「名」撤離」（_returnPrompt，新舊兩版都有）
+    async function _tripMarks() {
+        const out = [];
+        const add = (text, at) => {
+            const s = String(text || '');
+            let m = s.match(/進入視差世界「([^」]+)」/);
+            if (m) out.push({ kind: 'in', name: m[1], at });
+            m = s.match(/從視差世界「([^」]+)」撤離/);
+            if (m) out.push({ kind: 'out', name: m[1], at });
+        };
+        const when = v => { if (typeof v === 'number') return v; const n = Date.parse(String(v || '')); return isNaN(n) ? 0 : n; };
+        try {
+            if (_pwa()) {
+                const db = _db();
+                if (!db || !db.getAllVnChapters) return null;
+                const sid = _cid();
+                const list = ((await db.getAllVnChapters()) || []).filter(c => c && c.storyId === sid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                list.forEach(c => add(c.request, c.createdAt || 0));
+                return out;
+            }
+            const R = win.VN_READER || window.VN_READER;
+            const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
+            if (!Array.isArray(msgs) || !msgs.length) return null;
+            msgs.forEach(m => { if (m && m.is_user) add(m.mes || m.message || '', when(m.send_date)); });
+            return out;
+        } catch (e) { return null; }
+    }
+    // 一趟一趟的時間：進門那則 → 撤離那則（或直接進了下一個世界）。[{ name, start, end }]；時間讀不到的那趟不算（寧可不收也別收錯）
+    function _closedTrips(marks) {
+        const out = [];
+        let open = null;
+        (marks || []).forEach(m => {
+            if (open && open.at && m.at) out.push({ name: open.name, start: open.at, end: m.at });
+            open = (m.kind === 'in') ? m : null;
+        });
+        return out;
+    }
+    // 這一趟從什麼時候開始（毫秒）：DIVE 那刻記的 K_TRIP；這版之前進去的沒記 → 聊天裡最後一次進這個世界那則的時間。認不出回 0
+    async function _tripSince(id) {
+        try { const rec = await _get(K_TRIP, null, _cid()); if (rec && rec.id === id && rec.at) return rec.at; } catch (e) {}
+        const w = await _worldById(id);
+        if (!w || !w.name) return 0;
+        let t = 0;
+        ((await _tripMarks()) || []).forEach(m => { if (m.kind === 'in' && m.name === w.name && m.at) t = m.at; });
+        return t;
+    }
+    async function _worldIdByName(name) {
+        const list = (await _get(K_WORLDS, [])) || [];
+        let hit = null;
+        list.forEach(w => { if (w && w.name === name && (!hit || (w.ts || 0) >= (hit.ts || 0))) hit = w; });
+        return hit ? hit.id : '~' + name;   // 世界已經刪了：用名字收著（刪掉的世界進不去，也就不會放回來）
+    }
+    let _packQ = Promise.resolve();   // 換世界、每輪確認、換聊天室可能同時叫：一次跑一個，免得兩邊同時搬同一包
+    function _syncWorldPacks(left) {
+        const job = _packQ.then(() => _syncWorldPacksNow(left));
+        _packQ = job.catch(() => {});
+        return job;
+    }
+    const _sweptNow = new Set();   // 這次開機已經認過舊資料的聊天室（讀不到聊天的那種下次開機再試，不要每輪重讀）
+    async function _syncWorldPacksNow(left) {
         const db = _db();
         if (!db || !db.getAllVarPacks || !db.saveVarPack || !db.deleteVarPack) return;
         const AD = win.OS_AVS_ADAPTER || window.OS_AVS_ADAPTER;
         const cid = (AD && AD.getCurrentChatId && AD.getCurrentChatId()) || _cid();
         if (!cid) return;
-        const id = await _getCurrentId();
-        const w = id ? await _worldById(id) : null;
+        const curId = await _getCurrentId();
+        const SR = win.OS_STATE_RUNTIME || window.OS_STATE_RUNTIME;
+        const fold = k => { const Z = win.OS_ZH || window.OS_ZH; return (Z && typeof Z.key === 'function') ? Z.key(String(k)) : String(k); };
+        let all = (await db.getAllVarPacks()) || [];
+        const mine = () => all.filter(p => p && p.chatId === cid);
+        const stow = (await _get(K_STOW, null, cid)) || {};
+        let stowDirty = false, packsChanged = false, valsChanged = false, force = !!left;
+
+        // ① 認主。剛結束的那一趟：進門之後建的包都算那個世界的
+        const claim = [];
+        if (left && left.id && left.since) {
+            mine().forEach(p => { if (!_packOwner(p, cid) && _packTs(p) >= left.since) claim.push({ p, world: left.id }); });
+        }
+        // 這版之前就撤離的（她 11-05 從留句塔回來那份）：照聊天裡進門、撤離那兩則的時間認，每個聊天室認一次
+        if (!left && !_sweptNow.has(cid)) {
+            const loose = mine().filter(p => !_packOwner(p, cid) && _packTs(p));
+            if (!loose.length || (await _get(K_STOW_SWEPT, 0, cid))) _sweptNow.add(cid);
+            else {
+                const marks = await _tripMarks();   // null＝還讀不到聊天（模組還沒載好）→ 下一輪再試
+                if (marks) _sweptNow.add(cid);
+                if (marks && !marks.some(m => !m.at)) {   // 有一則沒時間 → 這次不認（寧可不收也別收錯），下次開機再試
+                    const trips = _closedTrips(marks);
+                    for (const p of loose) {
+                        const ts = _packTs(p);
+                        const t = trips.find(x => ts >= x.start && ts <= x.end);
+                        if (t) claim.push({ p, world: await _worldIdByName(t.name) });
+                    }
+                    await _set(K_STOW_SWEPT, 1, cid);
+                }
+            }
+        }
+        for (const c of claim) {
+            c.p.wgOwn = { world: c.world, chat: cid };   // 認過就寫進包裡，之後不再靠時間猜
+            await db.saveVarPack(c.p);
+            force = true;
+        }
+
+        // ② 不屬於現在這個世界的 → 收起來：包從清單拿掉、它的面板先關（值在 ④ 跟著收）
+        // 面板模板一個可能幾百 KB：真的要收、要放回來才讀（每輪確認多半什麼都不用做）
+        let tplAll;
+        const tplList = async () => {
+            if (tplAll === undefined) { try { tplAll = (db.getAllUITemplates && db.saveUITemplate) ? ((await db.getAllUITemplates()) || []) : null; } catch (e) { tplAll = null; } }
+            return tplAll;
+        };
+        let tplChanged = false;
+        for (const p of mine()) {
+            const w = _packOwner(p, cid);
+            if (!w || w === curId) continue;
+            let rec = stow[w];
+            if (!rec) {
+                const ww = w.charAt(0) === '~' ? null : await _worldById(w);
+                rec = stow[w] = { name: ww ? ww.name : w.replace(/^~/, ''), at: Date.now(), packs: [], values: {}, tpls: [] };
+            }
+            rec.packs = (rec.packs || []).filter(x => x && x.id !== p.id).concat([p]);
+            if (await tplList()) {
+                for (const t of tplAll) {
+                    if (!t || t.packId !== p.id || !t.isActive) continue;
+                    t.isActive = false;
+                    await db.saveUITemplate(t);
+                    tplChanged = true;
+                    if ((rec.tpls || (rec.tpls = [])).indexOf(t.id) < 0) rec.tpls.push(t.id);
+                }
+            }
+            await db.deleteVarPack(p.id);
+            all = all.filter(x => x && x.id !== p.id);
+            stowDirty = packsChanged = force = true;
+        }
+
+        // ③ 回到收著的那個世界 → 放回來（包、面板、值；值只補現在沒有的欄位）
+        if (curId && stow[curId]) {
+            const rec = stow[curId];
+            for (const p of (rec.packs || [])) {
+                if (!p || all.some(x => x && x.id === p.id)) continue;
+                const back = Object.assign({}, p, { chatId: cid, wgOwn: { world: curId, chat: cid } });
+                await db.saveVarPack(back);
+                all.push(back);
+                packsChanged = true;
+            }
+            if (Array.isArray(rec.tpls) && rec.tpls.length && (await tplList())) {
+                for (const t of tplAll) {
+                    if (!t || rec.tpls.indexOf(t.id) < 0 || t.isActive) continue;
+                    t.isActive = true;
+                    await db.saveUITemplate(t);
+                    tplChanged = true;
+                }
+            }
+            if (SR && SR.putKeys && rec.values && Object.keys(rec.values).length) {
+                try { if (await SR.putKeys(rec.values, cid)) valsChanged = true; } catch (e) { console.warn('[Worldgate③] 狀態值沒放回去', e); }
+            }
+            delete stow[curId];
+            stowDirty = true;
+        }
+
+        // SN 收尾設計的那包：人在那個世界裡就替這個聊天室掛上（只掛定義：變數說明每一輪由 state_runtime 組進提示詞，第一章起抽狀態的副模型照說明填值）
+        const w = curId ? await _worldById(curId) : null;
         const vars = (w && w.plan && Array.isArray(w.plan.vars)) ? w.plan.vars.filter(v => v && v.name) : [];
         const want = vars.length ? 'pack_wg_' + w.id + '_' + cid : '';
-        const all = (await db.getAllVarPacks()) || [];
-        let changed = false;
-        for (const p of all) {
-            if (p && typeof p.id === 'string' && p.id.indexOf('pack_wg_') === 0 && p.chatId === cid && p.id !== want) { await db.deleteVarPack(p.id); changed = true; }
+        const snOld = curId ? 'pack_wg_' + curId + '_' + cid : '';
+        if (snOld && !want && all.some(p => p && p.id === snOld)) {   // 企劃的狀態欄被拿掉了
+            await db.deleteVarPack(snOld);
+            all = all.filter(p => p && p.id !== snOld);
+            packsChanged = true;
         }
         if (want) {
             const variables = vars.map(v => ({ name: String(v.name), type: v.type || 'string', defaultValue: v.defaultValue == null ? '' : String(v.defaultValue), desc: String(v.desc || '') }));
             const cur = all.find(p => p && p.id === want);
             if (!cur || JSON.stringify(cur.variables) !== JSON.stringify(variables)) {
-                await db.saveVarPack({ id: want, name: '世界門・' + w.name, chatId: cid, variables,
-                    notes: 'SN 企劃室收尾時替「' + w.name + '」設計的狀態欄。人在這個世界裡自動掛上，撤離或換到別的世界就收起來。' });
-                changed = true;
+                const pk = { id: want, name: '世界門・' + w.name, chatId: cid, variables, wgOwn: { world: w.id, chat: cid },
+                    notes: 'SN 企劃室收尾時替「' + w.name + '」設計的狀態欄。人在這個世界裡自動掛上，撤離或換到別的世界就收起來。' };
+                await db.saveVarPack(pk);
+                all = all.filter(p => p && p.id !== want).concat([pk]);
+                packsChanged = true;
             }
         }
-        if (changed) { try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {} }
+
+        // ④ 收著的世界那幾欄的值：現在沒有別的包在記的，從狀態裡整組收走（放進收著的那份，回去時放回來）。
+        //   每輪確認都會對一次：網頁版刪章重算、或晚一步的寫入把它們帶回來，下一輪又收走
+        if (SR && SR.takeKeys) {
+            const live = new Set();
+            all.forEach(p => { if (p && (!p.chatId || p.chatId === cid) && Array.isArray(p.variables)) p.variables.forEach(v => { if (v && v.name) live.add(fold(v.name)); }); });
+            let now = null;
+            if (!force) { try { const E = win._AVS_ENGINE || window._AVS_ENGINE; now = (E && E.read) ? (E.read() || {}) : null; } catch (e) {} }
+            const nowKeys = now ? new Set(Object.keys(now).map(fold)) : null;
+            for (const wid of Object.keys(stow)) {
+                if (wid === curId) continue;
+                const rec = stow[wid];
+                if (!rec.values || typeof rec.values !== 'object') rec.values = {};
+                const keys = new Set();
+                (rec.packs || []).forEach(p => (p && Array.isArray(p.variables) ? p.variables : []).forEach(v => { if (v && v.name) keys.add(String(v.name)); }));
+                Object.keys(rec.values).forEach(k => keys.add(k));
+                const take = Array.from(keys).filter(k => !live.has(fold(k)) && (!nowKeys || nowKeys.has(fold(k))));
+                if (!take.length) continue;
+                let got = {};
+                try { got = (await SR.takeKeys(take, cid)) || {}; } catch (e) { console.warn('[Worldgate③] 那個世界的狀態值沒收走', e); }
+                Object.keys(got).forEach(k => { if (!Object.prototype.hasOwnProperty.call(rec.values, k)) rec.values[k] = got[k]; });
+                if (Object.keys(got).length) { stowDirty = true; valsChanged = true; }
+            }
+        }
+
+        if (stowDirty) await _set(K_STOW, stow, cid);
+        if (tplChanged) {
+            try {
+                const A = win.OS_AVS || window.OS_AVS;
+                if (A && A.saveActiveTplCache && db.getAllUITemplates) A.saveActiveTplCache(((await db.getAllUITemplates()) || []).filter(t => t && t.isActive));
+            } catch (e) {}
+        }
+        if (packsChanged) { try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {} }
+        if (packsChanged || valsChanged || tplChanged) {
+            try { (win.OS_AVS_STATE || window.OS_AVS_STATE)?.refresh?.(); } catch (e) {}
+            const names = Object.keys(stow).map(k => stow[k] && stow[k].name).filter(Boolean);
+            console.log('[Worldgate③] 🧾 狀態欄跟著世界換好了：' + (curId ? '在「' + ((w && w.name) || curId) + '」' : '在奧瑞亞') + (names.length ? '；收著的：' + names.join('、') : ''));
+        }
     }
     // 舊資料搬家:把 global 那一格搬進「現在這個聊天室」，然後清掉。
     //   只做一次，其餘聊天室從乾淨狀態開始——所以絕不能在拿不到 chatId 時就清掉 global。
@@ -2924,6 +3144,7 @@
         } catch (e) {}
         await _syncFreeMode();
         try { await _syncWorldLamps(id, '每輪確認'); } catch (e) {}
+        try { await _syncWorldPacks(); } catch (e) {}   // 🧾 別的世界的狀態欄有沒有收好（舊資料第一次會在這裡認）
         try { await _upgradeAchvBlock(id); } catch (e) {}
         try { await _upgradePlanBlock(id); } catch (e) {}
     }
@@ -3031,6 +3252,7 @@
             try { await _syncWorldLamps(id, '換聊天室'); } catch (e) {}
             try { await syncTheme(); } catch (e) {}
             try { await _upgradePlanBlock(id); } catch (e) {}   // 舊世界的條目換上岔路標記說明（只做一次）
+            try { await _syncWorldPacks(); } catch (e) {}   // 🧾 這一室收著的狀態欄對一次（她打開那段聊天就會收好，不用等下一章）
         };
         // 延遲是等酒館把 chatId 切過去,太早讀到的還是上一個聊天室(同 vn_free_mode 的作法)
         win.eventOn(ev.CHAT_CHANGED, () => { setTimeout(_resync, 800); });
@@ -4262,7 +4484,7 @@
             planBackfill: 'done',   // 新世界從第一章就有標記，沒有舊章節要補亮
             // 🧑‍💼 白板企劃的岔路、結局、祕密：寫進條目最後面（在這個世界裡每一輪都送）。人物已經寫進世界檔案第九節
             //   同行旅人那欄也留著：第一批旅人沒召集到時，詳情頁「召集旅人」還要照它召
-            //   vars＝SN 收尾設計的狀態欄（人在這個世界裡掛成一包，見 _syncPlanPack）
+            //   vars＝SN 收尾設計的狀態欄（人在這個世界裡掛成一包，見 _syncWorldPacks）
             plan: plan ? { from: plan.id, title: plan.title || '', front: plan.front || '', nodes: plan.nodes || [], endings: plan.endings || [], secret: plan.secret || '', people: plan.people || [], travelers: plan.travelers || [],
                 vars: (plan.built && Array.isArray(plan.built.vars)) ? plan.built.vars : [], travHint: (plan.built && plan.built.travHint) || '',
                 built: !!(plan.built && plan.built.world) } : null,

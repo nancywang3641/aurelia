@@ -164,6 +164,32 @@
         } catch(e) { return ''; }
     }
 
+    // 🧳 這一段從哪裡開始（11-07）：同一個聊天室會在視差世界和奧瑞亞之間來回（DIVE 進去、撤離回來接著玩）。
+    //   「開頭劇情」要的是現在這一段的開頭，不是整個聊天室的第一則——她從留句塔撤離回奧瑞亞後按「開始追蹤狀態」，
+    //   照舊拿第一則會拿到留句塔的開場，生出來又是塔的欄位。
+    //   在世界裡＝最後一次進門那則起；回到奧瑞亞＝最後一次撤離回程那則起；回來了卻沒有回程那則（沒送出去）＝拿最近幾則。
+    //   認的是世界門開場／回程指令裡寫死的字（os_worldgate 的 _divePrompt／_returnPrompt）。沒進過世界門的照舊從第一則。
+    //   回 { from } 或 { tail:true }；list 照時間舊到新，textOf 取「她送出去的那段」（不是使用者那則就回空）
+    function _legRange(list, textOf) {
+        let lastIn = -1, lastOut = -1;
+        (list || []).forEach((x, i) => {
+            const t = String(textOf(x) || '');
+            if (!t) return;
+            if (/進入視差世界「[^」]+」/.test(t)) lastIn = i;
+            if (/從視差世界「[^」]+」撤離/.test(t)) lastOut = i;
+        });
+        if (lastIn < 0 && lastOut < 0) return { from: 0 };
+        let inPara = false;
+        try { const G = win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE; inPara = !!(G && G.isInParallax && G.isInParallax()); } catch (e) {}
+        if (inPara) return { from: Math.max(0, lastIn) };
+        if (lastOut > lastIn) return { from: lastOut };
+        return { tail: true };
+    }
+    function _legSlice(list, textOf) {
+        const r = _legRange(list, textOf);
+        return r.tail ? list.slice(-CONFIG.headMessages) : list.slice(r.from, r.from + CONFIG.headMessages);
+    }
+
     async function gatherHeadMessages() {
         // PWA：沒有酒館訊息樓層，對應物＝這本故事最早的幾章（request＝她輸入的，content＝AI 那一章）
         if (isStandalone()) {
@@ -171,9 +197,9 @@
                 if (!win.OS_DB?.getAllVnChapters) return '';
                 const sid = getChatId();
                 const all = await win.OS_DB.getAllVnChapters();
-                const mine = (all || []).filter(c => c && (!sid || c.storyId === sid))
-                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0))
-                    .slice(0, CONFIG.headMessages);
+                const sorted = (all || []).filter(c => c && (!sid || c.storyId === sid))
+                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                const mine = _legSlice(sorted, c => c.request);
                 if (!mine.length) return '';
                 return mine.map(ch => {
                     // 章節存的是整份劇本原文：剝掉思維鏈、只取 <content> 正文（同 os_api_engine 的取法）
@@ -188,6 +214,18 @@
                 return '';
             }
         }
+        // 酒館：讀整個聊天檔（繞過懶載入）找這一段從哪則開始；讀不到才退回舊的「前幾樓」
+        try {
+            const full = await win.VN_READER?.fetchFullChat?.();
+            const msgs = Array.isArray(full) ? full.filter(m => m && (m.mes != null || m.message != null)) : [];   // 讀檔版第一筆是表頭（沒有內文）
+            if (msgs.length) {
+                const leg = _legSlice(msgs, m => m.is_user ? (m.mes || m.message || '') : '');
+                if (leg.length) return leg.map(m => {
+                    const role = m.is_user ? 'USER' : (m.name || 'AI');
+                    return `[${role}] ${String(m.message || m.mes || '').slice(0, 600)}`;
+                }).join('\n\n');
+            }
+        } catch (e) { console.warn('[State Schema] 讀整個聊天失敗，改用前幾樓:', e); }
         try {
             if (!win.TavernHelper?.getChatMessages) return '';
             const last = await win.TavernHelper.getChatMessages(-1);

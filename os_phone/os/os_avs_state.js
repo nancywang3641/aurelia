@@ -778,6 +778,7 @@
             const copy = JSON.parse(JSON.stringify(src));
             copy.id = newPackId;
             copy.chatId = chatId;
+            delete copy.wgOwn;   // 「屬於哪個世界」是原本那個聊天室的事；搬過來是新的一包，世界門照這裡建的時間再認
             await win.OS_DB.saveVarPack(copy);
             let nRules = 0, nTpl = 0;
             try {   // 條件規則跟著變數包走（packId 綁定）
