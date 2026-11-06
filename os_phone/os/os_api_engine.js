@@ -41,6 +41,10 @@
     //   圖片 data URL → inline_data，網址圖片只留一行字。safetySettings 五類全 OFF（同酒館 src/constants.js GEMINI_SAFETY）。
     const GEMINI_SAFETY_OFF = ['HARM_CATEGORY_HARASSMENT', 'HARM_CATEGORY_HATE_SPEECH', 'HARM_CATEGORY_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_DANGEROUS_CONTENT', 'HARM_CATEGORY_CIVIC_INTEGRITY']
         .map(category => ({ category, threshold: 'OFF' }));
+    // Vertex 多幾類只有它認得的（圖片四類、越獄）：照酒館送 Vertex 那包一樣全關（11-07 對過她 TauriTavern 的呼叫記錄）。
+    //   Gemini API 那邊不認這幾類、送了會整通報錯，所以只有網址是 Vertex 才帶。
+    const GEMINI_SAFETY_OFF_VERTEX = GEMINI_SAFETY_OFF.concat(['HARM_CATEGORY_IMAGE_HATE', 'HARM_CATEGORY_IMAGE_DANGEROUS_CONTENT', 'HARM_CATEGORY_IMAGE_HARASSMENT', 'HARM_CATEGORY_IMAGE_SEXUALLY_EXPLICIT', 'HARM_CATEGORY_JAILBREAK']
+        .map(category => ({ category, threshold: 'OFF' })));
     function _toGeminiBody(messages, o) {
         o = o || {};
         const sys = [];
@@ -85,7 +89,7 @@
             else contents.push({ role, parts });
         }
         if (!contents.some(c => c.role === 'user')) contents.push({ role: 'user', parts: [{ text: "Let's get started." }] });
-        const body = { contents, safetySettings: GEMINI_SAFETY_OFF };
+        const body = { contents, safetySettings: o.vertex ? GEMINI_SAFETY_OFF_VERTEX : GEMINI_SAFETY_OFF };
         if (sys.length) body.systemInstruction = { parts: [{ text: sys.join('\n\n') }] };
         const gc = {};
         if (isFinite(o.temperature)) gc.temperature = o.temperature;
@@ -105,6 +109,51 @@
         let s = String(url || '').replace(/\/+$/, '').replace(/\/chat\/completions$/, '');
         s = (fmt === 'gemini') ? s.replace(/\/v1beta.*$/, '') : s.replace(/\/messages$/, '');
         return s.replace(/\/v1$/, '').replace(/\/+$/, '');
+    }
+
+    // 🟦 Vertex（Google Cloud 上的 Gemini，11-07 接）：網頁版沒有酒館後端拿服務帳號那把鑰匙換通行證，
+    //   所以只接 Vertex 自己發的「API 金鑰」（酒館 Vertex 設定裡叫 express 的那種）。請求格式選「Gemini 原生」、
+    //   網址填 https://aiplatform.googleapis.com 就好；照 Cloud 主控台抄的長網址（帶 /projects/…/locations/…）也認，照留。
+    //   body、回應跟 Gemini 原生一樣，只有網址不同：…/v1[/projects/P/locations/L]/publishers/google/models/{模型}:generateContent
+    function _isVertexUrl(url) { return /^https?:\/\/([a-z0-9-]+-)?aiplatform\.googleapis\.com(\/|$)/i.test(String(url || '').trim()); }
+    function _vertexRoot(url) {
+        const s = String(url || '').trim();
+        const host = (s.match(/^https?:\/\/[^/]+/i) || ['https://aiplatform.googleapis.com'])[0];
+        const pl = s.match(/\/projects\/([^/?#]+)\/locations\/([^/?#]+)/);
+        return { host, scope: pl ? '/projects/' + pl[1] + '/locations/' + pl[2] : '' };
+    }
+    // Vertex 不收一般的 API 金鑰（11-07 用假金鑰從瀏覽器打過：回 401「API keys are not supported by this API」），
+    //   要「綁在服務帳號上」的那種。看到這句就補一行中文，告訴她換哪種金鑰
+    function _vertexHint(url, msg) {
+        return (_isVertexUrl(url) && /API keys are not supported/i.test(String(msg || '')))
+            ? msg + '\n→ Vertex 只收「綁在服務帳戶上」的 API 金鑰：Google Cloud 建金鑰時勾「透過服務帳戶驗證 API 呼叫」，選有 Vertex 權限的那個服務帳戶。'
+            : msg;
+    }
+    // 模型名她可能貼成 models/xxx 或 publishers/google/models/xxx：只留最後那段
+    function _geminiModelId(model) { return String(model || '').trim().replace(/^.*\/models\//, '').replace(/^models\//, ''); }
+    // Gemini 原生「生一篇」的網址（Gemini API 和 Vertex 兩種）：送生成、設置頁測試共用這一支
+    function _geminiGenUrl(url, model, key) {
+        const m = encodeURIComponent(_geminiModelId(model)), k = encodeURIComponent(String(key || ''));
+        if (_isVertexUrl(url)) { const r = _vertexRoot(url); return r.host + '/v1' + r.scope + '/publishers/google/models/' + m + ':generateContent?key=' + k; }
+        return _nativeBase('gemini', url) + '/v1beta/models/' + m + ':generateContent?key=' + k;
+    }
+    // Gemini 原生的模型清單（設置頁「拉模型」主副兩顆共用）→ 名字陣列。Vertex 只列 gemini 開頭的（Google 那份清單還有圖片、語音一大堆）
+    async function _geminiModelList(url, key) {
+        const k = String(key || '');
+        if (_isVertexUrl(url)) {
+            const r = _vertexRoot(url);
+            const res = await fetch(r.host + '/v1beta1/publishers/google/models?pageSize=200&key=' + encodeURIComponent(k), { method: 'GET', headers: { 'x-goog-api-key': k } });
+            if (!res.ok) {
+                const err = await res.json().catch(() => null);
+                throw new Error(_vertexHint(url, 'Vertex 的金鑰拉不到模型清單（' + res.status + (err && err.error && err.error.message ? '：' + err.error.message : '') + '），模型名請直接打，例如 gemini-2.5-flash'));
+            }
+            const data = await res.json();
+            return (data.publisherModels || []).map(m => _geminiModelId((m && m.name) || '')).filter(id => /^gemini/i.test(id));
+        }
+        const res = await fetch(_nativeBase('gemini', url) + '/v1beta/models?key=' + encodeURIComponent(k), { method: 'GET', headers: { 'x-goog-api-key': k } });
+        if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
+        const data = await res.json();
+        return (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
     }
 
     // OpenAI 形狀的 messages → Anthropic 原生（POST /v1/messages）body。
@@ -1029,6 +1078,7 @@
     win.OS_API = {
 
         nativeBase: _nativeBase,   // 原生格式的根網址（見 _nativeBase）：設置頁測試、拉清單跟送生成同一套剝法
+        geminiGenUrl: _geminiGenUrl, geminiModelList: _geminiModelList, isVertexUrl: _isVertexUrl, vertexHint: _vertexHint,   // Gemini 原生／Vertex 的網址（設置頁測試、拉模型清單跟送生成同一套）
 
         // 🔑 自己填網址那幾條的請求標頭。Anthropic 官方（api.anthropic.com）不認網頁直接連：
         //    沒帶 anthropic-dangerous-direct-browser-access 會被 CORS 擋成「Failed to fetch」，帶了才回正常的錯誤或結果。
@@ -1921,8 +1971,9 @@
                     // ── Gemini 原生格式：POST /v1beta/models/{model}:generateContent ──
                     //   接 Gemini CLI 的公益站（例如 gcli 那類）走 OpenAI 相容格式時不吃 Google 的安全欄位，R18 整段被過濾回空；
                     //   原生格式的 safetySettings 它會照轉，跟酒館用 Google 來源送過去的一樣。串流先不做，整篇回來再給。
-                    const _gUrl = _nativeBase('gemini', config.url) + '/v1beta/models/' + encodeURIComponent(String(config.model || '')) + ':generateContent?key=' + encodeURIComponent(String(config.key || ''));
-                    const _gBody = _toGeminiBody(cleanMessages, { temperature, maxTokens, top_p, thinking: !!config.enableThinking, budget: parseInt(config.thinkingBudget) || 0 });
+                    //   網址是 Vertex（aiplatform.googleapis.com）的話照 Vertex 的路徑送、多關幾類它才有的過濾（見 _geminiGenUrl）
+                    const _gUrl = _geminiGenUrl(config.url, config.model, config.key);
+                    const _gBody = _toGeminiBody(cleanMessages, { temperature, maxTokens, top_p, thinking: !!config.enableThinking, budget: parseInt(config.thinkingBudget) || 0, vertex: _isVertexUrl(config.url) });
                     const _gResp = await fetch(_gUrl, {
                         method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(config.key || '') },
                         body: _keepReq(_safeJson(_gBody)),
@@ -1930,7 +1981,7 @@
                     });
                     const _gData = await _gResp.json();
                     rawApiResponse = _gData;
-                    if (!_gResp.ok && _gData && _gData.error) throw new Error('HTTP ' + _gResp.status + '：' + (_gData.error.message || JSON.stringify(_gData.error)));
+                    if (!_gResp.ok && _gData && _gData.error) throw new Error(_vertexHint(config.url, 'HTTP ' + _gResp.status + '：' + (_gData.error.message || JSON.stringify(_gData.error))));
                     fullText = normalizeResponse(_gData, _keepFences);
                 } else {
                     let targetUrl = config.url.replace(/\/$/, '');

@@ -13,7 +13,7 @@
         if (!A || !A.registerHelp) return false;
         A.registerHelp({
             ss_1249: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
-            ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。\n接 Claude 官方（或支援 Claude 格式的站）選 Claude 原生：同一段開頭再送一次時會讀緩存，比較省。OpenAI 相容這個格式接 Claude 沒有緩存。' },
+            ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。\n接 Claude 官方（或支援 Claude 格式的站）選 Claude 原生：同一段開頭再送一次時會讀緩存，比較省。OpenAI 相容這個格式接 Claude 沒有緩存。\n用 Google Cloud 的 Vertex：選「Gemini 原生／Vertex」，API 地址填 https://aiplatform.googleapis.com，Key 填「綁在服務帳戶上」的 API 金鑰（Google Cloud 建金鑰時勾「透過服務帳戶驗證 API 呼叫」，選有 Vertex 權限的那個服務帳戶；一般的金鑰 Vertex 不收），模型名照 Vertex 上的寫（例如 gemini-2.5-flash）。下載下來的那種 JSON 鑰匙檔網頁版用不了，只有酒館收。' },
             ss_1278: { title: '自訂前置指令', body: '這段會放在主模型每次收到的訊息最前面。直連、托管、酒館連線都有效；用酒館連線時每個連接預設各記一份。\n留空就不放。' },
             ss_1298: { title: '注入 Preset 自訂條目', body: '把你挑的那個 Preset 裡自己寫的條目，放進主模型的指令裡。要裝酒館助手才有。' },
             ss_1354: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
@@ -1333,7 +1333,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-label">請求格式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1269') : ''}</div>
                             <select class="set-select" id="os-api-format">
                                 <option value="openai" ${(llmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
-                                <option value="gemini" ${llmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
+                                <option value="gemini" ${llmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生／Vertex</option>
                                 <option value="anthropic" ${llmConfig.apiFormat === 'anthropic' ? 'selected' : ''}>Claude 原生（有緩存）</option>
                             </select>
                         </div>
@@ -1441,7 +1441,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="set-label">請求格式${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1381') : ''}</div>
                             <select class="set-select" id="sec-api-format">
                                 <option value="openai" ${(secLlmConfig.apiFormat || 'openai') === 'openai' ? 'selected' : ''}>OpenAI 相容（多數站）</option>
-                                <option value="gemini" ${secLlmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生</option>
+                                <option value="gemini" ${secLlmConfig.apiFormat === 'gemini' ? 'selected' : ''}>Gemini 原生／Vertex</option>
                                 <option value="anthropic" ${secLlmConfig.apiFormat === 'anthropic' ? 'selected' : ''}>Claude 原生（有緩存）</option>
                             </select>
                         </div>
@@ -2849,7 +2849,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             + '<input class="set-input ch-key" type="password" placeholder="金鑰" value="' + esc(c.key) + '">'
                             + '<input class="set-input ch-model" placeholder="模型名稱" value="' + esc(c.model) + '">'
                             // 請求格式：以前通道沒有這格、偷偷照主模型那頁的；舊通道沒存過就顯示主模型那頁的（就是它一直在用的），改了才存
-                            + '<select class="set-select ch-fmt">' + [['openai', 'OpenAI 相容（多數站）'], ['gemini', 'Gemini 原生'], ['anthropic', 'Claude 原生（有緩存）']].map(function (f) { return '<option value="' + f[0] + '"' + ((c.apiFormat || loadLlmConfig().apiFormat || 'openai') === f[0] ? ' selected' : '') + '>' + f[1] + '</option>'; }).join('') + '</select>'
+                            + '<select class="set-select ch-fmt">' + [['openai', 'OpenAI 相容（多數站）'], ['gemini', 'Gemini 原生／Vertex'], ['anthropic', 'Claude 原生（有緩存）']].map(function (f) { return '<option value="' + f[0] + '"' + ((c.apiFormat || loadLlmConfig().apiFormat || 'openai') === f[0] ? ' selected' : '') + '>' + f[1] + '</option>'; }).join('') + '</select>'
                             + '<div class="set-channel-row">'
                             +   '<input class="set-input ch-max" type="number" min="256" step="256" placeholder="最大輸出" value="' + esc(c.maxTokens || '') + '">'
                             +   '<input class="set-input ch-temp" type="number" min="0" max="2" step="0.05" placeholder="溫度" value="' + esc(c.temperature == null ? '' : c.temperature) + '">'
@@ -3947,13 +3947,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const key = elKey.value.trim();
                     if (!url) throw new Error("請輸入 API 地址");
                     const _fmt = (container.querySelector('#os-api-format') || {}).value || 'openai';
-                    // Gemini 原生格式：清單在 /v1beta/models?key=，名字是 models/xxx
+                    // Gemini 原生格式（含 Vertex 的金鑰）：清單照送生成同一套網址規則拉（OS_API.geminiModelList）
                     if (_fmt === 'gemini') {
-                        const base = window.OS_API.nativeBase('gemini', url);   // 跟送生成同一套剝法
-                        const res = await fetch(base + '/v1beta/models?key=' + encodeURIComponent(key), { method: 'GET', headers: { 'x-goog-api-key': key } });
-                        if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
-                        const data = await res.json();
-                        const models = (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
+                        const models = await window.OS_API.geminiModelList(url, key);
                         if (!models.length) throw new Error("API 返回了空列表");
                         // 一次組好再指派（一項一項 += 每次都整個選單重建，幾百個模型會很慢）；名字是站方給的，要轉義
                         elModel.innerHTML = models.map(id => `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`).join('');
@@ -4014,13 +4010,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     
                     if (!url) throw new Error("請輸入副模型 API 地址");
                     const _fmt = isSync ? ((container.querySelector('#os-api-format') || {}).value || 'openai') : ((container.querySelector('#sec-api-format') || {}).value || 'openai');
-                    // Gemini 原生格式：清單在 /v1beta/models?key=，名字是 models/xxx
+                    // Gemini 原生格式（含 Vertex 的金鑰）：清單照送生成同一套網址規則拉（OS_API.geminiModelList）
                     if (_fmt === 'gemini') {
-                        const base = window.OS_API.nativeBase('gemini', url);   // 跟送生成同一套剝法
-                        const res = await fetch(base + '/v1beta/models?key=' + encodeURIComponent(key), { method: 'GET', headers: { 'x-goog-api-key': key } });
-                        if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
-                        const data = await res.json();
-                        const models = (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
+                        const models = await window.OS_API.geminiModelList(url, key);
                         if (!models.length) throw new Error("API 返回了空列表");
                         secModel.innerHTML = models.map(id => `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`).join('');
                         status.innerText = `副模型列表更新成功 (${models.length})`;
@@ -4345,10 +4337,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const base = win.OS_API.nativeBase(cfg.apiFormat, cfg.url);
                     let res;
                     if (cfg.apiFormat === 'gemini') {
-                        const gUrl = base + '/v1beta/models/' + encodeURIComponent(String(modelVal || '')) + ':generateContent?key=' + encodeURIComponent(String(cfg.key || ''));
+                        const gUrl = win.OS_API.geminiGenUrl(cfg.url, modelVal, cfg.key);   // 跟送生成同一支（Vertex 的網址也在裡面分）
                         res = await fetch(gUrl, {
                             method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(cfg.key || '') },
-                            body: JSON.stringify(win.OS_TO_GEMINI_BODY(msgs, { maxTokens: 50 }))
+                            body: JSON.stringify(win.OS_TO_GEMINI_BODY(msgs, { maxTokens: 50, vertex: win.OS_API.isVertexUrl(cfg.url) }))
                         });
                     } else {
                         const aUrl = base + '/v1/messages';
@@ -4358,7 +4350,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         });
                     }
                     const data = await res.json().catch(() => null);
-                    if (!res.ok) throw new Error(`HTTP ${res.status}: ` + ((data && data.error && (data.error.message || JSON.stringify(data.error))) || res.statusText));
+                    if (!res.ok) throw new Error(win.OS_API.vertexHint(cfg.url, `HTTP ${res.status}: ` + ((data && data.error && (data.error.message || JSON.stringify(data.error))) || res.statusText)));
                     replyText = (cfg.apiFormat === 'gemini'
                         ? ((data?.candidates?.[0]?.content?.parts) || []).filter(p => p && !p.thought).map(p => p.text || '').join('')
                         : ((data?.content) || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(''))
