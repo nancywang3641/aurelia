@@ -2974,6 +2974,7 @@
     win.OS_AVS = {
         launch: launchApp,
         updatesBtnHtml, openUpdates, bindUpdatesBtn,   // 🔬 狀態面板右上角「本輪更新」鈕＋小窗（資訊中心／資料中心共用）
+        updList: _updList,   // 📜 同一份「本輪更新了什麼」給章末簡報卡的「狀態變化」那欄（{ n, rows:[{k,v}], empty }，字還沒轉義）
         // 共用渲染引擎：給 vn_inspect 資訊中心、酒館資訊中心共用，保證兩邊一致。對外這份已經消毒好（值轉義＋面板過 AUI.safeHtml），拿去直接放
         renderTemplate: function (html, state, packVars, fmt, avatarMap) { return _avsSafe(_avsRenderTemplate(html, state, packVars, fmt, avatarMap)); },
         renderEntityCard: _avsRenderEntityCard,   // 只畫某一個角色那張卡(async)：劇情雙擊立繪的角色卡用

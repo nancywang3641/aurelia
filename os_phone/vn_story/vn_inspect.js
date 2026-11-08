@@ -107,6 +107,11 @@
                 }
                 if (this._wantTab === 'threads') tBtn.click();
             }
+            // 📜 章末簡報卡指名要的那頁（11-09）：'card'＝角色卡作者做的第一頁、'avs'＝狀態
+            if (this._wantTab === 'card' || this._wantTab === 'avs') {
+                const b = tabBar.querySelector(this._wantTab === 'card' ? '[data-tab^="card"]' : '[data-tab="avs"]');
+                if (b) b.click();
+            }
             this._wantTab = null;
             // 💰 錢包分頁已移除：OS_ECONOMY 早就退役到 _archive/dead-code、任何載入清單都不再載它，
             //    這頁在畫面上永遠只有一行「OS_ECONOMY 未載入」。經濟現在是 OS_PT（視差城市 PT）那一套。
@@ -155,6 +160,7 @@
         _addTab(tabBar, contentArea, id, name, html, active, onShow) {
             const btn = document.createElement('div');
             btn.className = 'ue-tab-item' + (active ? ' active' : '');
+            btn.dataset.tab = id;
             btn.textContent = name;
             const pane = document.createElement('div');
             pane.className = 'ue-tab-pane' + (active ? ' active' : '');
@@ -184,6 +190,10 @@
             const worldId = CR.currentWorldId();
             try { await CR.getPack(worldId); } catch (e) {}   // cardsIn 是同步取用 → 先確定正則庫已從 IDB 讀進記憶體
             try { return CR.cardsIn(raw, worldId) || []; } catch (e) { console.warn('[Archive] 卡片面板解析失敗', e); return []; }
+        },
+        // 📜 章末簡報卡問：這一章角色卡作者做了哪幾頁（只要名字，給「角色卡畫面」那塊小牌子）
+        async peekCardPanels() {
+            try { return (await this._cardPanels()).map(c => ({ title: String(c.title || '').trim() || '自定義面板' })); } catch (e) { return []; }
         },
 
         // 只掛「現在在看的那一張」：面板是完整 HTML 文件(iframe)，自帶 BGM 的卡片

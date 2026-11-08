@@ -109,6 +109,9 @@
         .caltd-empty { padding: 34px 20px 26px; text-align: center; color: #b9b2a3; font-size: 14px; }
         .caltd-empty i { display: block; font-size: 26px; color: rgba(212,175,55,.5); margin-bottom: 10px; }
         .caltd-empty-sub { margin-top: 6px; font-size: 12px; color: #8f887b; line-height: 1.6; }
+        /* 畫進章末簡報卡旁邊那一欄（todayInto）：不是浮起來的小卡，框線、陰影、進場動畫、關閉鈕都交給那欄 */
+        .caltd-card.caltd-inline { width: 100%; max-height: none; height: 100%; border: none; border-radius: 0; background: transparent; box-shadow: none; animation: none; cursor: auto; }
+        .caltd-inline .caltd-x { display: none; }
     `;
     function injectCss(d) {
         if (!d || d.getElementById('os-calendar-css')) return;
@@ -418,6 +421,17 @@
         if (_todayEl !== mask) return;
         paintToday(mask, st);
     }
+    // 📜 同一張「今天的行程」畫進別人給的格子（11-09 章末簡報卡旁邊那一欄）：不疊遮罩、不要關閉鈕（那欄自己有返回）
+    async function todayInto(host) {
+        if (!host) return false;
+        if (!S()) { host.innerHTML = '<div class="caltd-card caltd-inline"><div class="caltd-body"><div class="caltd-empty">日曆還在載入，等一下再按</div></div></div>'; return false; }
+        injectCss(host.ownerDocument || doc);
+        host.innerHTML = '<div class="caltd-card caltd-inline"><div class="caltd-body"><div class="caltd-empty">讀取中…</div></div></div>';
+        const st = await S().load();
+        if (!host.isConnected) return false;
+        paintToday(host, st);
+        return true;
+    }
 
     async function launch(container) {
         if (!container) return;
@@ -440,7 +454,7 @@
         if (_todayEl === el) paintToday(el, st);
     }); } catch (e) {}
 
-    win.OS_CALENDAR = { launch: launch, openToday: openToday, closeToday: closeToday };
+    win.OS_CALENDAR = { launch: launch, openToday: openToday, closeToday: closeToday, todayInto: todayInto };
     if (win !== window) window.OS_CALENDAR = win.OS_CALENDAR;
 
     // 登記進手機（跟微博同一條路：PhoneSystem.install → __PHONE_APPS，手機殼與 PWA 都從那裡開）

@@ -1458,6 +1458,87 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         @media (prefers-reduced-motion: reduce) { #vn-end-basic.vne-brief .vne-badge, #vn-end-basic.vne-brief #vn-end-btn-go::after { animation: none; } }
 
+        /* ═══ 📜 簡報卡旁邊那一欄（11-09 她選「旁邊多一欄」，小樣在本機 參考資料/VN_END_ONEGO_LAB.html）═══
+           線索、今天的行程、狀態變化、日誌在 #vn-end-side 打開（vn_end_brief.js 填內容），卡片什麼都不被蓋住：
+             寬（720 以上）：卡片往左讓、右邊多一欄，跟卡片一樣高（--vne-card-h 是 JS 量的卡片高）
+             窄（719 以下）：卡片縮成一條貼底（章名＋繼續），這欄拿上面整塊（線索的關係圖和新線索演出要地方）
+           打開時卡片掛 .vne-side-open；這欄 .vne-side-on 出現、下一格 .vne-side-in 淡進來 */
+        #vn-end-basic, #vn-end-side {
+            --vne-wc: min(600px, calc(58cqw - 28px));
+            --vne-ws: min(420px, calc(100cqw - var(--vne-wc) - 48px));
+            --vne-m: calc((100cqw - var(--vne-wc) - 16px - var(--vne-ws)) / 2);
+        }
+        #vn-end-basic.vne-brief { transition: left 0.38s cubic-bezier(.2,.8,.2,1); }
+        #vn-end-side { position: absolute; display: none; flex-direction: column; box-sizing: border-box; overflow: hidden; pointer-events: auto; z-index: 2;
+            color: #efe6cf; font-family: var(--font-classic); text-align: left;
+            background: linear-gradient(180deg, rgba(24,19,10,0.97), rgba(9,8,8,0.98));
+            border: 1px solid rgba(212,175,55,0.55); box-shadow: 0 0 0 1px rgba(0,0,0,0.55), 0 20px 60px rgba(0,0,0,0.6);
+            opacity: 0; transition: opacity 0.3s, transform 0.38s cubic-bezier(.2,.8,.2,1); }
+        #vn-end-side.vne-side-on { display: flex; }
+        #vn-end-side.vne-side-in { opacity: 1; transform: none; }
+        #vn-end-side .vne-side-back { position: absolute; top: 12px; left: 12px; z-index: 3; width: 34px; height: 34px; margin: 0; padding: 0; border-radius: 50%;
+            display: grid; place-items: center; cursor: pointer; font-size: 13px; color: #d4af37; border: 1px solid rgba(212,175,55,0.5); background: rgba(20,16,9,0.9); box-shadow: none; }
+        #vn-end-side .vne-side-back:hover { border-color: #d4af37; box-shadow: 0 0 12px rgba(212,175,55,0.35); }
+        #vn-end-side .vne-side-body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+        /* 自己畫的那幾頁（狀態變化、日誌）：標題排在返回鍵右邊 */
+        #vn-end-side .vne-sh { flex: none; display: flex; align-items: baseline; gap: 10px; padding: 19px 16px 12px 58px; border-bottom: 1px solid rgba(212,175,55,0.22); }
+        #vn-end-side .vne-sh-t { font-size: 16px; font-weight: 600; letter-spacing: 0.18em; color: #f3d98b; }
+        #vn-end-side .vne-sh-s { margin-left: auto; font-size: 12px; color: #a8a08a; }
+        #vn-end-side .vne-sc { flex: 1; min-height: 0; overflow-y: auto; padding: 10px 16px 14px; scrollbar-width: thin; scrollbar-color: rgba(212,175,55,0.35) transparent; }
+        #vn-end-side .vne-chg { display: flex; align-items: baseline; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(212,175,55,0.1); font-size: 14px; }
+        #vn-end-side .vne-chg-k { flex: 1; min-width: 0; color: #a8a08a; font-size: 13px; overflow-wrap: anywhere; }
+        #vn-end-side .vne-chg-v { flex: none; max-width: 55%; text-align: right; overflow-wrap: anywhere; }
+        #vn-end-side .vne-jr { padding: 10px 0; border-bottom: 1px solid rgba(212,175,55,0.1); }
+        #vn-end-side .vne-jr-d { font-size: 12px; color: #a8a08a; letter-spacing: 0.12em; }
+        #vn-end-side .vne-jr-t { margin-top: 4px; font-size: 14px; line-height: 1.8; color: #ddd3bb; white-space: pre-wrap; overflow-wrap: anywhere; }
+        #vn-end-side .vne-empty { padding: 36px 10px; text-align: center; color: #a8a08a; font-size: 14px; line-height: 1.7; }
+        #vn-end-side .vne-empty small { display: block; margin-top: 6px; font-size: 12px; color: #7d776a; }
+        #vn-end-side .vne-side-more { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; margin: 12px 0 2px; padding: 9px;
+            border: 1px dashed rgba(212,175,55,0.35); border-radius: 0; background: none; color: #d9cfb6; font: inherit; font-size: 13px; cursor: pointer; box-shadow: none; }
+        #vn-end-side .vne-side-more i { color: #d4af37; font-size: 11px; }
+        /* 線索那頁＝正式的線索頁（OS_STORY_THREADS.mountInto，新線索演出照舊在這裡播）：標題讓出返回鍵的位子，清單自己捲 */
+        #vn-end-side .sthr-embed { flex: 1; min-height: 0; height: 100%; border-radius: 0; background: transparent; padding-top: 18px; }
+        #vn-end-side .sthr-embed .sthr-head { padding-left: 58px; }
+        /* 今天的行程＝日曆那張小卡（OS_CALENDAR.todayInto）：標題讓出返回鍵的位子 */
+        #vn-end-side .caltd-card { flex: 1; min-height: 0; }
+        #vn-end-side .caltd-head { padding-left: 58px; }
+
+        /* 簡報卡上的小牌子三塊以上：排成兩欄 */
+        #vn-end-basic.vne-brief .vne-tiles.vne-tiles-grid { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #vn-end-basic.vne-brief .vne-tile.vne-on, #vn-end-basic.vne-brief .vne-ents button.vne-on .vne-ring { border-color: #d4af37; box-shadow: 0 0 16px rgba(212,175,55,0.35); }
+        /* 角色卡作者做的畫面：粉色小牌子，點了整頁開資料中心那一頁（照作者原本的樣子） */
+        #vn-end-basic.vne-brief .vne-tile.vne-tile-card { border-color: rgba(232,150,180,0.45); background: linear-gradient(180deg, rgba(232,150,180,0.1), rgba(232,150,180,0.02)); }
+        #vn-end-basic.vne-brief .vne-tile.vne-tile-card .vne-orb { border-color: rgba(232,150,180,0.8); color: #f6c3d6; background: radial-gradient(circle, rgba(232,150,180,0.28), rgba(232,150,180,0.04) 70%); }
+        #vn-end-basic.vne-brief .vne-tile > .fa-up-right-from-square { margin-left: auto; color: #8a6a22; font-size: 11px; }
+        @container vneo (max-width: 600px) { #vn-end-basic.vne-brief .vne-tile > .fa-up-right-from-square { display: none; } }
+
+        @container vneo (min-width: 720px) {
+            #vn-end-basic.vne-brief.vne-side-open { width: var(--vne-wc); left: calc(var(--vne-m) + var(--vne-wc) / 2); }
+            #vn-end-side { top: 50%; left: calc(var(--vne-m) + var(--vne-wc) + 16px); width: var(--vne-ws); height: var(--vne-card-h, 70%); max-height: calc(100% - 24px);
+                translate: 0 -50%; transform: translateX(-24px); }
+        }
+        @container vneo (max-width: 719px) {
+            #vn-end-basic.vne-brief.vne-side-open { top: auto; bottom: 0; left: 0; width: 100%; translate: none; border-width: 1px 0 0; border-radius: 18px 18px 0 0;
+                padding: 16px 20px calc(14px + env(safe-area-inset-bottom, 0px)); }
+            #vn-end-basic.vne-brief.vne-side-open::before { border-radius: 13px 13px 0 0; border-bottom: none; }
+            #vn-end-basic.vne-brief.vne-side-open .vne-bl, #vn-end-basic.vne-brief.vne-side-open .vne-br,
+            #vn-end-basic.vne-brief.vne-side-open .vne-meta, #vn-end-basic.vne-brief.vne-side-open .vne-divider,
+            #vn-end-basic.vne-brief.vne-side-open .vne-sum, #vn-end-basic.vne-brief.vne-side-open .vne-tiles,
+            #vn-end-basic.vne-brief.vne-side-open .vne-ents, #vn-end-basic.vne-brief.vne-side-open .vne-foot { display: none; }
+            #vn-end-basic.vne-brief.vne-side-open .vne-title { font-size: 18px; margin: 2px 0 10px; }
+            /* 上緣讓開右上角那排系統鍵（退出／設定／手機，z-index 比這層高，疊上來會壓到線索頁的開關） */
+            #vn-end-side { left: 10px; right: 10px; top: calc(64px + env(safe-area-inset-top, 0px)); bottom: calc(var(--vne-card-h, 160px) + 10px); border-radius: 14px; transform: translateY(-14px); }
+            body.layout-pad-ios #vn-end-side { top: 98px; }
+        }
+        /* 手機直放（480 以下）系統鍵直排在右上角、到 120px 左右才結束 */
+        @media (max-width: 480px) {
+            @container vneo (max-width: 719px) {
+                #vn-end-side { top: calc(124px + env(safe-area-inset-top, 0px)); }
+                body.layout-pad-ios #vn-end-side { top: 166px; }
+            }
+        }
+        @media (prefers-reduced-motion: reduce) { #vn-end-basic.vne-brief, #vn-end-side { transition: none; } }
+
         #text-panel {
             backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
             padding: 40px 50px; position: relative; min-height: 140px;

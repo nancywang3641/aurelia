@@ -2883,6 +2883,9 @@
                         journal: () => _openPhoneAppAboveVN('journal'),
                         // 🧵 線索帳搬進資料中心當一頁（10-13 她：跟狀態、選擇放同一個窗）；有人按到線索就直接開到那頁
                         threads: () => _actData({ tab: 'threads' }),
+                        // 📜 章末簡報卡（11-09）：「角色卡畫面」小牌子＝資料中心開到角色卡作者做的第一頁；「狀態變化」那欄底下＝開到狀態
+                        card: () => _actData({ tab: 'card' }),
+                        avs: () => _actData({ tab: 'avs' }),
                         // 📅 日曆：只看今天的行程（10-13 她：「簡化成當天的行程表就好，不需要到每日」）；整個月、自己加一筆在手機上的日曆 app
                         calendar: () => {
                             const C = win.OS_CALENDAR || window.OS_CALENDAR;

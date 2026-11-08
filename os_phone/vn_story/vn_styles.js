@@ -192,6 +192,12 @@
                         </div>
                         <div class="vne-foot"><button id="vn-end-btn-regen" type="button"><i class="fa-solid fa-rotate"></i> 重新生成</button></div>
                     </div>
+                    <!-- 📜 簡報卡旁邊那一欄（11-09 她選「旁邊多一欄」）：線索、今天的行程、狀態變化、日誌在這裡打開，不跳窗。
+                         寬的畫面在卡片右邊；窄的畫面卡片縮成一條（章名＋繼續），這欄拿上面整塊。內容由 vn_end_brief.js 填 -->
+                    <div id="vn-end-side">
+                        <button type="button" class="vne-side-back" title="返回"><i class="fa-solid fa-chevron-left"></i></button>
+                        <div class="vne-side-body"></div>
+                    </div>
                 </div>
 
                 <div id="vn-log-overlay">

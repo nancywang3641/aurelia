@@ -250,7 +250,9 @@
 
             if (this._scanning) return;   // 防連點刷新疊兩條等待迴圈
             this._scanning = true;
-            const wantThreads = this._wantTab === 'threads' || this.activeTab === 'aurelia_threads';   // 指名要線索、或上次停在線索
+            // 📜 章末簡報卡指名要的那頁（11-09）：'card'＝角色卡作者做的第一頁、'avs'＝狀態面板；有指名就不跳回上次停的線索
+            const wantTab = this._wantTab;
+            const wantThreads = wantTab === 'threads' || (!wantTab && this.activeTab === 'aurelia_threads');   // 指名要線索、或上次停在線索
             this._wantTab = null;
             contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
                 <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-hourglass-half"></i></div>讀取劇情數據中...
@@ -342,15 +344,36 @@
                 this.createTab(id, extractedData[id].name, extractedData[id].html.join(''));
             });
 
-            if (!this.activeTab || !tabOrder.includes(this.activeTab)) {
+            if (wantTab === 'card' || !this.activeTab || !tabOrder.includes(this.activeTab)) {
                 this.activeTab = tabOrder[0];
             }
             this.switchTab(this.activeTab);
 
             // 異步注入「狀態面板」固定 tab（從展廳啟用的 UI 模板渲染 + 當前變數值）
             // chatId-aware：不同 chat 對應不同 pack 的 active 模板
-            this._injectStatePanelTab().catch(e => console.warn('[Extractor] 狀態面板注入失敗:', e));
+            this._injectStatePanelTab().then(() => {
+                const ov = doc.getElementById('aurelia-extractor-phone-overlay');
+                if (wantTab === 'avs' && ov && ov.querySelector('#tab-btn-aurelia_state_panel')) this.switchTab('aurelia_state_panel');
+            }).catch(e => console.warn('[Extractor] 狀態面板注入失敗:', e));
             this._injectThreadsTab(wantThreads);
+        },
+
+        // 📜 章末簡報卡問：這一章角色卡作者做了哪幾頁（只要名字，給「角色卡畫面」那塊小牌子）。
+        //   不捲聊天、不等懶載：最後一樓現在就看得到的才算（TauriTavern 沒捲到就沒有，那就不出那塊小牌子，資料中心照樣點得到）
+        peekCardPanels() {
+            try {
+                const win = window.parent || window;
+                const doc = win.document || document;
+                const last = doc.querySelector('#chat .mes.last_mes .mes_text');
+                if (!last) return [];
+                const out = [];
+                last.querySelectorAll('.TH-render').forEach(th => {
+                    const code = th.querySelector('code.custom-language-html');
+                    const m = code ? String(code.innerText || code.textContent || '').match(/<title>(.*?)<\/title>/i) : null;
+                    out.push({ title: (m && m[1] && m[1].trim()) || '自定義面板' });
+                });
+                return out;
+            } catch (e) { return []; }
         },
 
         // 🧵 線索：跟狀態、選擇放同一個窗（10-13 她：拆成獨立窗口，一邊看線索一邊要回資訊中心，很卡手）
