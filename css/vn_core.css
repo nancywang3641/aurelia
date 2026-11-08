@@ -10,6 +10,7 @@
                 #ue-tab-bar::-webkit-scrollbar{display:none}
                 .ue-tab-item{padding:11px 14px;font-size:10px;color:rgba(200,178,130,.45);cursor:pointer;border-bottom:2px solid transparent;transition:all .18s;white-space:nowrap;font-weight:600;letter-spacing:2px}
                 .ue-tab-item.active{color:#d4af37;border-bottom-color:#d4af37}
+                .ue-tab-dot{display:inline-block;min-width:15px;height:15px;margin-left:5px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#c8463c;color:#fff;font:600 10px/15px sans-serif;letter-spacing:0;text-align:center;vertical-align:1px}
                 #ue-content-area{flex:1;overflow-y:auto;overflow-x:hidden;background:transparent;padding:0;display:flex;flex-direction:column;}
                 #ue-content-area::-webkit-scrollbar{width:3px}
                 #ue-content-area::-webkit-scrollbar-thumb{background:rgba(212,175,55,.28);border-radius:2px}

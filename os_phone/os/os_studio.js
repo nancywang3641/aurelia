@@ -1387,9 +1387,15 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
     #vncc-box .............. 卡片本體（內含 #vncc-story／#vncc-num／#vncc-title／
                              #vncc-rule／#vncc-preface／.vncc-cell 三格／#vncc-enter）
   #vn-end-overlay .......... 章末才出現的全螢幕層（本身透明、不擋點擊）
-    #vn-end-basic .......... 收尾鈕組：直排、置中、按鈕同寬
-      #vn-end-btn-data ..... 資料中心（主鈕，比其他四顆大一號）
-      #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-threads／#vn-end-btn-map／#vn-end-btn-regen ... 其餘五顆
+    #vn-end-basic .......... 章末簡報卡，平常身上掛著 .vne-brief（電腦置中一張卡、手機貼在下半部）：
+      .vne-head ............ 上方：.vne-kicker 章號、.vne-title 章名、.vne-meta 時間地點、.vne-divider 分隔
+      .vne-sum ............. 「這一章」：.vne-sec 小標＋.vne-points 三句（前面的 I II III 是 li::before）
+      .vne-tiles ........... 小牌子一兩塊：.vne-tile（.vne-orb 圓圖示、.vne-badge 紅數字、.vne-tile-k 小字、.vne-tile-v 內容）
+      #vn-end-btn-go ....... 「繼續」主鈕
+      .vne-ents ............ 一排五個入口：#vn-end-btn-data／#vn-end-btn-journal／#vn-end-btn-threads／#vn-end-btn-map／#vn-end-btn-ctx，
+                             每顆裡面是 .vne-ring 圓圈（CTX 那圈是用量條）＋ .vne-lb 字
+      .vne-foot ............ 右下角：#vn-end-btn-regen 重新生成
+      （有自己章末面板的世界會拿掉 .vne-brief，只把面板漏做的幾顆照舊直排補上來）
     #vn-end-panel .......... 有些世界會在這裡換上它專屬的收尾面板（另外生成的，不歸你管）
   #game-settings-overlay ... 設定視窗的暗幕（按了設定才出現）
     #game-settings-window .. 視窗本體：直排，標題列在上、內容區在下可捲動
@@ -1424,7 +1430,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 - #vn-panel-controls 與 .vn-panel-btn：對話框上緣那排小鈕。外面只有三顆：LOG（翻對話紀錄）、SKIP（跳過）、☰（其他功能）；按 ☰ 會往上浮出 #vn-more-menu，裡面是同款的 .vn-panel-btn。你只要把 .vn-panel-btn 設計好，浮窗裡的鈕自動跟著。（.vn-panel-btn.active 為啟用態。）「位置不要動」，只重新上色/造型配合主題。
 - #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
 - #vn-chapter-card 與 #vncc-box：章節卡（每一章開頭浮出來的那張卡：故事名 #vncc-story、章號 #vncc-num、章名 #vncc-title、分隔線 #vncc-rule、引言 #vncc-preface、資訊格 .vncc-cell/.vncc-cell-k/.vncc-cell-v、開始閱讀鈕 #vncc-enter）。⚠️這張卡預設會「抄對話框當下的皮」，所以你只寫對話框它也會跟著變；要單獨設計它，對 #vncc-box 的宣告一律加 !important 才蓋得過去。版型維持置中單欄，只重新設計外觀。
-- #vn-end-btn-data 與 #vn-end-btn-ctx／#vn-end-btn-journal／#vn-end-btn-threads／#vn-end-btn-map／#vn-end-btn-regen：章末收尾鈕。這是一章的句點，玩家在這裡停下來選下一步——做成那個世界裡「一章結束時會出現的東西」，跟對話框同一套語言。資料中心那顆要一眼看得出是主鈕，其餘五顆同款。外觀全部開放（底、邊框、造型、clip-path、::before/::after 裝飾都可以，按鈕自己裁自己是安全的）；排列不動：直排、置中、同寬，字維持單行；內距和寬度可以調，六顆要一起調、維持同寬，寬度別超過手機畫面的六成。這組鈕底下沒有對話框墊著，直接疊在明亮雜亂的背景圖上，按鈕本身的底要實心或 alpha ≥ 0.85。
+- #vn-end-basic.vne-brief（章末簡報卡）與裡面的 .vne-head／.vne-points／.vne-tile／#vn-end-btn-go／.vne-ring／#vn-end-btn-regen：這是一章的句點，玩家在這裡看一眼這章發生什麼、按「繼續」接著玩——做成那個世界裡「一章結束時會出現的東西」（一張卷宗、一封信、一塊終端機螢幕…），跟對話框同一套語言。「繼續」要一眼看得出是主鈕，五個入口同款，重新生成要低調。外觀全部開放（卡片的底、邊框、角花、字體、圓圈、clip-path、::before/::after 都可以）；🚨 這組的預設樣式是兩層 id 寫的，你的選擇器要照同樣寫法才蓋得過：卡片本身寫 #vn-end-basic.vne-brief，裡面的東西寫成 #vn-end-basic.vne-brief #vn-end-btn-go、#vn-end-basic.vne-brief .vne-ring 這樣；只寫單層 #vn-end-btn-go 會被預設蓋掉。排列不動（不改 display／grid／flex、不改卡片位置與寬度），字級、內距、圓圈大小可以調。卡片底下沒有對話框墊著，直接疊在明亮雜亂的背景圖上，卡片的底要實心或 alpha ≥ 0.8。
 - #game-settings-window 與裡面的 #gs-titlebar／#gs-body／.gs-*：設定視窗。它跟對話框一樣要是那個世界裡的一件實體物件，標題列、小標、滑桿（.gs-slider 的軌道，與 .gs-slider::-webkit-slider-thumb 滑塊）、小籤（.gs-chip 與選中的 .gs-chip.on）、色塊外框、重置鈕都要跟著換，不要只換視窗外框、裡面還是預設金黑。這扇窗是拿來讀和調的：視窗底要實心或 alpha ≥ 0.9，名稱與數值跟底強對比，選中的小籤要一眼跟沒選中的分得出來。版型不動：視窗置中、標題列在上、內容區捲動、滑桿列左名稱右數值；內距可以調，視窗寬度別比原本寬（原本是畫面寬扣 30px、上限 410px）。滑桿的原生外觀已經關掉了，軌道直接畫在 .gs-slider 本身（高度、底色），滑塊畫在 .gs-slider::-webkit-slider-thumb。色塊 .gs-color-input 只改外框，裡面那格顏色是玩家選的，別蓋。暗幕 #game-settings-overlay 只准改顏色與模糊程度。
 
 【版面骨架 — 先寫下來，再動手寫 CSS】
@@ -1474,7 +1480,7 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
 就會把那份定位打掉，元素會掉回文件流、整排疊到畫面中間。這不是「移動」，是「毀掉版位」。
 唯一的例外是 #text-panel 自己可以寫 position:relative（底板需要它當定位錨點），別的位移屬性一樣不准。
 收尾鈕與設定視窗也一樣：下面這些選擇器「本身」不准寫 position / top / left / right / bottom / display / float / flex——
-  #vn-end-overlay、#vn-end-basic、#vn-end-btn-data 等六顆收尾鈕、
+  #vn-end-overlay、#vn-end-basic、#vn-end-btn-data 等七顆收尾鈕（含「繼續」#vn-end-btn-go）、.vne-ents、.vne-tiles、
   #game-settings-overlay、#game-settings-window、#gs-titlebar、#gs-body、.gs-row、.gs-chips、.gs-color-row
 它們是靠 flex 排成直排、置中、左右兩欄的，一寫就散。
 它們、以及 .gs-chip、.gs-reset-btn、.gs-close，本身都已經是定位錨點：掛在它們身上的 ::before / ::after 直接寫 content + position:absolute 就會貼著它們長，不受這條限制。
@@ -1614,6 +1620,30 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 `;
     let _vthMode = 'char-mode';
 
+    // 📜 章末簡報卡（11-08）的樣式不在上面抄一份：直接從頁面上已經載入的 css/vn_styles.css 撈「章末簡報」那幾條，
+    //   兩邊永遠同一套數值（上面那份手抄的是對話框、名牌這些老東西，簡報卡一百多行再抄一次一定會漂）。
+    //   撈得到才記住；VN 的樣式還沒載進來時回空字串，下次再撈。
+    let _vthBriefCache = '';
+    function _vthBriefCss() {
+        if (_vthBriefCache) return _vthBriefCache;
+        let out = '';
+        const docs = [document, win.document].filter((d, i, a) => d && a.indexOf(d) === i);
+        for (const d of docs) {
+            for (const sh of Array.from(d.styleSheets || [])) {
+                let rules = null;
+                try { rules = sh.cssRules; } catch (e) { continue; }   // 跨網域的表讀不到，跳過
+                if (!rules) continue;
+                for (const r of Array.from(rules)) {
+                    const t = r.cssText || '';
+                    if (/vne-|vneo|#vn-end-btn-go/.test(t)) out += t + '\n';
+                }
+            }
+            if (out) break;
+        }
+        if (out) _vthBriefCache = '/* 📜 章末簡報卡（從 css/vn_styles.css 撈的） */\n' + out;
+        return out ? _vthBriefCache : '';
+    }
+
     function _vthBuildSrcdoc(css, mode, thumb) {
         const m = mode || _vthMode;
         const card = m === 'chapter';   // 📖 章節卡：卡片浮在對話框上（真實 VN 也是這個疊法）
@@ -1621,7 +1651,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         const gs = m === 'settings';    // ⚙ 設定視窗：暗幕蓋在整個畫面上
         const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-phone,#vn-panel-controls,#top-badge{display:none;}' : '';
         // 主題 CSS 是模型或小機寫的：帶 </style> 會跳出 <style> 長出標籤（小機截圖那個 iframe 沒關沙盒）→ 先拆掉
-        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>${VTH_PREVIEW_BASE}\n${layout}\n/* ====== 主題 CSS ====== */\n${String(css || '').replace(/<\/style/gi, '<\\/style')}</style></head><body>
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>${VTH_PREVIEW_BASE}\n${_vthBriefCss()}\n${layout}\n/* ====== 主題 CSS ====== */\n${String(css || '').replace(/<\/style/gi, '<\\/style')}</style></head><body>
 <div id="game-bg"></div>
 <div id="top-badge">黃昏 南城舊巷</div>
 <button id="btn-home">⌂ 返回</button>
@@ -1639,13 +1669,21 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
 </div>
 </div>
 <div id="vn-end-overlay"${end ? ' class="active"' : ''}>
-<div id="vn-end-basic">
-<button id="vn-end-btn-data" type="button">資料中心</button>
-<button id="vn-end-btn-ctx" type="button">CTX</button>
-<button id="vn-end-btn-journal" type="button">日誌</button>
-<button id="vn-end-btn-threads" type="button">日曆</button>
-<button id="vn-end-btn-map" type="button">地圖</button>
-<button id="vn-end-btn-regen" type="button">重新生成</button>
+<div id="vn-end-basic" class="vne-brief vne-has-new">
+<span class="vne-cn vne-tl"></span><span class="vne-cn vne-tr"></span><span class="vne-cn vne-bl"></span><span class="vne-cn vne-br"></span>
+<div class="vne-crest"><b></b><i></i><b></b></div>
+<div class="vne-head"><div class="vne-kicker">Chapter 03</div><div class="vne-title">霧港無眠</div><div class="vne-meta"><span><i class="fa-regular fa-clock"></i>3/14 19:20</span><span><i class="fa-solid fa-location-dot"></i>南城舊巷</span></div><div class="vne-divider"><span></span></div></div>
+<div class="vne-sum"><div class="vne-sec">這一章</div><ol class="vne-points"><li>在碼頭等到了遲到的委託人</li><li>對方留下一張寫著地址的收據</li><li>店長提醒今晚十點後別再出門</li></ol></div>
+<div class="vne-tiles"><button type="button" class="vne-tile"><span class="vne-orb"><i class="fa-solid fa-diagram-project"></i><span class="vne-badge">2</span></span><span class="vne-tile-txt"><span class="vne-tile-k">新線索</span><span class="vne-tile-v">2 條還沒看</span></span><i class="fa-solid fa-chevron-right"></i></button><button type="button" class="vne-tile"><span class="vne-orb"><i class="fa-regular fa-calendar"></i></span><span class="vne-tile-txt"><span class="vne-tile-k">下一件行程</span><span class="vne-tile-v">明天 09:00・開店</span></span><i class="fa-solid fa-chevron-right"></i></button></div>
+<button id="vn-end-btn-go" type="button">繼續<i class="fa-solid fa-play"></i></button>
+<div class="vne-ents">
+<button id="vn-end-btn-data" type="button"><span class="vne-ring"><i class="fa-solid fa-box-archive"></i><span class="vne-dot"></span></span><span class="vne-lb">資料中心</span></button>
+<button id="vn-end-btn-journal" type="button"><span class="vne-ring"><i class="fa-solid fa-book-open"></i></span><span class="vne-lb">日誌</span></button>
+<button id="vn-end-btn-threads" type="button"><span class="vne-ring"><i class="fa-regular fa-calendar-days"></i></span><span class="vne-lb">日曆</span></button>
+<button id="vn-end-btn-map" type="button"><span class="vne-ring"><i class="fa-solid fa-map-location-dot"></i></span><span class="vne-lb">地圖</span></button>
+<button id="vn-end-btn-ctx" type="button"><span class="vne-ring vne-ctx vne-ctx-on" style="--vne-pct:56"><i class="fa-solid fa-layer-group"></i></span><span class="vne-lb">CTX</span><small class="vne-pct">56%</small></button>
+</div>
+<div class="vne-foot"><button id="vn-end-btn-regen" type="button"><i class="fa-solid fa-rotate"></i> 重新生成</button></div>
 </div>
 </div>
 <div id="game-settings-overlay"${gs ? ' class="active"' : ''}>
@@ -1778,7 +1816,7 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
     // 章末收尾鈕與設定視窗：外殼靠 flex 排成直排置中／視窗置中／左右兩欄，碰到 display 或 position 就散。
     //   這組只認「選擇器最後那一節」是不是它們：掛在它們身上的 ::before/::after 裝飾、
     //   或它們裡面別的元素（例如 #gs-body .gs-section-title）照樣自由發揮。
-    const VTH_LOCKED_SUBJECT = ['#vn-end-overlay', '#vn-end-basic', '#vn-end-btn-',
+    const VTH_LOCKED_SUBJECT = ['#vn-end-overlay', '#vn-end-basic', '#vn-end-btn-', '.vne-ents', '.vne-tiles',
         '#game-settings-overlay', '#game-settings-window', '#gs-titlebar', '#gs-body', '.gs-row', '.gs-chips', '.gs-color-row'];
     // 兩層暗幕平常是隱形、不擋點擊的，靠這幾個屬性開關；寫了就會一直蓋在畫面上、什麼都點不到
     const VTH_VEILS = ['#vn-end-overlay', '#game-settings-overlay'];

@@ -885,6 +885,7 @@
         upcoming: upcoming, undated: undated, doneLabel: doneLabel, sigOf: sigOf, summary: summary, buildBlock: buildBlock, injectStatus: injectStatus, renderHud: renderHud,
         parseDate: parseDate, parseTime: parseTime, fmtDate: fmtDate, dateKey: dateKey, dayDiff: dayDiff, getChatId: getChatId,
         missionStart: missionStart, missionEnd: missionEnd, todayPlansText: todayPlansText, nowDate: nowDate,
+        isOn: _on,   // 「主角狀態」開著沒（章末簡報卡要不要寫故事時間、下一件行程）
         clockOf: clockOf, slotOf: slotOf, slotWordOf: slotWordOf, minsOf: minsOf, SLOTS: SLOTS.map(x => x.id),
         resetCache: function () { _cache = null; _cacheChat = ''; },
     };

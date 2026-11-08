@@ -371,10 +371,17 @@
             let mounted = false;
             const go = () => {
                 overlay.querySelectorAll('#ue-content-area > :not(.ue-tab-pane)').forEach(n => n.remove());
+                btn.querySelector('.ue-tab-dot')?.remove();   // 📜 點進來就算看過（線索頁那邊會記帳）
                 this.switchTab('aurelia_threads');
                 if (!mounted) { mounted = true; T.mountInto(pane); }
             };
             btn.onclick = go;
+            // 📜 還沒看過的新線：分頁名字旁掛紅色數字（跟章末簡報卡同一個數）
+            if (typeof T.unseenCount === 'function') {
+                T.unseenCount().then(n => {
+                    if (n > 0 && btn.isConnected && !btn.classList.contains('active') && !btn.querySelector('.ue-tab-dot')) btn.insertAdjacentHTML('beforeend', '<span class="ue-tab-dot">' + n + '</span>');
+                }).catch(() => {});
+            }
             if (want) go();
         },
 

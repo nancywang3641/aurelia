@@ -78,8 +78,8 @@
             contentArea.innerHTML = '';
             // 非卡片頁也要拆卡片：自帶音樂的面板被切走＝看不見，但還在響
             const _dropCards = () => this._teardownCards(contentArea, null);
-            // 若有待處理選擇，優先顯示選擇頁
-            const hasChoices = this._pendingChoices && this._pendingChoices.length > 0;
+            // 若有待處理選擇，優先顯示選擇頁（空陣列＝章末簡報卡按了「繼續」但這章沒寫選項：照樣開，只有輸入框）
+            const hasChoices = Array.isArray(this._pendingChoices);
             if (hasChoices) {
                 this._addTab(tabBar, contentArea, 'choices', '做出選擇', this._choicesHtml(), true, _dropCards);
             }
@@ -95,9 +95,17 @@
             if (T && typeof T.mountInto === 'function') {
                 this._addTab(tabBar, contentArea, 'threads', '線索', '', false, (pane) => {
                     _dropCards();
+                    tBtn.querySelector('.ue-tab-dot')?.remove();   // 📜 點進來就算看過（線索頁那邊會記帳）
                     if (!pane._sthrMounted) { pane._sthrMounted = true; T.mountInto(pane); }
                 });
-                if (this._wantTab === 'threads') tabBar.lastElementChild.click();
+                const tBtn = tabBar.lastElementChild;
+                // 📜 還沒看過的新線：分頁名字旁掛紅色數字（跟章末簡報卡同一個數）
+                if (typeof T.unseenCount === 'function') {
+                    T.unseenCount().then(n => {
+                        if (n > 0 && tBtn.isConnected && !tBtn.classList.contains('active') && !tBtn.querySelector('.ue-tab-dot')) tBtn.insertAdjacentHTML('beforeend', '<span class="ue-tab-dot">' + n + '</span>');
+                    }).catch(() => {});
+                }
+                if (this._wantTab === 'threads') tBtn.click();
             }
             this._wantTab = null;
             // 💰 錢包分頁已移除：OS_ECONOMY 早就退役到 _archive/dead-code、任何載入清單都不再載它，

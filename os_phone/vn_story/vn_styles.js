@@ -169,13 +169,28 @@
                 <div id="vn-end-overlay">
                     <!-- 🎴 視差世界的活動面板掛載點：有生成過就蓋掉下面那組基本鍵，沒有就空著 -->
                     <div id="vn-end-panel"></div>
+                    <!-- 📜 章末簡報（11-08）：沒有世界面板時整張卡（.vne-brief）；有世界面板時只把它漏做的那幾顆照舊直排補上來。
+                         六顆鈕的編號沿用舊的：劇情主題（創作室）是照這些編號上樣式的 -->
                     <div id="vn-end-basic">
-                        <button id="vn-end-btn-data">資料中心</button>
-                        <button id="vn-end-btn-ctx">CTX</button>
-                        <button id="vn-end-btn-journal">日誌</button>
-                        <button id="vn-end-btn-threads">日曆</button>
-                        <button id="vn-end-btn-map">地圖</button>
-                        <button id="vn-end-btn-regen"><i class="fa-solid fa-rotate"></i> 重新生成</button>
+                        <span class="vne-cn vne-tl"></span><span class="vne-cn vne-tr"></span><span class="vne-cn vne-bl"></span><span class="vne-cn vne-br"></span>
+                        <div class="vne-crest"><b></b><i></i><b></b></div>
+                        <div class="vne-head">
+                            <div class="vne-kicker"></div>
+                            <div class="vne-title"></div>
+                            <div class="vne-meta"></div>
+                            <div class="vne-divider"><span></span></div>
+                        </div>
+                        <div class="vne-sum"><div class="vne-sec">這一章</div><ol class="vne-points"></ol></div>
+                        <div class="vne-tiles"></div>
+                        <button id="vn-end-btn-go" type="button">繼續<i class="fa-solid fa-play"></i></button>
+                        <div class="vne-ents">
+                            <button id="vn-end-btn-data" type="button"><span class="vne-ring"><i class="fa-solid fa-box-archive"></i><span class="vne-dot"></span></span><span class="vne-lb">資料中心</span></button>
+                            <button id="vn-end-btn-journal" type="button"><span class="vne-ring"><i class="fa-solid fa-book-open"></i></span><span class="vne-lb">日誌</span></button>
+                            <button id="vn-end-btn-threads" type="button"><span class="vne-ring"><i class="fa-regular fa-calendar-days"></i></span><span class="vne-lb">日曆</span></button>
+                            <button id="vn-end-btn-map" type="button"><span class="vne-ring"><i class="fa-solid fa-map-location-dot"></i></span><span class="vne-lb">地圖</span></button>
+                            <button id="vn-end-btn-ctx" type="button"><span class="vne-ring vne-ctx"><i class="fa-solid fa-layer-group"></i></span><span class="vne-lb">CTX</span><small class="vne-pct"></small></button>
+                        </div>
+                        <div class="vne-foot"><button id="vn-end-btn-regen" type="button"><i class="fa-solid fa-rotate"></i> 重新生成</button></div>
                     </div>
                 </div>
 

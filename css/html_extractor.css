@@ -64,6 +64,9 @@
                     font-family: 'Cinzel', serif;
                 }
                 .ue-tab-item:hover:not(.active) { color: rgba(212, 175, 55, 0.65); }
+                /* 📜 線索分頁的紅色數字：還沒看過的新線（跟章末簡報卡同一個數），點進去就消 */
+                .ue-tab-dot { display: inline-block; min-width: 15px; height: 15px; margin-left: 5px; padding: 0 4px; box-sizing: border-box; border-radius: 8px;
+                    background: #c8463c; color: #fff; font: 600 10px/15px sans-serif; letter-spacing: 0; text-align: center; vertical-align: 1px; }
                 .ue-tab-item.active {
                     color: #d4af37; border-bottom-color: #d4af37;
                     text-shadow: 0 0 8px rgba(212, 175, 55, 0.38);

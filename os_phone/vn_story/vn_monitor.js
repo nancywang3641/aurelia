@@ -27,6 +27,17 @@
             this._refreshDisplay();
         },
 
+        // 📜 章末簡報卡 CTX 那圈：上一次送出去的量佔警戒上限幾 %（只讀數字、不碰 CTX 浮窗的畫面）；讀不到回 null
+        quickPct: async function() {
+            const isStandalone = win.OS_API?.isStandalone?.() ?? false;
+            // 每章重讀一次（上一章的數字會留在這裡）；跟打開 CTX 浮窗時讀的是同一份
+            if (isStandalone) this._readFromStandalone();
+            else { try { if (!(await this._readFromItemized())) this._readFromPlugin(); } catch (e) { this._readFromPlugin(); } }
+            const t = this.sendTokens;
+            if (t == null || !isFinite(t) || t <= 0) return null;
+            return Math.min(100, Math.round((t / this.getLimit()) * 100));
+        },
+
         // 獨立模式：從 OS_API._lastCtx 讀取
         _readFromStandalone: function() {
             try {

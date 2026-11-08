@@ -635,9 +635,13 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         const nClosedNow = s.closed.filter(r => r.mark === 'closed_now').length;
         if (nNew) chips.push(`這章新線 ${nNew}`);
         // 🎬 這章新冒出來、還沒演過的線（開始演就記住，再打開不重播）
+        //   📜 11-08：同一本帳也是「看過了沒」——章末簡報卡、資料中心「線索」分頁的紅點數字就是還沒記進來的那幾條。
+        //     所以「演出動畫」關著也要記（只是不演），不然紅點永遠不會消。記完廣播 aurelia:threads-seen 讓紅點跟著消
         let pend = [];
-        if (nNew && _revealOn() && panel.getBoundingClientRect().width > 0) {
+        if (nNew && panel.getBoundingClientRect().width > 0) {
             try { pend = await _takeReveal(s.latestKey, s.open.filter(r => r.mark === 'new').map(r => r.key)); } catch (e) { pend = []; }
+            if (pend.length) { try { win.dispatchEvent(new CustomEvent('aurelia:threads-seen')); } catch (e) {} }
+            if (!_revealOn()) pend = [];
             if (_panel !== panel) return;
         }
         if (nChg) chips.push(`這章有變化 ${nChg}`);
@@ -918,6 +922,18 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         });
     }
 
+    // 📜 最新一章新冒出來、還沒打開線索頁看過的有幾條（章末簡報卡、資料中心「線索」分頁的紅點）。線索關著＝0
+    async function unseenCount() {
+        if (!_isOn()) return 0;
+        const s = await snapshot();
+        if (!s || s.latestKey == null) return 0;
+        const keys = s.open.filter(r => r.mark === 'new').map(r => r.key);
+        if (!keys.length) return 0;
+        const d = await _run(() => _load());
+        const seen = (d && d.revealed && d.revealed.at === String(s.latestKey) && Array.isArray(d.revealed.keys)) ? d.revealed.keys : [];
+        return keys.filter(k => seen.indexOf(k) < 0).length;
+    }
+
     function _sfx(kind) { try { (win.VoidUiSfx || window.VoidUiSfx)?.play?.(kind); } catch (e) {} }
 
     // 這一格在畫面上真正看得到的範圍（被捲動容器、視窗切掉的不算）
@@ -1152,6 +1168,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         siteFor, addendum, commit, reconcile, snapshot, setPick, buildText, buildBlock,
         getLean, setLean, leanList,
         mountInto, closePanel: _closePanel,   // 10-13 起線索只畫在資訊中心／資料中心的分頁裡（舊的獨立窗 openPanel 拿掉了）
+        unseenCount,                          // 📜 還沒看過的新線幾條（紅點）；看過了會廣播 aurelia:threads-seen
         isOn: _isOn, setOn: _setOn,
         revealOn: _revealOn, setRevealOn: _setRevealOn,   // 🎬 新線索演出（大廳設置 → 選項「演出動畫」）
         INJECT_ID, CFG,

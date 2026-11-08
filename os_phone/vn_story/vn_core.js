@@ -370,6 +370,9 @@
             //    連對話框的接管旗標一起解除，不然上一章沒按「開始閱讀」就切走時，
             //    這旗標留著＝下一章的對話框被 hideOverlays 的守衛擋住，整章都不出來。
             this._ccOpen = false; this._ccData = null; this._ccPanelHidden = false;
+            this._sceneName = '';   // 📜 上一章的場景名別帶到這章的章末簡報卡
+            // 📜 上一章沒用掉的選項別留到這章（簡報卡的「繼續」看到有選項就開選項頁）
+            try { if (window.VN_StandaloneArchive) { window.VN_StandaloneArchive._pendingChoices = null; } } catch (e) {}
             { const _cc = document.getElementById('vn-chapter-card'); if (_cc) _cc.classList.add('hidden'); }
 
             // 關閉選項 overlay（載入新/舊章節時清除殘留）
@@ -1593,10 +1596,12 @@
             }
 
             if (!options.length) { this.next(); return; }
-            // 把選擇存入 Archive，然後打開資訊中心
+            // 把選擇存入 Archive。📜 11-08 起先停在章末簡報卡（這一章、新線索、下一件行程），按「繼續」才打開選項頁
+            //   （有世界面板的世界照舊直接打開，見章末那段的 _settle）。選項後面的行本來就不播（選了就生下一章），直接跳到末尾
             VN_StandaloneArchive._pendingChoices = options;
             VN_StandaloneArchive._choiceCallback = (text) => this._sendChoiceAndContinue(text);
-            VN_StandaloneArchive.show();
+            this.index = this.script.length - 1;
+            this.next();
         },
 
         // 「AI 生成中」進度畫面：選項框送出、卡片面板送出一句話都用這支（原本寫在 vn_inspect 的 doSend 裡）
@@ -2892,6 +2897,20 @@
                         home: () => { try { window.VN_PLAYER.stopGame(); } catch (e) {} },
                         // 🔁 這章不滿意 → 丟掉重寫（世界面板沒做這顆的話，基本鍵那顆會補上來）
                         regen: () => { try { window.VN_Core.regenerateLatest(); } catch (e) { console.warn('[VN_Core] 重新生成失敗', e); } },
+                        // 📜 章末簡報卡的「繼續」：網頁版打開選項頁（這章沒寫選項也開，空的輸入框自己打）；
+                        //    酒館版打開資料中心（酒館的輸入框搬在那裡面），游標放進輸入框
+                        go: () => {
+                            if (win.OS_API?.isStandalone?.() ?? false) {
+                                const A = window.VN_StandaloneArchive;
+                                if (!A) return;
+                                if (!Array.isArray(A._pendingChoices)) A._pendingChoices = [];
+                                if (!A._choiceCallback) A._choiceCallback = (text) => this._sendChoiceAndContinue(text);
+                                A.show();
+                            } else {
+                                _actData();
+                                setTimeout(() => { try { const ta = document.getElementById('send_textarea'); if (ta) ta.focus({ preventScroll: true }); } catch (e) {} }, 450);
+                            }
+                        },
                     };
                     // 🚨 日曆用的是原本「線索」那顆的位子和編號：VN 外觀設計（創作室）是照這些編號上樣式的，換新編號舊外觀就套不到它
                     const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', calendar: 'vn-end-btn-threads', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
@@ -2899,6 +2918,7 @@
                         const b = document.getElementById(BASIC_OF[k]);
                         if (b) { b.onclick = acts[k]; b.classList.remove('hidden'); }
                     });
+                    { const _go = document.getElementById('vn-end-btn-go'); if (_go) _go.onclick = acts.go; }
                     // 🎴 這個世界有活動面板就換上去；沒有(舊世界/還沒生成/生成失敗)一律維持原樣。
                     //   🚨面板要讀 OS_DB(非同步)。舊版是「先亮基本鍵、讀到再換」→ 每次都先看到原本那四顆
                     //     閃一下才變成設計過的面板。改成先按住不亮，等結果出來再一次淡入：
@@ -2909,7 +2929,9 @@
                     const basic = document.getElementById('vn-end-basic');
                     let _endDecided = false;
                     // 先按住（模板裡這組預設是顯示的，上一章若被面板收起來過也要重置成「按住」狀態）
-                    if (basic) { basic.classList.add('hidden'); basic.classList.remove('vn-end-fade'); }
+                    // 📜 預設是簡報卡（.vne-brief）；等一下世界面板真的來了才改回「只補漏做的幾顆」。趁按住的時間先把卡片的字填上
+                    if (basic) { basic.classList.add('hidden', 'vne-brief'); basic.classList.remove('vn-end-fade'); }
+                    try { (win.VN_EndBrief || window.VN_EndBrief)?.fill(this, acts); } catch (e) { console.warn('[VN_Core] 章末簡報卡填字失敗', e); }
                     const _showBasic = () => {
                         if (!basic) return;
                         basic.classList.remove('hidden');
@@ -2924,6 +2946,12 @@
                         clearTimeout(_holdTimer);
                         win.AUI.lsSet('vn_end_panel_hit', r ? '1' : '0', '末尾面板的記號');
                         if (!r || !basic) { _showBasic(); return; }
+                        // 有世界面板：卡片收掉，只照舊直排補它漏做的那幾顆；網頁版有選項就照舊直接打開選項頁（11-08 前的樣子）
+                        basic.classList.remove('vne-brief');
+                        try {
+                            const _A = window.VN_StandaloneArchive;
+                            if ((win.OS_API?.isStandalone?.() ?? false) && _A && Array.isArray(_A._pendingChoices) && _A._pendingChoices.length) _A.show();
+                        } catch (e) {}
                         let left = 0;
                         Object.keys(BASIC_OF).forEach(k => {
                             const b = document.getElementById(BASIC_OF[k]);
@@ -3267,6 +3295,7 @@
 
                 if (sceneLabel) {
                     const sceneName = sceneLabel.replace(/_/g, ' ');
+                    this._sceneName = sceneName;   // 📜 章末簡報卡寫「在哪」用最後一個場景（vn_end_brief.js）
                     const rankPanel = document.getElementById('stream-rank-panel');
                     const usePanel  = rankPanel && !rankPanel.classList.contains('hidden');
                     if (usePanel) {
