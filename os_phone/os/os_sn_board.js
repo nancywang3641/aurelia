@@ -6,6 +6,7 @@
 // 資料：OS_DB 通用資料 sn_board::global::{staff,board,shifts}；酒館、手機各一份（同世界書）。
 // 🚨 值班的人：小機（OS_XIAOJI 門卡＝花錢）／宿舍住戶 claude、codex（ClaudeTerminal.sendAs 經過橋＝會員額度）。
 // 🚨 送給值班的人的只有白板自己的東西＋世界書條目，不送跑團原文（那是問題箱的事）。
+//    宿舍住戶另外附他自己最近的時間線（橋 /v1/wakes/timeline，他醒來時看到的同一段；11-09 起，_dormTimeline）。
 // 🚨 改白板一律在 _lockData 裡「重讀→改→寫」：值班那通要幾分鐘，她中間按的東西不能被蓋掉。
 // 暴露：window.OS_SN_BOARD
 // ----------------------------------------------------------------
@@ -772,12 +773,16 @@
         'lure="這個世界最吸引人的東西，5 個字以內的名詞" danger="主要危險，5 個字以內的名詞" crisis="現在正在發生、玩家會撞上的事，20 個字以內"></seed>';
     const PERSON_NEED = '名字或外號（不能只用職業或身分關係當稱呼）、住在哪裡、靠什麼過活、從哪裡來、怎麼變成現在這樣、個性跟說話的樣子、跟誰有牽扯、想要什麼或怕什麼、對玩家的態度會因為什麼而變';
     // ctx.usedNames＝世界門檔案庫裡已經有的世界名（寫企劃書時別撞名）；ctx.brief＝她世界書裡的上班須知（每班都帶，沒有就不帶）
+    const TIMELINE_JOBS = ['clip', 'combine', 'write', 'talk', 'plan'];   // 會附宿舍住戶時間線的那幾種班
     function buildMessages(job, who, b, refs, user, ctx) {
         const U = user || '她';
         ctx = ctx || {};
         const sys = (who.sys ? who.sys + '\n\n' : '你是' + who.name + '。\n') +
             '今天你在 SN 公司 32 樓的研討室值白板的班。白板是' + U + '的：大家在上面剪素材、湊點子、討論，再寫成稿或企劃書；' + U + '看過說好，稿才會寫進她的世界書，企劃書才會交給世界門的愛麗絲。\n' +
             '這一班只做下面交代的那一件事，照格式交回來就下班，格式以外的話不用寫。\n\n' +
+            // 宿舍住戶：附他最近在別的地方做過的事（橋給的，醒來時看到的同一段）。挑毛病、收尾那幾件不附
+            (ctx.timeline && TIMELINE_JOBS.indexOf(job.kind) >= 0
+                ? ctx.timeline + '\n（上面是系統附的，你最近在別的地方做過的事；這一班用不用得上你自己判斷。）\n\n' : '') +
             (ctx.brief ? '上班須知（' + U + '寫給值班的人的背景，每一班都照這個想）：\n' + ctx.brief + '\n\n' : '') + RULES + '\n' + PLAIN;
         const dropped = _list(b.dropped.slice(0, 10), x => '・' + x.title, '（沒有）');
         const L = [];
@@ -1278,6 +1283,23 @@
             return d.toDateString() === new Date().toDateString() ? hm : (d.getMonth() + 1) + '/' + d.getDate() + ' ' + hm;
         } catch (e) { return null; }
     }
+    // 宿舍住戶最近的時間線（橋的 /v1/wakes/timeline：跟他自己醒來時附的同一段，一週內最多 20 筆）。
+    // 11-09 她：「SN那邊也補上吧，或許他出門去論壇都能帶點什麼來做文章?」——以前值班那通看不到他醒來、上論壇做了什麼。
+    // 拿不到（橋沒開、舊橋沒這個口）回空字串＝這班照舊不附
+    async function _dormTimeline(rid) {
+        const CT = _g('ClaudeTerminal');
+        let c = null;
+        try { c = CT && CT.getConfig ? CT.getConfig() : null; } catch (e) {}
+        const f = win.fetch || (typeof fetch !== 'undefined' ? fetch : null);
+        if (!rid || !c || !c.url || !c.key || !f) return '';
+        const base = String(c.url).replace(/\/v1\/chat\/completions\/?$/, '');
+        try {
+            const r = await _withTimeout(_cfg.YT_TIMEOUT, signal => f.call(win, base + '/v1/wakes/timeline?rid=' + encodeURIComponent(rid), { headers: { Authorization: 'Bearer ' + c.key }, signal }));
+            if (!r || !r.ok) return '';
+            const j = await r.json();
+            return (j && typeof j.text === 'string') ? j.text.trim() : '';
+        } catch (e) { return ''; }
+    }
     // 叫了才撞到上限：錯誤整段看；回覆只看開頭就是上限那句的短回覆（他平常講到額度不算）
     const CAP_ERR = /額度到上限|usage limit|limit reached|hit your [\w -]{0,24}limit|try again (?:in|at) /i;
     const CAP_REPLY = /^\s*(?:Claude AI usage limit reached|You(?:'|’)ve hit your [\w -]{0,24}limit|(?:5-hour|five-hour|weekly|session|usage) limit reached)/i;
@@ -1458,11 +1480,13 @@
         try {
             const who = await resolve(pick);
             if (!who) throw new Error('找不到' + pick.name);
+            const timeline = who.type === 'dorm' ? await _dormTimeline(who.id) : '';   // 一班拿一次
             for (let i = 0; ; i++) {
                 const board = i ? await getBoard() : plan.board;
                 const refs = (job.kind === 'write' || job.kind === 'check') ? await worldRefs(refTerms(job, board)) : [];
                 const ctx = job.kind === 'plan' ? { usedNames: await _gateNames() } : {};
                 ctx.kit = kit;
+                ctx.timeline = timeline;
                 try { ctx.brief = await shiftBrief(); } catch (e) {}
                 let p;
                 if (job.kind === 'fin_pvart') {   // 🎞 畫宣傳片畫面：阿洛自己畫，別人值班不叫模型、由奧瑞亞畫
