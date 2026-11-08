@@ -42,6 +42,19 @@
         return { kicker: kicker, title: String(d.title || d.story || '').trim(), where: String(d.where || '').trim() };
     }
 
+    // 摘要區塊裡只有標題的那幾行（11-09：她的正文把摘要包成摺疊，摺疊的標題「🌀摘要」和底下的小標「【摘要】」
+    //   被當成三句裡的兩句印出來）。拿掉表情符號、括號、冒號之後只剩「摘要／總結／概要…」的，整行不要；
+    //   小標跟內容寫在同一行（「【摘要】應子騫…」「摘要：…」）的，只剝掉前面那截
+    const SUM_WORD = '(?:本章|本回|這一章|这一章|本話|本话)?(?:摘要|總結|总结|概要|提要|梗概|小結|小结|回顧|回顾|大綱|大纲|summary)';
+    const _pic = /[☀-➿️‍]|\uD83C[\uDC00-\uDFFF]|\uD83D[\uDC00-\uDFFF]|\uD83E[\uDC00-\uDFFF]/g;
+    const _labelOnly = new RegExp('^' + SUM_WORD + '$', 'i');
+    const _labelHead = new RegExp('^(?:[【\\[〔「『(（<《]\\s*' + SUM_WORD + '\\s*[】\\]〕」』)）>》]|' + SUM_WORD + '\\s*[:：])\\s*', 'i');
+    function _dropLabel(line) {
+        const s = String(line || '').replace(_pic, '').trim();
+        if (_labelOnly.test(s.replace(/[\s【】[\]〔〕「」『』()（）<>《》:：*#=\-—_~|]/g, ''))) return '';
+        return s.replace(_labelHead, '').trim();
+    }
+
     // 這一章：摘要拆成最多三句（AI 多半一行一句；寫成一整段就照句號切）
     function _sumLines(core) {
         const R = win.VN_READER || window.VN_READER;
@@ -51,9 +64,10 @@
         try { t = R.sumExtract(raw) || ''; } catch (e) {}
         if (!t) return [];
         const clean = s => s.replace(/^\s*(?:[-*•・]|\d+\s*[.、)）]|[①-⑩])\s*/, '').trim();
-        let parts = t.split(/\n+/).map(clean).filter(Boolean);
+        const rows = t.split(/\n+/).map(_dropLabel).map(clean).filter(Boolean);
+        let parts = rows;
         // 🚨 別用 (?<=…) 往回看：iOS 16.4 以前的 Safari 不認得，整支檔案會載不起來
-        if (parts.length < 2) parts = t.replace(/\n+/g, '').replace(/([。！？!?])/g, '$1\n').split('\n').map(clean).filter(Boolean);
+        if (parts.length < 2) parts = rows.join('').replace(/([。！？!?])/g, '$1\n').split('\n').map(clean).filter(Boolean);
         return parts.slice(0, 3).map(s => {
             s = s.replace(/[。．.]$/, '');
             return s.length > 60 ? s.slice(0, 59) + '…' : s;

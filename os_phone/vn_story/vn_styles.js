@@ -184,9 +184,9 @@
                         <div class="vne-tiles"></div>
                         <button id="vn-end-btn-go" type="button">繼續<i class="fa-solid fa-play"></i></button>
                         <div class="vne-ents">
-                            <button id="vn-end-btn-data" type="button"><span class="vne-ring"><i class="fa-solid fa-box-archive"></i><span class="vne-dot"></span></span><span class="vne-lb">資料中心</span></button>
+                            <button id="vn-end-btn-data" type="button"><span class="vne-ring"><i class="fa-solid fa-box-archive"></i></span><span class="vne-lb">資料中心</span></button>
                             <button id="vn-end-btn-journal" type="button"><span class="vne-ring"><i class="fa-solid fa-book-open"></i></span><span class="vne-lb">日誌</span></button>
-                            <button id="vn-end-btn-threads" type="button"><span class="vne-ring"><i class="fa-regular fa-calendar-days"></i></span><span class="vne-lb">日曆</span></button>
+                            <button id="vn-end-btn-threads" type="button"><span class="vne-ring"><i class="fa-solid fa-diagram-project"></i><span class="vne-dot"></span></span><span class="vne-lb">線索</span></button>
                             <button id="vn-end-btn-map" type="button"><span class="vne-ring"><i class="fa-solid fa-map-location-dot"></i></span><span class="vne-lb">地圖</span></button>
                             <button id="vn-end-btn-ctx" type="button"><span class="vne-ring vne-ctx"><i class="fa-solid fa-layer-group"></i></span><span class="vne-lb">CTX</span><small class="vne-pct"></small></button>
                         </div>

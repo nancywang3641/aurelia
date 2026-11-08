@@ -2912,8 +2912,9 @@
                             }
                         },
                     };
-                    // 🚨 日曆用的是原本「線索」那顆的位子和編號：VN 外觀設計（創作室）是照這些編號上樣式的，換新編號舊外觀就套不到它
-                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', calendar: 'vn-end-btn-threads', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
+                    // 🚨 #vn-end-btn-threads 那顆：10-13 改成日曆、11-09 又換回線索（她：「我想把底下的日曆按鈕改成 線索」；日曆從「下一件行程」那塊小牌子進）。
+                    //    編號一直沒換：VN 外觀設計（創作室）是照這些編號上樣式的，換新編號舊外觀就套不到它
+                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', threads: 'vn-end-btn-threads', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
                     Object.keys(BASIC_OF).forEach(k => {
                         const b = document.getElementById(BASIC_OF[k]);
                         if (b) { b.onclick = acts[k]; b.classList.remove('hidden'); }
