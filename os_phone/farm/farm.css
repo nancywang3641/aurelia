@@ -85,8 +85,10 @@
 .aurelia-farm .farm-log-head span {color:rgba(255,255,255,.66); font-size:9px;}
 .aurelia-farm .farm-log-line {overflow:hidden; color:rgba(255,255,255,.84); font-size:10px; line-height:1.5; text-overflow:ellipsis; white-space:nowrap;}
 .aurelia-farm .farm-log-line + .farm-log-line {margin-top:3px;}
-.aurelia-farm .farm-drawer-backdrop {position:absolute; inset:0; z-index:48; background:rgba(30,42,28,.25); backdrop-filter:blur(2px);}
-.aurelia-farm .farm-shop {position:absolute; right:1.6%; top:1.8%; bottom:1.8%; z-index:50; display:flex; flex-direction:column; width:min(430px,44%); padding:15px; overflow:hidden; border:1px solid rgba(255,255,255,.8); border-radius:20px; background:rgba(255,252,241,.97); box-shadow:0 18px 60px rgba(29,42,25,.34);}
+/* 11-09 她截圖：種子商店打開，左下的搖桿（fw-joy 61）、底下工具列（fb-hotbar 58）、走近田跳出的小提示（fw-bar 60）都疊在商店上面。
+   商店跟背包（90）、出貨箱（92）那些小窗同一級：遮罩 93、商店 94；買東西回報那條提示（farm-toast）再往上 96，商店開著也看得到 */
+.aurelia-farm .farm-drawer-backdrop {position:absolute; inset:0; z-index:93; background:rgba(30,42,28,.25); backdrop-filter:blur(2px);}
+.aurelia-farm .farm-shop {position:absolute; right:1.6%; top:1.8%; bottom:1.8%; z-index:94; display:flex; flex-direction:column; width:min(430px,44%); padding:15px; overflow:hidden; border:1px solid rgba(255,255,255,.8); border-radius:20px; background:rgba(255,252,241,.97); box-shadow:0 18px 60px rgba(29,42,25,.34);}
 .aurelia-farm .farm-shop[hidden], .aurelia-farm .farm-drawer-backdrop[hidden] {display:none;}
 .aurelia-farm .shop-head {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;}
 .aurelia-farm .shop-head strong {display:block; font-size:15px;}
@@ -111,7 +113,7 @@
 .aurelia-farm .ledger-line b {color:var(--ink); font-weight:700;}
 .aurelia-farm .ledger-line .plus {color:#3e7a48;}
 .aurelia-farm .ledger-line .minus {color:#a7613a;}
-.aurelia-farm .farm-toast {position:absolute; left:50%; bottom:12.5%; z-index:70; max-width:min(430px,calc(100% - 32px)); padding:10px 14px; border-radius:12px; background:rgba(36,49,33,.92); color:#fff; font-size:11px; opacity:0; transform:translate(-50%,10px); transition:opacity .2s ease,transform .2s ease; pointer-events:none;}
+.aurelia-farm .farm-toast {position:absolute; left:50%; bottom:12.5%; z-index:96; max-width:min(430px,calc(100% - 32px)); padding:10px 14px; border-radius:12px; background:rgba(36,49,33,.92); color:#fff; font-size:11px; opacity:0; transform:translate(-50%,10px); transition:opacity .2s ease,transform .2s ease; pointer-events:none;}
 .aurelia-farm .farm-toast.show {opacity:1; transform:translate(-50%,0);}
 @media (max-width: 980px) {
 .aurelia-farm .farm-tools .link, .aurelia-farm .farm-tool.icon-only span {display:none;}
