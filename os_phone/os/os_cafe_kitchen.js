@@ -20,8 +20,8 @@
         cup:    { name: '飲料', icon: 'fa-mug-hot',       kind: 'stack', max: 4, frame: [],                    frameCost: 0, drink: true, noun: '' },
         burger: { name: '漢堡', icon: 'fa-burger',        kind: 'stack', max: 5, frame: ['bun_b', 'bun_t'],     frameCost: 4, frameName: '麵包', noun: '堡' },
         cake:   { name: '蛋糕', icon: 'fa-cake-candles',  kind: 'stack', max: 5, frame: ['sponge'],            frameCost: 5, frameName: '蛋糕胚', noun: '蛋糕', top: true },   // 夾層從側面疊，疊完翻到「頂面」畫布擠奶油、擺料
-        bento:  { name: '便當', icon: 'fa-bowl-rice',     kind: 'cells', frameCost: 2, frameName: '便當盒', noun: '便當',
-                  cells: [{ k: 'main', name: '主食格', roles: ['grain'] }, { k: 's1', name: '小格一' }, { k: 's2', name: '小格二' }, { k: 's3', name: '小格三' }] },
+        bento:  { name: '便當', icon: 'fa-bowl-rice',     kind: 'canvas', frameCost: 2, frameName: '便當盒', noun: '便當',   // 11-12 改畫布：一塊一塊擺，飯一勺一勺放、會壓平
+                  box: [{ k: 'main', name: '主食格', x: 22, y: 22, w: 132, h: 176 }, { k: 's1', name: '小格一', x: 164, y: 22, w: 114, h: 54 }, { k: 's2', name: '小格二', x: 164, y: 83, w: 114, h: 54 }, { k: 's3', name: '小格三', x: 164, y: 144, w: 114, h: 54 }] },
         pizza:  { name: '披薩', icon: 'fa-pizza-slice',   kind: 'canvas', frameCost: 6, frameName: '餅皮', noun: '披薩', equip: 'oven', sauceRole: 'psauce' },   // 11-12 改畫布：料自己擺
     };
     const BASE_ORDER = ['cup', 'burger', 'cake', 'bento', 'pizza'];
@@ -58,6 +58,19 @@
         side.pieces.forEach(p => add(p.x));
         side.strokes.forEach(t => t.pts.forEach(q => add(q[0])));
         return bins.size / 6;
+    }
+    // 🍱 便當：點在哪一格；飯每 2 勺一份、配菜每 3 塊一份
+    function _cellAt(x, y) {
+        const c = BASES.bento.box.find(c => x >= c.x && x <= c.x + c.w && y >= c.y && y <= c.y + c.h);
+        return c ? c.k : null;
+    }
+    function _bentoItems(b) {
+        const g = {};
+        (b.pieces || []).forEach(p => { const k = p.id + '@' + p.c; (g[k] || (g[k] = { id: p.id, c: p.c, n: 0 })).n++; });
+        return Object.values(g).filter(e => ING_BY[e.id]).map(e => ({
+            ing: ING_BY[e.id], where: (BASES.bento.box.find(c => c.k === e.c) || {}).name || '格子', cell: e.c, pieces: e.n,
+            n: Math.ceil(e.n / (ING_BY[e.id].role === 'grain' ? 2 : 3)),
+        }));
     }
     function _cakeItems(cv) {
         if (!cv) return [];
@@ -117,6 +130,7 @@
         { id: 'nuts', name: '堅果碎', s: '堅果', tag: '酥脆', cost: 3, role: 'top', str: 1, col: '#b98a5a', tone: 'd', use: ['cake'], pr: 4, shape: 'bits' },
         { id: 'sprinkle', name: '巧克力顆粒', s: '顆粒', tag: '甜', cost: 2, role: 'top', str: 1, col: '#5b3a2a', tone: 'd', use: ['cake'], pr: 3, shape: 'bits' },
         { id: 'rose', name: '玫瑰花瓣', s: '玫瑰', tag: '花香', cost: 4, role: 'top', str: 1, col: '#e48aa5', tone: 'l', use: ['cake'], pr: 6, shape: 'bits' },
+        { id: 'blueberry', name: '藍莓', s: '藍莓', tag: '果酸', cost: 3, role: 'top', str: 1, col: '#4a5aa8', tone: 'd', use: ['cake'], pr: 6, shape: 'bits' },
         { id: 'lemon', name: '檸檬皮', s: '檸檬', tag: '清爽', cost: 2, role: 'top', str: 1, col: '#f3e36b', tone: 'l', use: ['cake'], pr: 5, shape: 'bits' },
         { id: 'mintleaf', name: '薄荷葉', s: '薄荷', tag: '沁涼', cost: 2, role: 'top', str: 1, col: '#6cc08b', tone: 'l', use: ['cake'], pr: 6, shape: 'leaf' },
         // 便當
@@ -146,11 +160,11 @@
         { id: 'honey', name: '蜂蜜', s: '蜂蜜', tag: '甜', cost: 2, role: 'ptop', str: 3, col: '#e8b23a', tone: 'l', use: ['pizza'], pipe: true },
         { id: 'seafood', name: '海鮮', s: '海鮮', tag: '鹹香', cost: 6, role: 'ptop', str: 2, col: '#f0a080', tone: 'l', use: ['pizza'], pr: 11 },
     ];
-    // 🖼 料的圖（11-12 阿洛畫的 48 樣，128px 一格、一排 7 格；素材庫 sound-files 鎖 commit，走 GitHub raw——jsDelivr 會因整包太大回 403）
-    //   飲料那 10 樣沿用書咖舊的雪碧圖（os_cafe.js 的 .oc-sprite-*）
-    const ATLAS = { url: 'https://raw.githubusercontent.com/nancywang3641/sound-files/6646155b9fcc48d0adf6ac508ed69abbf48acb36/cafe_kitchen_v1/kitchen_ings_v1.webp', cell: 128, cols: 7, w: 896, h: 896,
-        pos: {"beef":0,"chicken":1,"egg":2,"cheese":3,"bacon":4,"lettuce":5,"tomato":6,"onion":7,"pickle":8,"teri":9,"hot":10,"mustard":11,"cream":12,"custard":13,"matcha":14,"straw":15,"choco":16,"nuts":17,"sprinkle":18,"rose":19,"lemon":20,"mintleaf":21,"milk":22,"rice":23,"friedrice":24,"grainrice":25,"karaage":26,"terichk":27,"salmon":28,"tamago":29,"greens":30,"cucumber":31,"kimchi":32,"braisedegg":33,"fruitcut":34,"redsauce":35,"whitesauce":36,"pesto":37,"mozz":38,"salami":39,"pineapple":40,"mushroom":41,"pepper":42,"chili":43,"basil":44,"honey":45,"seafood":46} };
-    const OLD_SPRITE = ["coffee", "tea", "soda", "floral", "berry", "caramel", "spice", "foam", "cookie", "mint"];
+    // 🖼 料的圖（11-12 阿洛畫的平面風 58 樣，照她給的扁平小牛當畫風、配小人的向量風；128px 一格、一排 8 格；
+    //   素材庫 sound-files 鎖 commit，走 GitHub raw——jsDelivr 會因整包太大回 403）
+    const ATLAS = { url: 'https://raw.githubusercontent.com/nancywang3641/sound-files/0863df7942606e8d95ecfbea887eafa8c52c2c50/cafe_kitchen_v1/kitchen_ings_v2.webp', cell: 128, cols: 8, w: 1024, h: 1024,
+        pos: {"coffee":0,"tea":1,"soda":2,"milk":3,"floral":4,"berry":5,"caramel":6,"spice":7,"foam":8,"cookie":9,"mint":10,"beef":11,"chicken":12,"egg":13,"cheese":14,"bacon":15,"lettuce":16,"tomato":17,"onion":18,"pickle":19,"teri":20,"hot":21,"mustard":22,"cream":23,"custard":24,"matcha":25,"straw":26,"choco":27,"nuts":28,"sprinkle":29,"rose":30,"lemon":31,"mintleaf":32,"blueberry":33,"rice":34,"friedrice":35,"grainrice":36,"karaage":37,"terichk":38,"salmon":39,"tamago":40,"greens":41,"cucumber":42,"kimchi":43,"braisedegg":44,"fruitcut":45,"redsauce":46,"whitesauce":47,"pesto":48,"mozz":49,"salami":50,"pineapple":51,"mushroom":52,"pepper":53,"chili":54,"basil":55,"honey":56,"seafood":57} };
+    const OLD_SPRITE = [];   // 11-12 起飲料也有平面風新圖，舊雪碧圖只剩菜單上的舊飲品在用
     // 圖上的一格畫進 svg（x,y 是左上角，w,h 是要畫多大，照比例放進去）
     function _atlasSvg(id, x, y, w, h) {
         const n = ATLAS.pos[id];
@@ -225,6 +239,7 @@
     }
     function _items(b) {   // 放了的料，帶「在哪」、幾份（n）
         const B = BASES[b.base];
+        if (b.base === 'bento') return _bentoItems(b);
         if (B.kind === 'canvas') {
             const out = b.sauce && ING_BY[b.sauce] ? [{ ing: ING_BY[b.sauce], where: '整片', n: 1 }] : [];
             return out.concat(_cvGroups(b));
@@ -238,7 +253,7 @@
     function _cvKey(cv) {
         if (!cv) return '';
         const r = (v) => Math.round(v / 5);
-        const ps = (cv.pieces || []).map(p => p.id + (p.f || '') + r(p.x) + ',' + r(p.y)).sort().join(';');
+        const ps = (cv.pieces || []).map(p => p.id + (p.f || '') + (p.c || '') + r(p.x) + ',' + r(p.y)).sort().join(';');
         const st = (cv.strokes || []).map(t => t.id + (t.f || '') + t.pts.filter((q, i) => i % 3 === 0).map(q => r(q[0]) + ',' + r(q[1])).join(' ')).join(';');
         return (_hash(ps + '|' + st) >>> 0).toString(36);
     }
@@ -264,8 +279,8 @@
         if (b.base === 'burger' && !roles.includes('main')) return '還沒有主角：牛肉餅、炸雞排或煎蛋選一樣';
         if (b.base === 'cake' && !roles.includes('cream')) return '蛋糕胚上至少要抹一層奶油或卡士達';
         if (b.base === 'bento') {
-            if (!b.cells.main) return '主食格還空著';
-            if (its.length < 3) return '小格至少放兩樣';
+            if (!its.some(x => x.cell === 'main' && x.ing.role === 'grain')) return '先在左邊的主食格放飯';
+            if (new Set(its.filter(x => x.cell !== 'main').map(x => x.cell)).size < 2) return '小格至少放兩格';
         }
         if (b.base === 'pizza') {
             if (!b.sauce) return '先在下面選一種醬，抹滿餅皮';
@@ -346,9 +361,21 @@
             const tones = new Set(its.map(x => x.ing.tone));
             if (its.length >= 3 && tones.size === 1) { score -= 4; notes.look.push({ w: 3, t: [...new Set(its.map(x => x.ing.name))].join('、') + '顏色都差不多，看起來很平' }); }
         }
+        if (b.base === 'bento') {
+            const cnt = { main: 0, s1: 0, s2: 0, s3: 0 };
+            let rice = 0;
+            (b.pieces || []).forEach(p => { if (cnt[p.c] != null) cnt[p.c]++; if (p.c === 'main' && ING_BY[p.id]?.role === 'grain') rice++; });
+            if (rice && rice < 3) { score -= 6; notes.bite.push({ w: 5, t: '飯只放了 ' + rice + ' 勺，主食格空了一大半' }); }
+            if (rice > 9) { score -= 6; notes.bite.push({ w: 5, t: '飯壓了 ' + rice + ' 勺，太滿了，蓋子蓋不起來' }); }
+            const empty = BASES.bento.box.filter(c => c.k !== 'main' && !cnt[c.k]);
+            const full = BASES.bento.box.filter(c => c.k !== 'main' && cnt[c.k] > 5);
+            if (empty.length) { score -= 3; notes.look.push({ w: 3, t: empty.map(c => c.name).join('、') + '空著，打開來缺一角' }); }
+            else if (full.length) { score -= 3; notes.look.push({ w: 3, t: full[0].name + '塞了 ' + cnt[full[0].k] + ' 塊，擠到看不出是什麼' }); }
+            else notes.look.push({ w: 1, good: true, t: '每一格都有東西，打開來很豐盛' });
+        }
         // 畫布（披薩、蛋糕頂面）：看位置——左右兩邊、蓋到多少、擠在一角、擠太多
         const cv = _cvOf(b);
-        if (cv && (B.kind === 'canvas' || B.top)) {
+        if (cv && b.base !== 'bento' && (B.kind === 'canvas' || B.top)) {
             const pizza = b.base === 'pizza', sp = pizza ? null : _cakeSplit(cv);
             const lay = _layout(pizza ? cv : sp.top, CV_R[b.base] || 124);
             if (!pizza) {
@@ -416,7 +443,7 @@
         if (b.base === 'cup') parts = [pick(['sauce', 'top']), pick(['liquid'])];
         else if (b.base === 'burger') parts = [pick(['main']), pick(['side', 'sauce'])];
         else if (b.base === 'cake') parts = [pick(['side', 'top', 'sauce']), pick(['cream'])];
-        else if (b.base === 'bento') parts = [pick(['main']) || pick(['side'])];
+        else if (b.base === 'bento') parts = [pick(['main']) || pick(['side'])];   // 主菜當名字
         else parts = _cvGroups(b).sort((a, z) => z.n - a.n).slice(0, 2).map(x => x.ing);
         const seen = new Set();
         const words = parts.filter(Boolean).filter(x => !seen.has(x.s) && seen.add(x.s)).map(x => x.s);
@@ -425,6 +452,7 @@
     function _blurbOf(b) {
         const its = _items(b).map(x => x.ing.name);
         if (b.base === 'cup') return '由下往上：' + its.join('、');
+        if (b.base === 'bento') return [...new Set(its)].join('、') + '一起裝';
         if (b.base === 'pizza') return (ING_BY[b.sauce] ? ING_BY[b.sauce].name + '上面' : '') + '鋪了' + its.slice(1).join('、');
         if (BASES[b.base].kind === 'stack') {
             const tops = [...new Set(_cakeItems(b.top).map(x => x.ing.name))];
@@ -538,7 +566,7 @@
         if (!ing) return '';
         const r = ing.pr || 8, c = ing.col;
         let g;
-        if (ATLAS.pos[p.id] != null) { const d = Math.max(22, r * 3); g = _atlasSvg(p.id, -d / 2, -d / 2, d, d); }
+        if (ATLAS.pos[p.id] != null) { const d = ing.use.includes('bento') ? 40 : Math.max(22, r * 3); g = _atlasSvg(p.id, -d / 2, -d / 2, d, d); }
         else if (ing.shape === 'leaf' || p.id === 'basil') g = '<ellipse rx="' + r + '" ry="' + (r * 0.5) + '" fill="' + c + '"/><line x1="' + (-r) + '" y1="0" x2="' + r + '" y2="0" stroke="#000" stroke-opacity=".2" stroke-width="1"/>';
         else if (p.id === 'straw') {   // 草莓：下尖上圓、一身籽、頭上一圈綠葉
             const f = (v) => (v * r).toFixed(1);
@@ -614,8 +642,37 @@
         if (!opt.thumb && empty) svg += '<text x="150" y="104" text-anchor="middle" class="ock-hint">點下面的料，再點蛋糕的上面或側面</text>';
         return '<svg class="ock-svg ock-canvas" viewBox="0 0 300 250" xmlns="http://www.w3.org/2000/svg" role="img">' + svg + '</svg>';
     }
+    // 🍱 便當盒（正上方看）：飯一勺一勺是向量的一坨，剛放下那勺會「壓平」；配菜用圖；每塊只畫在自己那格裡
+    function _riceSvg(ing, p, fresh) {
+        const r = _rng(p.id + p.x + ',' + p.y), dots = ing.id === 'friedrice' ? ['#f2c94c', '#7fb04a', '#e0a050'] : ing.id === 'grainrice' ? ['#7a4a5a', '#5a3a2a', '#c9a07a'] : ['#e8e0cc'];
+        // 一勺壓平＝一大片扁圓，幾勺疊在一起就連成一整床飯（底下一圈淡影讓飯床看得出邊）
+        let g = '<ellipse rx="37" ry="28" fill="' + ing.col + '"/>';
+        for (let k = 0; k < 16; k++) g += '<ellipse cx="' + (r() * 60 - 30).toFixed(1) + '" cy="' + (r() * 40 - 20).toFixed(1) + '" rx="2.6" ry="1.5" transform="rotate(' + Math.round(r() * 180) + ')" fill="' + dots[k % dots.length] + '"/>';
+        return '<g transform="translate(' + p.x + ' ' + p.y + ')"><g' + (fresh ? ' class="ock-press"' : '') + '>' + g + '</g></g>';
+    }
+    function _drawBento(b, opt) {
+        const B = BASES.bento;
+        let defs = '<defs>' + B.box.map(c => '<clipPath id="ockc-' + c.k + '"><rect x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" rx="8"/></clipPath>').join('') + '</defs>';
+        let svg = '<rect x="8" y="8" width="284" height="204" rx="18" fill="#3b2a22"/>' + B.box.map(c => '<rect x="' + c.x + '" y="' + c.y + '" width="' + c.w + '" height="' + c.h + '" rx="8" fill="#f7efe2"/>').join('');
+        const ps = (b.pieces || []).map((p, i) => ({ p, i }));
+        B.box.forEach(c => {
+            const mine = ps.filter(o => o.p.c === c.k).sort((a, z) => (ING_BY[z.p.id]?.role === 'grain') - (ING_BY[a.p.id]?.role === 'grain') || a.p.y - z.p.y);   // 飯先鋪底，配菜疊上去
+            if (!mine.length) { if (!opt.thumb) svg += '<text x="' + (c.x + c.w / 2) + '" y="' + (c.y + c.h / 2 + 4) + '" text-anchor="middle" class="ock-hint">' + c.name + '</text>'; return; }
+            const bed = mine.filter(o => ING_BY[o.p.id]?.role === 'grain').map(o => '<ellipse cx="' + o.p.x + '" cy="' + (o.p.y + 3) + '" rx="37" ry="28" fill="#000" opacity=".07"/>').join('');   // 影子先畫一層，飯床裡面才不會有一道道弧線
+            svg += '<g clip-path="url(#ockc-' + c.k + ')">' + bed + mine.map(o => {
+                const ing = ING_BY[o.p.id];
+                if (!ing) return '';
+                const tap = opt.thumb ? '' : ' data-p="' + o.i + '"';
+                if (ing.role === 'grain') return '<g' + tap + '>' + _riceSvg(ing, o.p, !opt.thumb && o.i === _fresh) + '</g>';
+                return _pieceSvg(o.p, o.i, opt, 'flat');
+            }).join('') + '</g>';
+        });
+        return '<svg class="ock-svg ock-canvas" viewBox="0 0 300 220" xmlns="http://www.w3.org/2000/svg" role="img">' + defs + svg + '</svg>';
+    }
+    let _fresh = -1;   // 剛放下的那勺飯（畫一次壓平就清掉）
     function _drawCanvas(b, opt) {
         if (b.base === 'cake') return _drawCake34(b, opt);
+        if (b.base === 'bento') { const out = _drawBento(b, opt); if (!opt.thumb) _fresh = -1; return out; }
         const cv = _cvOf(b) || { pieces: [], strokes: [] };
         let bg;
         if (b.base === 'pizza') {
@@ -842,7 +899,7 @@
             const cell = B1.kind === 'cells' ? B1.cells.find(c => c.k === _sel) : null;
             let list = ING.filter(x => x.use.includes(_cur.base));
             if (cell) list = list.filter(x => cell.roles ? cell.roles.includes(x.role) : !['grain', 'psauce'].includes(x.role));
-            $('.ock-pantry-label').textContent = cell ? '放進「' + cell.name + '」的料' : cvm ? (_cur.base === 'pizza' ? '醬點一下就抹滿；料點一樣，再點披薩' : '點一樣料，再點蛋糕的上面或側面；奶油和醬用拖的擠') : '料（點一下放到最上面）';
+            $('.ock-pantry-label').textContent = cell ? '放進「' + cell.name + '」的料' : cvm ? (_cur.base === 'bento' ? '點一樣料，再點便當盒的格子；飯一勺一勺放，會壓平' : _cur.base === 'pizza' ? '醬點一下就抹滿；料點一樣，再點披薩' : '點一樣料，再點蛋糕的上面或側面；奶油和醬用拖的擠') : '料（點一下放到最上面）';
             const onIng = (x) => cvm && (x.id === _pick || x.id === _cur.sauce);
             $('.ock-pantry').innerHTML = list.map(x => '<button class="ock-ing' + (onIng(x) ? ' on' : '') + '" data-id="' + x.id + '">' + _icon(x.id) +
                 '<b>' + x.name + '</b><small>' + x.tag + '・' + x.cost + ' 塊</small></button>').join('');
@@ -925,7 +982,7 @@
                 if (t === 'put' || t === 'erase') { _tool = t; paint(); return; }
                 if (t === 'undo' && _hist.length) {
                     const o = JSON.parse(_hist.pop());
-                    if (_cur.base === 'pizza') Object.assign(_cur, { sauce: o.sauce, pieces: o.cv.pieces, strokes: o.cv.strokes });
+                    if (B0().kind === 'canvas') Object.assign(_cur, { sauce: o.sauce, pieces: o.cv.pieces, strokes: o.cv.strokes });
                     else _cur.top = o.cv;
                 }
                 if (t === 'clear' && cv && ((cv.pieces || []).length || (cv.strokes || []).length)) { pushHist(); cv.pieces = []; cv.strokes = []; }
@@ -964,7 +1021,7 @@
         const svgNow = () => $('.ock-pic svg');
         const toPt = (e) => { const sv = svgNow(), r = sv.getBoundingClientRect(), vb = sv.viewBox.baseVal; return [(e.clientX - r.left) * vb.width / r.width, (e.clientY - r.top) * vb.height / r.height]; };
         const isCake = () => _cur.base === 'cake';
-        const inside = (q) => isCake() ? !!_cakeFace(q[0], q[1]) : Math.hypot(q[0] - CV_MID, q[1] - CV_MID) <= (CV_R[_cur.base] || 124);
+        const inside = (q) => isCake() ? !!_cakeFace(q[0], q[1]) : _cur.base === 'bento' ? !!_cellAt(q[0], q[1]) : Math.hypot(q[0] - CV_MID, q[1] - CV_MID) <= (CV_R[_cur.base] || 124);
         const faceOf = (q) => isCake() ? (_cakeFace(q[0], q[1]) || 'top') : undefined;
         const modeOf = (p) => isCake() ? (p.f === 'side' ? 'cake-side' : 'cake-top') : 'flat';
         const rd1 = (v) => Math.round(v * 10) / 10;
@@ -982,7 +1039,7 @@
             const ing = ING_BY[_pick];
             const cap = () => { try { svgNow().setPointerCapture(e.pointerId); } catch (er) {} };
             // 手上拿著擠的（奶油、醬）：壓在料上也是擠；拿著一顆一顆的料（或沒拿）：壓在料上＝拖著移動
-            if (hp && !(ing && ing.pipe)) { pushHist(); drag = { i: +hp.dataset.p, el: hp, moved: false }; cap(); return; }
+            if (hp && !(ing && ing.pipe)) { pushHist(); const p0 = cv.pieces[+hp.dataset.p]; drag = { i: +hp.dataset.p, el: hp, moved: false, ox: p0.x, oy: p0.y }; cap(); return; }
             if (!ing) { toast('先在下面點一樣料'); return; }
             if (_cur.base === 'pizza' && !_cur.sauce) { toast('先選一種醬抹滿餅皮'); return; }
             if (ing.pipe) {
@@ -1000,6 +1057,11 @@
             const r = _rng(ing.id + ':' + cv.pieces.length + ':' + Math.round(q[0]) + ',' + Math.round(q[1]));
             const pc = { id: ing.id, x: rd1(q[0]), y: rd1(q[1]), s: Math.round((0.9 + r() * 0.2) * 100) / 100, a: Math.round(r() * 360) };   // 每顆大小、角度差一點
             if (isCake()) pc.f = faceOf(q);
+            if (_cur.base === 'bento') {
+                pc.c = _cellAt(q[0], q[1]);
+                if (ing.role === 'grain' && pc.c !== 'main') { _hist.pop(); toast('飯放左邊的主食格'); return; }
+                if (ing.role === 'grain') { delete pc.a; _fresh = cv.pieces.length; }
+            }
             cv.pieces.push(pc);
             clearResult();
             paint();
@@ -1012,6 +1074,12 @@
                 const p = cv.pieces[drag.i];
                 p.x = rd1(q[0]); p.y = rd1(q[1]);
                 if (isCake()) p.f = faceOf(q);
+                if (_cur.base === 'bento') {
+                    const c = _cellAt(q[0], q[1]);
+                    if (!c || (ING_BY[p.id]?.role === 'grain' && c !== 'main')) { p.x = drag.ox; p.y = drag.oy; return; }
+                    p.c = c; drag.ox = p.x; drag.oy = p.y;
+                    if (ING_BY[p.id]?.role === 'grain') { drag.el.firstElementChild?.setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ')'); drag.moved = true; return; }
+                }
                 drag.el.setAttribute('transform', _pieceTf(p, modeOf(p)));
                 drag.moved = true;
                 return;
@@ -1123,6 +1191,9 @@
             '.ock-svg.ock-canvas [data-p],.ock-svg.ock-canvas [data-s]{cursor:grab;}' +
             '.ock-tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;}.ock-tools button{padding:7px 2px;border-radius:8px;border:1px solid #c9a77c;background:#fff;color:#674224;font-size:11px;cursor:pointer;}.ock-tools button.on{background:#f2dfc6;border-color:#b77b42;font-weight:700;}.ock-tools button:disabled{opacity:.4;cursor:default;}' +
             '.ock-side-note.left{text-align:left;margin-top:6px;}.ock-ing.on{background:#f2dfc6;border-color:#b77b42;box-shadow:inset 0 0 0 1px rgba(183,123,66,.25);}' +
+            '.ock-press{transform-box:fill-box;transform-origin:50% 75%;animation:ock-press .5s cubic-bezier(.3,1.5,.5,1) both;}' +
+            '@keyframes ock-press{0%{transform:translateY(-14px) scale(.65,1.45);}45%{transform:translateY(0) scale(1.22,.7);}100%{transform:scale(1,1);}}' +
+            '@media (prefers-reduced-motion: reduce){.ock-press{animation:none;}}' +
             '.ock-photo{display:flex;justify-content:center;margin:2px 0 6px;}.ock-photo .ock-svg{width:150px;max-height:150px;height:auto;display:block;}' +
             '.ock-thumb{display:block;width:40px;height:40px;}.ock-thumb svg{width:40px;height:40px;display:block;}';
         doc.head.appendChild(st);
