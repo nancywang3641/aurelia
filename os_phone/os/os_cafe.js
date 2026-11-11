@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------
 // [檔案] os_cafe.js
 // 路徑：os_phone/os/os_cafe.js
-// 職責：📖☕ 書咖經營系統——調配台(研發)+上架命名+菜單/書單+客人上門結算。
+// 職責：📖☕ 書咖經營系統——菜單/書單+備料+客人上門結算（研發在 os_cafe_kitchen.js：11-12 調配＋創想合成研發台；這裡留舊調配那杯的揭曉 _labResult／_finishRdNow）。
 //   10-12 改經營版：書咖自己的帳戶(跟 PT 錢包分開)+每天體力；研發花錢花體力、等幾小時才揭曉；
 //   上架的飲品要「備料」才有料，客人到店那一刻有料才點得到（點了才當場做）；10-13 起備的料等下一次 9 點開店才上架、放兩天才倒。
 //   雇來的早班／晚班員工（os_cafe_hire.js）在結算裡跟客人照時間交錯跑：上班先看帳備料、賣完補貨、領薪水。
@@ -27,17 +27,6 @@
         sCombos: ['coffee+caramel+foam', 'tea+floral+cookie', 'soda+berry+mint', 'coffee+spice+cookie', 'tea+berry+foam', 'soda+floral+mint'],
         cCombos: ['soda+caramel+foam', 'coffee+berry+mint', 'tea+spice+mint', 'soda+spice+cookie'],
         hashARatio: 0.45,   // 非策劃組合落 A 的比例
-        freeformCap: 3,     // 「自由創想」同時在架上限(防氪金灌爆菜單)
-        // 創想符號庫(遊戲材料,可增減):丟進鍋裡讓店長解讀成飲品意象——視差是虛擬系統,不用正常化,蛇+櫻桃也給店長圓XD
-        symbols: [
-            '⭐', '🌙', '☀️', '🌧️', '❄️', '⚡', '🌈', '🌫️', '☄️', '🌪️', '🌊', '🫧', '🔥', '💫', '✨', '🧊', '💥', '🌋',
-            '🌸', '🌿', '🍀', '🌵', '🌹', '🥀', '🍄', '🌾', '🎋', '🌻', '🪷', '🌱',
-            '🍋', '🍇', '🍯', '🍫', '🥛', '🍒', '🍑', '🍎', '🥭', '🍍', '🥥', '🫐', '🍓', '🌶️', '🧂', '🍵', '☕', '🍶', '🥃', '🍬', '🍭', '🍪', '🎂', '🥚', '🍜', '🧋',
-            '🐍', '🐈', '🐇', '🦋', '🦉', '🐟', '🐙', '🦑', '🦂', '🕷️', '🐉', '🦢', '🐺', '🦊', '🐝', '🪲', '🦇', '🐌', '🦎', '🐸',
-            '🖤', '💜', '🤍', '💎', '🔮', '🪞', '🕯️', '🗝️', '⚙️', '🧿', '📜', '🎻', '🎐', '⌛', '🧬', '🪐', '👁️', '🌑', '💀', '👻', '⛓️', '🪶', '🎭', '🕸️', '🎲', '🧸', '📀', '🫀',
-            '♾️', '☯️', '⚗️', '🧪', '📡', '🧲', '🔋', '🛰️', '🕳️', '🎇', '🧩', '🪄',
-        ],
-        symbolMax: 4,       // 一鍋最多丟幾顆
         // 💰 書咖自己的帳（跟 PT 錢包分開）：備料、研發都從這裡扣，客人付的錢進這裡
         //   每份材料錢＝售價三分之一；10-13 起備料＝料等下一次 9 點開店才上架、能放兩天（那天＋隔天），第三天早上倒掉
         fund: { start: 300, staminaMax: 12, batchStamina: 2, batchMax: 8, rdCost: 30, rdStamina: 3, rdHours: 4, shelfDays: 2 },
@@ -136,7 +125,10 @@
 
     // ── 💰 書咖帳戶、庫存、研發(資料層)──
     function _REG() { return win.OS_CAFE_REGULARS || window.OS_CAFE_REGULARS || null; }
-    function _unitCost(m) { return Math.round((Number(m && m.price) || 0) / 3); }   // 每份材料錢＝售價三分之一
+    function _unitCost(m) {   // 每份材料錢：研發台做的照料單算好存在 unit；舊的飲品照售價三分之一
+        if (m && Number.isFinite(m.unit)) return m.unit;
+        return Math.round((Number(m && m.price) || 0) / 3);
+    }
     // 跨日＝體力回滿（讀的時候就算好，不用等結算寫回）
     function _freshFund(f, today) {
         const F = CAFE_CFG.fund;
@@ -236,6 +228,17 @@
         });
     }
 
+    // 改版前調配到一半的那杯：研發台不用等，打開就直接揭曉
+    function _finishRdNow() {
+        return _locked(async () => {
+            const rd = await _getStrict(K_RD, null);
+            if (!rd) return false;
+            rd.doneAt = 0;
+            await _set(K_RD, rd);
+            return true;
+        }).then(had => had ? revealRd() : null);
+    }
+
     // ── 品質判定(寫死矩陣+雜湊,零 API=真解謎)──
     function _comboKey(b, f, t) { return b + '+' + f + '+' + t; }
     function _hash(str) { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; return h; }
@@ -246,7 +249,10 @@
     }
     function _ing(slot, id) { return CAFE_CFG.pantry[slot].find(x => x.id === id) || null; }
     function _tagsOf(b, f, t) { return [_ing('base', b), _ing('flavor', f), _ing('top', t)].filter(Boolean).map(x => x.tag); }
-    function _tagPool() { return Object.values(CAFE_CFG.pantry).flat().map(x => x.tag); }   // 調性標籤詞彙表(創想只准從這挑,②配對才對得上)
+    function _tagPool() {   // 研發台的料多了「鹹香」這類口味，一起進來（常客、書裡角色的口味才挑得到）
+        const K = win.OS_CAFE_KITCHEN || window.OS_CAFE_KITCHEN;
+        return [...new Set(Object.values(CAFE_CFG.pantry).flat().map(x => x.tag).concat(K && K.tags ? K.tags() : []))];
+    }   // 調性標籤詞彙表(創想只准從這挑,②配對才對得上)
 
     // ── 上架命名(副模型直連,仿 os_pt._valuate;失敗退機械名)──
     function _extractJSON(raw) {
@@ -282,43 +288,6 @@
             if (json && json.name) return { name: String(json.name).slice(0, 12), blurb: String(json.blurb || '').slice(0, 40) };
             return fallback;
         } catch (e) { console.warn('[Cafe] 命名失敗,退機械名', e); return fallback; }
-    }
-
-    // ── ✨ 自由創想(丟符號+備用詞→副模型當嚴格評審;整杯都是AI生的,失敗不退機械底、直接重試)──
-    async function _freeform(symbols, words) {
-        const api = win.OS_API || window.OS_API;
-        if (!api || !api.chat) return null;
-        try {
-            let config = {};
-            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
-            if (OS) {
-                const sec = OS.getSecondaryConfig ? OS.getSecondaryConfig() : null;
-                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
-            }
-            config = config || {};
-            config.route = 'cafe_freeform';
-            const prompt =
-                '你是書咖店長兼飲品評審。玩家把一把符號丟進了調配鍋,請把符號解讀成飲品意象,發明一款飲品並嚴格評定品質。只回傳純 JSON:\n' +
-                '{"tier":"{S|A|B|C 其中之一}","name":"{品名,不超過8個字,有記憶點}","blurb":"{一句菜單文案,不超過30字}","tags":["{從標籤池挑1~3個}"],"why":"{一句評語,說明這杯成不成立}"}\n' +
-                '評分標準:S=靈感之作(意象協調且驚豔,極少給)/A=優良(成立且好喝)/B=平庸(能喝但無記憶點)/C=不成立(意象打架或難以下嚥)。嚴格把關,平庸就給B,別討好玩家。\n' +
-                '標籤池(只准從中挑):' + _tagPool().join('、') + '\n' +
-                '鍋裡的符號:' + symbols.join(' ') + '\n' +
-                (words ? '玩家補充的關鍵詞:' + words + '\n' : '') +
-                '語言:繁體中文。';
-            const raw = await new Promise((resolve, reject) => {
-                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'cafe', label:'書咖自由創想', keepCodeFences: true });
-            });
-            const json = _extractJSON(raw);
-            if (!json || !/^[SABC]$/.test(String(json.tier))) return null;
-            const pool = _tagPool();
-            return {
-                tier: json.tier,
-                name: String(json.name || '').slice(0, 12),
-                blurb: String(json.blurb || '').slice(0, 40),
-                tags: (Array.isArray(json.tags) ? json.tags : []).filter(t => pool.includes(t)).slice(0, 3),
-                why: String(json.why || '').slice(0, 60),
-            };
-        } catch (e) { console.warn('[Cafe] 自由創想失敗', e); return null; }
     }
 
     // ── 🚶 每日消費模擬(②):開櫃檯窗時補算離線天數(旅行青蛙式,上限7天;全本地擲骰,只有首訪定調燒一次API)──
@@ -807,7 +776,7 @@
             '.oc-brand-copy{display:flex;flex-direction:column;line-height:1.05;white-space:nowrap;}.oc-brand-copy b{font-size:15px;letter-spacing:.06em;}.oc-brand-copy small{margin-top:4px;color:#a18869;font-size:8px;letter-spacing:.18em;font-weight:700;}' +
             '.oc-head-stats{display:flex;gap:5px;margin-left:auto;}.oc-stat-pill{display:flex;align-items:center;gap:4px;padding:5px 7px;border:1px solid #dfceb2;border-radius:8px;background:rgba(255,255,255,.58);color:#816143;font-size:11px;white-space:nowrap;}.oc-stat-pill b{color:#5e4028;font-size:12px;}' +
             '.oc-head .oc-close{background:none;border:none;color:#765638;cursor:pointer;font-size:15px;padding:5px 6px;border-radius:8px;}.oc-head .oc-close:hover{background:rgba(122,82,48,.1);}' +
-            '.oc-tabs{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:9px 12px 0;}' +
+            '.oc-tabs{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;padding:9px 12px 0;}' +
             '.oc-tab{min-width:0;background:rgba(255,255,255,.45);border:1px solid #dcc9aa;color:#735437;border-radius:8px;padding:6px 2px;cursor:pointer;font-size:10px;white-space:nowrap;}.oc-tab i{display:block;margin-bottom:3px;font-size:12px;}' +
             '.oc-tab.on{background:#8a5c34;border-color:#8a5c34;color:#fff8ed;font-weight:700;box-shadow:0 3px 8px rgba(105,67,35,.18);}' +
             '.oc-tab{position:relative;}.oc-tab.has-dot:after{content:"";position:absolute;top:4px;right:6px;width:7px;height:7px;border-radius:50%;background:#c4573f;box-shadow:0 0 0 2px rgba(255,250,240,.9);}' +
@@ -875,10 +844,10 @@
         put('coins', fund ? String(fund.coins) : '—');
         put('sta', fund ? fund.stamina + '/' + CAFE_CFG.fund.staminaMax : '—');
     }
-    // 調配分頁的小紅點：研發的那杯時間到了、她還沒打開看
+    // 研發分頁的小紅點：改版前調配的那杯時間到了、她還沒打開看
     function _paintLabDot() {
         if (!_winEl) return;
-        _get(K_RD, null).then(rd => { _winEl?.querySelector('.oc-tab[data-tab="lab"]')?.classList.toggle('has-dot', !!(rd && rd.doneAt <= Date.now())); }).catch(() => {});
+        _get(K_RD, null).then(rd => { _winEl?.querySelector('.oc-tab[data-tab="kitchen"]')?.classList.toggle('has-dot', !!(rd && rd.doneAt <= Date.now())); }).catch(() => {});
     }
     // 窗開著每分鐘補算一次：客人照時間進來、庫存跟著少、研發倒數會走
     let _tickTimer = null;
@@ -892,7 +861,7 @@
         const tab = on ? on.dataset.tab : 'menu';
         const body = _winEl.querySelector('.oc-body');
         _paintCrewDot();
-        if (tab === 'lab') { if (_winEl.querySelector('.oc-rd')) _renderTab('lab', body); return; }   // 研發中那格鎖著，重畫不會打斷她
+        if (tab === 'kitchen') return;   // 研發台正在擺料，不重畫
         if (tab === 'crew') { if (!_busy()) _renderTab('crew', body); return; }   // 員工頁：啟事倒數、上班中／下班了每分鐘會變；面試、打電話中不重畫
         if (changed && (tab === 'menu' || tab === 'log') && !_winEl.querySelector('.oc-batch')) _renderTab(tab, body);   // 正在挑份數就別重畫
     }
@@ -951,8 +920,7 @@
               '<button class="oc-close" title="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
             '<div class="oc-tabs">' +
               '<button class="oc-tab on" data-tab="menu"><i class="fa-solid fa-receipt"></i>菜單</button>' +
-              '<button class="oc-tab" data-tab="lab"><i class="fa-solid fa-blender"></i>調配</button>' +
-              '<button class="oc-tab" data-tab="free"><i class="fa-solid fa-wand-magic-sparkles"></i>創想</button>' +
+              '<button class="oc-tab" data-tab="kitchen"><i class="fa-solid fa-kitchen-set"></i>研發</button>' +   // 11-12 調配＋創想合成研發台（os_cafe_kitchen.js）
               '<button class="oc-tab" data-tab="books"><i class="fa-solid fa-book-open"></i>書單</button>' +
               '<button class="oc-tab" data-tab="log"><i class="fa-solid fa-users"></i>訪客</button>' +
               '<button class="oc-tab" data-tab="staff"><i class="fa-solid fa-bell-concierge"></i>值班</button>' +   // 店員：挑人、排時間、值班紀錄（10-08 取代點單小遊戲）
@@ -986,7 +954,7 @@
             _refreshHeaderStats();
             const tab = on ? on.dataset.tab : 'menu';
             _paintCrewDot();
-            if (tab !== 'lab' && tab !== 'free' && !_busy()) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數、面試正在操作，別重畫
+            if (tab !== 'kitchen' && !_busy()) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數、面試正在操作，別重畫
         }).catch(() => {});
         _tickTimer = setInterval(_tickOnce, 60000);
     }
@@ -1005,7 +973,8 @@
                 ? menu.map(m => {
                     const iconId = (m.ings || []).find(id => SPRITE_POS[id]) || (m.free ? 'receipt' : 'coffee');
                     const left = _stockNow(stock, m.id, today, nowMin), next = _stockNext(stock, m.id, today, nowMin);
-                    return '<div class="oc-menu-card" data-id="' + _esc(m.id) + '"><span class="oc-drink-icon">' + _sprite(iconId) + '</span>' +
+                    const K = m.dish && (win.OS_CAFE_KITCHEN || window.OS_CAFE_KITCHEN);
+                    return '<div class="oc-menu-card" data-id="' + _esc(m.id) + '"><span class="oc-drink-icon">' + (K && K.thumb ? K.thumb(m.dish) : _sprite(iconId)) + '</span>' +
                     '<span class="oc-menu-main"><span class="oc-menu-title">' + _esc(m.name) + '</span><span class="oc-blurb">' + _esc(m.blurb || '') + '</span>' +
                     '<span class="oc-mini-tags">' + (m.tags || []).map(t => '<i class="oc-mini-tag">' + _esc(t) + '</i>').join('') + '</span></span>' +
                     '<span class="oc-menu-side"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
@@ -1073,8 +1042,6 @@
                     '<div class="oc-item"><span><span class="oc-name">《' + _esc(b.title) + '》</span>' +
                     '<span class="oc-blurb">' + (b.by ? _esc(b.by) + ':' : '') + _esc(b.note || '') + '</span></span></div>').join('')
                 : '<div class="oc-empty"><i class="fa-solid fa-book"></i>書架還空著。<br>之後來店裡的客人會留下他們的推薦書。</div>');
-        } else if (tab === 'free') {
-            _renderFree(body);
         } else if (tab === 'crew') {
             const H = win.OS_CAFE_HIRE || window.OS_CAFE_HIRE;
             if (H && H.renderTab) { await H.renderTab(body); _paintCrewDot(); _refreshHeaderStats(); }
@@ -1084,7 +1051,10 @@
             if (S && S.renderTab) { await S.renderTab(body); _paintStaffDot(); }
             else body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-id-badge"></i>店員還沒準備好，等一下再來看。</div>';
         } else {
-            _renderLab(body);
+            // 🍳 研發台（11-12 調配＋創想合成一頁，os_cafe_kitchen.js）
+            const K = win.OS_CAFE_KITCHEN || window.OS_CAFE_KITCHEN;
+            if (K && K.render) { await K.render(body); _paintLabDot(); }
+            else body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-kitchen-set"></i>研發台還沒準備好，等一下再來看。</div>';
         }
     }
 
@@ -1134,55 +1104,6 @@
         });
     }
 
-    async function _renderFree(body) {
-        const picked = [];
-        body.innerHTML =
-            '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 自由創想</span><span class="oc-section-note">此功能會呼叫 AI</span></div>' +
-            '<div class="oc-slot-label">把符號丟進鍋裡(最多 ' + CAFE_CFG.symbolMax + ' 顆),店長會把它們釀成一杯:</div>' +
-            '<div class="oc-sym-grid">' + CAFE_CFG.symbols.map(s => '<button class="oc-sym" data-s="' + s + '">' + s + '</button>').join('') + '</div>' +
-            '<input class="oc-free-input" maxlength="24" placeholder="想補充的關鍵詞(可留空)">' +
-            '<button class="oc-brew" disabled><i class="fa-solid fa-wand-magic-sparkles"></i> 請店長特調(會呼叫 AI)</button>' +
-            '<div class="oc-result-slot"></div>';
-        const brew = body.querySelector('.oc-brew');
-        body.querySelector('.oc-sym-grid').addEventListener('click', (e) => {
-            const b = e.target.closest('.oc-sym');
-            if (!b) return;
-            const s = b.dataset.s, at = picked.indexOf(s);
-            if (at >= 0) { picked.splice(at, 1); b.classList.remove('on'); }
-            else if (picked.length < CAFE_CFG.symbolMax) { picked.push(s); b.classList.add('on'); }
-            brew.disabled = !picked.length;
-        });
-        brew.addEventListener('click', async () => {
-            brew.disabled = true;
-            brew.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 店長端詳著鍋裡的東西…';
-            const words = body.querySelector('.oc-free-input').value.trim();
-            const r = await _freeform(picked.slice(), words);
-            brew.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> 請店長特調(會呼叫 AI)';
-            brew.disabled = !picked.length;
-            const slot = body.querySelector('.oc-result-slot');
-            if (!r) { slot.innerHTML = '<div class="oc-result"><div class="oc-note">店長走神了,什麼都沒釀出來——再按一次試試。</div></div>'; return; }
-            const T = TIER_TEXT[r.tier];
-            const ok = r.tier === 'S' || r.tier === 'A';
-            slot.innerHTML =
-                '<div class="oc-result"><span class="oc-badge ' + T.cls + '">' + T.label + '</span> ' +
-                (ok ? '✨' + _esc(r.name) : picked.join(' ')) +
-                '<div class="oc-note">' + (r.why ? _esc(r.why) : T.note) + '</div>' +
-                (ok ? '<div class="oc-blurb">' + _esc(r.blurb) + '</div><button class="oc-shelf"><i class="fa-solid fa-arrow-up-from-bracket"></i> 上架</button>' : '') +
-                '</div>';
-            const shelfBtn = slot.querySelector('.oc-shelf');
-            if (shelfBtn) shelfBtn.addEventListener('click', async () => {
-                const menu = await getMenu();
-                if (menu.filter(m => m.free).length >= CAFE_CFG.freeformCap) {
-                    shelfBtn.outerHTML = '<div class="oc-note">創想品在架已滿 ' + CAFE_CFG.freeformCap + ' 款——菜單頁下架一款再來。</div>';
-                    return;
-                }
-                menu.unshift({ id: 'free_' + Date.now(), key: 'free_' + Date.now(), name: r.name, blurb: r.blurb, tier: r.tier, price: CAFE_CFG.prices[r.tier], tags: r.tags, ings: picked.slice(), free: true, ts: Date.now(), sold: 0 });
-                await _set(K_MENU, menu);
-                shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-wand-magic-sparkles"></i>「' + _esc(r.name) + '」上架了!到「菜單」頁看看。</div>';
-            });
-        });
-    }
-
     // 結果卡(研發揭曉、試過的組合都用這張)：好的可以上架，上架起名照舊叫一次副模型
     async function _labResult(slot, key, tier, b, f, t) {
         const ings = [_ing('base', b), _ing('flavor', f), _ing('top', t)];
@@ -1209,84 +1130,6 @@
             shelfBtn.outerHTML = '<div class="oc-note"><i class="fa-solid fa-mug-hot"></i>「' + _esc(named.name) + '」上架了!到「菜單」頁看看。</div>';
         });
     }
-    async function _renderLab(body) {
-        const F = CAFE_CFG.fund;
-        let rd = await _get(K_RD, null);
-        let revealed = null;
-        if (rd && rd.doneAt <= Date.now()) { try { revealed = await revealRd(); } catch (e) {} rd = null; }   // 時間到了＝打開就揭曉
-        const [lab, fund] = await Promise.all([_get(K_LAB, {}), _fundOrNull()]);
-        const sel = { base: null, flavor: null, top: null };
-        const tried = Object.keys(lab).length;
-        const total = Object.values(CAFE_CFG.pantry).reduce((n, list) => n * list.length, 1);
-        const nameOf = (x) => [_ing('base', x.b), _ing('flavor', x.f), _ing('top', x.t)].filter(Boolean).map(i => i.name).join(' + ');
-        let busy = '';
-        if (rd) {
-            const mins = Math.max(1, Math.ceil((rd.doneAt - Date.now()) / 60000));
-            const h = Math.floor(mins / 60), mi = mins % 60;
-            busy = '<div class="oc-rd"><span class="oc-rd-title"><i class="fa-solid fa-hourglass-half"></i> 研發中：' + nameOf(rd) + '</span>' +
-                '<span class="oc-rd-left">還要 ' + (h ? h + ' 小時' + (mi ? ' ' : '') : '') + (mi || !h ? mi + ' 分' : '') + '</span></div>';
-        }
-        body.innerHTML =
-            '<div class="oc-section-head"><span class="oc-section-title"><i class="fa-solid fa-flask"></i> 飲品調配</span><span class="oc-section-note">配方圖鑑 ' + tried + ' / ' + total + '</span></div>' +
-            (revealed ? '<div class="oc-slot-label">研發好了</div><div class="oc-reveal-slot"></div>' : '') +
-            busy +
-            '<div class="oc-lab-pick' + (rd ? ' oc-locked' : '') + '">' +
-            Object.keys(CAFE_CFG.pantry).map(slot =>
-                '<div class="oc-slot-label">' + SLOT_LABEL[slot] + '</div>' +
-                '<div class="oc-chips' + (CAFE_CFG.pantry[slot].length === 3 ? ' three' : '') + '" data-slot="' + slot + '">' +
-                CAFE_CFG.pantry[slot].map(x => '<button class="oc-chip" data-id="' + x.id + '">' + _sprite(x.id, 'oc-ing-icon') + x.name + '</button>').join('') +
-                '</div>').join('') +
-            '</div>' +
-            '<button class="oc-brew" disabled><i class="fa-solid fa-blender"></i> 開始研發</button>' +
-            '<div class="oc-cost-note">研發一杯花 ' + F.rdCost + ' PT 和 ' + F.rdStamina + ' 點體力，等 ' + F.rdHours + ' 小時才知道做出什麼；試過的組合直接看結果</div>' +
-            '<div class="oc-tried"><span>已研發 ' + tried + ' 種</span><span>' + Math.round(tried / total * 100) + '%</span></div>' +
-            '<div class="oc-progress-line"><i></i></div>' +
-            '<div class="oc-result-slot"></div>';
-        body.querySelector('.oc-progress-line i').style.width = Math.min(100, tried / total * 100) + '%';
-        if (revealed) { _paintLabDot(); _refreshHeaderStats(); _labResult(body.querySelector('.oc-reveal-slot'), revealed.key, revealed.tier, revealed.b, revealed.f, revealed.t); }
-        const brew = body.querySelector('.oc-brew');
-        const slotEl = body.querySelector('.oc-result-slot');
-        // 按鈕跟著選的東西變：沒選齊／試過了看結果／新組合要花錢花體力(不夠就灰掉寫為什麼)
-        const paint = () => {
-            const full = sel.base && sel.flavor && sel.top;
-            const key = full ? _comboKey(sel.base, sel.flavor, sel.top) : '';
-            slotEl.querySelector('.oc-why')?.remove();
-            if (rd) { brew.disabled = true; brew.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 研發中，等它好了再來'; return; }
-            if (!full) { brew.disabled = true; brew.innerHTML = '<i class="fa-solid fa-blender"></i> 開始研發'; return; }
-            if (lab[key]) { brew.disabled = false; brew.innerHTML = '<i class="fa-solid fa-eye"></i> 看結果（試過了）'; return; }
-            brew.innerHTML = '<i class="fa-solid fa-blender"></i> 開始研發（' + F.rdCost + ' PT・體力 ' + F.rdStamina + '）';
-            let why = '';
-            if (!fund) why = '讀不到書咖帳戶，等一下再試';
-            else if (fund.coins < F.rdCost) why = '錢不夠（研發要 ' + F.rdCost + '，帳戶剩 ' + fund.coins + '）';
-            else if (fund.stamina < F.rdStamina) why = '體力不夠（剩 ' + fund.stamina + '，研發要 ' + F.rdStamina + '），明天會回滿';
-            brew.disabled = !!why;
-            if (why) slotEl.insertAdjacentHTML('afterbegin', '<div class="oc-why">' + why + '</div>');
-        };
-        paint();
-        body.querySelectorAll('.oc-chips').forEach(row => row.addEventListener('click', (e) => {
-            const chip = e.target.closest('.oc-chip');
-            if (!chip || rd) return;
-            sel[row.dataset.slot] = chip.dataset.id;
-            row.querySelectorAll('.oc-chip').forEach(c => c.classList.toggle('on', c === chip));
-            slotEl.querySelector('.oc-result')?.remove();
-            paint();
-        }));
-        brew.addEventListener('click', async () => {
-            if (!(sel.base && sel.flavor && sel.top) || rd) return;
-            const key = _comboKey(sel.base, sel.flavor, sel.top);
-            if (lab[key]) { _labResult(slotEl, key, lab[key], sel.base, sel.flavor, sel.top); return; }
-            brew.disabled = true;
-            const r = await startRd(sel.base, sel.flavor, sel.top);
-            if (!r.ok) {
-                slotEl.querySelector('.oc-why')?.remove();
-                slotEl.insertAdjacentHTML('afterbegin', '<div class="oc-why">' + r.why + '</div>');
-                return;
-            }
-            _refreshHeaderStats();
-            if (_winEl) _renderTab('lab', _winEl.querySelector('.oc-body'));
-        });
-    }
-
     // 🧑‍🍳 給店員那支(os_cafe_staff.js)用的橋:同一份帳本、同一條結算
     function _refresh() {
         if (!_winEl) return;
@@ -1296,7 +1139,7 @@
         _paintCrewDot();
         const on = _winEl.querySelector('.oc-tab.on');
         const tab = on ? on.dataset.tab : 'menu';
-        if (tab !== 'lab' && tab !== 'free' && !_busy()) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數、面試正在操作,別重畫
+        if (tab !== 'kitchen' && !_busy()) _renderTab(tab, _winEl.querySelector('.oc-body'));   // 調配、創想、挑份數、面試正在操作,別重畫
     }
     const _b = { get: _get, getStrict: _getStrict, set: _set, settle: _settle, settleQuiet: () => _settle({ quiet: true }), dayNum: _dayNum, hm: _hm, minOf: _minOf,
         stockNow: _stockNow, stockNext: _stockNext, avail: _avail, usable: _usable, nextOpen: _nextOpen, unitCost: _unitCost, mkId: _mkId, OPEN_MIN, CLOSE_MIN,
@@ -1304,7 +1147,8 @@
         locked: _locked, fundLoad: _fundLoad,   // 員工那支寫 staff2、扣帳戶（貼徵人啟事）跟結算同一條排隊；fundLoad 只能在 locked 裡面叫
         refreshStats: () => _refreshHeaderStats(),
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
-        isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid };
+        isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid,
+        labResult: _labResult, finishRd: _finishRdNow, prices: CAFE_CFG.prices, tierText: TIER_TEXT, esc: _esc };   // 研發台（os_cafe_kitchen.js）用
     win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, makeBatch, startRd, revealRd, _settle, _b };   // _settle=console 診斷用
     console.log('[Cafe] 書咖經營系統就緒');
 })();
