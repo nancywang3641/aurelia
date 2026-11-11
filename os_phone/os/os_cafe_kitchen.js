@@ -69,7 +69,7 @@
     function _pieceTf(p, mode) {
         const ing = ING_BY[p.id] || {}, s = p.s || 1, a = Math.round(p.a || 0);
         const tr = 'translate(' + (+p.x).toFixed(1) + ' ' + (+p.y).toFixed(1) + ') ';
-        if (mode === 'cake-top') return tr + (ing.upright ? 'scale(' + s + ')' : 'scale(' + s + ' ' + (s * 0.45).toFixed(2) + ') rotate(' + a + ')');
+        if (mode === 'cake-top') return tr + (ing.upright ? 'scale(' + s + ')' : 'scale(' + s + ' ' + (s * (ATLAS.pos[p.id] != null ? 0.62 : 0.45)).toFixed(2) + ') rotate(' + a + ')');
         if (mode === 'cake-side') { const q = _sq(p.x); return tr + (ing.upright ? 'scale(' + (s * q).toFixed(2) + ' ' + s + ')' : 'scale(' + (s * q * 0.9).toFixed(2) + ' ' + s + ') rotate(' + a + ')'); }
         return tr + 'rotate(' + a + ') scale(' + s + ')';
     }
@@ -146,6 +146,29 @@
         { id: 'honey', name: '蜂蜜', s: '蜂蜜', tag: '甜', cost: 2, role: 'ptop', str: 3, col: '#e8b23a', tone: 'l', use: ['pizza'], pipe: true },
         { id: 'seafood', name: '海鮮', s: '海鮮', tag: '鹹香', cost: 6, role: 'ptop', str: 2, col: '#f0a080', tone: 'l', use: ['pizza'], pr: 11 },
     ];
+    // 🖼 料的圖（11-12 阿洛畫的 48 樣，128px 一格、一排 7 格；素材庫 sound-files 鎖 commit，走 GitHub raw——jsDelivr 會因整包太大回 403）
+    //   飲料那 10 樣沿用書咖舊的雪碧圖（os_cafe.js 的 .oc-sprite-*）
+    const ATLAS = { url: 'https://raw.githubusercontent.com/nancywang3641/sound-files/6646155b9fcc48d0adf6ac508ed69abbf48acb36/cafe_kitchen_v1/kitchen_ings_v1.webp', cell: 128, cols: 7, w: 896, h: 896,
+        pos: {"beef":0,"chicken":1,"egg":2,"cheese":3,"bacon":4,"lettuce":5,"tomato":6,"onion":7,"pickle":8,"teri":9,"hot":10,"mustard":11,"cream":12,"custard":13,"matcha":14,"straw":15,"choco":16,"nuts":17,"sprinkle":18,"rose":19,"lemon":20,"mintleaf":21,"milk":22,"rice":23,"friedrice":24,"grainrice":25,"karaage":26,"terichk":27,"salmon":28,"tamago":29,"greens":30,"cucumber":31,"kimchi":32,"braisedegg":33,"fruitcut":34,"redsauce":35,"whitesauce":36,"pesto":37,"mozz":38,"salami":39,"pineapple":40,"mushroom":41,"pepper":42,"chili":43,"basil":44,"honey":45,"seafood":46} };
+    const OLD_SPRITE = ["coffee", "tea", "soda", "floral", "berry", "caramel", "spice", "foam", "cookie", "mint"];
+    // 圖上的一格畫進 svg（x,y 是左上角，w,h 是要畫多大，照比例放進去）
+    function _atlasSvg(id, x, y, w, h) {
+        const n = ATLAS.pos[id];
+        if (n == null) return '';
+        const sx = (n % ATLAS.cols) * ATLAS.cell, sy = Math.floor(n / ATLAS.cols) * ATLAS.cell;
+        return '<svg x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" viewBox="' + sx + ' ' + sy + ' ' + ATLAS.cell + ' ' + ATLAS.cell + '" preserveAspectRatio="xMidYMid meet" overflow="hidden">' +
+            '<image href="' + ATLAS.url + '" width="' + ATLAS.w + '" height="' + ATLAS.h + '"/></svg>';
+    }
+    // 料庫按鈕上的小圖
+    function _icon(id) {
+        if (ATLAS.pos[id] != null) return '<span class="ock-ico ock-ico-' + id + '" aria-hidden="true"></span>';
+        if (OLD_SPRITE.includes(id)) return '<span class="oc-sprite oc-sprite-' + id + ' ock-old" aria-hidden="true"></span>';
+        const x = ING_BY[id];
+        return '<span class="ock-sw"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="' + (x ? x.col : '#ccc') + '" stroke="#0002"/></svg></span>';
+    }
+    function _iconCss() {
+        return Object.keys(ATLAS.pos).map(id => { const n = ATLAS.pos[id]; return '.ock-ico-' + id + '{background-position:' + (-(n % ATLAS.cols) * 40) + 'px ' + (-Math.floor(n / ATLAS.cols) * 40) + 'px;}'; }).join('');
+    }
     const ING_BY = {};
     ING.forEach(x => { ING_BY[x.id] = x; });
 
@@ -497,7 +520,10 @@
             Object.keys(box).forEach(k => {
                 const [x, y, w, h] = box[k], ing = ING_BY[b.cells[k]];
                 svg += '<g' + (opt.thumb ? '' : ' data-k="' + k + '"') + ' class="ock-cell"><rect x="' + x + '" y="' + y + '" width="' + w + '" height="' + h + '" rx="7" fill="#f7efe2"' + (ing ? '' : ' stroke="#c9b08a" stroke-dasharray="4 3"') + '/>';
-                if (ing) svg += k === 'main' ? '<rect x="' + (x + 4) + '" y="' + (y + 4) + '" width="' + (w - 8) + '" height="' + (h - 8) + '" rx="6" fill="' + ing.col + '"/>' + _blobs(ing.id, k, x + 4, y + 4, w - 8, h - 8, 26, 2, 3.4, ing.tone === 'l' ? '#e6dcc4' : '#5a4634')
+                if (ing && ATLAS.pos[ing.id] != null) {
+                    if (k === 'main') svg += _atlasSvg(ing.id, x + 2, y + 6, w - 4, h - 12);
+                    else svg += _atlasSvg(ing.id, x + 4, y + 2, h - 4, h - 4) + _atlasSvg(ing.id, x + w - h, y + 2, h - 4, h - 4);   // 小格放兩份
+                } else if (ing) svg += k === 'main' ? '<rect x="' + (x + 4) + '" y="' + (y + 4) + '" width="' + (w - 8) + '" height="' + (h - 8) + '" rx="6" fill="' + ing.col + '"/>' + _blobs(ing.id, k, x + 4, y + 4, w - 8, h - 8, 26, 2, 3.4, ing.tone === 'l' ? '#e6dcc4' : '#5a4634')
                     : _blobs(ing.id, k, x + 3, y + 3, w - 6, h - 6, 6, 7, 10, ing.col);
                 else if (!opt.thumb) svg += '<text x="' + (x + w / 2) + '" y="' + (y + h / 2 + 4) + '" text-anchor="middle" class="ock-hint">+</text>';
                 if (sel === k) svg += '<rect x="' + (x - 2) + '" y="' + (y - 2) + '" width="' + (w + 4) + '" height="' + (h + 4) + '" rx="8" fill="none" stroke="#e0a050" stroke-width="3"/>';
@@ -512,7 +538,8 @@
         if (!ing) return '';
         const r = ing.pr || 8, c = ing.col;
         let g;
-        if (ing.shape === 'leaf' || p.id === 'basil') g = '<ellipse rx="' + r + '" ry="' + (r * 0.5) + '" fill="' + c + '"/><line x1="' + (-r) + '" y1="0" x2="' + r + '" y2="0" stroke="#000" stroke-opacity=".2" stroke-width="1"/>';
+        if (ATLAS.pos[p.id] != null) { const d = Math.max(22, r * 3); g = _atlasSvg(p.id, -d / 2, -d / 2, d, d); }
+        else if (ing.shape === 'leaf' || p.id === 'basil') g = '<ellipse rx="' + r + '" ry="' + (r * 0.5) + '" fill="' + c + '"/><line x1="' + (-r) + '" y1="0" x2="' + r + '" y2="0" stroke="#000" stroke-opacity=".2" stroke-width="1"/>';
         else if (p.id === 'straw') {   // 草莓：下尖上圓、一身籽、頭上一圈綠葉
             const f = (v) => (v * r).toFixed(1);
             g = '<path d="M0 ' + f(1.05) + ' C' + f(-0.55) + ' ' + f(0.75) + ' ' + f(-1.02) + ' ' + f(0.05) + ' ' + f(-0.8) + ' ' + f(-0.5) + ' C' + f(-0.55) + ' ' + f(-0.95) + ' ' + f(-0.12) + ' ' + f(-0.8) + ' 0 ' + f(-0.72) +
@@ -817,7 +844,7 @@
             if (cell) list = list.filter(x => cell.roles ? cell.roles.includes(x.role) : !['grain', 'psauce'].includes(x.role));
             $('.ock-pantry-label').textContent = cell ? '放進「' + cell.name + '」的料' : cvm ? (_cur.base === 'pizza' ? '醬點一下就抹滿；料點一樣，再點披薩' : '點一樣料，再點蛋糕的上面或側面；奶油和醬用拖的擠') : '料（點一下放到最上面）';
             const onIng = (x) => cvm && (x.id === _pick || x.id === _cur.sauce);
-            $('.ock-pantry').innerHTML = list.map(x => '<button class="ock-ing' + (onIng(x) ? ' on' : '') + '" data-id="' + x.id + '"><span class="ock-sw" data-tone="' + x.tone + '"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="' + x.col + '" stroke="#0002"/></svg></span>' +
+            $('.ock-pantry').innerHTML = list.map(x => '<button class="ock-ing' + (onIng(x) ? ' on' : '') + '" data-id="' + x.id + '">' + _icon(x.id) +
                 '<b>' + x.name + '</b><small>' + x.tag + '・' + x.cost + ' 塊</small></button>').join('');
             // 花多少、能不能按
             const its = _items(_cur), cost = _costOf(_cur), key = _keyOf(_cur);
@@ -1078,6 +1105,8 @@
             '.ock-ing{min-width:0;min-height:64px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:5px 3px;border-radius:10px;border:1px solid #d8c3a1;background:rgba(255,255,255,.58);color:#5a4634;cursor:pointer;}' +
             '.ock-ing:active{background:#f2dfc6;}.ock-ing b{font-size:11px;font-weight:700;line-height:1.2;text-align:center;}.ock-ing small{font-size:9px;color:#a18465;}' +
             '.ock-sw{display:block;width:20px;height:20px;}.ock-sw svg{width:20px;height:20px;display:block;}' +
+            '.ock-ico{display:block;width:40px;height:40px;background-image:url("' + ATLAS.url + '");background-size:' + (ATLAS.cols * 40) + 'px ' + (ATLAS.cols * 40) + 'px;background-repeat:no-repeat;}' + _iconCss() +
+            '.ock-ing .ock-old{width:40px;height:40px;border-radius:8px;}.ock-ing{min-height:76px;}' +
             '.ock-cost{margin-top:10px;font-size:11px;color:#7e5b39;text-align:center;line-height:1.6;}.ock-cost b{color:#5a3a20;}' +
             '.ock-res-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}.ock-res-cost{font-size:10px;color:#a18465;}' +
             '.ock-line{display:grid;grid-template-columns:34px minmax(0,1fr);gap:6px;font-size:12px;line-height:1.5;color:#7a3f2a;padding:3px 0;border-top:1px dashed #eadcc4;}' +
