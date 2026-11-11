@@ -3,7 +3,8 @@
 // 路徑：os_phone/os/os_cafe_kitchen.js
 // 職責：🍳 書咖研發台（11-12，調配＋創想合成一頁）。
 //   一輪：選底 → 點料放上去 → 試做一份（料錢就是代價，不扣體力、不用等）→ 三位試吃員照規則說「哪一層出問題」→ 改一層再試或上架。
-//   底：飲料杯／漢堡／蛋糕（由下往上疊）、便當（格子）、披薩（鋪面，要先買烤箱）。
+//   底：飲料杯／漢堡／蛋糕（由下往上疊；蛋糕疊完還有「頂面」畫布）、便當（格子）、披薩（畫布，要先買烤箱）。
+//   畫布（11-12 她：「像畫布那樣…鮮奶油可以直接畫上去」）：料一顆一顆擺、拖得動，擠的用拖的畫；試吃看位置（_layout）。
 //   試吃照規則算、同一份永遠同一個結果、不花 AI 錢；另有一顆「請熟客試吃」叫一次模型（task 'cafe'），只寫評語和取名、不改分數。
 //   上架的菜進同一份菜單（app_data book_cafe/menu），帶 dish（畫縮圖）和 unit（做一批照料單扣錢）。
 //   錢、菜單、研發台資料的寫入一律走 OS_CAFE._b.locked（跟結算同一條排隊）。要排在 os_cafe.js 後面。
@@ -18,18 +19,19 @@
     const BASES = {
         cup:    { name: '飲料', icon: 'fa-mug-hot',       kind: 'stack', max: 4, frame: [],                    frameCost: 0, drink: true, noun: '' },
         burger: { name: '漢堡', icon: 'fa-burger',        kind: 'stack', max: 5, frame: ['bun_b', 'bun_t'],     frameCost: 4, frameName: '麵包', noun: '堡' },
-        cake:   { name: '蛋糕', icon: 'fa-cake-candles',  kind: 'stack', max: 5, frame: ['sponge'],            frameCost: 5, frameName: '蛋糕胚', noun: '蛋糕' },
+        cake:   { name: '蛋糕', icon: 'fa-cake-candles',  kind: 'stack', max: 5, frame: ['sponge'],            frameCost: 5, frameName: '蛋糕胚', noun: '蛋糕', top: true },   // 夾層從側面疊，疊完翻到「頂面」畫布擠奶油、擺料
         bento:  { name: '便當', icon: 'fa-bowl-rice',     kind: 'cells', frameCost: 2, frameName: '便當盒', noun: '便當',
                   cells: [{ k: 'main', name: '主食格', roles: ['grain'] }, { k: 's1', name: '小格一' }, { k: 's2', name: '小格二' }, { k: 's3', name: '小格三' }] },
-        pizza:  { name: '披薩', icon: 'fa-pizza-slice',   kind: 'cells', frameCost: 6, frameName: '餅皮', noun: '披薩', equip: 'oven',
-                  cells: [{ k: 'whole', name: '全面', roles: ['psauce'] }, { k: 'left', name: '左半邊' }, { k: 'right', name: '右半邊' }, { k: 'dots', name: '點綴' }] },
+        pizza:  { name: '披薩', icon: 'fa-pizza-slice',   kind: 'canvas', frameCost: 6, frameName: '餅皮', noun: '披薩', equip: 'oven', sauceRole: 'psauce' },   // 11-12 改畫布：料自己擺
     };
     const BASE_ORDER = ['cup', 'burger', 'cake', 'bento', 'pizza'];
+    // 🎨 畫布（披薩、蛋糕頂面；正上方看，座標 0～300）：一顆一顆擺的料每 6 顆算一份；擠的（奶油、醬、蜂蜜）照長度每 120 算一份（蛋糕外圈擠一圈約 6 份）
+    const PIECE_PER = 6, PIPE_PER = 120, CV_MID = 150, CV_R = { pizza: 124, cake: 128 }, CV_MAXPTS = 800;
     // 底的固定部分（不在料庫裡，錢算在 frameCost）
     const FRAME = {
         bun_b:  { name: '下層麵包', col: '#d9a35a', tone: 'l', shape: 'bunb' },
         bun_t:  { name: '上層麵包', col: '#dca85f', tone: 'l', shape: 'bunt' },
-        sponge: { name: '蛋糕胚',   col: '#f0d29a', tone: 'l', shape: 'sponge' },
+        sponge: { name: '蛋糕胚',   col: '#e8c27e', tone: 'd', shape: 'sponge' },   // 比奶油深，奶油直接抹上去看得出分層
     };
 
     // ── 🧺 料（cost＝一份幾塊；str＝味道多重 1～3；tone＝深 d／淺 l，切面一深一淺才看得出分層）──
@@ -41,8 +43,8 @@
         { id: 'soda', name: '氣泡水', s: '氣泡', tag: '清爽', cost: 2, role: 'liquid', str: 1, col: '#cfe8ef', tone: 'l', use: ['cup'] },
         { id: 'milk', name: '牛奶', s: '牛奶', tag: '綿密', cost: 2, role: 'liquid', str: 1, col: '#f6f1e6', tone: 'l', use: ['cup'] },
         { id: 'floral', name: '花香糖漿', s: '花香', tag: '花香', cost: 2, role: 'sauce', str: 3, col: '#e6a3c0', tone: 'l', use: ['cup'] },
-        { id: 'berry', name: '莓果醬', s: '莓果', tag: '果酸', cost: 3, role: 'sauce', str: 3, col: '#8e2a4a', tone: 'd', use: ['cup', 'cake'] },
-        { id: 'caramel', name: '焦糖', s: '焦糖', tag: '甜', cost: 2, role: 'sauce', str: 3, col: '#b0702a', tone: 'd', use: ['cup', 'cake'] },
+        { id: 'berry', name: '莓果醬', s: '莓果', tag: '果酸', cost: 3, role: 'sauce', str: 3, col: '#8e2a4a', tone: 'd', use: ['cup', 'cake'], pipe: true },
+        { id: 'caramel', name: '焦糖', s: '焦糖', tag: '甜', cost: 2, role: 'sauce', str: 3, col: '#b0702a', tone: 'd', use: ['cup', 'cake'], pipe: true },
         { id: 'spice', name: '辛香料', s: '辛香', tag: '辛暖', cost: 2, role: 'sauce', str: 2, col: '#a0522d', tone: 'd', use: ['cup'] },
         { id: 'foam', name: '奶泡拉花', s: '奶泡', tag: '綿密', cost: 2, role: 'top', str: 1, col: '#fff8ee', tone: 'l', use: ['cup'], shape: 'foam' },
         { id: 'cookie', name: '手工餅乾', s: '餅乾', tag: '酥脆', cost: 3, role: 'top', str: 1, col: '#c58f52', tone: 'd', use: ['cup'], shape: 'bits' },
@@ -61,16 +63,16 @@
         { id: 'hot', name: '辣醬', s: '辣味', tag: '辛暖', cost: 2, role: 'sauce', str: 3, col: '#c1272d', tone: 'd', use: ['burger'] },
         { id: 'mustard', name: '蜂蜜芥末', s: '芥末', tag: '甜', cost: 2, role: 'sauce', str: 2, col: '#e0b02e', tone: 'l', use: ['burger'] },
         // 蛋糕
-        { id: 'cream', name: '鮮奶油', s: '奶油', tag: '綿密', cost: 3, role: 'cream', str: 1, col: '#fbf6ec', tone: 'l', use: ['cake'], shape: 'cream' },
-        { id: 'custard', name: '卡士達', s: '卡士達', tag: '甜', cost: 3, role: 'cream', str: 1, col: '#f3d77a', tone: 'l', use: ['cake'], shape: 'cream' },
-        { id: 'matcha', name: '抹茶奶油', s: '抹茶', tag: '茶香', cost: 4, role: 'cream', str: 2, col: '#9cbf6b', tone: 'l', use: ['cake'], shape: 'cream' },
-        { id: 'straw', name: '草莓', s: '草莓', tag: '果酸', cost: 4, role: 'side', str: 1, col: '#e0475b', tone: 'd', use: ['cake'], shape: 'fruit' },
-        { id: 'choco', name: '巧克力醬', s: '巧克力', tag: '苦韻', cost: 3, role: 'sauce', str: 3, col: '#4a2a1a', tone: 'd', use: ['cake'] },
-        { id: 'nuts', name: '堅果碎', s: '堅果', tag: '酥脆', cost: 3, role: 'top', str: 1, col: '#b98a5a', tone: 'd', use: ['cake'], shape: 'bits' },
-        { id: 'sprinkle', name: '巧克力顆粒', s: '顆粒', tag: '甜', cost: 2, role: 'top', str: 1, col: '#5b3a2a', tone: 'd', use: ['cake'], shape: 'bits' },
-        { id: 'rose', name: '玫瑰花瓣', s: '玫瑰', tag: '花香', cost: 4, role: 'top', str: 1, col: '#e48aa5', tone: 'l', use: ['cake'], shape: 'bits' },
-        { id: 'lemon', name: '檸檬皮', s: '檸檬', tag: '清爽', cost: 2, role: 'top', str: 1, col: '#f3e36b', tone: 'l', use: ['cake'], shape: 'bits' },
-        { id: 'mintleaf', name: '薄荷葉', s: '薄荷', tag: '沁涼', cost: 2, role: 'top', str: 1, col: '#6cc08b', tone: 'l', use: ['cake'], shape: 'leaf' },
+        { id: 'cream', name: '鮮奶油', s: '奶油', tag: '綿密', cost: 3, role: 'cream', str: 1, col: '#fbf6ec', tone: 'l', use: ['cake'], pipe: true, shape: 'cream' },
+        { id: 'custard', name: '卡士達', s: '卡士達', tag: '甜', cost: 3, role: 'cream', str: 1, col: '#f3d77a', tone: 'l', use: ['cake'], pipe: true, shape: 'cream' },
+        { id: 'matcha', name: '抹茶奶油', s: '抹茶', tag: '茶香', cost: 4, role: 'cream', str: 2, col: '#9cbf6b', tone: 'l', use: ['cake'], pipe: true, shape: 'cream' },
+        { id: 'straw', name: '草莓', s: '草莓', tag: '果酸', cost: 4, role: 'side', str: 1, col: '#e0475b', tone: 'd', use: ['cake'], pr: 12, shape: 'fruit' },
+        { id: 'choco', name: '巧克力醬', s: '巧克力', tag: '苦韻', cost: 3, role: 'sauce', str: 3, col: '#4a2a1a', tone: 'd', use: ['cake'], pipe: true },
+        { id: 'nuts', name: '堅果碎', s: '堅果', tag: '酥脆', cost: 3, role: 'top', str: 1, col: '#b98a5a', tone: 'd', use: ['cake'], pr: 4, shape: 'bits' },
+        { id: 'sprinkle', name: '巧克力顆粒', s: '顆粒', tag: '甜', cost: 2, role: 'top', str: 1, col: '#5b3a2a', tone: 'd', use: ['cake'], pr: 3, shape: 'bits' },
+        { id: 'rose', name: '玫瑰花瓣', s: '玫瑰', tag: '花香', cost: 4, role: 'top', str: 1, col: '#e48aa5', tone: 'l', use: ['cake'], pr: 6, shape: 'bits' },
+        { id: 'lemon', name: '檸檬皮', s: '檸檬', tag: '清爽', cost: 2, role: 'top', str: 1, col: '#f3e36b', tone: 'l', use: ['cake'], pr: 5, shape: 'bits' },
+        { id: 'mintleaf', name: '薄荷葉', s: '薄荷', tag: '沁涼', cost: 2, role: 'top', str: 1, col: '#6cc08b', tone: 'l', use: ['cake'], pr: 6, shape: 'leaf' },
         // 便當
         { id: 'rice', name: '白飯', s: '白飯', tag: '綿密', cost: 2, role: 'grain', str: 1, col: '#fbfaf4', tone: 'l', use: ['bento'] },
         { id: 'friedrice', name: '炒飯', s: '炒飯', tag: '鹹香', cost: 3, role: 'grain', str: 2, col: '#e3c06a', tone: 'l', use: ['bento'] },
@@ -88,15 +90,15 @@
         { id: 'redsauce', name: '番茄紅醬', s: '紅醬', tag: '果酸', cost: 3, role: 'psauce', str: 2, col: '#c8372d', tone: 'd', use: ['pizza'] },
         { id: 'whitesauce', name: '白醬', s: '白醬', tag: '綿密', cost: 3, role: 'psauce', str: 1, col: '#f4ecd8', tone: 'l', use: ['pizza'] },
         { id: 'pesto', name: '青醬', s: '青醬', tag: '清爽', cost: 3, role: 'psauce', str: 2, col: '#5f8f3a', tone: 'd', use: ['pizza'] },
-        { id: 'mozz', name: '起司絲', s: '起司', tag: '綿密', cost: 3, role: 'ptop', str: 1, col: '#f6e3a0', tone: 'l', use: ['pizza'] },
-        { id: 'salami', name: '臘腸', s: '臘腸', tag: '鹹香', cost: 4, role: 'ptop', str: 2, col: '#a8322d', tone: 'd', use: ['pizza'] },
-        { id: 'pineapple', name: '鳳梨', s: '鳳梨', tag: '果酸', cost: 3, role: 'ptop', str: 1, col: '#f5d04a', tone: 'l', use: ['pizza'] },
-        { id: 'mushroom', name: '蘑菇', s: '蘑菇', tag: '鹹香', cost: 3, role: 'ptop', str: 1, col: '#b8a088', tone: 'l', use: ['pizza'] },
-        { id: 'pepper', name: '青椒', s: '青椒', tag: '清爽', cost: 2, role: 'ptop', str: 1, col: '#4f9a3a', tone: 'd', use: ['pizza'] },
-        { id: 'chili', name: '辣椒', s: '辣味', tag: '辛暖', cost: 2, role: 'ptop', str: 3, col: '#d42a20', tone: 'd', use: ['pizza'] },
-        { id: 'basil', name: '羅勒葉', s: '羅勒', tag: '花香', cost: 2, role: 'ptop', str: 1, col: '#3f7f3a', tone: 'd', use: ['pizza'] },
-        { id: 'honey', name: '蜂蜜', s: '蜂蜜', tag: '甜', cost: 2, role: 'ptop', str: 3, col: '#e8b23a', tone: 'l', use: ['pizza'] },
-        { id: 'seafood', name: '海鮮', s: '海鮮', tag: '鹹香', cost: 6, role: 'ptop', str: 2, col: '#f0a080', tone: 'l', use: ['pizza'] },
+        { id: 'mozz', name: '起司絲', s: '起司', tag: '綿密', cost: 3, role: 'ptop', str: 1, col: '#f6e3a0', tone: 'l', use: ['pizza'], pr: 6 },
+        { id: 'salami', name: '臘腸', s: '臘腸', tag: '鹹香', cost: 4, role: 'ptop', str: 2, col: '#a8322d', tone: 'd', use: ['pizza'], pr: 13 },
+        { id: 'pineapple', name: '鳳梨', s: '鳳梨', tag: '果酸', cost: 3, role: 'ptop', str: 1, col: '#f5d04a', tone: 'l', use: ['pizza'], pr: 10 },
+        { id: 'mushroom', name: '蘑菇', s: '蘑菇', tag: '鹹香', cost: 3, role: 'ptop', str: 1, col: '#b8a088', tone: 'l', use: ['pizza'], pr: 9 },
+        { id: 'pepper', name: '青椒', s: '青椒', tag: '清爽', cost: 2, role: 'ptop', str: 1, col: '#4f9a3a', tone: 'd', use: ['pizza'], pr: 8 },
+        { id: 'chili', name: '辣椒', s: '辣味', tag: '辛暖', cost: 2, role: 'ptop', str: 3, col: '#d42a20', tone: 'd', use: ['pizza'], pr: 5 },
+        { id: 'basil', name: '羅勒葉', s: '羅勒', tag: '花香', cost: 2, role: 'ptop', str: 1, col: '#3f7f3a', tone: 'd', use: ['pizza'], pr: 7 },
+        { id: 'honey', name: '蜂蜜', s: '蜂蜜', tag: '甜', cost: 2, role: 'ptop', str: 3, col: '#e8b23a', tone: 'l', use: ['pizza'], pipe: true },
+        { id: 'seafood', name: '海鮮', s: '海鮮', tag: '鹹香', cost: 6, role: 'ptop', str: 2, col: '#f0a080', tone: 'l', use: ['pizza'], pr: 11 },
     ];
     const ING_BY = {};
     ING.forEach(x => { ING_BY[x.id] = x; });
@@ -121,17 +123,63 @@
     function _rng(seed) { let x = _hash(seed) || 1; return () => { x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296; }; }
 
     // ── 一份菜（build）：{ base, parts:[由下往上] } 或 { base, cells:{格:料} } ──
-    function _empty(base) { return BASES[base].kind === 'stack' ? { base, parts: [] } : { base, cells: {} }; }
-    function _items(b) {   // 放了的料，帶「在哪」
+    function _empty(base) {
+        const B = BASES[base];
+        if (B.kind === 'canvas') return { base, sauce: null, pieces: [], strokes: [] };
+        if (B.kind === 'stack') return B.top ? { base, parts: [], top: { pieces: [], strokes: [] } } : { base, parts: [] };
+        return { base, cells: {} };
+    }
+    // 畫布那一面（披薩整個是畫布；蛋糕是頂面）
+    function _cvOf(b) {
+        if (!b) return null;
+        if (BASES[b.base]?.kind === 'canvas') return b;
+        return b.top || null;
+    }
+    function _strokeLen(pts) { let n = 0; for (let i = 1; i < pts.length; i++) n += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); return n; }
+    // 畫布上的料照種類分組：幾份、放在哪一塊
+    function _cvGroups(cv) {
+        if (!cv) return [];
+        const g = {};
+        (cv.pieces || []).forEach(p => { (g[p.id] || (g[p.id] = { id: p.id, pts: [], pieces: 0, len: 0 })); g[p.id].pts.push([p.x, p.y]); g[p.id].pieces++; });
+        (cv.strokes || []).forEach(st => { (g[st.id] || (g[st.id] = { id: st.id, pts: [], pieces: 0, len: 0 })); g[st.id].len += _strokeLen(st.pts); st.pts.forEach(q => g[st.id].pts.push(q)); });
+        return Object.values(g).filter(e => ING_BY[e.id]).map(e => ({
+            ing: ING_BY[e.id], where: _regionOf(e.pts), n: Math.ceil(e.pieces / PIECE_PER) + Math.ceil(e.len / PIPE_PER), pieces: e.pieces, len: e.len,
+        })).filter(x => x.n > 0);
+    }
+    function _regionOf(pts) {
+        if (!pts.length) return '整片';
+        const left = pts.filter(q => q[0] < CV_MID).length / pts.length;
+        if (left >= 0.8) return '左半邊';
+        if (left <= 0.2) return '右半邊';
+        const avg = pts.reduce((n, q) => n + Math.hypot(q[0] - CV_MID, q[1] - CV_MID), 0) / pts.length;
+        return avg < 45 ? '中間' : avg > 95 ? '外圈' : '整片';
+    }
+    function _items(b) {   // 放了的料，帶「在哪」、幾份（n）
         const B = BASES[b.base];
-        if (B.kind === 'stack') return b.parts.map((id, i) => ({ ing: ING_BY[id], where: '第 ' + (i + 1) + ' 層', i })).filter(x => x.ing);
-        return B.cells.filter(c => b.cells[c.k]).map(c => ({ ing: ING_BY[b.cells[c.k]], where: c.name, k: c.k })).filter(x => x.ing);
+        if (B.kind === 'canvas') {
+            const out = b.sauce && ING_BY[b.sauce] ? [{ ing: ING_BY[b.sauce], where: '整片', n: 1 }] : [];
+            return out.concat(_cvGroups(b));
+        }
+        if (B.kind === 'stack') {
+            const out = b.parts.map((id, i) => ({ ing: ING_BY[id], where: '第 ' + (i + 1) + ' 層', i, n: 1 })).filter(x => x.ing);
+            return B.top ? out.concat(_cvGroups(b.top).map(x => Object.assign(x, { where: '頂面' + (x.where === '整片' ? '' : x.where) }))) : out;
+        }
+        return B.cells.filter(c => b.cells[c.k]).map(c => ({ ing: ING_BY[b.cells[c.k]], where: c.name, k: c.k, n: 1 })).filter(x => x.ing);
+    }
+    function _cvKey(cv) {
+        if (!cv) return '';
+        const r = (v) => Math.round(v / 5);
+        const ps = (cv.pieces || []).map(p => p.id + r(p.x) + ',' + r(p.y)).sort().join(';');
+        const st = (cv.strokes || []).map(t => t.id + t.pts.filter((q, i) => i % 3 === 0).map(q => r(q[0]) + ',' + r(q[1])).join(' ')).join(';');
+        return (_hash(ps + '|' + st) >>> 0).toString(36);
     }
     function _keyOf(b) {
         const B = BASES[b.base];
-        return b.base + ':' + (B.kind === 'stack' ? b.parts.join('>') : B.cells.map(c => c.k + '=' + (b.cells[c.k] || '')).join(','));
+        if (B.kind === 'canvas') return b.base + ':' + (b.sauce || '') + '#' + _cvKey(b);
+        if (B.kind === 'stack') return b.base + ':' + b.parts.join('>') + (B.top ? '#' + _cvKey(b.top) : '');
+        return b.base + ':' + B.cells.map(c => c.k + '=' + (b.cells[c.k] || '')).join(',');
     }
-    function _costOf(b) { return BASES[b.base].frameCost + _items(b).reduce((n, x) => n + x.ing.cost, 0); }
+    function _costOf(b) { return BASES[b.base].frameCost + _items(b).reduce((n, x) => n + x.ing.cost * (x.n || 1), 0); }
     function _tagsOf(b) {
         const cnt = {};
         _items(b).forEach(x => { cnt[x.ing.tag] = (cnt[x.ing.tag] || 0) + 1; });
@@ -151,7 +199,7 @@
             if (its.length < 3) return '小格至少放兩樣';
         }
         if (b.base === 'pizza') {
-            if (!b.cells.whole) return '先在「全面」抹一層醬';
+            if (!b.sauce) return '先在下面選一種醬，抹滿餅皮';
             if (its.length < 2) return '醬上面至少放一樣料';
         }
         return '';
@@ -178,9 +226,9 @@
             const cnt = {};
             its.forEach(x => { cnt[x.ing.tag] = (cnt[x.ing.tag] || 0) + 1; });
             const top = Object.keys(cnt).sort((a, z) => cnt[z] - cnt[a])[0];
-            if (cnt[top] / its.length >= 0.6) {
+            if (cnt[top] >= 3 && cnt[top] / its.length >= 0.6) {
                 score -= 12;
-                notes.taste.push({ w: 6, t: '整份吃起來都是' + top + '，' + has(top).map(x => x.ing.name).join('、') + '疊在一起，少了別的味道' });
+                notes.taste.push({ w: 6, t: '整份吃起來都是' + top + '，' + [...new Set(has(top).map(x => x.ing.name))].join('、') + '太多，少了別的味道' });
             }
         }
         // 口感（飲料不算；披薩的餅皮本來就脆）
@@ -227,19 +275,59 @@
                 }
             }
             const tones = new Set(its.map(x => x.ing.tone));
-            if (its.length >= 3 && tones.size === 1) { score -= 4; notes.look.push({ w: 3, t: its.map(x => x.where).join('、') + '顏色都差不多，看起來很平' }); }
+            if (its.length >= 3 && tones.size === 1) { score -= 4; notes.look.push({ w: 3, t: [...new Set(its.map(x => x.ing.name))].join('、') + '顏色都差不多，看起來很平' }); }
+        }
+        // 畫布（披薩、蛋糕頂面）：看位置——左右兩邊、蓋到多少、擠在一角、擠太多
+        const cv = _cvOf(b);
+        if (cv && (B.kind === 'canvas' || B.top)) {
+            const lay = _layout(cv, CV_R[b.base] || 124), pizza = b.base === 'pizza';
+            if (B.top && !lay.total) { score -= 4; notes.look.push({ w: 2, t: '頂上什麼都沒放，看起來很素' }); }
+            if (lay.total) {
+                if (pizza && lay.pieces >= 6 && Math.abs(lay.L - lay.R) >= 4 && Math.min(lay.L, lay.R) <= lay.pieces * 0.2) {
+                    score -= 8; notes.bite.push({ w: 6, t: (lay.L < lay.R ? '左' : '右') + '半邊幾乎沒料，一邊重一邊空' });
+                }
+                if (lay.pct < 35) {
+                    if (pizza) { score -= 8; notes.bite.push({ w: 5, t: '中間空了一大塊，咬下去只有醬（料只蓋到 ' + lay.pct + '%）' }); }
+                    else { score -= 4; notes.look.push({ w: 3, t: '頂面空了一大塊，看起來像還沒擺完（只蓋到 ' + lay.pct + '%）' }); }
+                }
+                if (pizza && lay.pct > 85 && lay.pieces > 24) { score -= 6; notes.bite.push({ w: 4, t: '料鋪太滿，吃不出餅皮' }); }
+                if (lay.pieces >= 6 && lay.quadMax >= 0.6) { score -= 4; notes.look.push({ w: 3, t: '料全擠在' + lay.quadName + '，其他地方空空的' }); }
+                const heavy = _cvGroups(cv).find(x => (x.ing.pipe && x.n > 6) || (x.ing.str === 3 && x.n >= 3));
+                if (heavy) { score -= 10; notes.taste.push({ w: 7, t: heavy.ing.name + (heavy.ing.pipe ? '擠' : '放') + '太多（' + heavy.n + ' 份），' + (heavy.ing.tag === '綿密' || heavy.ing.tag === '甜' ? '整個吃起來很膩' : '蓋過了其他料') }); }
+                if (!notes.look.length) notes.look.push({ w: 1, good: true, t: '料擺得很平均，很好看' });
+            }
         }
         if (good.length && !notes.taste.length) {
             const [p, q] = good[0], a = has(p)[0], z = has(q)[0];
             notes.taste.push({ w: 1, good: true, t: a.ing.name + '配' + z.ing.name + '剛好，味道接得起來' });
         }
         const tier = score >= 80 ? 'S' : score >= 63 ? 'A' : score >= 45 ? 'B' : 'C';
-        const PRAISE = { taste: '味道平順，沒有打架的地方', bite: B.drink ? '喝起來順，料沒有沉在底下' : '口感沒什麼問題', look: B.kind === 'stack' ? '一層深一層淺，切開很好看' : '顏色分得開，打開來很好看' };
+        const PRAISE = { taste: '味道平順，沒有打架的地方', bite: B.drink ? '喝起來順，料沒有沉在底下' : '口感沒什麼問題', look: B.kind === 'stack' ? '一層深一層淺，切開很好看' : B.kind === 'canvas' ? '料擺得很平均，很好看' : '顏色分得開，打開來很好看' };
         const lines = JUDGES.map(j => {
             const n = notes[j.k].sort((a, z) => z.w - a.w)[0];
             return { judge: j.name, good: !n || !!n.good, t: n ? n.t : PRAISE[j.k] };
         });
         return { tier, score, lines };
+    }
+
+    // 畫布上的位置：左右各幾顆、蓋到幾成（8×8 格裡有料的比例）、最擠的那一角
+    function _layout(cv, R) {
+        const ps = (cv.pieces || []).map(p => [p.x, p.y]);
+        const sp = [];
+        (cv.strokes || []).forEach(t => t.pts.forEach(q => sp.push(q)));
+        const L = ps.filter(q => q[0] < CV_MID).length;
+        const step = R * 2 / 8;
+        let cells = 0, cov = 0;
+        for (let i = 0; i < 8; i++) for (let j = 0; j < 8; j++) {
+            const cx = CV_MID - R + step * (i + 0.5), cy = CV_MID - R + step * (j + 0.5);
+            if (Math.hypot(cx - CV_MID, cy - CV_MID) > R - step * 0.3) continue;
+            cells++;
+            if (ps.some(q => Math.abs(q[0] - cx) < step * 0.75 && Math.abs(q[1] - cy) < step * 0.75) || sp.some(q => Math.abs(q[0] - cx) < step * 0.6 && Math.abs(q[1] - cy) < step * 0.6)) cov++;
+        }
+        const Q = { 左上角: 0, 右上角: 0, 左下角: 0, 右下角: 0 };
+        ps.forEach(q => { Q[(q[1] < CV_MID ? (q[0] < CV_MID ? '左上角' : '右上角') : (q[0] < CV_MID ? '左下角' : '右下角'))]++; });
+        const quadName = Object.keys(Q).sort((a, z) => Q[z] - Q[a])[0];
+        return { L, R: ps.length - L, pieces: ps.length, total: ps.length + sp.length, pct: cells ? Math.round(cov / cells * 100) : 0, quadName, quadMax: ps.length ? Q[quadName] / ps.length : 0 };
     }
 
     // 規則取的名字（她可以改；請熟客試吃會換成熟客取的）
@@ -251,7 +339,7 @@
         else if (b.base === 'burger') parts = [pick(['main']), pick(['side', 'sauce'])];
         else if (b.base === 'cake') parts = [pick(['side', 'top', 'sauce']), pick(['cream'])];
         else if (b.base === 'bento') parts = [pick(['main']) || pick(['side'])];
-        else parts = [ING_BY[b.cells.left] || ING_BY[b.cells.dots], ING_BY[b.cells.right]];
+        else parts = _cvGroups(b).sort((a, z) => z.n - a.n).slice(0, 2).map(x => x.ing);
         const seen = new Set();
         const words = parts.filter(Boolean).filter(x => !seen.has(x.s) && seen.add(x.s)).map(x => x.s);
         return (words.join('') + B.noun).slice(0, 12) || B.name;
@@ -259,7 +347,11 @@
     function _blurbOf(b) {
         const its = _items(b).map(x => x.ing.name);
         if (b.base === 'cup') return '由下往上：' + its.join('、');
-        if (BASES[b.base].kind === 'stack') return '從下到上夾了' + its.join('、');
+        if (b.base === 'pizza') return (ING_BY[b.sauce] ? ING_BY[b.sauce].name + '上面' : '') + '鋪了' + its.slice(1).join('、');
+        if (BASES[b.base].kind === 'stack') {
+            const tops = _cvGroups(b.top).map(x => x.ing.name);
+            return '從下到上夾了' + b.parts.map(id => ING_BY[id]?.name).filter(Boolean).join('、') + (tops.length ? '，頂上' + tops.join('、') : '');
+        }
         return its.join('、') + '一起裝';
     }
 
@@ -358,41 +450,51 @@
             });
             return '<svg class="ock-svg" viewBox="0 0 200 160" xmlns="http://www.w3.org/2000/svg" role="img">' + svg + '</svg>';
         }
-        // 披薩：全面一層醬，左右半邊各一樣料，點綴撒滿
-        const cx = 100, cy = 100;
-        let svg = '<circle cx="' + cx + '" cy="' + cy + '" r="88" fill="#d9a35a"/><circle cx="' + cx + '" cy="' + cy + '" r="78" fill="#f1d7a0"/>';
-        const whole = ING_BY[b.cells.whole];
-        svg += '<g' + (opt.thumb ? '' : ' data-k="whole"') + ' class="ock-cell"><circle cx="' + cx + '" cy="' + cy + '" r="72" fill="' + (whole ? whole.col : '#f1d7a0') + '"' + (whole ? '' : ' stroke="#c9b08a" stroke-dasharray="5 4"') + '/></g>';
-        const half = (k, side) => {
-            const ing = ING_BY[b.cells[k]];
-            const clip = 'M' + cx + ' ' + (cy - 70) + ' A70 70 0 0 ' + (side < 0 ? 0 : 1) + ' ' + cx + ' ' + (cy + 70) + ' Z';
-            let s = '<g' + (opt.thumb ? '' : ' data-k="' + k + '"') + ' class="ock-cell"><path d="' + clip + '" fill="#000" opacity="0"/>';
-            if (ing) {
-                const r = _rng(ing.id + k);
-                for (let i = 0; i < 7; i++) {
-                    const ang = (side < 0 ? Math.PI : 0) + (r() - 0.5) * Math.PI * 0.9, dist = 16 + r() * 46;
-                    const px = cx + Math.cos(ang) * dist, py = cy + Math.sin(ang) * dist;
-                    const x2 = side < 0 ? Math.min(px, cx - 9) : Math.max(px, cx + 9);
-                    const rr = 8 * (0.9 + r() * 0.2);
-                    s += '<ellipse cx="' + x2 + '" cy="' + py + '" rx="' + rr + '" ry="' + (rr * 0.85) + '" fill="' + ing.col + '" stroke="#000" stroke-opacity=".15" stroke-width=".8"/>';
-                }
-            }
-            if (sel === k) s += '<path d="' + clip + '" fill="none" stroke="#e0a050" stroke-width="3"/>';
-            return s + '</g>';
-        };
-        svg += half('left', -1) + half('right', 1);
-        const dots = ING_BY[b.cells.dots];
-        svg += '<g' + (opt.thumb ? '' : ' data-k="dots"') + ' class="ock-cell">';
-        if (dots) { const r = _rng(dots.id + 'dots'); for (let i = 0; i < 22; i++) { const a = r() * Math.PI * 2, d = r() * 66; svg += '<circle cx="' + (cx + Math.cos(a) * d) + '" cy="' + (cy + Math.sin(a) * d) + '" r="' + (2.6 + r() * 1.6) + '" fill="' + dots.col + '"/>'; } }
-        svg += '</g>';
-        if (sel === 'whole') svg += '<circle cx="' + cx + '" cy="' + cy + '" r="75" fill="none" stroke="#e0a050" stroke-width="3"/>';
-        if (sel === 'dots') svg += '<circle cx="' + cx + '" cy="' + cy + '" r="66" fill="none" stroke="#e0a050" stroke-width="2.5" stroke-dasharray="3 5"/>';
-        return '<svg class="ock-svg" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg" role="img">' + svg + '</svg>';
+        return '';
+    }
+    function _pieceSvg(p, i, opt) {
+        const ing = ING_BY[p.id];
+        if (!ing) return '';
+        const r = ing.pr || 8, c = ing.col;
+        let g;
+        if (ing.shape === 'leaf' || p.id === 'basil') g = '<ellipse rx="' + r + '" ry="' + (r * 0.5) + '" fill="' + c + '"/><line x1="' + (-r) + '" y1="0" x2="' + r + '" y2="0" stroke="#000" stroke-opacity=".2" stroke-width="1"/>';
+        else if (p.id === 'straw') g = '<path d="M0 ' + r + ' Q' + (-r) + ' 0 ' + (-r * 0.6) + ' ' + (-r * 0.7) + ' Q0 ' + (-r) + ' ' + (r * 0.6) + ' ' + (-r * 0.7) + ' Q' + r + ' 0 0 ' + r + 'Z" fill="' + c + '"/><path d="M-4 ' + (-r * 0.72) + ' L0 ' + (-r * 0.98) + ' L4 ' + (-r * 0.72) + '" stroke="#3f7f3a" stroke-width="2.4" fill="none"/>';
+        else if (p.id === 'sprinkle') g = '<rect x="-4" y="-1.4" width="8" height="2.8" rx="1.4" fill="' + c + '"/>';
+        else g = '<circle r="' + r + '" fill="' + c + '" stroke="#000" stroke-opacity=".18" stroke-width=".8"/>' + (r >= 9 ? '<circle r="' + (r * 0.35) + '" cx="' + (r * 0.25) + '" cy="' + (-r * 0.25) + '" fill="#fff" opacity=".25"/>' : '');
+        return '<g' + (opt.thumb ? '' : ' data-p="' + i + '"') + ' transform="translate(' + p.x.toFixed(1) + ' ' + p.y.toFixed(1) + ') rotate(' + Math.round(p.a || 0) + ') scale(' + (p.s || 1).toFixed(2) + ')">' + g + '</g>';
+    }
+    function _strokeSvg(t, i, opt) {
+        const ing = ING_BY[t.id];
+        if (!ing || !t.pts.length) return '';
+        const pts = t.pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+        const w = ing.role === 'cream' ? 12 : 7;
+        const line = (stroke, width, extra) => '<polyline points="' + pts + '" fill="none" stroke="' + stroke + '" stroke-width="' + width + '" stroke-linecap="round" stroke-linejoin="round"' + (extra || '') + '/>';
+        return '<g' + (opt.thumb ? '' : ' data-s="' + i + '"') + '>' + line('#7a5a3a', w + 2.5, ' stroke-opacity=".3"') + line(ing.col, w) +
+            (ing.role === 'cream' ? line('#fff', w * 0.3, ' stroke-opacity=".45" stroke-dasharray="6 4"') : '') + '</g>';
+    }
+    function _drawCanvas(b, opt) {
+        const cv = _cvOf(b) || { pieces: [], strokes: [] };
+        let bg;
+        if (b.base === 'pizza') {
+            const sc = ING_BY[b.sauce];
+            bg = '<circle cx="150" cy="150" r="142" fill="#d9a35a"/><circle cx="150" cy="150" r="131" fill="#f1d7a0"/>' +
+                (sc ? '<circle cx="150" cy="150" r="124" fill="' + sc.col + '"/>' : '<circle cx="150" cy="150" r="124" fill="none" stroke="#c9b08a" stroke-width="2" stroke-dasharray="6 5"/>');
+        } else {
+            const topLayer = ING_BY[(b.parts || [])[b.parts.length - 1]];
+            const face = topLayer && topLayer.role === 'cream' ? topLayer.col : '#f0d29a';
+            bg = '<circle cx="150" cy="150" r="141" fill="#e2bd7c"/><circle cx="150" cy="150" r="130" fill="' + face + '" stroke="#d8b06c" stroke-width="1.5"/>';
+        }
+        const empty = !(cv.pieces || []).length && !(cv.strokes || []).length;
+        const hint = !opt.thumb && empty ? '<text x="150" y="154" text-anchor="middle" class="ock-hint">' + (b.base === 'pizza' && !b.sauce ? '先在下面選一種醬' : '點下面的料，再點這裡放上去') + '</text>' : '';
+        return '<svg class="ock-svg ock-canvas" viewBox="0 0 300 300" xmlns="http://www.w3.org/2000/svg" role="img">' + bg +
+            (cv.strokes || []).map((t, i) => _strokeSvg(t, i, opt)).join('') + (cv.pieces || []).map((p, i) => _pieceSvg(p, i, opt)).join('') + hint + '</svg>';
     }
     function draw(b, opt) {
         opt = opt || {};
         if (!b || !BASES[b.base]) return '';
-        return BASES[b.base].kind === 'stack' ? _drawStack(b, opt) : _drawCells(b, opt);
+        const k = BASES[b.base].kind;
+        if (k === 'canvas' || opt.face === 'top') return _drawCanvas(b, opt);
+        return k === 'stack' ? _drawStack(b, opt) : _drawCells(b, opt);
     }
     // 菜單卡片的小圖
     function thumb(dish) { return '<span class="ock-thumb">' + draw(dish, { thumb: true }) + '</span>'; }
@@ -499,6 +601,10 @@
     // ── 🖼 畫面 ──
     let _cur = null;          // 正在擺的那份（換分頁回來還在）
     let _sel = null;          // 疊的：選中第幾層；格子：選中哪一格
+    let _step = 'layers';     // 蛋糕：夾層／頂面
+    let _pick = null;         // 畫布：手上拿著哪樣料
+    let _tool = 'put';        // 畫布：擺（放、拖）／擦掉
+    let _hist = [];           // 畫布：復原用
     function _registerHelp() {
         const A = win.AUI || window.AUI;
         if (!A || !A.registerHelp || _registerHelp.done) return;
@@ -506,7 +612,8 @@
         A.registerHelp({ cafe_kitchen: { title: '研發台', body:
             '選一種底，點料放上去，按「試做一份」。料錢從書咖帳戶扣，不扣體力、不用等。\n' +
             '三位試吃員照規則講：味道、口感、賣相各一句，會說是哪一層、哪一格出問題。同一份永遠同一個結果，試過的再按不會再扣錢。\n' +
-            '漢堡、蛋糕、飲料由下往上疊：點某一層可以上移、下移、拿掉。便當、披薩先點一格，再點料放進去。\n' +
+            '漢堡、蛋糕、飲料由下往上疊：點某一層可以上移、下移、拿掉。便當先點一格，再點料放進去。\n' +
+            '披薩和蛋糕的「頂面」是畫布：點一樣料，再點上面放一顆，放好的可以拖著移；奶油、醬、蜂蜜按住拖，擠出一條。一顆一顆的料每 6 顆算一份，擠的照長度算。試吃員會看位置：哪半邊沒料、空了一大塊、全擠在一角、擠太多。\n' +
             '「靈感之作」「優良」可以上架，名字可以自己改；上架後到菜單頁備料，做一批照這份的料錢算。\n' +
             '「請熟客試吃」會叫一次模型（設置裡「書咖」那一列），請一位口味最對的常客講感想、取名字，不會改等級，不按也能上架。\n' +
             '披薩要先買烤箱。' }
@@ -532,6 +639,7 @@
               '<span class="oc-section-note">' + Object.keys(kit.equip).filter(id => EQUIP[id]).map(id => '<i class="fa-solid ' + EQUIP[id].icon + '" title="' + EQUIP[id].name + '"></i> ' + EQUIP[id].name).join('　') + '</span></div>' +
             (old ? '<div class="oc-slot-label">改版前調配的那杯好了</div><div class="ock-old"></div>' : '') +
             '<div class="ock-bases">' + BASE_ORDER.map(k => '<button class="ock-base' + (k === _cur.base ? ' on' : '') + (locked(k) ? ' locked' : '') + '" data-base="' + k + '"><i class="fa-solid ' + (locked(k) ? 'fa-lock' : BASES[k].icon) + '"></i>' + BASES[k].name + '</button>').join('') + '</div>' +
+            '<div class="ock-steps"></div>' +
             '<div class="ock-stage"><div class="ock-pic"></div><div class="ock-side"></div></div>' +
             '<div class="oc-slot-label ock-pantry-label">料</div>' +
             '<div class="ock-pantry"></div>' +
@@ -550,13 +658,27 @@
         const $ = (s) => root.querySelector(s);
         const B0 = () => BASES[_cur.base];
         const firstEmpty = () => (B0().cells || []).find(c => !_cur.cells[c.k]);
+        const canvasMode = () => B0().kind === 'canvas' || (!!B0().top && _step === 'top');
+        const snap = () => JSON.stringify({ sauce: _cur.sauce, cv: _cvOf(_cur) });
+        const pushHist = () => { _hist.push(snap()); if (_hist.length > 40) _hist.shift(); };
+        const toast = (t) => { if (A && A.toast) A.toast(t, { type: 'info' }); };
         if (B0().kind === 'cells' && !_sel) _sel = (firstEmpty() || B0().cells[0]).k;
         const clearResult = () => { $('.ock-result').innerHTML = ''; };
         const paint = () => {
-            const B1 = B0();
-            $('.ock-pic').innerHTML = draw(_cur, { sel: _sel });
-            // 右邊：疊的列出每一層（上面的在上面）；格子列出每一格
-            if (B1.kind === 'stack') {
+            const B1 = B0(), cvm = canvasMode();
+            $('.ock-stage').classList.toggle('canvas', cvm);
+            $('.ock-steps').innerHTML = B1.top ? '<button data-step="layers" class="' + (_step === 'layers' ? 'on' : '') + '">夾層（從側面疊）</button><button data-step="top" class="' + (_step === 'top' ? 'on' : '') + '">頂面（擠奶油、擺料）</button>' : '';
+            $('.ock-pic').innerHTML = cvm ? _drawCanvas(_cur, {}) : draw(_cur, { sel: _sel });
+            // 右邊：疊的列出每一層（上面的在上面）；格子列出每一格；畫布是工具
+            if (cvm) {
+                const ing = ING_BY[_pick];
+                $('.ock-side').innerHTML = '<div class="ock-tools">' +
+                    '<button data-tool="put" class="' + (_tool === 'put' ? 'on' : '') + '"><i class="fa-solid fa-hand-pointer"></i> 擺</button>' +
+                    '<button data-tool="erase" class="' + (_tool === 'erase' ? 'on' : '') + '"><i class="fa-solid fa-eraser"></i> 擦掉</button>' +
+                    '<button data-tool="undo"' + (_hist.length ? '' : ' disabled') + '><i class="fa-solid fa-rotate-left"></i> 復原</button>' +
+                    '<button data-tool="clear"><i class="fa-solid fa-trash-can"></i> 清空</button></div>' +
+                    '<div class="ock-side-note left">' + (_tool === 'erase' ? '點一顆料或一條奶油就擦掉' : ing ? '拿著「' + ing.name + '」：' + (ing.pipe ? '在上面按住拖，擠出一條' : '點一下放一顆；放好的可以拖著移動') : '先在下面點一樣料') + '</div>';
+            } else if (B1.kind === 'stack') {
                 const rows = _cur.parts.map((id, i) => ({ id, i })).reverse();
                 $('.ock-side').innerHTML = '<div class="ock-side-title">' + (B1.drink ? '杯子裡（上面的在上面）' : '從上到下') + '</div>' +
                     (B1.frame[1] ? '<div class="ock-row fixed">' + FRAME[B1.frame[1]].name + '</div>' : '') +
@@ -576,14 +698,15 @@
             const cell = B1.kind === 'cells' ? B1.cells.find(c => c.k === _sel) : null;
             let list = ING.filter(x => x.use.includes(_cur.base));
             if (cell) list = list.filter(x => cell.roles ? cell.roles.includes(x.role) : !['grain', 'psauce'].includes(x.role));
-            $('.ock-pantry-label').textContent = cell ? '放進「' + cell.name + '」的料' : '料（點一下放到最上面）';
-            $('.ock-pantry').innerHTML = list.map(x => '<button class="ock-ing" data-id="' + x.id + '"><span class="ock-sw" data-tone="' + x.tone + '"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="' + x.col + '" stroke="#0002"/></svg></span>' +
+            $('.ock-pantry-label').textContent = cell ? '放進「' + cell.name + '」的料' : cvm ? (_cur.base === 'pizza' ? '醬點一下就抹滿；料點一樣，再點披薩' : '點一樣料，再點蛋糕；奶油和醬用拖的擠') : '料（點一下放到最上面）';
+            const onIng = (x) => cvm && (x.id === _pick || x.id === _cur.sauce);
+            $('.ock-pantry').innerHTML = list.map(x => '<button class="ock-ing' + (onIng(x) ? ' on' : '') + '" data-id="' + x.id + '"><span class="ock-sw" data-tone="' + x.tone + '"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8" fill="' + x.col + '" stroke="#0002"/></svg></span>' +
                 '<b>' + x.name + '</b><small>' + x.tag + '・' + x.cost + ' 塊</small></button>').join('');
             // 花多少、能不能按
             const its = _items(_cur), cost = _costOf(_cur), key = _keyOf(_cur);
             const miss = its.length ? _missing(_cur) : '先放料';
             const tried = kit.tried[key];
-            $('.ock-cost').innerHTML = its.length ? '用料 ' + its.length + ' 份' + (B1.frameCost ? '＋' + B1.frameName : '') + '・<b>' + cost + '</b> 塊' + (fund ? '　帳戶剩 ' + fund.coins : '') : '';
+            $('.ock-cost').innerHTML = its.length ? '用料 ' + its.reduce((n, x) => n + (x.n || 1), 0) + ' 份' + (B1.frameCost ? '＋' + B1.frameName : '') + '・<b>' + cost + '</b> 塊' + (fund ? '　帳戶剩 ' + fund.coins : '') : '';
             const btn = $('.ock-try');
             btn.disabled = !!miss || (!tried && fund && fund.coins < cost);
             btn.innerHTML = tried ? '<i class="fa-solid fa-eye"></i> 看結果（試過了，不再扣錢）' : '<i class="fa-solid fa-utensils"></i> 試做一份' + (its.length ? '（' + cost + ' 塊）' : '');
@@ -644,12 +767,27 @@
             if (base === _cur.base) return;
             _cur = _empty(base);
             _sel = BASES[base].kind === 'cells' ? BASES[base].cells[0].k : null;
+            _step = 'layers'; _pick = null; _tool = 'put'; _hist = [];
             root.querySelectorAll('.ock-base').forEach(x => x.classList.toggle('on', x === btn));
             clearResult();
             paint();
         });
         // 點圖或右邊清單：選層、選格
         const pickAt = (e) => {
+            const tl = e.target.closest('[data-tool]');
+            if (tl) {
+                const t = tl.dataset.tool, cv = _cvOf(_cur);
+                if (t === 'put' || t === 'erase') { _tool = t; paint(); return; }
+                if (t === 'undo' && _hist.length) {
+                    const o = JSON.parse(_hist.pop());
+                    if (_cur.base === 'pizza') Object.assign(_cur, { sauce: o.sauce, pieces: o.cv.pieces, strokes: o.cv.strokes });
+                    else _cur.top = o.cv;
+                }
+                if (t === 'clear' && cv && ((cv.pieces || []).length || (cv.strokes || []).length)) { pushHist(); cv.pieces = []; cv.strokes = []; }
+                clearResult();
+                paint();
+                return;
+            }
             const op = e.target.closest('[data-op]');
             if (op) {
                 const B1 = B0();
@@ -669,11 +807,91 @@
         };
         $('.ock-pic').addEventListener('click', pickAt);
         $('.ock-side').addEventListener('click', pickAt);
+        // 蛋糕：夾層／頂面
+        $('.ock-steps').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-step]');
+            if (!btn || btn.dataset.step === _step) return;
+            _step = btn.dataset.step; _pick = null; _tool = 'put'; _sel = null;
+            paint();
+        });
+        // 畫布：點一下放一顆、拖著移動、按住拖擠一條、擦掉
+        let drag = null, stroke = null;
+        const svgNow = () => $('.ock-pic svg');
+        const toPt = (e) => { const r = svgNow().getBoundingClientRect(); return [(e.clientX - r.left) * 300 / r.width, (e.clientY - r.top) * 300 / r.height]; };
+        const inside = (q) => Math.hypot(q[0] - CV_MID, q[1] - CV_MID) <= (CV_R[_cur.base] || 124);
+        const rd1 = (v) => Math.round(v * 10) / 10;
+        const ptsOf = (cv) => (cv.strokes || []).reduce((n, t) => n + t.pts.length, 0);
+        $('.ock-pic').addEventListener('pointerdown', (e) => {
+            if (!canvasMode() || !svgNow()) return;
+            const cv = _cvOf(_cur), q = toPt(e);
+            const hp = e.target.closest('[data-p]'), hs = e.target.closest('[data-s]');
+            if (_tool === 'erase') {
+                if (hp || hs) { pushHist(); if (hp) cv.pieces.splice(+hp.dataset.p, 1); else cv.strokes.splice(+hs.dataset.s, 1); clearResult(); paint(); }
+                return;
+            }
+            if (!inside(q)) return;
+            e.preventDefault();
+            const ing = ING_BY[_pick];
+            const cap = () => { try { svgNow().setPointerCapture(e.pointerId); } catch (er) {} };
+            // 手上拿著擠的（奶油、醬）：壓在料上也是擠；拿著一顆一顆的料（或沒拿）：壓在料上＝拖著移動
+            if (hp && !(ing && ing.pipe)) { pushHist(); drag = { i: +hp.dataset.p, el: hp, moved: false }; cap(); return; }
+            if (!ing) { toast('先在下面點一樣料'); return; }
+            if (_cur.base === 'pizza' && !_cur.sauce) { toast('先選一種醬抹滿餅皮'); return; }
+            if (ing.pipe) {
+                if (ptsOf(cv) >= CV_MAXPTS) { toast('擠太多了，先擦掉一些'); return; }
+                pushHist();
+                stroke = { id: ing.id, pts: [[rd1(q[0]), rd1(q[1])]] };
+                cv.strokes.push(stroke);
+                stroke.idx = cv.strokes.length - 1;
+                $('.ock-pic').innerHTML = _drawCanvas(_cur, {});
+                cap();
+                return;
+            }
+            pushHist();
+            const r = _rng(ing.id + ':' + cv.pieces.length + ':' + Math.round(q[0]) + ',' + Math.round(q[1]));
+            cv.pieces.push({ id: ing.id, x: rd1(q[0]), y: rd1(q[1]), s: Math.round((0.9 + r() * 0.2) * 100) / 100, a: Math.round(r() * 360) });   // 每顆大小、角度差一點
+            clearResult();
+            paint();
+        });
+        $('.ock-pic').addEventListener('pointermove', (e) => {
+            if (!drag && !stroke) return;
+            const cv = _cvOf(_cur), q = toPt(e);
+            if (!inside(q)) return;
+            if (drag) {
+                const p = cv.pieces[drag.i];
+                p.x = rd1(q[0]); p.y = rd1(q[1]);
+                drag.el.setAttribute('transform', 'translate(' + p.x + ' ' + p.y + ') rotate(' + Math.round(p.a || 0) + ') scale(' + (p.s || 1) + ')');
+                drag.moved = true;
+                return;
+            }
+            const last = stroke.pts[stroke.pts.length - 1];
+            if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 4 || ptsOf(cv) >= CV_MAXPTS) return;
+            stroke.pts.push([rd1(q[0]), rd1(q[1])]);
+            const txt = stroke.pts.map(z => z[0] + ',' + z[1]).join(' ');
+            const g = $('.ock-pic [data-s="' + stroke.idx + '"]');
+            if (g) g.querySelectorAll('polyline').forEach(pl => pl.setAttribute('points', txt));
+        });
+        const endPtr = () => {
+            if (drag) { if (!drag.moved) _hist.pop(); drag = null; clearResult(); paint(); }
+            if (stroke) {
+                if (stroke.pts.length < 2) stroke.pts.push([stroke.pts[0][0] + 2, stroke.pts[0][1]]);   // 點一下＝擠一小坨
+                delete stroke.idx;
+                stroke = null; clearResult(); paint();
+            }
+        };
+        $('.ock-pic').addEventListener('pointerup', endPtr);
+        $('.ock-pic').addEventListener('pointercancel', endPtr);
         // 點料
         $('.ock-pantry').addEventListener('click', (e) => {
             const btn = e.target.closest('.ock-ing');
             if (!btn) return;
             const B1 = B0(), id = btn.dataset.id;
+            if (canvasMode()) {
+                if (ING_BY[id].role === 'psauce') { pushHist(); _cur.sauce = id; clearResult(); paint(); return; }
+                _pick = id; _tool = 'put';
+                paint();
+                return;
+            }
             if (B1.kind === 'stack') {
                 if (_cur.parts.length >= B1.max) { if (A && A.toast) A.toast('最多 ' + B1.max + ' 層，先拿掉一層', { type: 'info' }); return; }
                 _cur.parts.push(id);
@@ -746,6 +964,11 @@
             '.ock-eq > i{font-size:18px;color:#9a6a3e;text-align:center;}.ock-eq b{display:block;font-size:12px;color:#573b26;}.ock-eq small{font-size:10px;color:#a18465;}.ock-eq.have{background:rgba(78,139,87,.08);border-color:#9cc3a2;}' +
             '.ock-buy{padding:6px 14px;border-radius:9px;border:1px solid #6d4425;background:#7a4f2d;color:#fff8ed;font-weight:700;font-size:12px;cursor:pointer;}.ock-buy:disabled{opacity:.5;}' +
             '.ock-old{margin-bottom:8px;}' +
+            '.ock-steps{display:flex;gap:6px;margin-bottom:8px;}.ock-steps:empty{display:none;}.ock-steps button{flex:1;padding:6px 4px;border-radius:9px;border:1px solid #d8c3a1;background:rgba(255,255,255,.58);color:#5a4634;font-size:11px;cursor:pointer;}.ock-steps button.on{background:#f2dfc6;border-color:#b77b42;color:#674224;font-weight:700;}' +
+            '.ock-stage.canvas{grid-template-columns:minmax(0,1fr);}.ock-stage.canvas .ock-pic .ock-svg{max-height:none;max-width:340px;margin:0 auto;touch-action:none;user-select:none;-webkit-user-select:none;}' +
+            '.ock-svg.ock-canvas [data-p],.ock-svg.ock-canvas [data-s]{cursor:grab;}' +
+            '.ock-tools{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:5px;}.ock-tools button{padding:7px 2px;border-radius:8px;border:1px solid #c9a77c;background:#fff;color:#674224;font-size:11px;cursor:pointer;}.ock-tools button.on{background:#f2dfc6;border-color:#b77b42;font-weight:700;}.ock-tools button:disabled{opacity:.4;cursor:default;}' +
+            '.ock-side-note.left{text-align:left;margin-top:6px;}.ock-ing.on{background:#f2dfc6;border-color:#b77b42;box-shadow:inset 0 0 0 1px rgba(183,123,66,.25);}' +
             '.ock-thumb{display:block;width:40px;height:40px;}.ock-thumb svg{width:40px;height:40px;display:block;}';
         doc.head.appendChild(st);
     }
