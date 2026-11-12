@@ -821,14 +821,15 @@
         const BRY = .46;
         const BL = { bunB: { r: 86, h: 20 }, bunT: { r: 88, h: 46 }, beef: { r: 88, h: 16 }, chicken: { r: 88, h: 15 }, egg: { r: 78, h: 7 }, cheese: { r: 84, h: 5 }, bacon: { r: 86, h: 6 }, lettuce: { r: 96, h: 9 }, tomato: { r: 80, h: 8 }, onion: { r: 76, h: 6 }, pickle: { r: 70, h: 5 } };
         const BSAUCE = { teri: ['#5a3220', '#3d2014'], hot: ['#d63a2a', '#a3241a'], mustard: ['#ecc23a', '#c4981c'] };
-        const BGEN = { r: 78, h: 13 };      // 不是漢堡料的東西（草莓、珍珠、炸雞塊…）：鋪成一層
+        const BGEN = { r: 78, h: 13 }, BRICE = { r: 84, h: 18 };      // 不是漢堡料的東西（草莓、珍珠、炸雞塊…）：鋪成一層
         function bgInit() { BG = { layers: [{ id: 'bunB', dx: 0, seed: 1, b: 0, sauce: [] }], ops: [] }; bgPtr = null; }
         function bgUndo() { const o = BG.ops.pop(); if (!o) return; if (o === 'L') BG.layers.pop(); else if (BG.layers[o.i]) BG.layers[o.i].sauce.pop(); }
-        function bgLayout(now) { let y = 234; const out = BG.layers.map(L => { const d = BL[L.id] || BGEN, e = Math.min(1, (now - L.b) / 300), drop = -(1 - e * e) * 70, o = { L, d, x: 200 + L.dx, yb: y + drop, yt: y - d.h + drop, e }; y -= d.h; return o; }); return { out, H: 234 - y }; }
+        function bgLayout(now) { let y = 234; const out = BG.layers.map(L => { const d = BL[L.id] || (tool(L.id) && tool(L.id).grain ? BRICE : BGEN), e = Math.min(1, (now - L.b) / 300), drop = -(1 - e * e) * 70, o = { L, d, x: 200 + L.dx, yb: y + drop, yt: y - d.h + drop, e }; y -= d.h; return o; }); return { out, H: 234 - y }; }
         function bgPt(e) { const q = pt(e), sc = Math.min(1, 190 / Math.max(1, bgLayout(1e12).H)); return [(q[0] - 200) / sc + 200, (q[1] - 236) / sc + 236]; }
         function bgDraw(c, o) {
           const x = o.x, yb = o.yb, yt = o.yt, r = o.d.r, seed = o.L.seed, id = o.L.id;
           const E = (ex, ey, rx, ry, col, rot) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, rot || 0, 0, 6.2832); c.fill(); };
+          if (!BL[id] && tool(id) && tool(id).grain) return riceLayer(c, o, tool(id));
           if (!BL[id]) { const t = tool(id), big = !(t.kind === 'ctop' || t.kind === 'scatter' || isDust(t)), n = big ? 7 : 30, ps = [];
             for (let i = 0; i < n; i++) { const a = big ? i * 1.047 + seed : rnd(seed + i) * 6.28, d = big ? (i < 6 ? .6 : 0) : Math.sqrt(rnd(seed + i + 3)) * .82; ps.push([x + Math.cos(a) * r * d, yb - 3 + Math.sin(a) * r * BRY * d, seed + i * 1.7]); }
             ps.sort((p, q) => p[1] - q[1]).forEach(p => drawAny(c, t, p[0], p[1], big ? 1.05 : .85, p[2])); return; }
@@ -850,6 +851,19 @@
           else if (id === 'tomato') { [[-.4, -2], [.4, -5], [0, 9]].forEach(([ox, oy], i) => { const cx2 = x + ox * r, cy2 = yt + oy; E(cx2, cy2 + 4, 36, 18, '#a3281f'); E(cx2, cy2, 36, 18, '#e04a3a'); E(cx2, cy2, 28, 13, '#ee6c5a'); for (let k = 0; k < 6; k++) { const a = k * 1.047 + i; E(cx2 + Math.cos(a) * 15, cy2 + Math.sin(a) * 7, 3, 1.8, '#f8dca0', a); } }); }
           else if (id === 'onion') { [[-.35, -3], [.35, -1], [0, 8]].forEach(([ox, oy]) => { const cx2 = x + ox * r, cy2 = yt + oy; c.lineWidth = 7; c.strokeStyle = '#9a68a8'; c.beginPath(); c.ellipse(cx2, cy2 + 2, 34, 17, 0, 0, 6.2832); c.stroke(); c.strokeStyle = '#d9b6e0'; c.beginPath(); c.ellipse(cx2, cy2, 34, 17, 0, 0, 6.2832); c.stroke(); c.lineWidth = 2.5; c.strokeStyle = '#f6ecf7'; c.beginPath(); c.ellipse(cx2, cy2 - 1, 34, 17, 0, 0, 6.2832); c.stroke(); }); }
           else if (id === 'pickle') { [[-.55, 0], [-.05, -9], [.5, -1], [.1, 10]].forEach(([ox, oy]) => { const cx2 = x + ox * r, cy2 = yt + oy; E(cx2, cy2 + 3, 19, 10, '#4a7626'); E(cx2, cy2, 19, 10, '#7fae45'); E(cx2, cy2, 14, 7, '#a9cf74'); for (let k = 0; k < 5; k++) E(cx2 + Math.cos(k * 1.26) * 7, cy2 + Math.sin(k * 1.26) * 3.5, 1.6, 1, '#d6ebb0'); }); }
+        }
+        function riceLayer(c, o, t) {   // 漢堡裡的一層飯：像米漢堡的飯餅，前面那圈和上面都是一粒一粒的
+          const x = o.x, yb = o.yb, yt = o.yt, r = o.d.r, seed = o.L.seed, pk = (sd) => t.bits[Math.floor(rnd(sd) * t.bits.length)];
+          const E = (ex, ey, rx, ry, col, rot) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, rot || 0, 0, 6.2832); c.fill(); };
+          E(x, yb, r, r * BRY, t.rim); c.fillStyle = t.rim; c.fillRect(x - r, yt, r * 2, yb - yt);
+          for (let i = 0; i < 46; i++) { const sd = seed + i * 2.3, a = rnd(sd) * Math.PI, py = yt + (yb - yt) * rnd(sd + 1) + Math.sin(a) * r * BRY; E(x - Math.cos(a) * r * .96, py, 3.6, 2.2, pk(sd + 2), rnd(sd + 3) * 3.14); }
+          E(x, yt, r, r * BRY, t.col);
+          for (let i = 0; i < 110; i++) { const sd = seed + i * 1.9 + 50, a = rnd(sd) * 6.28, d = Math.sqrt(rnd(sd + 1)) * .95; E(x + Math.cos(a) * r * d, yt + Math.sin(a) * r * BRY * d, 3.8, 2.3, pk(sd + 2), rnd(sd + 3) * 3.14); }
+        }
+        function riceClump(c, t, x, y, k, seed) {   // 一小坨飯（丟進杯子、浮在杯面）
+          const R = 22 * k, E = (ex, ey, rx, ry, col, rot) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, rot || 0, 0, 6.2832); c.fill(); };
+          E(x + 1, y + R * .45, R * 1.1, R * .42, 'rgba(0,0,0,.18)'); E(x, y, R, R * .72, t.rim); E(x, y - R * .12, R * .94, R * .64, t.col);
+          for (let i = 0; i < 16; i++) { const sd = seed + i * 3.7, a = rnd(sd) * 6.28, d = Math.sqrt(rnd(sd + 1)) * R * .8; E(x + Math.cos(a) * d, y - R * .15 + Math.sin(a) * d * .62, 2.4 * k + .8, 1.5 * k + .5, t.bits[Math.floor(rnd(sd + 2) * t.bits.length)], rnd(sd + 3) * 3.14); }
         }
         function bgSauce(c, o) {      // 擠在這一層上面的醬：照這一層的面壓扁，同一種醬連成一片、只有外面一圈深色
           if (!o.L.sauce.length) return;
@@ -890,7 +904,7 @@
         const isDust = (t) => t.id === 'cocoa' || t.id === 'cinnamon';
         function flowOf(t) {      // 「會流的」（醬、奶油、飲料）回一組顏色 [面, 邊]；不是就回 null
           if (!t) return null;
-          if (t.kind === 'sauce') return [t.col, t.rim]; if (t.kind === 'pipe') return [t.col, t.shade];
+          if (t.kind === 'sauce') return t.grain ? null : [t.col, t.rim]; if (t.kind === 'pipe') return [t.col, t.shade];
           if (t.kind === 'cliq') { const q = LIQ[t.id].rgb; return [kRgb(q), kRgb(q.map(v => v * .75))]; }
           if (t.kind === 'bg' && BSAUCE[t.id]) return BSAUCE[t.id];
           if (t.kind === 'kf' && KFCOL[t.id] && !isDust(t)) return KFCOL[t.id];
@@ -898,10 +912,11 @@
           return null;
         }
         const toRgb = (col) => col[0] === '#' ? hexRgb(col) : col.match(/\d+/g).map(Number);
-        const solidOf = (t) => !!t && (t.kind === 'piece' || t.kind === 'scatter' || t.kind === 'ctop' || t.kind === 'cice' || t.id === 'scoop' || (t.kind === 'bg' && !!BL[t.id]) || isDust(t));
+        const solidOf = (t) => !!t && (t.kind === 'piece' || t.kind === 'scatter' || t.kind === 'ctop' || t.kind === 'cice' || t.id === 'scoop' || (t.kind === 'bg' && !!BL[t.id]) || isDust(t) || !!t.grain);
         function drawAny(c, t, x, y, k, seed, baked) {   // 把任何一樣「一塊一塊的料」畫在 (x,y)，k＝大小倍率
           if (!t) return;
-          if (t.kind === 'piece' || t.kind === 'scatter') drawPiece(c, t.id, x, y, (t.r || 6) * k, seed, baked);
+          if (t.grain) riceClump(c, t, x, y, k, seed);
+          else if (t.kind === 'piece' || t.kind === 'scatter') drawPiece(c, t.id, x, y, (t.r || 6) * k, seed, baked);
           else if (t.kind === 'ctop') cupPiece(c, t.id, x, y, 1.5 * k, seed);
           else if (t.kind === 'cice') cupIce(c, x, y - 4 * k, k);
           else if (t.id === 'scoop') cupScoop(c, x, y - 14 * k, .62 * k);
