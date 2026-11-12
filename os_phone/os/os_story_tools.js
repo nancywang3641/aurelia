@@ -482,6 +482,79 @@
             return `<已結案>\n（${names.join('、')}，這些事已經過去了，這章不要再提，也別讓誰再聊起。）\n</已結案>`;
         } catch (e) { return ''; }
     };
+    // ── 🚪 世界門：別的世界的人和事，送的時候先收起來（11-13 她：「我玩了兩個世界門，那個大總結變超臃腫」，選「送的時候藏起來」）──
+    //   存檔一個字都不動，只在送出去的那一刻藏：主角人在奧瑞亞（或 A 世界）時，B 世界留在那裡的人、他們的關係、
+    //   在 B 世界發生的事、他們的近況都不送，換成【去過的視差世界】一行（去過哪、什麼時候、在那裡認識誰）；回到 B 世界那份整段照送。
+    //   重壓是故意不刪角色表和關係圖譜的（一個不漏），所以兩趟世界門回來，壓完還是一萬字上下（她那份 12,158 字，兩個世界佔 5,790）。
+    //   誰是哪個世界的：角色表「身份」或「狀態／位置」欄寫著那個世界的名字、又沒寫撤離／下線的（跟著主角進出的旅伴會寫撤離，照送）。
+    //     關係＝兩邊都是那些人、或一邊是主角；事件＝關鍵角色欄裡有那些人（名字切開一個一個比，「阿明」不會比中「阿明哲」）。
+    //   世界名單問世界門（OS_WORLDGATE.worldNames、getCurrentWorld），簡繁一律過 OS_ZH.key；認不出就照送，寧可多送也別藏錯。
+    const _zk = s => { const Z = win.OS_ZH || window.OS_ZH; return (Z && Z.key) ? Z.key(s) : String(s == null ? '' : s).replace(/\s/g, ''); };
+    const WG_ROLE = ['角色表'], WG_REL = ['關係圖譜', '关系图谱'], WG_EVT = ['事件表'];
+    const _WG_LEFT = /撤離|撤离|下線|下线/;
+    function _hdrCol(cells, re) { for (let i = 0; i < cells.length; i++) if (re.test(cells[i])) return i; return -1; }
+    function _nameList(cell) { return String(cell || '').split(/[、,，;；\/／|]|\s+|與|与|及/).map(s => s.trim()).filter(Boolean); }
+    // 回 { natives: Map(名字鑰匙→世界名), byWorld: {世界名:[名字]}, mc: 主角鑰匙 }；這份總結裡沒有別的世界的人回 null
+    function _worldNatives(secs, worlds) {
+        if (!worlds || !Array.isArray(worlds.names) || !worlds.names.length) return null;
+        const hereK = worlds.here ? _zk(worlds.here) : '';
+        const others = worlds.names.filter(n => n && _zk(n).length >= 2 && _zk(n) !== hereK);
+        if (!others.length) return null;
+        const role = secs.find(x => WG_ROLE.indexOf(x.header) >= 0);
+        if (!role) return null;
+        const t = _parseMdTable(role.body);
+        if (!t.header) return null;
+        const hc = _rowCells(t.header);
+        const iId = _hdrCol(hc, /身份|身分/), iSt = _hdrCol(hc, /狀態|状态|位置/);
+        const natives = new Map(), byWorld = {};
+        let mc = '';
+        t.rows.forEach(r => {
+            const c = _rowCells(r), name = c[0];
+            if (!name || name === '-') return;
+            if (c.some(x => /^本人/.test(x))) { mc = _zk(name); return; }   // 主角永遠照送
+            const st = iSt >= 0 ? (c[iSt] || '') : '';
+            if (_WG_LEFT.test(st)) return;
+            const hay = _zk((iId >= 0 ? (c[iId] || '') : '') + ' ' + st);
+            const w = others.find(n => hay.indexOf(_zk(n)) >= 0);
+            if (!w) return;
+            natives.set(_zk(name), w);
+            (byWorld[w] = byWorld[w] || []).push(name);
+        });
+        return natives.size ? { natives: natives, byWorld: byWorld, mc: mc } : null;
+    }
+    // 這一列屬於哪個（別的）世界：'' ＝照送
+    function _wgRoleOf(tk, row) { return tk.natives.get(_zk(_rowCells(row)[0])) || ''; }
+    function _wgRelOf(tk, row) {
+        const c = _rowCells(row), a = _zk(c[0]), b = _zk(c[1]);
+        const wa = tk.natives.get(a) || '', wb = tk.natives.get(b) || '';
+        if (wa && (wb || (tk.mc && b === tk.mc))) return wa;
+        if (wb && tk.mc && a === tk.mc) return wb;
+        return '';
+    }
+    function _wgEvtOf(tk, row, iWho) {
+        if (iWho < 0) return '';
+        for (const n of _nameList(_rowCells(row)[iWho])) { const w = tk.natives.get(_zk(n)); if (w) return w; }
+        return '';
+    }
+    function _wgNote(tk, times) {
+        const lines = Object.keys(tk.byWorld).map(w => {
+            const t = times[w] || [];
+            const when = t.length ? '（' + t[0] + (t.length > 1 ? ' ～ ' + t[t.length - 1] : '') + '）' : '';
+            return '- ' + w + when + '：在那裡認識 ' + tk.byWorld[w].join('、');
+        });
+        return '【去過的視差世界】\n（主角去過這些世界。那裡的人、在那裡發生的事這一輪先不帶，主角回到那個世界時會整段帶上；這些人留在自己的世界裡。）\n' + lines.join('\n');
+    }
+    // 給大總結送出時用：世界門有哪些世界、主角現在人在哪一個（不是視差世界＝''）；問不到回 null（＝照送）
+    async function _summaryWorlds() {
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.worldNames !== 'function') return null;
+        try {
+            const names = (await G.worldNames()) || [];
+            if (!names.length) return null;
+            const cur = (typeof G.getCurrentWorld === 'function') ? await G.getCurrentWorld() : null;
+            return { here: (cur && cur.name) || '', names: names };
+        } catch (e) { return null; }
+    }
     API.buildInjectionPayload = function (fullContent, opts) {
         const o = opts || {};
         // 事件表預設「全開」——大總結生成時久遠事件已壓成「階段節點」，這份本來就是壓縮過的完整劇情線，
@@ -493,15 +566,25 @@
             const secs = _splitSummarySections(_stripSummaryHead(fullContent));
             const DROP = new Set(['結算清單', '结算清单', '場景索引', '场景索引', '代辦清單', '代办清单', '故事標題', '故事标题', '物品表']);   // 物品表整塊不注入(Rae 拍板)，物品狀態走向量收斂釘選
             const out = [];
+            const tk = o.worlds ? _worldNatives(secs, o.worlds) : null;   // 🚪 別的世界的人和事先收起來（見 _worldNatives）
+            const wgTimes = {};
+            let wgHid = 0;
+            const wgKeep = (t, of) => { const before = t.rows.length; t.rows = t.rows.filter(r => !of(r)); wgHid += before - t.rows.length; };
             for (const s of secs) {
                 const h = s.header;
                 if (DROP.has(h)) continue;
                 let body = s.body;
+                if (tk && (WG_ROLE.indexOf(h) >= 0 || WG_REL.indexOf(h) >= 0)) {
+                    const t = _parseMdTable(body);
+                    wgKeep(t, r => WG_ROLE.indexOf(h) >= 0 ? _wgRoleOf(tk, r) : _wgRelOf(tk, r));
+                    body = _buildMdTable(t);
+                }
                 if (LIFE.has(h)) {
                     if (o.withoutClosed) continue;   // 酒館正文另外放到下筆前（buildLifeBlock）
                     const t = _parseMdTable(body);
                     const mcK = _mcLifeKey();
                     if (mcK) t.rows = t.rows.filter(r => _lifeKey(_rowCells(r)[0]) !== mcK);   // 主角不是配角（見 _mcLifeKey）
+                    if (tk) wgKeep(t, r => _wgRoleOf(tk, r));
                     if (!t.rows.length) continue;
                     body = LIFE_NOTE + '\n' + _buildMdTable(t);
                 } else if (CLOSED.has(h)) {
@@ -511,6 +594,10 @@
                     body = CLOSED_NOTE + '\n' + _buildMdTable(t);
                 } else if (h === '事件表') {
                     const t = _parseMdTable(body);
+                    if (tk && t.header) {
+                        const iWho = _hdrCol(_rowCells(t.header), /角色|人物/);
+                        wgKeep(t, r => { const w = _wgEvtOf(tk, r, iWho); if (w) (wgTimes[w] = wgTimes[w] || []).push(_rowCells(r)[0]); return w; });
+                    }
                     if (t.rows.length > eventsKeep) t.rows = t.rows.slice(-eventsKeep);   // 只留最近 N 筆事件(舊的靠結語涵蓋)
                     body = _buildMdTable(t);
                 } else if (h === '性事紀' || h === '性事记') {
@@ -521,6 +608,7 @@
                 }
                 if (String(body || '').trim()) out.push(`【${h}】\n${String(body).trim()}`);
             }
+            if (tk && wgHid) out.push(_wgNote(tk, wgTimes));
             const packed = out.join('\n\n').trim();
             // 🚨 切不出任何區塊就退回全文，絕不回空字串：舊格式 / 自訂模板沒用【區塊名】包表頭時
             //   _splitSummarySections 會回空陣列 → 這裡本來會回 ''，注入端拿到空字串＝整份長期記憶靜靜消失。
@@ -583,6 +671,7 @@
         } catch (e) { return null; }
     }
     API._loadTavernSummary = _loadTavernSummary;
+    API.summaryWorlds = _summaryWorlds;   // 網頁版組劇情 context 時自己叫 buildInjectionPayload，要先問這個
     API.getChatId = getChatIdentifier;   // 注入器/外部要用「跟存檔 key 同款」的 chatId，從這拿(別用 OS_DB.currentChatId，空白正規化不同)
     // 給 PWA 的 vn_summary 共用：同一份模板(含她自訂的)與同一道品質閘門。
     //   兩版差在「資料從哪來」與「怎麼注入」，這兩支是純文字處理、跟來源無關 → 沒有理由各寫一份。
@@ -596,7 +685,9 @@
             if (!chatId) return '';
             const rec = await _loadTavernSummary(chatId);
             if (!rec || !rec.content) return '';
-            return API.buildInjectionPayload(rec.content, opts);
+            const o = Object.assign({}, opts);
+            if (o.worlds === undefined) o.worlds = await _summaryWorlds();   // 🚪 別的世界的人和事送的時候先收起來；要整份帶 worlds:null
+            return API.buildInjectionPayload(rec.content, o);
         } catch (e) { console.warn('[大總結] getCurrentInjectionPayload 失敗:', e); return ''; }
     };
     // 結案事項名單（記憶導演挑記憶時用：已結案的別挑）
@@ -635,10 +726,12 @@
         const k = _lifeKey(n);
         return k === 'user' ? '' : k;
     }
-    API.buildLifeBlock = function (fullContent) {
+    API.buildLifeBlock = function (fullContent, worlds) {
         try {
             const mcK = _mcLifeKey();
-            const rows = _lifeRows(fullContent).filter(r => !mcK || _lifeKey(r.name) !== mcK);
+            // 🚪 別的世界留在那裡的人，近況也先不送（同 buildInjectionPayload）
+            const tk = worlds ? _worldNatives(_splitSummarySections(_stripSummaryHead(fullContent)), worlds) : null;
+            const rows = _lifeRows(fullContent).filter(r => (!mcK || _lifeKey(r.name) !== mcK) && !(tk && tk.natives.has(_zk(r.name))));
             if (!rows.length) return '';
             return `<配角近況>\n${LIFE_NOTE}\n${rows.map(r => '・' + r.name + '：' + r.life).join('\n')}\n</配角近況>`;
         } catch (e) { return ''; }
@@ -648,7 +741,7 @@
             const chatId = getChatIdentifier();
             if (!chatId) return '';
             const rec = await _loadTavernSummary(chatId);
-            return (rec && rec.content) ? API.buildLifeBlock(rec.content) : '';
+            return (rec && rec.content) ? API.buildLifeBlock(rec.content, await _summaryWorlds()) : '';
         } catch (e) { return ''; }
     };
     const _lifeBusy = {};

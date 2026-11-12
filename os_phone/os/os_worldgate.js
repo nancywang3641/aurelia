@@ -69,6 +69,7 @@
         _pendingCur = v ? { id: v, ts: Date.now() } : null;   // 撤離(空值)要把手上那筆一起丟掉
         if (c) await _set(K_CURRENT, v, c);
         try { await syncTheme(); } catch (e) {}   // 進世界換上它的劇情介面、撤離換回這本故事的
+        try { (win.OS_SUMMARY_INJECT || window.OS_SUMMARY_INJECT)?.invalidate?.(); } catch (e) {}   // 大總結送哪個世界的人和事跟著換（os_story_tools 的 _worldNatives）
         let left = null;
         if (prev && prev !== v) { left = { id: prev, since: 0 }; try { left.since = await _tripSince(prev); } catch (e) {} }
         try { await _syncWorldPacks(left); } catch (e) { console.warn('[Worldgate③] 狀態欄沒跟著換', e); }   // 那個世界的狀態欄跟著進出
@@ -5296,6 +5297,10 @@
             return '[設定] ' + _entryComment(w) + '\n' + _entryContent(w, w.entryText);
         } catch (e) { return ''; }
     }
+    // 🚪 大總結送出時認「別的世界的人和事」用（os_story_tools 的 _summaryWorlds）：世界門有過的每個世界的名字
+    async function worldNames() {
+        try { return [...new Set(((await _get(K_WORLDS, [])) || []).map(w => w && w.name).filter(Boolean))]; } catch (e) { return []; }
+    }
     async function getCurrentWorld() {
         try {
             const id = await _getCurrentId();
@@ -5409,7 +5414,7 @@
             .map(w => ({ id: w.id, name: String(w.name || ''), art: w.art }));
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, worldNames, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts,
         inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen, pvImgGet };

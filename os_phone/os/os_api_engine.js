@@ -2781,7 +2781,10 @@
                                 //   壓縮器切不出區塊(舊格式總結)會自己退回全文，不會變空。
                                 let _sumTxt = _latest.content;
                                 try {
-                                    const _packed = win.OS_STORY_TOOLS?.buildInjectionPayload?.(_latest.content);
+                                    // 🚪 別的視差世界的人和事先收起來（同酒館，見 os_story_tools 的 _worldNatives）
+                                    let _wg = null;
+                                    try { _wg = (await win.OS_STORY_TOOLS?.summaryWorlds?.()) || null; } catch (e) {}
+                                    const _packed = win.OS_STORY_TOOLS?.buildInjectionPayload?.(_latest.content, { worlds: _wg });
                                     if (_packed && _packed.trim()) _sumTxt = _packed;
                                 } catch (e) { console.warn('[OS_API vn_story] 大總結壓縮失敗，用全文:', e); }
                                 _grandSummaryBlock = `【大總結（第${_latest.count}次）】\n${_sumTxt}`;
