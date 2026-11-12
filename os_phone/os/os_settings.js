@@ -178,7 +178,7 @@
     function loadSecLlmConfig() {
         let saved = localStorage.getItem(SEC_LLM_STORAGE_KEY);
         let config = {
-            url: '', key: '', model: 'gemini-1.5-flash',
+            url: '', key: '', model: 'gemini-3.7-flash',   // 11-13 換掉 1.5-flash（她副模型平常用這顆；酒館選單上 flash 最新也是它）
             useSystemApi: true, stProfileId: '', syncWithPrimary: true, // 🔥 預設開啟同步主模型
             directMode: false, enableStreaming: false, disableTyping: false,
             useGenerateRaw: false,
@@ -2759,6 +2759,40 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         _wireModelType(elModel);
         _wireModelType(secModel);
         const TYPE_HINT = '（模型選單最下面可以選「自己輸入模型名稱」）';
+        const ST_NOTE = n => `接口那邊拉不到模型清單，先列酒館選單上的 ${n} 個；這裡沒有的選最下面「自己輸入模型名稱」`;
+        // 拉清單：接口那邊拉得到就用它的；Gemini／Vertex、Claude 原生拉不到，就抄酒館選單上那份（OS_API.tavernModelList，11-13 她「抄酒館的作業」）
+        //   🚨 拉完原本選的那個要留著選中：以前整個選單重寫、自動跳到第一個，沒注意就存成別的模型
+        function _fillModels(sel, ids) {
+            const cur = sel.value;
+            const list = ids.map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+            if (cur && cur !== MODEL_TYPE && list.indexOf(cur) < 0) list.unshift(cur);
+            // 一次組好再指派（一項一項 += 每次都整個選單重建，幾百個模型會很慢）；名字是站方給的，要轉義
+            sel.innerHTML = list.map(id => `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`).join('');
+            if (cur && cur !== MODEL_TYPE) sel.value = cur;
+            _withTypeOpt(sel);
+        }
+        async function _pullModels(sel, url, key, fmt) {
+            let ids = [], why = '';
+            try {
+                if (fmt === 'gemini') ids = await window.OS_API.geminiModelList(url, key);   // 含 Vertex：照送生成同一套網址規則
+                else {
+                    // 🚨 網址本來就以 /v1 結尾（大多數站台給的都是）就別再接一層，不然變 /v1/v1/models 回 404（同 chat() 的接法）
+                    const _base = url.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
+                    const fetchUrl = _base + (/\/v1$/.test(_base) ? '' : '/v1') + '/models';
+                    const res = await fetch(fetchUrl, { method: 'GET', headers: window.OS_API.authHeaders(fetchUrl, key, { native: true }) });
+                    if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
+                    const data = await res.json();
+                    ids = (data.data || data.models || []).map(m => (m && m.id) || m);
+                }
+            } catch (e) { why = e.message; }
+            if (ids.length) { _fillModels(sel, ids); return { n: ids.length, st: false }; }
+            if ((fmt === 'gemini' || fmt === 'anthropic') && window.OS_API.tavernModelList) {
+                let st = [];
+                try { st = await window.OS_API.tavernModelList(fmt, url); } catch (e) {}
+                if (st.length) { _fillModels(sel, st); return { n: st.length, st: true }; }
+            }
+            throw new Error(why || 'API 返回了空列表');
+        }
 
         // ── 🎲 決策模型三格：打字就存（os_jev_conn.js），測試一按一通 ──
         (function wireJev() {
@@ -3976,32 +4010,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const key = elKey.value.trim();
                     if (!url) throw new Error("請輸入 API 地址");
                     const _fmt = (container.querySelector('#os-api-format') || {}).value || 'openai';
-                    // Gemini 原生格式（含 Vertex 的金鑰）：清單照送生成同一套網址規則拉（OS_API.geminiModelList）
-                    if (_fmt === 'gemini') {
-                        const models = await window.OS_API.geminiModelList(url, key);
-                        if (!models.length) throw new Error("API 返回了空列表");
-                        // 一次組好再指派（一項一項 += 每次都整個選單重建，幾百個模型會很慢）；名字是站方給的，要轉義
-                        elModel.innerHTML = models.map(id => `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`).join('');
-                        status.innerText = `成功獲取 (${models.length})`;
-                        return;
-                    }
-
-                    // 🚨 網址本來就以 /v1 結尾（大多數站台給的都是）就別再接一層，不然變 /v1/v1/models 回 404（同 chat() 的接法）
-                    let _base = url.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
-                    let fetchUrl = _base + (/\/v1$/.test(_base) ? '' : '/v1') + '/models';
-                    const res = await fetch(fetchUrl, { method: 'GET', headers: window.OS_API.authHeaders(fetchUrl, key, { native: true }) });
-                    
-                    if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
-                    
-                    const data = await res.json();
-                    let models = data.data || data.models || [];
-                    
-                    if (models.length > 0) {
-                        elModel.innerHTML = models.map(m => { const id = m.id || m; return `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`; }).join('');
-                        status.innerText = `成功獲取 ${models.length} 個模型`;
-                    } else {
-                        throw new Error("API 返回了空列表");
-                    }
+                    const r = await _pullModels(elModel, url, key, _fmt);
+                    status.innerText = r.st ? ST_NOTE(r.n) : `成功獲取 ${r.n} 個模型`;
                 }
             } catch (e) {
                 console.error(e);
@@ -4040,31 +4050,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     
                     if (!url) throw new Error("請輸入副模型 API 地址");
                     const _fmt = isSync ? ((container.querySelector('#os-api-format') || {}).value || 'openai') : ((container.querySelector('#sec-api-format') || {}).value || 'openai');
-                    // Gemini 原生格式（含 Vertex 的金鑰）：清單照送生成同一套網址規則拉（OS_API.geminiModelList）
-                    if (_fmt === 'gemini') {
-                        const models = await window.OS_API.geminiModelList(url, key);
-                        if (!models.length) throw new Error("API 返回了空列表");
-                        secModel.innerHTML = models.map(id => `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`).join('');
-                        status.innerText = `副模型列表更新成功 (${models.length})`;
-                        return;
-                    }
-
-                    // 🚨 網址本來就以 /v1 結尾（大多數站台給的都是）就別再接一層，不然變 /v1/v1/models 回 404（同 chat() 的接法）
-                    let _base = url.replace(/\/chat\/completions$/, '').replace(/\/+$/, '');
-                    let fetchUrl = _base + (/\/v1$/.test(_base) ? '' : '/v1') + '/models';
-                    const res = await fetch(fetchUrl, { method: 'GET', headers: window.OS_API.authHeaders(fetchUrl, key, { native: true }) });
-                    
-                    if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
-                    
-                    const data = await res.json();
-                    let models = data.data || data.models || [];
-                    
-                    if (models.length > 0) {
-                        secModel.innerHTML = models.map(m => { const id = m.id || m; return `<option value="${_capiEsc(id)}">${_capiEsc(id)}</option>`; }).join('');
-                        status.innerText = `副模型列表更新成功 (${models.length})`;
-                    } else {
-                        throw new Error("API 返回空列表");
-                    }
+                    const r = await _pullModels(secModel, url, key, _fmt);
+                    status.innerText = r.st ? '副模型：' + ST_NOTE(r.n) : `副模型列表更新成功 (${r.n})`;
                 }
 
             } catch (e) {

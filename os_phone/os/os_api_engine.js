@@ -145,7 +145,7 @@
             const res = await fetch(r.host + '/v1beta1/publishers/google/models?pageSize=200&key=' + encodeURIComponent(k), { method: 'GET', headers: { 'x-goog-api-key': k } });
             if (!res.ok) {
                 const err = await res.json().catch(() => null);
-                throw new Error(_vertexHint(url, 'Vertex 的金鑰拉不到模型清單（' + res.status + (err && err.error && err.error.message ? '：' + err.error.message : '') + '），模型名請直接打，例如 gemini-2.5-flash'));
+                throw new Error(_vertexHint(url, 'Vertex 的金鑰拉不到模型清單（' + res.status + (err && err.error && err.error.message ? '：' + err.error.message : '') + '），模型選單最下面選「自己輸入模型名稱」，例如 gemini-3.1-pro-preview'));
             }
             const data = await res.json();
             return (data.publisherModels || []).map(m => _geminiModelId((m && m.name) || '')).filter(id => /^gemini/i.test(id));
@@ -154,6 +154,35 @@
         if (!res.ok) throw new Error(`API 錯誤: ${res.status}`);
         const data = await res.json();
         return (data.models || []).map(m => String((m && m.name) || m).replace(/^models\//, '')).filter(Boolean);
+    }
+
+    // 🍎 抄酒館的作業（11-13 她：「我們能不能直接抄酒館的作業XD 他有啥就更新成啥」）：
+    //   接口那邊拉不到模型清單時（Vertex 綁服務帳戶的金鑰一拉就 401），改列 SillyTavern 選單上的那份——酒館每一版都會跟著出新模型更新它。
+    //   酒館裡＝直接讀她酒館當下的選單；網頁版＝讀 SillyTavern 官方最新版（release 分支）的網頁、挑出那幾個選單，這次打開期間記著不重抓。
+    //   🚨 選單上沒有的（例如她手動輸入的新模型）不在這份裡，設置頁會把她原本選的那個留著
+    const _ST_SELECT = { google: 'model_google_select', vertex: 'model_vertexai_select', claude: 'model_claude_select' };
+    const _ST_PAGE = 'https://raw.githubusercontent.com/SillyTavern/SillyTavern/release/public/index.html';
+    let _stLists = null;   // { google:[], vertex:[], claude:[] }
+    const _stOk = v => v && !/^custom$/i.test(v);
+    async function _tavernModelList(fmt, url) {
+        const kind = fmt === 'anthropic' ? 'claude' : (_isVertexUrl(url) ? 'vertex' : 'google');
+        try {   // 酒館裡：她酒館當下的選單
+            const sel = (win.document || document).getElementById(_ST_SELECT[kind]);
+            const live = sel ? Array.from(sel.querySelectorAll('option')).map(o => String(o.value || '').trim()).filter(_stOk) : [];
+            if (live.length) return live;
+        } catch (e) {}
+        if (!_stLists) {
+            const res = await fetch(_ST_PAGE, { method: 'GET' });
+            if (!res.ok) throw new Error('讀不到 SillyTavern 的模型清單（' + res.status + '）');
+            const html = await res.text();
+            const out = {};
+            Object.keys(_ST_SELECT).forEach(k => {
+                const m = html.match(new RegExp('<select id="' + _ST_SELECT[k] + '"[^>]*>([\\s\\S]*?)</select>'));
+                out[k] = m ? Array.from(m[1].matchAll(/<option value="([^"]+)"/g)).map(x => x[1].trim()).filter(_stOk) : [];
+            });
+            _stLists = out;
+        }
+        return (_stLists[kind] || []).slice();
     }
 
     // OpenAI 形狀的 messages → Anthropic 原生（POST /v1/messages）body。
@@ -1078,7 +1107,7 @@
     win.OS_API = {
 
         nativeBase: _nativeBase,   // 原生格式的根網址（見 _nativeBase）：設置頁測試、拉清單跟送生成同一套剝法
-        geminiGenUrl: _geminiGenUrl, geminiModelList: _geminiModelList, isVertexUrl: _isVertexUrl, vertexHint: _vertexHint,   // Gemini 原生／Vertex 的網址（設置頁測試、拉模型清單跟送生成同一套）
+        geminiGenUrl: _geminiGenUrl, geminiModelList: _geminiModelList, isVertexUrl: _isVertexUrl, vertexHint: _vertexHint, tavernModelList: _tavernModelList,   // Gemini 原生／Vertex 的網址（設置頁測試、拉模型清單跟送生成同一套）
 
         // 🔑 自己填網址那幾條的請求標頭。Anthropic 官方（api.anthropic.com）不認網頁直接連：
         //    沒帶 anthropic-dangerous-direct-browser-access 會被 CORS 擋成「Failed to fetch」，帶了才回正常的錯誤或結果。
