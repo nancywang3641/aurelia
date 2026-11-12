@@ -52,6 +52,14 @@
     };
     const MAIN = new Set(['beef', 'chicken', 'egg', 'karaage', 'terichk', 'salmon', 'braisedegg', 'salami', 'tamago', 'bacon']);   // 能當主角的
     const DESSERT = new Set(['cream', 'custard', 'matcha', 'choco', 'sprinkle', 'ccream', 'scoop', 'pudding', 'cpearl', 'straw', 'blueberry']);   // 甜點才有的
+    // 🔥 進烤箱會怎樣：每樣料算一類（11-13 她：「漢堡的起司進烤箱也會有融化效果嗎，還有可可粉形狀會不會消失？」）
+    //   起司融成一灘、奶油冰淇淋塌成一灘、冰塊化成水、粉糊開變深、葉子縮小變深、水果變深滲汁、肉和飯和麵包烤上色；焦黃一律用起司那套雜訊遮罩
+    const BAKE = {};
+    [['cheese', 'mozz cheese'], ['cream', 'cream custard matcha ccream foam scoop'], ['ice', 'ice'], ['dust', 'cocoa cinnamon'],
+        ['leaf', 'lettuce greens mintleaf basil'], ['fruit', 'straw blueberry tomato fruitcut pickle cucumber kimchi'],
+        ['meat', 'beef bacon chicken karaage terichk salmon salami braisedegg'], ['rice', 'rice friedrice grainrice'], ['bun', 'bunB bunT']]
+        .forEach(([m, ids]) => ids.split(' ').forEach(id => { BAKE[id] = m; }));
+    const bakeOf = (id) => BAKE[id] || 'other';
     const CONFLICT = [['沁涼', '辛暖'], ['茶香', '辛暖'], ['花香', '鹹香'], ['沁涼', '鹹香']];
     const HARMONY = [['苦韻', '甜'], ['茶香', '花香'], ['清爽', '果酸'], ['苦韻', '辛暖'], ['綿密', '酥脆'], ['鹹香', '清爽'], ['鹹香', '甜'],
         ['甜', '果酸'], ['綿密', '甜'], ['茶香', '綿密'], ['鹹香', '酥脆'], ['果酸', '鹹香'], ['綿密', '果酸'], ['苦韻', '綿密']];
@@ -118,7 +126,7 @@
               { id: 'beef', name: '牛肉', kind: 'bg' }, { id: 'chicken', name: '炸雞排', kind: 'bg' }, { id: 'cheese', name: '起司', kind: 'bg' }, { id: 'egg', name: '太陽蛋', kind: 'bg' }, { id: 'bacon', name: '培根', kind: 'bg' },
               { id: 'lettuce', name: '生菜', kind: 'bg' }, { id: 'tomato', name: '番茄', kind: 'bg' }, { id: 'onion', name: '洋蔥', kind: 'bg' }, { id: 'pickle', name: '酸黃瓜', kind: 'bg' },
               { id: 'teri', name: '照燒醬', kind: 'bg' }, { id: 'hot', name: '辣醬', kind: 'bg' }, { id: 'mustard', name: '芥末', kind: 'bg' }, { id: 'bunT', name: '蓋上麵包', kind: 'bg' } ],
-            hint: '點一樣料再點漢堡：料掉下來疊上去，點偏一點就疊歪一點。醬：在最上面那層用手指擠。最後蓋上麵包。' },
+            hint: '點一樣料再點漢堡：料掉下來疊上去，點偏一點就疊歪一點。醬：在最上面那層用手指擠。想要起司融化就按「烤一下」。最後蓋上麵包。' },
         };
         let st = opts.st || 'burger', pick = null, S = null, dirty = true, area = null;
         const cv = $('cv'), cx = cv.getContext('2d');
@@ -203,16 +211,18 @@
 
         // ── 醬：整灘一起畫（先邊、再面），所以不管抹幾筆都連成一灘；平躺在面上所以照 K 壓扁 ──
         function sauceW(p, i, now) { return p.w * (.55 + .45 * ease((now - p.b) / 320)) * (.88 + .22 * Math.sin(i * .37 + p.x * .05)) * (p.g || 1); }
-        function drawSauce(c, now, baked, lv) {
+        function drawSauce(c, now, baked, lv, flat) {   // flat＝烤過：底下的奶油塌了，醬全部貼回盤面
           const groups = {}; S.sauce.forEach(s => (groups[s.t.id] = groups[s.t.id] || []).push(s));
+          const LVof = (p) => flat ? 0 : (p.lv || 0);
           const o = -lv * LV * .9 / K; c.save(); c.scale(1, K); c.lineCap = 'round'; c.lineJoin = 'round';
+          const bk = baked === 'burnt' ? .3 : baked === 'good' ? .1 : 0;   // 烤過的醬收乾、顏色深一點
           for (const id in groups) {
-            const t = groups[id][0].t;
+            const t = groups[id][0].t, rim = bk ? toastCol(t.rim, bk) : t.rim, col = bk ? toastCol(t.col, bk) : t.col;
             const pass = (col, add, dx, dy, mul) => { c.strokeStyle = col; c.fillStyle = col;
-              groups[id].forEach(s => { for (let i = 0; i < s.pts.length; i++) { const p = s.pts[i]; if ((p.lv || 0) !== lv) continue; let q = s.pts[i - 1] || p; if ((q.lv || 0) !== lv) q = p; const w = sauceW(p, i, now) * mul + add; c.lineWidth = w; c.beginPath(); c.moveTo(q.x + dx * w, q.y / K + dy * w + o); c.lineTo(p.x + dx * w, p.y / K + dy * w + o + .01); c.stroke(); } }); };
-            pass(t.rim, 4, 0, t.grain ? .16 : .06, 1); pass(t.col, 0, 0, 0, 1);
+              groups[id].forEach(s => { for (let i = 0; i < s.pts.length; i++) { const p = s.pts[i]; if (LVof(p) !== lv) continue; let q = s.pts[i - 1] || p; if (LVof(q) !== lv) q = p; const w = sauceW(p, i, now) * mul + add; c.lineWidth = w; c.beginPath(); c.moveTo(q.x + dx * w, q.y / K + dy * w + o); c.lineTo(p.x + dx * w, p.y / K + dy * w + o + .01); c.stroke(); } }); };
+            pass(rim, 4, 0, t.grain ? .16 : .06, 1); pass(col, 0, 0, 0, 1);
             // 醬不畫高光：同一種醬抹幾筆都是一整片平的，只有整灘最外面一圈深色的邊
-            if (t.grain) groups[id].forEach(s => s.pts.forEach((p, i) => { if ((p.lv || 0) !== lv) return; const w = sauceW(p, i, now);     // 飯：一粒一粒
+            if (t.grain) groups[id].forEach(s => s.pts.forEach((p, i) => { if (LVof(p) !== lv) return; const w = sauceW(p, i, now);     // 飯：一粒一粒
               for (let j = 0; j < 4; j++) { const sd = p.x * 13.7 + p.y * 7.3 + j * 3.1, a = rnd(sd) * 6.28, d = Math.sqrt(rnd(sd + 1)) * w * .44; c.fillStyle = t.bits[Math.floor(rnd(sd + 2) * t.bits.length)]; c.beginPath(); c.ellipse(p.x + Math.cos(a) * d, p.y / K + Math.sin(a) * d + o, 3.6, 2.2, rnd(sd + 3) * 3.14, 0, 6.2832); c.fill(); } }));
           }
           c.restore();
@@ -385,16 +395,71 @@
           }
           c.putImageData(im, 0, 0); return S.tex[baked] = o;
         }
-        function drawMelt(c, baked) {
-          const ms = S.pcs.filter(p => p.id === 'mozz'); if (!ms.length) return;
-          const R = (p) => 9 + rnd(p.seed) * 6, blob = (add, dy) => { c.beginPath(); ms.forEach(p => { const r = R(p) + add; c.moveTo(p.x + r, p.y / K + dy); c.arc(p.x, p.y / K + dy, r, 0, 6.2832); }); };
+        function drawMelt(c, baked) {   // 起司絲、漢堡的起司片：融成一灘（起司片是橘黃的那灘）
+          const ms = S.pcs.filter(p => bakeOf(p.id) === 'cheese'); if (!ms.length) return;
+          const R = (p) => p.id === 'mozz' ? 9 + rnd(p.seed) * 6 : 24 + rnd(p.seed) * 6, blob = (arr, add, dy) => { c.beginPath(); arr.forEach(p => { const r = R(p) + add; c.moveTo(p.x + r, p.y / K + dy); c.arc(p.x, p.y / K + dy, r, 0, 6.2832); }); };
+          const mz = ms.filter(p => p.id === 'mozz'), ch = ms.filter(p => p.id !== 'mozz');
           c.save(); c.scale(1, K);
-          c.fillStyle = baked === 'burnt' ? '#a8762c' : '#d9b05a'; blob(1.5, 3); c.fill();
-          c.fillStyle = baked === 'raw' ? '#fdf3cf' : baked === 'burnt' ? '#e6bd62' : '#fbe6a2'; blob(0, 0); c.fill();
-          blob(0, 0); c.clip();
+          if (ch.length) { c.fillStyle = baked === 'burnt' ? '#a8681c' : '#d99a2a'; blob(ch, 1.5, 3); c.fill(); c.fillStyle = baked === 'raw' ? '#f9d769' : baked === 'burnt' ? '#e3a83c' : '#f4c04a'; blob(ch, 0, 0); c.fill(); }
+          if (mz.length) { c.fillStyle = baked === 'burnt' ? '#a8762c' : '#d9b05a'; blob(mz, 1.5, 3); c.fill(); c.fillStyle = baked === 'raw' ? '#fdf3cf' : baked === 'burnt' ? '#e6bd62' : '#fbe6a2'; blob(mz, 0, 0); c.fill(); }
+          blob(ms, 0, 0); c.clip();
           ms.forEach(p => { if (rnd(p.seed + 3) > .4) feather(c, p.x - 3, p.y / K - 4, R(p) * .7, '255,250,225', .5); });       // 亮的地方（油亮）
           if (baked !== 'raw') c.drawImage(noiseTex(baked), 40, 60 / K, 320, 200 / K);   // 焦斑：一張雜訊圖切成幾層顏色，只在起司範圍內露出來
           c.restore();
+        }
+        // 奶油、冰淇淋、奶蓋進烤箱：塌下去化成一灘（同一種顏色連成一片，只有整灘外圈），烤到的地方跟起司一樣用雜訊遮罩上焦糖色
+        const MELT_CREAM = { scoop: ['#f6b0c0', '#e58aa0'], ccream: ['#fffdf8', '#d9c6a4'], foam: ['#fff4e0', '#e2d2b0'] };
+        function drawCreamMelt(c, baked) {
+          const bl = [];   // [x, y, r, 面, 邊]
+          S.cream.forEach(s => s.pts.forEach((p, i) => { if (i % 2 && i !== s.pts.length - 1) return; bl.push([p.x, p.y, p.w * .8, s.t.col, s.t.shade]); }));
+          S.pcs.forEach(p => { const m = MELT_CREAM[p.id]; if (m) bl.push([p.x, p.y, 20 + rnd(p.seed) * 8, m[0], m[1]]); });
+          if (!bl.length) return;
+          const groups = {}; bl.forEach(b => { const k = b[3] + '|' + b[4]; (groups[k] = groups[k] || []).push(b); });
+          const path = (arr, add, dy) => { c.beginPath(); arr.forEach(b => { const r = b[2] + add; c.moveTo(b[0] + r, b[1] / K + dy); c.arc(b[0], b[1] / K + dy, r, 0, 6.2832); }); };
+          c.save(); c.scale(1, K);
+          for (const k in groups) { const [col, rim] = k.split('|'); c.fillStyle = rim; path(groups[k], 1.5, 2.5); c.fill(); c.fillStyle = col; path(groups[k], 0, 0); c.fill(); }
+          if (baked !== 'raw') { path(bl, 0, 0); c.clip(); c.globalAlpha = baked === 'burnt' ? .95 : .6; c.drawImage(noiseTex(baked), 40, 60 / K, 320, 200 / K); }
+          c.restore();
+        }
+        // 先畫到一張暫存畫布、只在畫到的地方蓋一層顏色，再貼回來（烤過的肉、葉子、水果、麵包變深就靠這個）
+        let tintC = null;
+        function tinted(c, rgb, a, draw) {
+          if (!a) return draw(c);
+          const cw = c.canvas.width, ch = c.canvas.height;
+          if (!tintC) tintC = doc.createElement('canvas');
+          if (tintC.width !== cw || tintC.height !== ch) { tintC.width = cw; tintC.height = ch; }
+          const t = tintC.getContext('2d'); t.setTransform(1, 0, 0, 1, 0, 0); t.clearRect(0, 0, cw, ch); t.globalAlpha = 1;
+          t.setTransform(c.getTransform()); draw(t);
+          t.setTransform(1, 0, 0, 1, 0, 0); t.globalAlpha = 1; t.globalCompositeOperation = 'source-atop'; t.fillStyle = 'rgba(' + rgb.join(',') + ',' + a + ')'; t.fillRect(0, 0, cw, ch); t.globalCompositeOperation = 'source-over';
+          c.save(); c.setTransform(1, 0, 0, 1, 0, 0); c.drawImage(tintC, 0, 0); c.restore();
+        }
+        const TINT = { leaf: [[38, 52, 12], .4, .62], fruit: [[95, 18, 12], .24, .48], meat: [[70, 30, 8], .22, .55], rice: [[175, 115, 35], .3, .55], bun: [[150, 78, 18], .32, .62], other: [[130, 70, 20], .14, .42] };
+        const tintA = (m, baked) => TINT[m] ? TINT[m][baked === 'burnt' ? 2 : 1] * (baked === 'raw' ? .35 : 1) : 0;
+        function toastCol(col, k) { const r = toRgb(col), d = [70, 30, 10]; return 'rgb(' + r.map((v, i) => Math.round(v + (d[i] - v) * k)).join(',') + ')'; }
+        // 烤好的披薩（或任何進過烤箱的面）：奶油塌掉、醬貼回盤面、起司融、料照種類變化
+        const NATIVE_BAKE = new Set(['salami', 'mushroom', 'pepper', 'basil']);   // 披薩本來的料，自己會畫烤過的樣子
+        function renderBaked(c, now) {
+          const bk = S.baked;
+          drawSauce(c, now, bk, 0, true);
+          drawCreamMelt(c, bk);
+          drawMelt(c, bk);
+          const pcs = S.pcs.filter(p => { const m = bakeOf(p.id); return m !== 'cheese' && !MELT_CREAM[p.id]; }).sort((a, z) => a.y - z.y);
+          const E = (ex, ey, rx, ry, col) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, 0, 0, 6.2832); c.fill(); };
+          pcs.forEach(p => {   // 冰塊化成一灘水、水果旁邊滲一點汁：畫在料底下
+            const m = bakeOf(p.id);
+            if (m === 'ice') { E(p.x, p.y, 15 + rnd(p.seed) * 6, (15 + rnd(p.seed) * 6) * K, 'rgba(190,226,242,.55)'); E(p.x - 4, p.y - 2, 5, 2, 'rgba(255,255,255,.7)'); }
+            else if (m === 'fruit') { const t = tool(p.id), col = p.id === 'blueberry' ? '70,40,110' : p.id === 'cucumber' || p.id === 'pickle' ? '120,150,60' : '170,40,50'; feather(c, p.x + 2, p.y + 2, (t && t.r || 10) * 1.3, col, bk === 'raw' ? .15 : .3); }
+          });
+          const one = (cc, p, sc) => { cc.save(); cc.translate(p.x, p.y); if (sc) cc.scale(sc, sc); drawAny(cc, tool(p.id), 0, 0, 1, p.seed, bk); cc.restore(); };
+          pcs.filter(p => NATIVE_BAKE.has(p.id)).forEach(p => one(c, p));
+          ['meat', 'rice', 'other', 'fruit', 'leaf'].forEach(m => {
+            const g = pcs.filter(p => !NATIVE_BAKE.has(p.id) && bakeOf(p.id) === m);
+            if (g.length) tinted(c, TINT[m][0], tintA(m, bk), cc => g.forEach(p => one(cc, p, m === 'leaf' ? .8 : 0)));   // 葉子烤過縮小一圈
+          });
+          pcs.filter(p => bakeOf(p.id) === 'dust').forEach(p => {   // 可可粉、肉桂粉：還看得出撒過，但點點糊開、顏色變深
+            const rgb = p.id === 'cocoa' ? '52,26,12' : '118,58,18';
+            for (let i = 0; i < 7; i++) feather(c, p.x + (rnd(p.seed + i) - .5) * 14, p.y + (rnd(p.seed + i + 5) - .5) * 8, 4.2, rgb, bk === 'raw' ? .6 : .85);
+          });
         }
         // ── 整盤畫一次（畫面和「存成樣本」用同一支）──
         function render(c, now) {
@@ -403,6 +468,7 @@
           if (st === 'coffee') return renderCoffee(c, now);
           if (st === 'burger') return renderBurger(c, now);
           drawBase(c, S.baked);
+          if (S.baked) return renderBaked(c, now);
           drawSauce(c, now, S.baked, 0);
           if (S.baked) drawMelt(c, S.baked);
           const rs = runs(), maxLv = Math.max(0, ...rs.map(r => r.lv), ...S.pcs.map(p => p.lv), ...S.sauce.map(s => Math.max(...s.pts.map(p => p.lv || 0))));
@@ -496,16 +562,22 @@
           area = mkArea(); pick = null;
           $('hint').textContent = ST[st].hint;
           traySrc = st; buildTray();
+          if (st === 'coffee') kInit();
+          if (st === 'burger') bgInit();
+          if (st === 'cup') cupInit();
+          actBar();
+          $('oven').classList.remove('on'); $('meter').classList.remove('on'); $('res').classList.remove('on'); $('dish').classList.remove('in-oven');
+          touch(); api.built();
+        }
+        function actBar() {   // 下面那排鈕（烤完回來也叫它重排）
           const pizza = st === 'pizza';
           $('act').innerHTML = '<button class="ock-ghost" data-ok="undo"><i class="fa-solid fa-rotate-left"></i> 上一步</button><button class="ock-ghost" data-ok="clr">重來</button><button data-ok="go">' + (pizza ? '<i class="fa-solid fa-fire-burner"></i> 送進烤箱' : '<i class="fa-solid fa-bell-concierge"></i> 完成') + '</button>';
           $('undo').onclick = () => { const h = S.hist.pop(); if (!h) return; const a = S[h.k], i = a.indexOf(h.o); if (i >= 0) a.splice(i, 1); touch(); };
           $('clr').onclick = build;
-          if (st === 'coffee') { kInit(); $('undo').onclick = kUndo; }
-          if (st === 'burger') { bgInit(); $('undo').onclick = () => { bgUndo(); touch(); }; }
-          if (st === 'cup') { cupInit(); $('undo').innerHTML = '<i class="fa-solid fa-rotate-left"></i>'; $('undo').onclick = cupUndo; $('go').insertAdjacentHTML('beforebegin', '<button class="ock-ghost" data-ok="shk"><i class="fa-solid fa-arrows-left-right"></i> 搖一搖</button>'); $('shk').onclick = cupShakeToggle; }
+          if (st === 'coffee') $('undo').onclick = kUndo;
+          if (st === 'burger') { $('undo').onclick = () => { bgUndo(); touch(400); }; $('go').insertAdjacentHTML('beforebegin', '<button class="ock-ghost" data-ok="toast"><i class="fa-solid fa-fire-burner"></i> 烤一下</button>'); $('toast').onclick = toastBurger; }
+          if (st === 'cup') { $('undo').innerHTML = '<i class="fa-solid fa-rotate-left"></i>'; $('undo').onclick = cupUndo; $('go').insertAdjacentHTML('beforebegin', '<button class="ock-ghost" data-ok="shk"><i class="fa-solid fa-arrows-left-right"></i> 搖一搖</button>'); $('shk').onclick = cupShakeToggle; }
           $('go').onclick = () => { if (!api.can()) return; if (pizza) bake(); else api.done(); };   // 空盤、錢不夠先講；做好交給外面扣錢、試吃
-          $('oven').classList.remove('on'); $('meter').classList.remove('on'); $('res').classList.remove('on'); $('dish').classList.remove('in-oven');
-          touch(); api.built();
         }
         root.addEventListener('click', (e) => {
           const b = e.target.closest('.ock-ing'); if (b) { pick = b.dataset.id; root.querySelectorAll('.ock-ing').forEach(x => x.classList.toggle('on', x === b)); }
@@ -532,6 +604,35 @@
             S.bakeV = Math.round(Math.min(v, 100)); S.baked = v < 55 ? 'raw' : v <= 75 ? 'good' : 'burnt'; touch();
             $('dish').classList.remove('in-oven'); $('meter').classList.remove('on');
             setTimeout(() => { $('oven').classList.remove('on'); finish(S.baked === 'raw' ? '還沒熟……' : S.baked === 'good' ? '烤得剛剛好！' : '烤焦了 xD', '烤到 ' + Math.round(Math.min(v, 100)) + '%（剛好是 55～75%）'); }, 800);
+          }
+          $('out').onclick = done;
+        }
+        // 漢堡「烤一下」：現在疊好的每一層一起進烤箱（之後再疊上去的是新鮮的）。烤的熱度累加：烤兩次就焦了
+        const heatOf = (h) => !h ? null : h < 55 ? 'raw' : h <= 75 ? 'good' : 'burnt';
+        function toastBurger() {
+          if (S.busy || !BG) return;
+          if (api.locked('pizza')) { api.unlock('pizza'); return; }   // 跟披薩同一台烤箱，沒買先問
+          if (BG.layers.length < 2) { $('hint').textContent = '先疊點料再烤'; return; }
+          S.busy = true;
+          $('ovenImg').src = opts.oven.open; $('oven').classList.add('on'); $('dish').classList.add('in-oven');
+          setTimeout(() => { $('ovenImg').src = opts.oven.closed; $('glow').classList.add('on'); }, 650);
+          $('act').innerHTML = '<button data-ok="out"><i class="fa-solid fa-hand"></i> 拿出來</button>';
+          $('hint').textContent = '烤到綠色那段拿出來：麵包金黃、起司剛好融化。太早只是溫溫的，太晚會焦。';
+          $('meter').classList.add('on');
+          let v = 0, over = false; const bar = $('meterBar');
+          const tick = setInterval(() => { v += 1.6; bar.style.width = Math.min(100, v) + '%'; if (v >= 100) done(); }, 80);
+          function done() {
+            if (over) return; over = true; clearInterval(tick);
+            const add = Math.round(Math.min(v, 100));
+            BG.ops.push({ toast: BG.layers.map(l => l.heat || 0) });
+            BG.layers.forEach(l => { l.heat = (l.heat || 0) + add; });
+            const hs = heatOf(Math.max(...BG.layers.map(l => l.heat || 0)));
+            $('glow').classList.remove('on'); $('ovenImg').src = opts.oven.open; $('dish').classList.remove('in-oven'); $('meter').classList.remove('on'); touch(900);
+            setTimeout(() => {
+              if (!root.isConnected) return;
+              $('oven').classList.remove('on'); S.busy = false; actBar(); api.built();
+              $('hint').textContent = hs === 'good' ? '烤好了：麵包金黃、起司融化。可以接著疊，或按完成。' : hs === 'burnt' ? '烤焦了 xD（這次烤到 ' + add + '%，剛好是 55～75%；再烤會更焦）' : '只烤到溫溫的（' + add + '%，剛好是 55～75%），可以再烤一下';
+            }, 800);
           }
           $('out').onclick = done;
         }
@@ -823,7 +924,7 @@
         const BSAUCE = { teri: ['#5a3220', '#3d2014'], hot: ['#d63a2a', '#a3241a'], mustard: ['#ecc23a', '#c4981c'] };
         const BGEN = { r: 78, h: 13 }, BRICE = { r: 84, h: 18 };      // 不是漢堡料的東西（草莓、珍珠、炸雞塊…）：鋪成一層
         function bgInit() { BG = { layers: [{ id: 'bunB', dx: 0, seed: 1, b: 0, sauce: [] }], ops: [] }; bgPtr = null; }
-        function bgUndo() { const o = BG.ops.pop(); if (!o) return; if (o === 'L') BG.layers.pop(); else if (BG.layers[o.i]) BG.layers[o.i].sauce.pop(); }
+        function bgUndo() { const o = BG.ops.pop(); if (!o) return; if (o === 'L') BG.layers.pop(); else if (o.toast) BG.layers.forEach((l, i) => { l.heat = o.toast[i] || 0; }); else if (BG.layers[o.i]) BG.layers[o.i].sauce.pop(); }
         function bgLayout(now) { let y = 234; const out = BG.layers.map(L => { const d = BL[L.id] || (tool(L.id) && tool(L.id).grain ? BRICE : BGEN), e = Math.min(1, (now - L.b) / 300), drop = -(1 - e * e) * 70, o = { L, d, x: 200 + L.dx, yb: y + drop, yt: y - d.h + drop, e }; y -= d.h; return o; }); return { out, H: 234 - y }; }
         function bgPt(e) { const q = pt(e), sc = Math.min(1, 190 / Math.max(1, bgLayout(1e12).H)); return [(q[0] - 200) / sc + 200, (q[1] - 236) / sc + 236]; }
         function bgDraw(c, o) {
@@ -877,7 +978,34 @@
           const lay = bgLayout(now), sc = Math.min(1, 190 / Math.max(1, bgLayout(1e12).H));
           c.save(); c.translate(200, 236); c.scale(sc, sc); c.translate(-200, -236);
           E(202, 240, 94, 26, 'rgba(0,0,0,.16)');
-          lay.out.forEach(o => { c.globalAlpha = Math.min(1, o.e * 3); bgDraw(c, o); bgSauce(c, o); c.globalAlpha = 1; });
+          lay.out.forEach(o => {
+            c.globalAlpha = Math.min(1, o.e * 3);
+            const hs = heatOf(o.L.heat), m = bakeOf(o.L.id);
+            if (!hs) { bgDraw(c, o); bgSauce(c, o); }
+            else if (o.L.id === 'cheese' && hs !== 'raw') { bgCheeseMelt(c, o, hs); bgSauce(c, o); }   // 起司片烤過：融化、往下垂、上面焦黃
+            else {
+              const tm = m === 'leaf' || m === 'fruit' || m === 'meat' || m === 'rice' || m === 'bun' ? m : 'other';
+              const oo = m === 'leaf' ? Object.assign({}, o, { d: { r: o.d.r * .9, h: o.d.h }, yt: o.yt + 2 }) : o;   // 生菜烤過軟掉、縮一圈
+              tinted(c, TINT[tm][0], tintA(tm, hs), cc => { bgDraw(cc, oo); bgSauce(cc, oo); });
+            }
+            c.globalAlpha = 1;
+          });
+          c.restore();
+        }
+        function bgCheeseMelt(c, o, hs) {   // 融化的起司片：攤成圓的一片蓋過下面那層的邊，前面幾處往下垂；焦黃跟披薩起司同一套雜訊遮罩
+          const x = o.x, yt = o.yt, r = o.d.r * 1.04, ry = r * BRY, seed = o.L.seed;
+          const side = hs === 'burnt' ? '#b9781e' : '#dca428', top = hs === 'burnt' ? '#e8b240' : '#f7cf52';
+          const drip = (px, py, w, L, col) => { c.fillStyle = col; c.beginPath(); c.moveTo(px - w / 2, py); c.lineTo(px - w / 2, py + L); c.arc(px, py + L, w / 2, Math.PI, 0, true); c.lineTo(px + w / 2, py); c.closePath(); c.fill(); };
+          for (let i = 0; i < 8; i++) {   // 前半圈垂下來幾滴，長短不一
+            const a = .2 + i * .38 + (rnd(seed + i) - .5) * .18; if (Math.sin(a) < .15) continue;
+            const px = x + Math.cos(a) * r * .97, py = yt + Math.sin(a) * ry * .9, w = 7 + rnd(seed + i + 4) * 6, L = 6 + rnd(seed + i + 9) * 18;
+            drip(px, py, w + 2, L + 1, side); drip(px, py - 1, w, L, top);
+          }
+          c.fillStyle = side; c.beginPath(); c.ellipse(x, yt + 2.5, r, ry, 0, 0, 6.2832); c.fill();
+          c.fillStyle = top; c.beginPath(); c.ellipse(x, yt, r, ry, 0, 0, 6.2832); c.fill();
+          c.save(); c.beginPath(); c.ellipse(x, yt, r, ry, 0, 0, 6.2832); c.clip();
+          feather(c, x - r * .3, yt - ry * .3, r * .35, '255,246,210', .55);   // 油亮
+          c.globalAlpha *= hs === 'burnt' ? 1 : .75; c.drawImage(noiseTex(hs), x - r, yt - ry, r * 2, ry * 2);
           c.restore();
         }
         function bgDown(e) {
@@ -974,8 +1102,10 @@
             L.forEach((l, i) => { if (i) add(l.id, 1, 1); l.sauce.forEach(a => { if (a.id) add(a.id, a.pts.length, Math.max(1, Math.ceil(a.pts.length / 30))); }); });
             const dx = L.slice(1).filter(l => l.id !== 'bunT').map(l => l.dx), mean = dx.reduce((a, b) => a + b, 0) / Math.max(1, dx.length);
             Object.assign(m, { layers: L.length - 1, top: L[L.length - 1].id, tilt: Math.sqrt(dx.reduce((a, v) => a + (v - mean) * (v - mean), 0) / Math.max(1, dx.length)),
-              sauces: L.reduce((n, l) => n + l.sauce.length, 0), mains: L.filter(l => MAIN.has(l.id)).length });
-            key.push(L.map(l => l.id + r0(l.dx) + (l.sauce.length ? '+' + l.sauce.map(a => (a.id || '') + a.pts.length).join('/') : '')).join(','));
+              sauces: L.reduce((n, l) => n + l.sauce.length, 0), mains: L.filter(l => MAIN.has(l.id)).length,
+              toast: heatOf(Math.max(0, ...L.map(l => l.heat || 0))), burntId: (L.find(l => heatOf(l.heat) === 'burnt') || {}).id || '', cheeseMelt: L.some(l => l.id === 'cheese' && heatOf(l.heat) === 'good'),
+              leafHot: L.some(l => (l.id === 'lettuce' || l.id === 'tomato') && l.heat > 0) });
+            key.push(L.map(l => l.id + r0(l.dx) + (l.heat ? 'h' + l.heat : '') + (l.sauce.length ? '+' + l.sauce.map(a => (a.id || '') + a.pts.length).join('/') : '')).join(','));
           } else {
             const cnt = tally(S.pcs.map(p => p.id));
             for (const id in cnt) { const t = surfTool(tool(id)); add(id, cnt[id], Math.ceil(cnt[id] / (t && t.kind === 'scatter' ? 18 : 6))); }
@@ -1074,8 +1204,14 @@
             if (m.baked === 'raw') { score -= 28; N('bite', 10, '中間還是軟的，沒烤熟（烤到 ' + m.bakeV + '%，剛好是 55～75%）'); }
             else if (m.baked === 'burnt') { score -= 28; N('bite', 10, '邊緣焦到發苦（烤到 ' + m.bakeV + '%，剛好是 55～75%）'); }
             else if (m.baked === 'good') { score += 10; N('bite', 4, '餅皮烤得剛好，外脆裡軟', true); }
-            if (!(sum.por.mozz > 0)) { score -= 6; N('bite', 5, '沒放起司，咬起來乾乾的'); }
+            if (!(sum.por.mozz > 0 || sum.por.cheese > 0)) { score -= 6; N('bite', 5, '沒放起司，咬起來乾乾的'); }
             if (m.sauceCov < .3) { score -= 8; N('bite', 6, '醬只抹了一小塊，大部分咬到的是乾餅皮'); }
+            if (m.baked) {   // 不該進烤箱的料進去了
+                const melt = ids.filter(id => bakeOf(id) === 'cream')[0], leaf = ids.filter(id => bakeOf(id) === 'leaf' && id !== 'basil')[0];
+                if (melt) { score -= 8; N('bite', 7, nm(melt) + '進烤箱化成一灘，黏在餅皮上'); }
+                if (sum.por.ice > 0) { score -= 8; N('bite', 7, '冰塊烤化了，餅皮濕濕的'); }
+                if (leaf) { score -= 4; N('bite', 4, nm(leaf) + '烤到軟爛'); }
+            }
         } else if (sum.st === 'cake') {
             if (!m.cream) { score -= 12; N('bite', 7, '上面沒擠奶油，吃起來只有蛋糕體'); }
             else if (m.cream > 2400) { score -= 8; N('bite', 6, '奶油擠太多，吃兩口就膩'); }
@@ -1090,6 +1226,10 @@
             if (!m.mains) { score -= 14; N('bite', 8, '沒有肉也沒有蛋，咬下去空空的'); }
             if (m.top !== 'bunT') { score -= 10; N('bite', 7, '沒蓋上麵包，拿起來會散掉'); }
             if (m.layers > 11) { score -= 10; N('bite', 7, '疊太高了，嘴巴張不開'); }
+            if (m.toast === 'burnt') { score -= 14; N('bite', 9, '烤太久，' + (m.burntId === 'bunB' || m.burntId === 'bunT' ? '麵包' : nm(m.burntId)) + '烤焦了，吃起來苦苦的'); }
+            else if (m.toast === 'good') { score += 6; N('bite', 3, m.cheeseMelt ? '起司烤到融化，咬下去會牽絲' : '麵包烤得香香脆脆', true); }
+            else if (m.toast === 'raw') N('bite', 2, '只烤到溫溫的，麵包還是軟的');
+            if (m.leafHot) { score -= 4; N('bite', 4, '生菜也跟著進烤箱，軟掉了'); }
             if (!notes.bite.length) { score += 6; N('bite', 3, '一口咬下去每一層都吃得到', true); }
         } else if (sum.st === 'cup') {
             if (m.level < .35) { score -= 14; N('bite', 8, '只倒了一點點，像喝剩的'); }
@@ -1451,7 +1591,8 @@
             '三位試吃員照規則講：味道、口感、賣相各一句。同一盤永遠同一個結果。\n' +
             '「靈感之作」「優良」可以上架，做好的那一盤就是菜單上的照片，名字可以自己改；上架後到菜單頁備料，做一批照這一盤的料錢算。\n' +
             '「請熟客試吃」會叫一次模型（設置裡「書咖」那一列），請一位口味最對的常客講感想、取名字，不會改等級，不按也能上架。\n' +
-            '披薩要先買烤箱：點披薩那一檯會問要不要買。' }
+            '披薩要先買烤箱：點披薩那一檯會問要不要買。漢堡也能「烤一下」（同一台烤箱）：疊好的那幾層一起烤，麵包變金黃、起司片融化往下垂，烤兩次就焦了；之後再疊上去的是新鮮的。\n' +
+            '進烤箱的料各有變化：起司融成一灘、奶油和冰淇淋化掉、冰塊變水、可可粉糊開、葉子軟掉、肉和飯上色。' }
         });
     }
     async function render(body) {
