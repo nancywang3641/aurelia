@@ -1525,6 +1525,26 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             border: 1px solid #f8e9b6; border-radius: 0; background: linear-gradient(180deg, #f6e19c 0%, #d4af37 48%, #a27c26 100%); box-shadow: none; }
         #vn-end-side .vne-go-send:hover { filter: brightness(1.06); }
         #vn-end-side .vne-go-send i { font-size: 12px; letter-spacing: 0; }
+        /* CTX 那頁（11-13）：CTX 浮窗整塊借進來（vn_end_brief.js 的 ctx），拿掉浮窗的外框和自己的標題列，標題、返回鍵用這欄的 */
+        #vn-end-side #vn-ctx-popup.vne-ctx-side { display: block; position: static; transform: none; width: auto; max-width: none; max-height: none; overflow: visible;
+            margin: 0; padding: 4px 0 2px; z-index: auto; border: 0; border-radius: 0; background: none; box-shadow: none; animation: none; }
+        #vn-end-side #vn-ctx-popup.vne-ctx-side .ctx-title { display: none; }
+        /* 字跟這欄其他頁（狀態變化、日誌）一樣大；置中那個浮窗照舊小字 */
+        #vn-end-side .vne-ctx-side .ctx-row { padding: 4px 0; }
+        #vn-end-side .vne-ctx-side .ctx-label, #vn-end-side .vne-ctx-side .ctx-limit-label { font-size: 13px; letter-spacing: 0.04em; color: #a8a08a; }
+        #vn-end-side .vne-ctx-side .ctx-val { font-size: 14px; }
+        #vn-end-side .vne-ctx-side .ctx-usage-text, #vn-end-side .vne-ctx-side .ctx-time { font-size: 12px; }
+        #vn-end-side .vne-ctx-side .ctx-autosum-unit, #vn-end-side .vne-ctx-side .ctx-expr-btn { font-size: 12px; }
+        #vn-end-side .vne-ctx-side .ctx-expr-btn { padding: 4px 9px; }
+        #vn-end-side .vne-ctx-side .ctx-limit-input { font-size: 13px; padding: 4px 6px; }
+        #vn-end-side .vne-ctx-side .ctx-autosum-every { width: 56px; }
+        #vn-end-side .vne-ctx-side .ctx-bd-head { font-size: 12px; }
+        #vn-end-side .vne-ctx-side .ctx-bd-all { font-size: 12px; padding: 4px 10px; }
+        #vn-end-side .vne-ctx-side .ctx-bd-item { padding: 4px; }
+        #vn-end-side .vne-ctx-side .ctx-bd-label { font-size: 12px; width: 96px; }
+        #vn-end-side .vne-ctx-side .ctx-bd-val { font-size: 12px; width: auto; min-width: 64px; white-space: nowrap; }
+        #vn-end-side .vne-ctx-side .ctx-bd-total .ctx-bd-label, #vn-end-side .vne-ctx-side .ctx-bd-total .ctx-bd-val { font-size: 13px; width: auto; }
+        #vn-end-side .vne-ctx-side #ctx-summary-btn { font-size: 14px !important; padding: 10px 4px !important; }
 
         /* 簡報卡上的小牌子三塊以上：排成兩欄 */
         #vn-end-basic.vne-brief .vne-tiles.vne-tiles-grid { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }

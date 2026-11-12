@@ -4048,6 +4048,8 @@
             return true;
         },
         toggleCtx: function() {
+            // 章末簡報卡的 CTX 是把這個浮窗借進旁邊那欄（11-13）：對話框這顆要開置中的，先叫它還回來
+            try { (win.VN_EndBrief || window.VN_EndBrief)?.ctxHome?.(); } catch (e) {}
             const popup = document.getElementById('vn-ctx-popup');
             const btn   = document.getElementById('vn-btn-ctx');
             if (!popup) return;

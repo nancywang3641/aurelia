@@ -197,7 +197,7 @@
     function _briefOn() { const r = _root(); return !!r && r.classList.contains('vne-brief'); }
     function _threads() { return win.OS_STORY_THREADS || window.OS_STORY_THREADS; }
     const SIDE_MARK = { threads: ['#vn-end-btn-threads', '.vne-tile[data-vne="threads"]'], today: ['.vne-tile[data-vne="today"]'],
-        changes: ['.vne-tile[data-vne="changes"]'], journal: ['#vn-end-btn-journal'], go: ['#vn-end-btn-go'] };
+        changes: ['.vne-tile[data-vne="changes"]'], journal: ['#vn-end-btn-journal'], go: ['#vn-end-btn-go'], ctx: ['#vn-end-btn-ctx'] };
     function _markOn(key) {
         const root = _root();
         if (!root) return;
@@ -334,7 +334,41 @@
             if (!pick || pwa) listOpts();
             if (!opts.length && !pick) { try { inp.focus({ preventScroll: true }); } catch (e) {} }
         },
+        // CTX（11-13 她：「CTX 也弄成側邊滑出？但注意，對話框也有 CTX 快捷，這裡還是原樣喔」）：
+        //   CTX 浮窗（#vn-ctx-popup）整塊借過來放進這欄，收起來放回原處。數字是 VN_CtxMonitor 照編號寫的，
+        //   只有一份才不會兩邊對不上；對話框那顆照舊叫 VN_Core.toggleCtx 開置中的浮窗（叫之前會先把借走的還回去）
+        ctx(body) {
+            const pop = document.getElementById('vn-ctx-popup');
+            if (!pop) { body.innerHTML = _wait('上下文', '上下文還在載入，等一下再按'); return; }
+            body.innerHTML = _sh('上下文') + '<div class="vne-sc vne-ctx-sc"></div>';
+            const V = window.VN_Core;
+            try { if (V && V.closeCtx) V.closeCtx(); } catch (e) {}   // 置中那個開著的話先收（借走以後就不在原處了）
+            if (!_ctxHome) _ctxHome = { parent: pop.parentNode, next: pop.nextSibling };
+            body.querySelector('.vne-ctx-sc').appendChild(pop);
+            pop.classList.add('vne-ctx-side');
+            // 底下那顆鈕兩版做的事不一樣（同 toggleCtx）：網頁版直接生大總結、酒館開故事管理
+            const sb = document.getElementById('ctx-summary-btn');
+            if (sb) sb.textContent = _standalone() ? '大總結' : '故事管理';
+            const M = win.VN_CtxMonitor || window.VN_CtxMonitor;
+            try { if (M && M.poll) M.poll(); } catch (e) {}
+        },
     };
+    // 借進這欄的 CTX 浮窗放回原處（換頁、收起來、對話框那顆要開的時候都會叫）
+    let _ctxHome = null;
+    function _dropCtx() {
+        const pop = document.getElementById('vn-ctx-popup');
+        const home = _ctxHome;
+        _ctxHome = null;
+        if (!pop || !pop.classList.contains('vne-ctx-side')) return;
+        pop.classList.remove('vne-ctx-side', 'show');
+        const parent = (home && home.parent && home.parent.isConnected) ? home.parent : (document.getElementById('page-game') || document.body);
+        try { parent.insertBefore(pop, (home && home.next && home.next.parentNode === parent) ? home.next : null); }
+        catch (e) { parent.appendChild(pop); }
+    }
+    // 對話框那顆 CTX（VN_Core.toggleCtx）開之前叫：這欄開著 CTX 就整欄收起來，浮窗回到原處再照舊置中打開
+    function ctxHome() {
+        if (_sideKey === 'ctx') closeSide(true); else _dropCtx();
+    }
     function _toast(msg) { try { (win.AUI || window.AUI).toast(msg); } catch (e) {} }
 
     // 酒館的輸入框（#send_textarea）跟「繼續」那頁的輸入框綁成同一句：
@@ -408,6 +442,7 @@
         if (_sideKey === key) { closeSide(); return true; }
         _dropThreads(side);
         _dropGo(side);
+        _dropCtx();
         _sideKey = key;
         const seq = ++_sideSeq;
         root.classList.add('vne-side-open');
@@ -433,6 +468,7 @@
         const root = _root(), side = _side();
         _dropThreads(side);
         _dropGo(side);
+        _dropCtx();
         _sideKey = '';
         _sideSeq++;
         if (root) { root.classList.remove('vne-side-open'); root.querySelectorAll('.vne-on').forEach(n => n.classList.remove('vne-on')); }
@@ -451,7 +487,9 @@
     // 底下那排的線索、日誌：簡報卡上在旁邊那欄開；世界面板漏做、補上來的那幾顆（直排）照舊開資料中心／手機日誌
     function _bindEnts() {
         const th = document.getElementById('vn-end-btn-threads'), jr = document.getElementById('vn-end-btn-journal'), go = document.getElementById('vn-end-btn-go');
+        const cx = document.getElementById('vn-end-btn-ctx');
         if (th) th.onclick = () => { if (_briefOn()) openSide('threads'); else if (_acts && _acts.threads) _acts.threads(); };
+        if (cx) cx.onclick = () => { if (_briefOn()) openSide('ctx'); else if (_acts && _acts.ctx) _acts.ctx(); };
         if (jr) jr.onclick = () => { if (_briefOn()) openSide('journal'); else if (_acts && _acts.journal) _acts.journal(); };
         // 繼續：簡報卡上在旁邊那欄開「做出選擇」（11-13）；世界面板那種直排的照舊開選項頁／資料中心
         if (go) go.onclick = () => { if (_briefOn()) { openSide('go'); return; } closeSide(); if (_acts && _acts.go) _acts.go(); };
@@ -549,7 +587,7 @@
         if (k !== _tile.nChg) { _tile.nChg = k; _renderTiles(root); }
     });
 
-    const API = { fill: fill, refreshClues: refreshClues, openSide: openSide, closeSide: closeSide };
+    const API = { fill: fill, refreshClues: refreshClues, openSide: openSide, closeSide: closeSide, ctxHome: ctxHome };
     window.VN_EndBrief = API;
     if (win !== window) win.VN_EndBrief = API;
 })();
