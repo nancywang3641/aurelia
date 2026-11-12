@@ -1,7 +1,7 @@
 // ----------------------------------------------------------------
 // [檔案] os_cafe.js
 // 路徑：os_phone/os/os_cafe.js
-// 職責：📖☕ 書咖經營系統——菜單/書單+備料+客人上門結算（研發在 os_cafe_kitchen.js：11-12 調配＋創想合成研發台；這裡留舊調配那杯的揭曉 _labResult／_finishRdNow）。
+// 職責：📖☕ 書咖經營系統——菜單/書單+備料+客人上門結算（研發＝後廚，在 os_cafe_kitchen.js：11-12 夜起是全螢幕後廚窗口；這裡留舊調配那杯的揭曉 _labResult／_finishRdNow）。
 //   10-12 改經營版：書咖自己的帳戶(跟 PT 錢包分開)+每天體力；研發花錢花體力、等幾小時才揭曉；
 //   上架的飲品要「備料」才有料，客人到店那一刻有料才點得到（點了才當場做）；10-13 起備的料等下一次 9 點開店才上架、放兩天才倒。
 //   雇來的早班／晚班員工（os_cafe_hire.js）在結算裡跟客人照時間交錯跑：上班先看帳備料、賣完補貨、領薪水。
@@ -920,7 +920,7 @@
               '<button class="oc-close" title="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
             '<div class="oc-tabs">' +
               '<button class="oc-tab on" data-tab="menu"><i class="fa-solid fa-receipt"></i>菜單</button>' +
-              '<button class="oc-tab" data-tab="kitchen"><i class="fa-solid fa-kitchen-set"></i>研發</button>' +   // 11-12 調配＋創想合成研發台（os_cafe_kitchen.js）
+              '<button class="oc-tab" data-tab="kitchen"><i class="fa-solid fa-kitchen-set"></i>研發</button>' +   // 研發＝後廚門口（os_cafe_kitchen.js，按「進後廚」開全螢幕窗口）
               '<button class="oc-tab" data-tab="books"><i class="fa-solid fa-book-open"></i>書單</button>' +
               '<button class="oc-tab" data-tab="log"><i class="fa-solid fa-users"></i>訪客</button>' +
               '<button class="oc-tab" data-tab="staff"><i class="fa-solid fa-bell-concierge"></i>值班</button>' +   // 店員：挑人、排時間、值班紀錄（10-08 取代點單小遊戲）
@@ -1051,7 +1051,7 @@
             if (S && S.renderTab) { await S.renderTab(body); _paintStaffDot(); }
             else body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-id-badge"></i>店員還沒準備好，等一下再來看。</div>';
         } else {
-            // 🍳 研發台（11-12 調配＋創想合成一頁，os_cafe_kitchen.js）
+            // 🍳 研發＝後廚門口（os_cafe_kitchen.js；按「進後廚」開全螢幕後廚窗口）
             const K = win.OS_CAFE_KITCHEN || window.OS_CAFE_KITCHEN;
             if (K && K.render) { await K.render(body); _paintLabDot(); }
             else body.innerHTML = '<div class="oc-empty"><i class="fa-solid fa-kitchen-set"></i>研發台還沒準備好，等一下再來看。</div>';
