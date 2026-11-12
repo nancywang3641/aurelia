@@ -13,7 +13,7 @@
         if (!A || !A.registerHelp) return false;
         A.registerHelp({
             ss_1249: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
-            ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。\n接 Claude 官方（或支援 Claude 格式的站）選 Claude 原生：同一段開頭再送一次時會讀緩存，比較省。OpenAI 相容這個格式接 Claude 沒有緩存。\n用 Google Cloud 的 Vertex：選「Gemini 原生／Vertex」，API 地址填 https://aiplatform.googleapis.com，Key 填「綁在服務帳戶上」的 API 金鑰（Google Cloud 建金鑰時勾「透過服務帳戶驗證 API 呼叫」，選有 Vertex 權限的那個服務帳戶；一般的金鑰 Vertex 不收），模型名照 Vertex 上的寫（例如 gemini-2.5-flash）。下載下來的那種 JSON 鑰匙檔網頁版用不了，只有酒館收。' },
+            ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。\n接 Claude 官方（或支援 Claude 格式的站）選 Claude 原生：同一段開頭再送一次時會讀緩存，比較省。OpenAI 相容這個格式接 Claude 沒有緩存。\n用 Google Cloud 的 Vertex（現在叫 Agent Platform）：選「Gemini 原生／Vertex」，API 地址填 https://aiplatform.googleapis.com，Key 填「綁在服務帳戶上」的 API 金鑰（Google Cloud 建金鑰時先在「選取 API 限制」選 Agent Platform API，再綁一個有「Agent Platform 使用者」角色的服務帳戶；一般的金鑰 Vertex 不收）。建金鑰時說被組織政策擋住：到「組織政策」找 iam.managed.disableServiceAccountApiKeyCreation，在 allowedServices 多加一行 aiplatform.googleapis.com。\n這種金鑰拉不到模型清單，模型選單最下面選「自己輸入模型名稱」，照 Vertex 上的寫（例如 gemini-3.1-pro-preview）。會先想的模型想的也算在 Max Tokens 裡，寫劇情建議 16000 以上。下載下來的那種 JSON 鑰匙檔網頁版用不了，只有酒館收。' },
             ss_1278: { title: '自訂前置指令', body: '這段會放在主模型每次收到的訊息最前面。直連、托管、酒館連線都有效；用酒館連線時每個連接預設各記一份。\n留空就不放。' },
             ss_1298: { title: '注入 Preset 自訂條目', body: '把你挑的那個 Preset 裡自己寫的條目，放進主模型的指令裡。要裝酒館助手才有。' },
             ss_1354: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
@@ -2731,6 +2731,35 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const secTestBtn = container.querySelector('#sec-test-btn');
         const status = container.querySelector('#os-status');
 
+        // ✏️ 主／副模型那格可以自己打模型名（11-13 小斐驗收網頁版抓到：Vertex 綁服務帳戶的金鑰拉不到模型清單（401），
+        //   選單只剩預設那一個、換不了）。選單最下面一項「自己輸入模型名稱…」，選了跳輸入框，打的名字加進選單選起來；
+        //   取消就回到原本選的。拉清單會整個重寫選單，所以拉完要再補回這一項（_withTypeOpt）。「我的通道」那格本來就是輸入框
+        const MODEL_TYPE = '__type_model__';
+        function _withTypeOpt(sel) {
+            if (sel && !sel.querySelector('option[value="' + MODEL_TYPE + '"]')) sel.insertAdjacentHTML('beforeend', '<option value="' + MODEL_TYPE + '">自己輸入模型名稱…</option>');
+        }
+        function _wireModelType(sel) {
+            if (!sel || sel.dataset.typeWired) return;
+            sel.dataset.typeWired = '1';
+            _withTypeOpt(sel);
+            let prev = sel.value;
+            sel.addEventListener('focus', () => { if (sel.value !== MODEL_TYPE) prev = sel.value; });
+            sel.addEventListener('change', async () => {
+                if (sel.value !== MODEL_TYPE) { prev = sel.value; return; }
+                const U = window.AUI || (window.parent && window.parent.AUI);
+                let v = null;
+                try { v = (U && U.prompt) ? await U.prompt('模型名稱（照接口那邊寫的）', prev === MODEL_TYPE ? '' : prev) : null; } catch (e) {}
+                const name = String(v == null ? '' : v).trim();
+                if (!name) { sel.value = prev; return; }
+                if (!Array.from(sel.options).some(o => o.value === name)) sel.insertAdjacentHTML('afterbegin', `<option value="${_capiEsc(name)}">${_capiEsc(name)}</option>`);
+                sel.value = name;
+                prev = name;
+            });
+        }
+        _wireModelType(elModel);
+        _wireModelType(secModel);
+        const TYPE_HINT = '（模型選單最下面可以選「自己輸入模型名稱」）';
+
         // ── 🎲 決策模型三格：打字就存（os_jev_conn.js），測試一按一通 ──
         (function wireJev() {
             const J = window.OS_JEV_CONN || (window.parent && window.parent.OS_JEV_CONN);
@@ -3976,9 +4005,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 }
             } catch (e) {
                 console.error(e);
-                status.innerText = `同步失敗: ${e.message}`;
+                status.innerText = `同步失敗: ${e.message}` + TYPE_HINT;
             } finally {
                 btnFetch.style.animation = "none";
+                _withTypeOpt(elModel);
             }
         };
 
@@ -4039,9 +4069,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
             } catch (e) {
                 console.error(e);
-                status.innerText = `副模型同步失敗: ${e.message}`;
+                status.innerText = `副模型同步失敗: ${e.message}` + TYPE_HINT;
             } finally {
                 secFetch.style.animation = "none";
+                _withTypeOpt(secModel);
             }
         };
 
@@ -4075,7 +4106,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     stProfileId: elStProfile.value,
                     url: elUrl.value.trim(),
                     key: elKey.value.trim(),
-                    model: elModel.value,
+                    model: elModel.value === MODEL_TYPE ? llmConfig.model : elModel.value,
                     usePresetPrompts: elUsePresetPrompts ? elUsePresetPrompts.checked : false,
                     presetName: (elPresetName ? elPresetName.value : '') || '',
                     maxTokens: parseInt(elMaxTokens.value),
@@ -4100,7 +4131,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     syncWithPrimary: isSecSync,
                     url: isSecSync ? elUrl.value.trim() : secUrl.value.trim(),
                     key: isSecSync ? elKey.value.trim() : secKey.value.trim(),
-                    model: secModel.value,
+                    model: secModel.value === MODEL_TYPE ? secLlmConfig.model : secModel.value,
                     usePresetPrompts: secUsePresetPrompts ? secUsePresetPrompts.checked : false,
                     presetName: (secPresetName ? secPresetName.value : '') || '',
                     maxTokens: parseInt(secMaxTokens.value),
@@ -4262,6 +4293,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // --- Test API Logic (共用) ---
         async function runApiTest(cfg, modelVal, resultEl) {
+            // 測試只說一句 Hi，但會先想的模型（Gemini 3.x pro、Claude 5.5、o 系列）想的部分也算在字數裡：
+            //   以前給 50，一想就用光、回空的，測試看起來失敗、實際生成卻正常（11-13 小斐驗收 Vertex 3.1-pro 抓到）。給 2048 讓它想完
+            const TEST_MAX = 2048;
             resultEl.style.display = 'block';
             resultEl.style.color = 'rgba(26,28,40,0.40)';
             resultEl.textContent = '測試中...';
@@ -4304,7 +4338,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             response = await context.ConnectionManagerRequestService.sendRequest(
                                 cfg.stProfileId,
                                 [{ role: 'user', content: 'Hi' }],
-                                50,
+                                TEST_MAX,
                                 undefined,
                                 _ov
                             );
@@ -4318,7 +4352,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     } else {
                         const headers = context.getRequestHeaders();
                         // 沒選連接設定檔 → 直連組 body（不經 sendRequest）；同樣要擋掉 top_k=0，否則測試永遠 400
-                        const _tbody = { messages: [{ role: 'user', content: 'Hi' }], max_tokens: 50, stream: false };
+                        const _tbody = { messages: [{ role: 'user', content: 'Hi' }], max_tokens: TEST_MAX, stream: false };
                         try { win.OS_API?._dropZeroTopK?.(context, _tbody); } catch (e) {}
                         const res = await fetch('/api/backends/chat-completions/generate', {
                             method: 'POST',
@@ -4340,13 +4374,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         const gUrl = win.OS_API.geminiGenUrl(cfg.url, modelVal, cfg.key);   // 跟送生成同一支（Vertex 的網址也在裡面分）
                         res = await fetch(gUrl, {
                             method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(cfg.key || '') },
-                            body: JSON.stringify(win.OS_TO_GEMINI_BODY(msgs, { maxTokens: 50, vertex: win.OS_API.isVertexUrl(cfg.url) }))
+                            body: JSON.stringify(win.OS_TO_GEMINI_BODY(msgs, { maxTokens: TEST_MAX, vertex: win.OS_API.isVertexUrl(cfg.url) }))
                         });
                     } else {
                         const aUrl = base + '/v1/messages';
                         res = await fetch(aUrl, {
                             method: 'POST', headers: win.OS_API.authHeaders(aUrl, cfg.key, { json: true, anthropic: true }),
-                            body: JSON.stringify(win.OS_TO_ANTHROPIC_BODY(msgs, { model: modelVal, maxTokens: 50 }))
+                            body: JSON.stringify(win.OS_TO_ANTHROPIC_BODY(msgs, { model: modelVal, maxTokens: TEST_MAX }))
                         });
                     }
                     const data = await res.json().catch(() => null);
@@ -4362,7 +4396,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     const res = await fetch(targetUrl, {
                         method: 'POST',
                         headers: window.OS_API.authHeaders(targetUrl, cfg.key, { json: true }),
-                        body: JSON.stringify({ model: modelVal, messages: [{ role: 'user', content: 'Hi' }], max_tokens: 50, stream: false })
+                        body: JSON.stringify({ model: modelVal, messages: [{ role: 'user', content: 'Hi' }], max_tokens: TEST_MAX, stream: false })
                     });
                     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
                     const data = await res.json();

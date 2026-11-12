@@ -2056,10 +2056,16 @@
                         const _fr = _r.choices?.[0]?.finish_reason || _r.candidates?.[0]?.finishReason || '';
                         const _u = _r.usage || _r.usageMetadata || null;
                         const _pt = _u ? (_u.prompt_tokens ?? _u.promptTokenCount) : undefined;
+                        // 想了多少（Gemini thoughtsTokenCount、OpenAI 相容 reasoning_tokens）
+                        const _th = _u ? (_u.thoughtsTokenCount ?? _u.completion_tokens_details?.reasoning_tokens ?? 0) : 0;
                         if (_fr) _why += 'finish_reason=' + _fr;
                         if (_pt !== undefined) _why += (_why ? '，' : '') + 'prompt_tokens=' + _pt;
                         if (_pt === 0) _why += '（用量為零，上游沒有真的跑模型：多半是額度用完或被站方擋下）';
                         else if (/safety|prohibited|recitation|blocklist/i.test(_fr)) _why += '（內容被上游安全過濾）';
+                        // 11-13：會先想的模型想的也算在 Max Tokens 裡，設太小就全想光、一個字都沒寫，畫面只看到空白
+                        else if (/max_tokens|^length$/i.test(_fr)) _why += _th > 0
+                            ? '（模型先在心裡想了 ' + _th + ' 個字、把 Max Tokens 用光了，沒寫出正文：到設置把 Max Tokens 調高，例如 16000 以上）'
+                            : '（寫到一半就碰到 Max Tokens 上限：到設置把 Max Tokens 調高）';
                     } catch (e) {}
                     throw new Error('API 返回內容為空' + (_why ? '：' + _why : '（可能被過濾或生成失敗）'));
                 }
