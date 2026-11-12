@@ -173,6 +173,56 @@
         const today = _dayNum(ts);
         return { day: _minOf(ts) < OPEN_MIN ? today : today + 1, t: OPEN_MIN };
     }
+    // 🌾 書咖倉庫（11-13 她選「後院送料」）：{ items:{ 作物id 或 egg/milk/honey: { n, g＝其中上等幾個 } }, got:[收過的送貨單 id], dev:這台的代號 }
+    //   後院出貨箱旁邊「送去書咖」：田那邊先從倉庫拿走、在田的帳本寫一張送貨單（type 'cafe'），田存好了這裡才照送貨單收（collectFromFarm）。
+    //   只收這台送的（dev）、同一張只收一次（got）；田開了雲端存檔就等存上伺服器才收（伺服器那份蓋回來時送貨單跟著不見，就不會兩邊都有）。
+    const K_PANTRY = 'pantry';
+    const FARM_NAME = { stardew: '星露豆', sunroot: '曦根', moonleaf: '月葉菜', emberpepper: '燼火椒', cloudberry: '雲莓', frostbell: '霜鈴瓜', nightstar: '夜星茄', honeycorn: '蜜光玉米', dawnberry: '晨露莓', silverwheat: '銀穗麥', egg: '雞蛋', milk: '牛奶', honey: '蜂蜜' };
+    async function _panLoad() {
+        const p = Object.assign({ items: {}, got: [], dev: '' }, await _getStrict(K_PANTRY, null) || {});
+        if (!p.items || typeof p.items !== 'object') p.items = {};
+        if (!Array.isArray(p.got)) p.got = [];
+        return p;
+    }
+    async function _setStrict(k, v) { const db = _db(); if (!db?.saveAppData) throw new Error('資料庫還沒載入'); await db.saveAppData(APP_ID, k, v); }   // 寫不進去要知道（_set 會吞掉錯）
+    function cafeDev() {
+        return _locked(async () => { const p = await _panLoad(); if (!p.dev) { p.dev = 'cd_' + _mkId(); await _setStrict(K_PANTRY, p); } return p.dev; });
+    }
+    async function getPantry() { const p = await _get(K_PANTRY, null); return (p && p.items) || {}; }
+    function _lsRead(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+    async function collectFromFarm(opts) {
+        const FC = win.FarmCloud || window.FarmCloud;
+        const cloudOn = () => { const c = _lsRead('aurelia_farm_cloud') || {}; return !!(c.on && String(c.url || '').trim() && String(c.token || '').trim()); };
+        if (opts && opts.flush && FC && FC.enabled && FC.enabled()) {   // 剛送：先把田送上伺服器（另一份送到一半就等一下再看）
+            for (let i = 0; i < 6; i++) { try { await FC.flush(); } catch (e) {} if (!(FC.meta() || {}).dirty) break; await new Promise(r => setTimeout(r, 700)); }
+        }
+        if (cloudOn() && (_lsRead('aurelia_farm_cloud_meta') || {}).dirty) return { ok: false, pending: true };
+        const farm = _lsRead('aurelia_farm_v1');
+        const notes = ((farm && farm.ledger) || []).filter(e => e && e.type === 'cafe' && e.id && e.quantity > 0 && FARM_NAME[e.cropId]);
+        if (!notes.length) return { ok: true, added: [] };
+        return _locked(async () => {
+            const pan = await _panLoad();
+            const mine = notes.filter(e => e.dev && e.dev === pan.dev && !pan.got.includes(e.id));
+            if (!mine.length) return { ok: true, added: [] };
+            mine.forEach(e => { const it = pan.items[e.cropId] || (pan.items[e.cropId] = { n: 0, g: 0 }); it.n += e.quantity; if (e.q === 'good') it.g = (it.g || 0) + e.quantity; pan.got.push(e.id); });
+            pan.got = pan.got.slice(-400);
+            await _setStrict(K_PANTRY, pan);
+            return { ok: true, added: mine.map(e => ({ id: e.cropId, n: e.quantity })) };
+        }).catch(e => { console.warn('[Cafe] 收後院送來的料失敗', e); return { ok: false }; });
+    }
+    function _panTake(pan, use) { for (const g in use) { const it = pan.items[g]; if (!it) continue; const t = Math.min(it.n, use[g]); it.g = Math.max(0, (it.g || 0) - t); it.n -= t; if (it.n <= 0) delete pan.items[g]; } }
+    // 備 n 份要從倉庫拿什麼：後院才有的作物不夠就備不了；牛奶雞蛋蜂蜜倉庫有就先用（省下買的錢）
+    function _batchPlan(m, n, items) {
+        const g = (m && m.garden) || {}, use = {};
+        let save = 0;
+        for (const id in g) {
+            const need = (g[id].u || 0) * n, have = items[id] ? items[id].n : 0;
+            if (!g[id].c) { if (have < need) return { ok: false, why: '後院的' + (FARM_NAME[id] || id) + '不夠（備 ' + n + ' 份要 ' + need + '，倉庫只有 ' + have + '）' }; if (need) use[id] = need; }
+            else { const t = Math.min(have, need); if (t) { use[id] = t; save += t * g[id].c; } }
+        }
+        return { ok: true, use, save, cost: Math.max(0, _unitCost(m) * n - save) };
+    }
+    const _cropDish = (m) => !!(m && m.garden && Object.keys(m.garden).some(id => !m.garden[id].c));   // 要用後院作物的菜（店員不會自己備：他們拿不到後院的料）
     // 備料：花材料錢＋體力，料等下一次開店才上架（10-13 她：「備料要在一個節點備料，這個備料是明天的」——快打烊才備的不會當天上架、隔天就倒）
     function makeBatch(menuId, qty) {
         return _locked(async () => {
@@ -184,14 +234,18 @@
             if (!m) return { ok: false, why: '這杯已經不在菜單上了' };
             const fd = await _fundLoad();
             if (fd.stamina < F.batchStamina) return { ok: false, why: '體力不夠（剩 ' + fd.stamina + '，備料一次要 ' + F.batchStamina + '）' };
-            const unit = _unitCost(m), cost = unit * n;
+            const pan = m.garden ? await _panLoad() : null;
+            const plan = _batchPlan(m, n, pan ? pan.items : {});
+            if (!plan.ok) return { ok: false, why: plan.why };
+            const cost = plan.cost, unit = Math.round(cost / n);
             if (fd.coins < cost) return { ok: false, why: '錢不夠（備 ' + n + ' 份要 ' + cost + '，帳戶剩 ' + fd.coins + '）' };
             const stock = await _getStrict(K_STOCK, {});
             (stock[m.id] || (stock[m.id] = [])).push({ id: _mkId(), qty: n, day: at.day, t: at.t, unit });
             fd.coins -= cost; fd.stamina -= F.batchStamina;
+            if (pan && Object.keys(plan.use).length) { _panTake(pan, plan.use); await _setStrict(K_PANTRY, pan); }
             await _set(K_STOCK, stock);
             await _set(K_FUND, fd);
-            return { ok: true, fund: fd, qty: n, cost, day: at.day, t: at.t };
+            return { ok: true, fund: fd, qty: n, cost, day: at.day, t: at.t, home: plan.use };
         });
     }
     // 研發開工：花錢＋體力，等幾個小時才知道做出什麼；同時只能一杯
@@ -496,7 +550,7 @@
         const tal = (day, id, k) => {
             for (const T of [tallyAdd, tallyLive]) { const d = T[day] || (T[day] = {}); (d[id] || (d[id] = [0, 0]))[k]++; }
         };
-        const crew = staff2 ? HIRE._pure.crewSession({ staff2, tally: tallyLive, menu, stock, used, coins: fund0.coins, today, nowMin, from: crewFrom,
+        const crew = staff2 ? HIRE._pure.crewSession({ staff2, tally: tallyLive, menu: menu.filter(m => !_cropDish(m)), stock, used, coins: fund0.coins, today, nowMin, from: crewFrom,
             unitCost: _unitCost, avail: _avail, mkId: _mkId, rand: Math.random }) : null;
         const recId = shop.recommend?.id || null;   // 店員推薦的那杯
         const pop0 = shop.popularity || 0;
@@ -825,6 +879,7 @@
             '.oc-menu-ops{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding-top:7px;border-top:1px dashed rgba(160,120,80,.25);}' +
             '.oc-stock{color:#7a5a3c;font-size:11px;}.oc-stock b{color:#4f3520;font-size:13px;}.oc-stock.zero b{color:#b65050;}.oc-stock-next{color:#a18465;}.oc-stock-next b{color:#7a5a3c;}' +
             '.oc-make{margin-left:auto;background:rgba(122,79,45,.08);border:1px solid #c9a476;color:#6d4425;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700;}.oc-make.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;}' +
+            '.oc-mini-tag.oc-home-tag{color:#3f7448;background:#e6f3e0;}.oc-home-line{display:block;margin-top:6px;font-size:11px;color:#3f7448;line-height:1.5;}' +
             '.oc-unlist{margin-left:6px;background:none;border:1px solid #dcc7a6;color:#9a7a5a;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px;}.oc-unlist:hover{background:rgba(182,80,80,.08);color:#b65050;border-color:#d99;}.oc-unlist:disabled{opacity:.5;cursor:default;}' +
             '.oc-batch{grid-column:1/-1;display:flex;flex-direction:column;gap:7px;}' +
             '.oc-batch-nums{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;}' +
@@ -991,7 +1046,7 @@
                     const K = m.dish && (win.OS_CAFE_KITCHEN || window.OS_CAFE_KITCHEN);
                     return '<div class="oc-menu-card" data-id="' + _esc(m.id) + '"><span class="oc-drink-icon">' + (K && K.thumb ? K.thumb(m.dish) : _sprite(iconId)) + '</span>' +
                     '<span class="oc-menu-main"><span class="oc-menu-title">' + _esc(m.name) + '</span><span class="oc-blurb">' + _esc(m.blurb || '') + '</span>' +
-                    '<span class="oc-mini-tags">' + (m.tags || []).map(t => '<i class="oc-mini-tag">' + _esc(t) + '</i>').join('') + '</span></span>' +
+                    '<span class="oc-mini-tags">' + (m.garden ? '<i class="oc-mini-tag oc-home-tag"><i class="fa-solid fa-seedling"></i> 自家後院</i>' : '') + (m.tags || []).map(t => '<i class="oc-mini-tag">' + _esc(t) + '</i>').join('') + '</span></span>' +
                     '<span class="oc-menu-side"><span class="oc-badge ' + (TIER_TEXT[m.tier]?.cls || 'a') + '">' + (TIER_TEXT[m.tier]?.label || '') + '</span>' +
                     '<span class="oc-menu-price">' + m.price + ' PT</span><span class="oc-menu-sold">售出 ' + (m.sold || 0) + '</span></span>' +
                     '<span class="oc-menu-ops"><span class="oc-stock' + (left ? '' : ' zero') + '">現在有料 <b>' + left + '</b> 份</span>' +
@@ -1090,23 +1145,28 @@
 
     async function _openBatch(card, m) {
         const F = CAFE_CFG.fund;
-        const unit = _unitCost(m);
         const fund = await _fundOrNull();
         const coins = fund ? fund.coins : 0, sta = fund ? fund.stamina : 0;
+        const items = m.garden ? await getPantry().catch(() => ({})) : {};   // 書咖倉庫（後院送來的）
+        const plan1 = _batchPlan(m, 1, items), unit = plan1.ok ? plan1.cost : _unitCost(m);
         let why = '';
         if (!fund) why = '讀不到書咖帳戶，等一下再試';
         else if (sta < F.batchStamina) why = '體力不夠（剩 ' + sta + '，備料一次要 ' + F.batchStamina + '），明天會回滿';
+        else if (!plan1.ok) why = plan1.why + '：去後院出貨箱旁邊按「送去書咖」';
         else if (coins < unit) why = '錢不夠（一份料要 ' + unit + '，帳戶剩 ' + coins + '）';
         const at = _nextOpen(Date.now());
         const when = at.day === _dayNum(Date.now()) ? '今天 9 點開店上架' : '明天 9 點開店上架';
+        const homeText = (use) => Object.keys(use || {}).map(id => (FARM_NAME[id] || id) + ' ' + use[id]).join('、');
         const nums = [];
-        for (let n = 1; n <= F.batchMax; n++) nums.push('<button class="oc-num" data-n="' + n + '"' + (why || unit * n > coins ? ' disabled' : '') + '>' + n + '</button>');
+        for (let n = 1; n <= F.batchMax; n++) { const pl = _batchPlan(m, n, items); nums.push('<button class="oc-num" data-n="' + n + '"' + (why || !pl.ok || pl.cost > coins ? ' disabled' : '') + '>' + n + '</button>'); }
+        const gLine = m.garden ? '<span class="oc-home-line"><i class="fa-solid fa-seedling"></i> 每份用後院的 ' + Object.keys(m.garden).map(id => (FARM_NAME[id] || id) + ' ' + m.garden[id].u + (m.garden[id].c ? '（沒有就用買的）' : '')).join('、') +
+            '；倉庫 ' + (Object.keys(m.garden).map(id => (FARM_NAME[id] || id) + ' ' + (items[id] ? items[id].n : 0)).join('、')) + '</span>' : '';
         card.insertAdjacentHTML('beforeend',
             '<span class="oc-batch">' +
               '<span class="oc-batch-nums">' + nums.join('') + '</span>' +
               '<span class="oc-batch-row"><span class="oc-batch-cost">' + (why ? '' : '要備幾份？一份料 ' + unit + '，備一次花 ' + F.batchStamina + ' 體力；' + when) + '</span>' +
               '<button class="oc-batch-go" disabled>備</button></span>' +
-              (why ? '<span class="oc-why">' + why + '</span>' : '') +
+              gLine + (why ? '<span class="oc-why">' + why + '</span>' : '') +
             '</span>');
         const box = card.querySelector('.oc-batch');
         const go = box.querySelector('.oc-batch-go');
@@ -1117,7 +1177,8 @@
             if (!b || b.disabled) return;
             pick = Number(b.dataset.n);
             box.querySelectorAll('.oc-num').forEach(x => x.classList.toggle('on', x === b));
-            cost.textContent = '備 ' + pick + ' 份：材料 ' + (unit * pick) + '，體力 ' + F.batchStamina + '；' + when;
+            const pl = _batchPlan(m, pick, items), ht = homeText(pl.use);
+            cost.textContent = '備 ' + pick + ' 份：材料 ' + pl.cost + (ht ? '（用自家的 ' + ht + (pl.save ? '，省 ' + pl.save : '') + '）' : '') + '，體力 ' + F.batchStamina + '；' + when;
             go.disabled = false;
         });
         go.addEventListener('click', async () => {
@@ -1179,6 +1240,6 @@
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
         isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid,
         labResult: _labResult, finishRd: _finishRdNow, prices: CAFE_CFG.prices, tierText: TIER_TEXT, esc: _esc };   // 研發台（os_cafe_kitchen.js）用
-    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, makeBatch, startRd, revealRd, _settle, _b };   // _settle=console 診斷用
+    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, makeBatch, startRd, revealRd, cafeDev, collectFromFarm, getPantry, _settle, _b };   // _settle=console 診斷用
     console.log('[Cafe] 書咖經營系統就緒');
 })();

@@ -110,6 +110,30 @@
         if (b) b.qty += n; else bin.push({ key: key, qty: n });
         return result(true, 'shipped', '放進出貨箱：' + i.name + ' × ' + n + '，明天早上結算。', { qty: n });
     }
+    // 送去書咖（11-13 她選「後院送料」）：不賣、不進出貨箱，直接從倉庫拿走、寫一張送貨單（帳本一筆 type 'cafe'，金額 0，結算單不算錢）。
+    //   書咖那邊照送貨單收貨（OS_CAFE.collectFromFarm）：認 id 只收一次、只收這台送的（dev），田存上去了才收——伺服器那份蓋回來時送貨單跟著不見，就不會兩邊都有。
+    //   能送的是吃的：十種收成、雞蛋、牛奶、蜂蜜（羊毛不是食物）。位置檢查跟出貨箱一樣在 farm_walk_core 的 act。
+    var CAFE_PRODUCTS = { egg: 1, milk: 1, honey: 1 };
+    function cafeables(state, libs) {
+        return sellables(state, libs).filter(function (i) { var k = parse(i.key); return k.kind === 'harvest' || CAFE_PRODUCTS[k.id]; });
+    }
+    function toCafe(state, key, qty, libs, dev) {
+        var i = info(state, key, libs), k = parse(key);
+        if (!i || (k.kind === 'product' && !CAFE_PRODUCTS[k.id])) return result(false, 'not_food', '這個書咖用不到。');
+        var n = qty == null ? i.have : int(qty);
+        if (n <= 0) return result(false, 'invalid_quantity', '數量要大於零。');
+        if (i.have < n) return result(false, 'not_enough', i.name + '不夠（只有 ' + i.have + ' ' + i.unit + '）。');
+        take(state, key, n);
+        var tid = 'cafe_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        state.ledger = Array.isArray(state.ledger) ? state.ledger : [];
+        state.ledger.unshift({ day: state.day, type: 'cafe', cropId: k.id, quantity: n, amount: 0, note: '送去書咖', id: tid, q: k.quality || 'normal', dev: String(dev || '') });
+        state.ledger = state.ledger.slice(0, 40);
+        state.logs = Array.isArray(state.logs) ? state.logs : [];
+        state.logs.unshift('第 ' + state.day + ' 日｜送去書咖：' + i.name + ' × ' + n);
+        state.logs = state.logs.slice(0, libs.farm.LOG_KEEP || 300);
+        return result(true, 'to_cafe', '送去書咖：' + i.name + ' × ' + n + '。', { qty: n, id: tid });
+    }
+
     // 當天還沒結算的，全部拿回來
     function unshipAll(state, libs) {
         var bin = S(state).bin;
@@ -241,7 +265,7 @@
         HISTORY_KEEP: HISTORY_KEEP, CATCH_MAX: CATCH_MAX,
         createShip: createShip, normalizeShip: normalizeShip, attach: attach,
         info: info, sellables: sellables, binList: binList, binTotal: binTotal,
-        ship: ship, unshipAll: unshipAll, endDay: endDay,
+        ship: ship, unshipAll: unshipAll, endDay: endDay, toCafe: toCafe, cafeables: cafeables,
         nextSettle: nextSettle, catchUp: catchUp, canEndEarly: canEndEarly, endEarly: endEarly, noonCheck: noonCheck, NOON_OWNER: NOON_OWNER
     };
 });

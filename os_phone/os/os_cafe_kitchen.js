@@ -54,6 +54,9 @@
         espresso: ['苦韻', 3, '咖啡'], water: [null, 0, ''], steam: ['綿密', 2, '奶泡'], kmilk: ['綿密', 2, '拿鐵'], pick: [null, 0, ''], cocoa: ['苦韻', 1, '可可'], cinnamon: ['辛暖', 1, '肉桂'],
         beef: ['鹹香', 6, '牛肉'], chicken: ['酥脆', 6, '炸雞'], cheese: ['綿密', 3, '起司'], egg: ['綿密', 3, '蛋'], bacon: ['鹹香', 4, '培根'], lettuce: ['清爽', 2, '生菜'],
         tomato: ['果酸', 2, '番茄'], onion: ['酥脆', 2, '洋蔥'], pickle: ['果酸', 2, '酸瓜'], teri: ['甜', 2, '照燒'], hot: ['辛暖', 2, '辣味'], mustard: ['甜', 2, '芥末'], bunT: [null, 0, ''],
+        // 後院送來的（自家的不花錢）
+        stardew: ['綿密', 0, '星露豆'], sunroot: ['甜', 0, '曦根'], moonleaf: ['清爽', 0, '月葉菜'], emberpepper: ['辛暖', 0, '燼火椒'], cloudberry: ['果酸', 0, '雲莓'],
+        frostbell: ['沁涼', 0, '霜鈴瓜'], nightstar: ['鹹香', 0, '夜星茄'], honeycorn: ['甜', 0, '蜜光玉米'], dawnberry: ['果酸', 0, '晨露莓'], silverwheat: ['酥脆', 0, '銀穗麥'],
     };
     const MAIN = new Set(['beef', 'chicken', 'egg', 'karaage', 'terichk', 'salmon', 'braisedegg', 'salami', 'tamago', 'bacon']);   // 能當主角的
     const DESSERT = new Set(['cream', 'custard', 'matcha', 'choco', 'sprinkle', 'ccream', 'scoop', 'pudding', 'cpearl', 'straw', 'blueberry', 'chococream', 'pinkcream', 'chips', 'sugar']);   // 甜點才有的
@@ -61,10 +64,17 @@
     //   起司融成一灘、奶油冰淇淋塌成一灘、冰塊化成水、粉糊開變深、葉子縮小變深、水果變深滲汁、肉和飯和麵包烤上色；焦黃一律用起司那套雜訊遮罩
     const BAKE = {};
     [['cheese', 'mozz cheese'], ['cream', 'cream custard matcha chococream pinkcream ccream foam scoop'], ['ice', 'ice'], ['dust', 'cocoa cinnamon sugar'],
-        ['leaf', 'lettuce greens mintleaf basil'], ['fruit', 'straw blueberry tomato fruitcut pickle cucumber kimchi'],
+        ['leaf', 'lettuce greens mintleaf basil moonleaf'], ['fruit', 'straw blueberry tomato fruitcut pickle cucumber kimchi cloudberry dawnberry frostbell emberpepper nightstar'],
         ['meat', 'beef bacon chicken karaage terichk salmon salami braisedegg'], ['rice', 'rice friedrice grainrice'], ['bun', 'bunB bunT']]
         .forEach(([m, ids]) => ids.split(' ').forEach(id => { BAKE[id] = m; }));
     const bakeOf = (id) => BAKE[id] || 'other';
+    // 🌾 後院送料（11-13 她選「後院送料」）：書咖倉庫在 app_data book_cafe 的 pantry（{items:{id:{n,g}}}，g＝其中上等的有幾個），後院出貨箱旁邊「送去書咖」送進來（OS_CAFE.receiveFromFarm）。
+    //   後院那十種作物只能從倉庫拿；牛奶、雞蛋、蜂蜜廚房本來就買得到，倉庫有就先用自家的（那幾份不花錢）。一瓶牛奶、一罐蜂蜜夠 3 份，其他一樣一份。
+    const CROPS = new Set(['stardew', 'sunroot', 'moonleaf', 'emberpepper', 'cloudberry', 'frostbell', 'nightstar', 'honeycorn', 'dawnberry', 'silverwheat']);
+    const FARM_NAME = { stardew: '星露豆', sunroot: '曦根', moonleaf: '月葉菜', emberpepper: '燼火椒', cloudberry: '雲莓', frostbell: '霜鈴瓜', nightstar: '夜星茄', honeycorn: '蜜光玉米', dawnberry: '晨露莓', silverwheat: '銀穗麥', egg: '雞蛋', milk: '牛奶', honey: '蜂蜜' };
+    const KG = { milk: 'milk', kmilk: 'milk', steam: 'milk', foam: 'milk', egg: 'egg', tamago: 'egg', braisedegg: 'egg', honey: 'honey' };   // 廚房的料 → 後院的哪一樣
+    const PER_UNIT = { milk: 3, honey: 3 };
+    const gardenOf = (kid) => KG[kid] || (CROPS.has(kid) ? kid : null);
     const CONFLICT = [['沁涼', '辛暖'], ['茶香', '辛暖'], ['花香', '鹹香'], ['沁涼', '鹹香']];
     const HARMONY = [['苦韻', '甜'], ['茶香', '花香'], ['清爽', '果酸'], ['苦韻', '辛暖'], ['綿密', '酥脆'], ['鹹香', '清爽'], ['鹹香', '甜'],
         ['甜', '果酸'], ['綿密', '甜'], ['茶香', '綿密'], ['鹹香', '酥脆'], ['果酸', '鹹香'], ['綿密', '果酸'], ['苦韻', '綿密']];
@@ -132,6 +142,14 @@
               { id: 'co_pink', name: '草莓', kind: 'body', part: 'coat', top: '#f7c6cf', side: '#e9a9b6', edge: '#fde2e7' },
               { id: 'co_custard', name: '卡士達', kind: 'body', part: 'coat', top: '#f9e3a0', side: '#e9cc7c', edge: '#fdf0c8' } ],
             hint: '' },
+          // 後院送來的（11-13 她選「後院送料」）：倉庫裡有才拿得到；牛奶、雞蛋、蜂蜜跟別檯是同一樣，倉庫有就先用自家的
+          garden: { tray: [
+              { id: 'stardew', name: '星露豆', kind: 'scatter', farm: true }, { id: 'sunroot', name: '曦根', kind: 'piece', r: 11, farm: true },
+              { id: 'moonleaf', name: '月葉菜', kind: 'piece', r: 13, farm: true }, { id: 'emberpepper', name: '燼火椒', kind: 'piece', r: 12, farm: true },
+              { id: 'cloudberry', name: '雲莓', kind: 'piece', r: 10, farm: true }, { id: 'frostbell', name: '霜鈴瓜', kind: 'piece', r: 10, farm: true },
+              { id: 'nightstar', name: '夜星茄', kind: 'piece', r: 13, farm: true }, { id: 'honeycorn', name: '蜜光玉米', kind: 'scatter', farm: true },
+              { id: 'dawnberry', name: '晨露莓', kind: 'piece', r: 10, farm: true }, { id: 'silverwheat', name: '銀穗麥', kind: 'piece', r: 12, farm: true } ],
+            hint: '' },
           bento: { tray: [
               { id: 'rice', name: '白飯', kind: 'sauce', grain: true, col: '#f1ebdb', rim: '#cfc5ac', hi: '#ffffff', w: 34, bits: ['#ffffff', '#ffffff', '#fbf7ec'] },
               { id: 'friedrice', name: '炒飯', kind: 'sauce', grain: true, col: '#e6c574', rim: '#b8923f', hi: '#f3dc9a', w: 34, bits: ['#f3dc9a', '#d9a94e', '#e8873a', '#6fae4c', '#f8e88a'] },
@@ -168,7 +186,7 @@
         if (win.ResizeObserver) new win.ResizeObserver(fitRes).observe(cv);
         const ALLT = {}; Object.keys(ST).forEach(k => ST[k].tray.forEach(t => { t.from = k; ALLT[t.id] = t; }));
         const tool = (id) => ALLT[id];       // 不管現在在哪個檯子，六個檯子的料都找得到
-        const SRC = { burger: '漢堡料', coffee: '咖啡', cup: '飲料', bento: '便當料', pizza: '披薩料', cake: '蛋糕料', cakebody: '蛋糕體' };
+        const SRC = { burger: '漢堡料', coffee: '咖啡', cup: '飲料', bento: '便當料', pizza: '披薩料', cake: '蛋糕料', cakebody: '蛋糕體', garden: '後院' };
         let traySrc = st;
         const rnd = (seed) => { const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
         const ease = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
@@ -354,6 +372,49 @@
           } else if (id === 'chips') {   // 巧克力豆：一顆一顆小水滴形
             const rot = (rnd(seed) - .5) * .8; c.save(); c.translate(x, y); c.rotate(rot);
             E(0, 1.6, 3.2, 1.8, 'rgba(0,0,0,.2)'); c.fillStyle = '#4a2a1a'; c.beginPath(); c.moveTo(0, -4.2); c.quadraticCurveTo(3.6, .6, 0, 1.6); c.quadraticCurveTo(-3.6, .6, 0, -4.2); c.fill(); E(-1, -.8, .8, 1.3, 'rgba(255,255,255,.35)'); c.restore();
+          // ── 後院送來的（顏色照後院收成圖：星露豆青藍、曦根金橘、月葉菜藍、燼火椒紅、雲莓淡紫藍、霜鈴瓜冰藍、夜星茄深紫帶星、蜜光玉米金、晨露莓珊瑚心形帶露珠、銀穗麥銀藍）──
+          } else if (id === 'stardew') {   // 星露豆：一顆一顆青藍色的豆子
+            const a = (rnd(seed) - .5) * 2; E(x, y + 1.4, 4.6, 2.6, '#0f6e8a', a); E(x, y, 4.4, 2.5, '#3cc4dc', a); E(x - 1.2, y - .8, 1.6, .8, '#bff8ff', a);
+          } else if (id === 'sunroot') {   // 曦根：切成圓片
+            E(x, y + 2.5, r, r * K, '#9a4a0c'); E(x, y, r, r * K, '#f0a22a'); E(x, y, r * .78, r * .78 * K, '#ffd77a');
+            c.strokeStyle = 'rgba(184,96,12,.45)'; c.lineWidth = 1; c.beginPath(); c.ellipse(x, y, r * .5, r * .5 * K, 0, 0, 6.2832); c.stroke(); E(x, y, 1.6, 1, '#e0700c');
+          } else if (id === 'moonleaf') {   // 月葉菜：藍色的葉子
+            sh(r * 1.1, r * .4, r * .3); c.save(); c.translate(x, y); c.rotate((rnd(seed) - .5) * 1.2);
+            [[-.5, '#2f5578'], [0, '#4a79a8'], [.5, '#79a6cf']].forEach(([o, col], i) => { c.fillStyle = col; c.beginPath(); c.ellipse(o * r * .9, -i * 2, r * .62, r * .36, o * .6, 0, 6.2832); c.fill(); });
+            c.strokeStyle = 'rgba(223,234,250,.7)'; c.lineWidth = 1; c.beginPath(); c.moveTo(-r * .8, 0); c.lineTo(r * .8, -4); c.stroke(); c.restore();
+          } else if (id === 'emberpepper') {   // 燼火椒：一根紅辣椒，中間一條橘色的光
+            sh(r * 1.1, r * .35, r * .35); c.save(); c.translate(x, y); c.rotate(-.5 + (rnd(seed) - .5) * .8);
+            c.fillStyle = '#7a1206'; c.beginPath(); c.moveTo(-r, 2); c.quadraticCurveTo(0, -r * .55 + 2, r * .95, 1); c.quadraticCurveTo(0, r * .45 + 2, -r, 2); c.fill();
+            c.fillStyle = '#e83a1c'; c.beginPath(); c.moveTo(-r, 0); c.quadraticCurveTo(0, -r * .55, r * .95, -1); c.quadraticCurveTo(0, r * .4, -r, 0); c.fill();
+            c.strokeStyle = '#ffb05a'; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-r * .6, -1); c.quadraticCurveTo(0, -r * .25, r * .6, -2); c.stroke();
+            c.fillStyle = '#4f9a2c'; c.beginPath(); c.ellipse(-r, 0, 2.6, 3.4, 0, 0, 6.2832); c.fill(); c.restore();
+          } else if (id === 'cloudberry') {   // 雲莓：淡紫和淡藍的小圓莓，三四顆一小串，立著
+            sh(r * 1.2, r * .45, r * .45);
+            [[-.45, .1, '#9a6ee6', '#fbeaff'], [.45, .1, '#5aa0f0', '#e6f4ff'], [0, -.45, '#9a6ee6', '#fbeaff']].forEach(([ox, oy, d, l]) => {
+              const bx = x + ox * r, by = y + oy * r - r * .35, g = c.createRadialGradient(bx - r * .2, by - r * .25, r * .05, bx, by, r * .6);
+              g.addColorStop(0, l); g.addColorStop(1, d); c.fillStyle = g; c.beginPath(); c.arc(bx, by, r * .55, 0, 6.2832); c.fill();
+              c.strokeStyle = 'rgba(255,255,255,.7)'; c.lineWidth = 1; c.beginPath(); c.arc(bx, by + 1, r * .25, 3.6, 5.6); c.stroke(); });
+          } else if (id === 'frostbell') {   // 霜鈴瓜：切成冰藍色的小方塊，上面有雪花紋
+            sh(r * 1.1, r * .45, r * .55);
+            c.fillStyle = '#2e6fae'; c.fillRect(x - r * .8, y - r * .35, r * 1.6, r * .9); c.fillStyle = '#6ab4ec'; c.fillRect(x - r * .8, y - r * 1.05, r * 1.6, r * .72);
+            c.fillStyle = '#e6f6ff'; c.fillRect(x - r * .8, y - r * 1.15, r * 1.6, r * .3);
+            c.strokeStyle = '#ffffff'; c.lineWidth = 1; c.beginPath(); c.moveTo(x - 2, y - r * .7); c.lineTo(x + 2, y - r * .4); c.moveTo(x + 2, y - r * .7); c.lineTo(x - 2, y - r * .4); c.stroke();
+          } else if (id === 'nightstar') {   // 夜星茄：切片，外圈深紫、裡面淺色，帶一點星光
+            E(x, y + 2.5, r, r * K, '#120a3a'); E(x, y, r, r * K, '#3a2a90'); E(x, y, r * .8, r * .8 * K, '#e9e2f6');
+            for (let i = 0; i < 6; i++) { const a = i * 1.047 + rnd(seed); E(x + Math.cos(a) * r * .38, y + Math.sin(a) * r * .38 * K, 1.4, .9, '#8a78f0'); }
+            c.fillStyle = '#fff6c0'; c.beginPath(); for (let k = 0; k < 8; k++) { const rr = k % 2 ? 1.2 : 3, a = k * .785; c.lineTo(x + r * .3 + Math.cos(a) * rr, y - 2 + Math.sin(a) * rr); } c.closePath(); c.fill();
+          } else if (id === 'honeycorn') {   // 蜜光玉米：一粒一粒金色的玉米粒
+            const a = rnd(seed) * 3.14; E(x, y + 1.2, 3.2, 2.6, '#a2600c', a); E(x, y, 3, 2.5, '#ffc83a', a); E(x - .8, y - .7, 1.2, .8, '#fff2b0', a);
+          } else if (id === 'dawnberry') {   // 晨露莓：心形的珊瑚紅莓果，上面一顆露珠，立著
+            sh(r * .95, r * .45, r * .5);
+            const g = c.createRadialGradient(x - r * .3, y - r * .7, r * .1, x, y - r * .4, r * 1.1); g.addColorStop(0, '#ffd6cc'); g.addColorStop(1, '#ee5a4c');
+            c.fillStyle = g; c.beginPath(); c.moveTo(x, y + r * .45); c.bezierCurveTo(x - r * 1.2, y - r * .3, x - r * .6, y - r * 1.35, x, y - r * .8); c.bezierCurveTo(x + r * .6, y - r * 1.35, x + r * 1.2, y - r * .3, x, y + r * .45); c.fill();
+            E(x + r * .15, y - r * .45, r * .26, r * .24, 'rgba(160,220,255,.9)'); E(x + r * .08, y - r * .52, r * .08, r * .06, '#ffffff');
+          } else if (id === 'silverwheat') {   // 銀穗麥：一小束銀藍色的麥穗
+            sh(r * 1.1, r * .3, r * .3); c.save(); c.translate(x, y); c.rotate(-.9 + (rnd(seed) - .5) * .6);
+            c.strokeStyle = '#4fb3a0'; c.lineWidth = 1.4; c.beginPath(); c.moveTo(-r, 0); c.lineTo(r * .2, 0); c.stroke();
+            for (let i = 0; i < 5; i++) { const px = r * .1 + i * r * .2; E(px, -2.2, r * .16, r * .09, '#7f9cc8', -.5); E(px, 2.2, r * .16, r * .09, '#a9bfe0', .5); }
+            E(r * 1.08, 0, r * .14, r * .08, '#f4f8ff'); c.restore();
           } else if (id === 'sugar') {   // 糖粉：薄薄一層白點
             for (let i = 0; i < 5; i++) E(x + (rnd(seed + i) - .5) * 8, y + (rnd(seed + i + 3) - .5) * 4, 1.3, .9, 'rgba(255,255,255,.95)');
           } else if (id === 'nuts') {
@@ -583,11 +644,14 @@
 
         // ── 盤面、料盤、按鈕 ──
         function buildTray() {
-          const srcs = [st].concat(st === 'cake' ? ['cakebody'] : [], Object.keys(SRC).filter(k => k !== st && k !== 'cakebody'));   // 「蛋糕體」只在蛋糕檯出現，排在這一檯後面
+          const srcs = [st].concat(st === 'cake' ? ['cakebody'] : [], ['garden'], Object.keys(SRC).filter(k => k !== st && k !== 'cakebody' && k !== 'garden'));   // 「蛋糕體」只在蛋糕檯出現；「後院」每一檯都有，排在前面
           $('src').innerHTML = srcs.map(k => '<button data-src="' + k + '" class="' + (k === traySrc ? 'on' : '') + '">' + (k === st ? '這一檯' : SRC[k]) + '</button>').join('');
           const PART = { sponge: '胚', fill: '內餡', coat: '外層' }, isOn = (t) => t.kind === 'body' ? !!(S && S.body && S.body[t.part] === t.id) : t.id === pick;
-          $('tray').innerHTML = ST[traySrc].tray.map((t, i, a) => (t.kind === 'body' && (!i || a[i - 1].part !== t.part) ? '<span class="ock-ing-group">' + PART[t.part] + '</span>' : '') +
-            '<button class="ock-ing' + (isOn(t) ? ' on' : '') + '" data-id="' + t.id + '"><canvas width="80" height="80"></canvas>' + t.name + '</button>').join('');
+          const pan = api.pantry ? api.pantry() : {}, list = traySrc === 'garden' ? ST.garden.tray.concat(['milk', 'egg', 'honey'].map(tool)) : ST[traySrc].tray;
+          const badge = (t) => { const g = gardenOf(t.id), n = g ? (pan[g] || 0) : 0; return t.farm ? '<i class="ock-ing-n' + (n ? '' : ' none') + '">' + n + '</i>' : n ? '<i class="ock-ing-n home" title="倉庫裡自家的">自家 ' + n + '</i>' : ''; };   // 後院送來的數量
+          $('tray').innerHTML = list.map((t, i, a) => (t.kind === 'body' && (!i || a[i - 1].part !== t.part) ? '<span class="ock-ing-group">' + PART[t.part] + '</span>' : '') +
+            '<button class="ock-ing' + (isOn(t) ? ' on' : '') + (t.farm && !(pan[t.id] > 0) ? ' ock-empty' : '') + '" data-id="' + t.id + '"><canvas width="80" height="80"></canvas>' + (traySrc === 'garden' && FARM_NAME[t.id] ? FARM_NAME[t.id] : t.name) + badge(t) + '</button>').join('') +
+            (traySrc === 'garden' && !Object.keys(pan).some(k => pan[k] > 0) ? '<span class="ock-ing-group">倉庫還是空的：去後院出貨箱旁邊按「送去書咖」</span>' : '');
           $('tray').scrollLeft = 0;
           root.querySelectorAll('.ock-ing').forEach(b => {     // 料盤上的小圖也是同一支畫出來的，跟盤子上的長一樣
             const t = tool(b.dataset.id), c = b.firstChild.getContext('2d'); c.scale(2, 2);
@@ -600,7 +664,7 @@
             else if (t.id === 'sugar') { const E = (ex, ey, rx, ry, col) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, 0, 0, 6.2832); c.fill(); };   // 白的放在白鈕上看不到：畫一小堆粉，底下帶影子
               E(20, 29, 13, 4.5, 'rgba(0,0,0,.12)'); E(20, 26, 12, 6, '#e9e2d4'); E(20, 23, 9, 6, '#f4efe5'); E(19, 19.5, 5.5, 4, '#ffffff'); for (let i = 0; i < 8; i++) E(9 + rnd(i) * 22, 28 + rnd(i + 4) * 4, .9, .7, '#d8cfbf'); }
             else if (t.kind === 'scatter') { for (let i = 0; i < 9; i++) drawPiece(c, t.id, 8 + rnd(i) * 24, 12 + rnd(i + 7) * 18, 6, i * 3.3); }
-            else drawPiece(c, t.id, 20, t.id === 'straw' || t.id === 'terichk' ? 28 : t.id === 'mintleaf' ? 30 : 22, Math.min(13, (t.r || 10)), 4);
+            else drawPiece(c, t.id, 20, t.id === 'straw' || t.id === 'terichk' ? 28 : t.id === 'mintleaf' ? 30 : t.id === 'cloudberry' || t.id === 'dawnberry' ? 27 : 22, Math.min(13, (t.r || 10)), 4);
           });
         }
         function build() {
@@ -634,6 +698,7 @@
               S.hist.push({ k: 'body', prev: Object.assign({}, S.body) }); S.body = Object.assign({}, S.body, { [t.part]: t.id });
               $('hint').textContent = { sponge: '胚換成', fill: '內餡換成', coat: '外層抹面換成' }[t.part] + '「' + t.name + '」'; buildTray(); touch(); return;
             }
+            if (t && t.farm && !((api.pantry ? api.pantry() : {})[t.id] > 0)) { $('hint').textContent = '倉庫裡沒有' + t.name + '：去後院出貨箱旁邊按「送去書咖」'; return; }   // 後院才有的料，沒送來就拿不到
             pick = b.dataset.id; root.querySelectorAll('.ock-ing').forEach(x => x.classList.toggle('on', x === b));
           }
           const sc = e.target.closest('[data-src]'); if (sc) { traySrc = sc.dataset.src; buildTray(); }
@@ -1219,6 +1284,7 @@
             win.setTimeout(() => { if (root.isConnected && h.textContent === t && st === s0 && !(S && S.busy)) h.textContent = ST[st].hint; }, 3800);
           },
           stop: () => { _ivs.forEach(id => win.clearInterval(id)); _ivs.clear(); },
+          tray: () => buildTray(),   // 倉庫數量變了，料盤重排
         };
     }
 
@@ -1270,6 +1336,8 @@
         if (sum.st === 'pizza' && sweet.filter(id => id !== 'straw' && id !== 'blueberry').length) { score -= 10; N('taste', 7, '披薩上有' + nm(sweet.filter(id => id !== 'straw' && id !== 'blueberry')[0]) + '，烤完黏成一片'); }
         const tagN = Object.keys(byTag).length;
         if (tagN >= 6) { score -= 8; N('taste', 6, '味道太多種，吃不出主角是什麼'); }
+        const homeCrops = ids.filter(id => CROPS.has(id));
+        if (homeCrops.length) { score += 4; N('taste', 4, '用了自家後院的' + homeCrops.slice(0, 2).map(id => FARM_NAME[id]).join('和') + '，很新鮮', true); }
         if (!notes.taste.length) N('taste', 1, tagN ? '整體是' + (TASTE_WORD[Object.keys(byTag)[0]] || '') + '的味道，很順口' : '味道很淡，吃不太出來', !!tagN);
         // ── 口感 ──
         if (sum.st === 'pizza') {
@@ -1360,22 +1428,45 @@
     // ================================================================
     const _kitOf = (k) => Object.assign({ equip: {}, tried: {}, tries: 0, shelved: 0 }, k || {});
     async function _kit() { const B = _B(); return _kitOf(B ? await B.get(K_KIT, null) : null); }
-    function _tryOne(sum) {   // 試做一份：扣料錢（同一盤試過了就直接看結果，不再扣）
-        const B = _B(), key = _hash(sum.key).toString(36), cost = _costOf(sum);
+    // 🌾 這一盤要用後院的什麼：use＝從倉庫拿幾個、short＝作物不夠、save＝自家的牛奶雞蛋蜂蜜省下多少錢、per＝每份要幾個（上架用，c＝買的話一個多少錢，作物是 0）
+    const K_PAN = 'pantry';
+    function _gardenPlan(sum, pan) {
+        const items = (pan && pan.items) || {}, kids = {}, out = { use: {}, short: [], save: 0, per: {} };
+        Object.keys(sum.por).forEach(k => { const g = gardenOf(k); if (g && sum.por[k] > 0) (kids[g] = kids[g] || []).push(k); });
+        for (const g in kids) {
+            const por = kids[g].reduce((n, k) => n + sum.por[k], 0), units = Math.ceil(por / (PER_UNIT[g] || 1)), have = items[g] ? items[g].n : 0;
+            const coins = kids[g].reduce((n, k) => n + (TASTE[k] ? TASTE[k][1] : 2) * sum.por[k], 0);
+            out.per[g] = { u: units, c: CROPS.has(g) ? 0 : Math.round(coins / units) };
+            if (CROPS.has(g)) { if (have < units) out.short.push({ g, units, have }); else out.use[g] = units; }
+            else { const take = Math.min(have, units); if (take) { out.use[g] = take; out.save += take * out.per[g].c; } }
+        }
+        return out;
+    }
+    const _shortText = (short) => '後院的料不夠：' + short.map(x => FARM_NAME[x.g] + '要 ' + x.units + '，倉庫只有 ' + x.have).join('；');
+    function _panTake(pan, use) {   // 從倉庫拿：先拿上等的
+        for (const g in use) { const it = pan.items[g]; if (!it) continue; const t = Math.min(it.n, use[g]); it.g = Math.max(0, (it.g || 0) - t); it.n -= t; if (it.n <= 0) delete pan.items[g]; }
+    }
+    function _tryOne(sum) {   // 試做一份：扣料錢、用掉倉庫裡自家的料（同一盤試過了就直接看結果，不再扣）
+        const B = _B(), key = _hash(sum.key).toString(36);
         return B.locked(async () => {
             const kit = _kitOf(await B.getStrict(K_KIT, null));
             const v = judge(sum);
-            if (kit.tried[key]) return { ok: true, v, key, again: true, cost: 0 };
+            if (kit.tried[key]) return { ok: true, v, key, again: true, cost: 0, home: {} };
+            const pan = Object.assign({ items: {} }, await B.getStrict(K_PAN, null) || {});
+            const plan = _gardenPlan(sum, pan);
+            if (plan.short.length) return { ok: false, why: _shortText(plan.short) };
+            const cost = Math.max(0, _costOf(sum) - plan.save);
             const fd = await B.fundLoad();
             if (fd.coins < cost) return { ok: false, why: '錢不夠（這一盤料要 ' + cost + '，帳戶剩 ' + fd.coins + '）' };
             fd.coins -= cost;
+            if (Object.keys(plan.use).length) { _panTake(pan, plan.use); await B.set(K_PAN, pan); }
             kit.tried[key] = v.tier;
             const ks = Object.keys(kit.tried);
             if (ks.length > TRIED_MAX) ks.slice(0, ks.length - TRIED_MAX).forEach(k => { delete kit.tried[k]; });
             kit.tries = (kit.tries || 0) + 1;
             await B.set('fund', fd);
             await B.set(K_KIT, kit);
-            return { ok: true, v, key, cost };
+            return { ok: true, v, key, cost, home: plan.use };
         });
     }
     function _shelve(sum, v, key, name, blurb, photo) {
@@ -1389,6 +1480,8 @@
             if (photo) await B.set(img, photo);
             menu.unshift({ id, key, name: String(name || _autoName(sum)).slice(0, 12), blurb: String(blurb || _blurbOf(sum)).slice(0, 60),
                 tier: v.tier, price: P[v.tier], tags: _tagsOf(sum), dish: { st: sum.st, img: photo ? img : '' }, unit: _costOf(sum), ts: Date.now(), sold: 0 });
+            const per = _gardenPlan(sum, null).per;
+            if (Object.keys(per).length) menu[0].garden = per;   // 備料時照這個從倉庫拿（作物不夠就備不了；牛奶雞蛋蜂蜜倉庫有就先用、省錢）
             const kit = _kitOf(await B.getStrict(K_KIT, null));
             kit.shelved = (kit.shelved || 0) + 1;
             await B.set('menu', menu);
@@ -1502,6 +1595,10 @@
         let kit = await _kit();
         let fund = null;
         try { fund = await C.getFund(); } catch (e) {}
+        let pan = { items: {} };   // 書咖倉庫（後院送來的）
+        const loadPan = async () => { try { pan = Object.assign({ items: {} }, await B.get(K_PAN, null) || {}); } catch (e) {} };
+        try { if (C.collectFromFarm) await C.collectFromFarm(); } catch (e) {}   // 後院送來、還沒收的先收
+        await loadPan();
         const locked = (k) => !!(ST_BY[k] && ST_BY[k].equip && !kit.equip[ST_BY[k].equip]);
         let st0 = stKey && ST_BY[stKey] ? stKey : _lastSt;
         if (locked(st0)) st0 = 'burger';
@@ -1542,14 +1639,17 @@
         let lastKey = '', lastCost = -1;
         const paintCost = () => {
             if (!W0.eng || !root.isConnected) return;
-            const sum = W0.eng.summary(false), key = _hash(sum.key).toString(36), cost = _costOf(sum);
+            const sum = W0.eng.summary(false), key = _hash(sum.key).toString(36), plan = _gardenPlan(sum, pan), cost = Math.max(0, _costOf(sum) - plan.save);
             const go = $('go');
             if (key === lastKey && cost === lastCost && go && go.dataset.painted) return;
             lastKey = key; lastCost = cost;
-            const tried = !!kit.tried[key], miss = _missing(sum), poor = !tried && fund && fund.coins < cost;
+            const tried = !!kit.tried[key], miss = _missing(sum), poor = !tried && fund && fund.coins < cost, short = !tried && plan.short.length;
+            const home = Object.keys(plan.use).map(g => FARM_NAME[g] + ' ' + plan.use[g]).join('、');
             $('cost').innerHTML = miss ? '' : tried ? '<i class="fa-solid fa-eye"></i> 這一盤試過了，再按不會扣錢'
-                : '這一盤料錢 <b>' + cost + '</b> 塊' + (fund ? '・帳戶剩 ' + fund.coins : '') + (poor ? '<span class="ock-poor">錢不夠</span>' : '');
-            if (go) { go.dataset.painted = '1'; go.classList.toggle('ock-dim', !!miss || !!poor); }
+                : short ? '<span class="ock-poor">' + _esc(_shortText(plan.short)) + '</span>'
+                : '這一盤料錢 <b>' + cost + '</b> 塊' + (fund ? '・帳戶剩 ' + fund.coins : '') + (poor ? '<span class="ock-poor">錢不夠</span>' : '') +
+                  (home ? '<span class="ock-home"><i class="fa-solid fa-seedling"></i> 用自家的 ' + _esc(home) + (plan.save ? '（省 ' + plan.save + ' 塊）' : '') + '</span>' : '');
+            if (go) { go.dataset.painted = '1'; go.classList.toggle('ock-dim', !!miss || !!poor || !!short); }
         };
         const api = {
             locked,
@@ -1566,10 +1666,13 @@
                 if (!W0.eng) return false;
                 const sum = W0.eng.summary(false), miss = _missing(sum);
                 if (miss) { W0.eng.hint(miss); return false; }
-                const key = _hash(sum.key).toString(36), cost = _costOf(sum);
-                if (!kit.tried[key] && fund && fund.coins < cost) { W0.eng.hint('錢不夠：這一盤料要 ' + cost + ' 塊，帳戶剩 ' + fund.coins); return false; }
+                const key = _hash(sum.key).toString(36), plan = _gardenPlan(sum, pan), cost = Math.max(0, _costOf(sum) - plan.save);
+                if (kit.tried[key]) return true;
+                if (plan.short.length) { W0.eng.hint(_shortText(plan.short) + '：去後院出貨箱旁邊按「送去書咖」'); return false; }
+                if (fund && fund.coins < cost) { W0.eng.hint('錢不夠：這一盤料要 ' + cost + ' 塊，帳戶剩 ' + fund.coins); return false; }
                 return true;
             },
+            pantry: () => { const o = {}; for (const g in pan.items) o[g] = pan.items[g].n || 0; return o; },
             built: () => { lastKey = ''; _lastSt = W0.eng ? W0.eng.st : _lastSt; },
             done: () => { if (root.isConnected) onDone(); },
         };
@@ -1581,7 +1684,7 @@
             const r = await _tryOne(sum);
             if (!root.isConnected) return;
             if (!r.ok) { eng.hint(r.why); if (go) go.disabled = false; return; }
-            if (!r.again) { kit.tried[r.key] = r.v.tier; try { fund = await C.getFund(); } catch (e) {} B.refreshStats && B.refreshStats(); }
+            if (!r.again) { kit.tried[r.key] = r.v.tier; try { fund = await C.getFund(); } catch (e) {} B.refreshStats && B.refreshStats(); if (r.home && Object.keys(r.home).length) { await loadPan(); eng.tray(); } }
             lastKey = '';
             const photo = _photo(eng.snapCanvas());
             await showResult(sum, r, photo);
@@ -1597,7 +1700,8 @@
             res.innerHTML =
                 '<div class="ock-card">' +
                   '<div class="ock-card-head"><span class="oc-badge ' + tt.cls + '">' + _esc(tt.label) + '</span>' +
-                    '<span class="ock-card-cost">' + (r.again ? '試過了，這次沒扣錢' : '花了 ' + r.cost + ' 塊') + '</span></div>' +
+                    '<span class="ock-card-cost">' + (r.again ? '試過了，這次沒扣錢' : '花了 ' + r.cost + ' 塊') +
+                      (r.home && Object.keys(r.home).length ? '<br><i class="fa-solid fa-seedling"></i> 用了自家的 ' + Object.keys(r.home).map(g => FARM_NAME[g] + ' ' + r.home[g]).join('、') : '') + '</span></div>' +
                   (photo ? '<img class="ock-photo" alt="" src="' + photo + '">' : '') +
                   v.lines.map(l => '<div class="ock-line' + (l.good ? ' good' : '') + '"><b>' + l.judge + '</b><span>' + _esc(l.t) + '</span></div>').join('') +
                   '<div class="ock-ai"></div>' +
@@ -1675,6 +1779,9 @@
         let old = null;
         try { old = B.finishRd ? await B.finishRd() : null; } catch (e) {}
         const kit = await _kit();
+        let items = {};
+        try { if (C.collectFromFarm) await C.collectFromFarm(); items = C.getPantry ? await C.getPantry() : {}; } catch (e) {}
+        const stockTxt = Object.keys(FARM_NAME).filter(g => items[g] && items[g].n > 0).map(g => FARM_NAME[g] + ' ' + items[g].n + (items[g].g ? '（上等 ' + items[g].g + '）' : '')).join('・');
         body.innerHTML =
             '<div class="ock-door">' +
               '<div class="ock-door-pic"><img alt="" src="' + ART.bg + '"></div>' +
@@ -1682,6 +1789,8 @@
               '<button class="oc-brew ock-enter"><i class="fa-solid fa-door-open"></i> 進後廚</button>' +
               '<div class="ock-door-stat">試做過 ' + (kit.tries || 0) + ' 盤・上架 ' + (kit.shelved || 0) + ' 道</div>' +
             '</div>' +
+            '<div class="oc-slot-label">倉庫（後院送來的）</div>' +
+            '<div class="ock-pantry">' + (stockTxt ? '<i class="fa-solid fa-seedling"></i> ' + _esc(stockTxt) : '還是空的。到後院出貨箱旁邊按「送去書咖」，收成和雞蛋、牛奶、蜂蜜就會送過來；後廚做菜先用自家的，那幾份不花錢。') + '</div>' +
             (old ? '<div class="oc-slot-label">改版前調配的那杯好了</div><div class="ock-old"></div>' : '') +
             '<div class="oc-slot-label">器材</div>' +
             '<div class="ock-equip">' + Object.keys(EQUIP).map(id => {
@@ -1780,6 +1889,10 @@
             '.ock-ing.on{background:#f2dfc6;border-color:#b77b42;font-weight:700;box-shadow:0 0 0 2px rgba(183,123,66,.2);}.ock-ing canvas{width:40px;height:40px;display:block;}' +
             '.ock-cost{min-height:18px;padding:0 14px;font-size:11.5px;color:var(--soft);flex:none;}.ock-cost b{color:var(--ink);}' +
             '.ock-poor{margin-left:6px;color:#b65050;font-weight:700;}' +
+            '.ock-home{display:block;color:#3f7448;}.ock-home i{margin-right:3px;}' +
+            '.ock-ing{position:relative;}.ock-ing-n{position:absolute;top:3px;right:4px;font-style:normal;font-size:10px;font-weight:700;line-height:15px;min-width:15px;padding:0 4px;border-radius:8px;background:#4e8155;color:#fff;}' +
+            '.ock-ing-n.none{background:#cdbfae;}.ock-ing-n.home{right:3px;font-size:9px;}.ock-ing.ock-empty canvas{opacity:.4;}.ock-ing.ock-empty{color:#a99278;}' +
+            '.ock-pantry{border:1px solid #d6e6cf;background:#f3f9ef;border-radius:12px;padding:9px 11px;font-size:12px;line-height:1.6;color:#3f5a3f;margin-bottom:12px;}.ock-pantry i{color:#4e8155;margin-right:3px;}' +
             '.ock-act{display:flex;gap:8px;padding:8px 12px 16px;flex:none;}' +
             /* 寬的時候（電腦）：盤子吃滿左邊，料盤搬到右邊一欄、一格一格排、自己捲 */
             '@container ock (min-width:720px){' +
@@ -1787,7 +1900,8 @@
               '.ock-side{width:312px;border-top:0;border-left:1px solid var(--line);min-height:0;}' +
               '.ock-src{flex-wrap:wrap;overflow:visible;padding:12px 12px 2px;}' +
               '.ock-tray{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));align-content:start;overflow-x:hidden;overflow-y:auto;}' +
-              '.ock-ing{width:auto;}.ock-ing-group{grid-column:1/-1;padding:4px 2px 0;}.ock-cost{padding:8px 14px 0;}.ock-hint{right:auto;max-width:min(560px,calc(100% - 20px));}' +
+              '.ock-ing{width:auto;}.ock-ing-group{grid-column:1/-1;padding:4px 2px 0;}.ock-cost{padding:8px 14px 0;}' +
+              '.ock-act{flex-wrap:wrap;}.ock-act button.ock-ghost{flex:1 1 0;white-space:nowrap;}.ock-act button[data-ok="go"],.ock-act button[data-ok="out"]{flex:1 1 100%;order:9;}.ock-hint{right:auto;max-width:min(560px,calc(100% - 20px));}' +
             '}' +
             '.ock-act button{flex:1;border-radius:12px;padding:11px 0;font-weight:800;font-size:13px;border:1px solid #6d4425;background:var(--btn);color:#fff8ed;}' +
             '.ock-act button.ock-ghost{background:#fff;color:var(--ink);border-color:var(--line);flex:.6;}.ock-act button.on{background:#f2dfc6;border-color:#b77b42;}' +

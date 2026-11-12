@@ -372,6 +372,11 @@
                 if (!libs.ship) return result(false, 'no_ship', '出貨箱還沒裝好。');
                 if (!near(state, 'yardbin') && !near(state, 'ranchbin')) return result(false, 'too_far', '要先走到出貨箱旁邊（後院左邊、牧場門口右邊）。');
                 return a.type === 'ship' ? libs.ship.ship(state, a.item, a.quantity, libs) : libs.ship.unshipAll(state, libs);
+            // 送去書咖（11-13）：跟出貨箱同一個地方送。伺服器上那份舊的不認得這個動作（住戶也用不到），只有她自己按得到
+            case 'cafe':
+                if (!libs.ship || !libs.ship.toCafe) return result(false, 'no_ship', '出貨箱還沒裝好。');
+                if (!near(state, 'yardbin') && !near(state, 'ranchbin')) return result(false, 'too_far', '要先走到出貨箱旁邊（後院左邊、牧場門口右邊）。');
+                return libs.ship.toCafe(state, a.item, a.quantity, libs, a.dev);
             // 夜裡動物在睡覺，平常餵不了（10-12 她：「睡覺就不要有餵食物的功能了吧?…睡覺餵食也很怪」）；
             //   a.wake＝把牠吵醒來吃（她：「或許可以補救，比如可以吵醒他們餵飯，但會導致生病機率微量提升」），生病那段在 ranch_core
             //   夜裡由呼叫的那邊給 libs.night()（台灣 20:00～06:00），沒給＝不擋

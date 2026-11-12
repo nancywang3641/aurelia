@@ -82,9 +82,41 @@
         wrap.hidden = true;
         wrap.setAttribute('data-fw-modal', '');
         app.appendChild(wrap);
-        var mode = null;   // 'ship' | 'report'
+        var mode = null;   // 'ship' | 'cafe' | 'report'
         function close() { wrap.hidden = true; mode = null; }
         function openShip() { mode = 'ship'; wrap.hidden = false; renderShip(); }
+        // ── 「送去書咖」（11-13 她選「後院送料」）：吃的才送得過去；送了就不賣錢，書咖後廚做菜先用自家的 ──
+        function cafeApi() { return (window.parent && window.parent.OS_CAFE) || window.OS_CAFE || null; }
+        function openCafe() { mode = 'cafe'; wrap.hidden = false; renderCafe(); }
+        function renderCafe() {
+            var st = opts.state(), have = ship.cafeables ? ship.cafeables(st, libs) : [];
+            var rows = have.length ? have.map(function (i) {
+                return '<div class="fs-row"><span class="fs-ico">' + iconOf(i.key) + '</span><div class="fs-name"><strong>' + esc(i.name) + '</strong><small>有 ' + i.have + ' ' + esc(i.unit) + '</small></div>' +
+                    '<button type="button" data-cafe="' + esc(i.key) + '" data-n="1">送 1</button><button type="button" class="fs-all" data-cafe="' + esc(i.key) + '">全部送</button></div>';
+            }).join('') : '<p class="fs-empty">沒有能送的。收成、撿蛋、擠奶、收蜂蜜之後再來（羊毛不是吃的，送不過去）。</p>';
+            wrap.innerHTML = '<section class="fs-card" role="dialog" aria-label="送去書咖">' +
+                '<header class="fs-head"><strong>' + fa('fa-mug-hot') + '送去書咖</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fs-body"><p class="fs-empty">送過去的放進書咖的倉庫，後廚做菜、備料會先用自家的（那幾份不花錢）。送了就不會再賣錢。</p><div class="fs-list">' + rows + '</div></div></section>';
+        }
+        var sending = false;
+        function sendCafe(key, n) {
+            var CAFE = cafeApi();
+            if (!CAFE || !CAFE.collectFromFarm || !CAFE.cafeDev) { if (opts.toast) opts.toast('書咖還沒準備好，等一下再送'); return; }
+            if (sending) return;
+            sending = true;
+            CAFE.cafeDev().then(function (dev) {
+                var out = WC.act(opts.state(), { type: 'cafe', item: key, quantity: n, dev: dev }, libs);
+                if (opts.toast) opts.toast(out.message);
+                if (!out.ok) return null;
+                if (opts.onChange) opts.onChange();   // 先存田（送貨單寫在田的帳本裡），書咖照送貨單收
+                if (mode === 'cafe') renderCafe();
+                return CAFE.collectFromFarm({ flush: true }).then(function (r) {
+                    if (!opts.toast) return;
+                    if (r && r.pending) opts.toast('送貨單寫好了，等田存上伺服器，書咖就會收到');
+                    else if (r && r.added && r.added.length) opts.toast(out.message + '書咖收到了');
+                });
+            }).catch(function (e) { console.warn('[Farm] 送去書咖', e); if (opts.toast) opts.toast('這次沒送成，等一下再試'); }).then(function () { sending = false; });
+        }
         function renderShip() {
             var st = opts.state();
             var have = ship.sellables(st, libs), inBin = ship.binList(st, libs), total = ship.binTotal(st, libs);
@@ -143,6 +175,8 @@
         wrap.addEventListener('click', function (e) {
             e.stopPropagation();
             if (e.target === wrap || e.target.closest('.fs-close') || e.target.closest('.fs-ok')) { close(); return; }
+            var cf = e.target.closest('[data-cafe]');
+            if (cf) { sendCafe(cf.getAttribute('data-cafe'), cf.getAttribute('data-n') ? Number(cf.getAttribute('data-n')) : null); return; }
             var b = e.target.closest('[data-ship]');
             var out = null;
             if (b) out = WC.act(opts.state(), { type: 'ship', item: b.getAttribute('data-ship'), quantity: b.getAttribute('data-n') ? Number(b.getAttribute('data-n')) : null }, libs);
@@ -169,6 +203,7 @@
                 actions: function () {
                     var list = [{ icon: 'fa-box-open', label: '放東西進去', cls: 'fav', sub: ship.sellables(st, libs).length ? null : '沒有能賣的', run: function () { openShip(); return null; } }];
                     if (ship.binList(st, libs).length) list.push({ icon: 'fa-rotate-left', label: '全部拿回來', run: function () { return WC.act(st, { type: 'unship' }, libs); } });
+                    if (ship.cafeables && cafeApi()) list.push({ icon: 'fa-mug-hot', label: '送去書咖', sub: ship.cafeables(st, libs).length ? null : '沒有能送的', run: function () { openCafe(); return null; } });
                     return list;
                 }
             };
@@ -186,7 +221,7 @@
 
         renderBin();
         return {
-            render: renderBin, target: target, openShip: openShip, openReport: openReport, endDay: endDay, close: close,
+            render: renderBin, target: target, openShip: openShip, openCafe: openCafe, openReport: openReport, endDay: endDay, close: close,
             isOpen: function () { return !wrap.hidden; },
             destroy: function () { window.removeEventListener('keydown', onKey); }
         };
