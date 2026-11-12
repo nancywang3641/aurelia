@@ -789,7 +789,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            兩格週期錯開，兩個人不會一起吸氣。頭像框（vn-avatar）不呼吸；系統設了「減少動態」也不呼吸。
            呼吸寫成變數 --vn-breath：搖晃／嚇一跳／滑進來那幾個 class 要把它跟自己的動畫寫在同一行，不然會把呼吸（或自己）蓋掉。
            頭不跟著拉長（11-06）：圖停穩時 vn_core_stage.js 的 _breath* 在同一格上面疊一張 .vn-breath-head 只露脖子以上、跟著脖子平移，
-           原本這張剪掉脖子以上（伸縮倍數 JS 從這份關鍵影格讀，改這裡不用改 JS） */
+           原本這張照舊整張伸縮、影子也由它出（伸縮倍數和緩動 JS 從這份關鍵影格讀，改這裡不用改 JS；緩動請用 ease 系列或 cubic-bezier，JS 才算得出曲線，
+           蓋上去那一下才能從「跟底下一模一樣」慢慢變過去不跳——寫別的會退回等吐氣到底才蓋） */
         #game-char   { --vn-breath: vnBreath 3.8s ease-in-out infinite; }
         #game-char-2 { --vn-breath: vnBreath 4.3s ease-in-out -1.6s infinite; }
         #game-char.vn-avatar, #game-char-2.vn-avatar { --vn-breath: none; }

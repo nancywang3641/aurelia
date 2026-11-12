@@ -899,11 +899,18 @@
         //   圖停穩的時候，在這格上面疊一張一樣的圖（.vn-breath-head）只露脖子以上、跟著脖子那一點平移不伸縮，蓋住底下被拉長的頭。
         //   這格自己不動（照舊整張伸縮、影子也由它出）；頭那張不帶影子。脖子在哪：圖鑑記的臉圈（做過動嘴、眨眼的）→
         //   去背輪廓頭底下最窄那排再往下到開始變寬（肩膀）那排 → 都認不出就不疊（照舊整張伸縮）。
-        //   一有變化（換表情、淡入淡出、換位置、搖晃、換說話的人、視窗大小變了）當場收起來，停穩 0.3 秒再疊；
         //   講話、眨眼換的那幾份（_faceBase 認得的）只照抄過去，不收。
         //   🚨 兩張都帶影子、各剪一半的做法試過（11-06）：換手那條線上影子會疊兩次或缺一塊，背景上看得到一條線，所以影子只留一份
+        // ── 疊上去、收起來那一下不能跳（11-13 她：「校準前一秒露餡…替換固定頭部的圖插入有高低差，我眼睛看的到」）──
+        //   兩張只在吸氣時不一樣（吸滿時頭頂差 1～2 點）。以前一有變化（換說話的人變暗、手機換近遠大小）就當場收起來、
+        //   停穩 0.3 秒再在呼吸的隨便哪一刻蓋回去：收那下頭掉一截、蓋回那下又跳上來，每換一次人抖一次。現在：
+        //   ① 蓋上去那一格，頭那張先跟底下那張一模一樣（一起伸縮），1.2 秒內再慢慢變成頭不拉長（_breathRamp），看不出換手；
+        //      算不出呼吸曲線的話退回等吐氣到底（兩張完全疊在一起）那一格才蓋
+        //   ② 變暗變亮、換近遠大小、換位置、左右搖晃、視窗大小變了：不收，頭那張照抄底下那張的位置、大小、明暗，
+        //      還在過渡就每一格照抄（_breathSync、_breathFollow）
+        //   ③ 還是得收的只剩：換別張圖（會先整張淡出再淡入）、撤下、嚇一跳（有放大）、頭像框——那一下整張圖本來就在變
         _breathSt: null,
-        _breathSig: function(img) {   // 這格的樣子（class＋行內樣式）：變了就收起來
+        _breathSig: function(img) {   // 這格的樣子（class＋行內樣式）：變了就重新對一次
             //   空白全拿掉：同樣的樣式瀏覽器排出來的字，尾巴有時多一個空格
             return img.className + '|' + String(img.style.cssText || '').replace(/\s+/g, '');
         },
@@ -911,39 +918,47 @@
             const S = this._breathSt || (this._breathSt = new Map());
             let s = S.get(img);
             if (s) return s;
-            s = { img, head: null, on: false, busy: false, base: '', sig: this._breathSig(img), changed: Date.now(), anim: null };
+            s = { img, head: null, on: false, wait: false, busy: false, base: '', neck: null, sig: this._breathSig(img), changed: Date.now(), anim: null, ramp: null, kfKey: '', tok: 0, follow: false };
             S.set(img, s);
             new MutationObserver(recs => {
                 let other = false, src = false;
                 recs.forEach(r => { if (r.attributeName === 'src') src = true; else other = true; });
+                if (src && (s.on || s.wait)) {
+                    const base = this._faceBase(img) || img.getAttribute('src') || '';
+                    if (base !== s.base) { s.changed = Date.now(); this._breathOff(s); return; }   // 換了別張圖
+                    if (s.head) s.head.src = img.getAttribute('src');   // 講話、眨眼換的那幾份：頭那張跟著換（同一輪、畫面上不會差一格）
+                }
                 if (other) {
                     const sig = this._breathSig(img);
-                    if (sig !== s.sig) { s.sig = sig; s.changed = Date.now(); this._breathOff(s); return; }
-                }
-                if (src && s.on) {
-                    const base = this._faceBase(img) || img.getAttribute('src') || '';
-                    if (base !== s.base) { s.changed = Date.now(); this._breathOff(s); return; }
-                    s.head.src = img.getAttribute('src');   // 講話、眨眼換的那幾份：頭那張跟著換（同一輪、畫面上不會差一格）
+                    if (sig === s.sig) return;
+                    s.sig = sig; s.changed = Date.now();
+                    if (s.on) this._breathSync(s);   // 疊著：當場跟上（跟不上的才收）
+                    else this._breathOff(s);         // 還在等吐氣到底：這次先不疊，停穩再重來
                 }
             }).observe(img, { attributes: true, attributeFilter: ['src', 'class', 'style'] });
-            if (!this._breathWatch) {   // 視窗、劇情畫面大小變了：位置要重算，先全部收回
+            if (!this._breathWatch) {   // 視窗、劇情畫面大小變了：疊著的當場重算位置（同一格畫面），還在等的取消
                 this._breathWatch = true;
-                const off = () => { (this._breathSt || new Map()).forEach(x => { x.changed = Date.now(); this._breathOff(x); }); };
-                try { (img.ownerDocument.defaultView || window).addEventListener('resize', off); } catch (e) {}
-                try { const box = img.parentNode, RO = (img.ownerDocument.defaultView || window).ResizeObserver; if (box && RO) new RO(off).observe(box); } catch (e) {}
+                const re = () => { (this._breathSt || new Map()).forEach(x => { x.changed = Date.now(); if (x.on) this._breathSync(x); else this._breathOff(x); }); };
+                try { (img.ownerDocument.defaultView || window).addEventListener('resize', re); } catch (e) {}
+                try { const box = img.parentNode, RO = (img.ownerDocument.defaultView || window).ResizeObserver; if (box && RO) new RO(re).observe(box); } catch (e) {}
             }
             return s;
         },
         _breathOff: function(s) {
-            if (!s || !s.on) return;
+            if (!s) return;
+            s.tok++;   // 還在等吐氣到底的那次也一起取消
+            if (!s.on) return;
             s.on = false;
             if (s.anim) { try { s.anim.cancel(); } catch (e) {} s.anim = null; }
+            if (s.ramp) { try { s.ramp.anim.cancel(); } catch (e) {} s.ramp = null; }
+            s.kfKey = '';
             if (s.head) s.head.style.display = 'none';
         },
         // 眨眼那邊每 0.12 秒巡一次（圖在畫面上才叫）
         _breathTick: function(img, st) {
             const s = this._breathOf(img);
-            if (s.on || s.busy) return;
+            if (s.on) { if (!s.follow) this._breathSync(s); return; }   // 疊著：順便對一次（漏接的變化也補上）
+            if (s.busy) return;
             if (Date.now() - s.changed < 300) return;
             if (img.style.display !== 'block' || img.style.opacity !== '1' || !img.complete || !img.naturalWidth) return;
             if (!img.getAnimations) return;
@@ -1021,29 +1036,182 @@
             if (!spans.length) return null;
             return { frac: (ny + 0.5) / H0, spans };
         },
-        _breathSplit: async function(s, br, base, neck) {
-            const img = s.img, doc = img.ownerDocument, view = doc.defaultView || window;
+        // 底下那張現在畫在哪、多大、什麼明暗、呼吸到哪（sy）：頭那張照抄用。
+        //   跟不上的回 null：看不到、半透明（淡入淡出時兩張疊著，頭會比身體實）、有放大旋轉的效果（嚇一跳）、沒在呼吸。
+        //   moving＝還有別的效果或過渡在跑（變暗那 0.35 秒、換近遠那 0.32 秒、搖晃那 0.4 秒），要每一格跟
+        _breathGeom: function(s) {
+            const img = s.img, neck = s.neck;
+            if (!neck || !img.isConnected || img.style.display !== 'block' || img.style.opacity !== '1' || !img.complete || !img.naturalWidth || !img.getAnimations) return null;
+            const view = img.ownerDocument.defaultView || window;
+            const anims = img.getAnimations();
+            const br = anims.find(a => a.animationName === 'vnBreath');
+            // 呼吸被暫停（目前沒有地方會停，測試凍結畫面時會）：頭那張跟著停在同一刻，不收
+            if (!br || !(br.playState === 'running' ? br.startTime != null : br.playState === 'paused' && br.currentTime != null)) return null;
             const cs = view.getComputedStyle(img);
+            if (cs.display === 'none' || cs.visibility === 'hidden' || !(parseFloat(cs.opacity) >= 0.999)) return null;
+            // 別的效果只跟得上平移（左右搖晃）：嚇一跳那種有放大的，脖子對不齊
+            let tx = 0, tf = 'none';
+            const m = String(cs.transform || 'none');
+            if (m !== 'none') {
+                const v = (m.match(/^matrix\(([^)]*)\)$/) || [])[1];
+                const n = v ? v.split(',').map(Number) : [];
+                if (n.length !== 6 || Math.abs(n[0] - 1) > 1e-6 || Math.abs(n[1]) > 1e-6 || Math.abs(n[2]) > 1e-6 || Math.abs(n[3] - 1) > 1e-6) return null;
+                tx = n[4]; tf = 'translate(' + n[4] + 'px, ' + n[5] + 'px)';
+            }
+            if (String(cs.rotate || 'none') !== 'none' || String(cs.translate || 'none') !== 'none') return null;
             const W = parseFloat(cs.width), H = parseFloat(cs.height), nw = img.naturalWidth, nh = img.naturalHeight;
-            if (!(W > 0 && H > 0 && nw && nh)) return;
+            if (!(W > 0 && H > 0)) return null;
             // 圖畫在框裡的哪裡（object-fit: contain＋object-position，靠底）
             let dw = W, dh = H;
             if (cs.objectFit === 'contain') { const k = Math.min(W / nw, H / nh); dw = nw * k; dh = nh * k; }
             const op = String(cs.objectPosition || '50% 50%').split(/\s+/);
             const at = (v, free) => /%$/.test(v || '') ? free * parseFloat(v) / 100 : (parseFloat(v) || 0);
-            const left0 = at(op[0] || '50%', W - dw), top = at(op[1] || '50%', H - dh);
+            const top = at(op[1] || '50%', H - dh);
             const neckY = top + neck.frac * dh;
             const oy = parseFloat(String(cs.transformOrigin).split(/\s+/)[1]);
-            if (!(oy > neckY)) return;
-            // 頭那張的動畫：照 CSS 那份關鍵影格逐格換算（scale: 1 sy → 脖子那點往上移多少），時間跟這格的呼吸對齊
-            const kf = br.effect.getKeyframes();
-            const hk = kf.map(k => {
+            if (!(oy > neckY)) return null;
+            // 左右照實際位置（有小數；呼吸只拉高度，左右不受影響；搖晃的平移另外照抄，這裡扣掉），上下照框（靠底）
+            const parent = img.offsetParent || img.parentNode;
+            const r = img.getBoundingClientRect(), pr = parent.getBoundingClientRect();
+            const left = r.left - pr.left - (parent.clientLeft || 0) - tx;
+            const topPx = (cs.bottom && cs.bottom !== 'auto') ? (parent.clientHeight - parseFloat(cs.bottom) - H) : img.offsetTop;
+            const sp = String(cs.scale || 'none').trim().split(/\s+/);
+            const sy = sp[0] === 'none' ? 1 : (parseFloat(sp[1] || sp[0]) || 1);
+            // 影子只由這格自己出（它不剪，整張照舊伸縮）：頭那張不帶影子，只蓋在上面。
+            //   兩張各帶影子的話，換手那條線上影子會疊兩次或缺一塊，背景上看得到一條線（11-06 試過剪齊、只在人身上重疊都還在）
+            const f = String(cs.filter || '').replace(/drop-shadow\((?:[^()]|\([^()]*\))*\)/g, '').trim();
+            return { br, sy, W, H, left, top: topPx, neckY, oy, span: neck.frac * dh, fit: cs.objectFit, pos: cs.objectPosition, origin: cs.transformOrigin,
+                     filter: f || 'none', z: cs.zIndex, tf, moving: anims.some(a => a !== br && a.playState === 'running') };
+        },
+        // 頭那張的動畫：照 CSS 那份關鍵影格逐格換算（scale: 1 sy → 脖子那點往上移多少；d＝轉軸到脖子幾點），時間跟這格的呼吸對齊
+        _breathHeadKf: function(br, d) {
+            return br.effect.getKeyframes().map(k => {
                 const p = String(k.scale || '1').trim().split(/\s+/), sy = parseFloat(p[1] || p[0]) || 1;
                 // 🚨 scale 那格不能省：動畫有 scale 的圖，瀏覽器對齊像素的方式跟只有 translate 的不一樣，
                 //   省掉的話頭那張會跟底下那張差 0.2～0.4 點，邊緣有重影（11-06 三種螢幕量過，帶上就剛好疊在一起）。
                 //   每格都寫 1 1 的話瀏覽器當它沒在動、照樣不對齊，所以吸氣那格多一點點（十萬分之一，600 點高差不到 0.01 點）
-                return { offset: k.computedOffset, easing: k.easing || 'linear', scale: sy === 1 ? '1 1' : '1 1.00001', translate: '0px ' + (-(sy - 1) * (oy - neckY)).toFixed(3) + 'px' };
+                return { offset: k.computedOffset, easing: k.easing || 'linear', scale: sy === 1 ? '1 1' : '1 1.00001', translate: '0px ' + (-(sy - 1) * d).toFixed(3) + 'px' };
             });
+        },
+        // 頭那張照 _breathGeom 量到的擺好；呼吸動畫跟這格的呼吸同一個起點（大小變了、轉軸到脖子的距離變了就換關鍵影格，起點不動）
+        _breathApply: function(s, g) {
+            const h = s.head, hs = h.style;
+            hs.left = g.left + 'px'; hs.top = g.top + 'px'; hs.width = g.W + 'px'; hs.height = g.H + 'px';
+            hs.objectFit = g.fit; hs.objectPosition = g.pos; hs.transformOrigin = g.origin; hs.transform = g.tf;
+            hs.filter = g.filter; hs.zIndex = g.z; hs.opacity = '1';
+            hs.clipPath = 'polygon(-50% -50%, 150% -50%, 150% ' + g.neckY.toFixed(2) + 'px, -50% ' + g.neckY.toFixed(2) + 'px)';
+            const t = g.br.effect.getTiming(), d = g.oy - g.neckY, key = d.toFixed(3);
+            if (!s.anim) {
+                s.anim = h.animate(this._breathHeadKf(g.br, d), { duration: t.duration, delay: t.delay || 0, iterations: Infinity, fill: 'both' });
+                s.kfKey = key;
+            } else {
+                if (s.kfKey !== key) { s.anim.effect.setKeyframes(this._breathHeadKf(g.br, d)); s.kfKey = key; }
+                const ht = s.anim.effect.getTiming();
+                if (ht.duration !== t.duration || (ht.delay || 0) !== (t.delay || 0)) s.anim.effect.updateTiming({ duration: t.duration, delay: t.delay || 0 });
+            }
+            if (g.br.playState === 'paused') {   // 底下那張停住：頭那張停在同一刻（慢慢變那段照時間走、停不住，直接變完）
+                if (s.ramp) { try { s.ramp.anim.cancel(); } catch (e) {} s.ramp = null; }
+                if (s.anim.playState !== 'paused') s.anim.pause();
+                if (Math.abs((s.anim.currentTime || 0) - g.br.currentTime) > 0.01) s.anim.currentTime = g.br.currentTime;
+                return;
+            }
+            if (s.anim.playState === 'paused') s.anim.play();
+            if (s.anim.startTime == null || Math.abs(s.anim.startTime - g.br.startTime) > 0.01) s.anim.startTime = g.br.startTime;
+            if (s.ramp) {   // 剛蓋上去、還在慢慢變的那段：變完就拆；大小或呼吸起點變了，剩下那段照新的重算（變到哪照舊接著）
+                const now = this._breathNow(s);
+                if (now == null || now >= s.ramp.t0 + s.ramp.R - 1) { try { s.ramp.anim.cancel(); } catch (e) {} s.ramp = null; }
+                else if (s.ramp.key !== key || Math.abs(s.ramp.st - g.br.startTime) > 0.01) this._breathRamp(s, g, s.ramp.t0, s.ramp.R);
+            }
+        },
+        _breathNow: function(s) {
+            const tl = s.img.ownerDocument.timeline;
+            return tl && tl.currentTime != null ? tl.currentTime : null;
+        },
+        // 剛蓋上去那段：頭那張從「跟底下那張一模一樣（整張伸縮）」在 R 毫秒內慢慢變成「頭整塊跟著脖子走」。
+        //   t0＝開始變的那一刻（時間軸上），變到哪＝(現在−t0)/R 再抹平頭尾；每 33 毫秒算一格，格跟格之間直線接
+        _breathRamp: function(s, g, t0, R, fn) {
+            if (s.ramp) { try { s.ramp.anim.cancel(); } catch (e) {} s.ramp = null; }
+            const now = this._breathNow(s);
+            fn = fn || this._breathCurve(g.br);
+            if (now == null || !fn) return;
+            if (t0 == null) t0 = now;
+            if (!R) R = 1200;
+            const end = t0 + R;
+            if (end - now < 30) return;
+            const d = g.oy - g.neckY, N = Math.max(4, Math.ceil((end - now) / 33)), kf = [];
+            for (let i = 0; i <= N; i++) {
+                const t = now + (end - now) * i / N;
+                const x = Math.min(1, Math.max(0, (t - t0) / R)), w = x * x * (3 - 2 * x);
+                const sy = fn(t);
+                // 底下那張伸縮多少（sy），頭那張就剩 (1−w) 那麼多跟著伸縮、其餘 w 換成整塊平移；吸氣那邊照 _breathHeadKf 留十萬分之一
+                const S = 1 + (1 - w) * (sy - 1) + (Math.abs(sy - 1) > 1e-9 ? w * 0.00001 : 0);
+                kf.push({ offset: i / N, easing: 'linear', scale: '1 ' + S.toFixed(7), translate: '0px ' + (-w * (sy - 1) * d).toFixed(3) + 'px' });
+            }
+            const a = s.head.animate(kf, { duration: end - now, fill: 'none' });
+            a.startTime = now;
+            s.ramp = { anim: a, t0, R, key: d.toFixed(3), st: g.br.startTime };
+        },
+        // 這格呼吸在時間軸 t 那一刻上下伸縮幾倍：照 CSS 那份關鍵影格＋每段的緩動自己算（跟瀏覽器畫的一樣）；看不懂的寫法回 null
+        _breathCurve: function(br) {
+            const eff = br.effect, tm = eff.getTiming(), D = tm.duration, delay = tm.delay || 0, rate = br.playbackRate || 1;
+            if (!(D > 0) || br.startTime == null || (tm.easing && tm.easing !== 'linear') || (tm.direction && tm.direction !== 'normal') || tm.iterationStart) return null;
+            const ks = eff.getKeyframes().map(k => { const p = String(k.scale || '1').trim().split(/\s+/); return { o: k.computedOffset, v: parseFloat(p[1] || p[0]) || 1, e: this._breathEase(k.easing) }; });
+            if (ks.length < 2 || ks.some(k => !k.e)) return null;
+            const st = br.startTime;
+            return (t) => {
+                const at = (t - st) * rate - delay;
+                let p = (at % D) / D; if (p < 0) p += 1;
+                let i = 0; while (i < ks.length - 2 && p >= ks[i + 1].o) i++;
+                const a = ks[i], b = ks[i + 1], span = b.o - a.o;
+                const x = span > 0 ? Math.min(1, Math.max(0, (p - a.o) / span)) : 0;
+                return a.v + (b.v - a.v) * a.e(x);
+            };
+        },
+        // CSS 緩動（linear、ease、ease-in、ease-out、ease-in-out、cubic-bezier(…)）→ 函式；看不懂的回 null
+        _breathEase: function(e) {
+            const s = String(e || 'linear').trim();
+            if (s === 'linear') return (x) => x;
+            const named = { ease: [0.25, 0.1, 0.25, 1], 'ease-in': [0.42, 0, 1, 1], 'ease-out': [0, 0, 0.58, 1], 'ease-in-out': [0.42, 0, 0.58, 1] };
+            let c = named[s];
+            if (!c) { const m = s.match(/^cubic-bezier\(([^)]*)\)$/); if (!m) return null; c = m[1].split(',').map(Number); if (c.length !== 4 || c.some(v => isNaN(v))) return null; }
+            const x1 = c[0], y1 = c[1], x2 = c[2], y2 = c[3];
+            const B = (t, a, b) => 3 * a * t * (1 - t) * (1 - t) + 3 * b * t * t * (1 - t) + t * t * t;
+            const dB = (t, a, b) => 3 * a * (1 - t) * (1 - t) + 6 * (b - a) * t * (1 - t) + 3 * (1 - b) * t * t;
+            return (x) => {
+                if (x <= 0) return 0;
+                if (x >= 1) return 1;
+                let t = x;
+                for (let i = 0; i < 8; i++) { const dd = dB(t, x1, x2); if (Math.abs(dd) < 1e-7) break; t -= (B(t, x1, x2) - x) / dd; }
+                if (!(t >= 0 && t <= 1) || Math.abs(B(t, x1, x2) - x) > 1e-7) { let lo = 0, hi = 1; for (let i = 0; i < 50; i++) { t = (lo + hi) / 2; if (B(t, x1, x2) < x) lo = t; else hi = t; } }
+                return B(t, y1, y2);
+            };
+        },
+        // 疊著的時候底下那張變了：頭那張當場跟上（同一格畫面）；還在過渡就每一格跟。跟不上的才收
+        _breathSync: function(s) {
+            if (!s || !s.on) return;
+            const g = this._breathGeom(s);
+            if (!g) { s.changed = Date.now(); this._breathOff(s); return; }
+            this._breathApply(s, g);
+            if (g.moving && !s.follow) this._breathFollow(s);
+        },
+        _breathFollow: function(s) {
+            const view = s.img.ownerDocument.defaultView || window;
+            s.follow = true;
+            const step = () => {
+                if (!s.on) { s.follow = false; return; }
+                const g = this._breathGeom(s);
+                if (!g) { s.follow = false; s.changed = Date.now(); this._breathOff(s); return; }
+                this._breathApply(s, g);
+                if (g.moving) view.requestAnimationFrame(step); else s.follow = false;
+            };
+            view.requestAnimationFrame(step);
+        },
+        // 準備好頭那張，下一格畫面蓋上去（_breathRamp 從跟底下那張一模一樣開始，蓋上去那一下看不出來）。
+        //   退路：算不出呼吸曲線就等吐氣到底（兩張疊在一起、頭頂差不到 0.05 點）那一格才蓋——
+        //   離那一刻還遠就先睡（最多睡 0.25 秒就起來看一次有沒有被取消），近了逐格看；中途有變化（_breathOff）就作廢
+        _breathSplit: async function(s, br, base, neck) {
+            const img = s.img, doc = img.ownerDocument, view = doc.defaultView || window;
+            const tok = ++s.tok;
             let h = s.head;
             if (!h || !h.isConnected) {
                 h = s.head = doc.createElement('img');
@@ -1053,27 +1221,34 @@
             const cur = img.getAttribute('src');
             if (h.getAttribute('src') !== cur) h.src = cur;
             if (!h.complete || !h.naturalWidth) { try { await h.decode(); } catch (e) { return; } }
-            // 等的時候變了：這次不分
-            if (s.on || this._breathSig(img) !== s.sig || Date.now() - s.changed < 300 || (this._faceBase(img) || img.getAttribute('src')) !== base || br.playState !== 'running') return;
-            h.src = img.getAttribute('src');
-            // 左右照實際位置（有小數；呼吸只拉高度，左右不受影響），上下照框（靠底）
-            const parent = img.offsetParent || img.parentNode;
-            const r = img.getBoundingClientRect(), pr = parent.getBoundingClientRect();
-            const left = r.left - pr.left - (parent.clientLeft || 0);
-            const topPx = (cs.bottom && cs.bottom !== 'auto') ? (parent.clientHeight - parseFloat(cs.bottom) - H) : img.offsetTop;
-            const hs = h.style;
-            hs.left = left + 'px'; hs.top = topPx + 'px'; hs.width = W + 'px'; hs.height = H + 'px';
-            hs.objectFit = cs.objectFit; hs.objectPosition = cs.objectPosition; hs.transformOrigin = cs.transformOrigin;
-            // 影子只由這格自己出（它不剪，整張照舊伸縮）：頭那張不帶影子，只蓋在上面。
-            //   兩張各帶影子的話，換手那條線上影子會疊兩次或缺一塊，背景上看得到一條線（11-06 試過剪齊、只在人身上重疊都還在）
-            const f = String(cs.filter || '').replace(/drop-shadow\((?:[^()]|\([^()]*\))*\)/g, '').trim();
-            hs.filter = f || 'none'; hs.zIndex = cs.zIndex; hs.opacity = '1';
-            hs.clipPath = 'polygon(-50% -50%, 150% -50%, 150% ' + neckY.toFixed(2) + 'px, -50% ' + neckY.toFixed(2) + 'px)';
-            const t = br.effect.getTiming();
-            s.anim = h.animate(hk, { duration: t.duration, delay: t.delay || 0, iterations: Infinity, fill: 'both' });
-            s.anim.startTime = br.startTime;
-            hs.display = 'block';
-            s.on = true; s.base = base;
+            const ok = () => s.tok === tok && !s.on && (this._faceBase(img) || img.getAttribute('src')) === base;
+            if (!ok()) return;
+            s.base = base; s.neck = neck; s.wait = true;
+            const frame = () => new Promise(r => view.requestAnimationFrame(() => r()));
+            const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+            try {
+                for (let n = 0; n < 600; n++) {
+                    await frame();   // 在畫面要畫之前看、之前蓋：看到的那格就是畫出來的那格
+                    if (!ok()) return;
+                    const g = this._breathGeom(s);
+                    if (!g || g.moving) return;
+                    // 平常現在就蓋（_breathRamp 從一模一樣慢慢變）；算出來的曲線跟畫面上的對不上，才等吐氣到底那一格
+                    const now = this._breathNow(s), fn = this._breathCurve(g.br);
+                    const flat = Math.abs(g.sy - 1) * g.span <= 0.05;
+                    const ramp = !flat && !!fn && now != null && Math.abs(fn(now) - g.sy) * g.span <= 0.05;
+                    if (flat || ramp) {
+                        h.src = img.getAttribute('src');   // 等的時候講話、眨眼換過：用現在這份
+                        this._breathApply(s, g);
+                        if (ramp) this._breathRamp(s, g, now, 1200, fn);
+                        h.style.display = 'block';
+                        s.on = true;
+                        return;
+                    }
+                    const ct = g.br.effect.getComputedTiming();
+                    const ms = (1 - (ct.progress || 0)) * (ct.duration || g.br.effect.getTiming().duration) / Math.abs(g.br.playbackRate || 1);
+                    if (ms > 150) await sleep(Math.min(250, ms - 100));
+                }
+            } finally { s.wait = false; }
         },
         // text＝這句台詞：嘴至少動完「大約唸完這句」的時間（一個字 90ms、最少 0.6 秒、最多 5 秒），
         //   字一下就跑完（打字快、她點了跳過）也看得到在講；下一句一開始就停
