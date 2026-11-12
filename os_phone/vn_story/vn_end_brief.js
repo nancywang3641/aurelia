@@ -5,6 +5,10 @@
  *   章名、時間地點、「這一章」三句、小牌子（新線索／下一件行程／狀態變化／角色卡畫面）、繼續、五個入口、角落的重新生成。
  * 11-09 起「一頁看完」：線索、今天的行程、狀態變化、日誌在卡片旁邊那一欄（#vn-end-side）打開，不跳窗；
  *   角色卡作者做的畫面（小劇場、結語、卡片的狀態欄）不塞進欄裡，「角色卡畫面」小牌子整頁開資料中心那一頁、照原樣。
+ * 11-13 起「繼續」也在這一欄打開（她：「選擇器直接崁入到繼續按鈕裡好了，感覺也沒必要分開」）：
+ *   上面是這一章的選項卡（正則把 <branches> 畫成的那張，例如帶插圖的選擇器），整張搬過來、直接展開；
+ *   沒有選項卡就列出 <branches> 那幾個選項；底下一條輸入框，點選項填進去、按發送就送出。
+ *   選項卡搬進來以後，「角色卡畫面」小牌子不再列它。
  * 這支只負責「把字填進去」：
  *   骨架在 vn_styles.js（#vn-end-basic 那段）、樣式在 css/vn_styles.css（「章末簡報」那段）、
  *   每顆按鈕做什麼在 vn_core.js 章末那段的 acts（這裡的小牌子也是借那份，不另寫開 app 的邏輯）。
@@ -30,6 +34,10 @@
     let _tile = { nNew: 0, ev: null, nChg: 0, cards: [] };
     let _sideKey = '';     // 旁邊那一欄現在開的是哪一頁（'' ＝收著）
     let _sideSeq = 0;      // 每換一頁加一：非同步讀回來時已經換頁／收起來就不寫
+    let _opts = [];        // 這一章的選項（<branches> 那幾行；網頁版先看播放器收好的那份）
+    let _goOff = null;     // 「繼續」那頁掛在酒館輸入框上的監聽，換頁／收起來要拆
+
+    function _standalone() { return win.OS_API?.isStandalone?.() ?? false; }
 
     function _root() { return document.getElementById('vn-end-basic'); }
     function _alive(n) { const r = _root(); return n === _seq && !!r && r.classList.contains('vne-brief'); }
@@ -109,6 +117,37 @@
         try { return (await T.unseenCount()) || 0; } catch (e) { return 0; }
     }
 
+    // 這一章的選項：<branches> 裡真正給人點的那幾行（拆法跟 vn_core loadScript 那段一樣：
+    //   選項插圖卡的 <panels>（角色外觀＋每格分鏡）、摺疊的 <summary> 標題、整行只有標籤的都不算；開頭的「A.」拿掉）
+    function _branchOpts(core) {
+        const raw = String((core && core._scriptRawText) || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+        const m = raw.match(/<branches>([\s\S]*?)<\/branches>/i);
+        if (!m) return [];
+        return m[1].replace(/<panels>[\s\S]*?<\/panels>/gi, '').replace(/<summary>[\s\S]*?<\/summary>/gi, '')
+            .split('\n').map(l => l.trim()).filter(Boolean)
+            .filter(l => !/^<\/?[A-Za-z][\w-]*[^>]*>$/.test(l))
+            .map(l => l.replace(/<br\s*\/?>/gi, '').replace(/^\[Choice\|([\s\S]*)\]$/, '$1')
+                .replace(/^(?:[A-Ha-h][.．、:：]|[0-9]+[.．、]|[-*•])\s*/, '').trim())
+            .filter(Boolean);
+    }
+    // 網頁版播放器播到選項會先收好一份（_pendingChoices），有就用那份；酒館播放器不收，照原文拆
+    function _choiceOpts(core) {
+        if (_standalone()) {
+            const A = window.VN_StandaloneArchive;
+            if (A && Array.isArray(A._pendingChoices) && A._pendingChoices.length) return A._pendingChoices.map(String);
+        }
+        return _branchOpts(core);
+    }
+    // 角色卡作者做的哪一頁是「選項卡」：頁面原文裡找得到這一章的選項（兩個以上；只有一個選項就一個）
+    const _nz = s => String(s == null ? '' : s).replace(/\s+/g, '');
+    function _isPicker(text, opts) {
+        if (!text || !opts || !opts.length) return false;
+        const T = _nz(text);
+        let hit = 0;
+        opts.forEach(o => { const k = _nz(o).slice(0, 12); if (k.length >= 4 && T.indexOf(k) >= 0) hit++; });
+        return hit >= Math.min(2, opts.length);
+    }
+
     async function _ctxPct() {
         const C = win.VN_CtxMonitor || window.VN_CtxMonitor;
         if (!C || typeof C.quickPct !== 'function') return null;
@@ -158,7 +197,7 @@
     function _briefOn() { const r = _root(); return !!r && r.classList.contains('vne-brief'); }
     function _threads() { return win.OS_STORY_THREADS || window.OS_STORY_THREADS; }
     const SIDE_MARK = { threads: ['#vn-end-btn-threads', '.vne-tile[data-vne="threads"]'], today: ['.vne-tile[data-vne="today"]'],
-        changes: ['.vne-tile[data-vne="changes"]'], journal: ['#vn-end-btn-journal'] };
+        changes: ['.vne-tile[data-vne="changes"]'], journal: ['#vn-end-btn-journal'], go: ['#vn-end-btn-go'] };
     function _markOn(key) {
         const root = _root();
         if (!root) return;
@@ -214,13 +253,161 @@
                                  : '<div class="vne-empty">這個故事還沒有日誌<small>做過大總結，這裡就會有一段一段的回顧</small></div>')
                 + _more('journal', '看全部日誌') + '</div>';
         },
+        // 「繼續」：選項卡（或選項）＋輸入框。點選項＝填進輸入框，按發送才送出（跟資料中心那頁一樣，可以改了再送）
+        async go(body, seq) {
+            const opts = _opts.slice();
+            const pwa = _standalone();
+            body.innerHTML = _sh('做出選擇', opts.length ? opts.length + ' 個選項' : '')
+                + '<div class="vne-sc vne-go-sc"><div class="vne-go-card"></div><div class="vne-go-opts"></div><div class="ue-mission-chips vne-go-chips"></div></div>'
+                + '<div class="vne-go-bar"><textarea class="vne-go-in" rows="1" placeholder="點選項填入，或直接輸入…"></textarea>'
+                + '<button type="button" class="vne-go-send">發送<i class="fa-solid fa-caret-right"></i></button></div>';
+            const inp = body.querySelector('.vne-go-in'), sendBtn = body.querySelector('.vne-go-send');
+            const cardBox = body.querySelector('.vne-go-card'), optBox = body.querySelector('.vne-go-opts');
+            // 酒館：這格跟酒館的輸入框是同一句話（選項卡點下去是寫進酒館輸入框的 /setinput，要跟著出現在這裡；這裡打的也寫回去）
+            const tv = pwa ? null : _tavernInput(inp);
+            const settle = new Set();
+            const send = async () => {
+                if (pwa) {
+                    let val = inp.value.trim();
+                    // 沒打字直接按發送：地圖收著委託或搭話的話，那段就當這一句送出去（同資料中心選項頁）
+                    const M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+                    if (!val && M && M.missionHeldText) { try { val = String((await M.missionHeldText()) || '').trim(); } catch (e) {} }
+                    if (!val) { try { inp.focus({ preventScroll: true }); } catch (e) {} return; }
+                    if (settle.size) val += '\n[結算委託] ' + [...settle].join('、');
+                    const V = window.VN_Core;
+                    if (V && typeof V.sendPlayerLine === 'function' && V.sendPlayerLine(val)) closeSide();
+                    return;
+                }
+                if (!tv) { _toast('找不到酒館的輸入框，請到資料中心送出'); return; }
+                tv.push();
+                const d = win.document || document;
+                const btn = d.getElementById('send_but');
+                if (!btn) { _toast('找不到酒館的送出鍵，請到資料中心送出'); return; }
+                btn.click();
+                closeSide();
+            };
+            sendBtn.onclick = send;
+            inp.onkeydown = (e) => {
+                const U = win.AUI || window.AUI;
+                if (U && typeof U.enterSends === 'function' && U.enterSends(e)) { e.preventDefault(); send(); }
+            };
+            // 選項：點了填進輸入框、亮起來（選項卡自己就有選項的話不另外列，免得同一組選項出現兩次）
+            const listOpts = () => {
+                optBox.innerHTML = opts.map((o, i) => '<button type="button" class="vne-opt" data-i="' + i + '"><span class="vne-opt-k">' + String.fromCharCode(65 + i) + '</span><span class="vne-opt-t">' + esc(o) + '</span></button>').join('');
+                optBox.querySelectorAll('.vne-opt').forEach(b => {
+                    b.onclick = () => {
+                        inp.value = opts[+b.dataset.i];
+                        if (tv) tv.push();
+                        optBox.querySelectorAll('.vne-opt').forEach(x => x.classList.toggle('vne-on', x === b));
+                        try { inp.focus({ preventScroll: true }); } catch (e) {}
+                    };
+                });
+            };
+            // 網頁版：還沒結算的地圖委託排一排「結算委託・名字」（同資料中心選項頁；酒館那邊送出時自己會併）
+            if (pwa) {
+                const M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+                const chipBox = body.querySelector('.vne-go-chips');
+                if (M && M.missionsRunning) {
+                    Promise.resolve(M.missionsRunning()).then(list => {
+                        if (!list || !list.length || seq !== _sideSeq || !chipBox.isConnected) return;
+                        chipBox.innerHTML = list.map((m, i) => '<button type="button" class="ue-mission-chip" data-i="' + i + '"><i class="fa-solid fa-stamp"></i>結算委託・' + esc(m.title) + '</button>').join('');
+                        chipBox.classList.add('on');
+                        chipBox.querySelectorAll('.ue-mission-chip').forEach(b => {
+                            b.onclick = () => {
+                                const t = list[+b.dataset.i].title;
+                                if (settle.has(t)) settle.delete(t); else settle.add(t);
+                                b.classList.toggle('picked', settle.has(t));
+                            };
+                        });
+                    }).catch(() => {});
+                }
+            }
+            // 選項卡：酒館要等最後一樓煮好（TauriTavern 沒捲到就沒有），慢的話先寫一行讀取中
+            const slow = setTimeout(() => { if (seq === _sideSeq && cardBox.isConnected && !cardBox.firstChild) cardBox.innerHTML = '<div class="vne-empty">讀取選項卡…</div>'; }, 300);
+            const cards = opts.length ? await _fullCards() : [];
+            clearTimeout(slow);
+            if (seq !== _sideSeq || !body.isConnected) return;
+            const pick = cards.find(c => _isPicker(c.text, opts));
+            cardBox.innerHTML = '';
+            if (pick) _mountPicker(cardBox, pick);
+            // 網頁版的選項卡多半是酒館的正則寫的，點了寫不進這格（網頁版沒有酒館輸入框）→ 選項照樣列
+            if (!pick || pwa) listOpts();
+            if (!opts.length && !pick) { try { inp.focus({ preventScroll: true }); } catch (e) {} }
+        },
     };
+    function _toast(msg) { try { (win.AUI || window.AUI).toast(msg); } catch (e) {} }
+
+    // 酒館的輸入框（#send_textarea）跟「繼續」那頁的輸入框綁成同一句：
+    //   選項卡點選項是 /setinput 寫進酒館的輸入框（會發 input 事件）→ 抄過來；這裡打的字 → 寫回去（選項卡是接在酒館輸入框後面寫的）
+    function _tavernInput(inp) {
+        const d = win.document || document;
+        const ta = d.getElementById('send_textarea');
+        if (!ta) return null;
+        inp.value = ta.value || '';
+        let mute = false;
+        const fromTa = () => { if (!mute && inp.isConnected) inp.value = ta.value; };
+        const push = () => {
+            mute = true;
+            ta.value = inp.value;
+            try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+            mute = false;
+        };
+        ta.addEventListener('input', fromTa);
+        inp.addEventListener('input', push);
+        _goOff = () => { ta.removeEventListener('input', fromTa); };
+        return { push: push };
+    }
+    // 角色卡作者做的頁面整份（要搬進「繼續」那頁用）：酒館＝最後一樓的 .TH-render（跟資料中心同一套抓法），網頁版＝這一章原文套卡片正則
+    async function _fullCards() {
+        try {
+            if (_standalone()) {
+                const A = window.VN_StandaloneArchive;
+                const list = (A && typeof A.cardPanels === 'function') ? ((await A.cardPanels()) || []) : [];
+                return list.map(c => ({ title: c.title, text: String(c.html || ''), html: String(c.html || ''), pwa: true }));
+            }
+            const H = win.AureliaHtmlExtractor || window.AureliaHtmlExtractor;
+            return (H && typeof H.cardPanelsFull === 'function') ? ((await H.cardPanelsFull()) || []) : [];
+        } catch (e) { return []; }
+    }
+    // 選項卡掛進來：酒館那份是酒館助手煮好的 .TH-render 整塊照搬（同資料中心）；網頁版是卡片正則套出來的片段，先消毒（同資料中心 _mountCard）。
+    //   選項卡在聊天裡多半預設收著（摺疊 <details>、MoM 美化那一系列的 .post-it-collapsible），這裡就是來點選項的 → 載好直接打開
+    function _mountPicker(box, c) {
+        if (c.pwa) {
+            const V = window.VN_Core;
+            const safe = (V && typeof V._safeRegexCard === 'function') ? V._safeRegexCard(c.html) : esc(c.html);
+            box.innerHTML = '<div class="native-render-wrapper">' + safe + '</div>';
+            const CR = win.OS_CARD_REGEX || window.OS_CARD_REGEX;
+            try { if (CR && CR.fitCardFrames) CR.fitCardFrames(box); } catch (e) {}
+        } else {
+            box.innerHTML = '<div class="native-render-wrapper">' + c.html + '</div>';
+        }
+        box.querySelectorAll('iframe').forEach(fr => {
+            const open = () => {
+                try {
+                    const fd = fr.contentDocument;
+                    if (!fd) return;
+                    fd.querySelectorAll('details:not([open])').forEach(x => x.setAttribute('open', ''));
+                    fd.querySelectorAll('.post-it-collapsible:not(.open)').forEach(x => x.classList.add('open'));
+                } catch (e) {}
+            };
+            fr.addEventListener('load', () => { open(); setTimeout(open, 300); });
+            try { if (fr.contentDocument && fr.contentDocument.readyState === 'complete') { open(); setTimeout(open, 300); } } catch (e) {}
+        });
+    }
+    // 換頁／收起來：拆掉輸入框的監聽，選項卡自帶的聲音先停（iframe 等一下跟著整頁清掉）
+    function _dropGo(side) {
+        if (_goOff) { try { _goOff(); } catch (e) {} _goOff = null; }
+        const box = side && side.querySelector('.vne-go-card');
+        const CR = win.OS_CARD_REGEX || window.OS_CARD_REGEX;
+        if (box && box.querySelector('iframe, audio, video') && CR && CR.stopMedia) { try { CR.stopMedia(box); } catch (e) {} }
+    }
     // 打開某一頁；同一頁再按一次＝收起來
     async function openSide(key) {
         const root = _root(), side = _side();
         if (!root || !side || !_briefOn() || !SIDE_FILL[key]) return false;
         if (_sideKey === key) { closeSide(); return true; }
         _dropThreads(side);
+        _dropGo(side);
         _sideKey = key;
         const seq = ++_sideSeq;
         root.classList.add('vne-side-open');
@@ -245,6 +432,7 @@
     function closeSide(now) {
         const root = _root(), side = _side();
         _dropThreads(side);
+        _dropGo(side);
         _sideKey = '';
         _sideSeq++;
         if (root) { root.classList.remove('vne-side-open'); root.querySelectorAll('.vne-on').forEach(n => n.classList.remove('vne-on')); }
@@ -265,13 +453,14 @@
         const th = document.getElementById('vn-end-btn-threads'), jr = document.getElementById('vn-end-btn-journal'), go = document.getElementById('vn-end-btn-go');
         if (th) th.onclick = () => { if (_briefOn()) openSide('threads'); else if (_acts && _acts.threads) _acts.threads(); };
         if (jr) jr.onclick = () => { if (_briefOn()) openSide('journal'); else if (_acts && _acts.journal) _acts.journal(); };
-        if (go) go.onclick = () => { closeSide(); if (_acts && _acts.go) _acts.go(); };
+        // 繼續：簡報卡上在旁邊那欄開「做出選擇」（11-13）；世界面板那種直排的照舊開選項頁／資料中心
+        if (go) go.onclick = () => { if (_briefOn()) { openSide('go'); return; } closeSide(); if (_acts && _acts.go) _acts.go(); };
     }
     function _chgCount() {
         const A = win.OS_AVS || window.OS_AVS;
         try { return (A && typeof A.updList === 'function') ? (A.updList().n || 0) : 0; } catch (e) { return 0; }
     }
-    // 角色卡作者做的那幾頁（只要名字）：網頁版問資料中心解析這一章的原文；酒館問最後一樓現在看得到的
+    // 角色卡作者做的那幾頁（名字＋頁面原文，原文拿來認哪一頁是選項卡）：網頁版問資料中心解析這一章的原文；酒館問最後一樓現在看得到的
     async function _peekCards() {
         try {
             if (win.OS_API?.isStandalone?.() ?? false) {
@@ -313,6 +502,7 @@
         const lines = _sumLines(core);
         root.querySelector('.vne-points').innerHTML = lines.map(s => '<li>' + esc(s) + '</li>').join('');
         root.querySelector('.vne-sum').classList.toggle('vne-off', !lines.length);
+        _opts = _choiceOpts(core);
         _tile = { nNew: 0, ev: null, nChg: _chgCount(), cards: [] };
         _renderTiles(root);
         _bindEnts();
@@ -329,7 +519,7 @@
             _tile.nNew = nNew;
             const cards = await _peekCards();
             if (n !== _seq) return;
-            _tile.cards = cards;
+            _tile.cards = cards.filter(c => !_isPicker(c.text, _opts));   // 選項卡在「繼續」裡了，小牌子不再列它
             _renderTiles(root);
             const pct = await _ctxPct();
             if (n !== _seq) return;

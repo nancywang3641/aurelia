@@ -366,14 +366,25 @@
                 const doc = win.document || document;
                 const last = doc.querySelector('#chat .mes.last_mes .mes_text');
                 if (!last) return [];
-                const out = [];
-                last.querySelectorAll('.TH-render').forEach(th => {
-                    const code = th.querySelector('code.custom-language-html');
-                    const m = code ? String(code.innerText || code.textContent || '').match(/<title>(.*?)<\/title>/i) : null;
-                    out.push({ title: (m && m[1] && m[1].trim()) || '自定義面板' });
-                });
-                return out;
+                return Array.from(last.querySelectorAll('.TH-render')).map(th => this._panelInfo(th));
             } catch (e) { return []; }
+        },
+        // 一頁的名字＋原文（簡報卡拿原文認哪一頁是這一章的選項卡）
+        _panelInfo(th) {
+            const code = th.querySelector('code.custom-language-html');
+            const text = code ? String(code.innerText || code.textContent || '') : '';
+            const m = text.match(/<title>(.*?)<\/title>/i);
+            return { title: (m && m[1] && m[1].trim()) || '自定義面板', text: text };
+        },
+        // 📜 章末簡報卡的「繼續」（11-13）要把選項卡整張搬過去：跟資料中心同一套抓法（TauriTavern 懶載先捲到底等煮好），整塊 .TH-render 照搬
+        async cardPanelsFull() {
+            const win = window.parent || window;
+            const doc = win.document || document;
+            let last = null;
+            try { last = await this._ensureLastMesRendered(doc); } catch (e) {}
+            this._restoreChatScroll(doc);
+            if (!last) return [];
+            return Array.from(last.querySelectorAll('.TH-render')).map(th => Object.assign(this._panelInfo(th), { html: th.outerHTML }));
         },
 
         // 🧵 線索：跟狀態、選擇放同一個窗（10-13 她：拆成獨立窗口，一邊看線索一邊要回資訊中心，很卡手）

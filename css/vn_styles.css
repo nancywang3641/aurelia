@@ -1502,6 +1502,29 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 今天的行程＝日曆那張小卡（OS_CALENDAR.todayInto）：標題讓出返回鍵的位子 */
         #vn-end-side .caltd-card { flex: 1; min-height: 0; }
         #vn-end-side .caltd-head { padding-left: 58px; }
+        /* 「繼續」那頁（11-13 她：「選擇器直接崁入到繼續按鈕裡好了」）：上面捲（選項卡、選項、委託），輸入框一條貼底 */
+        #vn-end-side .vne-go-card:empty, #vn-end-side .vne-go-opts:empty { display: none; }
+        #vn-end-side .vne-go-card .native-render-wrapper { margin: 0 0 10px; }
+        #vn-end-side .vne-go-card iframe { width: 100%; border: 0; display: block; background: transparent; }
+        #vn-end-side .vne-go-card .vne-empty { padding: 20px 10px; }
+        #vn-end-side .vne-opt { display: flex; align-items: baseline; gap: 10px; width: 100%; margin: 0 0 8px; padding: 11px 14px; text-align: left; cursor: pointer;
+            font: inherit; font-size: 14px; line-height: 1.6; color: #ddd3bb; background: rgba(212,175,55,0.06); border: 1px solid rgba(212,175,55,0.22); border-radius: 0; box-shadow: none;
+            transition: background 0.2s, border-color 0.2s; }
+        #vn-end-side .vne-opt:hover { background: rgba(212,175,55,0.13); }
+        #vn-end-side .vne-opt.vne-on { border-color: rgba(212,175,55,0.7); background: rgba(212,175,55,0.16); }
+        #vn-end-side .vne-opt-k { flex: none; font-weight: 700; color: #d4af37; }
+        #vn-end-side .vne-opt-t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+        #vn-end-side .vne-go-chips { margin-top: 2px; }
+        #vn-end-side .vne-go-bar { flex: none; display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid rgba(212,175,55,0.22); background: rgba(9,8,8,0.6); }
+        #vn-end-side .vne-go-in { flex: 1; min-width: 0; min-height: 42px; max-height: 120px; field-sizing: content; resize: none; box-sizing: border-box; margin: 0; padding: 10px 12px;
+            font: inherit; font-size: 14px; line-height: 1.5; color: #efe6cf; background: rgba(0,0,0,0.4); border: 1px solid rgba(212,175,55,0.35); border-radius: 0; outline: none; box-shadow: none; }
+        #vn-end-side .vne-go-in::placeholder { color: #7d776a; }
+        #vn-end-side .vne-go-in:focus { border-color: #d4af37; }
+        #vn-end-side .vne-go-send { flex: none; height: 42px; margin: 0; padding: 0 16px; display: flex; align-items: center; gap: 8px; cursor: pointer;
+            font: inherit; font-size: 14px; font-weight: 600; letter-spacing: 0.2em; color: #1c1407; text-shadow: none;
+            border: 1px solid #f8e9b6; border-radius: 0; background: linear-gradient(180deg, #f6e19c 0%, #d4af37 48%, #a27c26 100%); box-shadow: none; }
+        #vn-end-side .vne-go-send:hover { filter: brightness(1.06); }
+        #vn-end-side .vne-go-send i { font-size: 12px; letter-spacing: 0; }
 
         /* 簡報卡上的小牌子三塊以上：排成兩欄 */
         #vn-end-basic.vne-brief .vne-tiles.vne-tiles-grid { grid-auto-flow: row; grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -191,9 +191,13 @@
             try { await CR.getPack(worldId); } catch (e) {}   // cardsIn 是同步取用 → 先確定正則庫已從 IDB 讀進記憶體
             try { return CR.cardsIn(raw, worldId) || []; } catch (e) { console.warn('[Archive] 卡片面板解析失敗', e); return []; }
         },
-        // 📜 章末簡報卡問：這一章角色卡作者做了哪幾頁（只要名字，給「角色卡畫面」那塊小牌子）
+        // 📜 章末簡報卡問：這一章角色卡作者做了哪幾頁（名字給「角色卡畫面」那塊小牌子；原文拿來認哪一頁是選項卡）
         async peekCardPanels() {
-            try { return (await this._cardPanels()).map(c => ({ title: String(c.title || '').trim() || '自定義面板' })); } catch (e) { return []; }
+            try { return (await this._cardPanels()).map(c => ({ title: String(c.title || '').trim() || '自定義面板', text: String(c.html || '') })); } catch (e) { return []; }
+        },
+        // 📜 章末簡報卡的「繼續」（11-13）要整份：選項卡搬進那一欄
+        async cardPanels() {
+            try { return (await this._cardPanels()) || []; } catch (e) { return []; }
         },
 
         // 只掛「現在在看的那一張」：面板是完整 HTML 文件(iframe)，自帶 BGM 的卡片
