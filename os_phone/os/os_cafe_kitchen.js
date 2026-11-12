@@ -40,6 +40,11 @@
         mushroom: ['鹹香', 3, '蘑菇'], pepper: ['清爽', 2, '青椒'], basil: ['清爽', 2, '羅勒'], honey: ['甜', 2, '蜂蜜'],
         cream: ['綿密', 3, '奶油'], custard: ['甜', 3, '卡士達'], matcha: ['茶香', 4, '抹茶'], choco: ['苦韻', 3, '巧克力'], straw: ['果酸', 4, '草莓'],
         blueberry: ['果酸', 3, '藍莓'], mintleaf: ['沁涼', 2, '薄荷'], sprinkle: ['甜', 2, '彩糖'], nuts: ['酥脆', 3, '堅果'],
+        chococream: ['苦韻', 4, '巧克力'], pinkcream: ['果酸', 4, '草莓'], chips: ['甜', 2, '巧克力豆'], sugar: ['甜', 1, '糖粉'],
+        // 蛋糕體（原味胚、鮮奶油草莓餡、鮮奶油抹面算在蛋糕胚的錢裡）
+        sp_vanilla: ['甜', 0, ''], sp_choco: ['苦韻', 2, '巧克力'], sp_matcha: ['茶香', 2, '抹茶'], sp_redvelvet: ['甜', 2, '紅絲絨'], sp_chip: ['甜', 2, '巧克力豆'], sp_earlgrey: ['茶香', 2, '伯爵'],
+        fi_straw: ['果酸', 0, '草莓'], fi_blue: ['果酸', 1, '藍莓'], fi_custard: ['甜', 1, '卡士達'], fi_ganache: ['苦韻', 2, '巧克力'], fi_redbean: ['茶香', 2, '紅豆'], fi_taro: ['綿密', 2, '芋泥'],
+        co_white: ['綿密', 0, ''], co_choco: ['苦韻', 2, '巧克力'], co_matcha: ['茶香', 2, '抹茶'], co_pink: ['果酸', 2, '草莓'], co_custard: ['甜', 1, '卡士達'],
         rice: ['綿密', 2, '白飯'], friedrice: ['鹹香', 3, '炒飯'], grainrice: ['清爽', 3, '雜糧'], karaage: ['酥脆', 4, '炸雞'], terichk: ['鹹香', 5, '照燒雞'],
         salmon: ['鹹香', 5, '鮭魚'], tamago: ['甜', 3, '玉子'], greens: ['清爽', 2, '青菜'], cucumber: ['清爽', 2, '黃瓜'], kimchi: ['辛暖', 2, '泡菜'],
         braisedegg: ['鹹香', 2, '滷蛋'], fruitcut: ['果酸', 3, '水果'],
@@ -51,11 +56,11 @@
         tomato: ['果酸', 2, '番茄'], onion: ['酥脆', 2, '洋蔥'], pickle: ['果酸', 2, '酸瓜'], teri: ['甜', 2, '照燒'], hot: ['辛暖', 2, '辣味'], mustard: ['甜', 2, '芥末'], bunT: [null, 0, ''],
     };
     const MAIN = new Set(['beef', 'chicken', 'egg', 'karaage', 'terichk', 'salmon', 'braisedegg', 'salami', 'tamago', 'bacon']);   // 能當主角的
-    const DESSERT = new Set(['cream', 'custard', 'matcha', 'choco', 'sprinkle', 'ccream', 'scoop', 'pudding', 'cpearl', 'straw', 'blueberry']);   // 甜點才有的
+    const DESSERT = new Set(['cream', 'custard', 'matcha', 'choco', 'sprinkle', 'ccream', 'scoop', 'pudding', 'cpearl', 'straw', 'blueberry', 'chococream', 'pinkcream', 'chips', 'sugar']);   // 甜點才有的
     // 🔥 進烤箱會怎樣：每樣料算一類（11-13 她：「漢堡的起司進烤箱也會有融化效果嗎，還有可可粉形狀會不會消失？」）
     //   起司融成一灘、奶油冰淇淋塌成一灘、冰塊化成水、粉糊開變深、葉子縮小變深、水果變深滲汁、肉和飯和麵包烤上色；焦黃一律用起司那套雜訊遮罩
     const BAKE = {};
-    [['cheese', 'mozz cheese'], ['cream', 'cream custard matcha ccream foam scoop'], ['ice', 'ice'], ['dust', 'cocoa cinnamon'],
+    [['cheese', 'mozz cheese'], ['cream', 'cream custard matcha chococream pinkcream ccream foam scoop'], ['ice', 'ice'], ['dust', 'cocoa cinnamon sugar'],
         ['leaf', 'lettuce greens mintleaf basil'], ['fruit', 'straw blueberry tomato fruitcut pickle cucumber kimchi'],
         ['meat', 'beef bacon chicken karaage terichk salmon salami braisedegg'], ['rice', 'rice friedrice grainrice'], ['bun', 'bunB bunT']]
         .forEach(([m, ids]) => ids.split(' ').forEach(id => { BAKE[id] = m; }));
@@ -100,10 +105,33 @@
               { id: 'cream', name: '鮮奶油', kind: 'pipe', col: '#fffdf8', shade: '#d9c6a4', hi: '#ffffff', w: 17 },
               { id: 'custard', name: '卡士達', kind: 'pipe', col: '#f7dc7e', shade: '#ddb84e', hi: '#fdeeb0', w: 17 },
               { id: 'matcha', name: '抹茶奶油', kind: 'pipe', col: '#a9c977', shade: '#84a655', hi: '#c6dea0', w: 17 },
+              { id: 'chococream', name: '巧克力奶油', kind: 'pipe', col: '#7a4a2c', shade: '#57321e', hi: '#a3704e', w: 17 },
+              { id: 'pinkcream', name: '草莓奶油', kind: 'pipe', col: '#f8bccb', shade: '#df92a6', hi: '#fdd9e2', w: 17 },
               { id: 'choco', name: '巧克力醬', kind: 'sauce', col: '#5a3220', rim: '#3d2014', hi: '#8a573c', w: 9 },
               { id: 'straw', name: '草莓', kind: 'piece', r: 15 }, { id: 'blueberry', name: '藍莓', kind: 'piece', r: 9 },
-              { id: 'mintleaf', name: '薄荷', kind: 'piece', r: 12 }, { id: 'sprinkle', name: '彩色顆粒', kind: 'scatter' }, { id: 'nuts', name: '堅果', kind: 'scatter' } ],
-            hint: '奶油：按著拖，擠出連續一條；停著不動會鼓成一坨；要疊高就放開，在奶油上再按一次。草莓、藍莓放在奶油上會坐在上面。' },
+              { id: 'mintleaf', name: '薄荷', kind: 'piece', r: 12 }, { id: 'sprinkle', name: '彩色顆粒', kind: 'scatter' }, { id: 'nuts', name: '堅果', kind: 'scatter' },
+              { id: 'chips', name: '巧克力豆', kind: 'scatter' }, { id: 'sugar', name: '糖粉', kind: 'scatter' } ],
+            hint: '奶油：按著拖，擠出連續一條；停著不動會鼓成一坨；要疊高就放開，在奶油上再按一次。草莓、藍莓放在奶油上會坐在上面。蛋糕體、內餡、外層的口味在下面「蛋糕體」換。' },
+          // 蛋糕本身（11-13 她：「我的蛋糕好像沒辦法配內餡…胚可以分口味？巧顆粒胚也沒有欸」）：點一下就換，不用放到盤子上
+          cakebody: { tray: [
+              { id: 'sp_vanilla', name: '原味', kind: 'body', part: 'sponge', c: '#f0cf8c', crust: '#d9a85e', crumb: 'rgba(190,140,70,.35)' },
+              { id: 'sp_choco', name: '巧克力', kind: 'body', part: 'sponge', c: '#7a4a2c', crust: '#55301b', crumb: 'rgba(40,20,8,.4)' },
+              { id: 'sp_matcha', name: '抹茶', kind: 'body', part: 'sponge', c: '#b5c97a', crust: '#8fa356', crumb: 'rgba(80,100,35,.35)' },
+              { id: 'sp_redvelvet', name: '紅絲絨', kind: 'body', part: 'sponge', c: '#b8343f', crust: '#8a2230', crumb: 'rgba(80,12,18,.35)' },
+              { id: 'sp_chip', name: '巧克力豆', kind: 'body', part: 'sponge', c: '#f0cf8c', crust: '#d9a85e', crumb: 'rgba(190,140,70,.35)', chip: true },
+              { id: 'sp_earlgrey', name: '伯爵茶', kind: 'body', part: 'sponge', c: '#d8b98c', crust: '#b8915e', crumb: 'rgba(70,50,35,.55)' },
+              { id: 'fi_straw', name: '鮮奶油草莓', kind: 'body', part: 'fill', c: '#fffaf0', fruit: 'straw' },
+              { id: 'fi_blue', name: '鮮奶油藍莓', kind: 'body', part: 'fill', c: '#fffaf0', fruit: 'blue' },
+              { id: 'fi_custard', name: '卡士達', kind: 'body', part: 'fill', c: '#f7dc7e' },
+              { id: 'fi_ganache', name: '巧克力甘納許', kind: 'body', part: 'fill', c: '#4a2a1a', gloss: true },
+              { id: 'fi_redbean', name: '抹茶紅豆', kind: 'body', part: 'fill', c: '#c6dea0', fruit: 'bean' },
+              { id: 'fi_taro', name: '芋泥', kind: 'body', part: 'fill', c: '#c9a8d8' },
+              { id: 'co_white', name: '鮮奶油', kind: 'body', part: 'coat', top: '#fbeccd', side: '#eadbbd', edge: '#fff8e8' },
+              { id: 'co_choco', name: '巧克力', kind: 'body', part: 'coat', top: '#6b4028', side: '#55321e', edge: '#8a5a3c' },
+              { id: 'co_matcha', name: '抹茶', kind: 'body', part: 'coat', top: '#bcd48c', side: '#a2bc70', edge: '#d6e8b4' },
+              { id: 'co_pink', name: '草莓', kind: 'body', part: 'coat', top: '#f7c6cf', side: '#e9a9b6', edge: '#fde2e7' },
+              { id: 'co_custard', name: '卡士達', kind: 'body', part: 'coat', top: '#f9e3a0', side: '#e9cc7c', edge: '#fdf0c8' } ],
+            hint: '' },
           bento: { tray: [
               { id: 'rice', name: '白飯', kind: 'sauce', grain: true, col: '#f1ebdb', rim: '#cfc5ac', hi: '#ffffff', w: 34, bits: ['#ffffff', '#ffffff', '#fbf7ec'] },
               { id: 'friedrice', name: '炒飯', kind: 'sauce', grain: true, col: '#e6c574', rim: '#b8923f', hi: '#f3dc9a', w: 34, bits: ['#f3dc9a', '#d9a94e', '#e8873a', '#6fae4c', '#f8e88a'] },
@@ -140,7 +168,7 @@
         if (win.ResizeObserver) new win.ResizeObserver(fitRes).observe(cv);
         const ALLT = {}; Object.keys(ST).forEach(k => ST[k].tray.forEach(t => { t.from = k; ALLT[t.id] = t; }));
         const tool = (id) => ALLT[id];       // 不管現在在哪個檯子，六個檯子的料都找得到
-        const SRC = { burger: '漢堡料', coffee: '咖啡', cup: '飲料', bento: '便當料', pizza: '披薩料', cake: '蛋糕料' };
+        const SRC = { burger: '漢堡料', coffee: '咖啡', cup: '飲料', bento: '便當料', pizza: '披薩料', cake: '蛋糕料', cakebody: '蛋糕體' };
         let traySrc = st;
         const rnd = (seed) => { const x = Math.sin(seed * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
         const ease = (k) => 1 - Math.pow(1 - Math.min(1, Math.max(0, k)), 3);
@@ -196,16 +224,23 @@
             c.fillStyle = '#ffffff'; c.beginPath(); c.ellipse(200, 227, 186, 58, 0, 0, 6.2832); c.fill();
             c.strokeStyle = '#ece5d6'; c.lineWidth = 2; c.beginPath(); c.ellipse(200, 228, 150, 44, 0, 0, 6.2832); c.stroke();
             c.fillStyle = 'rgba(0,0,0,.12)'; c.beginPath(); c.moveTo(T[0] - 6, T[1] + h + 4); c.lineTo(F[0], F[1] + h + 8); c.quadraticCurveTo(C[0] + 14, C[1] + h + 6, B[0] + 8, B[1] + h); c.closePath(); c.fill();
+            const bd = S.body || {}, SP = tool(bd.sponge) || tool('sp_vanilla'), FI = tool(bd.fill) || tool('fi_straw'), CO = tool(bd.coat) || tool('co_white');   // 胚、內餡、外層抹面
             // 外側那圈（抹面）
-            c.fillStyle = '#eadbbd'; c.beginPath(); c.moveTo(F[0], F[1]); c.quadraticCurveTo(C[0], C[1], B[0], B[1]); c.lineTo(B[0], B[1] + h); c.quadraticCurveTo(C[0], C[1] + h, F[0], F[1] + h); c.closePath(); c.fill();
-            // 前面的切面：一層一層
+            c.fillStyle = CO.side; c.beginPath(); c.moveTo(F[0], F[1]); c.quadraticCurveTo(C[0], C[1], B[0], B[1]); c.lineTo(B[0], B[1] + h); c.quadraticCurveTo(C[0], C[1] + h, F[0], F[1] + h); c.closePath(); c.fill();
+            // 前面的切面：一層一層（上面一條抹面、胚、內餡、胚、底下烤上色的那一層）
             const band = (f0, f1, col) => { c.fillStyle = col; c.beginPath(); c.moveTo(T[0], T[1] + h * f0); c.lineTo(F[0], F[1] + h * f0); c.lineTo(F[0], F[1] + h * f1); c.lineTo(T[0], T[1] + h * f1); c.closePath(); c.fill(); };
-            band(0, 1, '#f0cf8c'); band(0, .1, '#fbeccd'); band(.42, .56, '#fffaf0'); band(.9, 1, '#d9a85e');
-            for (let i = 0; i < 7; i++) { const k = .12 + i * .125, x = T[0] + (F[0] - T[0]) * k, y = T[1] + (F[1] - T[1]) * k + h * .49; c.fillStyle = '#e25563'; c.beginPath(); c.ellipse(x, y, 9, 3.6, .2, 0, 6.2832); c.fill(); c.fillStyle = '#f39aa2'; c.beginPath(); c.ellipse(x, y, 5, 1.6, .2, 0, 6.2832); c.fill(); }
-            for (let i = 0; i < 46; i++) { const k = .06 + rnd(i) * .9, f = rnd(i + 50) > .5 ? .14 + rnd(i + 9) * .25 : .6 + rnd(i + 9) * .27, x = T[0] + (F[0] - T[0]) * k, y = T[1] + (F[1] - T[1]) * k + h * f; c.fillStyle = 'rgba(190,140,70,.35)'; c.beginPath(); c.ellipse(x, y, 1.6 + rnd(i + 3) * 1.4, 1, 0, 0, 6.2832); c.fill(); }
+            const at = (k, f) => [T[0] + (F[0] - T[0]) * k, T[1] + (F[1] - T[1]) * k + h * f];
+            const E = (ex, ey, rx, ry, col, rot) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, rot || 0, 0, 6.2832); c.fill(); };
+            band(0, 1, SP.c); band(0, .1, CO.top); band(.42, .56, FI.c); band(.9, 1, SP.crust);
+            if (FI.fruit === 'straw') for (let i = 0; i < 7; i++) { const [x, y] = at(.12 + i * .125, .49); E(x, y, 9, 3.6, '#e25563', .2); E(x, y, 5, 1.6, '#f39aa2', .2); }
+            else if (FI.fruit === 'blue') for (let i = 0; i < 10; i++) { const [x, y] = at(.08 + i * .092, .49 + (i % 2 ? .02 : -.02)); E(x, y, 3.6, 3.2, '#3b4690'); E(x - 1, y - 1, 1.2, .9, '#8a98dc'); }
+            else if (FI.fruit === 'bean') for (let i = 0; i < 16; i++) { const [x, y] = at(.06 + rnd(i + 70) * .9, .45 + rnd(i + 80) * .08); E(x, y, 2.4, 1.6, '#7a2a22', rnd(i) * 3); }
+            if (FI.gloss) { c.strokeStyle = 'rgba(255,255,255,.22)'; c.lineWidth = 1.5; c.beginPath(); const p0 = at(.05, .45), p1 = at(.95, .45); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke(); }
+            for (let i = 0; i < 46; i++) { const f = rnd(i + 50) > .5 ? .14 + rnd(i + 9) * .25 : .6 + rnd(i + 9) * .27, [x, y] = at(.06 + rnd(i) * .9, f); E(x, y, 1.6 + rnd(i + 3) * 1.4, 1, SP.crumb); }
+            if (SP.chip) for (let i = 0; i < 22; i++) { const f = rnd(i + 150) > .5 ? .15 + rnd(i + 109) * .22 : .6 + rnd(i + 109) * .25, [x, y] = at(.06 + rnd(i + 120) * .88, f); E(x, y, 2.3, 1.7, '#3d2014', rnd(i) * 3); }   // 巧克力豆胚：切面上一顆一顆
             // 上面（抹了奶油的面）
-            c.fillStyle = '#fbeccd'; c.beginPath(); c.moveTo(T[0], T[1]); c.lineTo(B[0], B[1]); c.quadraticCurveTo(C[0], C[1], F[0], F[1]); c.closePath(); c.fill();
-            c.strokeStyle = '#fff8e8'; c.lineWidth = 3; c.lineJoin = 'round'; c.stroke();
+            c.fillStyle = CO.top; c.beginPath(); c.moveTo(T[0], T[1]); c.lineTo(B[0], B[1]); c.quadraticCurveTo(C[0], C[1], F[0], F[1]); c.closePath(); c.fill();
+            c.strokeStyle = CO.edge; c.lineWidth = 3; c.lineJoin = 'round'; c.stroke();
           }
         }
 
@@ -316,6 +351,11 @@
             const a = rnd(seed) * 3.14, col = SPR[Math.floor(rnd(seed + 5) * SPR.length)]; c.lineCap = 'round';
             c.strokeStyle = 'rgba(0,0,0,.2)'; c.lineWidth = 3; c.beginPath(); c.moveTo(x - Math.cos(a) * 3.5, y - Math.sin(a) * 2 + 1.5); c.lineTo(x + Math.cos(a) * 3.5, y + Math.sin(a) * 2 + 1.5); c.stroke();
             c.strokeStyle = col; c.beginPath(); c.moveTo(x - Math.cos(a) * 3.5, y - Math.sin(a) * 2); c.lineTo(x + Math.cos(a) * 3.5, y + Math.sin(a) * 2); c.stroke();
+          } else if (id === 'chips') {   // 巧克力豆：一顆一顆小水滴形
+            const rot = (rnd(seed) - .5) * .8; c.save(); c.translate(x, y); c.rotate(rot);
+            E(0, 1.6, 3.2, 1.8, 'rgba(0,0,0,.2)'); c.fillStyle = '#4a2a1a'; c.beginPath(); c.moveTo(0, -4.2); c.quadraticCurveTo(3.6, .6, 0, 1.6); c.quadraticCurveTo(-3.6, .6, 0, -4.2); c.fill(); E(-1, -.8, .8, 1.3, 'rgba(255,255,255,.35)'); c.restore();
+          } else if (id === 'sugar') {   // 糖粉：薄薄一層白點
+            for (let i = 0; i < 5; i++) E(x + (rnd(seed + i) - .5) * 8, y + (rnd(seed + i + 3) - .5) * 4, 1.3, .9, 'rgba(255,255,255,.95)');
           } else if (id === 'nuts') {
             const a = rnd(seed) * 3.14; E(x, y + 1.6, 4.4, 3, '#8a5a2c', a); E(x, y, 4.2, 2.8, '#c9925a', a); E(x - .8, y - .8, 1.8, 1, '#e3b888', a);
           } else if (id === 'karaage') {
@@ -457,7 +497,7 @@
             if (g.length) tinted(c, TINT[m][0], tintA(m, bk), cc => g.forEach(p => one(cc, p, m === 'leaf' ? .8 : 0)));   // 葉子烤過縮小一圈
           });
           pcs.filter(p => bakeOf(p.id) === 'dust').forEach(p => {   // 可可粉、肉桂粉：還看得出撒過，但點點糊開、顏色變深
-            const rgb = p.id === 'cocoa' ? '52,26,12' : '118,58,18';
+            const rgb = p.id === 'cocoa' ? '52,26,12' : p.id === 'sugar' ? '205,158,88' : '118,58,18';   // 糖粉烤過變焦糖色
             for (let i = 0; i < 7; i++) feather(c, p.x + (rnd(p.seed + i) - .5) * 14, p.y + (rnd(p.seed + i + 5) - .5) * 8, 4.2, rgb, bk === 'raw' ? .6 : .85);
           });
         }
@@ -543,22 +583,28 @@
 
         // ── 盤面、料盤、按鈕 ──
         function buildTray() {
-          $('src').innerHTML = [st].concat(Object.keys(SRC).filter(k => k !== st)).map(k => '<button data-src="' + k + '" class="' + (k === traySrc ? 'on' : '') + '">' + (k === st ? '這一檯' : SRC[k]) + '</button>').join('');
-          $('tray').innerHTML = ST[traySrc].tray.map(t => '<button class="ock-ing' + (t.id === pick ? ' on' : '') + '" data-id="' + t.id + '"><canvas width="80" height="80"></canvas>' + t.name + '</button>').join('');
+          const srcs = [st].concat(st === 'cake' ? ['cakebody'] : [], Object.keys(SRC).filter(k => k !== st && k !== 'cakebody'));   // 「蛋糕體」只在蛋糕檯出現，排在這一檯後面
+          $('src').innerHTML = srcs.map(k => '<button data-src="' + k + '" class="' + (k === traySrc ? 'on' : '') + '">' + (k === st ? '這一檯' : SRC[k]) + '</button>').join('');
+          const PART = { sponge: '胚', fill: '內餡', coat: '外層' }, isOn = (t) => t.kind === 'body' ? !!(S && S.body && S.body[t.part] === t.id) : t.id === pick;
+          $('tray').innerHTML = ST[traySrc].tray.map((t, i, a) => (t.kind === 'body' && (!i || a[i - 1].part !== t.part) ? '<span class="ock-ing-group">' + PART[t.part] + '</span>' : '') +
+            '<button class="ock-ing' + (isOn(t) ? ' on' : '') + '" data-id="' + t.id + '"><canvas width="80" height="80"></canvas>' + t.name + '</button>').join('');
           $('tray').scrollLeft = 0;
           root.querySelectorAll('.ock-ing').forEach(b => {     // 料盤上的小圖也是同一支畫出來的，跟盤子上的長一樣
             const t = tool(b.dataset.id), c = b.firstChild.getContext('2d'); c.scale(2, 2);
             if (/^c(top|ice|liq|cap)$/.test(t.kind)) return drawCupIcon(c, t);
             if (t.kind === 'kf') return kIcon(c, t);
             if (t.kind === 'bg') return bgIcon(c, t);
+            if (t.kind === 'body') return bodyIcon(c, t);
             if (t.kind === 'pipe') { const keep = S; S = { cream: [{ t, pts: [] }] }; for (let i = 0; i <= 8; i++) S.cream[0].pts.push({ x: 9 + i * 2.8, y: 24 - Math.sin(i / 8 * 3.14) * 5, w: i === 8 ? 17 : 11, lv: 0 }); const tt = Object.assign({}, t, { w: 11 }); S.cream[0].t = tt; drawCreamLevel(c, runs()); S = keep; }
             else if (t.kind === 'sauce') { c.lineCap = 'round'; [[t.rim, 15, 0], [t.col, 12, 0]].forEach(([col, w, o]) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(11 + o * .3, 24 + o); c.quadraticCurveTo(20, 12 + o, 29, 20 + o); c.stroke(); }); }
+            else if (t.id === 'sugar') { const E = (ex, ey, rx, ry, col) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, 0, 0, 6.2832); c.fill(); };   // 白的放在白鈕上看不到：畫一小堆粉，底下帶影子
+              E(20, 29, 13, 4.5, 'rgba(0,0,0,.12)'); E(20, 26, 12, 6, '#e9e2d4'); E(20, 23, 9, 6, '#f4efe5'); E(19, 19.5, 5.5, 4, '#ffffff'); for (let i = 0; i < 8; i++) E(9 + rnd(i) * 22, 28 + rnd(i + 4) * 4, .9, .7, '#d8cfbf'); }
             else if (t.kind === 'scatter') { for (let i = 0; i < 9; i++) drawPiece(c, t.id, 8 + rnd(i) * 24, 12 + rnd(i + 7) * 18, 6, i * 3.3); }
             else drawPiece(c, t.id, 20, t.id === 'straw' || t.id === 'terichk' ? 28 : t.id === 'mintleaf' ? 30 : 22, Math.min(13, (t.r || 10)), 4);
           });
         }
         function build() {
-          S = { sauce: [], cream: [], pcs: [], hist: [], baked: null, busy: false, seed: Math.random() * 100 };
+          S = { sauce: [], cream: [], pcs: [], hist: [], baked: null, busy: false, seed: Math.random() * 100, body: { sponge: 'sp_vanilla', fill: 'fi_straw', coat: 'co_white' } };
           area = mkArea(); pick = null;
           $('hint').textContent = ST[st].hint;
           traySrc = st; buildTray();
@@ -572,7 +618,7 @@
         function actBar() {   // 下面那排鈕（烤完回來也叫它重排）
           const pizza = st === 'pizza';
           $('act').innerHTML = '<button class="ock-ghost" data-ok="undo"><i class="fa-solid fa-rotate-left"></i> 上一步</button><button class="ock-ghost" data-ok="clr">重來</button><button data-ok="go">' + (pizza ? '<i class="fa-solid fa-fire-burner"></i> 送進烤箱' : '<i class="fa-solid fa-bell-concierge"></i> 完成') + '</button>';
-          $('undo').onclick = () => { const h = S.hist.pop(); if (!h) return; const a = S[h.k], i = a.indexOf(h.o); if (i >= 0) a.splice(i, 1); touch(); };
+          $('undo').onclick = () => { const h = S.hist.pop(); if (!h) return; if (h.k === 'body') { S.body = h.prev; buildTray(); touch(); return; } const a = S[h.k], i = a.indexOf(h.o); if (i >= 0) a.splice(i, 1); touch(); };
           $('clr').onclick = build;
           if (st === 'coffee') $('undo').onclick = kUndo;
           if (st === 'burger') { $('undo').onclick = () => { bgUndo(); touch(400); }; $('go').insertAdjacentHTML('beforebegin', '<button class="ock-ghost" data-ok="toast"><i class="fa-solid fa-fire-burner"></i> 烤一下</button>'); $('toast').onclick = toastBurger; }
@@ -580,7 +626,16 @@
           $('go').onclick = () => { if (!api.can()) return; if (pizza) bake(); else api.done(); };   // 空盤、錢不夠先講；做好交給外面扣錢、試吃
         }
         root.addEventListener('click', (e) => {
-          const b = e.target.closest('.ock-ing'); if (b) { pick = b.dataset.id; root.querySelectorAll('.ock-ing').forEach(x => x.classList.toggle('on', x === b)); }
+          const b = e.target.closest('.ock-ing');
+          if (b) {
+            const t = tool(b.dataset.id);
+            if (t && t.kind === 'body') {   // 蛋糕體：點一下就換，手上拿的料不變
+              if (S.busy || S.body[t.part] === t.id) return;
+              S.hist.push({ k: 'body', prev: Object.assign({}, S.body) }); S.body = Object.assign({}, S.body, { [t.part]: t.id });
+              $('hint').textContent = { sponge: '胚換成', fill: '內餡換成', coat: '外層抹面換成' }[t.part] + '「' + t.name + '」'; buildTray(); touch(); return;
+            }
+            pick = b.dataset.id; root.querySelectorAll('.ock-ing').forEach(x => x.classList.toggle('on', x === b));
+          }
           const sc = e.target.closest('[data-src]'); if (sc) { traySrc = sc.dataset.src; buildTray(); }
           const s = e.target.closest('[data-st]'); if (s) { if (S && S.busy) return; if (api.locked(s.dataset.st)) { api.unlock(s.dataset.st); return; } st = s.dataset.st; root.querySelectorAll('[data-st]').forEach(x => x.classList.toggle('on', x === s)); build(); }
         });
@@ -1022,6 +1077,18 @@
           if (!bgPtr) return; const q = bgPt(e), top = bgPtr.top; let u = (q[0] - top.x) / top.d.r, v = (q[1] - top.yt) / (top.d.r * BRY); const r = Math.hypot(u, v); if (r > 1) { u /= r; v /= r; }
           const pts = bgPtr.a.pts, l = pts[pts.length - 1]; if (!l || Math.hypot(u - l.u, v - l.v) > .03) { pts.push({ u, v }); touch(); }
         }
+        function bodyIcon(c, t) {   // 蛋糕體的小圖：一小塊切面，換成這一樣會長怎樣
+          const b = Object.assign({}, (S && S.body) || {}, { [t.part]: t.id }), SP = tool(b.sponge) || tool('sp_vanilla'), FI = tool(b.fill) || tool('fi_straw'), CO = tool(b.coat) || tool('co_white');
+          const R = (y, hh, col) => { c.fillStyle = col; c.fillRect(7, y, 26, hh); }, E = (ex, ey, rx, ry, col) => { c.fillStyle = col; c.beginPath(); c.ellipse(ex, ey, rx, ry, 0, 0, 6.2832); c.fill(); };
+          c.save(); c.beginPath(); c.moveTo(10, 8); c.lineTo(30, 8); c.quadraticCurveTo(33, 8, 33, 11); c.lineTo(33, 33); c.lineTo(7, 33); c.lineTo(7, 11); c.quadraticCurveTo(7, 8, 10, 8); c.clip();
+          R(8, 25, SP.c); R(8, 4, CO.top); R(18.5, 4.5, FI.c); R(30, 3, SP.crust);
+          if (FI.fruit === 'straw') for (let i = 0; i < 3; i++) E(11.5 + i * 8.5, 20.8, 3, 1.4, '#e25563');
+          else if (FI.fruit === 'blue') for (let i = 0; i < 4; i++) E(10 + i * 6.6, 20.8, 1.7, 1.5, '#3b4690');
+          else if (FI.fruit === 'bean') for (let i = 0; i < 6; i++) E(9 + i * 4.4, 20.4 + (i % 2), 1.2, .9, '#7a2a22');
+          if (SP.chip) for (let i = 0; i < 7; i++) E(9 + rnd(i + 3) * 22, (i % 2 ? 14 : 26) + rnd(i) * 2, 1.2, .9, '#3d2014');
+          for (let i = 0; i < 6; i++) E(9 + rnd(i + 11) * 22, (i % 2 ? 15 : 27), .9, .6, SP.crumb);
+          c.restore();
+        }
         function bgIcon(c, t) {
           if (BSAUCE[t.id]) { c.lineCap = 'round'; [[BSAUCE[t.id][1], 9, 2], [BSAUCE[t.id][0], 7, 0]].forEach(([col, w, o]) => { c.strokeStyle = col; c.lineWidth = w; c.beginPath(); c.moveTo(8, 14 + o); c.lineTo(30, 14 + o); c.lineTo(10, 22 + o); c.lineTo(32, 22 + o); c.lineTo(12, 30 + o); c.stroke(); }); return; }
           c.save(); c.translate(20, 22); c.scale(.2, .2); const d = BL[t.id]; bgDraw(c, { L: { id: t.id, seed: 3 }, d, x: 0, yb: d.h / 2 + (t.id === 'bunT' ? 20 : 0), yt: -d.h / 2 + (t.id === 'bunT' ? 20 : 0) }); c.restore();
@@ -1110,11 +1177,12 @@
             const cnt = tally(S.pcs.map(p => p.id));
             for (const id in cnt) { const t = surfTool(tool(id)); add(id, cnt[id], Math.ceil(cnt[id] / (t && t.kind === 'scatter' ? 18 : 6))); }
             const sl = {}; S.sauce.concat(S.cream).forEach(s => { sl[s.t.id] = (sl[s.t.id] || 0) + len(s.pts) + 8; });
+            if (st === 'cake' && S.body) ['sponge', 'fill', 'coat'].forEach(k => add(S.body[k], 1, 1));   // 胚、內餡、外層也算料
             for (const id in sl) add(id, sl[id], Math.max(1, Math.ceil(sl[id] / 220)));
             Object.assign(m, { baked: S.baked, bakeV: S.bakeV || 0, sauces: S.sauce.length, cream: S.cream.reduce((n, s) => n + len(s.pts), 0),
               creamLv: S.cream.reduce((n, s) => Math.max(n, s.pts[0] ? s.pts[0].lv : 0), 0), pcs: S.pcs.length, onCream: S.pcs.filter(p => p.lv > 0).length });
             if (full) Object.assign(m, cover());
-            key.push(S.baked || '', S.bakeV || 0, S.pcs.map(p => p.id + r0(p.x / 4) + '.' + r0(p.y / 4)).sort().join(','),
+            key.push(st === 'cake' && S.body ? S.body.sponge + S.body.fill + S.body.coat : '', S.baked || '', S.bakeV || 0, S.pcs.map(p => p.id + r0(p.x / 4) + '.' + r0(p.y / 4)).sort().join(','),
               S.sauce.concat(S.cream).map(s => s.t.id + ':' + s.pts.filter((q, i) => i % 4 === 0).map(q => r0(q.x / 4) + '.' + r0(q.y / 4)).join(' ')).join(';'));
           }
           return { st, amt, por, names, m, key: key.join('|') };
@@ -1158,7 +1226,10 @@
     // 👅 試吃：三位試吃員照規則講（同一盤永遠同一個結果、不花 AI 錢）
     // ================================================================
     function _ids(sum) { return Object.keys(sum.por).filter(id => sum.por[id] > 0 && TASTE[id] && TASTE[id][0]); }
-    const SAY = { espresso: '咖啡', steam: '奶泡', kmilk: '奶泡', water: '熱水', ccream: '鮮奶油', foam: '奶蓋' };   // 料盤上寫的是動作（萃取、倒奶泡），講給人聽換成吃到的東西
+    const SAY = { espresso: '咖啡', steam: '奶泡', kmilk: '奶泡', water: '熱水', ccream: '鮮奶油', foam: '奶蓋',
+        sp_vanilla: '原味蛋糕體', sp_choco: '巧克力蛋糕體', sp_matcha: '抹茶蛋糕體', sp_redvelvet: '紅絲絨蛋糕體', sp_chip: '巧克力豆蛋糕體', sp_earlgrey: '伯爵茶蛋糕體',
+        fi_straw: '鮮奶油草莓餡', fi_blue: '鮮奶油藍莓餡', fi_custard: '卡士達餡', fi_ganache: '巧克力甘納許', fi_redbean: '抹茶紅豆餡', fi_taro: '芋泥餡',
+        co_white: '鮮奶油抹面', co_choco: '巧克力抹面', co_matcha: '抹茶抹面', co_pink: '草莓抹面', co_custard: '卡士達抹面' };   // 料盤上寫的是動作（萃取、倒奶泡），講給人聽換成吃到的東西
     function _nm(sum, id) { return SAY[id] || (sum.names && sum.names[id]) || (TASTE[id] && TASTE[id][2]) || id; }
     function _tagsOf(sum) {
         const cnt = {};
@@ -1186,7 +1257,8 @@
         let score = 62;
         // ── 味道 ──
         const byTag = {};
-        ids.slice().sort((a, z) => (sum.por[z] || 0) - (sum.por[a] || 0)).forEach(id => { const t = TASTE[id][0]; (byTag[t] = byTag[t] || []).push(id); });
+        const plain = (id) => id === 'sp_vanilla' || id === 'co_white' ? 9 : 0;   // 原味胚、鮮奶油抹面是預設，講搭配時排最後
+        ids.slice().sort((a, z) => ((sum.por[z] || 0) - plain(z)) - ((sum.por[a] || 0) - plain(a))).forEach(id => { const t = TASTE[id][0]; (byTag[t] = byTag[t] || []).push(id); });
         CONFLICT.forEach(([p, q]) => { if (byTag[p] && byTag[q]) { score -= 16; N('taste', 9, nm(byTag[p][0]) + '跟' + nm(byTag[q][0]) + '的味道打架，吃起來很怪'); } });
         let harm = 0;
         HARMONY.forEach(([p, q]) => { if (byTag[p] && byTag[q] && harm < 3) { harm++; score += 6; if (harm === 1) N('taste', 3, nm(byTag[p][0]) + '配' + nm(byTag[q][0]) + '，很搭', true); } });
@@ -1272,7 +1344,7 @@
         const ids = Object.keys(sum.por).filter(id => TASTE[id] && TASTE[id][2] && id !== 'ice' && id !== 'steam').sort((a, z) => (sum.por[z] || 0) - (sum.por[a] || 0));
         let noun = S0.noun || '';
         if (sum.st === 'coffee') noun = ids.includes('kmilk') ? '拿鐵' : '咖啡';
-        const parts = ids.filter(id => !(sum.st === 'coffee' && (id === 'kmilk' || id === 'espresso'))).slice(0, 2).map(id => TASTE[id][2]);
+        const parts = Array.from(new Set(ids.filter(id => !(sum.st === 'coffee' && (id === 'kmilk' || id === 'espresso'))).map(id => TASTE[id][2]))).slice(0, 2);   // 巧克力胚＋巧克力餡只講一次巧克力
         return (parts.join('') + noun).slice(0, 12) || ((S0.name || '') + '試作');
     }
     function _blurbOf(sum) {
@@ -1704,6 +1776,7 @@
             '.ock-src button.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;font-weight:700;}' +
             '.ock-tray{display:flex;gap:8px;padding:10px 12px;overflow-x:auto;scrollbar-width:thin;flex:none;}' +
             '.ock-ing{flex:none;width:66px;border:1px solid var(--line);background:#fff;border-radius:14px;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--ink);}' +
+            '.ock-ing-group{flex:none;align-self:center;font-size:11px;font-weight:700;color:var(--soft);padding:0 2px;}' +
             '.ock-ing.on{background:#f2dfc6;border-color:#b77b42;font-weight:700;box-shadow:0 0 0 2px rgba(183,123,66,.2);}.ock-ing canvas{width:40px;height:40px;display:block;}' +
             '.ock-cost{min-height:18px;padding:0 14px;font-size:11.5px;color:var(--soft);flex:none;}.ock-cost b{color:var(--ink);}' +
             '.ock-poor{margin-left:6px;color:#b65050;font-weight:700;}' +
@@ -1714,7 +1787,7 @@
               '.ock-side{width:312px;border-top:0;border-left:1px solid var(--line);min-height:0;}' +
               '.ock-src{flex-wrap:wrap;overflow:visible;padding:12px 12px 2px;}' +
               '.ock-tray{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));align-content:start;overflow-x:hidden;overflow-y:auto;}' +
-              '.ock-ing{width:auto;}.ock-cost{padding:8px 14px 0;}.ock-hint{right:auto;max-width:min(560px,calc(100% - 20px));}' +
+              '.ock-ing{width:auto;}.ock-ing-group{grid-column:1/-1;padding:4px 2px 0;}.ock-cost{padding:8px 14px 0;}.ock-hint{right:auto;max-width:min(560px,calc(100% - 20px));}' +
             '}' +
             '.ock-act button{flex:1;border-radius:12px;padding:11px 0;font-weight:800;font-size:13px;border:1px solid #6d4425;background:var(--btn);color:#fff8ed;}' +
             '.ock-act button.ock-ghost{background:#fff;color:var(--ink);border-color:var(--line);flex:.6;}.ock-act button.on{background:#f2dfc6;border-color:#b77b42;}' +

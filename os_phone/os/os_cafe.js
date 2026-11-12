@@ -752,6 +752,20 @@
 
     // ── 對外資料 API(事件/好感度後續掛這)──
     async function getMenu() { return _get(K_MENU, []); }
+    // 🗑 下架（11-13 她：「那怎麼下架東西」）：從菜單拿掉，客人就點不到；備好的料當員工餐（不退錢、不算早上倒掉的）；後廚做的那張照片一起清掉
+    function _unlist(id) {
+        return _locked(async () => {
+            const menu = await _getStrict(K_MENU, []);
+            const m = menu.find(x => x.id === id);
+            if (!m) return { ok: false };
+            const stock = await _getStrict(K_STOCK, {});
+            delete stock[id];
+            await _set(K_MENU, menu.filter(x => x.id !== id));
+            await _set(K_STOCK, stock);
+            if (m.dish && m.dish.img) await _set(m.dish.img, '');
+            return { ok: true };
+        }).catch(e => { console.warn('[Cafe] 下架失敗', e); return { ok: false }; });
+    }
     async function getBooks() { return _get(K_BOOKS, []); }
     async function getShop() { return _get(K_SHOP, { popularity: 0, revenue: 0, cups: 0, lastDay: 0 }); }
     async function addBook(entry) {
@@ -811,6 +825,7 @@
             '.oc-menu-ops{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding-top:7px;border-top:1px dashed rgba(160,120,80,.25);}' +
             '.oc-stock{color:#7a5a3c;font-size:11px;}.oc-stock b{color:#4f3520;font-size:13px;}.oc-stock.zero b{color:#b65050;}.oc-stock-next{color:#a18465;}.oc-stock-next b{color:#7a5a3c;}' +
             '.oc-make{margin-left:auto;background:rgba(122,79,45,.08);border:1px solid #c9a476;color:#6d4425;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700;}.oc-make.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;}' +
+            '.oc-unlist{margin-left:6px;background:none;border:1px solid #dcc7a6;color:#9a7a5a;border-radius:8px;padding:5px 9px;cursor:pointer;font-size:11px;}.oc-unlist:hover{background:rgba(182,80,80,.08);color:#b65050;border-color:#d99;}.oc-unlist:disabled{opacity:.5;cursor:default;}' +
             '.oc-batch{grid-column:1/-1;display:flex;flex-direction:column;gap:7px;}' +
             '.oc-batch-nums{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;}' +
             '.oc-num{min-width:0;background:rgba(255,255,255,.72);border:1px solid #d8c3a1;border-radius:7px;padding:6px 0;cursor:pointer;color:#5a4634;font-size:12px;font-weight:700;}.oc-num.on{background:#f2dfc6;border-color:#b77b42;color:#674224;}.oc-num:disabled{opacity:.35;cursor:default;}' +
@@ -981,9 +996,24 @@
                     '<span class="oc-menu-price">' + m.price + ' PT</span><span class="oc-menu-sold">售出 ' + (m.sold || 0) + '</span></span>' +
                     '<span class="oc-menu-ops"><span class="oc-stock' + (left ? '' : ' zero') + '">現在有料 <b>' + left + '</b> 份</span>' +
                     (next ? '<span class="oc-stock oc-stock-next">等開店 <b>' + next + '</b> 份</span>' : '') +
-                    '<button class="oc-make" data-id="' + _esc(m.id) + '"><i class="fa-solid fa-basket-shopping"></i> 備料</button></span></div>';
+                    '<button class="oc-make" data-id="' + _esc(m.id) + '"><i class="fa-solid fa-basket-shopping"></i> 備料</button>' +
+                    '<button class="oc-unlist" data-id="' + _esc(m.id) + '"><i class="fa-solid fa-box-archive"></i> 下架</button></span></div>';
                 }).join('')
-                : '<div class="oc-empty"><i class="fa-solid fa-mug-hot"></i>菜單還是空的。<br>去「調配」研發出好東西再上架吧。</div>');
+                : '<div class="oc-empty"><i class="fa-solid fa-mug-hot"></i>菜單還是空的。<br>去「研發」進後廚做一道，再上架吧。</div>');
+            // 🗑 下架：先問，有備好的料要講會當員工餐
+            body.querySelectorAll('.oc-unlist').forEach(btn => btn.addEventListener('click', async () => {
+                const m = menu.find(x => x.id === btn.dataset.id);
+                if (!m) return;
+                const A = win.AUI || window.AUI;
+                const have = _stockNow(stock, m.id, today, nowMin) + _stockNext(stock, m.id, today, nowMin);
+                const yes = A && A.confirm ? await A.confirm('「' + m.name + '」下架後，客人就點不到了。' + (have ? '已經備好的 ' + have + ' 份當員工餐，不退錢。' : '') + '之後想再賣，回後廚做一次再上架。', { title: '下架「' + m.name + '」', okText: '下架' }) : false;
+                if (!yes) return;
+                btn.disabled = true;
+                const r = await _unlist(m.id);
+                if (!r.ok) { btn.disabled = false; if (A && A.toast) A.toast('下架沒成功，等一下再試', { type: 'warn' }); return; }
+                if (A && A.toast) A.toast('「' + m.name + '」下架了', { type: 'success' });
+                _renderTab('menu', body);
+            }));
             // 🧺 備料：點了展開 1～8 份，選好看花多少，按「備」才扣
             body.querySelectorAll('.oc-make').forEach(btn => btn.addEventListener('click', () => {
                 const card = btn.closest('.oc-menu-card');
