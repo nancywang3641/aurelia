@@ -577,7 +577,19 @@
                 if (!name) { AUI.alert('群名不能為空'); return; } if (checks.length === 0) { AUI.alert('至少選擇一個成員'); return; }
                 const groupId = 'group_' + Date.now(); const memberIds = Array.from(checks).map(c => c.value); memberIds.push("User");
                 this.addContactToStorage({ id: groupId, name: name, isGroup: true, members: memberIds });
-                if (win.wxApp && win.wxApp.GLOBAL_CHATS) { win.wxApp.GLOBAL_CHATS[groupId] = { id: groupId, name: name, isGroup: true, members: memberIds, messages: [], lastTime: '', unread: false }; win.wxApp.render(); }
+                // 🧑‍🤝‍🧑 11-13 小斐驗收：建好的群在通訊錄有、「聊天」那頁卻要發一則才出現（聊天列表只列有訊息的，見 wx_view）。
+                //   照聊天軟體的樣子先放一行「你建立了群聊」，列表馬上看得到、存檔，建好直接進那一間
+                const _app = win.wxApp;
+                if (_app && _app.GLOBAL_CHATS) {
+                    const _nm = memberIds.filter(id => id !== 'User').map(id => (_app.GLOBAL_CHATS[id] && _app.GLOBAL_CHATS[id].name) || ((allContacts.find(c => c.id === id) || {}).name) || id);
+                    const _line = '你建立了群聊「' + name + '」，成員：' + _nm.join('、');
+                    const _rec = { id: groupId, name: name, isGroup: true, members: memberIds, messages: [{ type: 'system', content: _line, isMe: false }], lastTime: '剛剛', lastPreview: _line, unread: false, pushedCount: 0, renderedCount: 0 };
+                    _app.GLOBAL_CHATS[groupId] = _rec;
+                    try { if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(groupId, _rec); } catch (e) {}
+                    targetDoc.getElementById('wxActionModal').classList.remove('show');
+                    if (typeof _app.openChat === 'function') _app.openChat(groupId); else _app.render();
+                    return;
+                }
                 targetDoc.getElementById('wxActionModal').classList.remove('show');
             };
         },

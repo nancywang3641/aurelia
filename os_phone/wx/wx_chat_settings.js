@@ -1289,16 +1289,20 @@
             }
             
             // 清空與刪除
+            // 🧹 11-13 小斐驗收：第一次按「確定」後畫面停在這頁、訊息還在，第二次才清掉；照步驟重現第一次就清得掉，
+            //   多半是確認框沒按到（點到框外＝取消；或「還沒備份過」那種提醒排在前面，清空的確認框要等它關了才出來）。
+            //   所以問的時候寫出是哪一間、清完跳一句「清空了」，有沒有清一眼看得出來；列表上那行預覽也一起清
             doc.getElementById('btn-clear-chat').onclick = async () => {
-                if (await AUI.confirm('確定要清空記錄嗎？')) {
+                if (await AUI.confirm('確定要清空「' + (chat.name || chatName) + '」的聊天記錄嗎？')) {
                     // 紅包／轉帳／禮物的已領狀態跟著記錄一起清，不然同一個單號再出現會直接顯示已領
                     try { const MM = win.WX_MESSAGE_MANAGER; if (MM && MM.purgeProtocolState) MM.purgeProtocolState(chatId, chat.messages); } catch (e) {}
                     try { if (win.WX_CARDS) win.WX_CARDS.clear(chatId); } catch (e) {}
-                    chat.messages = []; chat.pushedCount = 0; chat.renderedCount = 0;
+                    chat.messages = []; chat.pushedCount = 0; chat.renderedCount = 0; chat.lastPreview = '';
                     if (app.GLOBAL_ACTIVE_ID === chatId && app.render) app.render();
-                    if (win.OS_DB && win.OS_DB.saveApiChat) win.OS_DB.saveApiChat(chatId, chat);
-                    // 存檔只靠上面那行 saveApiChat。wxApp 沒有 saveChats，直接叫會丟錯，下一行收面板就跑不到
+                    // 存檔只靠這行 saveApiChat。wxApp 沒有 saveChats，直接叫會丟錯，下一行收面板就跑不到
+                    if (win.OS_DB && win.OS_DB.saveApiChat) { try { await win.OS_DB.saveApiChat(chatId, chat); } catch (e) { console.warn('[wx 設定] 清空後存檔失敗', e); } }
                     panel.classList.remove('show');
+                    try { AUI.toast('「' + (chat.name || chatName) + '」的聊天記錄清空了'); } catch (e) {}
                 }
             };
             // 🔒 黑名單／朋友驗證（wx_core 的 blockContact／unblockContact／sendFriendRequest）
