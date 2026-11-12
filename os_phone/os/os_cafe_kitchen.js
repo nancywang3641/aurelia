@@ -122,8 +122,14 @@
         };
         let st = opts.st || 'burger', pick = null, S = null, dirty = true, area = null;
         const cv = $('cv'), cx = cv.getContext('2d');
-        const DPR = Math.min(2, window.devicePixelRatio || 1);
-        cv.width = W * DPR; cv.height = H * DPR;
+        let DPR = 2;
+        function fitRes() {   // 盤子在畫面上多寬 × 螢幕倍率，取 0.5 一階，最多 3 倍
+          const r = cv.getBoundingClientRect(), k = Math.max(1, Math.min(3, Math.ceil((r.width || W * 2) / W * (win.devicePixelRatio || 1) * 2) / 2));
+          if (k === DPR && cv.width === W * k) return;
+          DPR = k; cv.width = W * DPR; cv.height = H * DPR; cx.setTransform(DPR, 0, 0, DPR, 0, 0); dirty = true;
+        }
+        fitRes();
+        if (win.ResizeObserver) new win.ResizeObserver(fitRes).observe(cv);
         const ALLT = {}; Object.keys(ST).forEach(k => ST[k].tray.forEach(t => { t.from = k; ALLT[t.id] = t; }));
         const tool = (id) => ALLT[id];       // 不管現在在哪個檯子，六個檯子的料都找得到
         const SRC = { burger: '漢堡料', coffee: '咖啡', cup: '飲料', bento: '便當料', pizza: '披薩料', cake: '蛋糕料' };
@@ -1282,19 +1288,26 @@
                 '<span class="ock-title">後廚' + (A && A.helpBtn ? A.helpBtn('cafe_kitchen') : '') + '</span>' +
                 '<span class="ock-st">' + STATIONS.map(tabHtml).join('') + '</span>' +
               '</div>' +
-              '<div class="ock-stage" data-ok="stage">' +
-                '<div class="ock-oven" data-ok="oven"><img data-ok="ovenImg" alt="" src="' + ART.open + '"><span class="ock-glow" data-ok="glow"></span></div>' +
-                '<div class="ock-dish" data-ok="dish"><canvas data-ok="cv"></canvas></div>' +
-                '<div class="ock-hint" data-ok="hint"></div>' +
-                '<div class="ock-meter" data-ok="meter"><b></b><i data-ok="meterBar"></i></div>' +
+              '<div class="ock-main">' +
+                '<div class="ock-stage" data-ok="stage">' +
+                  '<div class="ock-oven" data-ok="oven"><img data-ok="ovenImg" alt="" src="' + ART.open + '"><span class="ock-glow" data-ok="glow"></span></div>' +
+                  '<div class="ock-dish" data-ok="dish"><canvas data-ok="cv"></canvas></div>' +
+                  '<div class="ock-hint" data-ok="hint"></div>' +
+                  '<div class="ock-meter" data-ok="meter"><b></b><i data-ok="meterBar"></i></div>' +
+                '</div>' +
+                '<div class="ock-side">' +   // 料：窄的時候在盤子下面，寬的時候（電腦）搬到右邊一欄
+                  '<div class="ock-src" data-ok="src"></div>' +
+                  '<div class="ock-tray" data-ok="tray"></div>' +
+                  '<div class="ock-cost" data-ok="cost"></div>' +
+                  '<div class="ock-act" data-ok="act"></div>' +
+                '</div>' +
               '</div>' +
-              '<div class="ock-src" data-ok="src"></div>' +
-              '<div class="ock-tray" data-ok="tray"></div>' +
-              '<div class="ock-cost" data-ok="cost"></div>' +
-              '<div class="ock-act" data-ok="act"></div>' +
               '<div class="ock-res" data-ok="res"></div>' +
             '</div>';
-        doc.body.appendChild(root);
+        // 跟 SN 白板一樣掛在大廳畫面（.lobby-left）上、蓋住整個場景，右邊讓出大廳那排鈕；沒有大廳才蓋整個視窗
+        const host = doc.querySelector('.lobby-left');
+        if (!host) root.classList.add('ock-fixed');
+        (host || doc.body).appendChild(root);
         const $ = (k) => root.querySelector('[data-ok="' + k + '"]');
         const W0 = { root, eng: null, timer: null };
         _win = W0;
@@ -1506,33 +1519,47 @@
         const st = doc.createElement('style');
         st.id = 'os-cafe-kitchen-style';
         st.textContent =
-            '.ock-win{--ink:#4b3424;--soft:#8a6a4a;--cream:#fbf4ea;--line:#d8c3a1;--btn:#7a4f2d;position:fixed;inset:0;z-index:3600;display:flex;justify-content:center;background:rgba(30,22,18,.72);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;color:var(--ink);}' +
+            /* 窗口：跟 SN 白板一樣掛在大廳畫面上（右邊讓出 78px 給大廳那排鈕），浮在 NPC 泡泡上面、💬 浮鈕下面；手機整個蓋滿 */
+            '.ock-win{--ink:#4b3424;--soft:#8a6a4a;--cream:#fbf4ea;--line:#d8c3a1;--btn:#7a4f2d;position:absolute;inset:12px 78px 12px 12px;z-index:3450;display:flex;overflow:hidden;border-radius:18px;background:var(--cream);box-shadow:0 18px 40px rgba(40,25,15,.38);container:ock / inline-size;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;color:var(--ink);}' +
+            '.ock-win.ock-fixed{position:fixed;inset:0;border-radius:0;}' +
+            '@media (max-width:760px){.ock-win{inset:0;border-radius:0;z-index:3600;}}' +
             '.ock-win *{box-sizing:border-box;}.ock-win button{font-family:inherit;cursor:pointer;}' +
-            '.ock-shell{position:relative;width:100%;max-width:520px;height:100%;display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;background:var(--cream);padding-bottom:env(safe-area-inset-bottom);}' +
-            '.ock-top{display:flex;align-items:center;gap:8px;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));background:#fffaf2;border-bottom:1px solid var(--line);flex:none;}' +
+            '.ock-shell{position:relative;flex:1;min-width:0;display:flex;flex-direction:column;overflow-x:hidden;overflow-y:auto;background:var(--cream);padding-bottom:env(safe-area-inset-bottom);}' +
+            '.ock-main{flex:1 0 auto;display:flex;flex-direction:column;min-height:0;}' +
+            '.ock-side{flex:none;display:flex;flex-direction:column;min-width:0;background:#fffaf2;border-top:1px solid var(--line);}' +
+            '.ock-top{display:flex;align-items:center;gap:8px;padding:10px 12px;background:#fffaf2;border-bottom:1px solid var(--line);flex:none;}' +
+            '.ock-fixed .ock-top{padding-top:max(10px,env(safe-area-inset-top));}' +   // 只有沒大廳、蓋整個視窗時才會碰到 iPhone 的瀏海
             '.ock-back{border:1px solid var(--line);background:#fff;border-radius:10px;padding:6px 10px;color:var(--ink);font-size:13px;flex:none;}' +
             '.ock-title{display:flex;align-items:center;gap:4px;font-weight:800;font-size:15px;flex:none;}' +
             '.ock-st{display:flex;gap:6px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;}.ock-st::-webkit-scrollbar{display:none;}' +
             '.ock-st button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:6px 10px;white-space:nowrap;font-size:12px;color:var(--ink);}' +
             '.ock-st button.on{background:#f2dfc6;border-color:#b77b42;font-weight:700;}.ock-st button.ock-locked{color:#a99278;}' +
-            '.ock-stage{position:relative;flex:none;height:min(62vh,440px);overflow:hidden;background:linear-gradient(#f4efe6 0 46%,#e9e2d6 46% 52%,#cfd5da 52%,#b8c0c7 64%,#a9b1b8 100%);background-size:cover;background-position:center 70%;}' +
+            '.ock-stage{position:relative;flex:1 1 auto;min-height:300px;container-type:size;overflow:hidden;background:linear-gradient(#f4efe6 0 46%,#e9e2d6 46% 52%,#cfd5da 52%,#b8c0c7 64%,#a9b1b8 100%);background-size:cover;background-position:center 70%;}' +
             '.ock-stage.has-bg{background-image:url("' + ART.bg + '");}' +
-            '.ock-dish{position:absolute;left:50%;bottom:3%;width:min(94%,420px);transform:translateX(-50%);touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .6s ease-in,opacity .6s ease-in;}' +
+            '.ock-dish{position:absolute;left:50%;bottom:3%;width:min(94%,420px);width:min(94cqw,118cqh,760px);transform:translateX(-50%);touch-action:none;user-select:none;-webkit-user-select:none;transition:transform .6s ease-in,opacity .6s ease-in;}' +
             '.ock-dish.in-oven{transform:translateX(-50%) translate(30%,-24%) scale(.3);opacity:0;}' +
             '.ock-dish canvas{width:100%;display:block;}' +
-            '.ock-oven{position:absolute;right:3%;bottom:30%;width:34%;opacity:0;transform:translateX(30px);transition:.35s;pointer-events:none;}.ock-oven.on{opacity:1;transform:none;}.ock-oven img{width:100%;display:block;}' +
+            '.ock-oven{position:absolute;right:3%;bottom:30%;width:34%;width:min(34cqw,46cqh);opacity:0;transform:translateX(30px);transition:.35s;pointer-events:none;}.ock-oven.on{opacity:1;transform:none;}.ock-oven img{width:100%;display:block;}' +
             '.ock-glow{position:absolute;left:36%;top:44%;width:28%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,rgba(255,170,60,.95),rgba(255,120,40,.5) 55%,transparent 72%);opacity:0;transition:opacity .4s;}' +
             '.ock-glow.on{opacity:1;animation:ockFlick 1.2s ease-in-out infinite;}@keyframes ockFlick{50%{opacity:.75;}}' +
             '.ock-hint{position:absolute;left:10px;top:10px;right:10px;font-size:12px;color:#fff;background:rgba(60,40,25,.55);padding:6px 10px;border-radius:10px;pointer-events:none;}' +
-            '.ock-src{display:flex;gap:6px;padding:8px 12px 0;overflow-x:auto;background:#fffaf2;border-top:1px solid var(--line);scrollbar-width:none;flex:none;}.ock-src::-webkit-scrollbar{display:none;}' +
+            '.ock-src{display:flex;gap:6px;padding:8px 12px 0;overflow-x:auto;scrollbar-width:none;flex:none;}.ock-src::-webkit-scrollbar{display:none;}' +
             '.ock-src button{flex:none;border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px;font-size:11px;color:var(--soft);white-space:nowrap;}' +
             '.ock-src button.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;font-weight:700;}' +
-            '.ock-tray{display:flex;gap:8px;padding:10px 12px;overflow-x:auto;background:#fffaf2;flex:none;}' +
+            '.ock-tray{display:flex;gap:8px;padding:10px 12px;overflow-x:auto;scrollbar-width:thin;flex:none;}' +
             '.ock-ing{flex:none;width:66px;border:1px solid var(--line);background:#fff;border-radius:14px;padding:5px 4px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--ink);}' +
             '.ock-ing.on{background:#f2dfc6;border-color:#b77b42;font-weight:700;box-shadow:0 0 0 2px rgba(183,123,66,.2);}.ock-ing canvas{width:40px;height:40px;display:block;}' +
-            '.ock-cost{min-height:18px;padding:0 14px;font-size:11.5px;color:var(--soft);background:#fffaf2;flex:none;}.ock-cost b{color:var(--ink);}' +
+            '.ock-cost{min-height:18px;padding:0 14px;font-size:11.5px;color:var(--soft);flex:none;}.ock-cost b{color:var(--ink);}' +
             '.ock-poor{margin-left:6px;color:#b65050;font-weight:700;}' +
-            '.ock-act{display:flex;gap:8px;padding:8px 12px 16px;background:#fffaf2;flex:none;}' +
+            '.ock-act{display:flex;gap:8px;padding:8px 12px 16px;flex:none;}' +
+            /* 寬的時候（電腦）：盤子吃滿左邊，料盤搬到右邊一欄、一格一格排、自己捲 */
+            '@container ock (min-width:720px){' +
+              '.ock-shell{overflow:hidden;}.ock-main{flex:1 1 0;flex-direction:row;}.ock-stage{min-height:0;}' +
+              '.ock-side{width:312px;border-top:0;border-left:1px solid var(--line);min-height:0;}' +
+              '.ock-src{flex-wrap:wrap;overflow:visible;padding:12px 12px 2px;}' +
+              '.ock-tray{flex:1 1 auto;min-height:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));align-content:start;overflow-x:hidden;overflow-y:auto;}' +
+              '.ock-ing{width:auto;}.ock-cost{padding:8px 14px 0;}.ock-hint{right:auto;max-width:min(560px,calc(100% - 20px));}' +
+            '}' +
             '.ock-act button{flex:1;border-radius:12px;padding:11px 0;font-weight:800;font-size:13px;border:1px solid #6d4425;background:var(--btn);color:#fff8ed;}' +
             '.ock-act button.ock-ghost{background:#fff;color:var(--ink);border-color:var(--line);flex:.6;}.ock-act button.on{background:#f2dfc6;border-color:#b77b42;}' +
             '.ock-act button.ock-dim{opacity:.55;}.ock-act button:disabled{opacity:.5;cursor:default;}' +
