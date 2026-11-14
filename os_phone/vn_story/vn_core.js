@@ -3940,6 +3940,8 @@
         },
 
         toggleUI: function(target) {
+            // 🎬 劇情手機瀏覽器正轉橫看影片：手機要收起來或換別的畫面，先轉回直的（不然外框帶著轉的樣子滑走，下次打開還是橫的）
+            if (target !== 'phone-browser' && win.VN_Browser && win.VN_Browser._land) win.VN_Browser.landOff(true);
             const po = document.getElementById('phone-overlay');
             if (target === 'vn') {
                 // 🚨這支在劇情模式下「每一行劇本」都會被叫一次（next() 裡那句 toggleUI('vn')），

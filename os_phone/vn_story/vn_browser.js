@@ -62,8 +62,10 @@
         _rush: false,        // 自己播的途中她點了：剩下的步驟不等，一口氣播到該停的地方
         _openTimer: null,    // [Open] 卡片按下去到換頁中間那一下
         _pendingOpen: null,
+        _land: null,         // 🎬 正轉橫看影片：{ el: 那張影片卡, start: 收回去要縮回的位置 }
 
         resetState: function () {
+            this.landOff(true);
             this._pvStop();
             this.query = '';
             this.view = 'home';
@@ -150,6 +152,7 @@
 
         // ---------- 進出 ----------
         initBrowser: function (core, line) {
+            this.landOff(true);
             core.mode = 'browser';
             this._core = core;
             this._stopChain();
@@ -231,6 +234,7 @@
         },
 
         exitBrowser: function (core) {
+            this.landOff(true);   // 正轉橫看影片：先轉回直的
             this._pvStop();   // 手機收起來了：影片停、音樂換回原本那首
             this.view = 'home';
             this.busy = false;
@@ -272,6 +276,7 @@
 
         // ---------- 每行 ----------
         handleBrowserLine: function (line, core) {
+            if (this._land) this.landOff(true);   // 轉橫看影片時她用鍵盤往下播了：先轉回直的，新的一行才看得到
             core.toggleUI('phone-browser');
             this._stopChain(true);
             this._flushOpen();   // 上一行的點開還在卡片按下去那一下：先換頁，這一行才接得上
@@ -436,13 +441,16 @@
             el.innerHTML = `<div class="br-site"><span class="br-vch">${esc(it.ch || '影片')}</span></div>` +
                 `<div class="br-vbox"><div class="br-vimg"></div><div class="br-vdim"></div><div class="br-vdm"></div><div class="br-vcap"></div>` +
                 `<div class="br-vttl"><b>${esc(it.title)}</b><span></span></div><div class="br-vprog"></div>` +
+                `<button type="button" class="br-vx" aria-label="轉橫看"><i class="fa-solid fa-expand"></i></button>` +
                 `<button type="button" class="br-vre br-voff" aria-label="重播"><i class="fa-solid fa-rotate-right"></i></button></div>` +
                 `<div class="br-vinfo br-voff"><div class="br-title"></div><div class="br-snip"></div><div class="br-vtags"></div></div>`;
             r.appendChild(el);
             scrollNearest(el);
+            // 點影片＝整支手機轉橫看（不算「點下一句」）
+            el.querySelector('.br-vbox').onclick = (ev) => { ev.stopPropagation(); this.landOn(el); };
             const replay = !!(core && core._scriptIsReplay);
             const W = win.OS_WORLDGATE || window.OS_WORLDGATE;
-            const go = (pv) => { if (!el.isConnected) return; this._pvFill(el, it, pv); this._pvPlay(el, it, pv); };
+            const go = (pv) => { if (!el.isConnected) return; el._pvArgs = { it, pv }; this._pvFill(el, it, pv); this._pvPlay(el, it, pv); };
             if (W && W.pvOf) {
                 W.pvOf(it.title).then(pv => { if (pv && !replay && W.pvSeen) W.pvSeen(it.title); go(pv); }).catch(() => go(null));
             } else go(null);
@@ -469,21 +477,17 @@
         _pvSetImg: function (img, src) { img.style.setProperty('--br-vart', 'url("' + String(src).replace(/["\\\n\r]/g, m => '\\' + m) + '")'); },
         // 播一次：畫面照時間算（不靠動畫排程，預覽窗 rAF 慢也不亂）；一次只播一支，新的開始舊的就停
         //   SN 收尾畫過畫面的（pv.imgs）一句換一張，沒畫到的那句、片名用底圖
+        //   同一個時鐘可以同時畫好幾格（卡片那格＋轉橫那格 st.views），轉過去、轉回來都接得上
         _pvPlay: function (el, it, pv) {
             this._pvStop();
             const lines = (pv && pv.lines) || [];
             const TL = this.pvTimeline(lines.length, (it.dm || []).length);
-            const box = el.querySelector('.br-vbox'), img = box.querySelector('.br-vimg'), dim = box.querySelector('.br-vdim');
-            const cap = box.querySelector('.br-vcap'), ttl = box.querySelector('.br-vttl'), prog = box.querySelector('.br-vprog');
-            const dmz = box.querySelector('.br-vdm'), re = box.querySelector('.br-vre');
-            dmz.innerHTML = '';
-            const dms = (it.dm || []).map((s, i) => { const e = document.createElement('span'); if (i % 3) e.className = 'c' + (i % 3); e.textContent = s; dmz.appendChild(e); return { e, t0: TL.dm[i], lane: i % 4, w: 0 }; });
+            const box = el.querySelector('.br-vbox'), re = box.querySelector('.br-vre');
             re.classList.add('br-voff');
             const lerp = (a, b, k) => a + (b - a) * Math.max(0, Math.min(1, k));
             const ease = k => k <= 0 ? 0 : k >= 1 ? 1 : k * k * (3 - 2 * k);
             const imgs = (pv && pv.imgs) || [], baseImg = this._pvBase(pv);   // 🚨 別叫 base：render 裡下面有一個暗度 base（同名會在宣告前就被讀到而整支停掉）
-            let shown = baseImg;
-            const render = (t) => {
+            const render = (v, t) => {
                 // 鏡頭：第幾句就用第幾個畫面；片名那段固定一個
                 let seg, k, src = baseImg;
                 if (t >= TL.titleAt && lines.length) { seg = [50, 52, 1.0, 1.05]; k = (t - TL.titleAt) / 4.5; }
@@ -492,47 +496,207 @@
                     seg = PV_CAMS[i % PV_CAMS.length]; k = ((t - 1.0) - i * PV_STEP) / PV_STEP;
                     src = imgs[Math.min(i, lines.length - 1)] || baseImg;
                 }
-                if (src && src !== shown) { this._pvSetImg(img, src); shown = src; }   // 換句的那一下剛好是黑場，換圖看不到跳
-                img.style.backgroundPosition = lerp(seg[0], seg[1], k).toFixed(2) + '% 50%';
-                img.style.transform = 'scale(' + lerp(seg[2], seg[3], k).toFixed(4) + ')';
+                if (src && src !== v.shown) { this._pvSetImg(v.img, src); v.shown = src; }   // 換句的那一下剛好是黑場，換圖看不到跳
+                v.img.style.backgroundPosition = lerp(seg[0], seg[1], k).toFixed(2) + '% 50%';
+                v.img.style.transform = 'scale(' + lerp(seg[2], seg[3], k).toFixed(4) + ')';
                 let cut = 0;
                 TL.cuts.forEach(c => { const d = Math.abs(t - c); if (d < 0.3) cut = Math.max(cut, 1 - d / 0.3); });
                 let base = lines.length ? 0.12 : 0.4;
                 if (lines.length >= 3 && t >= TL.lines[lines.length - 1].t0 - 0.2 && t < TL.titleAt) base = 0.36;   // 最後一句（危機）壓暗
                 if (t >= TL.titleAt && lines.length) base = lerp(0.36, 0.55, ease((t - TL.titleAt) / 0.8));
                 if (t < 0.6) base = Math.max(base, 1 - t / 0.6);
-                dim.style.opacity = Math.max(base, cut).toFixed(3);
+                v.dim.style.opacity = Math.max(base, cut).toFixed(3);
                 const L = TL.lines.findIndex(l => t >= l.t0 - 0.05 && t < l.t1 + 0.4);
-                cap.textContent = L >= 0 ? lines[L] : '';
-                cap.style.opacity = L >= 0 ? Math.min(ease((t - TL.lines[L].t0) / 0.45), 1 - ease((t - TL.lines[L].t1) / 0.4)).toFixed(3) : 0;
+                v.cap.textContent = L >= 0 ? lines[L] : '';
+                v.cap.style.opacity = L >= 0 ? Math.min(ease((t - TL.lines[L].t0) / 0.45), 1 - ease((t - TL.lines[L].t1) / 0.4)).toFixed(3) : 0;
                 const tk = ease((t - TL.titleAt) / 0.9);
-                ttl.style.opacity = tk.toFixed(3);
-                ttl.style.transform = 'scale(' + lerp(1.08, 1, tk).toFixed(4) + ')';
-                prog.style.width = (Math.min(1, t / TL.end) * 100).toFixed(2) + '%';
-                const Wd = dmz.clientWidth, H = dmz.clientHeight;
-                dms.forEach(d => {
+                v.ttl.style.opacity = tk.toFixed(3);
+                v.ttl.style.transform = 'scale(' + lerp(1.08, 1, tk).toFixed(4) + ')';
+                v.prog.style.width = (Math.min(1, t / TL.end) * 100).toFixed(2) + '%';
+                const Wd = v.dmz.clientWidth, H = v.dmz.clientHeight;
+                v.dms.forEach(d => {
                     const q = (t - d.t0) / PV_DM_DUR;
-                    if (q < 0 || q > 1) { d.e.style.visibility = 'hidden'; return; }
+                    // 🚨 藏用 opacity 不用 visibility：子層寫了 visible 會蓋過外層的 hidden，藏著的轉橫那格彈幕會漏出來
+                    if (q < 0 || q > 1) { d.e.style.opacity = '0'; return; }
                     if (!d.w) d.w = d.e.offsetWidth || 60;
-                    d.e.style.visibility = 'visible';
+                    d.e.style.opacity = '1';
                     d.e.style.transform = 'translate(' + (Wd - q * (Wd + d.w)).toFixed(1) + 'px,' + (d.lane * H / 4).toFixed(1) + 'px)';
                 });
             };
             const t0 = performance.now();
-            const st = { el, timer: null, bgm: (pv && pv.bgm) || '' };
+            const st = { el, it, pv, TL, render, t: 0, views: [this._pvView(box, it, TL, baseImg)], timer: null, bgm: (pv && pv.bgm) || '' };
             this._pv = st;
             if (st.bgm) this._pvBgmOn(st.bgm);   // 🎵 Jev 挑的那首（沒挑到就照舊放現在的歌）
             const tick = () => {
                 if (this._pv !== st) return;
                 if (!el.isConnected) { this._pvStop(); return; }   // 卡片被拆掉（換章、重開瀏覽器）
                 const t = (performance.now() - t0) / 1000;
-                render(Math.min(t, TL.end));
+                st.t = Math.min(t, TL.end);
+                st.views.forEach(v => render(v, st.t));
                 if (t >= TL.end) { this._pvStop(); re.classList.remove('br-voff'); return; }
                 st.timer = setTimeout(tick, 33);
             };
             re.onclick = (ev) => { ev.stopPropagation(); this._pvPlay(el, it, pv); };   // 重播不算「點下一句」
-            render(0);
+            st.views.forEach(v => render(v, 0));
             tick();
+        },
+
+        // 一格畫面（卡片那格、轉橫那格用同一套 class），彈幕每格自己一份
+        _pvView: function (box, it, TL, shown) {
+            const dmz = box.querySelector('.br-vdm');
+            dmz.innerHTML = '';
+            const dms = (it.dm || []).map((s, i) => { const e = document.createElement('span'); if (i % 3) e.className = 'c' + (i % 3); e.textContent = s; dmz.appendChild(e); return { e, t0: TL.dm[i], lane: i % 4, w: 0 }; });
+            return { box, img: box.querySelector('.br-vimg'), dim: box.querySelector('.br-vdim'), cap: box.querySelector('.br-vcap'), ttl: box.querySelector('.br-vttl'), prog: box.querySelector('.br-vprog'), dmz, dms, shown };
+        },
+        // 在播的這支多畫一格（轉橫那格）：底圖、片名照卡片的
+        _pvAddView: function (box) {
+            const st = this._pv; if (!st) return;
+            st.views = st.views.filter(v => v.box !== box);
+            const art = this._pvBase(st.pv);
+            if (art) { this._pvSetImg(box.querySelector('.br-vimg'), art); box.classList.remove('br-vnoart'); }
+            else box.classList.add('br-vnoart');
+            textOnly(box.querySelector('.br-vttl b'), st.it.title || '');
+            const sub = st.el.querySelector('.br-vttl span');
+            textOnly(box.querySelector('.br-vttl span'), sub ? sub.textContent : '');
+            const v = this._pvView(box, st.it, st.TL, art);
+            st.views.push(v);
+            st.render(v, st.t);
+        },
+        _pvDropView: function (box) { const st = this._pv; if (st) st.views = st.views.filter(v => v.box !== box); },
+
+        // ---------- 🎬 點影片：整支手機轉成橫的，影片塞滿（小樣 A，參考資料/PHONE_LANDSCAPE_LAB.html） ----------
+        //   外框 #phone-device 往左轉 90 度、放大到塞得下；螢幕裡蓋一層 #br-land（寬高對調、往右轉 90 度），
+        //   兩個用同一條時間曲線，所以影片一路都是正的，從卡片那格長到滿螢幕。
+        //   觸控螢幕而且劇情畫面是直的（iPhone 拿直的）：外框不轉、影片側躺填滿，她把真手機轉過來看；
+        //   iPhone 轉過去畫面變橫的時候 resize 會照新尺寸重擺（_landFit）
+        _landGeom: function () {
+            const ov = $('phone-overlay'), dev = $('phone-device'), scr = $('phone-screen');
+            if (!ov || !dev || !scr) return null;
+            const W = ov.clientWidth, H = ov.clientHeight, pw = dev.offsetWidth, ph = dev.offsetHeight, sw = scr.offsetWidth, sh = scr.offsetHeight;
+            if (!W || !H || !pw || !ph || !sw || !sh) return null;
+            let touch = false;
+            try { touch = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (e) {}
+            const side = touch && H > W;   // 滑鼠的話螢幕轉不過來，畫面再窄也照樣轉外框
+            const k = side ? Math.max(1, Math.min((W - 12) / pw, (H - 12) / ph)) : Math.min((W - 24) / ph, (H - 24) / pw);
+            return { sw, sh, side, dev: 'translateY(0px) rotate(' + (side ? 0 : -90) + 'deg) scale(' + k.toFixed(4) + ')' };
+        },
+        _landEnd: function (g) { return 'translate(' + (g.sw / 2 - g.sh / 2) + 'px,' + (g.sh / 2 - g.sw / 2) + 'px) rotate(90deg) scale(1)'; },
+        _landSize: function (land, g) {
+            const vw = g.sw * 16 / 9;   // 影片 16:9，兩側剩下的是黑邊（膠囊島落在左邊那條上）
+            land.style.width = g.sh + 'px';
+            land.style.height = g.sw + 'px';
+            land.style.setProperty('--br-lvw', vw.toFixed(2) + 'px');
+            land.style.setProperty('--br-lbar', ((g.sh - vw) / 2).toFixed(2) + 'px');
+            // 外框很小（iPhone 拿橫的時候劇情畫面很矮）：黑邊太窄、膠囊島（98px 寬，見 .vnp-notch）上方也放不下返回鈕 → 返回鈕改放影片左上角
+            land.classList.toggle('br-lnarrow', (g.sh - vw) / 2 < 40 || (g.sw - 98) / 2 < 46);
+            return vw;
+        },
+        _landEl: function () {
+            let land = $('br-land');
+            if (land) return land;
+            const scr = $('phone-screen'); if (!scr) return null;
+            land = document.createElement('div');
+            land.id = 'br-land';
+            land.innerHTML = '<div class="br-lbox"><div class="br-vimg"></div><div class="br-vdim"></div><div class="br-vdm"></div><div class="br-vcap"></div>' +
+                '<div class="br-vttl"><b></b><span></span></div><div class="br-vprog"></div></div>' +
+                '<button type="button" class="br-lback" aria-label="轉回直的"><i class="fa-solid fa-chevron-left"></i></button><div class="br-lhome"></div>';
+            land.onclick = (ev) => { ev.stopPropagation(); this.landOff(); };   // 點任何地方（含返回鈕）都轉回直的
+            scr.appendChild(land);   // 排在狀態列後面（同一層、後來的蓋前面），膠囊島還在它上面
+            return land;
+        },
+        landOn: function (el) {
+            if (this._land || !el || !el.isConnected || !el._pvArgs) return;
+            const g = this._landGeom(), land = this._landEl();
+            const dev = $('phone-device'), scr = $('phone-screen'), card = el.querySelector('.br-vbox');
+            if (!g || !land || !card) return;
+            if (!this._pv || this._pv.el !== el) this._pvPlay(el, el._pvArgs.it, el._pvArgs.pv);   // 播完了：從頭再播一次
+            const box = land.querySelector('.br-lbox');
+            const vw = this._landSize(land, g);
+            this._pvAddView(box);
+            // 起點：疊在卡片那格上（外層有縮放就換算回來）
+            const r = card.getBoundingClientRect(), s = scr.getBoundingClientRect();
+            const sc = (s.width / scr.offsetWidth) || 1;
+            const cx = (r.left - s.left + r.width / 2) / sc, cy = (r.top - s.top + r.height / 2) / sc;
+            const start = 'translate(' + (cx - g.sh / 2).toFixed(2) + 'px,' + (cy - g.sw / 2).toFixed(2) + 'px) rotate(0deg) scale(' + ((r.width / sc) / vw).toFixed(4) + ')';
+            this._land = { el, start };
+            clearTimeout(this._landTimer);
+            land.style.transition = 'none';
+            land.style.opacity = '';
+            land.style.transform = start;
+            land.classList.add('br-lon');
+            land.classList.remove('br-ldark');
+            card.classList.add('br-vaway');
+            dev.style.transition = 'none';
+            dev.style.transform = 'translateY(0px) rotate(0deg) scale(1)';   // 先換成同一串寫法，轉的時候才會一段段補間
+            void land.offsetWidth;
+            const D = 560, E = 'cubic-bezier(.45,0,.2,1)';
+            land.style.transition = 'transform ' + D + 'ms ' + E + ', background-color 280ms ease ' + Math.round(D * 0.35) + 'ms';
+            land.style.transform = this._landEnd(g);
+            land.classList.add('br-ldark');
+            dev.style.transition = 'transform ' + D + 'ms ' + E;
+            dev.style.transform = g.dev;
+            scr.classList.add('vnp-rot');
+            this._landBusy = performance.now() + D;
+            if (g.side) this._turnHint(true);
+        },
+        // instant＝不演、馬上回直的（手機要收起來、換章、往下播）
+        landOff: function (instant) {
+            const L = this._land; if (!L) return;
+            if (!instant && performance.now() < (this._landBusy || 0)) return;   // 還在轉過去，別半路折返
+            this._land = null;
+            const land = $('br-land'), dev = $('phone-device'), scr = $('phone-screen');
+            const card = L.el && L.el.querySelector('.br-vbox');
+            const box = land && land.querySelector('.br-lbox');
+            clearTimeout(this._landTimer);
+            const done = () => {
+                if (land) { land.style.transition = 'none'; land.classList.remove('br-lon', 'br-ldark'); land.style.opacity = ''; }
+                if (card) card.classList.remove('br-vaway');
+                if (box) this._pvDropView(box);
+                if (dev) { dev.style.transition = 'none'; dev.style.transform = ''; void dev.offsetWidth; dev.style.transition = ''; }   // 交回 CSS（滑進滑出那套）
+            };
+            if (scr) scr.classList.remove('vnp-rot');
+            this._turnHint(false);
+            if (instant || !land || !dev) { done(); return; }
+            const D = 520, E = 'cubic-bezier(.45,0,.2,1)';
+            if (L.start) {
+                land.style.transition = 'transform ' + D + 'ms ' + E + ', background-color 200ms ease';
+                land.style.transform = L.start;   // 縮回卡片那格
+            } else {
+                land.style.transition = 'opacity 300ms ease';   // 轉著的時候畫面尺寸變過，卡片位置不準了：淡掉
+                land.style.opacity = '0';
+            }
+            land.classList.remove('br-ldark');
+            dev.style.transition = 'transform ' + D + 'ms ' + E;
+            dev.style.transform = 'translateY(0px) rotate(0deg) scale(1)';
+            this._landTimer = setTimeout(done, D + 20);
+        },
+        // 轉著的時候畫面尺寸變了（真手機轉過來、視窗拉大小）：照新尺寸直接擺好
+        _landFit: function () {
+            const L = this._land, g = this._landGeom(), land = $('br-land'), dev = $('phone-device');
+            if (!L || !g || !land || !dev) { this.landOff(true); return; }
+            land.style.transition = 'none';
+            dev.style.transition = 'none';
+            this._landSize(land, g);
+            land.style.transform = this._landEnd(g);
+            dev.style.transform = g.dev;
+            L.start = null;
+            if (this._pv) this._pv.views.forEach(v => v.dms.forEach(d => { d.w = 0; }));
+            this._turnHint(g.side);
+        },
+        // 劇情畫面是直的、影片側躺時：上面冒一下「把手機轉橫看」
+        _turnHint: function (on) {
+            let h = $('br-turnhint');
+            clearTimeout(this._hintTimer);
+            if (!on) { if (h) h.classList.remove('br-on'); return; }
+            const ov = $('phone-overlay'); if (!ov) return;
+            if (!h) {
+                h = document.createElement('div');
+                h.id = 'br-turnhint';
+                h.innerHTML = '<i class="fa-solid fa-mobile-screen-button"></i><span>把手機轉橫看</span>';
+                ov.appendChild(h);
+            }
+            h.classList.add('br-on');
+            this._hintTimer = setTimeout(() => h.classList.remove('br-on'), 2400);
         },
 
         _pvStop: function () {
@@ -597,6 +761,9 @@
     };
 
     function textOnly(el, s) { if (el) el.textContent = s; }
+
+    // 轉橫看影片的時候畫面尺寸變了（真手機轉過來、視窗拉大小）：照新尺寸重擺。模組載入時掛一次就好
+    if (window.addEventListener) window.addEventListener('resize', () => { if (VN_Browser._land) VN_Browser._landFit(); });   // node 測試的假 window 沒這支
 
     win.VN_Browser = VN_Browser;
     window.VN_Browser = VN_Browser;

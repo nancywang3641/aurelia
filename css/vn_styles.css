@@ -2129,10 +2129,10 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .br-vid .br-vch { display: inline-block; background: #111827; color: #fff; border-radius: 4px; padding: 0 5px; font-size: 0.62rem; line-height: 1.5; }
         .br-vbox { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; background: #0b0f1a; margin-top: 6px; }
         .br-vimg { position: absolute; inset: 0; background-image: var(--br-vart, none); background-size: cover; background-repeat: no-repeat; background-position: 50% 50%; will-change: transform; }
-        .br-vbox.br-vnoart .br-vimg { background-image: linear-gradient(160deg, #1e293b, #0f172a 55%, #3b2f4a); }
+        .br-vbox.br-vnoart .br-vimg, .br-lbox.br-vnoart .br-vimg { background-image: linear-gradient(160deg, #1e293b, #0f172a 55%, #3b2f4a); }
         .br-vdim { position: absolute; inset: 0; background: #000; pointer-events: none; }
         .br-vdm { position: absolute; left: 0; right: 0; top: 4%; height: 55%; overflow: hidden; pointer-events: none; z-index: 2; }
-        .br-vdm span { position: absolute; left: 0; top: 0; visibility: hidden; white-space: nowrap; font-size: 0.68rem; font-weight: 600; color: #fff; text-shadow: 0 0 2px #000, 0 1px 2px #000; will-change: transform; }
+        .br-vdm span { position: absolute; left: 0; top: 0; opacity: 0; white-space: nowrap; font-size: 0.68rem; font-weight: 600; color: #fff; text-shadow: 0 0 2px #000, 0 1px 2px #000; will-change: transform; }
         .br-vdm span.c1 { color: #ffd98a; }
         .br-vdm span.c2 { color: #9fe0ff; }
         .br-vcap { position: absolute; left: 6%; right: 6%; bottom: 9%; z-index: 3; text-align: center; font-family: "Noto Serif TC", "Songti TC", "PMingLiU", serif; font-size: 0.8rem; line-height: 1.5; letter-spacing: 0.06em; color: #fff6e6; text-shadow: 0 1px 6px rgba(0,0,0,0.9); pointer-events: none; }
@@ -2142,6 +2142,34 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         .br-vprog { position: absolute; left: 0; bottom: 0; height: 2px; width: 0; background: #ff5a4f; z-index: 4; }
         .br-vre { position: absolute; right: 8px; bottom: 8px; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 0.8rem; cursor: pointer; }
         .br-vre.br-voff, .br-vinfo.br-voff { display: none; }
+        /* 🎬 點影片＝整支手機轉橫看（小樣 A，參考資料/PHONE_LANDSCAPE_LAB.html；vn_browser.js 的 landOn／landOff）：
+              外框轉 90 度放大，#br-land 在螢幕裡跟外框反著轉，所以影片一路是正的、從卡片那格長到滿螢幕 */
+        .br-vbox { cursor: pointer; }
+        .br-vx { position: absolute; top: 6px; right: 6px; z-index: 5; width: 26px; height: 26px; border-radius: 50%; border: 0; padding: 0; background: rgba(0,0,0,0.45); color: #fff; font-size: 0.68rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .br-vbox.br-vaway > *:not(.br-vre) { opacity: 0; }   /* 轉橫的那格疊在上面，底下這格先藏 */
+        #br-land { position: absolute; left: 0; top: 0; z-index: 31; transform-origin: 50% 50%; visibility: hidden; background-color: rgba(0,0,0,0); cursor: pointer; }
+        #br-land.br-lon { visibility: visible; }
+        #br-land.br-ldark { background-color: #000; }
+        .br-lbox { position: absolute; top: 0; bottom: 0; left: var(--br-lbar, 0px); width: var(--br-lvw, 100%); overflow: hidden; background: #0b0f1a; container-type: size; }
+        /* 大畫面的字跟著影片寬度長大（卡片那格維持原本的字級） */
+        .br-lbox .br-vdm span { font-size: clamp(9px, calc(6px + 2cqw), 22px); }
+        .br-lbox .br-vcap { font-size: clamp(11px, calc(6px + 2.4cqw), 28px); }
+        .br-lbox .br-vttl b { font-size: clamp(18px, calc(8px + 5.4cqw), 56px); }
+        .br-lbox .br-vttl span { font-size: clamp(7px, calc(4px + 1.4cqw), 15px); }
+        .br-lbox .br-vprog { height: clamp(2px, 0.9cqh, 4px); }
+        /* 返回鈕放在影片左邊那條黑邊上方（膠囊島在那條正中間），不擋畫面跟彈幕 */
+        .br-lback { position: absolute; left: calc(var(--br-lbar, 40px) / 2 - 17px); top: 12px; width: 34px; height: 34px; border: 0; padding: 0; border-radius: 50%; background: rgba(255,255,255,0.14); color: #fff; font-size: 0.95rem; cursor: pointer; opacity: 0; transition: opacity 0.3s; }
+        #br-land.br-ldark .br-lback { opacity: 1; transition-delay: 0.35s; }
+        #br-land.br-lnarrow .br-lback { left: calc(var(--br-lbar, 0px) + 8px); top: 8px; width: 30px; height: 30px; background: rgba(0,0,0,0.45); font-size: 0.85rem; }   /* 黑邊太窄：放影片左上角 */
+        .br-lhome { position: absolute; left: 50%; bottom: 6px; width: 120px; height: 4px; margin-left: -60px; border-radius: 4px; background: rgba(255,255,255,0.35); opacity: 0; transition: opacity 0.3s; pointer-events: none; z-index: 5; }
+        #br-land.br-ldark .br-lhome { opacity: 1; }
+        #phone-screen > #phone-browser, #phone-screen > .vnp-statusbar, #phone-screen > .vnp-homebar { transition: opacity 0.4s ease; }
+        #phone-screen.vnp-rot > #phone-browser, #phone-screen.vnp-rot > .vnp-statusbar, #phone-screen.vnp-rot > .vnp-homebar { opacity: 0; }
+        /* 觸控螢幕、劇情畫面是直的：影片側躺，上面冒一下「把手機轉橫看」 */
+        #br-turnhint { position: absolute; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 5; transform: translate(-50%, -8px); display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 999px; background: rgba(20,22,28,0.85); color: #fff; font-size: 0.82rem; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.3s, transform 0.3s; }
+        #br-turnhint.br-on { opacity: 1; transform: translate(-50%, 0); }
+        #br-turnhint i { animation: br-tilt 1.4s ease-in-out infinite; }
+        @keyframes br-tilt { 0%, 20% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
         .br-vinfo { margin-top: 8px; }
         .br-vtags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
         .br-vtags span { font-size: 0.62rem; background: #eef0f5; color: #3c4048; border-radius: 9px; padding: 2px 8px; }
