@@ -67,6 +67,7 @@
         let prev = '';
         try { prev = await _getCurrentId(); } catch (e) {}   // 換之前在哪個世界：那一趟現在結束了
         _pendingCur = v ? { id: v, ts: Date.now() } : null;   // 撤離(空值)要把手上那筆一起丟掉
+        _sinceMemo.clear();   // 換世界＝新的一趟，記著的進門時間作廢（不然再進同一個世界會拿上一趟的時間認主）
         if (c) await _set(K_CURRENT, v, c);
         try { await syncTheme(); } catch (e) {}   // 進世界換上它的劇情介面、撤離換回這本故事的
         try { (win.OS_SUMMARY_INJECT || window.OS_SUMMARY_INJECT)?.invalidate?.(); } catch (e) {}   // 大總結送哪個世界的人和事跟著換（os_story_tools 的 _worldNatives）
@@ -80,11 +81,13 @@
     //   撤離時沒人收：回奧瑞亞每輪還把「塔內時段」「今日留句狀態」的說明和值送給寫劇情的模型。
     //   規則：人在某個世界裡時建的狀態欄（開始追蹤、預設、自己建、沿用都算）＝那個世界的；SN 收尾設計的那包也是。
     //     離開那個世界 → 整組收起來交給世界門保管（K_STOW：包、這幾欄的值、原本開著的面板），回到同一個世界再原樣放回來。
-    //     在奧瑞亞建的（或進世界前就有的）不動：照舊跟著人進出世界。
+    //     在奧瑞亞建的（或進世界前就有的）：到「有自己狀態欄」的世界就整組收起來（記在 HOME 名下），
+    //       回奧瑞亞、或到沒有狀態欄的世界（愛麗絲當場許願建的那種）再放回來（11-15 起，見 ⑤）。
     //   值要連「底」和每輪紀錄一起收（OS_STATE_RUNTIME.takeKeys），不然之後刪樓重算又會長回來。
     //   🚨 初值不由這裡寫：AVS 的 initFromPack 會把整份狀態換掉；這裡只搬已經有的值。
     const K_STOW = 'stowed_packs';     // 這個聊天室收起來的、屬於別的世界的狀態欄：{ [世界id]: { name, at, packs:[整份變數包], values:{欄位:值}, tpls:[原本開著的面板id] } }
     const K_STOW_SWEPT = 'stow_swept'; // 這版之前就撤離的舊資料認過一次了（1＝認過）
+    const HOME = '@home';              // K_STOW 裡奧瑞亞那份的名下（世界 id 不會長這樣）
     // 這包什麼時候建的：變數包 id 是 'pack_' + 建立當下的毫秒（AI 生成、預設、自己建、沿用都是）；認不出回 0（就不靠時間認主）
     function _packTs(p) {
         if (p && typeof p.createdAt === 'number') return p.createdAt;
@@ -160,6 +163,15 @@
         return job;
     }
     const _sweptNow = new Set();   // 這次開機已經認過舊資料的聊天室（讀不到聊天的那種下次開機再試，不要每輪重讀）
+    // 這一趟的進門時間記一份：沒有 K_TRIP 的舊資料要讀整個聊天才知道，每輪確認都會問，不能每輪重讀
+    const _sinceMemo = new Map();
+    async function _sinceCached(cid, id) {
+        const k = cid + '|' + id;
+        if (_sinceMemo.has(k)) return _sinceMemo.get(k);
+        const t = await _tripSince(id);
+        if (t) _sinceMemo.set(k, t);   // 讀不到不記：下一輪再試
+        return t;
+    }
     async function _syncWorldPacksNow(left) {
         const db = _db();
         if (!db || !db.getAllVarPacks || !db.saveVarPack || !db.deleteVarPack) return;
@@ -178,6 +190,13 @@
         const claim = [];
         if (left && left.id && left.since) {
             mine().forEach(p => { if (!_packOwner(p, cid) && _packTs(p) >= left.since) claim.push({ p, world: left.id }); });
+        }
+        // 人還在世界裡：進門之後建的包當場就認這個世界（11-15 起；以前等撤離才認）——
+        //   ⑤ 要靠它知道「這個世界有沒有自己的狀態欄」，在裡面按「開始追蹤狀態」那一輪起奧瑞亞那份就該收。
+        //   進門時間讀不到（0）就不認，寧可晚一點收也別把奧瑞亞那包認錯。
+        if (!left && curId && mine().some(p => !_packOwner(p, cid) && _packTs(p))) {
+            const since = await _sinceCached(cid, curId);
+            if (since) mine().forEach(p => { if (!_packOwner(p, cid) && _packTs(p) >= since) claim.push({ p, world: curId }); });
         }
         // 這版之前就撤離的（她 11-05 從留句塔回來那份）：照聊天裡進門、撤離那兩則的時間認，每個聊天室認一次
         if (!left && !_sweptNow.has(cid)) {
@@ -211,14 +230,8 @@
             return tplAll;
         };
         let tplChanged = false;
-        for (const p of mine()) {
-            const w = _packOwner(p, cid);
-            if (!w || w === curId) continue;
-            let rec = stow[w];
-            if (!rec) {
-                const ww = w.charAt(0) === '~' ? null : await _worldById(w);
-                rec = stow[w] = { name: ww ? ww.name : w.replace(/^~/, ''), at: Date.now(), packs: [], values: {}, tpls: [] };
-            }
+        // 收一包：從清單拿掉、它開著的面板先關（記著，放回來時打開）；值在 ④ 跟著收
+        const putAway = async (p, rec) => {
             rec.packs = (rec.packs || []).filter(x => x && x.id !== p.id).concat([p]);
             if (await tplList()) {
                 for (const t of tplAll) {
@@ -232,14 +245,14 @@
             await db.deleteVarPack(p.id);
             all = all.filter(x => x && x.id !== p.id);
             stowDirty = packsChanged = force = true;
-        }
-
-        // ③ 回到收著的那個世界 → 放回來（包、面板、值；值只補現在沒有的欄位）
-        if (curId && stow[curId]) {
-            const rec = stow[curId];
+        };
+        // 放回一整份（包、面板、值；值只補現在沒有的欄位）。world＝那個世界的 id；奧瑞亞那份傳 ''（不認主）
+        const bringBack = async (key, world) => {
+            const rec = stow[key];
             for (const p of (rec.packs || [])) {
                 if (!p || all.some(x => x && x.id === p.id)) continue;
-                const back = Object.assign({}, p, { chatId: cid, wgOwn: { world: curId, chat: cid } });
+                const back = Object.assign({}, p, { chatId: cid });
+                if (world) back.wgOwn = { world: world, chat: cid }; else delete back.wgOwn;
                 await db.saveVarPack(back);
                 all.push(back);
                 packsChanged = true;
@@ -255,9 +268,22 @@
             if (SR && SR.putKeys && rec.values && Object.keys(rec.values).length) {
                 try { if (await SR.putKeys(rec.values, cid)) valsChanged = true; } catch (e) { console.warn('[Worldgate③] 狀態值沒放回去', e); }
             }
-            delete stow[curId];
+            delete stow[key];
             stowDirty = true;
+        };
+        for (const p of mine()) {
+            const w = _packOwner(p, cid);
+            if (!w || w === curId) continue;
+            let rec = stow[w];
+            if (!rec) {
+                const ww = w.charAt(0) === '~' ? null : await _worldById(w);
+                rec = stow[w] = { name: ww ? ww.name : w.replace(/^~/, ''), at: Date.now(), packs: [], values: {}, tpls: [] };
+            }
+            await putAway(p, rec);
         }
+
+        // ③ 回到收著的那個世界 → 放回來
+        if (curId && stow[curId]) await bringBack(curId, curId);
 
         // SN 收尾設計的那包：人在那個世界裡就替這個聊天室掛上（只掛定義：變數說明每一輪由 state_runtime 組進提示詞，第一章起抽狀態的副模型照說明填值）
         const w = curId ? await _worldById(curId) : null;
@@ -279,6 +305,21 @@
                 all = all.filter(p => p && p.id !== want).concat([pk]);
                 packsChanged = true;
             }
+        }
+
+        // ⑤ 奧瑞亞那份（綁這一室、不屬於任何世界的包）：人在「有自己狀態欄」的世界裡就整組收起來（11-15），
+        //   回奧瑞亞、或到沒有狀態欄的世界（愛麗絲當場許願建的那種）再放回來。值在 ④ 跟著收；兩邊都有的欄位照舊共用一格、不收。
+        //   她 11-15：「我給世界門生成了狀態 那奧瑞亞的狀態會不會也跟著劇情送過去啊? 會不會打架? 我已經取消啟用了」
+        //   ——「取消啟用」只關面板，綁這一室的包每輪都把說明和值送給寫劇情的模型；以前只收世界的，奧瑞亞那包一直跟進世界。
+        //   全域的包（沒綁任何一室）不動：別的故事也在用，不能從清單拿掉。
+        const ownHere = !!curId && all.some(p => p && _packOwner(p, cid) === curId);
+        if (ownHere) {
+            for (const p of mine()) {
+                if (_packOwner(p, cid)) continue;
+                await putAway(p, stow[HOME] || (stow[HOME] = { name: '奧瑞亞', at: Date.now(), packs: [], values: {}, tpls: [] }));
+            }
+        } else if (stow[HOME]) {
+            await bringBack(HOME, '');
         }
 
         // ④ 收著的世界那幾欄的值：現在沒有別的包在記的，從狀態裡整組收走（放進收著的那份，回去時放回來）。
