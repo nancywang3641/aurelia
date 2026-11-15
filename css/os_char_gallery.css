@@ -163,6 +163,8 @@
 .acg-gen-img { aspect-ratio: 3 / 4; border-radius: 7px; overflow: hidden; background: rgb(var(--os-tint-rgb)); cursor: zoom-in; }
 .acg-gen-img img { width: 100%; height: 100%; object-fit: contain; }
 .acg-gen-foot { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+/* 頭像和 Q版（一次生三種切出來的那幾張）：讀到圖才亮 */
+.acg-trio[hidden] { display: none; }
 
 .acg-wb { padding: 12px; border-radius: 12px; background: var(--acg-card); border: 1px solid var(--acg-line); margin-bottom: 12px; }
 .acg-wb-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }

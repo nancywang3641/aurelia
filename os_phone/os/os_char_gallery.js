@@ -567,6 +567,12 @@
            + (canExpr ? '<button class="acg-slot acg-slot-add" type="button" data-act="expr-open"><i class="fa-solid fa-wand-magic-sparkles"></i><span>生表情</span></button>' : '')
            + '</div>';
 
+        // 🧸 一次生三種切出來的自拍頭像、Q版（畫成三面的有正面／側面／背面）：以前只有大廳的小人和「下載全部 Q 版」看得到
+        //   （11-16 她：「我要去哪裡看小人有沒有生成對，找不到可以查看的頁面，角色圖鑑只給立繪」）。圖要讀到才知道有沒有，先放一個空的區，讀到再亮（fillGenThumbs）
+        if (info.gen.some(g => g.store === 'avatar_cache')) {
+            h += '<section class="acg-sec acg-trio" hidden><div class="acg-sec-title">頭像和 Q版</div><div class="acg-gen acg-trio-list"></div></section>';
+        }
+
         if (info.gen.length) {
             h += '<section class="acg-sec"><div class="acg-sec-title">生成過的圖</div><div class="acg-gen">'
                + info.gen.map((g, i) =>
@@ -610,11 +616,43 @@
         for (let i = 0; i < info.gen.length; i++) {
             if (!S || tk !== S.token || S.sel !== info.name) return;
             const g = info.gen[i];
-            if (!g.url) { const full = await C.getRaw(g.store, g.key); g.url = (full && full.url) || ''; }
+            if (!g.url || (g.store === 'avatar_cache' && !g.trio)) {
+                const full = await C.getRaw(g.store, g.key);
+                if (!g.url) g.url = (full && full.url) || '';
+                if (g.store === 'avatar_cache') g.trio = trioOf(full);
+            }
             if (!S || tk !== S.token) return;   // 等讀圖的時候圖鑑被關掉了
             const box = S.root.querySelector('.acg-gen-img[data-gen="' + i + '"]');
             if (box && g.url) box.innerHTML = '<img src="' + esc(g.url) + '" alt="" loading="lazy">';
+            if (g.trio && g.trio.length) paintTrio(info);
         }
+    }
+    // 頭像快取那一筆裡，一次生三種切出來的幾張：[{ src, label }]；沒有（不是一次生三種的）回空的
+    function trioOf(rec) {
+        const out = [];
+        if (!rec) return out;
+        if (rec.face) out.push({ src: rec.face, label: '自拍頭像' });
+        const views = !!(rec.chibiSide || rec.chibiBack);
+        if (rec.chibi) out.push({ src: rec.chibi, label: views ? 'Q版・正面' : 'Q版' });
+        if (rec.chibiSide) out.push({ src: rec.chibiSide, label: 'Q版・側面' });
+        if (rec.chibiBack) out.push({ src: rec.chibiBack, label: 'Q版・背面' });
+        return out;
+    }
+    // 這個角色有那幾張的第一筆（同名在這個故事裡通常只有一筆）
+    function trioList(info) {
+        const g = ((info && info.gen) || []).find(x => x.trio && x.trio.length);
+        return g ? g.trio : [];
+    }
+    function paintTrio(info) {
+        const sec = S && S.root && S.root.querySelector('.acg-trio');
+        const list = trioList(info);
+        if (!sec || !list.length || !sec.hidden) return;
+        sec.querySelector('.acg-trio-list').innerHTML = list.map((x, i) =>
+              '<div class="acg-gen-card">'
+            +   '<div class="acg-gen-img" data-act="view-trio" data-i="' + i + '"><img src="' + esc(x.src) + '" alt="" loading="lazy"></div>'
+            +   '<div class="acg-gen-foot"><span class="acg-src">' + esc(x.label) + '</span></div>'
+            + '</div>').join('');
+        sec.hidden = false;
     }
     function slotCard(s) {
         const u = s.used;
@@ -825,6 +863,12 @@
                 const g = info.gen[+b.dataset.gen];
                 const PV = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER;
                 if (PV && g && g.url) PV.open(withUrl.map(x => ({ src: x.url, who: ch, desc: x.label })), withUrl.indexOf(g), { fromEl: b.querySelector('img') });
+                return;
+            }
+            if (act === 'view-trio') {
+                const list = trioList(S.info[ch]);
+                const PV = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER;
+                if (PV && list.length) PV.open(list.map(x => ({ src: x.src, who: ch, desc: x.label })), Math.max(0, Math.min(list.length - 1, +b.dataset.i || 0)), { fromEl: b.querySelector('img') });
                 return;
             }
             if (act === 'add-exp') {
