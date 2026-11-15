@@ -68,6 +68,7 @@
         try { prev = await _getCurrentId(); } catch (e) {}   // 換之前在哪個世界：那一趟現在結束了
         _pendingCur = v ? { id: v, ts: Date.now() } : null;   // 撤離(空值)要把手上那筆一起丟掉
         _sinceMemo.clear();   // 換世界＝新的一趟，記著的進門時間作廢（不然再進同一個世界會拿上一趟的時間認主）
+        _castMemo = null;     // 誰在哪出場、這一趟的旅伴也跟著重算（大總結送出時用）
         if (c) await _set(K_CURRENT, v, c);
         try { await syncTheme(); } catch (e) {}   // 進世界換上它的劇情介面、撤離換回這本故事的
         try { (win.OS_SUMMARY_INJECT || window.OS_SUMMARY_INJECT)?.invalidate?.(); } catch (e) {}   // 大總結送哪個世界的人和事跟著換（os_story_tools 的 _worldNatives）
@@ -130,6 +131,57 @@
             msgs.forEach(m => { if (m && m.is_user) add(m.mes || m.message || '', when(m.send_date)); });
             return out;
         } catch (e) { return null; }
+    }
+    // 🧭 大總結送出時用（11-15）：每個人在哪裡出場過、這段聊天去過哪些世界、現在這一趟的旅伴。
+    //   以前大總結只靠角色表「身份／狀態」欄有沒有寫世界名來認人（os_story_tools._worldNatives），人在世界裡時奧瑞亞的人認不出來，照樣整份送。
+    //   這裡改看劇情裡真的出場的 [Char|名…]：那一則落在哪一趟（世界名），趟外＝''（主角原本生活的地方）。
+    //   進門那則之後算那個世界；撤離那則送出後的回程章還算那個世界，下一句她自己打的才回到原本那邊。
+    //   回 { places: { 名字: [地方…] }, visited: [{ name, genre }], team: [現在這一趟的旅伴名字] }；讀不到聊天回 null（＝照舊只靠文字認）。
+    //   讀整個聊天不便宜：記一份，一分鐘內、或沒換世界就重用。
+    let _castMemo = null;
+    async function castInfo() {
+        const cid = _cid();
+        if (_castMemo && _castMemo.cid === cid && Date.now() - _castMemo.at < 60000) return _castMemo.val;
+        const steps = [];   // [{ user: 文字 } | { ai: 文字 }]，照順序
+        try {
+            if (_pwa()) {
+                const db = _db();
+                if (!db || !db.getAllVnChapters) return null;
+                const list = ((await db.getAllVnChapters()) || []).filter(c => c && c.storyId === cid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                list.forEach(c => { steps.push({ user: String(c.request || '') }); steps.push({ ai: String(c.content || '') }); });
+            } else {
+                const R = win.VN_READER || window.VN_READER;
+                const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
+                if (!Array.isArray(msgs) || !msgs.length) return null;
+                msgs.forEach(m => { if (m && !m.chat_metadata) steps.push(m.is_user ? { user: String(m.mes || m.message || '') } : { ai: String(m.mes || m.message || '') }); });
+            }
+        } catch (e) { return null; }
+        const places = {}, visited = [];
+        let place = '', leaving = false;
+        const add = (n, p) => { const k = String(n || '').trim(); if (!k) return; const a = places[k] || (places[k] = []); if (a.indexOf(p) < 0) a.push(p); };
+        for (const s of steps) {
+            if (s.user != null) {
+                const mi = s.user.match(/進入視差世界「([^」]+)」/), mo = s.user.match(/從視差世界「([^」]+)」撤離/);
+                if (mi) { place = mi[1]; leaving = false; if (visited.indexOf(mi[1]) < 0) visited.push(mi[1]); }
+                else if (mo) leaving = true;
+                else if (leaving) { place = ''; leaving = false; }
+                continue;
+            }
+            const re = /\[Char\|([^|\]\n]+)/g;
+            let m;
+            while ((m = re.exec(s.ai))) add(m[1], place);
+        }
+        const worlds = (await _get(K_WORLDS, [])) || [];
+        const byName = n => { let hit = null; worlds.forEach(w => { if (w && w.name === n && (!hit || (w.ts || 0) >= (hit.ts || 0))) hit = w; }); return hit; };
+        let team = [];
+        try {
+            const curId = await _getCurrentId();
+            const w = curId ? worlds.find(x => x && x.id === curId) : null;
+            if (w) team = (w.travelers || []).filter(t => t && t.recruited && !t.gone && t.name).map(t => String(t.name));
+        } catch (e) {}
+        const val = { places, visited: visited.map(n => { const w = byName(n); return { name: n, genre: (w && w.genre) || '' }; }), team };
+        _castMemo = { cid, at: Date.now(), val };
+        return val;
     }
     // 一趟一趟的時間：進門那則 → 撤離那則（或直接進了下一個世界）。[{ name, start, end }]；時間讀不到的那趟不算（寧可不收也別收錯）
     function _closedTrips(marks) {
@@ -5458,7 +5510,7 @@
             .map(w => ({ id: w.id, name: String(w.name || ''), art: w.art }));
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, worldNames, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, worldNames, castInfo,pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts,
         inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen, pvImgGet };

@@ -494,12 +494,37 @@
     const _WG_LEFT = /撤離|撤离|下線|下线/;
     function _hdrCol(cells, re) { for (let i = 0; i < cells.length; i++) if (re.test(cells[i])) return i; return -1; }
     function _nameList(cell) { return String(cell || '').split(/[、,，;；\/／|]|\s+|與|与|及/).map(s => s.trim()).filter(Boolean); }
-    // 回 { natives: Map(名字鑰匙→世界名), byWorld: {世界名:[名字]}, mc: 主角鑰匙 }；這份總結裡沒有別的世界的人回 null
+    // 🧭 11-15 起再多看「劇情裡真的在哪出場過」（OS_WORLDGATE.castInfo，從 [Char|名] 認）：
+    //   她 11-15 盤點後選「先修大總結」——人在葦口澤時，奧瑞亞那邊的人（角色表沒寫任何世界名）認不出來，整份照送，又長又會被 AI 帶進世界。
+    //   現在：在「現在這個地方」出場過的照送（旅伴、這個世界的人）；只在別的地方出場過的先收起來——
+    //   人在世界裡＝奧瑞亞的人和別的世界的人；人在奧瑞亞＝別的世界的人（角色表沒寫世界名的也認得出來）。
+    //   沒在劇情裡出場過（只被提到）的照送；她 11-15：「名子角色大概只能依靠向量抽屜…只要保留一個區塊做全域記憶，比如MC去過哪類型的世界門，旅人有誰，但角色性格大概不要寫太多」
+    //   → 收起來的人只留【去過的視差世界】那一小塊（去過哪、什麼類型、這一趟的旅伴），細節靠記憶召回照名字找回來。
+    const WG_HOME = '\u0000home';   // byWorld 裡「主角原本生活的地方」那一格的名字（不會撞到世界名）
+    const _firstSeg = s => String(s || '').split(/[·・•\s]/)[0];
+    // castInfo.places → Map(名字鑰匙 → Set(地方鑰匙))；全名和「·」前那段都登記（「黎昂·維斯頓」和「黎昂」對得上）
+    function _castIndex(cast) {
+        if (!cast || !cast.places || typeof cast.places !== 'object') return null;
+        const idx = new Map();
+        Object.keys(cast.places).forEach(n => {
+            const ps = (cast.places[n] || []).map(p => p ? _zk(p) : '');
+            [_zk(n), _zk(_firstSeg(n))].forEach(k => {
+                if (!k) return;
+                const set = idx.get(k) || new Set();
+                ps.forEach(p => set.add(p));
+                idx.set(k, set);
+            });
+        });
+        return idx.size ? idx : null;
+    }
+    // 回 { natives: Map(名字鑰匙→世界名或 WG_HOME), byWorld: {世界名:[名字]}, mc: 主角鑰匙, cast }；沒有要收的人回 null
     function _worldNatives(secs, worlds) {
         if (!worlds || !Array.isArray(worlds.names) || !worlds.names.length) return null;
         const hereK = worlds.here ? _zk(worlds.here) : '';
         const others = worlds.names.filter(n => n && _zk(n).length >= 2 && _zk(n) !== hereK);
-        if (!others.length) return null;
+        const cast = _castIndex(worlds.cast);
+        if (!others.length && !cast) return null;
+        const worldOf = k => worlds.names.find(n => _zk(n) === k) || '';   // 地方鑰匙 → 世界名（''＝原本的地方）
         const role = secs.find(x => WG_ROLE.indexOf(x.header) >= 0);
         if (!role) return null;
         const t = _parseMdTable(role.body);
@@ -508,19 +533,25 @@
         const iId = _hdrCol(hc, /身份|身分/), iSt = _hdrCol(hc, /狀態|状态|位置/);
         const natives = new Map(), byWorld = {};
         let mc = '';
+        const put = (name, w) => { natives.set(_zk(name), w); (byWorld[w] = byWorld[w] || []).push(name); };
         t.rows.forEach(r => {
             const c = _rowCells(r), name = c[0];
             if (!name || name === '-') return;
             if (c.some(x => /^本人/.test(x))) { mc = _zk(name); return; }   // 主角永遠照送
+            const seen = cast ? (cast.get(_zk(name)) || cast.get(_zk(_firstSeg(name))) || null) : null;
+            if (seen && seen.has(hereK)) return;   // 在現在這個地方出場過：旅伴、這個世界的人
             const st = iSt >= 0 ? (c[iSt] || '') : '';
-            if (_WG_LEFT.test(st)) return;
+            if (_WG_LEFT.test(st)) return;         // 寫著撤離／下線的旅伴：跟著主角進出，照送
             const hay = _zk((iId >= 0 ? (c[iId] || '') : '') + ' ' + st);
             const w = others.find(n => hay.indexOf(_zk(n)) >= 0);
-            if (!w) return;
-            natives.set(_zk(name), w);
-            (byWorld[w] = byWorld[w] || []).push(name);
+            if (w) { put(name, w); return; }
+            if (seen && seen.size) {               // 只在別的地方出場過
+                const p = Array.from(seen).find(x => x !== hereK);
+                if (p === undefined) return;
+                put(name, p === '' ? WG_HOME : (worldOf(p) || WG_HOME));
+            }
         });
-        return natives.size ? { natives: natives, byWorld: byWorld, mc: mc } : null;
+        return natives.size ? { natives: natives, byWorld: byWorld, mc: mc, cast: worlds.cast || null } : null;
     }
     // 這一列屬於哪個（別的）世界：'' ＝照送
     function _wgRoleOf(tk, row) { return tk.natives.get(_zk(_rowCells(row)[0])) || ''; }
@@ -537,12 +568,19 @@
         return '';
     }
     function _wgNote(tk, times) {
-        const lines = Object.keys(tk.byWorld).map(w => {
+        const cast = tk.cast || {};
+        const genreOf = n => { const v = (cast.visited || []).find(x => x && _zk(x.name) === _zk(n)); return v && v.genre ? '（' + v.genre + '）' : ''; };
+        const lines = [];
+        // 全域那一小塊：去過哪些世界、什麼類型、這一趟的旅伴（她 11-15：保留一個區塊做全域記憶…旅人有誰，但角色性格不要寫太多）
+        if (Array.isArray(cast.visited) && cast.visited.length) lines.push('- 主角去過：' + cast.visited.map(v => v.name + genreOf(v.name)).join('、'));
+        if (Array.isArray(cast.team) && cast.team.length) lines.push('- 這一趟同行的旅人：' + cast.team.join('、'));
+        Object.keys(tk.byWorld).forEach(w => {
+            if (w === WG_HOME) { lines.push('- 主角原本生活那邊的人（' + tk.byWorld[w].length + ' 位）、在那裡發生的事：這一輪先不帶，主角回去時會整段帶上；他們不在這裡。'); return; }
             const t = times[w] || [];
             const when = t.length ? '（' + t[0] + (t.length > 1 ? ' ～ ' + t[t.length - 1] : '') + '）' : '';
-            return '- ' + w + when + '：在那裡認識 ' + tk.byWorld[w].join('、');
+            lines.push('- ' + w + when + '：在那裡認識 ' + tk.byWorld[w].join('、'));
         });
-        return '【去過的視差世界】\n（主角去過這些世界。那裡的人、在那裡發生的事這一輪先不帶，主角回到那個世界時會整段帶上；這些人留在自己的世界裡。）\n' + lines.join('\n');
+        return '【去過的視差世界】\n（主角去過這些世界。不在這裡的人、在別處發生的事這一輪先不帶，主角回到那裡時會整段帶上；這些人留在自己的地方。）\n' + lines.join('\n');
     }
     // 給大總結送出時用：世界門有哪些世界、主角現在人在哪一個（不是視差世界＝''）；問不到回 null（＝照送）
     async function _summaryWorlds() {
@@ -552,7 +590,9 @@
             const names = (await G.worldNames()) || [];
             if (!names.length) return null;
             const cur = (typeof G.getCurrentWorld === 'function') ? await G.getCurrentWorld() : null;
-            return { here: (cur && cur.name) || '', names: names };
+            let cast = null;   // 誰在哪出場過、去過哪、這一趟的旅伴（11-15；問不到＝只靠角色表的文字認）
+            try { cast = (typeof G.castInfo === 'function') ? await G.castInfo() : null; } catch (e) {}
+            return { here: (cur && cur.name) || '', names: names, cast: cast };
         } catch (e) { return null; }
     }
     API.buildInjectionPayload = function (fullContent, opts) {
