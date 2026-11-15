@@ -184,8 +184,13 @@
             if (!storyId) return;                 // 沒有當前 VN 故事就不注入
             if (!win.OS_DB?.getAllVnMemories) return;
 
-            const all = ((await win.OS_DB.getAllVnMemories(storyId)) || []).filter(m => m && !m.merged);   // 過濾被壓縮隱藏的原始條目
-            if (!all.length) return;
+            const allAny = ((await win.OS_DB.getAllVnMemories(storyId)) || []).filter(m => m && !m.merged);   // 過濾被壓縮隱藏的原始條目
+            // 🚪 世界門（11-15）：目錄、核心角色、性事、物品、語氣索引都只挑現在這個地方的記憶（見 OS_VECTOR_ENGINE.placeKeep）；
+            //   主模型自己寫 <recall>關鍵詞</recall> 點名的那條照舊整庫找（allAny）——她：「以後要回顧，得依賴關鍵字回朔」
+            let _here = null;
+            try { _here = (typeof win.OS_VECTOR_ENGINE?.placeKeep === 'function') ? await win.OS_VECTOR_ENGINE.placeKeep() : null; } catch (e) {}
+            const all = _here ? allAny.filter(_here) : allAny;
+            if (!all.length && !allAny.length) return;
             all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
 
             // 🔎 向量召回是否就緒：開了向量 + ≥90% 記憶已是「當前模型」的向量(回填到位) → 主模型不再背 2000 行全目錄，只給釘選＋導演挑的細節。
@@ -381,7 +386,7 @@
                 if (_pendingRecallMainEntries.length) _cand = _cand.concat(_pendingRecallMainEntries);  // 主模型挑碼解析的(備援，用碼可靠)
                 if (_pendingRecallKeywords.length) {                                                     // 主模型寫的非代號關鍵詞(末路備援)
                     const kws = _pendingRecallKeywords.map(k => k.toLowerCase());
-                    _cand = _cand.concat(all.filter(m => {
+                    _cand = _cand.concat(allAny.filter(m => {   // 🚪 點名＝她要的回顧，跨世界照找
                         const hay = ((m.tags || []).join(' ') + ' ' + (m.summary || '') + ' ' + (m.text || '')).toLowerCase();
                         return kws.some(k => k && hay.includes(k));
                     }));
@@ -460,7 +465,9 @@
             if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return null;
             const storyId = _storyId();
             if (!storyId || !win.OS_DB?.getAllVnMemories) return null;
-            const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            let all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            // 🚪 世界門：記憶導演只從現在這個地方的記憶挑（向量粗篩 search 自己也會篩）
+            try { const _here = (typeof win.OS_VECTOR_ENGINE?.placeKeep === 'function') ? await win.OS_VECTOR_ENGINE.placeKeep() : null; if (_here) all = all.filter(_here); } catch (e) {}
             const facts = all.filter(m => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged);   // 狀態型(物品/角色/關係)走收斂釘選、不交副模型挑(免挑到舊狀態/舊態度)；過濾被壓縮隱藏的原始條目
             if (!facts.length) return null;
 

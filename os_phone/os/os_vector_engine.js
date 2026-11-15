@@ -329,9 +329,54 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
 
     // 入庫「已抽好的記憶條目」——給「結合觸發」用：state_runtime 一通副模型同時抽好 memories 後直接丟進來，
     // 跳過這裡的副模型抽取(_extractMemories)，只做去重 + 向量化 + 存。
+    // ================================================================
+    // 🚪 世界門（11-15）：記憶記著在哪記的，自動召回只挑「現在這個地方」的
+    //   一段聊天在奧瑞亞和好幾個世界來回，記憶是同一個庫：人在葦口澤時，目錄、核心角色、物品、記憶導演的候選、向量自動搜
+    //   都會撈到奧瑞亞的事和人，AI 就把奧瑞亞寫進世界。她 11-15 盤點後排的第四塊：「記憶召回」。
+    //   她也說過：「名子角色大概只能依靠向量抽屜，以後要回顧，得依賴關鍵字回朔」——
+    //   所以只擋「自動」的；主模型自己寫 <recall>關鍵詞</recall> 點名的照舊整庫找（os_vector_inject 那條）。
+    //   place：世界名，''＝主角原本生活的地方；舊記憶沒記 → 看那一章在聊天裡的位置（OS_WORLDGATE.castInfo().at），認不出的照送。
+    // ================================================================
+    const _zk = s => { try { const Z = win.OS_ZH; if (Z && typeof Z.key === 'function') return Z.key(String(s == null ? '' : s)); } catch (e) {} return String(s == null ? '' : s).replace(/\s/g, ''); };
+    async function _wgNow() {
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.worldNames !== 'function') return null;
+        try {
+            const names = (await G.worldNames()) || [];
+            if (!names.length) return null;
+            const cur = (typeof G.getCurrentWorld === 'function') ? await G.getCurrentWorld() : null;
+            let at = null;
+            try { const ci = (typeof G.castInfo === 'function') ? await G.castInfo() : null; at = (ci && ci.at) || null; } catch (e) {}
+            return { place: (cur && cur.name) || '', at };
+        } catch (e) { return null; }
+    }
+    // 現在在哪（沒有世界門回 null＝不記）
+    async function placeNow() { const w = await _wgNow(); return w ? w.place : null; }
+    // m → 這條記憶在哪記的（null＝認不出）；沒有世界門回 null
+    async function placeResolver() {
+        const w = await _wgNow();
+        if (!w) return null;
+        return m => {
+            if (!m) return null;
+            if (m.place != null) return m.place;
+            if (w.at && m.chapterId != null && w.at[String(m.chapterId)] != null) return w.at[String(m.chapterId)];
+            return null;
+        };
+    }
+    // 自動召回用：這條記憶算不算這裡的（認不出的照送）；沒有世界門回 null＝全部都算
+    async function placeKeep() {
+        const w = await _wgNow();
+        if (!w) return null;
+        const of = await placeResolver();
+        const here = _zk(w.place);
+        return m => { const p = of ? of(m) : null; return p == null || _zk(p) === here; };
+    }
+
     async function ingestEntries(entries, storyId, chapterId) {
         if (!_isEnabled() || !win.OS_DB?.saveVnMemory) return;
         if (!Array.isArray(entries)) return;
+        let place = null;   // 🚪 這一章在哪（有世界門才記）
+        try { place = await placeNow(); } catch (e) {}
         // 重 roll/重生：先清同章舊記憶再寫新的(自動替換)
         if (chapterId != null && win.OS_DB?.deleteVnMemoriesByChapter) {
             try { await win.OS_DB.deleteVnMemoriesByChapter(chapterId, storyId); } catch (e) {}
@@ -346,7 +391,7 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
                 if (_hasEmbedConfig()) {
                     try { vec = await embed(entry.text); } catch (vErr) { console.warn('[VecEngine] 向量化失敗(不影響存):', vErr?.message || vErr); }
                 }
-                await win.OS_DB.saveVnMemory({
+                const rec = {
                     storyId, chapterId,
                     type: entry.type || 'event',
                     summary: String(entry.summary || '').trim(),   // 索引用一句話摘要(學星河目錄)；舊資料沒有→召回端退回 text
@@ -363,7 +408,9 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
                     vector: vec,
                     vecModel: vec ? _curModelId() : null,           // 算這條向量用的模型 → search 只認同模型的(換模型後新舊維度不混算)
                     createdAt: Date.now()
-                });
+                };
+                if (place != null) rec.place = place;
+                await win.OS_DB.saveVnMemory(rec);
             } catch (saveErr) {
                 console.warn('[VecEngine] 存記憶失敗，跳過:', entry.text, saveErr);
             }
@@ -414,6 +461,7 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
 
     // keep(m)：要不要列入候選。一定要在取前 K 名「之前」篩——先取前 K 再篩，語氣樣本/物品/角色那幾類一多，
     //   前 K 名幾乎被它們佔滿，篩完事件只剩個位數，導演就只有那幾條可挑。
+    //   🚪 世界門：向量搜都是自動召回（網頁版每輪、記憶導演的候選、沒導演時自助搜），只搜「現在這個地方」的（見 placeKeep）
     async function search(queryText, storyId, topK, keep) {
         if (!_isEnabled() || !win.OS_DB?.getAllVnMemories) return [];
         try {
@@ -421,9 +469,12 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
             const cur = _curModelId();
             const all = await win.OS_DB.getAllVnMemories(storyId);
             if (!all.length) return [];
+            let here = null;
+            try { here = await placeKeep(); } catch (e) {}
 
             return all
                 .filter(m => Array.isArray(m.vector) && m.vector.length && m.vecModel === cur)   // 只比同模型算的向量(維度一致、餘弦才有意義)
+                .filter(m => !here || here(m))
                 .filter(m => (typeof keep === 'function') ? keep(m) : true)
                 .map(m => ({ ...m, _score: cosineSim(queryVec, m.vector) }))
                 .sort((a, b) => b._score - a._score)
@@ -450,7 +501,8 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
     // 八、公開 API
     // ================================================================
 
-    win.OS_VECTOR_ENGINE = { embed, embedLocal: (text, model) => _embedLocal(text, model), _setTF: (T) => { _tfModP = Promise.resolve(T); }, ingest, ingestEntries, backfillVectors, search, vectorReady, isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
+    win.OS_VECTOR_ENGINE = { embed, embedLocal: (text, model) => _embedLocal(text, model), _setTF: (T) => { _tfModP = Promise.resolve(T); }, ingest, ingestEntries, backfillVectors, search, vectorReady,
+        placeNow, placeResolver, placeKeep, /* 🚪 世界門：記憶記在哪、自動召回只挑這裡的（os_vector_inject、記憶整理用） */ isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
         // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
         const src = _cfg().extractSource || 'content';
         let c = '';

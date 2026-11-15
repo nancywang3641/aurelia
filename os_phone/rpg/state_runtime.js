@@ -514,6 +514,15 @@
 【待合併記憶】
 ${list}`;
     }
+    // 🚪 記憶整理分批：同一批只放同一個地方的（照時間排好的 list 進來，回 [{ place, chunk }]；place＝null 是認不出地方的那堆）
+    async function _placeBatches(list, size) {
+        let of = null;
+        try { of = (typeof win.OS_VECTOR_ENGINE?.placeResolver === 'function') ? await win.OS_VECTOR_ENGINE.placeResolver() : null; } catch (e) {}
+        const groups = new Map(), out = [];
+        list.forEach(m => { const p = of ? of(m) : null; const k = p == null ? '?' : 'p:' + p; if (!groups.has(k)) groups.set(k, { place: p, list: [] }); groups.get(k).list.push(m); });
+        groups.forEach(g => { for (let i = 0; i < g.list.length; i += size) out.push({ place: g.place, chunk: g.list.slice(i, i + size) }); });
+        return out;
+    }
     // storyId 由呼叫端(os_avs_memory 面板)傳入；回 { mergedCount, madeCount, after, before }
     async function compressOldMemories(opts) {
         opts = opts || {};
@@ -536,14 +545,20 @@ ${list}`;
         if (compressible.length <= KEEP_RECENT) throw new Error('舊記憶還不夠多、暫時不需要整理');
         let targets = compressible.slice(0, compressible.length - KEEP_RECENT);
         // 按下去之前先告訴她要叫幾次模型（每批一次，失敗的那批會重試）
-        if (opts.plan) return { targets: targets.length, calls: Math.ceil(targets.length / CHUNK) };
+        if (opts.plan) return { targets: targets.length, calls: (await _placeBatches(targets, CHUNK)).length };   // 🚪 分地方壓，批數照分好的算
         // 自動整理（CTX 面板「自動整理記憶」）：不到一整批不叫模型（叫一次只併兩三條不划算）；一次最多 maxBatches 批、從最舊的開始
         if (opts.auto && targets.length < CHUNK) throw new Error('舊記憶還不夠多、暫時不需要整理');
         if (opts.maxBatches > 0) targets = targets.slice(0, opts.maxBatches * CHUNK);
 
-        let mergedCount = 0, madeCount = 0;
-        for (let i = 0; i < targets.length; i += CHUNK) {
-            const chunk = targets.slice(i, i + CHUNK);
+        // 🚪 世界門（11-15）：同一批只放同一個地方的記憶（世界名，''＝主角原本生活的地方），壓出來的那條記著地方；
+        //   混著壓的話，奧瑞亞和葦口澤的事會揉成一條，之後自動召回就分不開（OS_VECTOR_ENGINE.placeKeep）。
+        let _batches = await _placeBatches(targets, CHUNK);
+        // 自動整理：分地方之後不滿一整批的那堆先不壓（同上面「不到一整批不叫模型」，那是她的錢）
+        if (opts.auto) _batches = _batches.filter(b => b.chunk.length >= CHUNK);
+        let mergedCount = 0, madeCount = 0, _doneN = 0;
+        for (const _b of _batches) {
+            const chunk = _b.chunk, i = _doneN;
+            _doneN += chunk.length;
             onProgress(`整理中… ${Math.min(i + chunk.length, targets.length)}/${targets.length}`);
             let json;
             try { json = await _compressRun(_compressPrompt(chunk)); }
@@ -564,7 +579,8 @@ ${list}`;
                         text: String(e.text || e.summary || '').trim(),
                         tags: Array.isArray(e.tags) ? e.tags.filter(Boolean).slice(0, 4) : [],
                         createdAt: baseTs + k,   // 排回原本時段
-                        condensed: true
+                        condensed: true,
+                        ...(_b.place != null ? { place: _b.place } : {})   // 🚪 這一批都是同一個地方的
                     });
                     saved++; madeCount++;
                 } catch (err) { console.warn('[記憶壓縮] 存新條目失敗:', err?.message || err); }
