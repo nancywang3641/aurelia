@@ -1199,7 +1199,7 @@
         a._viewKeep = views ? [views.side, views.back].map(u => { const im = new Image(); im.src = u; return im; }) : null;
         if (views) a.flip = false;
         const el = document.createElement(isSheet ? 'div' : 'img');
-        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';   // 換好的圖載入才顯示
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + (a.smooth ? ' lstage-smooth' : '') + ' lstage-loading';   // 換好的圖載入才顯示
         a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
         a.frameW = a.frameH = null;
         a._left = a._top = a._z = a._bg = a._tf = a._trBase = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
@@ -1561,6 +1561,7 @@
         const a = spawnActor(cfg.src, cfg.x, cfg.y, cfg.h || NPC_H);
         const keepH = a.h;   // spawnActor 已套 actorScale，別讓 cfg.h(未縮放) 蓋回去
         const npc = Object.assign(a, cfg, { h: keepH, wanderT: 1500 + Math.random() * 3000, dest: null, defaultSrc: cfg.src });
+        if (cfg.smooth) npc.el.classList.add('lstage-smooth');   // 不是像素圖的小人（衣櫥拍的常客）：縮小時平滑，不要鋸齒
         if (_skins()[cfg.key]) npc._skinPending = true;   // 有自訂皮膚→預設圖先藏著，等 _applySkin 換好才顯示(免閃)
         _applySkin(npc, cfg.key);
         const tag = document.createElement('div');

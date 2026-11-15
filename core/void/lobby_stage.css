@@ -8,6 +8,7 @@
 .lstage-editing .lstage-upper { display:none; }
 .lstage-actor { position:absolute; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none;
   will-change:transform; backface-visibility:hidden; }
+.lstage-actor.lstage-smooth { image-rendering:auto; }   /* 不是像素圖的小人（衣櫥拍的書咖常客）：縮小要平滑 */
 .lstage-actor.lstage-loading { visibility:hidden; }   /* 圖載入中先藏，防轉場單圖閃一下才換成走路圖 */
 /* 🗺️ 靜態點擊地圖：建築點擊區＋入口膠囊標籤（點了進店） */
 .lstage-hotspot { position:absolute; z-index:1500; cursor:pointer; border-radius:18px;

@@ -3,10 +3,14 @@
 // 職責：☕ 書咖的 12 位常客出現在大廳的書咖場景裡。
 //   照書咖的到店紀錄：現在在店裡的站在客人出沒區；剛到的從門口一跳一跳進來，待一陣子再跳出去。
 //   點他＝跳一行字（誰、什麼習性、今天點了什麼），不叫模型。
-//   長相＝三視圖長條圖（素材庫 cafe_guests_v1/，[正面｜側面朝右｜背面]），這裡拼成 3×4 走路圖：
-//   往下走看正面、往上走看背面、左右看側面；走路那兩格往上提一點＝跳（她 10-13 定：先用跳的當走路）。
+//   長相＝隔壁衣櫥（小火苗衣櫥）裡那 18 位常客拍下來的圖（11-15 她：「先把隔壁的小人搬過來，比如那些客人」→「好，18 位都換」）：
+//   素材庫 cafe_dolls_v1/walk/<長相>.webp 是拼好的 3×4 走路圖（列：往下／往左／往右／往上；欄：踏一步／站著／踏另一步），
+//   往下走看正面、往上走看背面（都是一跳一跳，衣櫥裡正面的走路就是跳）、左右看側面（腳會踏步）。
+//   18 位同一個格子大小、同一個比例，腳底在格底、身體中心在格子正中。不是像素圖，舞台上要平滑縮（smooth）。
+//   🔁 她之後在衣櫥改了頭髮、衣服：收成衣櫥內建後跑本機 tmp/doll_bake/bake.cjs <長相> → sheet.py → 傳素材庫 → 換下面的 DOLL_REF。
+//   舊圖（阿洛畫的三視圖長條圖 cafe_guests_v1/、坐姿 cafe_guests_sit_v1/）還在素材庫，徵人頁（os_cafe_hire.js）的應徵者照片還在用。
 //   誰、長什麼樣在 os_cafe_regulars.js；幾點到店在 os_cafe.js 的結算——這裡每 30 秒叫一次「悄悄補算」，不叫模型。
-//   🪑 10-16 有坐姿了（阿洛畫的 18 張，素材庫 cafe_guests_sit_v1/，朝右斜正面；她：「是不是可以砍到椅子上?」）：
+//   🪑 坐姿（10-16 起有；她：「是不是可以砍到椅子上?」）＝衣櫥的側面坐姿（朝右，cafe_dolls_v1/sit/），18 位的屁股都在圖上同一個高度：
 //   進門走到一張空椅子坐下、要走了站起來走出去；椅子坐滿了才照舊站在客人出沒區。
 //   椅子照她現在的擺設找（擺設模式搬過、翻過都認）：chair_l 椅背在左＝朝右坐；chair_r 朝左＝坐姿翻過來。
 //   坐著＝換一張「每格都是坐姿」的走路圖（舞台只認走路圖），圖底多留一段透明：腳底那條線壓到椅子前面才畫在椅子前面，屁股才對得到椅面。
@@ -15,49 +19,34 @@
 (function () {
     'use strict';
     const W = window.parent || window;
-    const LOOK_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/cafe_guests_v1/';
-    const NPC_H = 200;          // 跟雷伊、丹一樣高（舞台會再乘人物縮放）
-    const HOP = 0.07;           // 跳多高（佔一格高的比例；長條圖頭頂留了這麼多空）
+    // 🚨 素材庫鎖 commit 抓（sound-files 超過 jsDelivr 的上限，用 @main 抓沒人抓過的圖會隨機 403）；抓不到再換 raw（_retry）
+    const DOLL_REF = '0c996afff9c88746e045fde5ce44c9e42ac0ac83';
+    const WALK_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@' + DOLL_REF + '/cafe_dolls_v1/walk/';
+    const NPC_H = 209;          // 一格多高（舞台會再乘人物縮放）：格子上面留了放馬尾、帽子的空，人本身大約 174＝跟雷伊、丹差不多高
     const TICK_MS = 30000;      // 多久看一次誰到、誰走
     const MAX_IN = 6;           // 店裡最多同時幾位常客
     const STAY_PEND = 30;       // 還沒結算到的（只知道幾點到）先當待 30 分
-    const SIT_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@5352eb1/cafe_guests_sit_v1/';
-    const SIT_H = 152;          // 坐著多高（跟站著的同一顆頭大小：站著那格 200、身體約 174）
+    const SIT_BASE = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@' + DOLL_REF + '/cafe_dolls_v1/sit/';
+    const SIT_H = 192;          // 坐姿圖多高（跟站著同一個比例：坐姿圖 448 高、走路圖一格 487 高）
     const SEAT_X = 0.62;        // 椅面中心在椅子圖的哪裡（朝右那張；朝左的取 1−）
     const SEAT_Y = 0.55;
-    const HIP_AT = 0.86;        // 坐姿圖從上往下多少是屁股（對到椅面）
+    const HIP_AT = 0.967;       // 坐姿圖從上往下多少是屁股（對到椅面）；拼圖時 18 位都對在這條線上
 
     // 抓不到的圖換 raw 再試一次（素材庫超過 jsDelivr 的上限會隨機 403，見 lobby_stage.js 的 _sfRetry）
     function _retry(img, onFail) {
         const b = window.LobbyStage && window.LobbyStage._b;
         if (b && b.sfRetry) b.sfRetry(img, onFail); else img.onerror = onFail;
     }
-    // 長條圖 → 3×4 走路圖（列：往下／往左／往右／往上；欄：跳起來／站著／跳起來）
+    // 走路圖：素材庫那張已經拼好（3×4），這裡只確認抓得到，回那個網址（換過 raw 的話回 raw 那個）
     const _sheets = new Map();
     function _sheetOf(look) {
         if (_sheets.has(look)) return _sheets.get(look);
         const p = new Promise((res) => {
             const img = new Image();
-            img.crossOrigin = 'anonymous';   // 要畫進畫布再拿出來
-            img.onload = () => {
-                try {
-                    const cw = Math.floor(img.naturalWidth / 3), ch = img.naturalHeight;
-                    const cv = document.createElement('canvas'); cv.width = cw * 3; cv.height = ch * 4;
-                    const g = cv.getContext('2d');
-                    const hop = Math.round(ch * HOP);
-                    const view = [0, 1, 1, 2], mirror = [false, true, false, false];   // 往左＝側面翻過來
-                    for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
-                        const dy = c === 1 ? 0 : -hop;
-                        g.save();
-                        if (mirror[r]) { g.translate(c * cw + cw, r * ch); g.scale(-1, 1); g.drawImage(img, view[r] * cw, 0, cw, ch, 0, dy, cw, ch); }
-                        else g.drawImage(img, view[r] * cw, 0, cw, ch, c * cw, r * ch + dy, cw, ch);
-                        g.restore();
-                    }
-                    cv.toBlob(b => res(b ? URL.createObjectURL(b) : null), 'image/png');
-                } catch (e) { console.warn('[CafeRegulars] 拼走路圖失敗', look, e); res(null); }
-            };
+            img.crossOrigin = 'anonymous';   // 舞台要讀它量腳印寬，同一種抓法才吃得到同一份快取
+            img.onload = () => res(img.src);
             _retry(img, () => res(null));
-            img.src = LOOK_BASE + look + '.webp';
+            img.src = WALK_BASE + look + '.webp';
         });
         _sheets.set(look, p);
         p.then(v => { if (!v) _sheets.delete(look); });   // 沒拿到圖下次再試
@@ -196,7 +185,7 @@
             const to = seat ? seat.stand : spot(), from = walkIn ? door() : to;
             const n = _b.addNpc({
                 key: 'cafe_reg_' + p.key, name: p.name, subTitle: (ty.label || '常客') + ' · 書咖常客',
-                x: from.x, y: from.y, h: NPC_H, src: { sheet },
+                x: from.x, y: from.y, h: NPC_H, src: { sheet }, smooth: true,
                 scriptOnly: true,   // 照腳本跑：不進小劇場配對、不開對話（點他只跳一行字）
                 homeRect: _b.CFG.points.npcZone, onInteract: () => say(p, n),
             });
