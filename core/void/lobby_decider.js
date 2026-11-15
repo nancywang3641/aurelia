@@ -250,7 +250,7 @@
                     n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
                     n.animT = (n.animT || 0) + dt;
                     n.frame = WF[Math.floor(n.animT / WMS) % WF.length];
-                } else if (vx) n.flip = vx > 0;
+                } else _b.face(n, vx, vy);
             } else if (d >= 6 && D.goal && (D.replans || 0) < 2 && D.walkT < 25000) {   // 半路被桌角卡住：從現在的位置重找一次路
                 D.replans = (D.replans || 0) + 1;
                 D.path = _decPath(n, D.goal);
@@ -266,7 +266,7 @@
             if (face) {
                 const vx = face.x - n.x, vy = face.y - n.y;
                 if (n.sheet) { n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); n.frame = 1; }
-                else if (vx) n.flip = vx > 0;
+                else _b.face(n, vx, vy);
             }
             if (!D.chatWith) D.waitT -= dt;   // 聊天中不想下一步
             if (D.waitT <= 0 && !D.chatWith && !D.busy && !document.hidden && window.NPC_DECIDE

@@ -531,8 +531,9 @@
             const head = VC.headOf ? VC.headOf(full) : full.url;   // 一次生三種的自拍優先（headOf）
             if (head && S.npcs.includes(npc)) { npc.portrait = head; npc.portraitKind = 'avatar'; }   // avatar_cache=頭像(半身)→對話用浮框擺放
             // 一次生三種的 Q版＝他在大廳的小人；裝扮室換過皮膚的照她換的（皮膚是她親手選的，不蓋）
+            //   Q版畫成正面／側面／背面三隻的（有 chibiSide、chibiBack）→ 三面小人，走路、轉向會換面；只有一張的照舊
             try {
-                if (full.chibi && S.npcs.includes(npc) && !(_b.skins && _b.skins()[npc.key])) _b.swapActorSrc(npc, full.chibi);
+                if (full.chibi && S.npcs.includes(npc) && !(_b.skins && _b.skins()[npc.key])) _b.swapActorSrc(npc, (full.chibiSide && full.chibiBack) ? { views: { front: full.chibi, side: full.chibiSide, back: full.chibiBack } } : full.chibi);
             } catch (e) {}
             // 裝扮室生過立繪(sprite_cache 同鍵)→ 蓋過頭像當對話立繪(貼底全高)；沒有就維持頭像浮框
             try {

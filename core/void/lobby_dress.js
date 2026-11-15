@@ -39,7 +39,7 @@
             a.dest = null;   // 清掉漫步目標，交給跟隨邏輯接手
             S.followers = S.followers.filter(x => x !== a);   // 先移除，維持佇列無重複
             if (a.follow) S.followers.push(a);   // 加到隊尾：越晚跟的排越後面（串成一列不重疊）
-            else { a.walking = false; if (a.sheet) { a.dir = 0; a.frame = 1; a.animT = 0; } }   // 取消跟隨=立定+轉回正面(第1列朝下)
+            else { a.walking = false; if (a.sheet) { a.dir = 0; a.frame = 1; a.animT = 0; } else if (a.views) a.dir = 0; }   // 取消跟隨=立定+轉回正面(第1列朝下)
             _closeActorMenu();
         });
         menu.querySelector('[data-act="history"]')?.addEventListener('click', () => {

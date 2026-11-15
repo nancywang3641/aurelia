@@ -1009,6 +1009,7 @@
             if (maxY < 0) return;   // 全透明
             a.bpad = (sh - 1 - maxY) / sh;                // 下方padding比例(腳到圖底)
             a.wfrac = ((maxX - minX + 1) / 2) / sw;        // 可見半寬佔圖寬比例→碰撞半寬
+            if (a.views) a._hwRatio = iw / ih;             // 三面小人：腳印照正面那張算，換面不跟著變寬變窄
             placeActor(a);                                 // 用新錨點/寬度重放
         } catch (e) { /* CORS污染等→維持預設(FOOT_W/圖底錨) */ }
     }
@@ -1108,13 +1109,24 @@
         _seeThruEls.forEach(el => { if (!next.has(el)) { el.style.webkitMaskImage = ''; el.style.maskImage = ''; el._mask = null; } });
         _seeThruEls = next;
     }
+    // 單張立姿／三面小人的面向（走路圖的各處自己設 dir）：三面的照四個方向（0下/1左/2右/3上，同走路圖），單張的只左右鏡像
+    function _face(a, vx, vy) {
+        if (a.views) { if (vx || vy) a.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); }
+        else if (vx) a.flip = vx > 0;   // 原圖朝左：往右才鏡像
+    }
     function placeActor(a) {
         if (a.sheet) return placeSheetActor(a);
+        // 🧸 三面小人（一次生三種的 Q版畫成正面／側面／背面）：照面向換那一張。側面那張原圖朝右 → 往左才鏡像（跟單張「原圖朝左」相反）
+        if (a.views) {
+            const k = a.dir === 3 ? 'back' : (a.dir === 1 || a.dir === 2) ? 'side' : 'front';
+            if (a._viewK !== k) { a.el.src = a.views[k]; a._viewK = k; }
+            a.flip = a.dir === 1;
+        }
         const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
         const w = a.h * ratio;
         // 碰撞半寬=可見角色半寬(量到才設；沒量到 blocked 用 FOOT_W)。
         // 🚨 用「邏輯尺寸」算(人物縮放,不含 outdoor 鏡頭脫鉤放大)：視覺放大是棋子表現,腳印跟著放大會變巨人塞不過縫
-        if (a.wfrac != null) a.hw = Math.max(6, Math.round(a.baseH * (CFG.points.actorScale || 1) * ratio * a.wfrac));
+        if (a.wfrac != null) a.hw = Math.max(6, Math.round(a.baseH * (CFG.points.actorScale || 1) * (a._hwRatio || ratio) * a.wfrac));
         // 下方padding修正：把圖往下推 bpad*h，讓「可見的腳」正好落在 a.y(=碰撞判定點)，而不是錨在圖片底部(腳下方)
         const footPad = Math.round(a.h * (a.bpad || 0));
         // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
@@ -1177,8 +1189,15 @@
         }
     }
     // 換裝：把角色元素整顆換掉（img↔div 走路圖兩種形態）
+    //   src 三種：網址字串＝單張；{ sheet }＝3×4 走路圖；{ views:{ front, side, back } }＝三面小人（單張的做法，照面向換那一張，見 placeActor）
     function _swapActorSrc(a, src) {
         const isSheet = (typeof src === 'object' && src && src.sheet);
+        const views = (!isSheet && typeof src === 'object' && src && src.views && src.views.front && src.views.side && src.views.back) ? src.views : null;
+        if (views) src = views.front;
+        a.views = views; a._viewK = views ? 'front' : null; a._hwRatio = null;
+        // 側面、背面先載好留著：換面時那張已經在手上，不會空一下
+        a._viewKeep = views ? [views.side, views.back].map(u => { const im = new Image(); im.src = u; return im; }) : null;
+        if (views) a.flip = false;
         const el = document.createElement(isSheet ? 'div' : 'img');
         el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';   // 換好的圖載入才顯示
         a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
@@ -1572,7 +1591,7 @@
             //    自己決定下一步的 NPC 例外：他不凍，交給 lobby_decider.js 走過去找對方、面對面站著（她 09-23 選的）
             if (n._theaterFrozen && !window.LobbyDecider?.exemptFromFreeze(n)) { _npcNearCheck(n); return; }
             if (n.facePlayer && S.player) {   // 愛麗絲永遠面向玩家
-                if (n.sheet) n.dir = S.player.x < n.x ? 1 : 2;
+                if (n.sheet || n.views) n.dir = S.player.x < n.x ? 1 : 2;
                 else n.flip = S.player.x > n.x;   // 原圖朝左：玩家在右側才鏡像成朝右
             }
             if (n.follow && S.player && S.talkTarget !== n) {   // 跟隨優先於 noWander/漫步（客人本是站定，跟隨要能蓋過）；對話中先停不跟
@@ -1590,7 +1609,7 @@
                             n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
                             n.animT = (n.animT || 0) + dt;
                             n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
-                        } else if (vx) n.flip = vx > 0;   // 原圖朝左：往右走才鏡像
+                        } else _face(n, vx, vy);   // 單張：往右走才鏡像；三面小人：換面
                     }
                 } else { n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
                 n.dest = null;
@@ -1602,7 +1621,7 @@
                 if (S.player) {
                     const vx = S.player.x - n.x, vy = S.player.y - n.y;
                     if (n.sheet) { n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); n.frame = 1; n.animT = 0; }
-                    else if (vx) n.flip = vx > 0;   // 原圖朝左：玩家在右才鏡像
+                    else _face(n, vx, vy);   // 單張：玩家在右才鏡像；三面小人：轉向玩家那一面
                 }
                 placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return;
             }
@@ -1628,7 +1647,7 @@
                             n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
                             n.animT = (n.animT || 0) + dt;
                             n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
-                        } else if (vx) n.flip = vx > 0;   // 原圖朝左：往右走才鏡像
+                        } else _face(n, vx, vy);   // 單張：往右走才鏡像；三面小人：換面
                     }
                 }
             }
@@ -1877,7 +1896,7 @@
         S.talkTarget = null;
         // 對話結束→NPC 轉回正面（朝下）；facePlayer 的(愛麗絲)下一幀會自己再面向玩家，不影響
         if (t) {
-            if (t.sheet) { t.dir = 0; t.frame = 1; t.animT = 0; } else { t.flip = false; }
+            if (t.sheet) { t.dir = 0; t.frame = 1; t.animT = 0; } else { t.flip = false; if (t.views) t.dir = 0; }
             if (t.el) placeActor(t);
         }
         _applySceneHeader();
@@ -2108,7 +2127,7 @@
                     p.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 2) : (dy < 0 ? 3 : 0);
                     p.animT = (p.animT || 0) + dt;
                     p.frame = WALK_FRAMES[Math.floor(p.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
-                } else if (dx !== 0) p.flip = dx > 0;   // 原圖朝左：往右走才鏡像
+                } else _face(p, dx, dy);   // 單張：往右走才鏡像；三面小人：換面
             } else {
                 p.walking = false;
                 if (p.sheet) { p.frame = 1; p.animT = 0; }   // 立定=中幀
@@ -3236,7 +3255,7 @@
             regWin: _regWin, closeWins: _closeWins,
             // 給 lobby_dress.js（裝扮室/歷史窗）：皮膚存取/換裝/圖片工具/NPC歷史資料
             skins: _skins, saveSkin: _saveSkin,
-            swapActorSrc: _swapActorSrc, applySkin: _applySkin,
+            swapActorSrc: _swapActorSrc, applySkin: _applySkin, face: _face,
             sfRetry: _sfRetry, sfMirror: _sfMirror,   // 素材庫的圖抓不到→換 raw 再試一次（lobby_cafe_regulars.js 的走路圖、坐姿圖；lobby_places.js 的縮圖）
             pixelify: _pixelify, askImage: _askImage,
             resolveRef, idbPut, idbDel,
