@@ -194,6 +194,9 @@
     //   🚨抄的那顆接在同一個父層的最後面，不插在它旁邊：模型可能用 :nth-child 排位置，插在中間會把後面每一顆往下擠一格。
     //   🚨位置：面板多半是一顆一顆用 absolute 釘死的（每顆自己一個 class 寫 top），抄出來會疊在原處 →
     //     照那一串的間距往頭尾各推一格，撞到別的東西就再找最近的空位（_placeExtras）。排在一般排版流裡的就交給排版。
+    //   🚨11-15 她的「葦口澤」：按鈕全裝在一個有 clip-path 的帳本盒裡，往上推一格出了盒子就被切掉（她「我沒看到欸」）；
+    //     「七檻市」手機版：一排本來就擠，再塞兩格原本的字全疊在一起 → 這兩種都把抄出來的搬出去、樣子照抄的那顆釘住（_freeze）。
+    //     測試拿她真的三張面板跑：tmp/vne_world/her_panel.cjs（面板原始碼在 tmp/vne_world/her/，只放本機）
     const EXTRA_ACTS = [
         { act: 'threads', label: '線索', icon: 'fa-diagram-project' },
         { act: 'go', label: '繼續', icon: 'fa-play' },
@@ -254,25 +257,103 @@
             el.classList.add('vnep-extra');
             src.parentNode.appendChild(el);
             _relabel(el, x.label, x.icon);
+            // 記下抄的是哪一顆、原本放在哪、每一層原本的 style：面板一變大小就整個還原再重擺（_resetExtra）
+            el._vnepSrc = src;
+            el._vnepHome = src.parentNode;
+            el._vnepSaved = [el].concat(Array.prototype.slice.call(el.querySelectorAll('*'))).map(n => [n, n.getAttribute('style')]);
             made.push(el);
         });
         _placeExtras(root);
         return made;
     }
-    // 抄出來的那幾顆擺哪裡（面板一變寬變窄就重擺：模型的位置多半是照面板大小算的）
+    function _resetExtra(el) {
+        if (el._vnepHome && el.parentNode !== el._vnepHome && el._vnepHome.isConnected) el._vnepHome.appendChild(el);
+        (el._vnepSaved || []).forEach(([n, s]) => { if (s == null) n.removeAttribute('style'); else n.setAttribute('style', s); });
+        el.classList.remove('vnep-lifted');
+    }
+    // 這顆所在的盒子實際看得到的範圍：一路往上，有 clip-path 的、或 overflow 不是 visible 的盒子都會把它切掉。
+    //   🚨用 absolute 釘的那顆，overflow 只有「它的定位盒那一層、或更外面」才切得到它（clip-path 哪一層都切）
+    function _clipBox(el, stop, pr) {
+        let r = { left: pr.left, top: pr.top, right: pr.right, bottom: pr.bottom };
+        const cb = getComputedStyle(el).position === 'absolute' ? el.offsetParent : null;
+        let passed = !cb;
+        for (let a = el.parentElement; a && a !== stop; a = a.parentElement) {
+            if (a === cb) passed = true;
+            const cs = getComputedStyle(a);
+            const byPath = cs.clipPath && cs.clipPath !== 'none';
+            const byFlow = passed && (cs.overflowX !== 'visible' || cs.overflowY !== 'visible' || /paint|strict|content/.test(cs.contain || ''));
+            if (!byPath && !byFlow) continue;
+            const b = a.getBoundingClientRect();
+            r = { left: Math.max(r.left, b.left), top: Math.max(r.top, b.top), right: Math.min(r.right, b.right), bottom: Math.min(r.bottom, b.bottom) };
+        }
+        return r;
+    }
+    // 把抄出來那顆搬出盒子：照抄的那顆「現在畫出來的樣子」一層一層釘成行內樣式（顏色、字、外框、clip-path、大小），
+    //   搬到哪裡都長一樣。滑鼠移上去的變化、::before/::after 的小裝飾帶不走（只能這樣，盒子會切掉它）
+    function _freeze(dst, src) {
+        const copy = (s, d) => {
+            const cs = getComputedStyle(s);
+            for (let i = 0; i < cs.length; i++) { const p = cs[i]; try { d.style.setProperty(p, cs.getPropertyValue(p)); } catch (e) {} }
+        };
+        const pair = (s, d) => {
+            copy(s, d);
+            for (let i = 0; i < d.children.length && i < s.children.length; i++) {
+                if (s.children[i].tagName === d.children[i].tagName) pair(s.children[i], d.children[i]);
+            }
+        };
+        pair(src, dst);
+        dst.style.transition = 'none';
+        dst.style.animation = 'none';
+        dst.style.transform = 'none';
+        dst.style.margin = '0';
+    }
+    // 抄出來的那幾顆擺哪裡（面板一變寬變窄就重擺：模型的位置多半是照面板大小算的）：
+    //   ①排在一般排版流裡、整顆看得到 → 跟著那一串排，不動
+    //   ②用 absolute 釘的 → 照那一串的對齊和間距往頭尾推一格，要落在它那個盒子看得到的範圍裡
+    //   ③盒子塞滿了（11-15 葦口澤：按鈕全裝在一個有 clip-path 的帳本盒裡，往上推一格就出了盒子被切掉，她「我沒看到欸」）
+    //     → 搬出盒子、樣子照抄的那顆釘住，貼著盒子的邊、照同樣的間距接下去
     function _placeExtras(root) {
         const ui = root.querySelector('.vnep-ui');
         const extras = ui ? Array.prototype.slice.call(ui.querySelectorAll('.vnep-extra')) : [];
         if (!extras.length) return;
         const pr = root.getBoundingClientRect();
         if (!pr.width || !pr.height) return;
-        extras.forEach(el => { ['left', 'top', 'right', 'bottom', 'width', 'height', 'boxSizing'].forEach(k => { el.style[k] = ''; }); });
+        extras.forEach(_resetExtra);
         const mains = _mainEntries(ui);
-        // 在排版流裡：跟著那一串排，不用管
-        if (!mains.length || getComputedStyle(extras[0]).position !== 'absolute') { _placeBadge(root); return; }
+        if (!mains.length) { _placeBadge(root); return; }
         const R = el => el.getBoundingClientRect();
+        const inside = (r, c) => r.left >= c.left - 1 && r.right <= c.right + 1 && r.top >= c.top - 1 && r.bottom <= c.bottom + 1;
+        const clip = _clipBox(extras[0], ui, pr);
+        const clipped = clip.left > pr.left + 1 || clip.top > pr.top + 1 || clip.right < pr.right - 1 || clip.bottom < pr.bottom - 1;
+        const flow = getComputedStyle(extras[0]).position !== 'absolute';
+        let lifted = false;
+        // ③的動作：先藏起來（不然抄的那顆量到的是被擠過的樣子），照抄的那顆釘住樣子，搬到最外層
+        const liftAll = () => {
+            extras.forEach(el => el.classList.add('vnep-measure'));
+            extras.forEach(el => { _freeze(el, el._vnepSrc); el.classList.add('vnep-lifted'); ui.appendChild(el); el.style.position = 'absolute'; });
+            extras.forEach(el => el.classList.remove('vnep-measure'));
+            lifted = true;
+        };
+        if (flow) {
+            // ①排版流：塞進去會把原本那幾顆擠小（11-15 七檻市手機版：一排六格本來就擠，再塞兩格字全疊在一起）、或被盒子切掉 → 搬出去
+            // 擠小一點、字還放得下（電腦版那排六格）照樣排在裡面，看起來就是它自己的；擠到字跑出格子外（含裡面那層字）才搬。
+            //   跟「沒塞之前」比：本來就凸出去的裝飾不算
+            const spill = list => list.reduce((n, el) => n + [el].concat(Array.prototype.slice.call(el.querySelectorAll('*')))
+                .filter(x => x.clientWidth && (x.scrollWidth > x.clientWidth + 2 || x.scrollHeight > x.clientHeight + 2)).length, 0);
+            extras.forEach(el => el.classList.add('vnep-measure'));
+            const base = mains.map(R), spill0 = spill(mains);
+            extras.forEach(el => el.classList.remove('vnep-measure'));
+            const shrunk = mains.some((el, i) => { const r = R(el); return r.width < base[i].width * 0.92 || r.height < base[i].height * 0.92; });
+            const squeezed = shrunk && (spill(mains) > spill0 || spill(extras) > 0);
+            if (!squeezed && extras.every(el => inside(R(el), clip))) { _placeBadge(root); return; }
+            liftAll();
+        }
+        // 跟哪一串對齊：抄的那顆所在的那一排（同一個父層）。入口分成兩排的面板（七檻市 A 面／B 面）拿全部一起算，會擺到兩排中間
+        const home = extras[0]._vnepHome;
+        const mates = mains.filter(el => el.parentNode === home);
+        const line = mates.length >= 2 ? mates : mains;
         // 那一串是靠哪一邊對齊的（左緣、中線、右緣；上緣、中線、下緣）：寬窄不一的一排靠左條子，拿中心算會一格一格往旁邊歪
-        const rs = mains.map(R);
+        const rs = line.map(R);
         const spread = arr => Math.max.apply(null, arr) - Math.min.apply(null, arr);
         const pickMode = (modes) => modes.reduce((best, m) => (spread(rs.map(m.f)) < spread(rs.map(best.f)) - 1 ? m : best));
         const xm = pickMode([{ k: 'l', f: r => r.left }, { k: 'c', f: r => r.left + r.width / 2 }, { k: 'r', f: r => r.right }]);
@@ -283,6 +364,7 @@
         const med = arr => { if (!arr.length) return 0; const s = arr.slice().sort((p, q) => p - q); return s[Math.floor(s.length / 2)]; };
         let vx = med(dxs), vy = med(dys);
         if (!vx && !vy) vy = rs[0].height * 1.25;
+        const across = Math.abs(vx) > Math.abs(vy);   // 那一串是橫的
         // 擋路的：每一顆入口、帶字的東西（標題、那句話）；整頁大的裝飾（底帶、外框）不算
         const area = pr.width * pr.height;
         const blocks = [];
@@ -300,58 +382,92 @@
         const hit = (a, b, pad) => a.left < b.right + pad && a.right > b.left - pad && a.top < b.bottom + pad && a.bottom > b.top - pad;
         const useZone = !mains.some(el => hit(R(el), zone, 0));
         const first = rs[0], last = rs[rs.length - 1];
-        const free = (r, taken) => r.left >= pr.left + 2 && r.right <= pr.right - 2 && r.top >= pr.top + 2 && r.bottom <= pr.bottom - 2
-            && !blocks.some(b => hit(r, b, 3)) && !taken.some(b => hit(r, b, 3)) && !(useZone && hit(r, zone, 0));
         const box = (x, y, w, h) => ({ left: x, top: y, right: x + w, bottom: y + h, width: w, height: h });
-        // 第 k 格：頭上往外數（k<0）或尾巴往外數（k>0），照那一串對齊的那一邊擺
-        const slot = (k, s) => {
-            const a = k < 0 ? first : last;
-            const x = xm.f(a) + vx * k, y = ym.f(a) + vy * k;
-            return box(xm.k === 'l' ? x : (xm.k === 'r' ? x - s.w : x - s.w / 2), ym.k === 't' ? y : (ym.k === 'b' ? y - s.h : y - s.h / 2), s.w, s.h);
-        };
-        const sizes = extras.map(el => { const r = R(el); return { me: r, w: r.width, h: r.height }; });
-        // 先整組接在那一串的頭上（線索貼著那一串、繼續在最外面），擺不下就整組接在尾巴
-        let plan = null;
-        for (const dir of [-1, 1]) {
-            const rs = [];
-            if (sizes.every((s, i) => { const r = slot(dir * (i + 1), s); if (!free(r, rs)) return false; rs.push(r); return true; })) { plan = rs; break; }
-        }
-        if (!plan) {
-            // 頭尾都擺不下整組：一顆一顆找，頭尾輪流往外；再不行疊在尾巴（或剛擺好那顆）旁邊另起一行；都不行找離那一串最近的空位
-            plan = [];
+        const alignX = (x, s) => xm.k === 'l' ? x : (xm.k === 'r' ? x - s.w : x - s.w / 2);
+        const alignY = (y, s) => ym.k === 't' ? y : (ym.k === 'b' ? y - s.h : y - s.h / 2);
+        // 找位置：region＝要整顆落在裡面的範圍；more＝多擋的東西；slot(k, s)＝頭上（k<0）／尾巴（k>0）往外第幾格。找不到的那顆給 null
+        const plan = (region, more, slot) => {
+            const free = (r, taken) => r.left >= Math.max(pr.left, region.left) + 2 && r.right <= Math.min(pr.right, region.right) - 2
+                && r.top >= Math.max(pr.top, region.top) + 2 && r.bottom <= Math.min(pr.bottom, region.bottom) - 2
+                && !blocks.some(b => hit(r, b, 3)) && !more.some(b => hit(r, b, 3)) && !taken.some(b => b && hit(r, b, 3)) && !(useZone && hit(r, zone, 0));
+            const sizes = extras.map(el => { const r = R(el); return { w: r.width, h: r.height }; });
+            // 先整組接在那一串的頭上（線索貼著那一串、繼續在最外面），擺不下就整組接在尾巴
+            for (const dir of [-1, 1]) {
+                const got = [];
+                if (sizes.every((s, i) => { const r = slot(dir * (i + 1), s); if (!free(r, got)) return false; got.push(r); return true; })) return got;
+            }
+            // 頭尾都擺不下整組：一顆一顆找，頭尾輪流往外；再不行疊在尾巴（或剛擺好那顆）旁邊另起一行；再不行找離那一串最近的空位
+            const got = [];
             const g = { x: (first.left + last.right) / 2, y: (first.top + last.bottom) / 2 };
-            const across = Math.abs(vx) > Math.abs(vy);   // 那一串是橫的：另起一行往上下疊；直的：往左右疊
             const beside = (a, sign, s) => across
                 ? box(a.left, sign < 0 ? a.top - s.h - Math.max(6, a.height * 0.25) : a.bottom + Math.max(6, a.height * 0.25), s.w, s.h)
                 : box(sign < 0 ? a.left - s.w - Math.max(6, a.width * 0.08) : a.right + Math.max(6, a.width * 0.08), a.top, s.w, s.h);
-            sizes.forEach((s, i) => {
+            sizes.forEach(s => {
                 let pick = null;
-                for (let k = 1; k <= extras.length + 2 && !pick; k++) pick = [slot(-k, s), slot(k, s)].find(r => free(r, plan)) || null;
+                for (let k = 1; k <= extras.length + 2 && !pick; k++) pick = [slot(-k, s), slot(k, s)].find(r => free(r, got)) || null;
                 if (!pick) {
-                    const anchors = plan.slice().reverse().concat([last, first]);
-                    for (const a of anchors) { pick = [beside(a, -1, s), beside(a, 1, s)].find(r => free(r, plan)) || null; if (pick) break; }
+                    const anchors = got.filter(Boolean).reverse().concat([last, first]);
+                    for (const a of anchors) { pick = [beside(a, -1, s), beside(a, 1, s)].find(r => free(r, got)) || null; if (pick) break; }
                 }
                 if (!pick) {
                     let bd = Infinity;
                     for (let y = pr.top + 4; y + s.h <= pr.bottom - 4; y += Math.max(8, s.h / 2)) {
                         for (let x = pr.left + 4; x + s.w <= pr.right - 4; x += Math.max(8, s.w / 3)) {
                             const r = box(x, y, s.w, s.h);
-                            if (!free(r, plan)) continue;
+                            if (!free(r, got)) continue;
                             const d = Math.hypot(x + s.w / 2 - g.x, y + s.h / 2 - g.y);
                             if (d < bd) { bd = d; pick = r; }
                         }
                     }
                 }
-                if (!pick) {   // 整個面板都塞滿了：照間距接在尾巴、夾在面板裡（會疊到，總比點不到好）
-                    const r = slot(i + 1, s);
-                    pick = box(Math.min(Math.max(r.left, pr.left + 2), pr.right - s.w - 2), Math.min(Math.max(r.top, pr.top + 2), pr.bottom - s.h - 2), s.w, s.h);
-                }
-                plan.push(pick);
+                got.push(pick);
             });
+            return got;
+        };
+        // ②盒子裡：照那一串往頭尾推（absolute 的才推得動；排版流的這步跳過）
+        const inSlot = (k, s) => { const a = k < 0 ? first : last; return box(alignX(xm.f(a) + vx * k, s), alignY(ym.f(a) + vy * k, s), s.w, s.h); };
+        let picks = lifted ? null : plan(clip, [], inSlot);
+        if (!picks || picks.some(p => !p)) {
+            // ③搬出盒子：盒子本身也算擋路，貼著盒子的邊、照那一串的間距接下去（沒有盒子切的＝貼著那一串外面那圈）
+            if (!lifted) liftAll();
+            const edge = clipped ? clip : rs.reduce((a, r) => ({ left: Math.min(a.left, r.left), top: Math.min(a.top, r.top), right: Math.max(a.right, r.right), bottom: Math.max(a.bottom, r.bottom) }),
+                { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
+            const sz = rs.reduce((a, r) => ({ w: a.w + r.width / rs.length, h: a.h + r.height / rs.length }), { w: 0, h: 0 });
+            const gapX = Math.max(6, Math.abs(vx) - sz.w), gapY = Math.max(6, Math.abs(vy) - sz.h);
+            const ax = rs.reduce((a, r) => a + xm.f(r), 0) / rs.length, ay = rs.reduce((a, r) => a + ym.f(r), 0) / rs.length;
+            // 那一串往哪個方向排：頭上＝反方向那條邊
+            const startLow = across ? vx > 0 : vy > 0;
+            const outSlot = (k, s) => {
+                const n = Math.abs(k), atStart = (k < 0);
+                if (across) {
+                    const leftSide = atStart === startLow;
+                    const x = leftSide ? edge.left - n * (s.w + gapX) : edge.right + gapX + (n - 1) * (s.w + gapX);
+                    return box(x, alignY(ay, s), s.w, s.h);
+                }
+                const topSide = atStart === startLow;
+                const y = topSide ? edge.top - n * (s.h + gapY) : edge.bottom + gapY + (n - 1) * (s.h + gapY);
+                return box(alignX(ax, s), y, s.w, s.h);
+            };
+            picks = plan(pr, [edge], outSlot);
         }
+        // 真的哪裡都塞不下：照間距接在尾巴、夾在面板裡（會疊到，總比點不到好）
+        picks = picks.map((p, i) => {
+            if (p) return p;
+            const r0 = R(extras[i]), s = { w: r0.width, h: r0.height };
+            const r = inSlot(i + 1, s);
+            return box(Math.min(Math.max(r.left, pr.left + 2), pr.right - s.w - 2), Math.min(Math.max(r.top, pr.top + 2), pr.bottom - s.h - 2), s.w, s.h);
+        });
         // 用 left/top 搬（模型可能用 right/bottom 釘的，一起放掉；寬高照抄出來的大小，免得放掉 right 之後縮水）
+        const uiR = R(ui);
         extras.forEach((el, i) => {
-            const cs = getComputedStyle(el), me = sizes[i].me, pick = plan[i];
+            const pick = picks[i];
+            if (lifted) {   // 已經搬到最外層，直接照面板的座標擺
+                el.style.right = 'auto'; el.style.bottom = 'auto';
+                el.style.left = Math.round(pick.left - uiR.left) + 'px';
+                el.style.top = Math.round(pick.top - uiR.top) + 'px';
+                return;
+            }
+            const cs = getComputedStyle(el), me = R(el);
             const ow = el.offsetWidth, oh = el.offsetHeight;
             const ol = el.offsetLeft - (parseFloat(cs.marginLeft) || 0), ot = el.offsetTop - (parseFloat(cs.marginTop) || 0);
             el.style.boxSizing = 'border-box';

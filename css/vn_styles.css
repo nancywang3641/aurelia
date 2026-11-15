@@ -1609,6 +1609,8 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             background: #c8463c; color: #fff; font: 600 11px/18px 'Playfair Display', serif; text-align: center; pointer-events: none;
             box-shadow: 0 0 0 2px #0c0a07; animation: vne-pulse 2.2s ease-in-out infinite; transition: opacity 0.25s; }
         #vn-end-panel .vnep-badge.vnep-badge-wait { opacity: 0; }
+        /* 抄出來的那兩顆擺位置時先藏一下，量「沒有它們時」原本那幾顆多大（vn_end_panel.js _placeExtras）；要壓過搬出盒子時釘住的行內樣式才用 !important */
+        #vn-end-panel .vnep-extra.vnep-measure { display: none !important; }
         #vn-end-panel.vnep-still .vnep-badge { animation: none; }
 
         #text-panel {
