@@ -85,7 +85,7 @@
 
     // ── 空的一天 / 空的一格 ──
     function blankDay(id) {
-        return { id: id, n: 0, ok: 0, fail: 0, inTok: 0, outTok: 0, ms: 0, img: 0, imgFail: 0,
+        return { id: id, n: 0, ok: 0, fail: 0, inTok: 0, outTok: 0, ms: 0, img: 0, imgFail: 0, voice: 0, voiceFail: 0, voiceChars: 0,
                  task: {}, model: {}, chan: {}, src: {}, firstAt: 0, updatedAt: 0 };
     }
     function bucket(map, key) {
@@ -97,6 +97,13 @@
     function foldInto(day, e) {
         day.updatedAt = Math.max(day.updatedAt || 0, e.t || 0);
         if (!day.firstAt) day.firstAt = e.t || 0;
+        // 念一句台詞（借接口那格 os_keyrun.js 記的）：算句數和計費字數，不算進跟模型講話的次數
+        if (e.kind === 'voice') {
+            day.voice = (day.voice || 0) + 1;
+            day.voiceChars = (day.voiceChars || 0) + (e.chars || 0);
+            if (e.ok === false) day.voiceFail = (day.voiceFail || 0) + 1;
+            return day;
+        }
         if (e.kind === 'image') {
             day.img++;
             if (e.ok === false) day.imgFail++;
@@ -287,6 +294,7 @@
             sum.n += d.n; sum.ok += d.ok; sum.fail += d.fail;
             sum.inTok += d.inTok; sum.outTok += d.outTok; sum.ms += d.ms;
             sum.img += d.img; sum.imgFail += d.imgFail || 0;
+            sum.voice += d.voice || 0; sum.voiceFail += d.voiceFail || 0; sum.voiceChars += d.voiceChars || 0;
             ['task', 'model', 'chan', 'src'].forEach(f => {
                 Object.keys(d[f] || {}).forEach(k => {
                     const a = bucket(sum[f], k), b = d[f][k];

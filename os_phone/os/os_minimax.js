@@ -122,8 +122,11 @@
         if (!result.data?.audio) throw new Error('回應無音頻數據');
         const blob = hexToBlob(result.data.audio);
         if (!blob) throw new Error('Hex 轉換失敗');
+        // 這句計費幾個字（中日韓一個字算兩個）：借接口那格（os_keyrun.js）拿來估花了多少
+        _lastInfo = { chars: result.extra_info ? result.extra_info.usage_characters : null, model: requestBody.model, provider: cfg.provider, at: Date.now() };
         return blob;  // 回傳 Blob，由呼叫方決定何時建 URL
     }
+    let _lastInfo = null;
 
     // --- 工具：取得或建立 <audio> 元素 ---
     function getAudioEl() {
@@ -185,9 +188,10 @@
         'lip-smacking','humming','hisses','emm','sneezes','whistles',
     ]);
 
-    // 檢查是否有實質可念內容（至少有一個中文字、英文字母或數字）
+    // 檢查是否有實質可念內容（至少有一個字或數字，哪種文字都算）
+    //   以前只認中英數，「めんどくさい」這種全假名的日語整句被當成只有標點、不念（11-02 做 MV 撞到）
     function _hasSpeakable(text) {
-        return /[\u4e00-\u9fa5a-zA-Z0-9]/.test(text);
+        return /[\p{L}\p{N}]/u.test(text);
     }
 
     // ① 清洗 TTS 文字：移除 VN 標籤和動作括號，保留中文標點
@@ -231,6 +235,9 @@
 
         /** 是否正在播放 */
         isPlaying() { return _isPlaying; },
+
+        /** 最近一次合成成功的那句：{ chars（計費字數）, model, provider, at } */
+        lastInfo() { return _lastInfo; },
 
         /**
          * ③ 將 VN Expression 名稱轉換為 Minimax emotion 值

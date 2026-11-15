@@ -2522,6 +2522,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             <div class="push-state" id="push-state">還沒開。</div>
                         </div>
 
+                        <!-- 借接口給電腦上的 AI：裡面整格由 os_keyrun.js 畫（下面 mount） -->
+                        <div class="set-group keyrun-group" id="keyrun-group"></div>
+
                         <div class="set-group${pwaOnly}">
                             <div class="set-label" title="在 iOS 加到主畫面時，若動態島或瀏海遮擋頂部 UI，可選「強制下移」。"><i class="fa-solid fa-desktop"></i> 介面佈局${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2515') : ''}</div>
                             <select class="set-select" id="os-layout-mode">
@@ -2615,6 +2618,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (targetView) { targetView.classList.remove('hidden'); targetView.classList.add('active'); }
             };
         });
+
+        // 借接口給電腦上的 AI（os_keyrun.js 自己畫、自己管開關和倒數）
+        const _keyrun = (window.parent || window).OS_KEYRUN;
+        if (_keyrun) _keyrun.mount(container.querySelector('#keyrun-group'));
 
         // 「圖片設置」(接口/底詞/尺寸) = 系統設置裡的 tab；圖庫快取圖(頭像/背景/插圖) = 獨立「相簿」app。
         //   view-img 永遠 render，靠下面切可見性把「設定」與「圖庫」分到兩邊。

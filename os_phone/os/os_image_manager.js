@@ -847,6 +847,8 @@
                 let data;
                 try { data = JSON.parse(text); }
                 catch (e) { throw new Error('回應不是 JSON（多半是網址填錯，指到了網頁而不是 API）：' + text.slice(0, 120)); }
+                // 這張用了多少（官方 GPT 圖片會回 usage）：借接口那格（os_keyrun.js）拿來估這張大概幾塊錢
+                this._lastCustomApiUsage = { usage: (data && data.usage) || null, model: model, official: _official, at: Date.now() };
 
                 if (isSd) {
                     const b64 = data && Array.isArray(data.images) ? data.images[0] : null;

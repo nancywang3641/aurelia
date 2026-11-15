@@ -212,7 +212,8 @@ const PHONE_FILES = [
     'os/os_voice_cast.js',       // 🔊 角色配音名單：輪到誰講話用哪個聲音（雲端／本機／不念）的唯一入口
     'os/translation_manager.js',
     'os/os_image_manager.js',
-    'os/os_relay.js',            // 📡 回覆交給伺服器跑（請求托管）：手機睡著也跑得完
+    'os/os_keyrun.js',           // 🔑 借接口給電腦上的 AI：限時開關＋通行碼，只收畫圖、念台詞（用到生圖、MiniMax，排在它們後面）
+    'os/os_relay.js',           // 📡 回覆交給伺服器跑（請求托管）：手機睡著也跑得完
     'os/os_heartbeat.js',        // 💓 角色主動找她：一間一組開關/節奏/機率
     'os/os_app_tools.js',        // 🧰 創作室 app 用的手機工具：故事時鐘、分享到聊天室、錢包、紅點、通知、自己動
     'os/os_keepalive.js',        // ☕ 沒有伺服器的守候：靜音音訊／螢幕不關／畫中畫小窗＋本機通知
@@ -532,6 +533,7 @@ async function initializeExtension() {
 
         // os_phone/os 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_keyrun.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_phone_theme.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_control_room.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_dashboard.css');
