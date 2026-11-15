@@ -26,7 +26,7 @@
             ss_jev: { title: '決策模型', body: '只做選擇題、打分數、回答是或不是的小模型，快又便宜，一次不到台幣 0.001 元。\n\n用到它的地方：書咖的丹決定下一步、立繪什麼時候收、音效和音樂、劇情地點對到地圖、記憶比對。\n\n要用 Jev 那種問法的服務。三格都要填；少一格，那些地方照舊用自己原本的辦法。\n\n只存在這台裝置上，電腦和手機要各填一次。' },
             ss_1503: { title: '頭像 來源', body: '角色頭像／立繪用這個來源。' },
             ss_1519: { title: '立繪模式', body: '開＝直接生全身立繪、不生頭像。' },
-            ss_trio: { title: '一次生三種', body: '只在立繪模式下有作用：勾了會順便勾上面的「跳過頭像」，取消「跳過頭像」它也會一起取消。新角色要圖時，一次生一張分三格的圖，切開成三張：\n\n・立繪（去背）：劇情舞台\n・頭像（自拍，留背景）：聊天、劇情手機、通話、大廳對話框、日誌、狀態面板\n・Q版（去背）：大廳裡他的小人（裝扮室換過造型的照舊）。Q版那格畫成正面、側面、背面三隻並排的，會切成三張，他在大廳走路、轉向時會換成那一面\n\n提示詞有兩格，用哪格看「立繪」那列接的是什麼：接自訂接口（GPT 那種）用上面那格，內建把 Q版畫成小人三面，也會附上分三格的底圖讓它照著排；接其他的（ComfyUI、NAI…）用下面那格，畫一隻 Q版、不附底圖（試過附了反而會把底圖的人帶過來）。\n\n開了這個，上面「一次生幾個角色」就不用了。已經有圖的舊角色不會重生。' },
+            ss_trio: { title: '一次生三種', body: '只在立繪模式下有作用：勾了會順便勾上面的「跳過頭像」，取消「跳過頭像」它也會一起取消。新角色要圖時，一次生一張分三格的圖，切開成三張：\n\n・立繪（去背）：劇情舞台\n・頭像（自拍，留背景）：聊天、劇情手機、通話、大廳對話框、日誌、狀態面板\n・Q版（去背）：大廳裡他的小人（裝扮室換過造型的照舊）。Q版那格畫成正面、側面、背面三隻並排的，會切成三張，他在大廳走路、轉向時會換成那一面\n\n提示詞有兩格，用哪格看「立繪」那列接的是什麼：接自訂接口（GPT 那種）用上面那格，會附上分三格的底圖讓它照著排；接其他的（ComfyUI、NAI…）用下面那格，不附底圖（試過附了反而會把底圖的人帶過來）。兩格內建的都是畫一隻站著的 Q版。\n\n開了這個，上面「一次生幾個角色」就不用了。已經有圖的舊角色不會重生。' },
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
@@ -1593,7 +1593,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="trio-row">
                                     <label class="set-check"><input type="checkbox" id="vncfg-sprite-trio" ${vnD.spriteTrio ? 'checked' : ''} onchange="window._trioToggle && window._trioToggle(this.checked)"> 一次生三種：立繪＋頭像＋Q版${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_trio') : ''}</label>
                                     <div id="vncfg-trio-body" class="${vnD.spriteTrio ? '' : 'hidden'}">
-                                        <!-- 11-15 分兩格（她：「好，分兩格」）：自訂接口那種能在同一張圖裡畫兩種畫風，內建把 Q版那格畫成小人三面；其他接口照舊畫一隻。用哪格看「立繪」那列接的接口（VN_Image.trioTplKey）。 -->
+                                        <!-- 11-15 分兩格（她：「好，分兩格」）：兩種接口各存各的。11-16 起兩格內建的都是畫一隻站立 Q版（自訂接口那格試過內建三面小人，畫風會被整張的畫風帶走，改回）。用哪格看「立繪」那列接的接口（VN_Image.trioTplKey）。 -->
                                         <div class="set-label">三格的提示詞：接自訂接口時用</div>
                                         <textarea class="set-textarea trio-tpl" id="trio-tpl-gpt" rows="9" oninput="window._trioTplSave && window._trioTplSave(this.value, 'custom_api')"></textarea>
                                         <div class="btn-test trio-reset" onclick="window._trioTplReset && window._trioTplReset('custom_api')">還原預設提示詞</div>

@@ -267,18 +267,13 @@
             + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, white background;\n\n'
             + 'upper-right panel: the same character taking a casual selfie inside a cluttered room, close-up portrait composition;\n\n'
             + 'right lower panel: a chibi adaptation of the exact same character, preserving the same hairstyle, hair color, eye color, skin tone and facial identity; wearing the exact same plain clothing as in the other panels, with the same garments, cut, colors and proportions adapted only to the chibi body; only the body proportions change into an oversized head and a small 2.5-head-tall body, centered fully inside the panel with clear white margin, plain white background;',
-        // 🧸 自訂接口（GPT 那種）用的那一份（11-15 她：「好，分兩格」）：右下那格畫成小人三面——正面、側面（臉朝右）、背面並排，
-        //   切的時候會切成三張（VN_Core._chibiViews），大廳的小人照方向換面。只有這種接口能在同一張圖裡左邊一種畫風、右下另一種；
-        //   ComfyUI 的 LoRA 一掛整張一起變，所以其他接口照舊用上面那份（一隻 Q版）。
-        //   🚨 側面寫死「臉朝右」：大廳（lobby_stage.js 的 placeActor）當它朝右，往左走才鏡像；改這裡那邊要一起改。
-        //   🚨 小人沒手沒腳用「只有兩個形狀：頭＋蛋形身體」正面講，不寫 no arms／no legs（同下面動物那套的規矩）。
-        TRIO_TPL_GPT: 'a three-panel character sprite sheet featuring the same character in three different formats;\n\n'
-            + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, white background;\n\n'
-            + 'upper-right panel: the same character taking a casual selfie inside a cluttered room, close-up portrait composition;\n\n'
-            + 'right lower panel: the exact same character turned into a small round-bottomed tumbler toy doll, drawn in a flat, simple mascot style that differs from the other two panels; the same doll appears three times side by side in one row, all three the same size and resting on the same ground line, sharing the continuous plain white background of this single panel: on the left seen from the front, in the middle in full profile with its face pointing to the right, on the right seen from behind; each doll is made of only two solid shapes, an oversized round head resting directly on a small smooth egg-shaped body with a rounded bottom; the head keeps the same hairstyle, hair color and eye color as the other panels, with large round eyes, a tiny mouth and round blush on the cheeks; the same outfit is painted flat onto the surface of the egg-shaped body, and the doll seen from behind shows the back of the hair and the back of the outfit; flat colors, thin clean outlines; the panel contains only these three dolls, evenly spaced with clear white gaps between them and clear white margin around them;',
+        // 🧸 自訂接口（GPT 那種）那一格的預設：11-15 曾經內建把右下畫成不倒翁小人三面（bd388614），11-16 她真的生了一張之後改回一隻站立 Q版——
+        //   畫風是加在整張圖上的（畫風包的字、接口的底詞、畫風底圖），小人那格也被照著畫，跟立繪同一種畫風，不是小人的畫法
+        //   （她：「怎麼畫風全一樣了」→「那還是改回之前那樣，先有個站立Q板好了」）。不倒翁小人之後另外做（裝扮室那邊單獨生）。
+        //   她自己在那格寫成三面並排的照樣會切成三張（VN_Core._chibiViews），大廳照方向換面；側面要臉朝右（lobby_stage.js 的 placeActor 當它朝右）。
         // 三格提示詞分兩份：自訂接口一份（os_trio_tpl_gpt）、其他接口一份（os_trio_tpl，原本那格）。設置頁兩格、這裡照「立繪」那列接的接口挑。
         trioTplKey: function (svc) { return svc === 'custom_api' ? 'os_trio_tpl_gpt' : 'os_trio_tpl'; },
-        trioTplDef: function (svc) { return svc === 'custom_api' ? this.TRIO_TPL_GPT : this.TRIO_TPL; },
+        trioTplDef: function (svc) { return this.TRIO_TPL; },   // 兩格現在同一份預設（一隻站立 Q版）；格子還是分開存，她各自改各自的
         // 分兩份那天的一次性搬家：以前只有一格、兩種接口共用。她若已經在那格寫了三面（側面、背面那些字）＝那是寫給自訂接口的，
         //   整段搬去自訂接口那格、原本那格回預設（其他接口照舊畫一隻）；沒寫三面的不動。搬過記一筆，之後不再看。
         trioTplMigrate: function () {
