@@ -84,6 +84,49 @@
     }
 
     // ── 存取 ────────────────────────────────────────────────────────
+    // ── 🚪 世界門（11-15）：線只送「現在這個地方」的 ─────────────────────────────
+    //   一段聊天在奧瑞亞和好幾個世界來回，帳是同一本：人在葦口澤時，奧瑞亞沒下文的線（評估灰色懸賞包…）照樣每輪送，
+    //   AI 就在世界裡推奧瑞亞的事；回奧瑞亞也一樣，世界裡的線要 10 章沒動才停。她 11-15 盤點後排的第三塊：「線索帳」。
+    //   規則：每一章的變化記著在哪記的（place：世界名，''＝主角原本生活的地方）；一條線在哪開、在哪動過，就算哪裡的線。
+    //     送給寫正文的、給副模型記帳看的，都只挑現在這裡的線；舊紀錄沒記地方的看那一章在哪（OS_WORLDGATE.castInfo().at），認不出的照送。
+    //     「想靠近／疏遠」的人也一樣：只列在這裡出場過的、這一趟的旅伴、沒出場紀錄的。線索頁面板照舊全列（給她看全貌）。
+    const _zk = s => { try { const Z = win.OS_ZH; if (Z && typeof Z.key === 'function') return Z.key(String(s == null ? '' : s)); } catch (e) {} return String(s == null ? '' : s).replace(/\s/g, ''); };
+    const _first = s => String(s || '').split(/[·・•\s]/)[0];
+    async function _scope() {
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.worldNames !== 'function') return null;
+        try {
+            const names = (await G.worldNames()) || [];
+            if (!names.length) return null;
+            const cur = (typeof G.getCurrentWorld === 'function') ? await G.getCurrentWorld() : null;
+            const ci = (typeof G.castInfo === 'function') ? await G.castInfo() : null;
+            const team = new Set();
+            ((ci && ci.team) || []).forEach(n => { team.add(_zk(n)); team.add(_zk(_first(n))); });
+            const cast = new Map();
+            if (ci && ci.places) Object.keys(ci.places).forEach(n => {
+                const ps = (ci.places[n] || []).map(p => _zk(p));
+                [_zk(n), _zk(_first(n))].forEach(k => { if (!k) return; const s = cast.get(k) || new Set(); ps.forEach(p => s.add(p)); cast.set(k, s); });
+            });
+            return { place: (cur && cur.name) || '', here: _zk((cur && cur.name) || ''), team, cast: cast.size ? cast : null, at: (ci && ci.at) || null };
+        } catch (e) { return null; }
+    }
+    // 這條線算不算這裡的：在這裡開的或在這裡動過；一個地方都認不出（舊紀錄、讀不到聊天）的照送
+    // 舊紀錄沒記地方：照那一章在聊天裡的位置認（castInfo().at）
+    function _placeOfFn(sc) { return (sc && sc.at) ? (k => (sc.at[String(k)] != null ? sc.at[String(k)] : null)) : null; }
+    function _lineHere(row, sc) {
+        if (!sc) return true;
+        const ps = row.places || [];
+        if (!ps.length) return true;
+        return ps.some(p => _zk(p) === sc.here);
+    }
+    // 這個人算不算這裡的（想靠近／疏遠那兩行用）
+    function _personHere(name, sc) {
+        if (!sc) return true;
+        if (sc.team.has(_zk(name)) || sc.team.has(_zk(_first(name)))) return true;
+        const seen = sc.cast ? (sc.cast.get(_zk(name)) || sc.cast.get(_zk(_first(name))) || null) : null;
+        return !seen || seen.has(sc.here);
+    }
+
     function _blank() { return { v: 1, deltas: {}, picks: {}, lean: {} }; }
     let _cache = null, _cacheChat = '';
     let _q = Promise.resolve();
@@ -196,12 +239,16 @@
         const seq = stopAt >= 0 ? order.slice(0, stopAt) : order;
         const ex = opts.exclude || null;
         const used = [];
+        // 🚪 這一章在哪記的（世界門）：新紀錄自己帶 place；舊的問 opts.placeOf（照那一章在聊天裡的位置認）；認不出＝null
+        const placeOfDelta = (k, d) => (d && d.place != null) ? d.place : (opts.placeOf ? opts.placeOf(k) : null);
+        const touch = (L, p) => { if (p == null) return; L.places = L.places || []; if (L.places.indexOf(p) < 0) L.places.push(p); };
         // 開帳的底（酒館從 Ako 伏笔帶進來的）排在所有章節前面
         if (data.seed && Array.isArray(data.seed.items)) {
             const at0 = opts.posOf ? (opts.posOf(data.seed.from) ?? 0) : 0;
+            const sp = opts.placeOf ? opts.placeOf(data.seed.from) : null;
             data.seed.items.forEach(it => {
                 const key = _keyOf(it.line);
-                if (key && !lines.has(key)) lines.set(key, { label: _labelOf(it.line), fact: it.fact || '', opened: at0, updated: at0, closed: false, lastAct: 'seed', lastKey: 'seed' });
+                if (key && !lines.has(key)) { const L = { label: _labelOf(it.line), fact: it.fact || '', opened: at0, updated: at0, closed: false, lastAct: 'seed', lastKey: 'seed' }; touch(L, sp); lines.set(key, L); }
             });
             lastPos = Math.max(lastPos, at0);
         }
@@ -212,17 +259,19 @@
             used.push(k);
             const at = Math.max(posOf(k), lastPos);   // 位置只准往後走（萬一排序跟位置對不上，不讓「幾章沒動」變負的）
             lastPos = at;
+            const dp = placeOfDelta(k, d);
             for (const it of d.items) {
                 const key = _keyOf(it.line);
                 if (!key) continue;
                 let L = lines.get(key);
+                if (L) touch(L, dp);
                 if (it.act === 'close') {
-                    if (!L) L = { label: _labelOf(it.line), fact: '', opened: at };
+                    if (!L) { L = { label: _labelOf(it.line), fact: '', opened: at }; touch(L, dp); }
                     if (it.kind) L.kind = it.kind;
                     L.closed = true; L.closedAt = at; L.lastAct = 'close'; L.lastKey = k;
                 } else {
                     const isNew = !L;
-                    if (!L) L = { label: _labelOf(it.line), fact: '', opened: at };
+                    if (!L) { L = { label: _labelOf(it.line), fact: '', opened: at }; touch(L, dp); }
                     if (it.fact) L.fact = it.fact;
                     if (it.kind) L.kind = it.kind;   // 開線時標的；之後「續」補標或這條線真的變成另一種事才會換
                     L.closed = false; L.updated = at; L.lastAct = isNew ? 'open' : 'update'; L.lastKey = k;
@@ -247,9 +296,10 @@
             const { order } = await _chapterOrder(data);
             // 這一章還沒記過（第一次）或正在被重寫（重生／swipe 同一把鑰匙）→ 都只看它之前的帳
             const ord = order.indexOf(key) >= 0 ? order : order.concat([key]);
-            const { lines } = _fold(data, ord, { beforeKey: key });
+            const sc = await _scope();   // 🚪 世界門：副模型只看、只記這裡的線（不然在世界裡會去續、去收奧瑞亞的線）
+            const { lines } = _fold(data, ord, { beforeKey: key, placeOf: _placeOfFn(sc) });
             const open = [];
-            lines.forEach(L => { if (!L.closed) open.push(`【${L.label}】${L.kind ? '〔' + _kindName(L.kind) + '〕' : '〔還沒標方向〕'}${L.fact || '（沒有記下現況）'}`); });
+            lines.forEach(L => { if (!L.closed && _lineHere(L, sc)) open.push(`【${L.label}】${L.kind ? '〔' + _kindName(L.kind) + '〕' : '〔還沒標方向〕'}${L.fact || '（沒有記下現況）'}`); });
             const block = `
 
 ═══════════════════════════════════════
@@ -268,7 +318,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
 - 當場就結束的小事、純日常、純心情不記。沒有變化就給 []。一章最多 ${CFG.maxItemsPerRound} 條。
 - 線名用「牽涉的人或事＋線」，四到八個字。帳上已有的線，名字照抄，不要換字、不要簡繁互換。
 格式："threads": [ { "line": "線名", "act": "開／續／收", "kind": "方向", "fact": "現況" } ]`;
-            return { block, handle: { cid, key } };
+            return { block, handle: sc ? { cid, key, place: sc.place } : { cid, key } };
         } catch (e) {
             console.warn('[Story Threads] 組記帳指示失敗:', e?.message || e);
             return null;
@@ -304,7 +354,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
                 if (act !== 'close' && !fact && !kind) continue;   // 開／續卻沒寫現況＝沒東西可記（只補標方向也算）
                 items.push(kind ? { line: label, act, fact, kind } : { line: label, act, fact });
             }
-            data.deltas[String(handle.key)] = { at: Date.now(), items };
+            data.deltas[String(handle.key)] = (handle.place != null) ? { at: Date.now(), items, place: handle.place } : { at: Date.now(), items };
             await _save();
             console.log(`🧵 [Story Threads] 第 ${handle.key} 章：` + (items.length
                 ? items.map(i => `${i.act === 'close' ? '收' : (i.act === 'open' ? '開' : '續')}【${i.line}】`).join(' ')
@@ -345,14 +395,14 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         const data = await _run(async () => { const d = await _load(cid); await _ensureSeed(d); return d; });
         if (!data) return null;
         const co = await _chapterOrder(data);
-        const { lines, count, used, lastPos } = _fold(data, co.order, { exclude: opts && opts.exclude, posOf: co.posOf });
+        const { lines, count, used, lastPos } = _fold(data, co.order, { exclude: opts && opts.exclude, posOf: co.posOf, placeOf: opts && opts.placeOf });
         // 「現在」＝最新一章的位置（PWA 用實際章節數，記帳沒跑的章也算時間有在走）
         let nowPos = lastPos;
         try { if (_isStandalone() && co.alive && co.alive.size) nowPos = Math.max(nowPos, co.alive.size - 1); } catch (e) {}
         const latestKey = used.length ? used[used.length - 1] : null;
         const out = { open: [], stale: [], closed: [], picks: data.picks, count, latestKey, site: siteFor(), on: _isOn() };
         lines.forEach((L, key) => {
-            const row = { key, label: L.label, fact: L.fact, kind: L.kind || '', pick: data.picks[key]?.s || '' };
+            const row = { key, label: L.label, fact: L.fact, kind: L.kind || '', pick: data.picks[key]?.s || '', places: L.places || [] };
             if (L.closed) {
                 row.age = nowPos - L.closedAt;
                 row.mark = (L.lastKey === latestKey) ? 'closed_now' : '';
@@ -411,8 +461,9 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         Object.keys((d && d.lean) || {}).forEach(k => { const v = d.lean[k]; if (v && out[v.s]) out[v.s].push(v.name); });
         return out;
     }
-    async function _leanText() {
+    async function _leanText(sc) {
         const L = await leanList();
+        if (sc) { L.near = L.near.filter(n => _personHere(n, sc)); L.far = L.far.filter(n => _personHere(n, sc)); }   // 🚪 不在這裡的人不列
         const parts = [];
         if (L.near.length) parts.push(`主角想靠近的人：${L.near.join('、')}\n玩家（螢幕前的人，不是主角）想跟這幾個人走感情線，主角對他們也有好感。讓他們照自己的日子過、在合理的場合出現在主角身邊，給主角接得住的機會；別讓他們消失，也別寫成只路過一次的人。關係怎麼走、走多快，照兩人之間實際發生過的事。`);
         if (L.far.length) parts.push(`主角在疏遠的人：${L.far.join('、')}\n主角對這幾個人的好感在往下掉。寫到主角跟他們的互動時照這個心意；他們怎麼反應，照他們自己的個性。`);
@@ -423,16 +474,17 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
     async function buildText(opts) {
         try {
             const parts = [];
-            const s = _isOn() ? await snapshot(opts) : null;
+            const sc = await _scope();   // 🚪 世界門：只送現在這裡的線
+            const s = _isOn() ? await snapshot(Object.assign({}, opts, { placeOf: _placeOfFn(sc) })) : null;
             if (s) {
                 const want = [], hold = [], facts = [];
-                const all = s.open.concat(s.stale);
+                const all = s.open.concat(s.stale).filter(r => _lineHere(r, sc));
                 all.forEach(r => {
                     if (r.pick === 'hold') { hold.push(r.label); return; }
                     if (r.pick === 'want') want.push(r.label + (r.kind ? '（' + _kindName(r.kind) + '）' : ''));
                     if (r.age < r.staleAt || r.pick === 'want') facts.push(`【${r.label}】${r.fact || '（沒有記下現況）'}`);
                 });
-                const closed = s.closed.filter(r => r.age < CFG.closedNameFor).map(r => r.label);
+                const closed = s.closed.filter(r => r.age < CFG.closedNameFor && _lineHere(r, sc)).map(r => r.label);
                 if (facts.length) {
                     parts.push('這個故事裡已經發生、還沒有下文的事。這是背景紀錄，不是這一章非處理不可的清單：碰不碰、碰哪一條，照這一章的場面自然決定；沒碰到的線，線裡的人照樣在過自己的日子。');
                     parts.push(facts.join('\n'));
@@ -441,7 +493,7 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
                 if (hold.length) parts.push(`先放著的線：${hold.join('、')}\n這段時間線裡的人不主動來找主角，旁人也別聊起。`);
                 if (closed.length) parts.push(`已經收場：${closed.join('、')}\n這些事已經過去了，這一章不要再提，也別讓誰再聊起。`);
             }
-            const lean = await _leanText();
+            const lean = await _leanText(sc);
             if (lean) parts.push(lean);
             return parts.join('\n\n');
         } catch (e) {

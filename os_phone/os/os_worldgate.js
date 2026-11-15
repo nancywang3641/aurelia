@@ -148,15 +148,21 @@
                 const db = _db();
                 if (!db || !db.getAllVnChapters) return null;
                 const list = ((await db.getAllVnChapters()) || []).filter(c => c && c.storyId === cid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-                list.forEach(c => { steps.push({ user: String(c.request || '') }); steps.push({ ai: String(c.content || '') }); });
+                list.forEach(c => { steps.push({ user: String(c.request || '') }); steps.push({ ai: String(c.content || ''), key: c.id }); });
             } else {
                 const R = win.VN_READER || window.VN_READER;
                 const msgs = (R && R.fetchFullChat) ? await R.fetchFullChat() : null;
                 if (!Array.isArray(msgs) || !msgs.length) return null;
-                msgs.forEach(m => { if (m && !m.chat_metadata) steps.push(m.is_user ? { user: String(m.mes || m.message || '') } : { ai: String(m.mes || m.message || '') }); });
+                let floor = 0;   // 樓號＝不算檔頭那一筆的第幾則（跟酒館 message_id 同一套）
+                msgs.forEach(m => {
+                    if (!m || m.chat_metadata) return;
+                    const f = (m.message_id != null) ? m.message_id : floor;
+                    floor++;
+                    steps.push(m.is_user ? { user: String(m.mes || m.message || '') } : { ai: String(m.mes || m.message || ''), key: f });
+                });
             }
         } catch (e) { return null; }
-        const places = {}, visited = [];
+        const places = {}, visited = [], at = {};   // at：每一章在哪（酒館＝樓號、網頁版＝章節 id → 地方），線索帳認舊紀錄用
         let place = '', leaving = false;
         const add = (n, p) => { const k = String(n || '').trim(); if (!k) return; const a = places[k] || (places[k] = []); if (a.indexOf(p) < 0) a.push(p); };
         for (const s of steps) {
@@ -167,6 +173,7 @@
                 else if (leaving) { place = ''; leaving = false; }
                 continue;
             }
+            if (s.key != null) at[String(s.key)] = place;
             const re = /\[Char\|([^|\]\n]+)/g;
             let m;
             while ((m = re.exec(s.ai))) add(m[1], place);
@@ -179,7 +186,7 @@
             const w = curId ? worlds.find(x => x && x.id === curId) : null;
             if (w) team = (w.travelers || []).filter(t => t && t.recruited && !t.gone && t.name).map(t => String(t.name));
         } catch (e) {}
-        const val = { places, visited: visited.map(n => { const w = byName(n); return { name: n, genre: (w && w.genre) || '' }; }), team };
+        const val = { places, at, visited: visited.map(n => { const w = byName(n); return { name: n, genre: (w && w.genre) || '' }; }), team };
         _castMemo = { cid, at: Date.now(), val };
         return val;
     }
