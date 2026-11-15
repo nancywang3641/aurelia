@@ -22,6 +22,16 @@
 
     const INJECT_ID = 'aurelia_app_memory';
     const FLAG_KEY = 'os_app_mem_inject_enabled';
+
+    // 🚪 世界門（11-15）：主角進視差世界不帶手機。
+    //   她 11-15：「不拿手機，世界多變，很多沒有現在機」——人在世界裡時，手機記憶、手機上剛發生的事、應用資料、聊天室代號都不送，
+    //   不然奧瑞亞的聯絡人和對話每輪跟進世界。手機上這段時間收到的訊息不會丟：事件簿沒送就還留著，撤離回來那一輪才一起看到。
+    //   網頁版同一條規則在 os_api_engine 的 _buildStandaloneContext（問同一支 inWorld）。
+    async function inWorld() {
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.getCurrentWorld !== 'function') return false;
+        try { return !!(await G.getCurrentWorld()); } catch (e) { return false; }
+    }
     const RECENT_SCAN = 8;      // 掃最近幾樓酒館對話，找「在場角色」
     const PER_CHAT_CHARS = 700; // 每個聊天室從最新往回帶，累積到這麼多字為止（聊天一句很短，只數句數會截在話題中間）
     const PER_CHAT_MSGS = 30;   // 同上，句數上限
@@ -438,6 +448,7 @@
             if (win.__AURELIA_SUMMARIZING) return;            // 大總結生成不摻
             if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 這條路酒館 only（PWA 走 app_memory 那一格）
             if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            if (await inWorld()) { try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; _nowBatch = null; try { win.OS_PHONE_EVENTS && win.OS_PHONE_EVENTS.cancel(); } catch (e) {} return; }   // 🚪 世界裡沒有手機：手機那三塊都不送
             if (type === 'quiet' || type === 'impersonate' || type === 'continue') { await injectAppData(null); return; }   // 不是她說了一句話的那種：事件簿不送，app 資料只帶送過的
 
             const before = await injectPhoneNow(type);
@@ -592,6 +603,7 @@
             _lastWxRoomUninject = null;
             if (win.__AURELIA_SUMMARIZING) return;
             if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
+            if (await inWorld()) return;   // 🚪 世界裡沒有手機：聊天室代號不送
             var th = win.TavernHelper;
             if (!th || !th.injectPrompts || !th.getChatMessages) return;
             var lastId = 0;
@@ -929,6 +941,8 @@
 
     win.OS_APP_MEMORY_INJECT = {
         injectAppMemory: injectAppMemory,
+        inWorld: inWorld,   // 🚪 人在視差世界裡（沒有手機）；網頁版組 context 也問這支
+        injectWxChatrooms: injectWxChatrooms,
         buildAppMemoryBlock: buildAppMemoryBlock,   // PWA：_buildStandaloneContext 的 app_memory 那一格取這份
         injectAppData: injectAppData,
         isEnabled: _enabled,

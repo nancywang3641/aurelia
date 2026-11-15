@@ -2897,10 +2897,16 @@
                 catch (_e) { console.warn('[OS_API vn_story] NPC 人物檔案組裝失敗:', _e); }
                 // 📨 手機上剛發生的事（手機事件簿，跟酒館同一本）：先拿，回顧那塊才知道要排除哪之後的
                 let _phoneNow = { text: '', from: null };
-                try { if (win.OS_PHONE_EVENTS) _phoneNow = await win.OS_PHONE_EVENTS.build(opts && opts.phone); }
-                catch (_e) { console.warn('[OS_API vn_story] 手機事件簿組裝失敗:', _e); }
-                try { _appMemBlock = (await win.OS_APP_MEMORY_INJECT?.buildAppMemoryBlock?.(scanText, -1, _phoneNow.from)) || ''; }
-                catch (_e) { console.warn('[OS_API vn_story] 手機近況組裝失敗:', _e); }
+                // 🚪 世界門（11-15）：主角進視差世界不帶手機（她：「不拿手機，世界多變，很多沒有現在機」）→ 手機近況、剛發生的事都不送；
+                //   事件簿沒 build 就不會被記成送過，撤離回來那一輪才一起看到（同酒館 os_app_memory_inject 的 inWorld）
+                let _noPhone = false;
+                try { _noPhone = !!(await win.OS_APP_MEMORY_INJECT?.inWorld?.()); } catch (_e) {}
+                if (!_noPhone) {
+                    try { if (win.OS_PHONE_EVENTS) _phoneNow = await win.OS_PHONE_EVENTS.build(opts && opts.phone); }
+                    catch (_e) { console.warn('[OS_API vn_story] 手機事件簿組裝失敗:', _e); }
+                    try { _appMemBlock = (await win.OS_APP_MEMORY_INJECT?.buildAppMemoryBlock?.(scanText, -1, _phoneNow.from)) || ''; }
+                    catch (_e) { console.warn('[OS_API vn_story] 手機近況組裝失敗:', _e); }
+                }
                 let _mcBlock = '';
                 try { _mcBlock = (await win.OS_MC_STATUS?.buildBlock?.()) || ''; }
                 catch (_e) { console.warn('[OS_API vn_story] 主角狀態組裝失敗:', _e); }
