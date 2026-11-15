@@ -298,18 +298,35 @@
     }
     // 把抄出來那顆搬出盒子：照抄的那顆「現在畫出來的樣子」一層一層釘成行內樣式（顏色、字、外框、clip-path、大小），
     //   搬到哪裡都長一樣。滑鼠移上去的變化、::before/::after 的小裝飾帶不走（只能這樣，盒子會切掉它）
-    function _freeze(dst, src) {
-        const copy = (s, d) => {
+    //   🚨11-16 她：修完之後「每次到末尾都會卡卡的」，有一次整個 TauriTavern 卡死。以前這裡一條一條讀、一條一條寫：
+    //     ①每寫一條瀏覽器就要重算一次樣式（讀寫交錯），一顆按鈕幾百條 × 每一層；
+    //     ②瀏覽器列出來的清單連「整頁繼承下來的 CSS 變數」都算（酒館頁面有幾百個，有的值是一整張圖），每一層都抄一遍，
+    //       按鈕身上掛了幾 MB 到幾十 MB 的行內樣式。
+    //     → 先全部讀完、每一層只寫一次；變數只抄「搬出去之後會拿不到的」（跟新家、跟上一層一樣的本來就繼承得到，不抄）。
+    //     量法：tmp/vne_world/end_perf2.cjs（頁面上掛 300 個變數＋幾張圖的時候寫了幾次、幾 MB、卡多久）
+    function _freeze(dst, src, into) {
+        const jobs = [];
+        const read = (s, d, up) => {
             const cs = getComputedStyle(s);
-            for (let i = 0; i < cs.length; i++) { const p = cs[i]; try { d.style.setProperty(p, cs.getPropertyValue(p)); } catch (e) {} }
-        };
-        const pair = (s, d) => {
-            copy(s, d);
+            let text = '';
+            const vars = [];
+            for (let i = 0; i < cs.length; i++) {
+                const p = cs[i], v = cs.getPropertyValue(p);
+                if (p.charCodeAt(0) === 45 && p.charCodeAt(1) === 45) {       // --變數
+                    if (up && up.getPropertyValue(p) !== v) vars.push([p, v]);
+                } else if (v !== '') text += p + ':' + v + ';';
+            }
+            jobs.push([d, text, vars]);
             for (let i = 0; i < d.children.length && i < s.children.length; i++) {
-                if (s.children[i].tagName === d.children[i].tagName) pair(s.children[i], d.children[i]);
+                if (s.children[i].tagName === d.children[i].tagName) read(s.children[i], d.children[i], cs);
             }
         };
-        pair(src, dst);
+        read(src, dst, into ? getComputedStyle(into) : null);
+        jobs.forEach(([d, text, vars]) => {
+            const own = d.getAttribute('style') || '';     // 面板自己寫在這顆上的行內樣式照留（跟以前一樣墊在底下）
+            d.style.cssText = (own ? own + ';' : '') + text;
+            vars.forEach(([p, v]) => { try { d.style.setProperty(p, v); } catch (e) {} });
+        });
         dst.style.transition = 'none';
         dst.style.animation = 'none';
         dst.style.transform = 'none';
@@ -338,7 +355,7 @@
         // ③的動作：先藏起來（不然抄的那顆量到的是被擠過的樣子），照抄的那顆釘住樣子，搬到最外層
         const liftAll = () => {
             extras.forEach(el => el.classList.add('vnep-measure'));
-            extras.forEach(el => { _freeze(el, el._vnepSrc); el.classList.add('vnep-lifted'); ui.appendChild(el); el.style.position = 'absolute'; });
+            extras.forEach(el => { _freeze(el, el._vnepSrc, ui); el.classList.add('vnep-lifted'); ui.appendChild(el); el.style.position = 'absolute'; });
             extras.forEach(el => el.classList.remove('vnep-measure'));
             lifted = true;
         };
@@ -643,14 +660,45 @@
 
     // 面板尺寸一變就重算溢出（酒館聊天欄是可以拖寬拖窄的）。只留一個觀察者，換世界時拆掉。
     // 🚨進場還在滑的時候不量：那時量到的是滑到一半的位置，會把正在進場的按鈕當成跑出去、拉歪一輩子
-    let _ro = null;
+    // 🚨11-16：觀察者一掛上就會先回報一次（大小根本沒變），以前每次都整組還原、重抄、重擺 → 進場剛演完畫面就頓一下（她「每次到末尾都會卡卡的」）。
+    //   現在先對「面板多大、原本那幾顆在哪」（_layoutSig）：跟上次擺好時一樣就不重擺，只照舊量一次有沒有東西跑出去。
+    //   保險：同一種大小幾秒內又回來要重擺（重擺 → 大小變 → 又重擺，兩邊互相叫）、或短時間重擺太多次 → 這次不擺，維持現在的位置。
+    let _ro = null, _placedSig = '';
+    function _layoutSig(root) {
+        const ui = root.querySelector('.vnep-ui');
+        const pr = root.getBoundingClientRect();
+        if (!ui) return '';
+        return Math.round(pr.width) + 'x' + Math.round(pr.height) + '|' + _mainEntries(ui).filter(el => !el.classList.contains('vnep-extra')).map(el => {
+            const r = el.getBoundingClientRect();
+            return [Math.round(r.left - pr.left), Math.round(r.top - pr.top), Math.round(r.width), Math.round(r.height)].join(',');
+        }).join(';');
+    }
     function _watchResize(root) {
         _unwatch();
         if (typeof ResizeObserver !== 'function') return;
-        let t = null;
+        let t = null, warned = false;
+        const runs = [];   // 最近幾次重擺：[時間, 那時的大小]
+        const my = _gen;
         _ro = new ResizeObserver(() => {
             clearTimeout(t);
-            t = setTimeout(() => { try { _placeExtras(root); _guardOverflow(root); } catch (e) {} }, Math.max(120, _enterUntil - Date.now() + 40));
+            t = setTimeout(() => {
+                if (_stale(root, my) || !root.classList.contains('active')) return;
+                try {
+                    const sig = _layoutSig(root);
+                    if (sig !== _placedSig) {
+                        const now = Date.now();
+                        while (runs.length && now - runs[0][0] > 4000) runs.shift();
+                        if (runs.length >= 6 || runs.filter(r => r[1] === sig).length >= 2) {
+                            if (!warned) { warned = true; console.warn('[VN末尾面板] 面板大小一直在變，「繼續」「線索」先不重擺'); }
+                        } else {
+                            runs.push([now, sig]);
+                            _placeExtras(root);
+                        }
+                    }
+                    _guardOverflow(root);
+                    _placedSig = _layoutSig(root);
+                } catch (e) {}
+            }, Math.max(120, _enterUntil - Date.now() + 40));
         });
         _ro.observe(root);
     }
@@ -1001,6 +1049,7 @@
         _toggleNative(found);
         _guardContrast(root);   // 要在掛上 active、文字也寫定之後才量，量的是最終畫面
         _guardOverflow(root);
+        try { _placedSig = _layoutSig(root); } catch (e) { _placedSig = ''; }   // 擺好時的樣子記下來：之後大小沒變就不重擺（要在進場開始滑之前量）
         // 進場排在位置拉正之後：從最近的邊滑進來，要先知道它最後停在哪
         if (_motionOk()) { try { _enter(root); } catch (e) { console.warn('[VN末尾面板] 進場沒演成：' + e.message); } }
         else _holdStill(root);
@@ -1016,6 +1065,7 @@
         const root = _el();
         _gen++;              // 換號：上一輪還在飛的底圖／插圖非同步結果全部作廢
         _unwatch();
+        _placedSig = '';
         _badgeN = 0;
         _toggleNative([]);   // 原生系統鍵先還原，不然面板拆了按鈕也跟著不見
         // 面板按鈕開的小窗（vn_end_brief 那一欄借來當小窗）一起收：面板拆了小窗留著＝線索頁、CTX 浮窗沒還回去
