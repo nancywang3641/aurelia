@@ -2696,12 +2696,31 @@
 
         // 台詞欄被 AI 混進旁白（「話」他動了動「話」）→ 語音只念「」內的內容，旁白描述不出聲（防出戲）。
         // 沒有「」的整句照舊（內心話 *…*、純口語、旁白走自己的路都不受影響）；多段引號用空格串接（TTS 自然停頓）。
+        // 🚨 AI 也會反過來：整句台詞沒包「」、裡面只拿「」引一個詞（…本地人说的「泽生子」了，…），
+        //    以前只念出「泽生子」三個字（11-15 她：「Char 基本上可以當作語音，但有些笨笨AI會在「」外面放旁白」）。
+        //    所以只在「像台詞包在「」裡」時才剝外面：整句一對「」、「」開頭或結尾、或「」裡的字不比外面少太多；
+        //    「」只框了一小段、前後都是一大段字 → 整句都是台詞，拿掉引號照念。
         _speechOnly: function(text) {
             const s = String(text || '');
+            if (s.indexOf('「') < 0) return s;
+            const t = s.trim().replace(/[。，、…‥！？!?.,\s]+$/, '');
+            // 整句就是一對「」（裡面再拿「」引個詞也算）→ 全部念
+            if (t[0] === '「' && t[t.length - 1] === '」') {
+                let d = 0, whole = true;
+                for (let i = 0; i < t.length; i++) {
+                    if (t[i] === '「') d++; else if (t[i] === '」') d--;
+                    if (d <= 0 && i < t.length - 1) { whole = false; break; }
+                }
+                if (whole) return s.replace(/[「」]/g, '').trim() || s;
+            }
             const m = s.match(/「[^「」]*」/g);
             if (!m || !m.length) return s;
             const joined = m.map(seg => seg.slice(1, -1).trim()).filter(Boolean).join(' ');
-            return joined || s;
+            if (!joined) return s;
+            const bare = x => x.replace(/[\s\p{P}\p{S}]/gu, '').length;
+            const inLen = bare(joined), outLen = bare(s.replace(/「[^「」]*」/g, ''));
+            if (t[0] !== '「' && t[t.length - 1] !== '」' && inLen * 2 < outLen) return s.replace(/[「」]/g, '');
+            return joined;
         },
 
         // 送 GPT-SoVITS 前清理文字：去掉開頭與結尾標點，避免後端切句異常與靜音
