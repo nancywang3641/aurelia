@@ -10,6 +10,8 @@
 //         os_phone/os/os_journal.js（故事日誌自己配書翻開／闔上的時間演）。
 // 對外：window.AURELIA_TILEFX = { canRun, hide, run, clear }
 // 🚨 演的時候窗口是被剪掉的：任何一條路沒收尾都會讓整格消失 → 每次都有保險計時器，畫面藏著 rAF 不跑也一定收尾。
+// 🐢 演的那不到一秒，窗口每一格都要整個重畫。窗口裡同時有毛玻璃、會滑的東西就會掉格（11-16 章節面板；故事日誌沒有這些所以不卡）
+//    → 演的時候窗口上掛著 class「aurelia-tilefx-on」，要省的窗口自己在 CSS 接（章節面板在 css/vn_styles.css）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -45,6 +47,7 @@
         const s = st(host);
         cancelAnimationFrame(s.raf); clearTimeout(s.timer);
         if (s.cv) { s.cv.remove(); s.cv = null; }
+        try { host.classList.remove('aurelia-tilefx-on'); } catch (e) {}
         s.run++;
     }
     // 收乾淨：停掉、拿掉畫布、窗口整格露出來
@@ -91,6 +94,7 @@
         cv.style.zIndex = String((parseInt(getComputedStyle(host).zIndex, 10) || 0) + 1);
         par.appendChild(cv);
         s.cv = cv;
+        host.classList.add('aurelia-tilefx-on');   // 演完（_stop）就拿掉
         const ctx = cv.getContext('2d');
         const size = W / COLS, rows = Math.ceil(H / size), cx = W / 2, cy = H / 2, far = Math.hypot(cx, cy);
         const cells = [];

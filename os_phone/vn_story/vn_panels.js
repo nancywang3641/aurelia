@@ -846,10 +846,49 @@
     const THUMB_W = 360;
     const _thumbSmall = {};     // cacheId → 縮好的小圖（字串很小，可以一直留著）
     const _thumbBusy = {};      // cacheId → 進行中的 Promise（同一張不重複解碼）
+    let _thumbTurn = Promise.resolve();   // 還沒縮過的排隊，一次只做一張
+    // 縮好的小圖記下來（上限 60 張，超過丟掉最早那批）
+    function _thumbKeep(cacheId, out) {
+        _thumbSmall[cacheId] = out;
+        const keys = Object.keys(_thumbSmall);
+        if (keys.length > 60) keys.slice(0, 20).forEach(k => { delete _thumbSmall[k]; delete _thumbBusy[k]; });
+        return out;
+    }
+    // 🐢 11-16：以前一律走下面那條（new Image 解碼＋畫布縮＋toDataURL），整張原圖（常常兩三 MB）的解碼和壓圖都卡在畫面這條線上，
+    //    一次七張＝每次開酒館第一次開章節都卡兩下。現在先走這條：解碼（createImageBitmap）和壓圖（toBlob）都在背後做，畫面不停。
+    //    抓不到的（別的網域沒開放、太舊的瀏覽器）回 ''，退回原本那條。
+    async function _shrinkOff(url) {
+        if (typeof createImageBitmap !== 'function') return '';
+        try {
+            const blob = await (await fetch(url)).blob();
+            const bmp = await createImageBitmap(blob);
+            const s = Math.min(1, THUMB_W / (bmp.width || THUMB_W));
+            const cv = document.createElement('canvas');
+            cv.width = Math.max(1, Math.round(bmp.width * s)); cv.height = Math.max(1, Math.round(bmp.height * s));
+            cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+            try { bmp.close(); } catch (e) {}
+            const small = await new Promise(r => cv.toBlob(r, 'image/webp', 0.72));
+            cv.width = cv.height = 1;
+            if (!small) return '';
+            return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result || '')); fr.onerror = () => r(''); fr.readAsDataURL(small); });
+        } catch (e) { return ''; }
+    }
+    // 從大廳打開章節時切塊還在演（面板被剪著）：等它演完才做重的。最多等 4 秒。
+    function _tilesDone() {
+        return new Promise((res) => {
+            const t0 = Date.now();
+            const chk = () => {
+                const p = document.getElementById('aurelia-vn-panel');
+                if (!(p && (p.classList.contains('aurelia-tilefx-on') || p.style.clipPath)) || Date.now() - t0 > 4000) res();
+                else setTimeout(chk, 80);
+            };
+            setTimeout(chk, 0);   // 切塊是「面板內容出來的下一步」才開始演，先讓那一步跑完再看
+        });
+    }
     function _shrink(cacheId, url) {
         if (_thumbSmall[cacheId]) return Promise.resolve(_thumbSmall[cacheId]);
         if (_thumbBusy[cacheId]) return _thumbBusy[cacheId];
-        _thumbBusy[cacheId] = new Promise((resolve) => {
+        _thumbBusy[cacheId] = _shrinkOff(url).then((off) => off ? _thumbKeep(cacheId, off) : new Promise((resolve) => {
             const img = new Image();   // 🚨不設 crossOrigin：設了會變成另一份請求、快取全落空
             img.onload = () => {
                 let out = url;
@@ -862,15 +901,11 @@
                     cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
                     out = cv.toDataURL('image/webp', 0.72);   // 跨網域圖會在這裡丟例外 → 退回原圖
                 } catch (e) { out = url; }
-                _thumbSmall[cacheId] = out;
-                // 小圖字串很小，但換過幾十個故事線也會積 → 超過就丟掉最早那批
-                const keys = Object.keys(_thumbSmall);
-                if (keys.length > 60) keys.slice(0, 20).forEach(k => { delete _thumbSmall[k]; delete _thumbBusy[k]; });
-                resolve(out);
+                resolve(_thumbKeep(cacheId, out));
             };
             img.onerror = () => resolve('');
             img.src = url;
-        });
+        }));
         return _thumbBusy[cacheId];
     }
     async function _fillSceneImg(sceneEl, cacheId) {
@@ -881,15 +916,23 @@
             sceneEl.style.setProperty('--chx-thumb-img', `url('${_thumbSmall[cacheId]}')`);
             return;
         }
-        let url = win.VN_Core?._bgMemCache?.[cacheId] || '';
-        if (!url) {
-            try {
-                const cached = await (win.VN_Cache?.get?.('bg_cache', cacheId));
-                url = (cached && cached.url) || '';
-            } catch (e) {}
-        }
-        if (!url) { delete sceneEl.dataset.thumbOn; return; }
-        const small = await _shrink(cacheId, url);
+        await _tilesDone();   // 還沒縮過的才會走到這：等切塊演完再讀原圖、縮圖（縮過的上面已經直接貼了）
+        // 一張一張排隊做：一次七張原圖（一張兩三 MB 的字串）同時從圖庫讀出來，光是讀就會卡一下
+        const turn = _thumbTurn; let done; _thumbTurn = new Promise(r => { done = r; });
+        let small = '';
+        try {
+            await turn;
+            if (sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
+            let url = win.VN_Core?._bgMemCache?.[cacheId] || '';
+            if (!url) {
+                try {
+                    const cached = await (win.VN_Cache?.get?.('bg_cache', cacheId));
+                    url = (cached && cached.url) || '';
+                } catch (e) {}
+            }
+            if (!url) { delete sceneEl.dataset.thumbOn; return; }
+            small = await _shrink(cacheId, url);
+        } finally { setTimeout(done, 0); }   // 讓畫面先喘一格再換下一張
         // 縮圖做好之前可能已經滑出視窗（被 _dropSceneImg 清掉）→ 別再塗回去
         if (!small || sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
         sceneEl.style.setProperty('--chx-thumb-img', `url('${small}')`);

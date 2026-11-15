@@ -283,6 +283,11 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
            opacity:0 不會讓它省下來。33 章＝33 片一直在模糊背後的東西，整個酒館都會被拖慢。
            進到可視範圍(去掉 chx-far)才恢復，那時卡片是透明的淡入，看不出切換。 */
         .chx-card.chx-far .chx-card-glass { backdrop-filter: none; -webkit-backdrop-filter: none; }
+        /* 🐢 從大廳打開／關掉時那一格格切塊在演（#aurelia-vn-panel 掛著 aurelia-tilefx-on，不到一秒）：
+           切塊每一格都要把整個面板重畫一次，卡片同時在滑、五片毛玻璃同時在糊，疊起來就掉格（11-16 她：「章節打開的時候總是卡卡的」）。
+           演的時候卡片直接就位不滑、毛玻璃先關；演完 class 拿掉就恢復，之後翻卡片照樣滑。 */
+        .aurelia-tilefx-on .chx-card { transition: none !important; }
+        .aurelia-tilefx-on .chx-card .chx-card-glass { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
         .chx-card.chx-far[data-side="r"] { --chx-dx: 46cqw;  --chx-sc: 0.5; }
         .chx-card.chx-far[data-side="l"] { --chx-dx: -46cqw; --chx-sc: 0.5; }
 
