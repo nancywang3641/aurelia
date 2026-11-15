@@ -523,6 +523,52 @@
                 if (btn) { btn.textContent = '已解除 ✓'; btn.disabled = true; }
             } catch (e) { AUI.alert('解除失敗：' + (e?.message || e)); }
         },
+        // 角色卡上那兩顆重生鈕用的外觀描述。跟工作檯同邏輯：優先用「這張頭像當初存的 prompt」(avatar_cache)→立繪跟頭像同一個人；沒有才退回腳本描述
+        _cardPrompt: async function(name) {
+            let rawP = '';
+            try { const _av = await win.VN_Cache?.get?.('avatar_cache', name); if (_av && _av.prompt) rawP = String(_av.prompt); } catch (e) {}
+            if (this._isNoneDesc(rawP)) rawP = '';   // 舊快取可能存過字串 'none'（舊版把它當外觀）→ 當作沒有
+            if (!rawP) {
+                let d = this._resolveAvatarPrompt(name);
+                // none 路人（有聲線無外觀）：一鍵生立繪不分模式都合成 prompt（標題+角色名翻英文＋聲線性別）
+                if (!d && this._isNoneChar(name)) d = await this._buildNonePrompt(name);
+                rawP = String(d || name);
+            }
+            return rawP;
+        },
+        // 🎴 重生三種（11-16 她：畫風弄錯想重生，「一鍵生立繪」只重畫立繪一張；「或許可以做單獨一個按鈕更好」）：
+        //   開著「一次生三種」時角色卡多這一顆 → 照現在的畫風重畫一張三格圖（叫一次生圖），立繪、自拍頭像、Q版（三面的連側面背面）整組換掉。
+        //   存回頭像快取那一筆（劇情自動生的那一筆，大廳的小人、聊天頭像、圖鑑「頭像和 Q版」都讀它）；
+        //   之前按過「一鍵生立繪」的（立繪庫有這個人，舞台先用那張）也一起換成新的，不然舞台上還是舊畫風那張。
+        regenTrio: async function(name, btn) {
+            const orig = btn ? btn.innerHTML : '';
+            const setT = (t) => { if (btn) btn.textContent = t; };
+            const back = (ms) => setTimeout(() => { if (btn) { btn.innerHTML = orig; btn.disabled = false; } }, ms);
+            try {
+                if (btn) btn.disabled = true;
+                setT('生成中…（一張圖切三種）');
+                const rawP = await this._cardPrompt(name);
+                if (!win.VN_Cache) throw new Error('VN_Cache 未就緒');
+                const img = await this._makeTrio(rawP, true);   // force＝這顆就是要重畫，不拿記著的舊圖
+                if (!img || !img.dataUrl) throw new Error('沒生成功，再按一次試試');
+                let old = null;
+                try { old = await win.VN_Cache.get('avatar_cache', name); } catch (e) {}
+                await win.VN_Cache.set('avatar_cache', name, this._charRec(rawP, img, old || null));
+                this._avatarMemCache[name] = img.objUrl || img.dataUrl;
+                if (img.face) this._faceMemCache[name] = img.face; else delete this._faceMemCache[name];
+                let had = null;
+                try { had = await win.VN_Cache.get('sprite_cache', name); } catch (e) {}
+                if (had) await win.VN_Cache.set('sprite_cache', name, { url: img.dataUrl, isRemoved: true, createdAt: Date.now() });
+                this._stageInit();
+                for (let i = 0; i < 2; i++) { if (this._stage[i] && this._stage[i].name === name) { const el = this._slotEl(i); if (el) el.classList.remove('vn-avatar'); this._renderSlot(i, name, this._stage[i].exp); } }
+                setT((img.chibiSide && img.chibiBack) ? '完成（Q版三面）' : (img.chibi ? '完成（Q版一張）' : '完成'));
+                back(2200);
+            } catch (e) {
+                console.error('[CharCard] 重生三種失敗:', e);
+                setT(e && e.message ? e.message : '失敗');
+                back(2600);
+            }
+        },
         // 真懶人：用角色頭像提示詞 → 生 512×896 立繪 → AI 模型去背 → 存 sprite_cache → 立繪即時換上
         autoGenSprite: async function(name, btn) {
             const orig = btn ? btn.textContent : '';
@@ -530,16 +576,7 @@
             try {
                 if (btn) btn.disabled = true;
                 setT('生成中…');
-                // 跟工作檯同邏輯：優先用「這張頭像當初存的 prompt」(avatar_cache)→立繪跟頭像同一個人；沒有才退回腳本描述
-                let rawP = '';
-                try { const _av = await win.VN_Cache?.get?.('avatar_cache', name); if (_av && _av.prompt) rawP = String(_av.prompt); } catch (e) {}
-                if (this._isNoneDesc(rawP)) rawP = '';   // 舊快取可能存過字串 'none'（舊版把它當外觀）→ 當作沒有
-                if (!rawP) {
-                    let d = this._resolveAvatarPrompt(name);
-                    // none 路人（有聲線無外觀）：一鍵生立繪不分模式都合成 prompt（標題+角色名翻英文＋聲線性別）
-                    if (!d && this._isNoneChar(name)) d = await this._buildNonePrompt(name);
-                    rawP = String(d || name);
-                }
+                const rawP = await this._cardPrompt(name);
                 // 前後綴、清洗、補下身、尺寸、帶翼加寬、負詞全交給 VN_Image.getSprite（劇情裡自動生立繪走的就是它）：
                 //   以前這裡自己抄一份，空前綴當預設、還多剝 looking at viewer，同一個人兩邊生出來的構圖不一樣。force＝這顆就是要重生
                 if (!win.OS_IMAGE_MANAGER || typeof win.OS_IMAGE_MANAGER.generate !== 'function') throw new Error('生圖引擎未就緒');
@@ -605,6 +642,8 @@
             const cvRow = '<div class="vn-cc-row"><span class="vn-cc-k">當前 CV</span><span class="vn-cc-v">' + cvText + '</span>' + _cvBtn + '</div>';
             const btns =
                 '<button class="vn-cc-btn" id="vn-cc-gen"><i class="fa-solid fa-palette"></i> 一鍵生立繪（去背）</button>' +
+                // 開著「一次生三種」才有：立繪、頭像、Q版照現在的畫風整組重畫（regenTrio）
+                (this._trioOn() ? '<button class="vn-cc-btn" id="vn-cc-trio"><i class="fa-solid fa-layer-group"></i> 重生立繪・頭像・Q版</button>' : '') +
                 '<button class="vn-cc-btn" id="vn-cc-gallery"><i class="fa-solid fa-address-book"></i> 角色圖鑑</button>';
             const A = win.AUI || window.AUI;
             if (A && A.registerHelp) A.registerHelp({ vn_cc_lean: { title: '主角對他', body: '想靠近：你想攻略這個人，主角對他也有好感。寫劇情的 AI 會讓他照自己的日子過、在合理的場合出現在主角身邊，不讓他消失或只當路人。第一次選的時候會替他生三條好感規則（叫一次模型），存進狀態面板這個故事的條件規則裡，規則窗口看得到、改得動。\n\n疏遠：主角對他的好感在往下掉，寫到兩人互動時照這個心意。\n\n普通：都不提。\n\n每個故事各記各的。' } });
@@ -632,6 +671,7 @@
                 card.querySelector('.vn-cc-name').textContent = name;
             }
             card.querySelector('#vn-cc-gen').onclick = (e) => this.autoGenSprite(name, e.currentTarget);
+            { const _tb = card.querySelector('#vn-cc-trio'); if (_tb) _tb.onclick = (e) => this.regenTrio(name, e.currentTarget); }
             card.querySelector('#vn-cc-gallery').onclick = (e) => {
                 const from = e.currentTarget;   // 劇情可能跑在浮動手機裡，也可能在主窗口：按鈕在哪就開在哪
                 this.closeCharCard();
