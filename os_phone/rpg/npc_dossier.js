@@ -68,6 +68,57 @@
         } catch (e) { return []; }
     }
 
+    // ── 🚪 世界門（11-15）：名冊、檔案只送「現在這個地方」的人 ─────────────────────────
+    //   以前一段聊天＝一個故事，檔案照聊天室分就夠；世界門讓一段聊天在奧瑞亞和好幾個世界來回，
+    //   人在葦口澤時名冊照樣列奧瑞亞的人，世界裡出現同名的人（08 月獅子黎昂那種）還會把奧瑞亞那個人的檔案帶進來。
+    //   她 11-15 盤點後選修這塊（大總結 b6c8a258 之後）。
+    //   規則：檔案記著在哪建的（place：世界名，''＝主角原本生活的地方）；送的時候只挑這裡的，旅伴（這一趟入隊的）到哪都照送；
+    //     舊檔案沒記 place → 看劇情裡他在哪出場過（OS_WORLDGATE.castInfo），沒出場紀錄的照送。
+    //   同名不同人：這裡出現一個名字、但同名那份檔案不屬於這裡 → 另開一份「名字＠地方」，兩份各記各的。
+    const WG_SEP = '＠';
+    const _zk = s => { try { const Z = win.OS_ZH; if (Z && typeof Z.key === 'function') return Z.key(String(s == null ? '' : s)); } catch (e) {} return String(s == null ? '' : s).replace(/\s/g, ''); };
+    const _first = s => String(s || '').split(/[·・•\s]/)[0];
+    function _baseOf(key) { const s = String(key); const i = s.indexOf(WG_SEP); return i < 0 ? s : s.slice(0, i); }
+    function _placeOfKey(key) { const s = String(key); const i = s.indexOf(WG_SEP); return i < 0 ? null : s.slice(i + 1); }
+    // 現在在哪、這一趟的旅伴、誰在哪出場過；沒有世界門（或一個世界都沒有）回 null＝照舊不挑
+    async function _scope() {
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.worldNames !== 'function') return null;
+        try {
+            const names = (await G.worldNames()) || [];
+            if (!names.length) return null;
+            const cur = (typeof G.getCurrentWorld === 'function') ? await G.getCurrentWorld() : null;
+            const ci = (typeof G.castInfo === 'function') ? await G.castInfo() : null;
+            const team = new Set();
+            ((ci && ci.team) || []).forEach(n => { team.add(_zk(n)); team.add(_zk(_first(n))); });
+            const cast = new Map();
+            if (ci && ci.places) Object.keys(ci.places).forEach(n => {
+                const ps = (ci.places[n] || []).map(p => _zk(p));
+                [_zk(n), _zk(_first(n))].forEach(k => { if (!k) return; const s = cast.get(k) || new Set(); ps.forEach(p => s.add(p)); cast.set(k, s); });
+            });
+            return { place: (cur && cur.name) || '', team: team, cast: cast.size ? cast : null };
+        } catch (e) { return null; }
+    }
+    function _inTeam(sc, name) { return sc.team.has(_zk(name)) || sc.team.has(_zk(_first(name))); }
+    // 這份檔案屬不屬於現在這個地方
+    function _belongs(key, rec, sc) {
+        if (!sc) return true;
+        const here = _zk(sc.place), kp = _placeOfKey(key);
+        if (kp !== null) return _zk(kp) === here;
+        const base = _baseOf(key);
+        if (_inTeam(sc, base)) return true;
+        if (rec && rec.place != null) return _zk(rec.place) === here;
+        const seen = sc.cast ? (sc.cast.get(_zk(base)) || sc.cast.get(_zk(_first(base))) || null) : null;
+        return !seen || seen.has(here);
+    }
+    // 這個名字在這裡要記進哪一份：同名那份屬於這裡（或還沒有）就是它，不然另開「名字＠地方」
+    function _keyFor(name, dossiers, sc) {
+        if (!sc) return name;
+        const rec = dossiers[name];
+        if (!rec || _belongs(name, rec, sc)) return name;
+        return name + WG_SEP + sc.place;
+    }
+
     // 從正文抓 [Char|名]：跳過 {代號} / *心聲* / 明顯非人名（過長、佔位符）；主角本人不建檔
     function _charNamesIn(text) {
         const out = new Set();
@@ -111,21 +162,26 @@
             }
 
             // 候選：本輪在場 + 登場達標 + （沒檔案 或 建檔後又累積了夠多戲份）；新建優先於增修
+            //   世界門：記進哪一份看 _keyFor（同名但不屬於這裡的另開一份）
+            const sc = await _scope();
             const fresh = [], stale = [];
             for (const name of present) {
                 const n = ledger.chars[name]?.n || 0;
                 if (n < CONFIG.minAppearances) continue;
-                const d = dossiers[name];
-                if (!d) fresh.push({ name, n, mode: 'new' });
-                else if (n - (d.nAtUpdate || 0) >= CONFIG.refreshGrowth) stale.push({ name, n, mode: 'update', old: d });
+                const key = _keyFor(name, dossiers, sc);
+                const d = dossiers[key];
+                const apart = key !== name;   // 跟同名那份是不同的人
+                if (!d) fresh.push({ name, key, n, mode: 'new', apart });
+                else if (n - (d.nAtUpdate || 0) >= CONFIG.refreshGrowth) stale.push({ name, key, n, mode: 'update', old: d, apart });
             }
             const candidates = fresh.concat(stale).slice(0, CONFIG.maxFilesPerRound);
 
             let block = null;
             if (candidates.length) {
+                const where = c => c.apart ? `；這是在「${sc.place || '主角原本生活的地方'}」遇到的${c.name}，跟別處同名的人不是同一個，只寫在這裡發生的事` : '';
                 const list = candidates.map(c => c.mode === 'new'
-                    ? `・${c.name}（第${c.n}次登場・尚無檔案 → 新建）`
-                    : `・${c.name}（第${c.n}次登場・已有檔案 → 增修。舊檔案：${String(c.old.file || '').trim()}）`
+                    ? `・${c.name}（第${c.n}次登場・尚無檔案 → 新建${where(c)}）`
+                    : `・${c.name}（第${c.n}次登場・已有檔案 → 增修${where(c)}。舊檔案：${String(c.old.file || '').trim()}）`
                 ).join('\n');
                 block = `
 
@@ -141,7 +197,7 @@ ${list}
 - 只處理待處理名單裡的角色，別自行加人。
 格式： "npc_files": [ { "name": "待處理名單裡的角色名", "hook": "一句話身分", "file": "檔案內文" } ]`;
             }
-            return { chatId, ledger, candidates, block };
+            return { chatId, ledger, candidates, block, scope: sc };
         } catch (e) {
             console.warn('[NPC Dossier] prepare 失敗:', e?.message || e);
             return null;
@@ -163,14 +219,19 @@ ${list}
                 if (!cand) continue;
                 const text = String(f.file || '').trim();
                 if (text.length < 40) continue;            // 太短=沒寫好，別拿去蓋舊檔
-                const old = dossiers[name];
-                dossiers[name] = {
+                const key = cand.key || name;
+                const old = dossiers[key];
+                const rec = {
                     hook: String(f.hook || '').trim().slice(0, CONFIG.hookMaxLen) || (old?.hook || ''),
                     file: text.slice(0, CONFIG.fileMaxLen),
                     nAtUpdate: cand.n,
                     createdAt: old?.createdAt || Date.now(),
                     updatedAt: Date.now()
                 };
+                // 在哪建的（世界門）：舊的照舊；新建的記這一輪的地方（沒有世界門就不記）
+                const place = old ? old.place : (handle.scope ? handle.scope.place : undefined);
+                if (place != null) rec.place = place;
+                dossiers[key] = rec;
                 saved++;
             }
             await win.OS_DB.saveStateData(handle.chatId, { ...data, npcLedger: handle.ledger, npcDossiers: dossiers });
@@ -239,13 +300,13 @@ ${list}
                 return;
             }
 
-            const dead = Object.keys(dossiers).filter(n => !nowChars[n]);
+            const dead = Object.keys(dossiers).filter(n => !nowChars[_baseOf(n)]);   // 「名字＠地方」那份看名字
             const sameCount = Object.keys(chars).length === Object.keys(nowChars).length
                 && Object.keys(nowChars).every(n => chars[n] && chars[n].n === nowChars[n].n);
             if (!dead.length && sameCount) return;   // 沒變化就別寫 DB
 
             const nextDossiers = {};
-            for (const n of Object.keys(dossiers)) if (nowChars[n]) nextDossiers[n] = dossiers[n];
+            for (const n of Object.keys(dossiers)) if (nowChars[_baseOf(n)]) nextDossiers[n] = dossiers[n];
 
             await win.OS_DB.saveStateData(chatId, {
                 ...data,
@@ -276,7 +337,16 @@ ${list}
             if (!dossiers || !Object.keys(dossiers).length) return '';
             const chars = data?.npcLedger?.chars || {};
 
-            const byRecency = Object.keys(dossiers)
+            // 🚪 世界門：只挑屬於現在這個地方的；同一個名字兩份都算這裡的話，「名字＠地方」那份優先
+            const sc = await _scope();
+            const pick = new Map();   // 名字 → 檔案鑰匙
+            Object.keys(dossiers).forEach(k => {
+                if (!_belongs(k, dossiers[k], sc)) return;
+                const b = _baseOf(k);
+                if (!pick.has(b) || _placeOfKey(k) !== null) pick.set(b, k);
+            });
+            if (!pick.size) return '';
+            const byRecency = Array.from(pick.keys())
                 .sort((a, b) => (chars[b]?.lastAt || 0) - (chars[a]?.lastAt || 0));
             const mentioned = recentText
                 ? byRecency.filter(n => recentText.indexOf(n) !== -1).slice(0, CONFIG.maxInjectFull)
@@ -284,7 +354,7 @@ ${list}
             const rosterNames = byRecency.slice(0, CONFIG.maxRoster);
 
             const rosterLines = rosterNames.map(n => {
-                const d = dossiers[n];
+                const d = dossiers[pick.get(n)];
                 const cnt = chars[n]?.n;
                 return `・${n}｜${d.hook || '（無簡介）'}${cnt ? `（登場${cnt}次）` : ''}`;
             }).join('\n');
@@ -292,7 +362,7 @@ ${list}
                 `<人物名冊 規則="本故事登場過的人物索引·唯讀·嚴禁複述">\n以下人物在本故事登場過、有既定人設與往事。劇情再次提到或主角尋訪他們（含用暱稱、身分代稱間接提到）時，必須沿用名冊與其檔案，嚴禁當成初次見面的新角色、嚴禁另編一個同名新人。\n${rosterLines}\n</人物名冊>`
             ];
             if (mentioned.length) {
-                const fileLines = mentioned.map(n => `【${n}】${dossiers[n].file}`).join('\n');
+                const fileLines = mentioned.map(n => `【${n}】${dossiers[pick.get(n)].file}`).join('\n');
                 parts.push(`<人物檔案 規則="本輪相關人物的長期檔案·權威·寫作不得矛盾">\n${fileLines}\n</人物檔案>`);
             }
 

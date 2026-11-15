@@ -732,7 +732,8 @@ ${KINDS.map(k => `  ${k.name}：${k.desc}`).join('\n')}
         } catch (e) {}
         try {
             const d = await win.OS_NPC_DOSSIER?.dump?.();
-            if (d && d.dossiers) Object.keys(d.dossiers).forEach(n => { names[n] = 1; });
+            // 世界門的同名不同人會存成「名字＠地方」（npc_dossier.js，11-15），圖譜上只認名字
+            if (d && d.dossiers) Object.keys(d.dossiers).forEach(n => { const b = String(n).split('＠')[0]; if (b) names[b] = 1; });
         } catch (e) {}
         return names;
     }
