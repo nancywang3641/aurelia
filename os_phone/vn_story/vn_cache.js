@@ -85,13 +85,17 @@
         return _openIDB().then(db => new Promise(res => {
             const tx = db.transaction(store, 'readwrite'); tx.objectStore(store).put(value, key);
             tx.oncomplete = () => res(true); tx.onerror = () => res(false);
-        })).catch(() => false).then(async ok => { if (ok && IMAGE_STORES[store]) await _metaPut(store, key, value); return ok; });
+        })).catch(() => false).then(async ok => { if (ok && IMAGE_STORES[store]) await _metaPut(store, key, value); if (ok) _changed(store, key); return ok; });
+    }
+    // 圖庫有一筆被寫入或刪掉：喊一聲（事件 vn-cache-changed，detail＝{ store, key 完整鑰匙 }），手上留著那張圖的副本的人自己丟（章節面板記在記憶體裡的場景小圖）
+    function _changed(store, key) {
+        try { window.dispatchEvent(new CustomEvent('vn-cache-changed', { detail: { store, key: String(key) } })); } catch (e) {}
     }
     function _txDel(store, key) {
         return _openIDB().then(db => new Promise(res => {
             const tx = db.transaction(store, 'readwrite'); tx.objectStore(store).delete(key);
             tx.oncomplete = () => res(true); tx.onerror = () => res(false);
-        })).catch(() => false).then(async ok => { if (ok && IMAGE_STORES[store]) await _metaDel([_mk(store, key)]); return ok; });
+        })).catch(() => false).then(async ok => { if (ok && IMAGE_STORES[store]) await _metaDel([_mk(store, key)]); if (ok) _changed(store, key); return ok; });
     }
     function _txKeys(store) {
         return _openIDB().then(db => new Promise((res, rej) => {
@@ -141,10 +145,17 @@
         }
         return { m, hasUrl: !!v.url };
     }
+    // 圖的指紋（us）：長度＋中間一小段。圖一換（重畫、重壓）就變；給「照這張圖做出來的東西」（章節面板存起來的場景小圖）認原圖還是不是同一張。
+    //   只認 data: 那種存得住的圖；blob:、網址每次不一定一樣，不算指紋（回 ''）。11-16 以前寫進小帳的那些沒有這一欄（undefined）。
+    function _urlSig(u) {
+        if (typeof u !== 'string' || !u.startsWith('data:')) return '';
+        const mid = Math.floor(u.length / 2);
+        return u.length + ':' + u.slice(mid, mid + 24);
+    }
     function _metaPut(store, key, value) {
         return _openMeta().then(db => new Promise(res => {
             const tx = db.transaction('meta', 'readwrite');
-            tx.objectStore('meta').put({ k: key, ..._metaOf(value) }, _mk(store, key));
+            tx.objectStore('meta').put({ k: key, ..._metaOf(value), us: _urlSig(value && value.url) }, _mk(store, key));
             tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
         })).catch(e => { console.error('[VN_Cache] 圖庫小帳寫入失敗', e); return false; });
     }
@@ -325,6 +336,9 @@
             return k;
         },
         scopedKey(world, bareKey) { return world ? (world + SEP + bareKey) : bareKey; },
+        // 目前這個世界裡某一筆的小帳（不讀圖）：{ k, m, hasUrl, us }；沒有這一筆（或還沒整理進小帳）回 null。us＝圖的指紋（見 _urlSig）
+        async metaOf(store, key) { try { return await _metaGet(store, _scoped(store, key)); } catch (e) { return null; } },
+        urlSig: _urlSig,
         // avatar_cache 那一筆要當「頭像」顯示時用哪張：一次生三種切出來的自拍（face）優先，沒有就是原本那張。
         //   聊天 app／通話／大廳對話框／日誌／狀態面板這些頭像位置都問這支；劇情舞台、插圖參考圖照用 url（全身立繪）。
         headOf(rec) { return (rec && (rec.face || rec.url)) || ''; },

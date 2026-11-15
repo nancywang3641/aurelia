@@ -847,6 +847,14 @@
     const _thumbSmall = {};     // cacheId → 縮好的小圖（字串很小，可以一直留著）
     const _thumbBusy = {};      // cacheId → 進行中的 Promise（同一張不重複解碼）
     let _thumbTurn = Promise.resolve();   // 還沒縮過的排隊，一次只做一張
+    // 圖庫裡某個場景被重畫或刪掉（VN_Cache 喊 vn-cache-changed）：記憶體裡那張小圖丟掉，下次貼的時候重新對指紋（存起來的那份靠指紋自己作廢）
+    const _onBgChanged = (e) => {
+        const d = e && e.detail;
+        if (!d || d.store !== 'bg_cache') return;
+        const k = String(d.key || ''), i = k.indexOf('::'), bare = i >= 0 ? k.slice(i + 2) : k;
+        delete _thumbSmall[bare]; delete _thumbBusy[bare];
+    };
+    try { window.addEventListener('vn-cache-changed', _onBgChanged); if (win !== window) win.addEventListener('vn-cache-changed', _onBgChanged); } catch (e) {}
     // 縮好的小圖記下來（上限 60 張，超過丟掉最早那批）
     function _thumbKeep(cacheId, out) {
         _thumbSmall[cacheId] = out;
@@ -872,6 +880,70 @@
             if (!small) return '';
             return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result || '')); fr.onerror = () => r(''); fr.readAsDataURL(small); });
         } catch (e) { return ''; }
+    }
+    // 💾 縮好的小圖存起來（11-16 她：「第一次載入圖片會比窗口慢顯示」→「好，存起來」）：重開酒館之後再開章節，小圖跟窗口一起出來，
+    //    不用再把兩三 MB 的原圖讀出來重縮。只有每一章第一次看、或場景被重畫過，才要等動畫演完再縮。
+    //    存在自己一個小資料庫（aurelia_chx_thumbs）：不動圖庫那個 9GB 的庫、不升任何版本；是照原圖做出來的，不進備份，丟了會自己重做。
+    //    一筆＝{ url 小圖, sig 原圖的指紋, t 存的時間 }，鑰匙＝世界::場景（同圖庫 bg_cache 的鑰匙）。
+    //    認原圖還是不是同一張：比圖庫小帳的指紋（VN_Cache.metaOf(...).us）。場景重畫＝指紋變了、刪掉＝小帳沒了，舊小圖就不用。
+    let _thumbDbP = null;
+    function _thumbDb() {
+        if (_thumbDbP) return _thumbDbP;
+        const p = new Promise((res, rej) => {
+            const req = indexedDB.open('aurelia_chx_thumbs', 1);
+            req.onupgradeneeded = e => { const db = e.target.result; if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs'); };
+            req.onsuccess = e => { const db = e.target.result; db.onversionchange = () => { try { db.close(); } catch (er) {} if (_thumbDbP === p) _thumbDbP = null; }; db.onclose = () => { if (_thumbDbP === p) _thumbDbP = null; }; res(db); _thumbPrune(db); };
+            req.onerror = () => rej(req.error);
+        });
+        p.catch(() => { if (_thumbDbP === p) _thumbDbP = null; });
+        _thumbDbP = p;
+        return p;
+    }
+    const _thumbKey = (cacheId) => { const VC = win.VN_Cache; return VC && VC.scopedKey && VC.getCurrentWorld ? VC.scopedKey(VC.getCurrentWorld(), cacheId) : cacheId; };
+    function _thumbLoad(cacheId) {
+        return _thumbDb().then(db => new Promise(res => {
+            const req = db.transaction('thumbs', 'readonly').objectStore('thumbs').get(_thumbKey(cacheId));
+            req.onsuccess = () => res(req.result || null); req.onerror = () => res(null);
+        })).catch(() => null);
+    }
+    function _thumbSave(cacheId, url, sig) {
+        if (!url || !String(url).startsWith('data:') || url.length > 400000) return Promise.resolve(false);   // 沒縮成（退回原圖那種）不存
+        return _thumbDb().then(db => new Promise(res => {
+            const tx = db.transaction('thumbs', 'readwrite'); tx.objectStore('thumbs').put({ url, sig: sig || '', t: Date.now() }, _thumbKey(cacheId));
+            tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
+        })).catch(() => false);
+    }
+    function _thumbForget(cacheId) {
+        return _thumbDb().then(db => new Promise(res => {
+            const tx = db.transaction('thumbs', 'readwrite'); tx.objectStore('thumbs').delete(_thumbKey(cacheId));
+            tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
+        })).catch(() => false);
+    }
+    // 存太多（超過 800 張）就把最久以前存的丟到剩 500 張。每次開這個小資料庫看一次，不擋別人。
+    function _thumbPrune(db) {
+        try {
+            const os = db.transaction('thumbs', 'readonly').objectStore('thumbs'), cnt = os.count();
+            cnt.onsuccess = () => {
+                if (cnt.result <= 800) return;
+                const all = [], cur = db.transaction('thumbs', 'readonly').objectStore('thumbs').openCursor();
+                cur.onsuccess = (e) => {
+                    const c = e.target.result;
+                    if (c) { all.push([c.key, (c.value && c.value.t) || 0]); c.continue(); return; }
+                    all.sort((a, b) => a[1] - b[1]);
+                    const tx = db.transaction('thumbs', 'readwrite'), st = tx.objectStore('thumbs');
+                    all.slice(0, all.length - 500).forEach(x => st.delete(x[0]));
+                };
+            };
+        } catch (e) {}
+    }
+    // 存好的那張還能不能用：圖庫裡這個場景還在，而且指紋沒變（小帳沒記指紋的舊資料＝沒辦法比，當作沒變；之後它一被重畫就會有指紋）
+    async function _thumbStored(cacheId) {
+        const rec = await _thumbLoad(cacheId);
+        if (!rec || !rec.url) return { rec: null, meta: null };
+        let meta = null;
+        try { meta = await (win.VN_Cache?.metaOf?.('bg_cache', cacheId)); } catch (e) {}
+        const ok = !!meta && (meta.us == null || meta.us === rec.sig);
+        return { rec, meta, ok };
     }
     // 從大廳打開章節時切塊還在演（面板被剪著）：等它演完才做重的。最多等 4 秒。
     function _tilesDone() {
@@ -916,22 +988,36 @@
             sceneEl.style.setProperty('--chx-thumb-img', `url('${_thumbSmall[cacheId]}')`);
             return;
         }
-        await _tilesDone();   // 還沒縮過的才會走到這：等切塊演完再讀原圖、縮圖（縮過的上面已經直接貼了）
+        // 以前存過的小圖：只讀兩筆小東西（小圖本身、圖庫小帳），不用等切塊演完，窗口一出來就貼上
+        let stored = { rec: null, meta: null, ok: false };
+        try { stored = await _thumbStored(cacheId); } catch (e) {}
+        if (sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
+        if (stored.ok) {
+            _thumbKeep(cacheId, stored.rec.url);
+            sceneEl.style.setProperty('--chx-thumb-img', `url('${stored.rec.url}')`);
+            return;
+        }
+        await _tilesDone();   // 沒存過、或原圖換過的才會走到這：等切塊演完再讀原圖、縮圖
         // 一張一張排隊做：一次七張原圖（一張兩三 MB 的字串）同時從圖庫讀出來，光是讀就會卡一下
         const turn = _thumbTurn; let done; _thumbTurn = new Promise(r => { done = r; });
         let small = '';
         try {
             await turn;
             if (sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
-            let url = win.VN_Core?._bgMemCache?.[cacheId] || '';
-            if (!url) {
-                try {
-                    const cached = await (win.VN_Cache?.get?.('bg_cache', cacheId));
-                    url = (cached && cached.url) || '';
-                } catch (e) {}
+            // 一律從圖庫讀（不拿播放器手上那張 blob: 的）：指紋要照存在圖庫裡的那張算，下次才對得上
+            let url = '';
+            try {
+                const cached = await (win.VN_Cache?.get?.('bg_cache', cacheId));
+                url = (cached && cached.url) || '';
+            } catch (e) {}
+            if (!url) url = win.VN_Core?._bgMemCache?.[cacheId] || '';
+            if (!url) { delete sceneEl.dataset.thumbOn; if (stored.rec) _thumbForget(cacheId); return; }   // 圖庫裡沒有這個場景了：舊小圖一起丟
+            const sig = (win.VN_Cache?.urlSig?.(url)) || '';
+            if (stored.rec && sig && stored.rec.sig === sig) small = _thumbKeep(cacheId, stored.rec.url);   // 小帳還沒整理到這張，但原圖沒變：存好的照用，不重縮
+            else {
+                small = await _shrink(cacheId, url);
+                if (small && small !== url) _thumbSave(cacheId, small, sig);
             }
-            if (!url) { delete sceneEl.dataset.thumbOn; return; }
-            small = await _shrink(cacheId, url);
         } finally { setTimeout(done, 0); }   // 讓畫面先喘一格再換下一張
         // 縮圖做好之前可能已經滑出視窗（被 _dropSceneImg 清掉）→ 別再塗回去
         if (!small || sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
