@@ -35,12 +35,20 @@
     //   ①@media/@supports/@keyframes 的條件行 → 變成 @#vn-end-panel media(...)，瀏覽器直接丟掉整塊，
     //     手機版型就這樣整組消失(實測)。②@keyframes 裡的 0%/from/to → 前綴後動畫不再套用。
     //   前面那個 [^{}@] 的寫法擋不住①：@ 被排除在第一個字元之外，正則只是往後挪一格從 media 開始配。
+    // 🚨11-15 修：以前寫成 /(^|[{}])([^{}]+)\{/，要求選擇器前面「吃掉」一個大括號。@container／@media 那一行配對時
+    //   已經把它後面的 { 吃掉了，區塊裡「第一條」規則前面沒有大括號可吃 → 整條沒加前綴，權重輸給外面加了前綴的同一條，
+    //   手機版那條從來沒生效（她的「葦口澤」手機上標題框一直停在電腦版的位置）。
+    //   改成不吃大括號：[^{}]+ 本來就只能從大括號後面（或開頭）開始配，跨不過宣告區塊的 }。
+    //   🚨別改用 (?<=…) 往回看：iOS 16.4 以前的 Safari 不認得，整支檔案會載不起來
+    // 🚨同一天也修：註解先整個拿掉。「/* 面板變窄 */ @container …」這種，以前開頭是 / 不是 @，被當成選擇器加了前綴，
+    //   變成瀏覽器讀不懂的一行，整塊手機版排法直接被丟掉（她的「七檻市」）；註解裡寫了大括號也會把整個對齊搞亂
     const _KEYFRAME_STEP = /^(?:\d+(?:\.\d+)?%|from|to)(?:\s*,\s*(?:\d+(?:\.\d+)?%|from|to))*$/i;
     function _scopeCss(css) {
-        return String(css || '').replace(/(^|[{}])([^{}]+)\{/g, (m, pre, sel) => {
+        return String(css || '').replace(/\/\*[\s\S]*?\*\//g, '').replace(/([^{}]+)\{/g, (m, sel) => {
             const s = sel.trim();
             if (!s || s.charAt(0) === '@' || _KEYFRAME_STEP.test(s)) return m;
-            return pre + s.split(',').map(x => '#' + PANEL_ID + ' ' + x.trim()).join(', ') + ' {';
+            const lead = sel.slice(0, sel.length - sel.replace(/^\s+/, '').length);   // 前面的換行縮排照留
+            return lead + s.split(',').map(x => '#' + PANEL_ID + ' ' + x.trim()).join(', ') + ' {';
         });
     }
 
@@ -372,7 +380,11 @@
             if (el.classList.contains('vnep-extra') || el.closest('.vnep-extra')) return;
             const isAct = el.hasAttribute('data-act');
             const hasText = Array.prototype.some.call(el.childNodes, n => n.nodeType === 3 && n.nodeValue.trim());
-            if (!isAct && !hasText) return;
+            // 有實心底、裡面有字的卡（標題卡）整塊算：只擋字的話，抄出來的會蓋在卡片的空白處（11-15 葦口澤手機版）。
+            //   裝著入口的那種外框不算（不然盒子裡永遠擺不進去）
+            const card = !isAct && !hasText && el.textContent.trim() && !el.querySelector('[data-act]') && !el.closest('[data-act]')
+                && ((_rgb(getComputedStyle(el).backgroundColor) || { a: 0 }).a >= 0.5);
+            if (!isAct && !hasText && !card) return;
             const r = R(el);
             if (!r.width || !r.height || (!isAct && r.width * r.height > area * 0.25)) return;
             blocks.push(r);
@@ -385,6 +397,9 @@
         const box = (x, y, w, h) => ({ left: x, top: y, right: x + w, bottom: y + h, width: w, height: h });
         const alignX = (x, s) => xm.k === 'l' ? x : (xm.k === 'r' ? x - s.w : x - s.w / 2);
         const alignY = (y, s) => ym.k === 't' ? y : (ym.k === 'b' ? y - s.h : y - s.h / 2);
+        // 一串裡相鄰兩顆之間空多少（抄出來的照這個間距接）
+        const sz = rs.reduce((a, r) => ({ w: a.w + r.width / rs.length, h: a.h + r.height / rs.length }), { w: 0, h: 0 });
+        const gapX = Math.max(6, Math.abs(vx) - sz.w), gapY = Math.max(6, Math.abs(vy) - sz.h);
         // 找位置：region＝要整顆落在裡面的範圍；more＝多擋的東西；slot(k, s)＝頭上（k<0）／尾巴（k>0）往外第幾格。找不到的那顆給 null
         const plan = (region, more, slot) => {
             const free = (r, taken) => r.left >= Math.max(pr.left, region.left) + 2 && r.right <= Math.min(pr.right, region.right) - 2
@@ -405,6 +420,13 @@
             sizes.forEach(s => {
                 let pick = null;
                 for (let k = 1; k <= extras.length + 2 && !pick; k++) pick = [slot(-k, s), slot(k, s)].find(r => free(r, got)) || null;
+                // 前一顆擺好了：這顆緊貼著它、照同樣的間距（兩顆分在畫面兩頭很怪，11-15 七檻市手機版）。先貼前面＝繼續排在線索前面
+                const prev = got.filter(Boolean).slice(-1)[0];
+                if (!pick && prev) {
+                    const nextTo = sign => across ? box(sign < 0 ? prev.left - s.w - gapX : prev.right + gapX, prev.top, s.w, s.h)
+                                                  : box(prev.left, sign < 0 ? prev.top - s.h - gapY : prev.bottom + gapY, s.w, s.h);
+                    pick = [nextTo(-1), nextTo(1)].find(r => free(r, got)) || null;
+                }
                 if (!pick) {
                     const anchors = got.filter(Boolean).reverse().concat([last, first]);
                     for (const a of anchors) { pick = [beside(a, -1, s), beside(a, 1, s)].find(r => free(r, got)) || null; if (pick) break; }
@@ -432,8 +454,6 @@
             if (!lifted) liftAll();
             const edge = clipped ? clip : rs.reduce((a, r) => ({ left: Math.min(a.left, r.left), top: Math.min(a.top, r.top), right: Math.max(a.right, r.right), bottom: Math.max(a.bottom, r.bottom) }),
                 { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity });
-            const sz = rs.reduce((a, r) => ({ w: a.w + r.width / rs.length, h: a.h + r.height / rs.length }), { w: 0, h: 0 });
-            const gapX = Math.max(6, Math.abs(vx) - sz.w), gapY = Math.max(6, Math.abs(vy) - sz.h);
             const ax = rs.reduce((a, r) => a + xm.f(r), 0) / rs.length, ay = rs.reduce((a, r) => a + ym.f(r), 0) / rs.length;
             // 那一串往哪個方向排：頭上＝反方向那條邊
             const startLow = across ? vx > 0 : vy > 0;
