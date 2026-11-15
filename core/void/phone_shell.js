@@ -76,11 +76,12 @@
         if (_savedGoHome !== null && win.PhoneSystem) { win.PhoneSystem.goHome = _savedGoHome; }
         _savedGoHome = null;
     }
+    let _inLeave = false;   // 正在收 app（回主畫面／換 app／關手機）：這時角色中心被關掉，不要再叫一次回主畫面
     function _runLeave() {
         if (_leaveApp) { try { _leaveApp(); } catch (e) {} _leaveApp = null; }
-        // 角色圖鑑開在手機的 app 區裡（不在 app 內容那層，清空 app 清不到它）→ 換 app／回主畫面／關手機時一起關
+        // 角色中心開在手機的 app 區裡（不在 app 內容那層，清空 app 清不到它）→ 換 app／回主畫面／關手機時一起關
         const G = win.OS_CHAR_GALLERY;
-        if (G && _el && _el.querySelector('.acg-root')) { try { G.close(); } catch (e) {} }
+        if (G && _el && _el.querySelector('.acg-root')) { _inLeave = true; try { G.close(); } catch (e) {} _inLeave = false; }
     }
 
     // ── 手機主題（CSS 變數驅動，掛在 .aps-frame；app 不需知道主題的存在、自動相容）──
@@ -631,6 +632,8 @@
         const tools = [
             { id: 'sysset', name: '設置', icon: 'fa-gear', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
             { id: 'album',  name: '相簿',   icon: 'fa-images', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
+            // 🎭 角色中心（11-16）：每個角色的素材和裝扮。它自己開一個窗蓋在 app 區上，按它的返回＝回主畫面
+            { id: 'chars',  name: '角色',   icon: 'fa-address-book', mode: 'inside', go: function (c) { var G = win.OS_CHAR_GALLERY; if (G && G.open) { G.open('', { from: c, onClose: function () { if (!_inLeave) _home(); } }); } else { c.innerHTML = '<div class="aps-fail">角色中心還沒載入</div>'; } } },
             { id: 'avsvar', name: '狀態檔案', icon: 'fa-dice', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
             // 創作室獨立 app 已移除：所有創作功能都從「應用商城」進(工坊首頁已內含 製作面板/主題/世界書/我的角色 等入口)
             { id: 'phone',  name: '電話',   icon: 'fa-phone', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">電話模組未載入</div>'; } } },

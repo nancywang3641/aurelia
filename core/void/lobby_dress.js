@@ -33,7 +33,7 @@
         S.root.appendChild(menu);
         S.menuEl = menu;
         menu.querySelector('[data-act="idcard"]')?.addEventListener('click', () => { _closeActorMenu(); try { a.onProfile(a); } catch (e) {} });
-        menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDressRoom(a); });
+        menu.querySelector('[data-act="dress"]').addEventListener('click', () => { _closeActorMenu(); _openDress(a); });
         menu.querySelector('[data-act="follow"]')?.addEventListener('click', () => {
             a.follow = !a.follow;
             a.dest = null;   // 清掉漫步目標，交給跟隨邏輯接手
@@ -55,23 +55,34 @@
     }
     function _menuOutside(e) { if (S.menuEl && !S.menuEl.contains(e.target)) _closeActorMenu(); }
     // 裝扮室面板
+    //   🎭 11-16 起裝扮室的內容搬進角色中心的「裝扮」那一頁（os_char_gallery.js 叫 mountInto）：同一份按鈕、同一套接法。
+    //     她：「發現我裝扮室和圖鑑需要歸類嗎?總感覺我每次前端這邊做一點那邊做一點，到處零散的感覺」。
+    //     大廳對角色按右鍵的「裝扮室」改開角色中心那一頁（_openDress）；角色中心還沒載到（酒館的手機那批比大廳晚到）才退回下面這個小窗。
+    //   a＝大廳的小人物件，或角色中心給的那一份 { key, name, avatarPrompt, avatarCacheKey }（人不在場也能換：造型照 key 存）。
+    //     沒有 key＝這個角色還沒進過大廳，小人那幾顆不出，只留立繪。
     function _closeDressRoom() { S.dressEl?.remove(); S.dressEl = null; }
-    function _openDressRoom(a) {
-        _closeDressRoom();
-        const box = document.createElement('div');
-        box.className = 'lstage-dress';
-        const hasSkin = !!_b.skins()[a.key];
-        box.innerHTML =
-            '<div class="lsd-title"><i class="fa-solid fa-shirt"></i> 裝扮室 — ' + _esc(a.name || '角色') + '</div>' +
-            '<div class="lsd-hint">單張圖＝站立像+走路彈跳；走路圖＝3×4格圖（第1列朝下、第2列朝左、第3列朝右、第4列朝上，每列3幀）</div>' +
+    function _openDress(a) {
+        const G = window.OS_CHAR_GALLERY || (window.parent || window).OS_CHAR_GALLERY;
+        if (G && G.dressOk && typeof G.open === 'function') {
+            try { _b.closeWins(); G.open(a.name, { actor: a, tab: 'dress' }); return; } catch (e) { console.warn('[LobbyDress] 角色中心沒開成，退回小窗', e); }
+        }
+        _openDressRoom(a);
+    }
+    const _DRESS_HINT = '<div class="lsd-hint">單張圖＝站立像+走路彈跳；走路圖＝3×4格圖（第1列朝下、第2列朝左、第3列朝右、第4列朝上，每列3幀）</div>';
+    function _dressSmallHtml(a) {
+        return _DRESS_HINT +
             '<button class="lep-btn" data-act="img"><i class="fa-solid fa-image"></i> 換單張立姿圖</button>' +
             '<button class="lep-btn" data-act="sheet"><i class="fa-solid fa-person-walking"></i> 換走路圖（3×4）</button>' +
-            _dressGenHtml(a) +
-            '<button class="lep-btn" data-act="reset"' + (hasSkin ? '' : ' disabled') + '><i class="fa-solid fa-rotate-left"></i> 還原預設</button>' +
-            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
-        S.root.appendChild(box);
-        S.dressEl = box;
+            _dressGenHtml(a);
+    }
+    function _dressResetHtml(a) {
+        return '<button class="lep-btn" data-act="reset"' + (_b.skins()[a.key] ? '' : ' disabled') + '><i class="fa-solid fa-rotate-left"></i> 還原預設</button>';
+    }
+    // 按鈕接上去。done＝做完一件事之後：小窗＝關掉；角色中心那頁＝重畫（目前的小人、還原預設那顆跟著變）
+    function _dressBind(box, a, done) {
+        box._done = done;
         _wireDressGen(box, a);
+        _wireDressSprite(box, a);
         box.addEventListener('click', (e) => {
             const act = e.target.closest('[data-act]')?.dataset.act;
             if (!act) return;
@@ -93,14 +104,64 @@
                     }
                     _b.saveSkin(a.key, { kind: act === 'sheet' ? 'sheet' : 'img', ref });
                     _b.applySkin(a, a.key);
-                    _closeDressRoom();
+                    done();
                 });
             } else if (act === 'reset') {
                 _b.saveSkin(a.key, null);
-                if (a.defaultSrc) _b.swapActorSrc(a, a.defaultSrc);
-                _closeDressRoom();
-            } else if (act === 'close') _closeDressRoom();
+                if (a.defaultSrc && a.el) _b.swapActorSrc(a, a.defaultSrc);
+                done();
+            } else if (act === 'close') done();
         });
+    }
+    function _openDressRoom(a) {
+        _closeDressRoom();
+        const box = document.createElement('div');
+        box.className = 'lstage-dress';
+        box.innerHTML =
+            '<div class="lsd-title"><i class="fa-solid fa-shirt"></i> 裝扮室 — ' + _esc(a.name || '角色') + '</div>' +
+            _dressSmallHtml(a) + _dressSpriteHtml(a) + _dressResetHtml(a) +
+            '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
+        S.root.appendChild(box);
+        S.dressEl = box;
+        _dressBind(box, a, _closeDressRoom);
+    }
+    // 🎭 角色中心的「裝扮」那一頁：同一份內容畫進 host（不是浮在大廳上的小窗）。
+    //   opts.previewHost＝生成完那張預覽／調框窗要蓋在誰上面（角色中心自己那個窗；不給就蓋在大廳舞台上，角色中心開著會被擋住）
+    //   opts.chibi＝他跟立繪一起生的 Q版（沒換過造型時大廳用的就是它；只拿來畫「目前用的」）
+    function mountInto(host, a, opts) {
+        opts = opts || {};
+        if (!host || !a) return;
+        const box = document.createElement('div');
+        box.className = 'lsd-embed';
+        box.innerHTML =
+            '<div class="lsd-sec"><div class="lsd-sec-title">大廳的小人</div>' +
+              (a.key
+                ? '<div class="lsd-cur"><div class="lsd-cur-img"></div><div class="lsd-cur-txt"><span class="lsd-cur-k">目前用的</span><span class="lsd-cur-src"></span></div></div>' +
+                  _dressSmallHtml(a) + _dressResetHtml(a)
+                : '<div class="lsd-hint lsd-nokey">這個角色還沒進過大廳，小人等他來了才能換。</div>') +
+            '</div>' +
+            '<div class="lsd-sec"><div class="lsd-sec-title">立繪</div>' + _dressSpriteHtml(a) + '</div>';
+        host.innerHTML = '';
+        host.appendChild(box);
+        box._pvHost = opts.previewHost || null;
+        _dressBind(box, a, () => { if (box.isConnected) mountInto(host, a, opts); });
+        _paintDressCur(box, a, opts);
+    }
+    // 目前用的小人：自己換過的那張 → 跟立繪一起生的 Q版 → 預設那張
+    async function _paintDressCur(box, a, opts) {
+        const img = box.querySelector('.lsd-cur-img'), lab = box.querySelector('.lsd-cur-src');
+        if (!img || !lab) return;
+        const skin = _b.skins()[a.key];
+        let src = '', txt = '';
+        if (skin) {
+            try { src = (await _b.resolveRef(skin.ref)) || ''; } catch (e) {}
+            if (src) txt = skin.kind === 'sheet' ? '自己換的走路圖' : '自己換的立姿圖';
+        }
+        if (!src && opts && opts.chibi) { src = opts.chibi; txt = '跟立繪一起生的 Q版'; }
+        if (!src && a.defaultSrc) { src = a.defaultSrc; txt = '預設的小人'; }
+        if (!box.isConnected) return;
+        img.innerHTML = src ? '<img src="' + _esc(src) + '" alt="">' : '<i class="fa-solid fa-person"></i>';
+        lab.textContent = txt || '預設的小人';
     }
 
     // ── 💬 NPC 對話紀錄小面板（舞台上，仿裝扮室：查看/逐條刪/清空徹底遺忘）──
@@ -254,8 +315,10 @@
             '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成單張立姿圖</button>' +
             '<button class="lep-btn lsd-gen-btn-sheet"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-person-walking"></i> 生成走路圖（3×4）</button>' +
             '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成單張立姿圖」。</div>' +
-        '</div>' +
-        '<button class="lep-btn lsd-sprite-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-image-portrait"></i> 生成立繪</button>' +
+        '</div>';
+    }
+    function _dressSpriteHtml(a) {
+        return '<button class="lep-btn lsd-sprite-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-image-portrait"></i> 生成立繪</button>' +
         '<div class="lsd-hint">立繪＝對話框裡的角色大圖，跟上面的小人是兩回事；走劇情角色卡「一鍵生立繪」同一套，生完劇情那邊共用同一張。</div>';
     }
     // 把邊界內的3×4逐格畫進目標畫布（flips[r]=該列左右鏡像；共用於即時預覽與最終重切）
@@ -286,7 +349,7 @@
             '<input class="lgp-slider" data-k="' + key + '" type="range" min="' + min + '" max="' + max + '" value="' + val + '" step="0.5"></label>';
     }
     // 生成預覽：套用前先看圖。走路圖=可拖邊界的調框器（生成隨機→逐張把紅格對準每格角色含腳）＋每列翻轉（修LoRA朝向錯的列，如右列鏡像自左列）＋即時結果
-    function _showGenPreview(dataUrl, kind, h) {
+    function _showGenPreview(dataUrl, kind, h, host) {
         const isSheet = (kind === 'sheet');
         const wrap = document.createElement('div');
         wrap.className = 'lstage-genprev';
@@ -312,7 +375,7 @@
                     '<button class="lep-btn lgp-cancel"><i class="fa-solid fa-xmark"></i> 取消</button>' +
                 '</div>' +
             '</div>';
-        S.root.appendChild(wrap);
+        (host || S.root).appendChild(wrap);   // host＝角色中心那個窗（從那一頁生的，蓋在大廳舞台上會被它擋住）
         const close = () => wrap.remove();
         let getFinal = () => dataUrl;   // 單張立姿：原樣套用
         if (isSheet) {
@@ -451,11 +514,11 @@
                         await _saveSpriteSkin(a.key, out || final, kind);   // 走路圖=調框重切後的圖；單張立姿=原圖
                         _b.applySkin(a, a.key);
                         btn.innerHTML = '<i class="fa-solid fa-check"></i> 已套用';
-                        setTimeout(() => { btn.innerHTML = label; btn.disabled = false; }, 1600);
+                        setTimeout(() => { btn.innerHTML = label; btn.disabled = false; if (box._pvHost && box._done) box._done(); }, 1600);   // 角色中心那頁：「目前用的」跟著換
                     },
                     retry: () => doGen(kind, btn),
                     cancel: () => {},
-                });
+                }, box._pvHost);
             } catch (e) {
                 console.warn('[LobbyDress] 裝扮室生成失敗', e);
                 AUI.alert('生成失敗：' + (e && e.message || e));
@@ -464,6 +527,8 @@
         })();
         btn.addEventListener('click', () => doGen('img', btn));
         if (btnSheet) btnSheet.addEventListener('click', () => doGen('sheet', btnSheet));
+    }
+    function _wireDressSprite(box, a) {
         // ── 🖼️ 生成立繪（對話框角色大圖）：直接呼叫 VN 劇情角色卡「一鍵生立繪」現成接口 ──
         //   管線全在 VN_Core.autoGenSprite（studio 模板+清洗+isnet 去背+存 sprite_cache，進度字樣它自己管）；
         //   key 用 avatarCacheKey(那輪chatId::名 複合鍵)→prompt 撈得到原頭像、立繪存回同鍵，掛載時 lobby_npcs 撈回當對話立繪。
@@ -496,7 +561,8 @@
 
     window.LobbyDress = {
         openMenu: _openActorMenu,       // 右鍵/長按角色→下拉單（lobby_stage tryMount 呼叫）
-        openRoom: _openDressRoom,       // 裝扮室（LobbyStage.openDressRoom 轉呼叫）
+        openRoom: _openDress,           // 裝扮室（LobbyStage.openDressRoom 轉呼叫）：開角色中心的「裝扮」頁，沒載到才是小窗
+        mountInto,                      // 🎭 角色中心「裝扮」頁：同一份內容畫進那一頁（os_char_gallery.js）
         openHistory: _openNpcHistory,   // NPC 對話紀錄窗（對話模式沒有舞台時掛在 .lobby-left）
         closeHistory: _closeNpcHistory, // 對話模式換地點時收掉（不然會留著上一位的紀錄）
         genSpriteInto,                  // 無人值守生立姿（世界門旅人自動補圖；與裝扮室同一條管線）

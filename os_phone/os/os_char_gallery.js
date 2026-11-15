@@ -392,9 +392,15 @@
         return null;
     }
 
+    // 🎭 11-16 起是「角色中心」：左邊選人，右邊「素材」（原本圖鑑那一頁）／「裝扮」（大廳裝扮室搬進來的那一份）兩頁。
+    //   她：「裝扮室和圖鑑需要歸類嗎?…到處零散的感覺」。大廳對角色按右鍵的「裝扮室」、劇情角色卡、相簿那顆、手機上的「角色」都開這個窗。
+    //   opts.tab＝'dress' 開在裝扮那頁；opts.actor＝大廳那個小人（從右鍵來的：不在這個故事名單裡的也排進名單，裝扮頁直接換他）；
+    //   opts.onClose＝關掉時叫（手機上的「角色」app 用來回主畫面）
     async function open(name, opts) {
         if (S) close();
         const host = pickHost(opts);
+        const actor = (opts && opts.actor) || null;
+        const offHit = actor ? officialList().find(o => o.key === actor.key) : null;   // 管理員、丹、雷伊：選官方那一區的那一位，不另外排一個同名的進名單
         const root = doc.createElement('div');
         root.className = 'acg-root' + (host ? ' acg-in-screen' : '');
         root.setAttribute('role', 'dialog');
@@ -402,7 +408,7 @@
         root.innerHTML =
             '<div class="acg-head">'
           +   '<button class="acg-back" type="button" data-act="close" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>'
-          +   '<div class="acg-title">角色圖鑑</div>'
+          +   '<div class="acg-title">角色中心</div>'
           +   '<span class="acg-head-sp"></span>'
           + '</div>'
           + '<div class="acg-body">'
@@ -419,8 +425,9 @@
           + '</div>'
           + '<input class="acg-file" type="file" accept="image/*">';
         (host || doc.body).appendChild(root);
-        S = { root, sel: null, want: name || '', names: [], cast: [], wb: { exp: [], preset: [] }, wbOk: wbAvailable(),
-              info: {}, marks: {}, draft: null, extra: [], changed: false, token: 0, filter: '', offSel: null };
+        S = { root, sel: null, want: offHit ? '' : (name || ''), names: [], cast: [], wb: { exp: [], preset: [] }, wbOk: wbAvailable(),
+              info: {}, marks: {}, draft: null, extra: [], changed: false, token: 0, filter: '', offSel: offHit ? offHit.key : null,
+              tab: (opts && opts.tab === 'dress') ? 'dress' : 'assets', actor: actor, onClose: (opts && opts.onClose) || null };
         root.classList.toggle('acg-has-wb', S.wbOk);
         root.addEventListener('click', onClick);
         root.addEventListener('input', onInput);
@@ -436,6 +443,7 @@
         doc.removeEventListener('keydown', onKey, true);
         st.root.remove();
         if (st.changed) refreshStage();
+        if (typeof st.onClose === 'function') { try { st.onClose(); } catch (e) {} }
     }
     function onKey(ev) {
         if (ev.key !== 'Escape' || !S) return;
@@ -529,12 +537,60 @@
           +   '<div class="acg-name-row"><div class="acg-name">' + esc(o.name) + '</div>' + (A && A.helpBtn ? A.helpBtn('acg_official') : '') + '</div>'
           +   (o.subTitle ? '<div class="acg-sub">' + esc(o.subTitle) + '</div>' : '')
           + '</div>'
-          + '<div class="acg-slots"><div class="acg-slot">'
+          + tabsHtml()
+          + (S.tab === 'dress' ? DRESS_BOX
+            : '<div class="acg-slots"><div class="acg-slot">'
           +   '<div class="acg-slot-img" data-act="view-official"><img src="' + esc(o.portrait) + '" alt=""></div>'
           +   '<div class="acg-slot-meta"><span class="acg-slot-exp">預設</span><span class="acg-src acg-src-official"><i class="fa-solid fa-lock"></i> 奧瑞亞官方</span></div>'
-          + '</div></div>';
+          + '</div></div>');
         main.scrollTop = 0;
+        if (S.tab === 'dress') mountDress(S.token);
         return true;
+    }
+
+    // ── 右邊的兩頁：素材（看、挑、收）／裝扮（會改圖的：換小人、生立繪）──
+    const DRESS_BOX = '<div class="acg-dress"><div class="acg-loading">載入中…</div></div>';
+    function tabsHtml() {
+        const one = (k, t, ic) => '<button class="acg-tab' + (S.tab === k ? ' is-on' : '') + '" type="button" data-act="tab" data-tab="' + k + '"><i class="fa-solid ' + ic + '"></i>' + t + '</button>';
+        return '<div class="acg-tabs">' + one('assets', '素材', 'fa-images') + one('dress', '裝扮', 'fa-shirt') + '</div>';
+    }
+    // 裝扮那頁要換的是誰：
+    //   ①從大廳右鍵開的那個小人 ②管理員那幾位（鑰匙＝他們在大廳的編號，人不在這一場也能換）
+    //   ③這個故事的角色：問大廳「他的小人是哪一把鑰匙」（LobbyNpcs.dressKeyFor；他現在就站在大廳就直接拿那個小人，換了當場看得到）
+    //   ④問不到＝還沒進過大廳：沒有鑰匙，那一頁只剩立繪
+    //   🚨 ③不拿名字去大廳裡找人：別的故事來的客人可能同名，會換到別人身上
+    async function dressCtx() {
+        const off = S.offSel ? officialList().find(o => o.key === S.offSel) : null;
+        const ch = off ? off.name : S.sel;
+        if (!ch) return null;
+        if (S.actor && (off ? S.actor.key === off.key : sameChar(S.actor.name, ch))) return { a: S.actor, chibi: '' };
+        const LS = win.LobbyStage || window.LobbyStage;
+        const st = (LS && LS._S) || null;
+        const live = st ? [st.player].concat(st.npcs || []).filter(Boolean) : [];
+        if (off) return { a: live.find(x => x.key === off.key) || { key: off.key, name: off.name }, chibi: '' };
+        const C = Cache();
+        let rec = null;
+        try { rec = C ? await C.get('avatar_cache', ch) : null; } catch (e) {}
+        const chibi = (rec && rec.chibi) || '', prompt = (rec && rec.prompt) || '';
+        let hit = null;
+        try { const N = win.LobbyNpcs || window.LobbyNpcs; if (N && N.dressKeyFor && C) hit = await N.dressKeyFor(ch, C.getCurrentWorld(), sameChar); } catch (e) {}
+        if (hit) {
+            const n = live.find(x => x.key === hit.key);
+            return { a: n || { key: hit.key, name: ch, avatarPrompt: prompt, avatarCacheKey: ch }, chibi: chibi };
+        }
+        return { a: { key: '', name: ch, avatarPrompt: prompt, avatarCacheKey: ch }, chibi: chibi };
+    }
+    async function mountDress(tk) {
+        const host = S && S.root.querySelector('.acg-dress');
+        if (!host) return;
+        const who = S.offSel || S.sel;
+        const LD = win.LobbyDress || window.LobbyDress;
+        if (!LD || typeof LD.mountInto !== 'function') { host.innerHTML = '<div class="acg-dress-none">大廳還沒準備好，等大廳出來再開這一頁。</div>'; return; }
+        let ctx = null;
+        try { ctx = await dressCtx(); } catch (e) { console.warn('[CharGallery] 裝扮那頁沒開成', e); }
+        if (!S || tk !== S.token || S.tab !== 'dress' || (S.offSel || S.sel) !== who || !host.isConnected) return;
+        if (!ctx) { host.innerHTML = '<div class="acg-dress-none">這一頁沒打開，再點一次試試。</div>'; return; }
+        LD.mountInto(host, ctx.a, { previewHost: S.root, chibi: ctx.chibi || '' });
     }
 
     async function renderMain() {
@@ -557,8 +613,14 @@
 
         const stranger = S.marks[ch] === 'stranger';
         let h = '<div class="acg-main-head"><div class="acg-name">' + esc(ch) + '</div>'
-              + (stranger ? '<div class="acg-note acg-note-stranger"><i class="fa-solid fa-circle-exclamation"></i> 這個故事沒有叫這個名字的角色</div>' : '')
-              + '</div>';
+              + (stranger && S.tab !== 'dress' ? '<div class="acg-note acg-note-stranger"><i class="fa-solid fa-circle-exclamation"></i> 這個故事沒有叫這個名字的角色</div>' : '')
+              + '</div>' + tabsHtml();
+        if (S.tab === 'dress') {   // 裝扮那頁：大廳裝扮室搬進來的那一份（LobbyDress.mountInto）
+            main.innerHTML = h + DRESS_BOX;
+            main.scrollTop = 0;
+            mountDress(tk);
+            return;
+        }
 
         const M = win.OS_IMAGE_MANAGER;
         const canExpr = !!(M && M.comfyInpaint) && (info.slots.some(s => s.exp === DEFAULT_EXP && s.used) || info.gen.length > 0);
@@ -863,6 +925,11 @@
                 const g = info.gen[+b.dataset.gen];
                 const PV = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER;
                 if (PV && g && g.url) PV.open(withUrl.map(x => ({ src: x.url, who: ch, desc: x.label })), withUrl.indexOf(g), { fromEl: b.querySelector('img') });
+                return;
+            }
+            if (act === 'tab') {
+                const t = b.dataset.tab === 'dress' ? 'dress' : 'assets';
+                if (t !== S.tab) { S.tab = t; await renderMain(); }
                 return;
             }
             if (act === 'view-trio') {
@@ -2171,6 +2238,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, faceFor, mouthRev, srcKey, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, eyeOvals, eyesOn, mouthGeom, sigDiff, ovalDist, layFix, lookFromText, lookTags, viewTags, exprMask, DIFF } };
+    win.OS_CHAR_GALLERY = { dressOk: true, open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, faceFor, mouthRev, srcKey, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, eyeOvals, eyesOn, mouthGeom, sigDiff, ovalDist, layFix, lookFromText, lookTags, viewTags, exprMask, DIFF } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();

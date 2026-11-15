@@ -509,17 +509,37 @@
         const metas = (await VC.getAllMeta('avatar_cache')).filter(e => norm(VC.worldOf(e)) === wn);
         if (!metas.length) return null;
         const bare = (e) => String(VC.bareKeyOf(e) || '').trim();
-        // 名字候選：原始「名_姓」→ 顯示名 → 姓名各種拼法 → 只有名
-        const parts = String(g.rawName).split('_').map(s => s.trim()).filter(s => s && s !== '無' && s !== '无');
-        const cands = [g.rawName, g.name];
-        if (parts.length >= 2) cands.push(parts[1] + parts[0], parts[1] + '·' + parts[0], parts[0] + parts[1], parts[0] + '·' + parts[1]);
-        if (parts.length) cands.push(parts[0]);
+        const { parts, cands } = _guestCands(g);
         let hit = null;
         for (const c of cands) { hit = metas.find(e => bare(e) === c); if (hit) break; }
         if (!hit && parts[0]) hit = metas.find(e => bare(e).includes(parts[0]));
         if (!hit) return null;
         const full = await VC.getRaw('avatar_cache', hit.key);
         return full ? { VC, key: hit.key, full } : null;
+    }
+    // 名字候選：原始「名_姓」→ 顯示名 → 姓名各種拼法 → 只有名（找那一輪的頭像、角色中心反查小人的鑰匙共用）
+    function _guestCands(g) {
+        const parts = String(g.rawName).split('_').map(s => s.trim()).filter(s => s && s !== '無' && s !== '无');
+        const cands = [g.rawName, g.name];
+        if (parts.length >= 2) cands.push(parts[1] + parts[0], parts[1] + '·' + parts[0], parts[0] + parts[1], parts[0] + '·' + parts[1]);
+        if (parts.length) cands.push(parts[0]);
+        return { parts, cands };
+    }
+    // 🎭 角色中心「裝扮」頁問：這個故事（world＝那一輪的聊天）裡叫這個名字的角色，在大廳的小人是哪一把鑰匙（jr_<那一輪>_<原名>，同下面刷客人的寫法）。
+    //   只有日誌客人池裡有他（那張卡現在挑的就是這一輪、角色表裡有他）才答得出來；答不出回 null＝他還沒進過大廳。
+    //   same(a, b)＝呼叫端的同名判斷（簡繁、間隔號）；沒給就比一字不差
+    async function _dressKeyFor(name, world, same) {
+        const norm = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+        const wn = norm(world), n = String(name || '').trim();
+        if (!wn || !n) return null;
+        const eq = (typeof same === 'function') ? same : ((a, b) => a === b);
+        let pool = [];
+        try { pool = await _journalGuestPool(); } catch (e) { return null; }
+        const mine = pool.filter(g => norm(g.chatId) === wn);
+        const keyOf = g => ({ key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName, name: g.name });
+        for (const g of mine) { if (_guestCands(g).cands.some(c => c && eq(c, n))) return keyOf(g); }
+        for (const g of mine) { const p0 = _guestCands(g).parts[0]; if (p0 && n.indexOf(p0) >= 0) return keyOf(g); }
+        return null;
     }
     async function _attachGuestPortrait(npc, g) {
         try {
@@ -579,6 +599,7 @@
         staffKeys: () => Object.keys(STAFF),
         official: _official,                // 奧瑞亞官方立繪名冊（管理員＋SN 住民）
         officialOf: _officialOf,            // 名字（含別名）→ 那一筆，沒有回 null
+        dressKeyFor: _dressKeyFor,          // 🎭 角色中心「裝扮」頁：這個故事的這個角色在大廳的小人是哪一把鑰匙（沒進過大廳回 null）
         // SN 住民（雷伊、丹）：小機培養室的「丹」那堂課要他的人設與頭像演小劇場
         snResident: (key) => {
             const r = SN_RESIDENTS.find(x => x.key === key);

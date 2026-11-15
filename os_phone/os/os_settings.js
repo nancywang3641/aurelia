@@ -48,7 +48,7 @@
             ss_1809: { title: '工作流模式', body: '想用自己的工作流再開，否則不用碰。' },
             ss_tavern_sd: { title: '酒館的生圖', body: '用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。這頁沒有要填的，下面那行是酒館那邊現在選的後端。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。手機版沒有酒館，這條用不了。' },
             ss_1840: { title: '模型', body: '按價格排序。' },
-            ss_1878: { title: '帶參考圖', body: '插圖附上出場角色的立繪，最多四個。只用角色圖鑑裡你放的圖。' },
+            ss_1878: { title: '帶參考圖', body: '插圖附上出場角色的立繪，最多四個。只用角色中心裡你放的圖。' },
             ss_capi_url: { title: '接口位址', body: '貼站方給的位址就好，兩種送法會自己認：網址帶 /sdapi 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。' },
             ss_1893: { title: '底詞', body: '選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。' },
             ss_1919: { title: '防超免費尺寸', body: '超過免費上限自動縮回。' },
@@ -59,7 +59,7 @@
             ss_2144: { title: '獨立插圖副模型', body: '插圖另開一通副模型（用副模型接口）、只吃下方規範、不背 AVS/記憶；開了上面的搭便車插圖就停。' },
             ss_2188: { title: '角色頭像快取', body: '備份後即使本地快取清空，也能從角色卡世界書讀回、不必重生（寫入當前角色卡主世界書，停用條目不進 AI）。' },
             bk_storage: { title: '這台裝置上的空間', body: '奧瑞亞的資料（劇情、聊天、圖片）都存在這台裝置的瀏覽器裡，瀏覽器會給一個上限。佔最多的通常是圖片。用到一半橘色、八成紅色。空間吃緊時，瀏覽器可能把整個站的資料一起清掉，不只是圖；「受保護」之後它就不會自己動手。不管有沒有受保護，定期匯出一份完整備份最保險。' },
-            bk_export_img: { title: '帶圖片', body: '聊天裡傳的照片和語音、好友頭像、聊天背景、朋友圈和記事本的照片、角色圖鑑、畫風參考圖會一起放進備份檔，換手機或格式化之後還原都回得來。圖片多的話檔案會大很多；如果手機匯出到一半整頁重開，取消這個勾再匯出一次（文字的部分照樣完整）。雲端自動備份不帶圖片。劇情插圖和立繪在另一個圖庫，不在備份裡。' },
+            bk_export_img: { title: '帶圖片', body: '聊天裡傳的照片和語音、好友頭像、聊天背景、朋友圈和記事本的照片、角色中心裡放的圖、畫風參考圖會一起放進備份檔，換手機或格式化之後還原都回得來。圖片多的話檔案會大很多；如果手機匯出到一半整頁重開，取消這個勾再匯出一次（文字的部分照樣完整）。雲端自動備份不帶圖片。劇情插圖和立繪在另一個圖庫，不在備份裡。' },
             ss_2250: { title: '已存立繪', body: '純色去背：本機瞬間完成，適合純色背景（NAI 圖用這個）。AI 去背：首次下載模型約 40MB，適合雜背景。立繪存進當前世界，VN 優先讀取。' },
             ss_2272: { title: '語音轉文字', body: '微信輸入框按住說話、電話直接說話都用這個。手機自己的聽寫不用下載，說的話會交給 Apple 或 Google 轉成字；本機模型的聲音不離開手機，第一次要下載約 250MB。' },
             ss_2308: { title: 'Group ID (必填)', body: '登入 Minimax 平台後，在帳號設定頁面可找到 Group ID。' },
@@ -2132,11 +2132,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                         </div><!-- /view-img-api -->
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">
-                            <!-- 內層子 tab：頭像快取 vs 角色立繪；最後一顆「角色圖鑑」是開窗口，不是切分頁 -->
+                            <!-- 內層子 tab：頭像快取 vs 角色立繪；最後一顆「角色中心」是開窗口，不是切分頁 -->
                             <div style="display:flex;gap:6px;padding:0 0 10px;border-bottom:1px solid rgba(var(--os-ink-rgb), 0.06);margin-bottom:10px;">
                                 <div class="av-sub active" data-avsub="cache"  style="cursor:pointer;padding:4px 10px;font-size:12px;color:var(--os-ink);border:1px solid rgba(var(--os-ink-rgb), 0.25);border-radius:4px;background:rgba(var(--os-ink-rgb), 0.06);" onclick="_switchAvatarSub(this,'cache')"><i class="fa-solid fa-box"></i> 頭像快取</div>
                                 <div class="av-sub"        data-avsub="sprite" style="cursor:pointer;padding:4px 10px;font-size:12px;color:rgba(var(--os-ink-rgb), 0.72);border:1px solid rgba(var(--os-ink-rgb), 0.25);border-radius:4px;"                              onclick="_switchAvatarSub(this,'sprite')"><i class="fa-solid fa-palette"></i> 角色立繪</div>
-                                <button class="acg-open-chip" type="button" onclick="var G=window.OS_CHAR_GALLERY||(window.parent&&window.parent.OS_CHAR_GALLERY);if(G)G.open(null,{from:this});"><i class="fa-solid fa-address-book"></i><span>角色圖鑑</span></button>
+                                <button class="acg-open-chip" type="button" onclick="var G=window.OS_CHAR_GALLERY||(window.parent&&window.parent.OS_CHAR_GALLERY);if(G)G.open(null,{from:this});"><i class="fa-solid fa-address-book"></i><span>角色中心</span></button>
                             </div>
 
                             <!-- 子: 頭像快取 -->

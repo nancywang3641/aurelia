@@ -644,7 +644,7 @@
                 '<button class="vn-cc-btn" id="vn-cc-gen"><i class="fa-solid fa-palette"></i> 一鍵生立繪（去背）</button>' +
                 // 開著「一次生三種」才有：立繪、頭像、Q版照現在的畫風整組重畫（regenTrio）
                 (this._trioOn() ? '<button class="vn-cc-btn" id="vn-cc-trio"><i class="fa-solid fa-layer-group"></i> 重生立繪・頭像・Q版</button>' : '') +
-                '<button class="vn-cc-btn" id="vn-cc-gallery"><i class="fa-solid fa-address-book"></i> 角色圖鑑</button>';
+                '<button class="vn-cc-btn" id="vn-cc-gallery"><i class="fa-solid fa-address-book"></i> 角色中心</button>';
             const A = win.AUI || window.AUI;
             if (A && A.registerHelp) A.registerHelp({ vn_cc_lean: { title: '主角對他', body: '想靠近：你想攻略這個人，主角對他也有好感。寫劇情的 AI 會讓他照自己的日子過、在合理的場合出現在主角身邊，不讓他消失或只當路人。第一次選的時候會替他生三條好感規則（叫一次模型），存進狀態面板這個故事的條件規則裡，規則窗口看得到、改得動。\n\n疏遠：主角對他的好感在往下掉，寫到兩人互動時照這個心意。\n\n普通：都不提。\n\n每個故事各記各的。' } });
             const leanRow = this._isMcName(name) ? '' : '<div class="vn-cc-lean"><span class="vn-cc-k">主角對他</span><div class="vn-cc-seg">' +

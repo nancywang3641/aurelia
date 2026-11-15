@@ -294,7 +294,7 @@
                 }
             }
             if (missed.length) {
-                try { AUI.toastr && AUI.toastr.warning('抓不到這幾個角色的立繪，這張沒帶他們：' + missed.join('、') + '。放到角色圖鑑的本地上傳就一定抓得到。', '參考圖', { timeOut: 8000 }); } catch (e) {}
+                try { AUI.toastr && AUI.toastr.warning('抓不到這幾個角色的立繪，這張沒帶他們：' + missed.join('、') + '。放到角色中心的本地上傳就一定抓得到。', '參考圖', { timeOut: 8000 }); } catch (e) {}
             }
             return out;
         },
