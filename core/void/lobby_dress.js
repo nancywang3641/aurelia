@@ -253,7 +253,7 @@
         try { const o = JSON.parse(localStorage.getItem(DRESS_GEN_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
     }
     function _dressGenSave(patch) {
-        AUI.lsSet(DRESS_GEN_KEY, JSON.stringify(Object.assign(_dressGenCfg(), patch)), '裝扮室上次選的畫圖設定');
+        return AUI.lsSet(DRESS_GEN_KEY, JSON.stringify(Object.assign(_dressGenCfg(), patch)), '大廳小人用哪個預設包');
     }
     function _imgMgr() { return window.OS_IMAGE_MANAGER || (window.parent || window).OS_IMAGE_MANAGER || null; }
     // 頭像 prompt → 小人 prompt：[Avatar] 規範的「(表情, 服裝, 簡單背景)」括號組拆開，
@@ -292,29 +292,36 @@
         const c = _dressGenCfg();
         return src === 'novelai' ? (c.naiPreset || c.naiPresetId || '') : (c.comfyPreset || c.comfyPresetId || '');
     }
-    function _dressPresetOpts(src) {
-        const presets = _dressPresetsOf(src);
-        const savedKey = _dressSavedKey(src);
-        return presets.length
-            ? presets.map((p, i) => '<option value="' + i + '"' + (_dressPresetKey(p) === savedKey ? ' selected' : '') + '>' + String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
-            : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
+    // 🎭 用哪個預設包畫（11-16 角色中心第二步）：以前是裝扮室裡的兩個下拉（接口、預設包），每個角色頁都看得到、
+    //   單張和走路圖共用一個選擇（要生走路圖得先把包換成會畫 3×4 的那個）。現在搬到 設置 → 圖片 → 畫風 的「大廳的小人」，
+    //   單張立姿、走路圖各選一包，角色頁只剩按鈕（她：「好多那種設置按鍵，會不會讓人看起來像開發者面板」）。
+    //   存在同一把鑰匙裡：{ img:{src,key}, sheet:{src,key} }；舊的 { src, comfyPreset, naiPreset }（以前在裝扮室選的那一個）
+    //   在新的還沒選時照舊拿來用——她原本選好的那包不用重選。回 { src, key, preset }；沒選、或那包已經被刪掉回 null。
+    function _dressPackOf(kind) {
+        const c = _dressGenCfg();
+        const k = kind === 'sheet' ? 'sheet' : 'img';
+        let pick = (c[k] && c[k].key) ? { src: c[k].src === 'novelai' ? 'novelai' : 'comfyui_direct', key: c[k].key } : null;
+        if (!pick) {
+            const src = c.src === 'novelai' ? 'novelai' : 'comfyui_direct';
+            const key = _dressSavedKey(src);
+            if (key) pick = { src, key };
+        }
+        if (!pick) return null;
+        const preset = _dressPresetsOf(pick.src).find(p => _dressPresetKey(p) === pick.key);
+        return preset ? { src: pick.src, key: pick.key, preset } : null;
+    }
+    // 設置頁選了就存：v＝「接口|預設包」。回 false＝沒存到（空間滿）
+    function _dressSetPack(kind, v) {
+        const i = String(v || '').indexOf('|');
+        const patch = {};
+        patch[kind === 'sheet' ? 'sheet' : 'img'] = (i > 0) ? { src: String(v).slice(0, i), key: String(v).slice(i + 1) } : null;
+        return _dressGenSave(patch);
     }
     function _dressGenHtml(a) {
-        const saved = _dressGenCfg();
-        const src = (saved.src === 'novelai') ? 'novelai' : 'comfyui_direct';
-        const opts = _dressPresetOpts(src);
         return '<div class="lsd-gen">' +
             '<div class="lsd-gen-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 生成小小人（用這位的頭像外觀）</div>' +
-            '<div class="lsd-gen-row">' +
-                '<select class="lsd-gen-src">' +
-                    '<option value="comfyui_direct"' + (src === 'comfyui_direct' ? ' selected' : '') + '>ComfyUI</option>' +
-                    '<option value="novelai"' + (src === 'novelai' ? ' selected' : '') + '>NAI</option>' +
-                '</select>' +
-                '<select class="lsd-gen-preset">' + opts + '</select>' +
-            '</div>' +
             '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成單張立姿圖</button>' +
             '<button class="lep-btn lsd-gen-btn-sheet"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-person-walking"></i> 生成走路圖（3×4）</button>' +
-            '<div class="lsd-hint">走路圖需選「會出 3×4 sprite sheet 的預設包」（例如掛 RPG 角色 sprite 類 LoRA）；一般預設包出的是單張，請用「生成單張立姿圖」。</div>' +
         '</div>';
     }
     function _dressSpriteHtml(a) {
@@ -482,31 +489,23 @@
     }
 
     function _wireDressGen(box, a) {
-        const srcSel = box.querySelector('.lsd-gen-src');
-        const pSel = box.querySelector('.lsd-gen-preset');
         const btn = box.querySelector('.lsd-gen-btn');
         const btnSheet = box.querySelector('.lsd-gen-btn-sheet');
-        if (!srcSel || !pSel || !btn) return;
-        const refillPresets = () => { pSel.innerHTML = _dressPresetOpts(srcSel.value); };
-        srcSel.addEventListener('change', () => { _dressGenSave({ src: srcSel.value }); refillPresets(); });
-        pSel.addEventListener('change', () => {
-            const key = _dressPresetKey(_dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)]);
-            if (key) _dressGenSave(srcSel.value === 'novelai' ? { naiPreset: key } : { comfyPreset: key });
-        });
+        if (!btn) return;
         // kind='img'→單張立姿圖(去背+掃碎片+裁切)；kind='sheet'→3×4走路圖(只去背，跳過會毀網格的掃碎片/裁切)
         const doGen = (kind, btn) => (async () => {
             if (btn.disabled) return;
             const M = _imgMgr();
             if (!M) { AUI.alert('生圖引擎還沒載入，稍等一下再按。'); return; }
-            const preset = _dressPresetsOf(srcSel.value)[parseInt(pSel.value, 10)];
-            if (!preset) { AUI.alert('先到「圖片設置」把這個接口的預設包存一個，這裡才有得選。'); return; }
+            const pk = _dressPackOf(kind);   // 用哪一包畫：設置 → 圖片 → 畫風 的「大廳的小人」（單張、走路圖各一格）
+            if (!pk) { AUI.alert('還沒選' + (kind === 'sheet' ? '走路圖' : '單張立姿圖') + '要用哪個預設包來畫。\n到「設置 → 圖片 → 畫風」的「大廳的小人」選好，再回來按。'); return; }
             if (!a.avatarPrompt) { AUI.alert('這位還沒有頭像資料。'); return; }
             const label = btn.innerHTML;
             btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 生成中…';
             try {
                 const prompt = _spritePromptOf(a.avatarPrompt);   // 拔掉頭像自帶的 simple xxx background，背景聽預設包的
                 // 不壓縮（畫風交給預設包）：單張立姿去背+掃碎片+裁切；走路圖只去背（掃碎片/裁切會毀12格網格）
-                const final = await _renderSpriteImage(prompt, srcSel.value, preset, kind);
+                const final = await _renderSpriteImage(prompt, pk.src, pk.preset, kind);
                 // 先預覽再套用：讓 Rae 檢查去背/網格對不對（走路圖尤其要看 4 列朝向、腳有沒有被切）
                 btn.innerHTML = label; btn.disabled = false;
                 _showGenPreview(final, kind, {
@@ -567,6 +566,8 @@
         closeHistory: _closeNpcHistory, // 對話模式換地點時收掉（不然會留著上一位的紀錄）
         genSpriteInto,                  // 無人值守生立姿（世界門旅人自動補圖；與裝扮室同一條管線）
         listPresets: _dressPresetsOf,   // 給設置頁列預設包（免得那邊再抄一份取法）
+        packOf: _dressPackOf,           // 設置頁「大廳的小人」那兩格現在選的是哪一包（kind＝'img'／'sheet'）
+        setPack: _dressSetPack,         // 設置頁選了就存
         presetKeyOf: _dressPresetKey,
     };
 })();

@@ -189,12 +189,6 @@
 .acg-dress .lep-btn[disabled] { opacity: .45; cursor: default; }
 .acg-dress .lsd-gen { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--acg-line); border-radius: 10px; background: transparent; }
 .acg-dress .lsd-gen-title { color: var(--acg-sub); font-size: 12px; font-weight: 700; letter-spacing: .5px; }
-.acg-dress .lsd-gen-row { display: flex; gap: 6px; }
-.acg-dress .lsd-gen-row select {
-    flex: 1; min-width: 0; padding: 8px; border: 1px solid var(--acg-line); border-radius: 8px;
-    background: var(--acg-card); color: var(--acg-ink); font-size: 13px;
-}
-.acg-dress .lsd-gen-row .lsd-gen-src { flex: 0 0 104px; }
 
 .acg-sec { margin-top: 26px; }
 .acg-sec-title { font-size: 14px; font-weight: 800; letter-spacing: 1px; margin-bottom: 10px; color: var(--acg-sub); }

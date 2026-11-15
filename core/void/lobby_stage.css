@@ -183,14 +183,10 @@
 .lstage-theater-win2 .lep-btn { flex:0 0 auto; border:1px solid rgba(35,49,94,.25); border-radius:8px; padding:7px 10px; font-size:12px; cursor:pointer; background:#fff; color:#23315e; }
 .lstage-theater-win2 .lep-btn:hover { border-color:#23315e; }
 .lstage-theater-win2 .lep-danger { border-color:rgba(200,80,70,.4); color:#b05555; background:#fff; }
-/* ✨ 裝扮室內建生成（接口+預設包+生成鈕） */
+/* ✨ 裝扮室內建生成（生成鈕；接口和預設包 11-16 搬去 設置 → 圖片 → 畫風 的「大廳的小人」） */
 .lsd-gen { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid rgba(60,80,130,.18);
   border-radius:10px; background:rgba(35,49,94,.04); }
 .lsd-gen-title { color:#4f74c8; font-size:11px; font-weight:700; letter-spacing:.5px; }
-.lsd-gen-row { display:flex; gap:6px; }
-.lsd-gen-row select { flex:1; min-width:0; border:1px solid rgba(60,80,130,.25); border-radius:7px;
-  background:#fff; color:#23315e; font-size:12px; padding:6px 4px; }
-.lsd-gen-row .lsd-gen-src { flex:0 0 92px; }
 
 /* 👁 生成預覽（套用前先看圖；棋盤底＝透明區） */
 .lstage-genprev { position:absolute; inset:0; z-index:3400; display:flex; align-items:center; justify-content:center;
@@ -531,7 +527,6 @@
 .void-tab.mode-404 :is(.lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel) .lep-done { background:rgba(22,101,52,.9); border-color:rgba(74,222,128,.6); color:#eafff0; }
 .void-tab.mode-404 .lstage-dress:not(.lstage-settings) .lsd-gen { border-color:rgba(74,222,128,.25); background:rgba(0,255,65,.04); }
 .void-tab.mode-404 .lstage-dress:not(.lstage-settings) .lsd-gen-title { color:#4ade80; }
-.void-tab.mode-404 .lstage-dress:not(.lstage-settings) .lsd-gen-row select { background:rgba(16,24,16,.9); border-color:rgba(74,222,128,.3); color:#d3f9d8; }
 .void-tab.mode-404 :is(.lstage-dress:not(.lstage-settings), .lgp-box, .lstage-edit-panel) .lep-danger { background:rgba(40,10,10,.85); border-color:rgba(255,110,110,.4); color:#ff9a9a; }
 
 /* 🎭 小劇場：兩人中間的共用「聊天中」泡泡（白玻璃＋打字三點；帶小尾巴） */

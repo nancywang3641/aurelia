@@ -38,6 +38,7 @@
             ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。' },
             ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
+            ss_dress_pack: { title: '大廳的小人', body: '角色中心「裝扮」那頁的「生成單張立姿圖」「生成走路圖」用哪個預設包來畫，在這裡各選一包，選一次就好。\n\n・單張立姿圖：選畫 Q版小人的那一包。\n・走路圖：要選會畫出 3×4 走路圖的那一包（例如掛了 RPG 角色走路圖 LoRA 的包）；一般的包只會畫出一張，用它生走路圖會切不開。\n\n預設包在上面 NAI、ComfyUI 那兩頁存。自己上傳圖片換小人不用選這個。' },
             ss_1627: { title: '同步角色來源', body: '開啟後，背景和角色用同一個來源，不用再貼一次帳號。' },
             ss_1652: { title: '背景尺寸', body: '全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。' },
             ss_1733: { title: 'Flux 專用搭配檔', body: 'CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。' },
@@ -1629,6 +1630,31 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                         return html;
                                     })()}
                                 </select>
+                            </div>
+                            <!-- 🎭 大廳的小人（11-16 角色中心第二步）：裝扮頁「生成單張立姿圖／生成走路圖」用哪個預設包。以前是裝扮室裡每個角色都看得到的兩個下拉，搬到這裡設一次 -->
+                            <div class="set-group" id="img-dress-pack-block">
+                                <div class="set-label"><i class="fa-solid fa-shirt"></i> 大廳的小人${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_dress_pack') : ''}</div>
+                                ${(() => {
+                                    const _w = window.parent || window;
+                                    const _LD = _w.LobbyDress || window.LobbyDress;
+                                    const _esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+                                    const one = (kind, label) => {
+                                        let opts = '', any = false;
+                                        const cur = (_LD && _LD.packOf) ? _LD.packOf(kind) : null;
+                                        if (_LD && _LD.listPresets) [['comfyui_direct', 'ComfyUI'], ['novelai', 'NAI']].forEach(([src, name]) => {
+                                            (_LD.listPresets(src) || []).forEach(p => {
+                                                const k = _LD.presetKeyOf(p);
+                                                if (!k) return;
+                                                any = true;
+                                                opts += '<option value="' + _esc(src + '|' + k) + '"' + ((cur && cur.src === src && cur.key === k) ? ' selected' : '') + '>' + name + '｜' + _esc(p.name || '未命名') + '</option>';
+                                            });
+                                        });
+                                        const head = cur ? '' : '<option value="" selected disabled>' + (any ? '還沒選' : '還沒有預設包') + '</option>';
+                                        return '<div class="set-label">' + label + '</div>'
+                                             + '<select class="set-select" id="img-dress-pack-' + kind + '" onchange="window._saveDressPack && window._saveDressPack(\'' + kind + '\', this.value)">' + head + opts + '</select>';
+                                    };
+                                    return one('img', '生成單張立姿圖用') + one('sheet', '生成走路圖用');
+                                })()}
                             </div>
                             <div class="set-group" id="img-style-list-block">
                                 <div class="set-label"><i class="fa-solid fa-palette"></i> 我的畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_img_styles') : ''}</div>
@@ -3857,6 +3883,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const o = (i > 0) ? { src: String(v).slice(0, i), key: String(v).slice(i + 1) } : {};
                 _lsSet('wg_sprite_pack_v1', JSON.stringify(o), '世界門旅人畫風');
             } catch (e) {}
+        };
+
+        // 🎭 大廳的小人：值＝「接口|預設包key」，選了就存（存在裝扮室那把鑰匙裡，LobbyDress.setPack）
+        window._saveDressPack = (kind, v) => {
+            const _w = window.parent || window;
+            const LD = _w.LobbyDress || window.LobbyDress;
+            try { if (LD && LD.setPack) LD.setPack(kind, v); } catch (e) {}
         };
 
         // ── 🔁 第一次打開新版：把目前每個地方實際在用的設定轉成列的值，出圖不變 ──
