@@ -83,6 +83,7 @@
     // 下一輪補上(見 _captureAndStripRecall)。每行都是看得懂的摘要、不是噪音 tag，prompt 也大幅縮水。
     const MEM_SUM_MAX = 28;      // 索引每條摘要最多幾字
     const PICK_POOL_K = 40;      // 🔎 向量粗篩給導演的候選池大小（取代 2000 行全目錄常駐：只把語意相關的這幾條交給副模型挑）
+    const CROSS_MAX = 6;   // 🚪 世界門：這章提到、但不在這裡的人，記憶導演候選最多放幾條
     // ⚖️ 候選池留給「份量重但跟當下劇情不相似」的格數。
     //    粗篩只認相似度，所以二十輪前埋的線只要話題轉開就再也撈不出來——它不是被忘了，
     //    是永遠不會被問到。留位置而不是去調相似度的打分：把「重要」折算成「相似」需要一個
@@ -465,11 +466,36 @@
             if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return null;
             const storyId = _storyId();
             if (!storyId || !win.OS_DB?.getAllVnMemories) return null;
-            let all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
-            // 🚪 世界門：記憶導演只從現在這個地方的記憶挑（向量粗篩 search 自己也會篩）
-            try { const _here = (typeof win.OS_VECTOR_ENGINE?.placeKeep === 'function') ? await win.OS_VECTOR_ENGINE.placeKeep() : null; if (_here) all = all.filter(_here); } catch (e) {}
+            const allRaw = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            let all = allRaw;
+            // 🚪 世界門：記憶導演平常只從現在這個地方的記憶挑（向量粗篩 search 自己也會篩）
+            let _here = null;
+            try { _here = (typeof win.OS_VECTOR_ENGINE?.placeKeep === 'function') ? await win.OS_VECTOR_ENGINE.placeKeep() : null; if (_here) all = allRaw.filter(_here); } catch (e) {}
             const facts = all.filter(m => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged);   // 狀態型(物品/角色/關係)走收斂釘選、不交副模型挑(免挑到舊狀態/舊態度)；過濾被壓縮隱藏的原始條目
-            if (!facts.length) return null;
+            // 🚪 但剛寫完的這章提到不在這裡的人（主角在葦口澤想起陳彥庭）→ 那個人的記憶也放進候選，挑不挑交給導演看劇情判斷。
+            //   11-15 她：「記憶召回不是副模型的工作嗎」→「要」（她說過「以後要回顧，得依賴關鍵字回朔」）。
+            //   只看記憶的標籤（多半是人名）有沒有出現在這章正文；主角本人不算（每章都有他）。每個人關係／近況各最新一條＋事件，最多 CROSS_MAX 條。
+            const _away = [];
+            if (_here) {
+                try {
+                    const qk = _nameKey(String(queryText || '').replace(/<[^>]+>/g, ' '));
+                    const mcK = _nameKey(_getProtagonist());
+                    const hitTag = m => (Array.isArray(m.tags) ? m.tags : []).some(t => { const k = _nameKey(String(t || '').trim()); return k.length >= 2 && k !== mcK && qk.indexOf(k) >= 0; });
+                    const cand = allRaw.filter(m => m && !m.merged && m.type !== 'dialogue' && !_here(m) && hitTag(m))
+                        .sort((a, b) => (_newer(a, b) ? -1 : 1));   // 新的在前
+                    const seenState = new Set();
+                    for (const m of cand) {
+                        if (m.type === 'npc' || m.type === 'relationship' || m.type === 'item') {   // 狀態型：同一個人／東西只留最新一條
+                            const who = m.type + '|' + _nameKey(((Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || '').trim());
+                            if (seenState.has(who)) continue;
+                            seenState.add(who);
+                        }
+                        _away.push(m);
+                        if (_away.length >= CROSS_MAX) break;
+                    }
+                } catch (e) {}
+            }
+            if (!facts.length && !_away.length) return null;
 
             // 🔎 向量粗篩：有「當下劇情」當 query + 向量回填到位 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
             //    沒給 query / 還沒回填到位(vectorReady=false) / 搜尋空 → 退回全目錄(早/中/近)，回填空窗期照舊能召回、不開天窗、不會只丟給導演零星幾條。
@@ -499,7 +525,7 @@
             }
             if (!pool) pool = facts.slice();
             pool.sort((a, b) => (_newer(a, b) ? 1 : -1));   // 照故事先後（見 _newer）
-            const _lab = await _chapterLabels(pool.concat(heavy));   // 目錄每行也標（第N章·日期），導演才分得出新舊
+            const _lab = await _chapterLabels(pool.concat(heavy, _away));   // 目錄每行也標（第N章·日期），導演才分得出新舊
 
             const map = {};
             const _seen = new Set();
@@ -533,6 +559,12 @@
                     heavy.forEach(m => _emit(m, hl));
                     if (hl.length) text += `\n〔還懸著、跟當前劇情無關但沒收尾的事〕\n` + hl.join('\n');
                 }
+            }
+            // 🚪 別處的人：另立一區，講明「不在這裡」，導演才不會當成現在身邊的事挑
+            if (_away.length) {
+                const al = [];
+                _away.slice().sort((a, b) => (_newer(a, b) ? 1 : -1)).forEach(m => _emit(m, al));
+                if (al.length) text += `\n〔這章提到、但不在現在這個地方的人：跟他們有關的舊記憶（主角想起他們、或劇情真的需要回想時才挑）〕\n` + al.join('\n');
             }
             if (!idx) return null;
             return { text: text.trim(), map };
