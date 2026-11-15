@@ -1237,6 +1237,15 @@
         }
         // ⚠️ 皮膚只管大廳小人外觀，不碰 a.portrait——對話立繪另有來源(固定NPC自帶/訪客avatar_cache頭像/裝扮室「生成立繪」的sprite_cache)，兩者是不同東西(Rae定案 2026-07-17)
         //   舊 skin 可能殘留 asPortrait 旗標(已退役)，一律忽略。
+        // 🧸 三面（裝扮頁「生成不倒翁小人」存的：正面在 ref，側面、背面另外兩張）：跟一次生三種的 Q版三面同一種小人，走路、轉向會換面。
+        //   側面或背面讀不到就退成單張（只有正面，照舊左右鏡像）
+        if (skin.kind === 'views') {
+            let side = '', back = '';
+            try { side = (await resolveRef(skin.side)) || ''; back = (await resolveRef(skin.back)) || ''; } catch (e) {}
+            if (!a.el || !S.active) return;
+            _swapActorSrc(a, (side && back) ? { views: { front: src, side: side, back: back } } : src);
+            return;
+        }
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src);
     }
 

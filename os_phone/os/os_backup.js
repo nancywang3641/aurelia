@@ -58,7 +58,7 @@
         'os_img_capi_base_packs',     // 底詞包
         'os_img_nai_nodes', 'os_img_capi_nodes',                    // 生圖節點清單
         'os_sprite_tpl_prefix', 'os_sprite_tpl_suffix', 'os_sprite_tpl_neg',
-        'os_sprite_size', 'os_sprite_hires', 'os_sprite_upscale_ratio', 'os_trio_tpl', 'os_trio_tpl_gpt', 'os_trio_tpl_split',   // 立繪工作室（三格提示詞兩份＋分兩份那天搬過的記號）
+        'os_sprite_size', 'os_sprite_hires', 'os_sprite_upscale_ratio', 'os_trio_tpl', 'os_trio_tpl_gpt', 'os_trio_tpl_split', 'os_doll_tpl',   // 立繪工作室（三格提示詞兩份＋分兩份那天搬過的記號）
         'wg_sprite_pack_v1',          // 世界門旅人畫風
         'acg_expr_style', 'acg_expr_mouth', 'acg_expr_lay',       // 角色圖鑑生表情：每個角色選一般還是內收、要不要順便做動嘴、嘴和眼睛小圈拖到哪（含側臉關掉的眼睛、圈轉的角度）
         'acg_expr_look',                                           // 角色圖鑑生表情：每個角色的眼睛顏色、臉上要留著的東西（眼鏡、眼罩…）

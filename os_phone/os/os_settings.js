@@ -38,7 +38,7 @@
             ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。' },
             ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
-            ss_dress_pack: { title: '大廳的小人', body: '角色中心「裝扮」那頁的「生成單張立姿圖」「生成走路圖」用哪個預設包來畫，在這裡各選一包，選一次就好。\n\n・單張立姿圖：選畫 Q版小人的那一包。\n・走路圖：要選會畫出 3×4 走路圖的那一包（例如掛了 RPG 角色走路圖 LoRA 的包）；一般的包只會畫出一張，用它生走路圖會切不開。\n\n預設包在上面 NAI、ComfyUI 那兩頁存。自己上傳圖片換小人不用選這個。' },
+            ss_dress_pack: { title: '大廳的小人', body: '角色中心「裝扮」那頁的「生成單張立姿圖」「生成走路圖」用哪個預設包來畫，在這裡各選一包，選一次就好。\n\n・單張立姿圖：選畫 Q版小人的那一包。\n・走路圖：要選會畫出 3×4 走路圖的那一包（例如掛了 RPG 角色走路圖 LoRA 的包）；一般的包只會畫出一張，用它生走路圖會切不開。\n\n預設包在上面 NAI、ComfyUI 那兩頁存。自己上傳圖片換小人不用選這個。\n\n「生成不倒翁小人」用哪組接口、要不要加畫風，在最上面「每個地方用什麼」的「不倒翁小人」那一列選；它自己一列，不會跟著立繪的畫風走。接自訂接口（GPT 那種）時照下面那格提示詞畫一張三隻（正面、側面、背面），接其他的照那組自己的底詞畫一隻。' },
             ss_1627: { title: '同步角色來源', body: '開啟後，背景和角色用同一個來源，不用再貼一次帳號。' },
             ss_1652: { title: '背景尺寸', body: '全部是 NAI 免費尺寸（64 倍數、未超上限、不扣點），任一接口都能用。' },
             ss_1733: { title: 'Flux 專用搭配檔', body: 'CFG 自動＝1、引導靠 Guidance；上面「模型」要選 diffusion_models 裡的 Flux（按測試會自動列出）。' },
@@ -1655,6 +1655,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                     };
                                     return one('img', '生成單張立姿圖用') + one('sheet', '生成走路圖用');
                                 })()}
+                                <div class="set-label">不倒翁小人的提示詞：接自訂接口時用</div>
+                                <textarea class="set-textarea trio-tpl" id="doll-tpl" rows="9" oninput="window._dollTplSave && window._dollTplSave(this.value)"></textarea>
+                                <div class="btn-test trio-reset" onclick="window._dollTplReset && window._dollTplReset()">還原預設提示詞</div>
                             </div>
                             <div class="set-group" id="img-style-list-block">
                                 <div class="set-label"><i class="fa-solid fa-palette"></i> 我的畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_img_styles') : ''}</div>
@@ -3588,7 +3591,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
         // 有「原本的底詞」的列（劇情頭像、背景、物品本來就自己拼一段底詞）
         const LEGACY_STYLE = { avatar: '原本的頭像底詞', bg: '原本的背景底詞', item: '原本的物品底詞' };
-        const FIXED_SIZE = { item: '跟著用它的地方', map: '1024×512', phone: '1024×1024', app: '跟著應用' };
+        const FIXED_SIZE = { item: '跟著用它的地方', map: '1024×512', phone: '1024×1024', app: '跟著應用', doll: '寬圖（三隻並排）' };
         const SPRITE_SIZES = [['512x896', '512×896（窄·瘦）'], ['640x896', '640×896（標準）'], ['704x896', '704×896（寬·鎧甲）'], ['768x896', '768×896（超寬·厚甲）']];
         const _parking = () => container.querySelector('#img-size-parking');
         function _renderImgUses() {
@@ -3885,6 +3888,29 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             } catch (e) {}
         };
 
+        // 🧸 不倒翁小人的提示詞（接自訂接口時用）：打了就存，跟預設一樣（或清空）就不存——以後預設改了才跟得上（同一次生三種那兩格）
+        const _dollLD = () => { const _w = window.parent || window; return _w.LobbyDress || window.LobbyDress; };
+        window._dollTplSave = (v) => {
+            const LD = _dollLD();
+            if (!LD || !LD.DOLL_TPL_KEY) return;
+            try {
+                if (!String(v || '').trim() || v === LD.DOLL_TPL) (window.parent || window).localStorage.removeItem(LD.DOLL_TPL_KEY);
+                else _lsSet(LD.DOLL_TPL_KEY, v, '不倒翁小人的提示詞');
+            } catch (e) {}
+        };
+        window._dollTplReset = () => {
+            const LD = _dollLD();
+            if (!LD || !LD.DOLL_TPL_KEY) return;
+            try { (window.parent || window).localStorage.removeItem(LD.DOLL_TPL_KEY); } catch (e) {}
+            const ta = container.querySelector('#doll-tpl');
+            if (ta) ta.value = LD.DOLL_TPL;
+        };
+        (function () {
+            const LD = _dollLD(), ta = container.querySelector('#doll-tpl');
+            if (!ta || !LD || !LD.dollTpl) return;
+            ta.value = LD.dollTpl();
+        })();
+
         // 🎭 大廳的小人：值＝「接口|預設包key」，選了就存（存在裝扮室那把鑰匙裡，LobbyDress.setPack）
         window._saveDressPack = (kind, v) => {
             const _w = window.parent || window;
@@ -4024,6 +4050,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (use === 'bg') return parse(v('#img-bg-size') || '1024x768');
             if (use === 'map') return { width: 1024, height: 512 };
             if (use === 'phone') return { width: 1024, height: 1024 };
+            if (use === 'doll') return { width: 1536, height: 1024 };
             return { width: 512, height: 512 };
         };
 

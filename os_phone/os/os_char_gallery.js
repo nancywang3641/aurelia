@@ -856,6 +856,13 @@
                 const src = one && await LB.resolveRef(one.ref);
                 const img = src && await _imgBytes(src);
                 if (img) files.push({ name: nameOf('大廳', clean(k) + (one.kind === 'sheet' ? '_走路圖' : ''), img.ext), data: img.data });
+                if (one.kind === 'views') {   // 裝扮頁生的不倒翁小人三面：側面、背面跟著包
+                    for (const [f, tag] of [['side', '_側面'], ['back', '_背面']]) {
+                        const s2 = one[f] && await LB.resolveRef(one[f]);
+                        const im = s2 && await _imgBytes(s2);
+                        if (im) files.push({ name: nameOf('大廳', clean(k) + tag, im.ext), data: im.data });
+                    }
+                }
             }
         }
         if (!files.length) { toast('還沒有 Q 版可以下載：角色要用「一次生三種」生過立繪，或在大廳裝扮室換過小人', 'warning'); return; }

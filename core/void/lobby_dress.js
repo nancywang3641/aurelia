@@ -155,7 +155,7 @@
         let src = '', txt = '';
         if (skin) {
             try { src = (await _b.resolveRef(skin.ref)) || ''; } catch (e) {}
-            if (src) txt = skin.kind === 'sheet' ? '自己換的走路圖' : '自己換的立姿圖';
+            if (src) txt = skin.kind === 'sheet' ? '自己換的走路圖' : (skin.kind === 'views' ? '不倒翁小人（正面、側面、背面）' : '自己換的立姿圖');
         }
         if (!src && opts && opts.chibi) { src = opts.chibi; txt = '跟立繪一起生的 Q版'; }
         if (!src && a.defaultSrc) { src = a.defaultSrc; txt = '預設的小人'; }
@@ -320,6 +320,7 @@
     function _dressGenHtml(a) {
         return '<div class="lsd-gen">' +
             '<div class="lsd-gen-title"><i class="fa-solid fa-wand-magic-sparkles"></i> 生成小小人（用這位的頭像外觀）</div>' +
+            '<button class="lep-btn lsd-gen-btn-doll"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-egg"></i> 生成不倒翁小人</button>' +
             '<button class="lep-btn lsd-gen-btn"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-wand-magic-sparkles"></i> 生成單張立姿圖</button>' +
             '<button class="lep-btn lsd-gen-btn-sheet"' + (a.avatarPrompt ? '' : ' disabled title="這位還沒有頭像資料（劇情裡生成過頭像才有外觀依據）"') + '><i class="fa-solid fa-person-walking"></i> 生成走路圖（3×4）</button>' +
         '</div>';
@@ -358,12 +359,16 @@
     // 生成預覽：套用前先看圖。走路圖=可拖邊界的調框器（生成隨機→逐張把紅格對準每格角色含腳）＋每列翻轉（修LoRA朝向錯的列，如右列鏡像自左列）＋即時結果
     function _showGenPreview(dataUrl, kind, h, host) {
         const isSheet = (kind === 'sheet');
+        const isViews = (kind === 'views');   // 🧸 不倒翁小人三面：dataUrl＝{ front, side, back }
         const wrap = document.createElement('div');
         wrap.className = 'lstage-genprev';
         wrap.innerHTML =
             '<div class="lgp-box">' +
-                '<div class="lgp-title">' + (isSheet ? '走路圖調框（3×4）' : '單張立姿預覽') + '</div>' +
-                (isSheet
+                '<div class="lgp-title">' + (isSheet ? '走路圖調框（3×4）' : (isViews ? '不倒翁小人預覽' : '單張立姿預覽')) + '</div>' +
+                (isViews
+                    ? '<div class="lgp-views">' + [['front', '正面'], ['side', '側面'], ['back', '背面']].map(v =>
+                        '<figure class="lgp-view"><img class="lgp-img" src="' + _esc(dataUrl[v[0]]) + '" alt=""><figcaption>' + v[1] + '</figcaption></figure>').join('') + '</div>'
+                    : isSheet
                     ? '<div class="lgp-sheetwrap"><img class="lgp-img lgp-sheetimg" src="' + _esc(dataUrl) + '"><canvas class="lgp-grid"></canvas></div>' +
                       '<div class="lgp-sliders">' +
                         _lgpSlider('上', 'top', 0, 40, 0) + _lgpSlider('下', 'bottom', 60, 100, 100) +
@@ -375,7 +380,7 @@
                       '<div class="lgp-reslabel">套用後（重切＋翻轉）</div>' +
                       '<canvas class="lgp-result"></canvas>'
                     : '<img class="lgp-img" src="' + _esc(dataUrl) + '">') +
-                '<div class="lgp-hint">' + (isSheet ? '紅格對準每格角色含腳；某列朝向錯就按「翻轉列」左右鏡像（右列常可鏡像自左列）' : '看去背乾不乾淨、有沒有缺手缺腳再套用') + '</div>' +
+                '<div class="lgp-hint">' + (isSheet ? '紅格對準每格角色含腳；某列朝向錯就按「翻轉列」左右鏡像（右列常可鏡像自左列）' : (isViews ? '三隻是不是同一個人、側面是不是臉朝右，看過再套用' : '看去背乾不乾淨、有沒有缺手缺腳再套用')) + '</div>' +
                 '<div class="lgp-btns">' +
                     '<button class="lep-btn lgp-apply"><i class="fa-solid fa-check"></i> 套用</button>' +
                     '<button class="lep-btn lgp-retry"><i class="fa-solid fa-rotate"></i> 重新生成</button>' +
@@ -471,6 +476,79 @@
         return true;
     }
 
+    // ── 🧸 不倒翁小人（11-16 角色中心第三步）──
+    //   她：一次生三種把小人跟立繪擠在同一張，畫風是加在整張上的，小人被立繪的畫風帶走（「怎麼畫風全一樣了」）
+    //   →「想做不倒翁到裝扮室?」：小人在這裡單獨生一張，走名冊自己那一列（OS_IMAGE_MANAGER.USES 的 doll），
+    //     用哪組接口、加不加畫風都在 設置 → 圖片 → 畫風「每個地方用什麼」的「不倒翁小人」那列選，不跟立繪共用。
+    //   接自訂接口（GPT 那種讀句子的）：照下面這段畫一張三隻（正面／側面／背面並排），原樣送（raw：接口那格底詞常寫著她的畫風，不接）。
+    //   接其他的（ComfyUI、NAI…吃標籤的）：外觀標籤＋「一個人、全身、站著」，畫風交給那組自己的底詞（她的小人 LoRA 包）；通常是一隻。
+    //   出來的圖去背後看是不是三隻並排（VN_Core._chibiViews，同一次生三種那套）：是＝切三張、存成三面；不是＝一張。
+    //   🚨 側面寫死「臉朝右」：大廳（lobby_stage.js 的 placeActor）當它朝右，往左走才鏡像；改這裡那邊要一起改。
+    //   🚨 小人沒手沒腳用「只有兩個形狀：頭＋蛋形身體」正面講，不寫 no arms／no legs（生圖模型看不懂否定）。
+    const DOLL_LOOK = '【角色外觀】';
+    const DOLL_TPL_KEY = 'os_doll_tpl';
+    const DOLL_TPL = 'a turnaround sheet of one small round-bottomed tumbler toy doll, drawn in a flat, simple mascot style; the doll is this character: 【角色外觀】;\n\n'
+        + 'the same doll appears three times side by side in one row, all three the same size and resting on the same ground line, on one continuous plain white background: on the left seen from the front, in the middle in full profile with its face pointing to the right, on the right seen from behind;\n\n'
+        + 'each doll is made of only two solid shapes, an oversized round head resting directly on a small smooth egg-shaped body with a rounded bottom; the head keeps the character\'s hairstyle, hair color and eye color, with large round eyes, a tiny mouth and round blush on the cheeks; the character\'s outfit is painted flat onto the surface of the egg-shaped body, and the doll seen from behind shows the back of the hair and the back of the outfit;\n\n'
+        + 'flat colors, thin clean outlines; the image contains only these three dolls, evenly spaced with clear white gaps between them and clear white margin around them;';
+    function _dollTpl() {
+        let t = null;
+        try { t = localStorage.getItem(DOLL_TPL_KEY); } catch (e) {}
+        return (t && t.trim()) ? t : DOLL_TPL;
+    }
+    const _blobToData = (b) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(b); });
+    // 回 { views:{front,side,back} } 或 { img }（都是 dataURL）；接口沒回圖丟錯（字是給她看的）
+    async function _genDoll(a) {
+        const M = _imgMgr();
+        if (!M) throw new Error('生圖引擎還沒載入');
+        const look = _spritePromptOf(a.avatarPrompt);
+        const svc = (typeof M.serviceForUse === 'function') ? M.serviceForUse('doll') : '';
+        const opts = { use: 'doll', force: true };
+        let prompt;
+        if (svc === 'custom_api') {
+            const tpl = _dollTpl();
+            prompt = tpl.indexOf(DOLL_LOOK) >= 0 ? tpl.split(DOLL_LOOK).join(look) : (tpl + ' ' + look);
+            opts.raw = true; opts.width = 1536; opts.height = 1024;
+        } else {
+            prompt = _standeePromptOf(look, '');
+        }
+        const url = await M.generate(prompt, 'char', opts);
+        if (!url) throw new Error('接口沒回圖（到 設置 → 圖片 → 畫風 看「不倒翁小人」那列用的是哪組）');
+        let blob = null;
+        try { blob = await (await fetch(url)).blob(); } catch (e) { throw new Error('圖拿到了但讀不進來'); }
+        // 去背：跟一次生三種同一套（AI 認人形，白色的衣服、眼白不會被當成背景挖掉）；劇情那支沒載到才退成掃白底
+        const V = window.VN_Core || (window.parent || window).VN_Core;
+        let cut = null;
+        if (V && typeof V._stripSpriteBgAI === 'function') {
+            try { cut = await V._stripSpriteBgAI(blob); } catch (e) {}
+            if (cut && typeof V._keepMainPiece === 'function') { try { cut = (await V._keepMainPiece(cut)) || cut; } catch (e) {} }
+        }
+        if (!cut) {
+            const d = await _b.pixelify(await _blobToData(blob), { noGrid: true, sheet: true });
+            if (d) cut = await (await fetch(d)).blob();
+        }
+        if (!cut) cut = blob;
+        let views = null;
+        if (V && typeof V._chibiViews === 'function') { try { views = await V._chibiViews(cut); } catch (e) {} }
+        if (views) return { views: { front: await _blobToData(views[0]), side: await _blobToData(views[1]), back: await _blobToData(views[2]) } };
+        return { img: await _blobToData(cut) };
+    }
+    // 存成這個小人的造型：三面＝三張各自落地，鑰匙那筆記 kind:'views'；一張＝跟「生成單張立姿圖」同一種
+    async function _saveDollSkin(key, r) {
+        if (!r.views) return await _saveSpriteSkin(key, r.img, 'img');
+        const ids = [];
+        try {
+            for (const k of ['front', 'side', 'back']) {
+                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + k.charAt(0);
+                await _b.idbPut(id, r.views[k]);
+                ids.push(id);
+            }
+        } catch (e) { for (const id of ids) { try { await _b.idbDel(id); } catch (e2) {} } return false; }
+        const ok = _b.saveSkin(key, { kind: 'views', ref: { idb: ids[0] }, side: { idb: ids[1] }, back: { idb: ids[2] } });
+        if (ok === false) { for (const id of ids) { try { await _b.idbDel(id); } catch (e) {} } return false; }
+        return true;
+    }
+
     // ── 🤖 無人值守版立姿生成（世界門旅人自動補圖）──
     //   跟按鈕版唯一的差別：不開預覽窗、生完直接落地。失敗就靜靜回 false，讓小人維持預設圖。
     //   prompt 直接給英文外觀詞（旅人是展開世界時一起產的，沒有頭像 prompt 可拆）。
@@ -526,6 +604,34 @@
         })();
         btn.addEventListener('click', () => doGen('img', btn));
         if (btnSheet) btnSheet.addEventListener('click', () => doGen('sheet', btnSheet));
+        // 🧸 生成不倒翁小人：叫一次生圖，先預覽再套用
+        const btnDoll = box.querySelector('.lsd-gen-btn-doll');
+        const doDoll = async () => {
+            if (btnDoll.disabled) return;
+            if (!a.avatarPrompt) { AUI.alert('這位還沒有頭像資料。'); return; }
+            const label = btnDoll.innerHTML;
+            btnDoll.disabled = true; btnDoll.innerHTML = '<i class="fa-solid fa-hourglass-half"></i> 生成中…';
+            try {
+                const r = await _genDoll(a);
+                btnDoll.innerHTML = label; btnDoll.disabled = false;
+                _showGenPreview(r.views || r.img, r.views ? 'views' : 'img', {
+                    apply: async () => {
+                        const ok = await _saveDollSkin(a.key, r);
+                        if (!ok) { AUI.alert('存不下來（本機空間滿了），這次沒有換上。'); return; }
+                        _b.applySkin(a, a.key);
+                        btnDoll.innerHTML = '<i class="fa-solid fa-check"></i> 已套用';
+                        setTimeout(() => { btnDoll.innerHTML = label; btnDoll.disabled = false; if (box._pvHost && box._done) box._done(); }, 1600);
+                    },
+                    retry: () => doDoll(),
+                    cancel: () => {},
+                }, box._pvHost);
+            } catch (e) {
+                console.warn('[LobbyDress] 不倒翁小人沒生成', e);
+                AUI.alert('生成失敗：' + (e && e.message || e));
+                btnDoll.innerHTML = label; btnDoll.disabled = false;
+            }
+        };
+        if (btnDoll) btnDoll.addEventListener('click', doDoll);
     }
     function _wireDressSprite(box, a) {
         // ── 🖼️ 生成立繪（對話框角色大圖）：直接呼叫 VN 劇情角色卡「一鍵生立繪」現成接口 ──
@@ -567,6 +673,7 @@
         genSpriteInto,                  // 無人值守生立姿（世界門旅人自動補圖；與裝扮室同一條管線）
         listPresets: _dressPresetsOf,   // 給設置頁列預設包（免得那邊再抄一份取法）
         packOf: _dressPackOf,           // 設置頁「大廳的小人」那兩格現在選的是哪一包（kind＝'img'／'sheet'）
+        DOLL_TPL, DOLL_TPL_KEY, dollTpl: _dollTpl,   // 🧸 不倒翁小人的提示詞（接自訂接口時用）：設置頁那格讀寫
         setPack: _dressSetPack,         // 設置頁選了就存
         presetKeyOf: _dressPresetKey,
     };

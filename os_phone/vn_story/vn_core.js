@@ -2191,7 +2191,13 @@
         },
         _heavyReport: function() {
             let m = null;
-            try { m = JSON.parse(localStorage.getItem('vn_heavy_step') || 'null'); localStorage.removeItem('vn_heavy_step'); } catch (e) {}
+            try { m = JSON.parse(localStorage.getItem('vn_heavy_step') || 'null'); } catch (e) {}
+            // 🚨 這一筆是「這次打開之後」才記的＝現在正在跑的那一張，不是上次留下來的：不報、也不擦（擦了那張做到一半的記號就沒了）。
+            //   這支是打開後 5 秒才看；5 秒內就開始去背（一打開就按生成）以前會被當成上次斷掉的，跳一句假的。
+            let born = 0;
+            try { born = Date.now() - performance.now(); } catch (e) {}
+            if (m && m.at && born && m.at >= born - 1000) return;
+            try { localStorage.removeItem('vn_heavy_step'); } catch (e) {}
             if (!m || !m.at || Date.now() - m.at > 30 * 60 * 1000) return;
             const what = m.step === 'trio' ? '把一次生三種的圖切成三格' : '幫立繪去背';
             // how：去背用顯卡還是 CPU、在不在背景工人裡（11-06 起記；她截圖回來就知道是哪一種跑法撐不住）
