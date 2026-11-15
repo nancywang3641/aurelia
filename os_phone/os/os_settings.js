@@ -26,7 +26,7 @@
             ss_jev: { title: '決策模型', body: '只做選擇題、打分數、回答是或不是的小模型，快又便宜，一次不到台幣 0.001 元。\n\n用到它的地方：書咖的丹決定下一步、立繪什麼時候收、音效和音樂、劇情地點對到地圖、記憶比對。\n\n要用 Jev 那種問法的服務。三格都要填；少一格，那些地方照舊用自己原本的辦法。\n\n只存在這台裝置上，電腦和手機要各填一次。' },
             ss_1503: { title: '頭像 來源', body: '角色頭像／立繪用這個來源。' },
             ss_1519: { title: '立繪模式', body: '開＝直接生全身立繪、不生頭像。' },
-            ss_trio: { title: '一次生三種', body: '只在立繪模式下有作用：勾了會順便勾上面的「跳過頭像」，取消「跳過頭像」它也會一起取消。新角色要圖時，一次生一張分三格的圖，切開成三張：\n\n・立繪（去背）：劇情舞台\n・頭像（自拍，留背景）：聊天、劇情手機、通話、大廳對話框、日誌、狀態面板\n・Q版（去背）：大廳裡他的小人（裝扮室換過造型的照舊）。Q版那格畫成正面、側面、背面三隻並排的，會切成三張，他在大廳走路、轉向時會換成那一面\n\n「立繪」那列接 GPT 那種時會附上分三格的底圖讓它照著排；ComfyUI 不附（試過附了反而會把底圖的人帶過來）。\n\n開了這個，上面「一次生幾個角色」就不用了。已經有圖的舊角色不會重生。' },
+            ss_trio: { title: '一次生三種', body: '只在立繪模式下有作用：勾了會順便勾上面的「跳過頭像」，取消「跳過頭像」它也會一起取消。新角色要圖時，一次生一張分三格的圖，切開成三張：\n\n・立繪（去背）：劇情舞台\n・頭像（自拍，留背景）：聊天、劇情手機、通話、大廳對話框、日誌、狀態面板\n・Q版（去背）：大廳裡他的小人（裝扮室換過造型的照舊）。Q版那格畫成正面、側面、背面三隻並排的，會切成三張，他在大廳走路、轉向時會換成那一面\n\n提示詞有兩格，用哪格看「立繪」那列接的是什麼：接自訂接口（GPT 那種）用上面那格，內建把 Q版畫成小人三面，也會附上分三格的底圖讓它照著排；接其他的（ComfyUI、NAI…）用下面那格，畫一隻 Q版、不附底圖（試過附了反而會把底圖的人帶過來）。\n\n開了這個，上面「一次生幾個角色」就不用了。已經有圖的舊角色不會重生。' },
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
@@ -1593,10 +1593,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <div class="trio-row">
                                     <label class="set-check"><input type="checkbox" id="vncfg-sprite-trio" ${vnD.spriteTrio ? 'checked' : ''} onchange="window._trioToggle && window._trioToggle(this.checked)"> 一次生三種：立繪＋頭像＋Q版${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_trio') : ''}</label>
                                     <div id="vncfg-trio-body" class="${vnD.spriteTrio ? '' : 'hidden'}">
-                                        <div class="set-label">三格的提示詞</div>
-                                        <textarea class="set-textarea trio-tpl" id="trio-tpl" rows="9" oninput="window._trioTplSave && window._trioTplSave(this.value)"></textarea>
-                                        <div class="set-desc">【角色外觀】會換成角色的長相；畫風照「立繪」那列。</div>
-                                        <div class="btn-test trio-reset" onclick="window._trioTplReset && window._trioTplReset()">還原預設提示詞</div>
+                                        <!-- 11-15 分兩格（她：「好，分兩格」）：自訂接口那種能在同一張圖裡畫兩種畫風，內建把 Q版那格畫成小人三面；其他接口照舊畫一隻。用哪格看「立繪」那列接的接口（VN_Image.trioTplKey）。 -->
+                                        <div class="set-label">三格的提示詞：接自訂接口時用</div>
+                                        <textarea class="set-textarea trio-tpl" id="trio-tpl-gpt" rows="9" oninput="window._trioTplSave && window._trioTplSave(this.value, 'custom_api')"></textarea>
+                                        <div class="btn-test trio-reset" onclick="window._trioTplReset && window._trioTplReset('custom_api')">還原預設提示詞</div>
+                                        <div class="set-label">三格的提示詞：接其他接口時用</div>
+                                        <textarea class="set-textarea trio-tpl" id="trio-tpl" rows="9" oninput="window._trioTplSave && window._trioTplSave(this.value, '')"></textarea>
+                                        <div class="btn-test trio-reset" onclick="window._trioTplReset && window._trioTplReset('')">還原預設提示詞</div>
+                                        <div class="set-desc">用哪一格看上面「立繪」那列接的是什麼（ComfyUI、NAI 那些算其他接口）。【角色外觀】會換成角色的長相；畫風照「立繪」那列。</div>
                                     </div>
                                 </div>
                             </div>
@@ -3806,7 +3810,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
 
         // 🎴 一次生三種：勾了才攤開提示詞那格；提示詞打了就存，跟預設一樣（或清空）就不存——以後預設改了才跟得上
-        const _trioDefault = () => { const VI = (window.parent || window).VN_Image || window.VN_Image; return (VI && VI.TRIO_TPL) || ''; };
+        //   兩格：svc 傳 'custom_api'＝自訂接口那格（#trio-tpl-gpt），其他＝原本那格（#trio-tpl）。key 和預設都問 VN_Image（trioTplKey／trioTplDef）
+        const _trioVI = () => (window.parent || window).VN_Image || window.VN_Image;
+        const _trioDefault = (svc) => { const VI = _trioVI(); return (VI && VI.trioTplDef && VI.trioTplDef(svc)) || ''; };
+        const _trioKey = (svc) => { const VI = _trioVI(); return (VI && VI.trioTplKey) ? VI.trioTplKey(svc) : 'os_trio_tpl'; };
+        const _trioBox = (svc) => container.querySelector(svc === 'custom_api' ? '#trio-tpl-gpt' : '#trio-tpl');
         // 三種一起生只在立繪模式下有作用：勾三種＝順便勾「跳過頭像」；取消「跳過頭像」＝三種也一起取消，兩格不會對不上
         //   （10-15 她：「我只勾一次生三種，他回給我的只有頭像，是不是因為還得開跳過頭像勾勾?」）
         window._trioToggle = (on) => {
@@ -3817,25 +3825,28 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const tr = container.querySelector('#vncfg-sprite-trio');
             if (!e.target.checked && tr && tr.checked) { tr.checked = false; window._trioToggle(false); }
         });
-        window._trioTplSave = (v) => {
+        window._trioTplSave = (v, svc) => {
             const _w = window.parent || window;
             try {
-                if (!String(v || '').trim() || v === _trioDefault()) _w.localStorage.removeItem('os_trio_tpl');
-                else _lsSet('os_trio_tpl', v, '一次生三種的模板');
+                if (!String(v || '').trim() || v === _trioDefault(svc)) _w.localStorage.removeItem(_trioKey(svc));
+                else _lsSet(_trioKey(svc), v, '一次生三種的提示詞');
             } catch (e) {}
         };
-        window._trioTplReset = () => {
+        window._trioTplReset = (svc) => {
             const _w = window.parent || window;
-            try { _w.localStorage.removeItem('os_trio_tpl'); } catch (e) {}
-            const ta = container.querySelector('#trio-tpl');
-            if (ta) ta.value = _trioDefault();
+            try { _w.localStorage.removeItem(_trioKey(svc)); } catch (e) {}
+            const ta = _trioBox(svc);
+            if (ta) ta.value = _trioDefault(svc);
         };
         (function () {
-            const ta = container.querySelector('#trio-tpl');
-            if (!ta) return;
-            let v = null;
-            try { v = (window.parent || window).localStorage.getItem('os_trio_tpl'); } catch (e) {}
-            ta.value = (v && v.trim()) ? v : _trioDefault();
+            try { const VI = _trioVI(); if (VI && VI.trioTplMigrate) VI.trioTplMigrate(); } catch (e) {}   // 以前只有一格：寫了三面的那段先搬去自訂接口那格
+            ['custom_api', ''].forEach((svc) => {
+                const ta = _trioBox(svc);
+                if (!ta) return;
+                let v = null;
+                try { v = (window.parent || window).localStorage.getItem(_trioKey(svc)); } catch (e) {}
+                ta.value = (v && v.trim()) ? v : _trioDefault(svc);
+            });
         })();
 
         // 🚪 世界門旅人：值＝「接口|預設包key」，選了就存（同房間的作風）
