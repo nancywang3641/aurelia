@@ -529,7 +529,7 @@
         const url = (await _imgToDataUrl(raw)) || raw;
         const _isSprite = (window.VN_Config || (window.parent || window).VN_Config)?.data?.spriteDirect === true;
         // 一次生三種的自拍頭像、Q版跟著這張一起換；重生成單張時舊的對不上新立繪，不留（undefined）
-        const _three = cfg.kind === 'avatar' ? { face: (_trio && _trio.face) || undefined, chibi: (_trio && _trio.chibi) || undefined } : {};
+        const _three = cfg.kind === 'avatar' ? { face: (_trio && _trio.face) || undefined, chibi: (_trio && _trio.chibi) || undefined, chibiSide: (_trio && _trio.chibiSide) || undefined, chibiBack: (_trio && _trio.chibiBack) || undefined } : {};
         await VN_Cache.setRaw(cfg.store, fullKey, _isSprite && cfg.kind === 'avatar'
             ? { ...val, prompt, url, isSprite: true, ..._three }
             : { ...val, prompt, url, ..._three });   // 不再存 rawUrl(只寫不讀的死資料、徒增 DB+記憶體)
@@ -783,11 +783,11 @@
                         reader.readAsDataURL(blob);
                     });
                     const saveUrl = dataUrl || raw;
-                    await VN_Cache.set('avatar_cache', name, { prompt, url: saveUrl, face: (_img && _img.face) || undefined, chibi: (_img && _img.chibi) || undefined });
+                    await VN_Cache.set('avatar_cache', name, { prompt, url: saveUrl, face: (_img && _img.face) || undefined, chibi: (_img && _img.chibi) || undefined, chibiSide: (_img && _img.chibiSide) || undefined, chibiBack: (_img && _img.chibiBack) || undefined });
                     previewImg.src = saveUrl;
                 } catch(e) {
                     // fetch 失敗（已是 data: URL 等）→ 直接存
-                    await VN_Cache.set('avatar_cache', name, { prompt, url: raw, face: (_img && _img.face) || undefined, chibi: (_img && _img.chibi) || undefined });
+                    await VN_Cache.set('avatar_cache', name, { prompt, url: raw, face: (_img && _img.face) || undefined, chibi: (_img && _img.chibi) || undefined, chibiSide: (_img && _img.chibiSide) || undefined, chibiBack: (_img && _img.chibiBack) || undefined });
                     previewImg.src = raw;
                 }
                 previewImg.style.opacity = '1';

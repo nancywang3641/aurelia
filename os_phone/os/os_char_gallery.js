@@ -738,8 +738,14 @@
             for (const e of list) {
                 const rec = await VC.getRaw('avatar_cache', e.key);
                 if (!rec || !rec.chibi) continue;
+                const base = clean(VC.bareKeyOf ? VC.bareKeyOf(e) : e.key);
                 const img = await _imgBytes(rec.chibi);
-                if (img) files.push({ name: nameOf('角色', clean(VC.bareKeyOf ? VC.bareKeyOf(e) : e.key), img.ext), data: img.data });
+                if (img) files.push({ name: nameOf('角色', base, img.ext), data: img.data });
+                // Q版畫成三面的：側面、背面跟著一起包
+                for (const [f, tag] of [['chibiSide', '_側面'], ['chibiBack', '_背面']]) {
+                    const im = rec[f] && await _imgBytes(rec[f]);
+                    if (im) files.push({ name: nameOf('角色', base + tag, im.ext), data: im.data });
+                }
             }
         }
         const LB = (win.LobbyStage || window.LobbyStage || {})._b;

@@ -580,6 +580,23 @@
             if (!hz && !withTpl) hz = edgeAt(false, hLo, hHi, v.b + 1, R0);
             const hFound = !!hz;
             if (!hz) { const t = VN_Image.trioLine(w, h); hz = { a: hExp - Math.ceil(t / 2), b: hExp + Math.floor(t / 2) }; }
+            // 右下那格的左邊不一定跟右上對齊：沒母圖時模型常把 Q版那排畫得比自拍寬（畫成三面圖尤其），照直的分界切會把最左那隻削掉一條。
+            //   分界那欄在右下這段高度裡有東西 → 往左找跟左格之間那條空白，切在空白中間；找不到（是左格的人伸過來）就不動。
+            let bx = v.b + 1;
+            if (!withTpl) {
+                const by0 = hz.b + 1, by1 = B0;
+                const blank = function (x) { return stat(true, x, by0, by1).sd < 8; };
+                if (by1 - by0 > 8 && !blank(v.b + 1)) {
+                    const lim = Math.max(L0, v.a - Math.round(w * 0.12));
+                    let g1 = v.a;
+                    while (g1 > lim && !blank(g1)) g1--;
+                    if (g1 > lim) {
+                        let g0 = g1;
+                        while (g0 - 1 > lim && blank(g0 - 1)) g0--;
+                        bx = Math.round((g0 + g1) / 2);
+                    }
+                }
+            }
             const pad = withTpl ? 3 : 0;   // 黑線邊緣常有一兩格灰邊，往裡多切一點
             const box = function (x0, y0, x1, y1) { return { x: Math.max(0, x0), y: Math.max(0, y0), w: Math.max(1, Math.min(w, x1) - Math.max(0, x0)), h: Math.max(1, Math.min(h, y1) - Math.max(0, y0)) }; };
             return {
@@ -587,7 +604,7 @@
                 boxes: {
                     left: box(L0 + pad, T0 + pad, v.a - pad, B0 - pad),
                     top: box(v.b + 1 + pad, T0 + pad, R0 - pad, hz.a - pad),
-                    bottom: box(v.b + 1 + pad, hz.b + 1 + pad, R0 - pad, B0 - pad),
+                    bottom: box(bx + pad, hz.b + 1 + pad, R0 - pad, B0 - pad),
                 },
             };
         },
@@ -623,7 +640,52 @@
             g.putImageData(img, 0, 0);
             return await new Promise(function (r) { c.toBlob(function (b) { r(b); }, 'image/png'); });
         },
-        // 回 { objUrl, dataUrl(立繪), face(頭像), chibi(Q版) }；失敗回 null（不退成單張立繪：她選的是三種一起）。
+        // 🧸 Q版那格畫成三面圖（正面、側面、背面並排）→ 切成三張，回 [正面, 側面, 背面] 的 Blob；不是三隻回 null（整格照舊當一張）。
+        //   吃去背後的圖：數「夠大的塊」（≥ 最大那塊的 35%），剛好三塊、左右不重疊才算；分界切在兩隻中間的空隙，由左到右＝正面、側面、背面。
+        //   每張左右留一樣寬的邊（小人在正中）、上下不裁：三張同高同腳底，換面不會跳，站在大廳的大小也跟整格當一張時同一個算法。
+        _chibiViews: async function (blob) {
+            const bmp = await createImageBitmap(blob);
+            const W = bmp.width, H = bmp.height, N = W * H;
+            const c = document.createElement('canvas'); c.width = W; c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+            try { bmp.close(); } catch (e) {}
+            try {
+                const d = g.getImageData(0, 0, W, H).data;
+                const lab = new Uint8Array(N), q = new Int32Array(N), comps = [], colHas = new Uint8Array(W);
+                for (let s = 0; s < N; s++) {
+                    if (lab[s] || d[s * 4 + 3] < 64) continue;
+                    let qh = 0, qt = 0, x0 = W, x1 = -1; lab[s] = 1; q[qt++] = s;
+                    while (qh < qt) {
+                        const p = q[qh++], x = p % W;
+                        if (x < x0) x0 = x; if (x > x1) x1 = x; colHas[x] = 1;
+                        const nb = [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, p >= W ? p - W : -1, p < N - W ? p + W : -1];
+                        for (let k = 0; k < 4; k++) { const n = nb[k]; if (n >= 0 && !lab[n] && d[n * 4 + 3] >= 64) { lab[n] = 1; q[qt++] = n; } }
+                    }
+                    comps.push({ n: qt, x0: x0, x1: x1 });
+                }
+                if (comps.length < 3) return null;
+                const big = Math.max.apply(null, comps.map(function (o) { return o.n; }));
+                const main = comps.filter(function (o) { return o.n >= big * 0.35; }).sort(function (a, b) { return a.x0 - b.x0; });
+                if (main.length !== 3) return null;
+                if (main[1].x0 <= main[0].x1 || main[2].x0 <= main[1].x1) return null;
+                const cuts = [0, Math.round((main[0].x1 + main[1].x0) / 2), Math.round((main[1].x1 + main[2].x0) / 2), W];
+                const pad = Math.round(H * 0.04), out = [];
+                for (let i = 0; i < 3; i++) {
+                    let a = cuts[i], b = cuts[i + 1] - 1;
+                    const lo = a, hi = b;
+                    while (a < b && !colHas[a]) a++;
+                    while (b > a && !colHas[b]) b--;
+                    const p = Math.max(0, Math.min(pad, a - lo, hi - b));
+                    const sx = a - p, sw = (b + p) - sx + 1;
+                    const o = document.createElement('canvas'); o.width = sw; o.height = H;
+                    o.getContext('2d').drawImage(c, sx, 0, sw, H, 0, 0, sw, H);
+                    out.push(await new Promise(function (r) { o.toBlob(function (bl) { r(bl); }, 'image/png'); }));
+                    this._freeCanvas(o);
+                }
+                return out.every(Boolean) ? out : null;
+            } finally { this._freeCanvas(c); }
+        },
+        // 回 { objUrl, dataUrl(立繪), face(頭像), chibi(Q版；畫成三面時＝正面那隻), chibiSide／chibiBack(三面時才有) }；失敗回 null（不退成單張立繪：她選的是三種一起）。
         //   🚨 不准往外丟錯：單張那條（_makeCharImageOne）失敗是回 null，開口時那條靠它退到「最終預設立繪」；丟出去就整個卡住。
         _makeTrio: async function (prompt, force) {
             try { return await this._makeTrioRaw(prompt, force); }
@@ -695,8 +757,14 @@
             this._freeCanvas(cTop);
             const spriteBlob = await cutOut(cLeft, '立繪');
             const chibiBlob = await cutOut(cBottom, 'Q版');
-            const out = await Promise.all([toData(spriteBlob), toData(chibiBlob), toData(faceBlob)]);
-            return { objUrl: URL.createObjectURL(spriteBlob), dataUrl: out[0], chibi: out[1], face: out[2] };
+            // Q版那格畫成正面／側面／背面三隻 → 切三張：正面那隻照舊當 chibi（大廳的小人），側面、背面另外存
+            let views = null;
+            try { views = await this._chibiViews(chibiBlob); } catch (e) { console.warn('[VN] 一次生三種：Q版切三面失敗，整格當一張：', (e && e.message) || e); }
+            if (views) console.log('[VN] 一次生三種：Q版那格是三面圖 → 切成正面／側面／背面');
+            const out = await Promise.all([toData(spriteBlob), toData(views ? views[0] : chibiBlob), toData(faceBlob)].concat(views ? [toData(views[1]), toData(views[2])] : []));
+            const res = { objUrl: URL.createObjectURL(spriteBlob), dataUrl: out[0], chibi: out[1], face: out[2] };
+            if (views) { res.chibiSide = out[3]; res.chibiBack = out[4]; }
+            return res;
         },
 
         // 去重包裝：同一道具若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
