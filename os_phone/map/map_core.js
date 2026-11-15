@@ -2035,12 +2035,40 @@ ${facilityText}
             if (d && d.saveAppData) await d.saveAppData(MISSION_APP, MISSION_KEY, list.slice(-MISSION_MAX), _missionScope());
         } catch (e) { console.warn('[Map] 委託紀錄存不進去', e); }
     }
+    // 🚪 世界門（11-15）：委託記著在哪接的（世界名，''＝主角原本生活的地方）；提醒 AI 結算、選項框的「結算委託」只列這裡的。
+    //   以前一條聊天一本帳，人在葦口澤時照樣提醒「主角手上還有奧瑞亞那份委託，辦成寫收款那行」，AI 就在世界裡辦奧瑞亞的事。
+    //   她 11-15 盤點後排的第五塊：「修委託」。舊紀錄沒記地方 → 看接的時間落在哪一趟（OS_WORLDGATE.tripsInfo），認不出的照送。
+    const _zkM = s => { try { const Z = win.OS_ZH; if (Z && typeof Z.key === 'function') return Z.key(String(s == null ? '' : s)); } catch (e) {} return String(s == null ? '' : s).replace(/\s/g, ''); };
+    async function _wgPlaceNow() {   // 有世界門才回地方（沒有回 null＝不記不篩）
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.worldNames !== 'function') return null;
+        try {
+            if (!((await G.worldNames()) || []).length) return null;
+            const cur = (typeof G.getCurrentWorld === 'function') ? await G.getCurrentWorld() : null;
+            return (cur && cur.name) || '';
+        } catch (e) { return null; }
+    }
+    async function _missionHere() {   // r → 這份委託算不算這裡的；沒有世界門回 null＝全部都算
+        const here = await _wgPlaceNow();
+        if (here == null) return null;
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        let trips = null;
+        try { trips = (G && typeof G.tripsInfo === 'function') ? await G.tripsInfo() : null; } catch (e) {}
+        const hk = _zkM(here);
+        return r => {
+            let p = (r && r.place != null) ? r.place : null;
+            if (p == null && trips && r && r.acceptedAt) { const t = trips.find(x => r.acceptedAt >= x.start && r.acceptedAt < x.end); p = t ? t.name : ''; }
+            return p == null || _zkM(p) === hk;
+        };
+    }
     async function _missionRecord(ev, startText) {
         const list = await _missionLoad();
         if (list.some(r => r.id === ev.id)) return;
-        list.push({ id: ev.id, title: ev.title, facName: ev.facName, zoneId: ev.zoneId, facKey: ev.facKey || '', sceneId: ev.sceneId || '',
+        const rec = { id: ev.id, title: ev.title, facName: ev.facName, zoneId: ev.zoneId, facKey: ev.facKey || '', sceneId: ev.sceneId || '',
             type: ev.type, difficulty: ev.difficulty, money: ev.money, desc: ev.desc || '', objective: ev.objective || '', acceptedAt: Date.now(), status: 'running',
-            held: !!startText, startText: startText || '' });
+            held: !!startText, startText: startText || '' };
+        try { const p = await _wgPlaceNow(); if (p != null) rec.place = p; } catch (e) {}
+        list.push(rec);
         await _missionSave(list);
         // 📅 日曆上佔一格（從主角現在的時間起、進行中）；收到報酬／不辦了時收掉（她 10-10：「委託卡似乎也能卡上去當時段」）
         try { const MC = win.OS_MC_STATUS; if (MC && MC.missionStart) await MC.missionStart({ id: ev.id, title: ev.title }); } catch (e) {}
@@ -2056,7 +2084,8 @@ ${facilityText}
     //   只帶還在跑的（running）；入帳＝done、她按「不辦了」＝dropped 就不再帶。
     //   還收著沒送的（held）也不帶：這一輪她那句會接上整段委託，前面先提醒「手上有一份」反而像已經在辦了。
     async function missionReminderText() {
-        const run = (await _missionLoad()).filter(r => r.status === 'running' && !r.held).slice(-3);
+        const here = await _missionHere();   // 🚪 只提醒這裡接的
+        const run = (await _missionLoad()).filter(r => r.status === 'running' && !r.held && (!here || here(r))).slice(-3);
         if (!run.length) return '';
         const lines = [];
         lines.push('主角手上還有' + (run.length > 1 ? ' ' + run.length + ' 份' : '一份') + '沒結算的委託：');
@@ -2075,7 +2104,8 @@ ${facilityText}
     }
     // 選項框上那顆「結算委託」要列哪幾張：這條聊天還沒結算的（最多 3 張，新的在後；還沒送出去的不算）
     async function missionsRunning() {
-        return (await _missionLoad()).filter(r => r.status === 'running' && !r.held).slice(-3).map(r => ({ id: r.id, title: r.title }));
+        const here = await _missionHere();   // 🚪 只列這裡接的
+        return (await _missionLoad()).filter(r => r.status === 'running' && !r.held && (!here || here(r))).slice(-3).map(r => ({ id: r.id, title: r.title }));
     }
     // 📮 接了還收著的委託（held）：她下一句從酒館送出時（MESSAGE_SENT，os_app_memory_inject 叫），接在那則訊息裡一起送。
     //   委託排前面、她那句排最後（模型看最後一段決定在回什麼）；回傳併好的整則，沒有收著的回空字串。

@@ -69,6 +69,7 @@
         _pendingCur = v ? { id: v, ts: Date.now() } : null;   // 撤離(空值)要把手上那筆一起丟掉
         _sinceMemo.clear();   // 換世界＝新的一趟，記著的進門時間作廢（不然再進同一個世界會拿上一趟的時間認主）
         _castMemo = null;     // 誰在哪出場、這一趟的旅伴也跟著重算（大總結送出時用）
+        _tripMemo = null;     // 一趟一趟的時間也重算（委託認舊紀錄用）
         if (c) await _set(K_CURRENT, v, c);
         try { await syncTheme(); } catch (e) {}   // 進世界換上它的劇情介面、撤離換回這本故事的
         try { (win.OS_SUMMARY_INJECT || window.OS_SUMMARY_INJECT)?.invalidate?.(); } catch (e) {}   // 大總結送哪個世界的人和事跟著換（os_story_tools 的 _worldNatives）
@@ -189,6 +190,24 @@
         const val = { places, at, visited: visited.map(n => { const w = byName(n); return { name: n, genre: (w && w.genre) || '' }; }), team };
         _castMemo = { cid, at: Date.now(), val };
         return val;
+    }
+    // 🕰 某個時間點主角在哪（11-15，委託那種只記了時間的舊紀錄用）：回 [{ name, start, end }]，還沒撤離的那一趟 end＝Infinity；
+    //   讀不到聊天回 null（＝認不出，照送）。一分鐘內、或沒換世界就重用。
+    let _tripMemo = null;
+    async function tripsInfo() {
+        const cid = _cid();
+        if (_tripMemo && _tripMemo.cid === cid && Date.now() - _tripMemo.at < 60000) return _tripMemo.val;
+        const marks = await _tripMarks();
+        if (!marks) return null;
+        const out = [];
+        let cur = null;
+        marks.forEach(m => {
+            if (cur && cur.at && m.at) out.push({ name: cur.name, start: cur.at, end: m.at });
+            cur = (m.kind === 'in') ? m : null;
+        });
+        if (cur && cur.at) out.push({ name: cur.name, start: cur.at, end: Infinity });
+        _tripMemo = { cid, at: Date.now(), val: out };
+        return out;
     }
     // 一趟一趟的時間：進門那則 → 撤離那則（或直接進了下一個世界）。[{ name, start, end }]；時間讀不到的那趟不算（寧可不收也別收錯）
     function _closedTrips(marks) {
@@ -5517,7 +5536,7 @@
             .map(w => ({ id: w.id, name: String(w.name || ''), art: w.art }));
     }
 
-    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, worldNames, castInfo,pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
+    win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, worldNames, castInfo, tripsInfo, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts,
         inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen, pvImgGet };
