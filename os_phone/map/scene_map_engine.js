@@ -57,6 +57,65 @@
         } catch (e) { return url; }
     }
 
+    // 🧭 灰度草稿（小地圖那一列走自訂接口、收得到參考圖時才用）：
+    //   AI 寫的地標座標是照「正上方的平面圖」寫的，底圖畫歪地標就對不上。GPT 這種讀得懂話的模型，
+    //   給它一張「哪裡有東西」的灰度草稿，再講明方塊只標位置，它會照位置畫、東西之間自己接起來（11-15 實測她：「GPT 比較好」）。
+    //   ComfyUI 不走這條：Anima 照方塊畫會一格一格割裂，她看過說還是沒草稿好。
+    //   草稿只拿地標的 x/y 畫同大小的柔邊方塊，不用任何素材；畫風、視角那些字照舊歸小地圖那一列的畫風包，這裡只講草稿怎麼看。
+    // 畫布 3:2（GPT 只出 1536×1024 這種比例），地標排在中間 2:1 那一條，畫完上下各裁 1/8 就剛好是小地圖的 2:1。
+    const GUIDE_W = 1536, GUIDE_H = 1024, GUIDE_TOP = 0.125, GUIDE_BLOCK = 0.15;
+    function _guideXY(lm) {   // 地標座標（小地圖 0-100）→ 草稿上的百分比
+        return { x: lm.x, y: (GUIDE_TOP + (1 - 2 * GUIDE_TOP) * lm.y / 100) * 100 };
+    }
+    function _guideLead(landmarks) {
+        const spots = landmarks.map((lm, i) => {
+            const p = _guideXY(lm);
+            return (i + 1) + ') ' + (lm.label || 'an object') + ' at ' + Math.round(p.x) + '% from the left and ' + Math.round(p.y) + '% from the top';
+        }).join('; ');
+        return 'Image {n} is only a layout guide, not a picture to copy: on a dark background, each soft light-grey blob marks where one object of this place stands. '
+            + 'Blobs: ' + spots + '. '
+            + 'The names only tell you which object each blob is; never write them or any other text in the picture. '
+            + 'Put each object on its blob with its own natural shape and size instead of copying the blob, '
+            + 'connect everything into one believable, continuous place with floor details, paths and small props in between, '
+            + 'and do not draw the blobs themselves.';
+    }
+    async function _guideRef(landmarks) {
+        const cv = document.createElement('canvas'); cv.width = GUIDE_W; cv.height = GUIDE_H;
+        const g = cv.getContext('2d');
+        g.fillStyle = 'rgb(20,20,20)'; g.fillRect(0, 0, GUIDE_W, GUIDE_H);
+        const s = GUIDE_W * GUIDE_BLOCK, r = 20;
+        g.fillStyle = 'rgb(200,200,200)';
+        g.shadowColor = 'rgb(200,200,200)'; g.shadowBlur = 18;   // 柔邊用陰影做：iPhone 的畫布不一定認 filter
+        landmarks.forEach(lm => {
+            const p = _guideXY(lm), cx = GUIDE_W * p.x / 100, cy = GUIDE_H * p.y / 100;
+            const x = cx - s / 2, y = cy - s / 2;
+            g.beginPath();
+            g.moveTo(x + r, y); g.lineTo(x + s - r, y); g.quadraticCurveTo(x + s, y, x + s, y + r);
+            g.lineTo(x + s, y + s - r); g.quadraticCurveTo(x + s, y + s, x + s - r, y + s);
+            g.lineTo(x + r, y + s); g.quadraticCurveTo(x, y + s, x, y + s - r);
+            g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
+            g.fill();
+        });
+        const blob = await new Promise(res => cv.toBlob(res, 'image/png'));
+        return blob ? { name: 'the layout guide', kind: 'layout', lead: _guideLead(landmarks), blob: blob } : null;
+    }
+    // 畫好的圖裁掉上下各 1/8，留下跟草稿上地標那一條對齊的 2:1（照比例裁，接口回別的尺寸也對得上）
+    async function _cropGuideBand(url) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image();
+                if (!/^data:/.test(String(url))) i.crossOrigin = 'anonymous';
+                i.onload = () => res(i); i.onerror = rej; i.src = url;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return url;
+            const top = Math.round(H * GUIDE_TOP), h = H - top * 2;
+            const out = document.createElement('canvas'); out.width = W; out.height = h;
+            out.getContext('2d').drawImage(img, 0, top, W, h, 0, 0, W, h);
+            return out.toDataURL('image/png');
+        } catch (e) { console.warn('[SceneMap] 草稿版底圖裁切失敗，用原圖:', e); return url; }
+    }
+
     function isBackdropAuto() {
         try { return localStorage.getItem(BACKDROP_AUTO_KEY) === '1'; } catch (e) { return false; }
     }
@@ -390,10 +449,17 @@
         if (isBackdropAuto() && !isPaintedWorld() && sceneMap.backdropPrompt && win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
             try {
                 const fullPrompt = sceneMap.backdropPrompt;   // 風格詞在「小地圖 TAB」底詞欄，不再暗拼固定詞
-                let _bu = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(fullPrompt, { width: 1024, height: 512, imgType: 'map', use: 'map' }) || '';
+                const IM = win.OS_IMAGE_MANAGER;
+                const _opts = { width: 1024, height: 512, imgType: 'map', use: 'map' };
+                // 走自訂接口（收得到參考圖）＋有地標 → 帶灰度草稿，照草稿的 3:2 要圖
+                const _guide = (sceneMap.landmarks.length && typeof IM.takesRefImages === 'function' && IM.takesRefImages('map'))
+                    ? await _guideRef(sceneMap.landmarks) : null;
+                if (_guide) { _opts._layoutRef = _guide; _opts.width = GUIDE_W; _opts.height = GUIDE_H; }
+                let _bu = await IM.generateBackgroundAsync(fullPrompt, _opts) || '';
                 if (_bu && _bu.indexOf('blob:') === 0) {
                     try { const _b = await (await fetch(_bu)).blob(); _bu = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(_b); }); } catch (e) {}
                 }
+                if (_bu && _guide) _bu = await _cropGuideBand(_bu);   // 🧭 裁回地標那一條（2:1）
                 if (_bu) _bu = await trimUniformBorder(_bu);   // ✂️ AI 出白邊就裁掉（沒白邊原樣回）
                 sceneMap.backdropUrl = _bu;
             } catch (e) { console.warn('[SceneMap] 底板圖生成失敗:', e); }

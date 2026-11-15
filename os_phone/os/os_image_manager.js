@@ -466,6 +466,16 @@
             const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
             return hit ? hit.provider : this.legacyServiceOf(use);
         },
+        // 這一列送得出參考圖嗎：走自訂接口、而且不是 SD WebUI 格式（那種站沒有帶圖編輯那條）。
+        //   小地圖帶灰度草稿（scene_map_engine.js）先問這支：送不出去的話草稿白畫，裁切也會裁錯。
+        takesRefImages: function(use) {
+            if (this.serviceForUse(use) !== 'custom_api') return false;
+            const r = this.getRoutes()[use] || {};
+            const hit = r.conn ? this._resolveConn(r.conn) : null;
+            const cfg = (hit && hit.customApi) || this.config.customApi || {};
+            const url = String(cfg.url || '').trim().replace(/\/+$/, '');
+            return !!url && !/\/sdapi(\/|$)/.test(url);
+        },
         // 這一列走 ComfyUI 時用的那組參數（看模型類型決定寫標籤還是句子的地方用）
         comfyCfgForUse: function(use) {
             const r = this.getRoutes()[use];
@@ -802,7 +812,9 @@
                 const _styles = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind === 'style');
                 const _layouts = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind === 'layout');
                 // 格子那段跟她在 SPRITE_TRIO_LAB 試成功的那段同一套說法（她：「有欸!」）
-                const _lead = (_layouts.length ? 'Image ' + _layouts[0].n + ' is the layout to draw on: a white canvas divided by thick black lines into three framed panels. '
+                //   版面圖自己帶說法（lead，{n}＝它是第幾張）就用它的：小地圖的灰度草稿（scene_map_engine.js）走這條
+                const _lead = (_layouts.length && _layouts[0].r.lead ? String(_layouts[0].r.lead).replace(/\{n\}/g, _layouts[0].n) + '\n'
+                    : _layouts.length ? 'Image ' + _layouts[0].n + ' is the layout to draw on: a white canvas divided by thick black lines into three framed panels. '
                         + 'One tall panel on the left runs the full height; on the right there are two panels stacked on top of each other, an upper one and a lower one. '
                         + 'Keep every black line exactly where it is in that image: straight, unbroken, the same thickness, and keep the black frame around the edge. '
                         + 'Fill each panel edge to edge with its own picture. Nothing is drawn on the lines and nothing crosses from one panel into another.\n' : '')
