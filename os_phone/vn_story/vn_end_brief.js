@@ -9,6 +9,9 @@
  *   上面是這一章的選項卡（正則把 <branches> 畫成的那張，例如帶插圖的選擇器），整張搬過來、直接展開；
  *   沒有選項卡就列出 <branches> 那幾個選項；底下一條輸入框，點選項填進去、按發送就送出。
  *   選項卡搬進來以後，「角色卡畫面」小牌子不再列它。
+ * 11-15 起世界門的世界（有自己的章末面板、這張卡收著）也借這一欄：面板上每顆按鈕點了，這一欄當成小窗浮在畫面正中間，
+ *   就地顯示那一項（狀態、線索、今天的行程、日誌、做出選擇、CTX），不再跳資料中心變成一排分頁
+ *   （她：「世界門的結束畫面要改成按鈕點擊後各自開小窗，不要再跑去資訊中心變成一堆TAB了」）。小窗＝.vne-float，後面墊一層 #vn-end-scrim。
  * 這支只負責「把字填進去」：
  *   骨架在 vn_styles.js（#vn-end-basic 那段）、樣式在 css/vn_styles.css（「章末簡報」那段）、
  *   每顆按鈕做什麼在 vn_core.js 章末那段的 acts（這裡的小牌子也是借那份，不另寫開 app 的邏輯）。
@@ -194,7 +197,11 @@
     //   線索那頁就是正式的線索頁（OS_STORY_THREADS.mountInto），新線索演出照舊在這裡播；今天的行程借日曆那張小卡（OS_CALENDAR.todayInto）；
     //   狀態變化借「本輪更新」那份（OS_AVS.updList）；日誌是這個故事最近幾次大總結的結語（OS_DB.getLobbySummaryForPrompt）。
     function _side() { return document.getElementById('vn-end-side'); }
+    function _scrim() { return document.getElementById('vn-end-scrim'); }
     function _briefOn() { const r = _root(); return !!r && r.classList.contains('vne-brief'); }
+    // 世界門的世界：自己的章末面板亮著（簡報卡收掉了）→ 這一欄改當小窗
+    function _worldUp() { const p = document.getElementById('vn-end-panel'); return !!p && p.classList.contains('active'); }
+    function isFloat() { const s = _side(); return !!s && s.classList.contains('vne-float'); }
     function _threads() { return win.OS_STORY_THREADS || window.OS_STORY_THREADS; }
     const SIDE_MARK = { threads: ['#vn-end-btn-threads', '.vne-tile[data-vne="threads"]'], today: ['.vne-tile[data-vne="today"]'],
         changes: ['.vne-tile[data-vne="changes"]'], journal: ['#vn-end-btn-journal'], go: ['#vn-end-btn-go'], ctx: ['#vn-end-btn-ctx'] };
@@ -227,6 +234,32 @@
             const C = win.OS_CALENDAR || window.OS_CALENDAR;
             if (!C || typeof C.todayInto !== 'function') { body.innerHTML = _wait('今天的行程', '日曆還在載入，等一下再按'); return; }
             await C.todayInto(body);
+        },
+        // 狀態（11-15，世界面板「這一章的資料與狀態」那顆）：整份狀態欄，跟資料中心「狀態」那頁同一份（煉丹爐做的面板＋現在的值）；
+        //   沒做過狀態面板就列這一章改了哪幾格。角色卡作者做的畫面照舊整頁開資料中心那一頁（照作者原本的樣子，不塞進小窗）
+        async status(body, seq) {
+            body.innerHTML = _wait('狀態', '讀取中…');
+            let html = '';
+            try {
+                if (_standalone()) {
+                    const SA = window.VN_StandaloneArchive;
+                    if (SA && typeof SA.statusPanelHtml === 'function') html = (await SA.statusPanelHtml()) || '';
+                } else {
+                    const H = win.AureliaHtmlExtractor || window.AureliaHtmlExtractor;
+                    if (H && typeof H.statePanelHtml === 'function') html = (await H.statePanelHtml()) || '';
+                }
+            } catch (e) { console.warn('[VN_EndBrief] 狀態欄讀不出來', e); }
+            const cards = (await _peekCards()).filter(c => !_isPicker(c.text, _opts));
+            if (seq !== _sideSeq || !body.isConnected) return;
+            const A = win.OS_AVS || window.OS_AVS;
+            const u = (A && typeof A.updList === 'function') ? A.updList() : { n: 0, rows: [] };
+            let inner;
+            if (html) inner = ((A && typeof A.updatesBtnHtml === 'function') ? A.updatesBtnHtml() : '') + '<div class="vne-st-panel native-render-wrapper">' + html + '</div>';
+            else if (u.n) inner = u.rows.map(r => '<div class="vne-chg"><span class="vne-chg-k">' + esc(r.k) + '</span><span class="vne-chg-v">' + esc(r.v) + '</span></div>').join('');
+            else inner = '<div class="vne-empty">這個故事還沒有狀態欄<small>在變數工坊做一個狀態面板，這裡就看得到</small></div>';
+            body.innerHTML = _sh('狀態', u.n ? '這一章改了 ' + u.n + ' 項' : '') + '<div class="vne-sc vne-st-sc">' + inner
+                + (cards.length ? _more('card', '角色卡畫面：' + cards.map(c => c.title).join('・')) : '') + '</div>';
+            if (html && A && typeof A.bindUpdatesBtn === 'function') A.bindUpdatesBtn(body, _side());
         },
         changes(body) {
             const A = win.OS_AVS || window.OS_AVS;
@@ -435,18 +468,27 @@
         const CR = win.OS_CARD_REGEX || window.OS_CARD_REGEX;
         if (box && box.querySelector('iframe, audio, video') && CR && CR.stopMedia) { try { CR.stopMedia(box); } catch (e) {} }
     }
-    // 打開某一頁；同一頁再按一次＝收起來
+    // 打開某一頁；同一頁再按一次＝收起來。
+    //   簡報卡在＝卡片旁邊那一欄；世界門的世界（自己的章末面板亮著、卡片收掉了）＝同一欄當成小窗浮在正中間（.vne-float）
     async function openSide(key) {
         const root = _root(), side = _side();
-        if (!root || !side || !_briefOn() || !SIDE_FILL[key]) return false;
+        if (!side || !SIDE_FILL[key]) return false;
+        const float = !_briefOn();
+        if (float ? !_worldUp() : !root) return false;
         if (_sideKey === key) { closeSide(); return true; }
         _dropThreads(side);
         _dropGo(side);
         _dropCtx();
         _sideKey = key;
         const seq = ++_sideSeq;
-        root.classList.add('vne-side-open');
-        _markOn(key);
+        if (!float) { root.classList.add('vne-side-open'); _markOn(key); }
+        side.classList.toggle('vne-float', float);
+        side.dataset.vneKey = key;   // 小窗的高度看是哪一頁（線索、做出選擇拿滿，其他跟著內容）
+        const sc = _scrim();
+        if (float && sc) {
+            sc.onclick = () => closeSide();   // 點小窗外面＝收起來
+            if (!sc.classList.contains('vne-on')) { sc.classList.add('vne-on'); requestAnimationFrame(() => requestAnimationFrame(() => { if (seq === _sideSeq) sc.classList.add('vne-in'); })); }
+        }
         const body = side.querySelector('.vne-side-body');
         body.innerHTML = '';
         side.onclick = (ev) => {
@@ -457,9 +499,9 @@
         };
         if (!side.classList.contains('vne-side-on')) {
             side.classList.add('vne-side-on');
-            requestAnimationFrame(() => { _measure(); requestAnimationFrame(() => { if (seq === _sideSeq) side.classList.add('vne-side-in'); }); });
-        } else _measure();
-        setTimeout(() => { if (seq === _sideSeq) _measure(); }, 420);   // 卡片往左讓／縮成一條要 0.38 秒，站穩了再量一次
+            requestAnimationFrame(() => { if (!float) _measure(); requestAnimationFrame(() => { if (seq === _sideSeq) side.classList.add('vne-side-in'); }); });
+        } else if (!float) _measure();
+        if (!float) setTimeout(() => { if (seq === _sideSeq) _measure(); }, 420);   // 卡片往左讓／縮成一條要 0.38 秒，站穩了再量一次
         try { await SIDE_FILL[key](body, seq); }
         catch (e) { console.warn('[VN_EndBrief] 旁邊那欄打不開', key, e); if (seq === _sideSeq) body.innerHTML = _wait('', '這一頁沒打開，再按一次試試'); }
         return true;
@@ -472,11 +514,14 @@
         _sideKey = '';
         _sideSeq++;
         if (root) { root.classList.remove('vne-side-open'); root.querySelectorAll('.vne-on').forEach(n => n.classList.remove('vne-on')); }
+        const sc = _scrim();
+        if (sc) sc.classList.remove('vne-in');
         if (!side) return;
         side.classList.remove('vne-side-in');
         const done = () => {
             if (_sideKey) return;
-            side.classList.remove('vne-side-on');
+            side.classList.remove('vne-side-on', 'vne-float');
+            if (sc) sc.classList.remove('vne-on');
             const b = side.querySelector('.vne-side-body');
             if (b) b.innerHTML = '';
         };
@@ -484,15 +529,16 @@
     }
     try { win.addEventListener('resize', () => { if (_sideKey) _measure(); }); } catch (e) {}
 
-    // 底下那排的線索、日誌：簡報卡上在旁邊那欄開；世界面板漏做、補上來的那幾顆（直排）照舊開資料中心／手機日誌
+    // 底下那排的線索、日誌、CTX、繼續：簡報卡上在旁邊那欄開；世界面板漏做、補上來的那幾顆（直排）在小窗開（11-15 起，同面板上的按鈕）。
+    //   開不成（例如面板已經拆了）才退回原本的行為
     function _bindEnts() {
         const th = document.getElementById('vn-end-btn-threads'), jr = document.getElementById('vn-end-btn-journal'), go = document.getElementById('vn-end-btn-go');
         const cx = document.getElementById('vn-end-btn-ctx');
-        if (th) th.onclick = () => { if (_briefOn()) openSide('threads'); else if (_acts && _acts.threads) _acts.threads(); };
-        if (cx) cx.onclick = () => { if (_briefOn()) openSide('ctx'); else if (_acts && _acts.ctx) _acts.ctx(); };
-        if (jr) jr.onclick = () => { if (_briefOn()) openSide('journal'); else if (_acts && _acts.journal) _acts.journal(); };
-        // 繼續：簡報卡上在旁邊那欄開「做出選擇」（11-13）；世界面板那種直排的照舊開選項頁／資料中心
-        if (go) go.onclick = () => { if (_briefOn()) { openSide('go'); return; } closeSide(); if (_acts && _acts.go) _acts.go(); };
+        const open = (key, act) => () => { openSide(key).then(ok => { if (!ok && _acts && typeof _acts[act] === 'function') _acts[act](); }); };
+        if (th) th.onclick = open('threads', 'threads');
+        if (cx) cx.onclick = open('ctx', 'ctx');
+        if (jr) jr.onclick = open('journal', 'journal');
+        if (go) go.onclick = open('go', 'go');
     }
     function _chgCount() {
         const A = win.OS_AVS || window.OS_AVS;
@@ -587,7 +633,7 @@
         if (k !== _tile.nChg) { _tile.nChg = k; _renderTiles(root); }
     });
 
-    const API = { fill: fill, refreshClues: refreshClues, openSide: openSide, closeSide: closeSide, ctxHome: ctxHome };
+    const API = { fill: fill, refreshClues: refreshClues, openSide: openSide, closeSide: closeSide, ctxHome: ctxHome, isFloat: isFloat };
     window.VN_EndBrief = API;
     if (win !== window) win.VN_EndBrief = API;
 })();

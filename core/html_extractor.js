@@ -419,23 +419,25 @@
             if (want) go();
         },
 
-        async _injectStatePanelTab() {
+        // 狀態面板本身（啟用中的煉丹爐模板＋現在的值，已消毒、CSS 包在 <style> 裡）；沒有啟用的模板回 ''。
+        //   資訊中心「狀態面板」那頁、世界面板的「狀態」小窗（vn_end_brief.js，11-15）共用這一份
+        async statePanelHtml() {
             const win = window.parent || window;
-            if (!win.OS_DB?.getAllUITemplates || !win.OS_AVS_ADAPTER) return;
+            if (!win.OS_DB?.getAllUITemplates || !win.OS_AVS_ADAPTER) return '';
 
             const chatId = win.OS_AVS_ADAPTER.getCurrentChatId?.() || '';
-            if (!chatId) return;
+            if (!chatId) return '';
 
             // 找當前 chat 對應的 pack（!pack.chatId 視為通用 fallback）
             const allPacks = await win.OS_DB.getAllVarPacks();
             const myPacks = (allPacks || []).filter(p => !p.chatId || p.chatId === chatId);
-            if (!myPacks.length) return;
+            if (!myPacks.length) return '';
             const myPackIds = myPacks.map(p => p.id);
 
             // 找啟用中的 UI 模板（綁定我這些 pack 的）
             const templates = await win.OS_DB.getAllUITemplates();
             const activeTpl = (templates || []).find(t => t.isActive && myPackIds.includes(t.packId));
-            if (!activeTpl) return;   // 沒煉丹過 / 沒啟用任何模板 → 不注入
+            if (!activeTpl) return '';   // 沒煉丹過 / 沒啟用任何模板
 
             // 找此模板綁定的 pack（給第二層 fallback 用）
             const tplPack = myPacks.find(p => p.id === activeTpl.packId);
@@ -450,16 +452,23 @@
             let html = '';
             try { html = (win.OS_AVS?.renderTemplate?.(activeTpl.htmlContent || '', state, _packVars, fmt, _avatarMap)) || (activeTpl.htmlContent || ''); }
             catch (e) { html = activeTpl.htmlContent || ''; console.warn('[Extractor] renderTemplate 失敗:', e); }
+            // 🧼 模板是模型煉的、值是模型寫的（煉丹本來就規定純 CSS、不跑 JS）：照格式畫，onerror／script 這類會跑的拿掉。
+            //    CSS 不會跑程式，只擋「</style> 後面接一段 HTML」跳出去的寫法
+            html = _safeHtml(html);
+            const _css = String(activeTpl.cssContent || '').replace(/<\/style/gi, '<\\/style');
+            return `<style>${_css}</style>${html}`;
+        },
+
+        async _injectStatePanelTab() {
+            const win = window.parent || window;
+            let html = await this.statePanelHtml();
+            if (!html) return;   // 沒煉丹過 / 沒啟用任何模板 → 不注入
             // 🔧 修「狀態面板被壓扁/切出窗外」：vn_core.css 把 .ue-tab-pane.active 設成 flex:1 的 flex 直欄
             //    → 面板(十幾個 NPC)被當 flex 子項擠壓分攤固定高、不長高也不捲。用 id 選擇器(權重高過 .ue-tab-pane.active)
             //    把這一頁改回 block+自然高，#ue-content-area 本身就會捲；並擋掉面板根的固定高/max-height(讓內容完整長出來)。
             const _panelFix = `#tab-pane-aurelia_state_panel.active{display:block;flex:0 0 auto;height:auto;min-height:100%;}`
                 + `#tab-pane-aurelia_state_panel>.custom-status-panel,#tab-pane-aurelia_state_panel .custom-status-panel{height:auto;max-height:none;}`;
-            // 🧼 模板是模型煉的、值是模型寫的（煉丹本來就規定純 CSS、不跑 JS）：照格式畫，onerror／script 這類會跑的拿掉。
-            //    CSS 不會跑程式，只擋「</style> 後面接一段 HTML」跳出去的寫法
-            html = _safeHtml(html);
-            const _css = String(activeTpl.cssContent || '').replace(/<\/style/gi, '<\\/style');
-            html = `<style>${_panelFix}\n${_css}</style>${html}`;
+            html = `<style>${_panelFix}</style>${html}`;
             // 🔬 本輪更新了什麼：面板右上角一顆小鈕，點了跳小窗（10-13 她：以前摺在最底下不美觀）；鈕和小窗是 os_avs 那份，PWA 資料中心同一份
             const _AV = win.OS_AVS;
             if (_AV && _AV.updatesBtnHtml) html = _AV.updatesBtnHtml() + html;

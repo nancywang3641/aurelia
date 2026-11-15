@@ -354,6 +354,25 @@
             " ${hasReroll ? '' : 'disabled'}>回朔上一章節${hasReroll ? '' : '（無紀錄）'}</button>`;
 
             // 當前狀態面板（煉丹爐模板 or 原始變數）
+            const panelHtml = await this._statusPanel(state, entries, true);
+            return this._avsTail(_txt, storyId, storyChs, lastChapter, state, rerollBtn, panelHtml);
+        },
+
+        // 📜 世界面板「狀態」小窗（11-15，vn_end_brief.js）：只要狀態面板本身（煉丹爐做的那份＋現在的值），
+        //   不要回朔鈕、診斷、變數歷史，也不帶右上角那顆「本輪更新」（小窗自己加）。一格都沒有回 ''，小窗自己寫「還沒有狀態欄」
+        async statusPanelHtml() {
+            const storyId = window.VN_Core?._currentStoryId || '';
+            const stateKey = storyId ? `avs_state_${storyId}` : 'avs_current_state';
+            let state = {};
+            try { state = JSON.parse(localStorage.getItem(stateKey) || '{}'); } catch (e) {}
+            const entries = Object.entries(state);
+            const html = await this._statusPanel(state, entries, false);
+            return html === null ? '' : html;
+        },
+
+        // 狀態面板那一塊：有啟用的煉丹爐模板就照模板畫；沒有模板有值就列原始變數；都沒有 → withBtn 時回提示字、否則回 null
+        async _statusPanel(state, entries, withBtn) {
+            const _txt = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
             // 以 IDB 為準（面板本體幾百 KB，localStorage 那份只是鏡像、額度滿的時候會過期甚至寫不進去）；
             // 真的拿不到 OS_DB 才退回讀快取——不是「IDB 回空就退」，那會讓已取消啟用的面板從快取裡復活。
             let activeTpls = null;
@@ -384,9 +403,11 @@
                     catch (e) { html = ''; }
                     rendered += `<style>${_safeCss(css)}</style>${_safeHtml(html)}`;
                 }
+                if (!withBtn) return rendered;
                 // 🔬 右上角「本輪更新」鈕（os_avs 那份，跟酒館資訊中心同一份長相）；點了在下面的委派裡開小窗
                 panelHtml = (win.OS_AVS?.updatesBtnHtml ? win.OS_AVS.updatesBtnHtml() : '') + `<div class="native-render-wrapper">${rendered}</div>`;
             } else if (entries.length === 0) {
+                if (!withBtn) return null;
                 panelHtml = `<div style="padding:24px 0;text-align:center;color:#666;font-size:12px;">
                     目前沒有追蹤中的變數<br>
                     <span style="font-size:11px;color:#444;">AI 輸出 &lt;vars&gt; 後會自動出現<br>可在 變數工坊 AVS 用煉丹爐生成美化面板</span>
@@ -405,7 +426,11 @@
                     ${rows}
                 </div>`;
             }
+            return panelHtml;
+        },
 
+        // 資料中心「狀態」那頁在面板底下接的：變數歷史、診斷區
+        _avsTail(_txt, storyId, storyChs, lastChapter, state, rerollBtn, panelHtml) {
             // 變數歷史：計算每章 diff
             let historyHtml = '';
             if (storyChs.length > 0) {

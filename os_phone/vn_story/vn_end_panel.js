@@ -9,6 +9,8 @@
 //   而 VN 跟酒館兩邊都有同名樣式——前綴是程式端的保險，不靠模型守規矩。
 // 功能鍵：面板裡的按鈕用 data-act 認（data/ctx/journal/map），行為由 vn_core 傳進來，
 //   不在這裡重寫一份（開手機 app 要頂 z-index、還原頂欄那套只能有一個版本）。
+//   11-15 起資料、線索、繼續、日曆、日誌、CTX 點了各自開一個小窗（vn_end_brief.js 那一欄借來當小窗），不再跳資料中心；
+//   面板沒做的「線索」「繼續」照面板自己的一顆抄一份（_addExtras），不再用金框基本鍵補在正中間。
 // 入口：VN_EndPanel.render(acts) / VN_EndPanel.clear()
 // ----------------------------------------------------------------
 (function () {
@@ -184,6 +186,210 @@
         });
         return found;
     }
+    // ── 🧵 面板沒做的入口：照它自己的一顆抄一份（11-15）──
+    //   面板是模型照當時的規則生的，「繼續」「線索」那時不在規則裡（11-09 章末那排的日曆換回線索，世界面板沒有跟著換）。
+    //   以前漏做的那顆會用原本的金框基本鍵補在畫面正中間，跟這個世界的畫面完全不搭（她：「線索按鈕直接露出了」）。
+    //   → 抄面板自己的一顆（同 class、同外框、同 hover），換字換圖示，接在那一串的頭或尾：看起來就是這個世界的按鈕。
+    //   🚨抄的那顆接在同一個父層的最後面，不插在它旁邊：模型可能用 :nth-child 排位置，插在中間會把後面每一顆往下擠一格。
+    //   🚨位置：面板多半是一顆一顆用 absolute 釘死的（每顆自己一個 class 寫 top），抄出來會疊在原處 →
+    //     照那一串的間距往頭尾各推一格，撞到別的東西就再找最近的空位（_placeExtras）。排在一般排版流裡的就交給排版。
+    const EXTRA_ACTS = [
+        { act: 'threads', label: '線索', icon: 'fa-diagram-project' },
+        { act: 'go', label: '繼續', icon: 'fa-play' },
+    ];
+    const MAIN_ACTS = ['data', 'ctx', 'journal', 'calendar', 'map', 'achv', 'regen'];
+    const COPY_FROM = ['calendar', 'journal', 'ctx', 'map', 'data', 'regen'];   // 成就那顆可能是暗的（還沒有清單），不拿它當樣本
+    function _visible(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+    function _mainEntries(ui) {
+        const out = [];
+        MAIN_ACTS.forEach(a => ui.querySelectorAll('[data-act="' + a + '"]').forEach(el => { if (out.indexOf(el) < 0 && _visible(el)) out.push(el); }));
+        // 照畫面上的順序（文件順序）排：頭尾才是那一串真正的頭尾
+        return out.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+    }
+    // 換字：有 [data-label] 就換它；不然換字最多（中文優先）的那一段，其他寫了字的（英文小標、編號）清掉，只剩符號的留著當裝飾
+    function _relabel(el, text, icon) {
+        el.querySelectorAll('i[class*="fa-"]').forEach(i => { i.className = 'fa-solid ' + icon; });
+        // 小圖示是內嵌 SVG 的（畫的是日曆、筆記本）：換成同色的圖示；大塊的 SVG 是外框裝飾，留著
+        const box = el.getBoundingClientRect();
+        el.querySelectorAll('svg').forEach(s => {
+            const r = s.getBoundingClientRect();
+            if (!box.width || r.width * r.height > box.width * box.height * 0.3) return;
+            const i = document.createElement('i');
+            i.className = 'fa-solid ' + icon;
+            s.replaceWith(i);
+        });
+        el.setAttribute('title', text);
+        if (el.hasAttribute('aria-label')) el.setAttribute('aria-label', text);
+        const slot = el.querySelector('[data-label]');
+        if (slot) { slot.textContent = text; return; }
+        const nodes = [];
+        const walk = n => n.childNodes.forEach(c => {
+            if (c.nodeType === 3) { if (c.nodeValue.trim()) nodes.push(c); }
+            else if (c.nodeType === 1 && !/^(svg|style|i)$/i.test(c.tagName)) walk(c);
+        });
+        walk(el);
+        if (!nodes.length) { el.appendChild(document.createTextNode(text)); return; }
+        const cjk = s => (s.match(/[一-鿿]/g) || []).length;
+        const main = nodes.slice().sort((a, b) => (cjk(b.nodeValue) - cjk(a.nodeValue)) || (b.nodeValue.trim().length - a.nodeValue.trim().length))[0];
+        nodes.forEach(n => {
+            if (n === main) n.nodeValue = n.nodeValue.replace(/\S[\s\S]*\S|\S/, text);
+            else if (/[\p{L}\p{N}]/u.test(n.nodeValue)) n.nodeValue = '';
+        });
+    }
+    function _addExtras(root, acts) {
+        const ui = root.querySelector('.vnep-ui');
+        if (!ui) return [];
+        const mains = _mainEntries(ui);
+        let src = null;
+        for (const a of COPY_FROM) { src = mains.find(el => el.getAttribute('data-act') === a); if (src) break; }
+        if (!src) return [];
+        const made = [];
+        EXTRA_ACTS.forEach(x => {
+            if (typeof (acts && acts[x.act]) !== 'function' || ui.querySelector('[data-act="' + x.act + '"]')) return;
+            const el = src.cloneNode(true);
+            el.setAttribute('data-act', x.act);
+            el.removeAttribute('id');
+            el.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+            el.classList.add('vnep-extra');
+            src.parentNode.appendChild(el);
+            _relabel(el, x.label, x.icon);
+            made.push(el);
+        });
+        _placeExtras(root);
+        return made;
+    }
+    // 抄出來的那幾顆擺哪裡（面板一變寬變窄就重擺：模型的位置多半是照面板大小算的）
+    function _placeExtras(root) {
+        const ui = root.querySelector('.vnep-ui');
+        const extras = ui ? Array.prototype.slice.call(ui.querySelectorAll('.vnep-extra')) : [];
+        if (!extras.length) return;
+        const pr = root.getBoundingClientRect();
+        if (!pr.width || !pr.height) return;
+        extras.forEach(el => { ['left', 'top', 'right', 'bottom', 'width', 'height', 'boxSizing'].forEach(k => { el.style[k] = ''; }); });
+        const mains = _mainEntries(ui);
+        // 在排版流裡：跟著那一串排，不用管
+        if (!mains.length || getComputedStyle(extras[0]).position !== 'absolute') { _placeBadge(root); return; }
+        const R = el => el.getBoundingClientRect();
+        // 那一串是靠哪一邊對齊的（左緣、中線、右緣；上緣、中線、下緣）：寬窄不一的一排靠左條子，拿中心算會一格一格往旁邊歪
+        const rs = mains.map(R);
+        const spread = arr => Math.max.apply(null, arr) - Math.min.apply(null, arr);
+        const pickMode = (modes) => modes.reduce((best, m) => (spread(rs.map(m.f)) < spread(rs.map(best.f)) - 1 ? m : best));
+        const xm = pickMode([{ k: 'l', f: r => r.left }, { k: 'c', f: r => r.left + r.width / 2 }, { k: 'r', f: r => r.right }]);
+        const ym = pickMode([{ k: 't', f: r => r.top }, { k: 'c', f: r => r.top + r.height / 2 }, { k: 'b', f: r => r.bottom }]);
+        // 一串的間距：相鄰兩顆（照對齊的那一邊量）的差，取中位數
+        const dxs = [], dys = [];
+        for (let i = 1; i < rs.length; i++) { dxs.push(xm.f(rs[i]) - xm.f(rs[i - 1])); dys.push(ym.f(rs[i]) - ym.f(rs[i - 1])); }
+        const med = arr => { if (!arr.length) return 0; const s = arr.slice().sort((p, q) => p - q); return s[Math.floor(s.length / 2)]; };
+        let vx = med(dxs), vy = med(dys);
+        if (!vx && !vy) vy = rs[0].height * 1.25;
+        // 擋路的：每一顆入口、帶字的東西（標題、那句話）；整頁大的裝飾（底帶、外框）不算
+        const area = pr.width * pr.height;
+        const blocks = [];
+        ui.querySelectorAll('*').forEach(el => {
+            if (el.classList.contains('vnep-extra') || el.closest('.vnep-extra')) return;
+            const isAct = el.hasAttribute('data-act');
+            const hasText = Array.prototype.some.call(el.childNodes, n => n.nodeType === 3 && n.nodeValue.trim());
+            if (!isAct && !hasText) return;
+            const r = R(el);
+            if (!r.width || !r.height || (!isAct && r.width * r.height > area * 0.25)) return;
+            blocks.push(r);
+        });
+        // 人物站在中央偏下：那一串本來就沒進那塊，抄的也別擺進去
+        const zone = { left: pr.left + pr.width * 0.3, right: pr.left + pr.width * 0.7, top: pr.top + pr.height * 0.36, bottom: pr.bottom };
+        const hit = (a, b, pad) => a.left < b.right + pad && a.right > b.left - pad && a.top < b.bottom + pad && a.bottom > b.top - pad;
+        const useZone = !mains.some(el => hit(R(el), zone, 0));
+        const first = rs[0], last = rs[rs.length - 1];
+        const free = (r, taken) => r.left >= pr.left + 2 && r.right <= pr.right - 2 && r.top >= pr.top + 2 && r.bottom <= pr.bottom - 2
+            && !blocks.some(b => hit(r, b, 3)) && !taken.some(b => hit(r, b, 3)) && !(useZone && hit(r, zone, 0));
+        const box = (x, y, w, h) => ({ left: x, top: y, right: x + w, bottom: y + h, width: w, height: h });
+        // 第 k 格：頭上往外數（k<0）或尾巴往外數（k>0），照那一串對齊的那一邊擺
+        const slot = (k, s) => {
+            const a = k < 0 ? first : last;
+            const x = xm.f(a) + vx * k, y = ym.f(a) + vy * k;
+            return box(xm.k === 'l' ? x : (xm.k === 'r' ? x - s.w : x - s.w / 2), ym.k === 't' ? y : (ym.k === 'b' ? y - s.h : y - s.h / 2), s.w, s.h);
+        };
+        const sizes = extras.map(el => { const r = R(el); return { me: r, w: r.width, h: r.height }; });
+        // 先整組接在那一串的頭上（線索貼著那一串、繼續在最外面），擺不下就整組接在尾巴
+        let plan = null;
+        for (const dir of [-1, 1]) {
+            const rs = [];
+            if (sizes.every((s, i) => { const r = slot(dir * (i + 1), s); if (!free(r, rs)) return false; rs.push(r); return true; })) { plan = rs; break; }
+        }
+        if (!plan) {
+            // 頭尾都擺不下整組：一顆一顆找，頭尾輪流往外；再不行疊在尾巴（或剛擺好那顆）旁邊另起一行；都不行找離那一串最近的空位
+            plan = [];
+            const g = { x: (first.left + last.right) / 2, y: (first.top + last.bottom) / 2 };
+            const across = Math.abs(vx) > Math.abs(vy);   // 那一串是橫的：另起一行往上下疊；直的：往左右疊
+            const beside = (a, sign, s) => across
+                ? box(a.left, sign < 0 ? a.top - s.h - Math.max(6, a.height * 0.25) : a.bottom + Math.max(6, a.height * 0.25), s.w, s.h)
+                : box(sign < 0 ? a.left - s.w - Math.max(6, a.width * 0.08) : a.right + Math.max(6, a.width * 0.08), a.top, s.w, s.h);
+            sizes.forEach((s, i) => {
+                let pick = null;
+                for (let k = 1; k <= extras.length + 2 && !pick; k++) pick = [slot(-k, s), slot(k, s)].find(r => free(r, plan)) || null;
+                if (!pick) {
+                    const anchors = plan.slice().reverse().concat([last, first]);
+                    for (const a of anchors) { pick = [beside(a, -1, s), beside(a, 1, s)].find(r => free(r, plan)) || null; if (pick) break; }
+                }
+                if (!pick) {
+                    let bd = Infinity;
+                    for (let y = pr.top + 4; y + s.h <= pr.bottom - 4; y += Math.max(8, s.h / 2)) {
+                        for (let x = pr.left + 4; x + s.w <= pr.right - 4; x += Math.max(8, s.w / 3)) {
+                            const r = box(x, y, s.w, s.h);
+                            if (!free(r, plan)) continue;
+                            const d = Math.hypot(x + s.w / 2 - g.x, y + s.h / 2 - g.y);
+                            if (d < bd) { bd = d; pick = r; }
+                        }
+                    }
+                }
+                if (!pick) {   // 整個面板都塞滿了：照間距接在尾巴、夾在面板裡（會疊到，總比點不到好）
+                    const r = slot(i + 1, s);
+                    pick = box(Math.min(Math.max(r.left, pr.left + 2), pr.right - s.w - 2), Math.min(Math.max(r.top, pr.top + 2), pr.bottom - s.h - 2), s.w, s.h);
+                }
+                plan.push(pick);
+            });
+        }
+        // 用 left/top 搬（模型可能用 right/bottom 釘的，一起放掉；寬高照抄出來的大小，免得放掉 right 之後縮水）
+        extras.forEach((el, i) => {
+            const cs = getComputedStyle(el), me = sizes[i].me, pick = plan[i];
+            const ow = el.offsetWidth, oh = el.offsetHeight;
+            const ol = el.offsetLeft - (parseFloat(cs.marginLeft) || 0), ot = el.offsetTop - (parseFloat(cs.marginTop) || 0);
+            el.style.boxSizing = 'border-box';
+            el.style.width = ow + 'px'; el.style.height = oh + 'px';
+            el.style.right = 'auto'; el.style.bottom = 'auto';
+            el.style.left = Math.round(ol + pick.left - me.left) + 'px';
+            el.style.top = Math.round(ot + pick.top - me.top) + 'px';
+        });
+        _placeBadge(root);
+    }
+    // 線索那顆的紅色數字（還沒看過的新線）：抄出來的那顆可能有 clip-path，掛在它身上會被切掉 → 掛在面板上、對準它的右上角
+    let _badgeN = 0;
+    function _placeBadge(root) {
+        root = root || _el();
+        if (!root) return;
+        const btn = root.querySelector('.vnep-ui [data-act="threads"]');
+        let b = root.querySelector(':scope > .vnep-badge');
+        if (!btn || !_badgeN) { if (b) b.remove(); return; }
+        if (!b) { b = document.createElement('span'); b.className = 'vnep-badge'; root.appendChild(b); }
+        b.textContent = String(_badgeN);
+        const pr = root.getBoundingClientRect(), r = btn.getBoundingClientRect();
+        b.style.left = Math.round(Math.min(r.right - pr.left, pr.width - 14)) + 'px';
+        b.style.top = Math.round(Math.max(r.top - pr.top, 12)) + 'px';
+        b.classList.toggle('vnep-badge-wait', Date.now() < _enterUntil);   // 那顆還在滑進來：數字等它停好再冒
+        if (Date.now() < _enterUntil) setTimeout(() => { if (b.isConnected) _placeBadge(root); }, _enterUntil - Date.now() + 60);
+    }
+    function _refreshBadge() {
+        const root = _el();
+        if (!root || !root.classList.contains('active') || !root.querySelector('.vnep-ui [data-act="threads"]')) return;
+        const T = win.OS_STORY_THREADS || window.OS_STORY_THREADS;
+        if (!T || typeof T.unseenCount !== 'function') return;
+        const my = _gen;
+        T.unseenCount().then(n => { if (my !== _gen) return; _badgeN = n || 0; _placeBadge(root); }).catch(() => {});
+    }
+    try {
+        win.addEventListener('aurelia:story-threads', _refreshBadge);
+        win.addEventListener('aurelia:threads-seen', _refreshBadge);
+    } catch (e) {}
+
     // 🚨系統鍵的文字鎖死：模型會忍不住把它們改寫成這個世界的說法（離艦／調律／終端），
     //   但那三顆是遊戲本身的功能，換了名字玩家會找不到自己的手機。
     //   只換 [data-label] 裡那幾個字，模型設計的外框與圖示原樣留著；沒照規則包 span 才整顆換掉。
@@ -307,7 +513,7 @@
         let t = null;
         _ro = new ResizeObserver(() => {
             clearTimeout(t);
-            t = setTimeout(() => { try { _guardOverflow(root); } catch (e) {} }, Math.max(120, _enterUntil - Date.now() + 40));
+            t = setTimeout(() => { try { _placeExtras(root); _guardOverflow(root); } catch (e) {} }, Math.max(120, _enterUntil - Date.now() + 40));
         });
         _ro.observe(root);
     }
@@ -651,15 +857,18 @@
         // 成就頁的資料就在手上，不必繞回 vn_core 再拿一次；沒有清單（也沒有岔路圖）就不接，那顆維持暗的
         const acts2 = (_hasAchv(w) || _hasPlan(w))
             ? Object.assign({}, acts, { achv: () => _openAchv(root, w) }) : acts;
+        root.classList.add('active');
+        // 面板沒做「線索」「繼續」：照它自己的一顆抄（要先掛 active 才量得到位置；抄完才綁，抄出來的那幾顆也綁得到）
+        _addExtras(root, acts2);
         const found = _bindActs(root, acts2);
         _toggleNative(found);
-        root.classList.add('active');
         _guardContrast(root);   // 要在掛上 active、文字也寫定之後才量，量的是最終畫面
         _guardOverflow(root);
         // 進場排在位置拉正之後：從最近的邊滑進來，要先知道它最後停在哪
         if (_motionOk()) { try { _enter(root); } catch (e) { console.warn('[VN末尾面板] 進場沒演成：' + e.message); } }
         else _holdStill(root);
         _watchResize(root);     // 聊天欄被拉寬拉窄時要重算，不然又跑出去
+        _refreshBadge();        // 線索那顆：還沒看過的新線掛紅色數字
         const miss = Object.keys(acts2 || {}).filter(a => found.indexOf(a) < 0);
         console.log('[VN末尾面板] 已套用「' + (w.name || '未命名世界') + '」的活動面板' +
             (miss.length ? '；模型漏做了 ' + miss.join('、') + '，那幾顆維持原本的按鈕' : ''));
@@ -670,7 +879,10 @@
         const root = _el();
         _gen++;              // 換號：上一輪還在飛的底圖／插圖非同步結果全部作廢
         _unwatch();
+        _badgeN = 0;
         _toggleNative([]);   // 原生系統鍵先還原，不然面板拆了按鈕也跟著不見
+        // 面板按鈕開的小窗（vn_end_brief 那一欄借來當小窗）一起收：面板拆了小窗留著＝線索頁、CTX 浮窗沒還回去
+        try { const EB = win.VN_EndBrief || window.VN_EndBrief; if (EB && EB.isFloat && EB.isFloat()) EB.closeSide(true); } catch (e) {}
         if (!root) return;
         root.classList.remove('active', 'has-bg', 'vnep-still', 'vnep-sheet-open');
         _enterUntil = 0;

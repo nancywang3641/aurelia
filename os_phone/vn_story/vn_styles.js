@@ -193,7 +193,9 @@
                         <div class="vne-foot"><button id="vn-end-btn-regen" type="button"><i class="fa-solid fa-rotate"></i> 重新生成</button></div>
                     </div>
                     <!-- 📜 簡報卡旁邊那一欄（11-09 她選「旁邊多一欄」）：線索、今天的行程、狀態變化、日誌在這裡打開，不跳窗。
-                         寬的畫面在卡片右邊；窄的畫面卡片縮成一條（章名＋繼續），這欄拿上面整塊。內容由 vn_end_brief.js 填 -->
+                         寬的畫面在卡片右邊；窄的畫面卡片縮成一條（章名＋繼續），這欄拿上面整塊。內容由 vn_end_brief.js 填。
+                         11-15 起世界門的世界（自己的章末面板亮著）也用這一欄：當成小窗浮在正中間，後面墊 #vn-end-scrim（點一下收起來） -->
+                    <div id="vn-end-scrim"></div>
                     <div id="vn-end-side">
                         <button type="button" class="vne-side-back" title="返回"><i class="fa-solid fa-chevron-left"></i></button>
                         <div class="vne-side-body"></div>

@@ -2950,12 +2950,9 @@
                         clearTimeout(_holdTimer);
                         win.AUI.lsSet('vn_end_panel_hit', r ? '1' : '0', '末尾面板的記號');
                         if (!r || !basic) { _showBasic(); return; }
-                        // 有世界面板：卡片收掉，只照舊直排補它漏做的那幾顆；網頁版有選項就照舊直接打開選項頁（11-08 前的樣子）
+                        // 有世界面板：卡片收掉，只照舊直排補它漏做的那幾顆（面板沒做的線索、繼續，面板那邊已經照它自己的一顆抄好了）。
+                        //   11-15 起網頁版有選項也不再自動彈出資料中心：選項在面板的「繼續」小窗裡（她：「不要再跑去資訊中心變成一堆TAB了」）
                         basic.classList.remove('vne-brief');
-                        try {
-                            const _A = window.VN_StandaloneArchive;
-                            if ((win.OS_API?.isStandalone?.() ?? false) && _A && Array.isArray(_A._pendingChoices) && _A._pendingChoices.length) _A.show();
-                        } catch (e) {}
                         let left = 0;
                         Object.keys(BASIC_OF).forEach(k => {
                             const b = document.getElementById(BASIC_OF[k]);
@@ -2967,8 +2964,21 @@
                         if (!left) basic.classList.add('hidden');   // 面板全包了 → 基本鍵整組不出場
                         else _showBasic();                          // 有漏做的 → 那幾顆補上來
                     };
+                    // 🎴 世界面板上的按鈕：資料、線索、繼續、日曆、日誌、CTX 點了各自開一個小窗，就地顯示那一項（11-15）。
+                    //   小窗是簡報卡旁邊那一欄借來的（vn_end_brief.js 的 openSide，簡報卡收著時它自己會浮到正中間），內容跟簡報卡那欄同一份；
+                    //   開不成才退回原本的行為（資料中心／手機 app）。地圖、成就、重新生成、系統鍵照舊
+                    const _EB = win.VN_EndBrief || window.VN_EndBrief;
+                    const _pop = (key, fb) => () => {
+                        const r = (_EB && typeof _EB.openSide === 'function') ? _EB.openSide(key) : null;
+                        if (r && typeof r.then === 'function') r.then(ok => { if (!ok) fb(); }).catch(() => fb());
+                        else fb();
+                    };
+                    const wacts = Object.assign({}, acts, {
+                        data: _pop('status', acts.data), threads: _pop('threads', acts.threads), go: _pop('go', acts.go),
+                        calendar: _pop('today', acts.calendar), journal: _pop('journal', acts.journal), ctx: _pop('ctx', acts.ctx),
+                    });
                     try {
-                        const _p = window.VN_EndPanel?.render(acts);
+                        const _p = window.VN_EndPanel?.render(wacts);
                         if (_p && typeof _p.then === 'function') _p.then(_settle).catch(() => _settle(null));
                         else _settle(null);
                     } catch (e) { _settle(null); }

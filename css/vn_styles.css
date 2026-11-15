@@ -1583,6 +1583,38 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         }
         @media (prefers-reduced-motion: reduce) { #vn-end-basic.vne-brief, #vn-end-side { transition: none; } }
 
+        /* ═══ 🎴 世界面板的小窗（11-15 她：「世界門的結束畫面要改成按鈕點擊後各自開小窗，不要再跑去資訊中心變成一堆TAB了」）═══
+           世界門的世界有自己的章末面板（簡報卡收著）：面板上的按鈕點了，上面那一欄改當小窗浮在正中間（.vne-float，vn_end_brief.js），
+           長相、返回鍵、裡面每一頁都跟簡報卡那欄同一份；後面墊一層暗幕擋住面板，點暗幕收起來。
+           🚨 選擇器都是 #vn-end-side.vne-float（id＋class），比上面那欄的 #vn-end-side 重，寫在哪個 @container 裡都蓋得過 */
+        #vn-end-scrim { position: absolute; inset: 0; z-index: 2; display: none; pointer-events: auto; background: rgba(4,5,10,0.55); opacity: 0; transition: opacity 0.28s; }
+        #vn-end-scrim.vne-on { display: block; }
+        #vn-end-scrim.vne-in { opacity: 1; }
+        /* 高度跟著內容（狀態、今天的行程、日誌、上下文字不多，不撐成一大片空的）；線索（關係圖）、做出選擇（輸入框貼底）固定拿滿 */
+        #vn-end-side.vne-float { z-index: 3; top: 50%; left: 50%; right: auto; bottom: auto; width: min(460px, calc(100cqw - 32px)); height: auto; max-height: min(640px, calc(100cqh - 56px));
+            translate: -50% -50%; transform: translateY(14px) scale(0.98); }
+        #vn-end-side.vne-float[data-vne-key="threads"], #vn-end-side.vne-float[data-vne-key="go"] { height: min(640px, calc(100cqh - 56px)); }
+        #vn-end-side.vne-float.vne-side-in { transform: none; }
+        /* 窄的畫面（手機）：左右留 10px、上面讓出系統列；線索、做出選擇拉到底 */
+        @container vneo (max-width: 719px) {
+            #vn-end-side.vne-float { left: 10px; right: 10px; width: auto; translate: none; top: calc(52px + env(safe-area-inset-top, 0px)); bottom: auto; height: auto;
+                max-height: calc(100cqh - 66px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); transform: translateY(14px); }
+            #vn-end-side.vne-float[data-vne-key="threads"], #vn-end-side.vne-float[data-vne-key="go"] { bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: auto; max-height: none; }
+            body.layout-pad-ios #vn-end-side.vne-float { top: 70px; max-height: calc(100cqh - 100px); }
+            body.layout-pad-ios #vn-end-side.vne-float[data-vne-key="threads"], body.layout-pad-ios #vn-end-side.vne-float[data-vne-key="go"] { bottom: 30px; max-height: none; }
+        }
+        @media (prefers-reduced-motion: reduce) { #vn-end-scrim { transition: none; } }
+        /* 狀態那頁：整份狀態欄（煉丹爐做的面板），面板自己的固定高拿掉，讓小窗捲 */
+        #vn-end-side .vne-st-sc { position: relative; }
+        #vn-end-side .vne-st-panel { margin: 0 -4px; }
+        #vn-end-side .vne-st-panel .custom-status-panel { height: auto; max-height: none; }
+        /* 面板沒做、照它自己一顆抄出來的「線索」：還沒看過的新線掛紅色數字（掛在面板上對準那顆的右上角，那顆可能有 clip-path 會切掉） */
+        #vn-end-panel .vnep-badge { position: absolute; z-index: 2; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; translate: -70% -45%;
+            background: #c8463c; color: #fff; font: 600 11px/18px 'Playfair Display', serif; text-align: center; pointer-events: none;
+            box-shadow: 0 0 0 2px #0c0a07; animation: vne-pulse 2.2s ease-in-out infinite; transition: opacity 0.25s; }
+        #vn-end-panel .vnep-badge.vnep-badge-wait { opacity: 0; }
+        #vn-end-panel.vnep-still .vnep-badge { animation: none; }
+
         #text-panel {
             backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
             padding: 40px 50px; position: relative; min-height: 140px;
