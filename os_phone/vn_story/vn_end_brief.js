@@ -10,7 +10,8 @@
  *   沒有選項卡就列出 <branches> 那幾個選項；底下一條輸入框，點選項填進去、按發送就送出。
  *   選項卡搬進來以後，「角色卡畫面」小牌子不再列它。
  * 11-15 起世界門的世界（有自己的章末面板、這張卡收著）也借這一欄：面板上每顆按鈕點了，這一欄當成小窗浮在畫面正中間，
- *   就地顯示那一項（狀態、線索、今天的行程、日誌、做出選擇、CTX），不再跳資料中心變成一排分頁
+ *   就地顯示那一項（線索、今天的行程、日誌、做出選擇、CTX），不再跳資料中心變成一排分頁；
+ *   「這一章的資料與狀態」那顆照舊開原版資料中心（狀態欄＋角色卡自己附帶的美化卡＋酒館最後一樓渲染的內容都在那裡，是核心，不做小窗）
  *   （她：「世界門的結束畫面要改成按鈕點擊後各自開小窗，不要再跑去資訊中心變成一堆TAB了」）。小窗＝.vne-float，後面墊一層 #vn-end-scrim。
  * 這支只負責「把字填進去」：
  *   骨架在 vn_styles.js（#vn-end-basic 那段）、樣式在 css/vn_styles.css（「章末簡報」那段）、
@@ -234,32 +235,6 @@
             const C = win.OS_CALENDAR || window.OS_CALENDAR;
             if (!C || typeof C.todayInto !== 'function') { body.innerHTML = _wait('今天的行程', '日曆還在載入，等一下再按'); return; }
             await C.todayInto(body);
-        },
-        // 狀態（11-15，世界面板「這一章的資料與狀態」那顆）：整份狀態欄，跟資料中心「狀態」那頁同一份（煉丹爐做的面板＋現在的值）；
-        //   沒做過狀態面板就列這一章改了哪幾格。角色卡作者做的畫面照舊整頁開資料中心那一頁（照作者原本的樣子，不塞進小窗）
-        async status(body, seq) {
-            body.innerHTML = _wait('狀態', '讀取中…');
-            let html = '';
-            try {
-                if (_standalone()) {
-                    const SA = window.VN_StandaloneArchive;
-                    if (SA && typeof SA.statusPanelHtml === 'function') html = (await SA.statusPanelHtml()) || '';
-                } else {
-                    const H = win.AureliaHtmlExtractor || window.AureliaHtmlExtractor;
-                    if (H && typeof H.statePanelHtml === 'function') html = (await H.statePanelHtml()) || '';
-                }
-            } catch (e) { console.warn('[VN_EndBrief] 狀態欄讀不出來', e); }
-            const cards = (await _peekCards()).filter(c => !_isPicker(c.text, _opts));
-            if (seq !== _sideSeq || !body.isConnected) return;
-            const A = win.OS_AVS || window.OS_AVS;
-            const u = (A && typeof A.updList === 'function') ? A.updList() : { n: 0, rows: [] };
-            let inner;
-            if (html) inner = ((A && typeof A.updatesBtnHtml === 'function') ? A.updatesBtnHtml() : '') + '<div class="vne-st-panel native-render-wrapper">' + html + '</div>';
-            else if (u.n) inner = u.rows.map(r => '<div class="vne-chg"><span class="vne-chg-k">' + esc(r.k) + '</span><span class="vne-chg-v">' + esc(r.v) + '</span></div>').join('');
-            else inner = '<div class="vne-empty">這個故事還沒有狀態欄<small>在變數工坊做一個狀態面板，這裡就看得到</small></div>';
-            body.innerHTML = _sh('狀態', u.n ? '這一章改了 ' + u.n + ' 項' : '') + '<div class="vne-sc vne-st-sc">' + inner
-                + (cards.length ? _more('card', '角色卡畫面：' + cards.map(c => c.title).join('・')) : '') + '</div>';
-            if (html && A && typeof A.bindUpdatesBtn === 'function') A.bindUpdatesBtn(body, _side());
         },
         changes(body) {
             const A = win.OS_AVS || window.OS_AVS;
@@ -495,7 +470,11 @@
             const t = ev.target;
             if (t.closest('.vne-side-back')) { closeSide(); return; }
             const m = t.closest('[data-vne-act]');
-            if (m) { const f = _acts && _acts[m.dataset.vneAct]; if (typeof f === 'function') f(); }
+            if (m) {
+                const f = _acts && _acts[m.dataset.vneAct];
+                if (float) closeSide(true);   // 小窗裡的「看全部日誌」這類：小窗先收，開的東西關掉時回到世界畫面
+                if (typeof f === 'function') f();
+            }
         };
         if (!side.classList.contains('vne-side-on')) {
             side.classList.add('vne-side-on');

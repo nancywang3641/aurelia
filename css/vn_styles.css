@@ -1604,10 +1604,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             body.layout-pad-ios #vn-end-side.vne-float[data-vne-key="threads"], body.layout-pad-ios #vn-end-side.vne-float[data-vne-key="go"] { bottom: 30px; max-height: none; }
         }
         @media (prefers-reduced-motion: reduce) { #vn-end-scrim { transition: none; } }
-        /* 狀態那頁：整份狀態欄（煉丹爐做的面板），面板自己的固定高拿掉，讓小窗捲 */
-        #vn-end-side .vne-st-sc { position: relative; }
-        #vn-end-side .vne-st-panel { margin: 0 -4px; }
-        #vn-end-side .vne-st-panel .custom-status-panel { height: auto; max-height: none; }
         /* 面板沒做、照它自己一顆抄出來的「線索」：還沒看過的新線掛紅色數字（掛在面板上對準那顆的右上角，那顆可能有 clip-path 會切掉） */
         #vn-end-panel .vnep-badge { position: absolute; z-index: 2; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; translate: -70% -45%;
             background: #c8463c; color: #fff; font: 600 11px/18px 'Playfair Display', serif; text-align: center; pointer-events: none;

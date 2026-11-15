@@ -2983,9 +2983,12 @@
                         if (!left) basic.classList.add('hidden');   // 面板全包了 → 基本鍵整組不出場
                         else _showBasic();                          // 有漏做的 → 那幾顆補上來
                     };
-                    // 🎴 世界面板上的按鈕：資料、線索、繼續、日曆、日誌、CTX 點了各自開一個小窗，就地顯示那一項（11-15）。
+                    // 🎴 世界面板上的按鈕：線索、繼續、日曆、日誌、CTX 點了各自開一個小窗，就地顯示那一項（11-15）。
                     //   小窗是簡報卡旁邊那一欄借來的（vn_end_brief.js 的 openSide，簡報卡收著時它自己會浮到正中間），內容跟簡報卡那欄同一份；
-                    //   開不成才退回原本的行為（資料中心／手機 app）。地圖、成就、重新生成、系統鍵照舊
+                    //   開不成才退回原本的行為（資料中心／手機 app）。
+                    //   🚨「這一章的資料與狀態」那顆（data）照舊開原版資料中心，不做小窗：資料中心是核心，狀態欄、角色卡自己附帶的美化卡、
+                    //     酒館最後一樓渲染的內容、酒館輸入框都打包在那裡（她：「把那狀態窗口直接拿原版資訊中心就好，那裏可以當作狀態藍+自附美化卡」）。
+                    //   地圖、成就、重新生成、系統鍵也照舊
                     const _EB = win.VN_EndBrief || window.VN_EndBrief;
                     const _pop = (key, fb) => () => {
                         const r = (_EB && typeof _EB.openSide === 'function') ? _EB.openSide(key) : null;
@@ -2993,7 +2996,7 @@
                         else fb();
                     };
                     const wacts = Object.assign({}, acts, {
-                        data: _pop('status', acts.data), threads: _pop('threads', acts.threads), go: _pop('go', acts.go),
+                        threads: _pop('threads', acts.threads), go: _pop('go', acts.go),
                         calendar: _pop('today', acts.calendar), journal: _pop('journal', acts.journal), ctx: _pop('ctx', acts.ctx),
                     });
                     try {
