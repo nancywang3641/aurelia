@@ -600,7 +600,9 @@
         hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter,
                     // 這支 0.25 秒色卡就開始收攏（1 秒攤開、開口），同白兔先等 0.4 秒
                     live: { idle: ASSET.hatterIdle, greet: ASSET.hatterGreet, greetFrom: 0, greetDelay: 400 } },
-        cheshire: { name: '柴郡',     persona: null,                subTitle: '系統異常部門 · 灰色夢魘組', portrait: ASSET.cheshire },
+        cheshire: { name: '柴郡',     persona: null,                subTitle: '系統異常部門 · 灰色夢魘組', portrait: ASSET.cheshire,
+                    // 這支 0.35 秒就歪頭開口（他眼睛被遮住不會眨眼，前面沒有那一下緩衝），先等 0.3 秒
+                    live: { idle: ASSET.cheshireIdle, greet: ASSET.cheshireGreet, greetFrom: 0, greetDelay: 300 } },
     };
 
     // 🔒 奧瑞亞官方立繪＝管理員＋SN 住民在大廳那張（她修過的那批，寫死在 ASSET）。用的地方：
