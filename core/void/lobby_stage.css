@@ -40,7 +40,8 @@
   filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); cursor:pointer; pointer-events:auto; z-index:2100;
   animation:lstage-hint-float 1.2s ease-in-out infinite; will-change:transform; }
 @keyframes lstage-hint-float { 0%,100%{transform:translate(-50%,-100%) translateY(0)} 50%{transform:translate(-50%,-100%) translateY(-5px)} }
-.lstage-click { position:absolute; inset:0; cursor:pointer; z-index:1; }
+/* 世界層是 0×0（裡面全 absolute），所以點地板這層不能寫 inset:0，要自己有地圖那麼大（尺寸由 lobby_stage.js 掛載時寫進變數） */
+.lstage-click { position:absolute; left:0; top:0; width:var(--lstage-map-w, 1536px); height:var(--lstage-map-h, 1024px); cursor:pointer; z-index:1; }
 /* 🕹️ 手機虛擬搖桿（左下角；只觸控裝置由 JS 建立） */
 /* 貼底的控制項自己讓開 home indicator：舞台容器已鋪到螢幕底(背景出血)，安全區不再由容器代讓 */
 .lstage-joy { position:absolute; left:40px; bottom:calc(58px + env(safe-area-inset-bottom, 0px)); width:132px; height:132px; border-radius:50%;

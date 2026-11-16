@@ -2804,6 +2804,10 @@
         left.appendChild(fab);
         if (!isStatic) _setupJoystick(root);   // 🕹️ 手機左下角虛擬搖桿（靜態地圖沒走路→不需要）
         S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
+        // 🖱 點地板的那層要有地圖那麼大：世界層裡的東西全是 absolute，世界層本身是 0×0，
+        //    .lstage-click 寫 inset:0 就跟著變 0×0、點地板從來沒接到過（11-17 小斐健檢 HC-1117 抓到）。尺寸交給 CSS 變數。
+        root.style.setProperty('--lstage-map-w', MAP_W + 'px');
+        root.style.setProperty('--lstage-map-h', MAP_H + 'px');
         S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
         _emitScene();        // 掛載當下也報一次場景 → 大廳的 404 皮跟腳下對齊
         // 底圖：本機/網址覆蓋（建構模式「換底圖」）
