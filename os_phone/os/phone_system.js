@@ -22,7 +22,10 @@
         // goHome 由 showOsApp / launchGameApp 在每次開啟前動態更新
         goHome: function() {
             const panel = document.querySelector('#aurelia-panel-container');
-            if (panel) panel.style.transform = 'translateX(100%)';
+            // 🚪 以前是把整格往右推出畫面（translateX(100%)），推了就不會推回來：
+            //    之後再開任何窗口（出門、設置…）切塊特效照演一秒，窗口本身卻停在畫面外＝「點了又回到原地」，重整才好（11-17 她回報）。
+            //    現在跟 control_center 收窗口同一個收法：直接藏起來。
+            if (panel) { panel.style.display = 'none'; panel.style.transform = ''; }
             if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) {
                 window.VoidTerminal.resumeLobbyActivity();
             }

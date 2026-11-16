@@ -784,6 +784,7 @@
     function _panelOpening(panel) {
         _panelSeq++;
         delete panel.dataset.tileOut;
+        panel.style.transform = '';   // 保險：舊的 goHome 曾把整格推出畫面（translateX(100%)），留著的話新開的窗口會看不見
         const TF = window.AURELIA_TILEFX;
         if (TF) TF.clear(panel);   // 上一個窗口收到一半就換人：先清乾淨（要在新 app 自己藏窗口之前）
     }
