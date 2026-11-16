@@ -584,8 +584,9 @@
         ying:     { name: '瀅瀅',     persona: null,                subTitle: '視差書咖 · 店長',        portrait: ASSET.ying },
         alice:    { name: '愛麗絲',   personaFull: ALICE_PERSONA,   subTitle: '純白大廳 · 首席導覽官',  portrait: ASSET.alice,
                     // live＝對話模式裡會動的立繪（有就播，播不了留 portrait）。greetFrom＝歡迎那支從第幾秒開始播：
-                    //   原片前 1 秒是閉眼、睜眼，手到 1.25 秒才動；她：「抬手的那個要再開始時間要再往前一點好」→ 從 1 秒進，
-                    //   點下去 0.25 秒手就開始抬，拉近的鏡頭停下來時手剛好伸出去。1 秒那格剛好是影片的關鍵格，跳過去不用等。
+                    //   她：「抬手的那個要再開始時間要再往前一點好」→ 不從頭播，從 1 秒進（那格剛好是影片的關鍵格，跳過去不用等）。
+                    //   現在這支（greet v2，有開口說話）前 1 秒是站著眨一下眼，手在 0.9 秒左右開始分開；從 1 秒進＝點下去手就在動，
+                    //   拉近的鏡頭停下來時手已經伸出去。換新影片時要重看一次手是第幾秒開始動的。
                     live: { idle: ASSET.aliceIdle, greet: ASSET.aliceGreet, greetFrom: 1 } },
         rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit },
         zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei },
