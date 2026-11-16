@@ -591,7 +591,9 @@
                     //   → v2 從頭播（0）：先眨一下眼、0.67 秒開口、0.9 秒手開始抬，拉近的鏡頭（0.75 秒）停下來之後才伸出去。
                     //   她覺得舒服的大約是「點下去 0.5～1 秒手才動」。跳到不是整數秒的地方要從前一個關鍵格解起（影片每 1 秒一個），手機上會頓一下。
                     live: { idle: ASSET.aliceIdle, greet: ASSET.aliceGreet, greetFrom: 0 } },
-        rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit },
+        rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit,
+                    // 這支也是 0.25 秒手和懷錶就開始動，同瀅瀅先等 0.4 秒
+                    live: { idle: ASSET.rabbitIdle, greet: ASSET.rabbitGreet, greetFrom: 0, greetDelay: 400 } },
         zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei },
         hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter },
         cheshire: { name: '柴郡',     persona: null,                subTitle: '系統異常部門 · 灰色夢魘組', portrait: ASSET.cheshire },
