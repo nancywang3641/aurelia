@@ -1174,6 +1174,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const targetId = `view-${tab.dataset.tab}`;
                 const targetView = container.querySelector(`#${targetId}`);
                 if (targetView) { targetView.classList.remove('hidden'); targetView.classList.add('active'); }
+                // 換分頁從頂端看起：以前停在上一頁捲到的高度，長頁切過來會以為新分頁沒有標題（11-17 Gemini 看到）
+                const _sc = container.querySelector('.set-content');
+                if (_sc) _sc.scrollTop = 0;
             };
         });
 
@@ -1991,8 +1994,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         try { const t = localStorage.getItem('os_img_settings_tab'); if (IMG_TABS.indexOf(t) >= 0) imgTab = t; } catch (e) {}
         const _tabGroups = { novelai: [elNaiGroup], comfyui_direct: [elCfdGroup], tavern_sd: [elTavGroup], custom_api: [elCapiGroup] };
         window._switchImgTab = (tab, quiet) => {
+            const _prevImgTab = imgTab;
             imgTab = IMG_TABS.indexOf(tab) >= 0 ? tab : 'style';
             _lsSet('os_img_settings_tab', imgTab, '圖片設置停在哪一頁');
+            if (!quiet && _prevImgTab !== imgTab) {   // 換圖片的小分頁也從頂端看起（畫風頁很長）
+                const _sc = container.querySelector('.set-content');
+                const _tabsTop = container.querySelector('.img-conn-tabs');
+                if (_sc && _tabsTop) _sc.scrollTop = Math.max(0, _tabsTop.offsetTop - 8);
+            }
             container.querySelectorAll('.img-conn-tabs .img-srctab').forEach(b => b.classList.toggle('active', b.dataset.imgtab === imgTab));
             const st = container.querySelector('#img-tab-style');
             if (st) st.hidden = (imgTab !== 'style');
@@ -2077,7 +2086,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             if (park) box.querySelectorAll('#img-avatar-size, #img-scene-size, #img-scene-size-custom, #img-bg-size').forEach(el => park.appendChild(el));
             try { _pinComfyLegacyRows(); } catch (e) {}   // 刪掉某個包之後，用它的列在這裡接回一模一樣的包
             const routes = M.getRoutes(), styles = M.getStyles(), svcs = _svcChoices();
-            box.innerHTML = M.USES.map(u => {
+            // 有列還沒選接口（新玩家一開始全是）：在表格上面講清楚要先去哪裡接（11-17 Gemini：沒有引導去哪裡新增）
+            const _unset = M.USES.filter(u => !M.serviceForUse(u.id)).length;
+            const _hint = _unset
+                ? '<div class="img-use-hint"><i class="fa-solid fa-circle-info"></i> 有 ' + _unset + ' 個地方還沒選接口，那些地方不會出圖。先到上面'
+                    + ['novelai:NAI', 'comfyui_direct:ComfyUI', 'custom_api:自訂接口', 'tavern_sd:酒館'].map(x => { const k = x.split(':'); return '<a class="img-use-hint-go" onclick="window._switchImgTab && window._switchImgTab(\'' + k[0] + '\')">' + k[1] + '</a>'; }).join('、')
+                    + '其中一頁接好，再回來這裡每一列選接口。</div>'
+                : '';
+            box.innerHTML = _hint + M.USES.map(u => {
                 const r = routes[u.id] || {};
                 const legacySvc = M.legacyServiceOf(u.id);
                 const fam = _famOf(r.conn);

@@ -15,6 +15,9 @@
         /* Tab 導航 */
         .set-tabs { display: flex; background: rgba(var(--os-tint-rgb), 0.9); padding: 0 10px; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.15); flex-shrink: 0; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
         .set-tabs::-webkit-scrollbar { display: none; }
+        /* 主分頁照字數分寬度：五顆一樣寬時「系統/備份」在手機框裡會被切成「系統/備」凸出去（11-17 她截圖）。
+           共用那份（os_sys_chrome.css）排在後面、寫 min-width:70px，這裡多一層 .set-tabs 才蓋得過 */
+        .set-tabs > .set-tab { flex: 1 1 auto; min-width: 0; padding-left: 6px; padding-right: 6px; }
         .set-tab { flex: 1; min-width: 70px; text-align: center; padding: 12px 0; font-size: 13px; color: var(--os-ink-soft); cursor: pointer; position: relative; transition: 0.3s; font-weight: 600; letter-spacing: 0.5px; }
         .set-tab.active { color: var(--os-accent-strong); font-weight: 800; }
         .set-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: var(--os-accent-strong); border-radius: 3px 3px 0 0; box-shadow: 0 -2px 8px var(--os-accent-glow); }
@@ -32,8 +35,10 @@
         .tab-view.active { display: block; }
         
         /* API tab 內子分頁列：主模型 / 副模型 切換 */
-        .api-subtab-row { display: flex; gap: 8px; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.08); margin-bottom: 16px; flex-wrap: wrap; }
-        .api-subtab { cursor: pointer; padding: 8px 16px; font-size: 14px; color: var(--os-ink-soft); border-bottom: 2px solid transparent; font-weight: 600; user-select: none; }
+        /* 小分頁一排排完、不折第二行：手機框窄的時候 API 的四顆會把「決策模型」擠到第二排（11-17 Gemini 看到）。照字數分寬度 */
+        .api-subtab-row { display: flex; gap: 2px; border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.08); margin-bottom: 16px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+        .api-subtab-row::-webkit-scrollbar { display: none; }
+        .api-subtab { cursor: pointer; padding: 8px 8px; font-size: 14px; color: var(--os-ink-soft); border-bottom: 2px solid transparent; font-weight: 600; user-select: none; flex: 1 1 auto; text-align: center; white-space: nowrap; }
         .api-subtab.active { color: var(--os-ink); border-bottom-color: var(--os-ink-soft); font-weight: 800; }
 
         /* 畫廊（相簿）主分頁列：跟系統設置主 tab(.set-tab) 同款；黏在內容頂部、負邊距吃掉 .set-content padding 滿版、不透明底蓋住捲動縫隙 */
@@ -346,11 +351,14 @@
 /* 圖片設置「畫風」頁：一個地方一段，名字一行，下面「接口／預設包（或畫風）／尺寸」各一行（面板只有三百多寬，兩格並排會把名字切掉）。
    標題那欄固定寬：第二格的標題一列寫「預設包」一列寫「畫風」，用 auto 的話每列下拉單左邊對不齊（11-17） */
 .img-use-row { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); gap: 6px 8px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
-.img-use-row:first-child { border-top: 0; padding-top: 2px; }
+.img-use-row:first-child, .img-use-hint + .img-use-row { border-top: 0; padding-top: 2px; }
 .img-use-name { grid-column: 1 / -1; font-size: 13px; font-weight: 800; color: var(--os-ink); }
 .img-use-label { font-size: 11px; color: var(--os-ink-soft); }
 .img-use-row .set-select, .img-use-row .set-input { font-size: 12px; min-width: 0; width: 100%; }
 .img-use-second { min-width: 0; }
+.img-use-hint { font-size: 12px; line-height: 1.6; color: var(--os-ink-soft); background: rgba(var(--os-ink-rgb), 0.05); border-radius: 8px; padding: 8px 10px; margin-bottom: 6px; }
+.img-use-hint .fa-circle-info { margin-right: 4px; }
+.img-use-hint-go { color: var(--os-accent-strong, var(--os-ink)); text-decoration: underline; cursor: pointer; font-weight: 700; }
 .img-use-size { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .img-use-label:has(+ .img-use-size:empty), .img-use-size:empty { display: none; }
 .img-use-size .set-input { flex: 1 1 100%; margin-top: 0 !important; }
