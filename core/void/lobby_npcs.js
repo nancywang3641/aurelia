@@ -595,7 +595,9 @@
                     // 這支也是 0.25 秒手和懷錶就開始動，同瀅瀅先等 0.4 秒
                     live: { idle: ASSET.rabbitIdle, greet: ASSET.rabbitGreet, greetFrom: 0, greetDelay: 400 } },
         zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei },
-        hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter },
+        hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter,
+                    // 這支 0.25 秒色卡就開始收攏（1 秒攤開、開口），同白兔先等 0.4 秒
+                    live: { idle: ASSET.hatterIdle, greet: ASSET.hatterGreet, greetFrom: 0, greetDelay: 400 } },
         cheshire: { name: '柴郡',     persona: null,                subTitle: '系統異常部門 · 灰色夢魘組', portrait: ASSET.cheshire },
     };
 

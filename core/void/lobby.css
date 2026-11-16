@@ -1543,6 +1543,8 @@
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk:not(.is-zoom) .lb-pv-poke {
         left:calc(38.5% + (100vh - 52px) * .115); top:13%;
     }
+    /* 帽匠手上那疊色卡剛好飄在這個位置，泡泡往上移到帽子旁邊，不要蓋在色卡上 */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv[data-place="workshop"].is-talk:not(.is-zoom) .lb-pv-poke { top:5.5%; }
 
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv .lb-rail {
         top:13.5%; bottom:auto; right:7.5%; width:var(--lbh-rail-w);
