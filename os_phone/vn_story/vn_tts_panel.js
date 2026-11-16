@@ -1144,6 +1144,45 @@ const VN_TTS_Panel = {
         this._restoreListScroll(); // 👈 儲存後恢復高度
     },
 
+    // 🗑 刪一個模型：卡片上那顆「刪除」從五月第一版起就叫這個名字，但一直沒寫出來，按下去只會報錯（11-17 她：「我刪不掉我不要的模型」）。
+    //    綁著它的指派一起解除：兩個引擎的艙都掃（engineSets；舊存檔還沒分艙就掃 config 本身），免得留下指到不存在音色的角色。
+    async deleteModel(id) {
+        const tts = this._tts();
+        if (!tts) return;
+        const C = tts.config;
+        const model = C.models && C.models[id];
+        if (!model) { this._toast('找不到這個模型，可能已經刪掉了'); this._renderBody('models'); return; }
+        const name = model.name || id;
+        if (!await AUI.confirm(`確定要刪除「${name}」嗎？\n用這個模型的角色、旁白、系統音、NPC 分類會一起解除綁定。\n電腦上的模型檔案不會被刪。`)) return;
+
+        const body = document.getElementById(this._bodyId);
+        const currentScroll = body ? body.scrollTop : 0;
+
+        const scrub = (set) => {
+            if (!set) return;
+            for (const k of Object.keys(set.charMappings || {})) if (set.charMappings[k] === id) delete set.charMappings[k];
+            for (const k of Object.keys(set.systemMappings || {})) if (set.systemMappings[k] === id) delete set.systemMappings[k];
+            if (set.narratorModel === id) set.narratorModel = '';
+            (set.npcCategories || []).forEach(cat => { if (Array.isArray(cat.modelIds)) cat.modelIds = cat.modelIds.filter(m => m !== id); });
+            for (const card of Object.keys(set.npcLocks || {})) {
+                const locks = set.npcLocks[card] || {};
+                for (const n of Object.keys(locks)) if (locks[n] === id) delete locks[n];
+            }
+        };
+        delete C.models[id];
+        if (C.engineSets) { scrub(C.engineSets.index); scrub(C.engineSets.sovits); }
+        else scrub(C);
+
+        if (!tts.save()) return;
+        if (this._modelFormMode === id) this._modelFormMode = null;
+        this._renderBody('models');
+        requestAnimationFrame(() => {
+            const b = document.getElementById(this._bodyId);
+            if (b) b.scrollTop = currentScroll;
+        });
+        this._toast(`✓ 已刪除「${name}」`);
+    },
+
     async deleteAllModels() {
         const tts = this._tts();
         if (!tts) return;
