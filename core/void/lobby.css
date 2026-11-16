@@ -1263,9 +1263,21 @@
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) {
     --lbh-serif:'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
     --lbh-kai:'LXGW WenKai TC', 'Kaiti TC', 'DFKai-SB', 'BiauKai', 'Noto Serif TC', serif;
-    --lbh-ink:#27345e; --lbh-line:rgba(255,255,255,.78); --lbh-glass:rgba(72,96,164,.34);
+    /* 🎨 顏色跟著地點走（她：「藍白在大廳正常，但到書咖又看著怪」「到紫薇的暗紅區，藍色ＵＩ對話框就和著怪怪的」）。
+       統一的是骨架：位置、形狀、字、圖示每個地點都一樣；只有這五個顏色照地點換（lobby_places.js 畫的時候在 .lb-pv 掛 data-place）。
+       頂列、更多清單、換場景卡是系統的東西，不跟著換。寫成「R,G,B」三個數字，用的地方自己配透明度。
+       deep＝最深那個（下緣的暗、名牌、字的陰影、淺底上的字）；box＝他說的話那一塊；soft＝玻璃感的底（常用那一排、輸入框）；a／a2＝大按鈕和送出鈕的亮色、暗色 */
+    --lbh-deep:34,49,95; --lbh-box:52,72,130; --lbh-soft:72,96,164; --lbh-a:39,73,170; --lbh-a2:27,53,133;
+    --lbh-ink:rgb(var(--lbh-deep)); --lbh-line:rgba(255,255,255,.78); --lbh-glass:rgba(var(--lbh-soft),.34);
     --lbh-ease:cubic-bezier(.22,.8,.2,1);
 }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv[data-place="cafe"])     { --lbh-deep:62,40,28;  --lbh-box:96,66,48;   --lbh-soft:150,112,86;  --lbh-a:142,90,56;  --lbh-a2:104,62,38; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv[data-place="exchange"]) { --lbh-deep:24,56,78;  --lbh-box:40,84,112;  --lbh-soft:70,124,156;  --lbh-a:30,112,152; --lbh-a2:20,80,114; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv[data-place="tarot"])    { --lbh-deep:52,18,32;  --lbh-box:88,34,54;   --lbh-soft:132,64,86;   --lbh-a:142,38,62;  --lbh-a2:100,24,44; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv[data-place="workshop"]) { --lbh-deep:40,28,70;  --lbh-box:66,48,112;  --lbh-soft:112,90,164;  --lbh-a:108,66,172; --lbh-a2:76,44,130; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv[data-place="myhome"])   { --lbh-deep:66,50,40;  --lbh-box:104,82,66;  --lbh-soft:156,134,114; --lbh-a:168,118,80; --lbh-a2:126,86,56; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv[data-place="sn32"])     { --lbh-deep:32,40,56;  --lbh-box:54,66,90;   --lbh-soft:96,112,138;  --lbh-a:54,88,134;  --lbh-a2:36,62,100; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv[data-place="garden"])   { --lbh-deep:28,56,36;  --lbh-box:46,86,56;   --lbh-soft:100,146,104; --lbh-a:58,126,68;  --lbh-a2:38,92,50; }
 /* 🚨 overflow 用 clip：拉近的人會超出畫面，hidden 的盒子還是捲得動，裡面的東西一拿到游標整個畫面就被推走 */
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv { overflow:clip; }
 /* 背景：拉近時跟著放大一點 */
@@ -1278,7 +1290,7 @@
     right:auto; max-width:none; object-position:center bottom;
     transform:translateX(-50%); transform-origin:50% 100%;
     pointer-events:auto; cursor:pointer;
-    filter:drop-shadow(0 18px 22px rgba(34,49,95,.22));
+    filter:drop-shadow(0 18px 22px rgba(var(--lbh-deep),.22));
     transition:transform .75s var(--lbh-ease);
     animation:lbh-breathe 4.6s ease-in-out infinite;
 }
@@ -1286,7 +1298,7 @@
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-veil {
     display:block; position:absolute; left:0; right:0; bottom:0; height:46%; z-index:2;
     pointer-events:none; opacity:0; transition:opacity .6s var(--lbh-ease);
-    background:linear-gradient(180deg, rgba(40,58,116,0), rgba(40,58,116,.72) 42%, rgba(34,49,95,.96) 78%);
+    background:linear-gradient(180deg, rgba(var(--lbh-deep),0), rgba(var(--lbh-deep),.66) 42%, rgba(var(--lbh-deep),.96) 78%);
 }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk.is-zoom .lb-pv-veil { opacity:1; }
 /* 頭旁邊的「聊聊」：只有站著、還沒拉近的時候在 */
@@ -1295,7 +1307,7 @@
     border:1px solid #fff; border-radius:999px 999px 999px 5px; cursor:pointer;
     background:rgba(255,255,255,.86); color:var(--lbh-ink);
     font-family:var(--lbh-serif); font-size:15px; font-weight:700; letter-spacing:2px; white-space:nowrap;
-    box-shadow:0 6px 16px rgba(34,49,95,.2);
+    box-shadow:0 6px 16px rgba(var(--lbh-deep),.2);
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     animation:lbh-poke 3.2s ease-in-out infinite;
 }
@@ -1317,11 +1329,11 @@
     width:100%; height:calc(var(--lbh-u, 1px) * 80); min-height:50px; margin:0; padding:0 clamp(18px, 3vw, 48px);
     border:0; cursor:pointer; color:#fff;
     font-family:var(--lbh-serif); font-size:clamp(19px, 2.1vw, 32px); font-weight:700; letter-spacing:.22em;
-    background:linear-gradient(100deg, #2749aa, #1b3585 58%, #2c53ba);
+    background:linear-gradient(100deg, rgb(var(--lbh-a)), rgb(var(--lbh-a2)) 58%, rgb(var(--lbh-a)));
     clip-path:polygon(3.5% 0, 100% 0, 100% 70%, 96.5% 100%, 0 100%, 0 30%);
-    filter:drop-shadow(0 8px 14px rgba(27,53,133,.35)); transition:filter .2s, transform .2s;
+    filter:drop-shadow(0 8px 14px rgba(var(--lbh-a2),.35)); transition:filter .2s, transform .2s;
 }
-.void-tab:not(.mode-404) .lb-pv .lb-rail-cta:hover { filter:drop-shadow(0 10px 18px rgba(27,53,133,.5)) brightness(1.12); transform:translateY(-1px); }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-cta:hover { filter:drop-shadow(0 10px 18px rgba(var(--lbh-a2),.5)) brightness(1.12); transform:translateY(-1px); }
 .void-tab:not(.mode-404) .lb-pv .lb-rail-cta > i:first-child { font-size:1.1em; }
 .void-tab:not(.mode-404) .lb-pv .lb-rail-cta > span { flex:1; min-width:0; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .void-tab:not(.mode-404) .lb-pv .lb-rail-picks {
@@ -1352,7 +1364,7 @@
     display:flex; align-items:center; gap:8px; align-self:flex-end; flex-shrink:0;
     margin:calc(var(--lbh-u, 1px) * 22) 0 0; padding:5px 14px 5px 16px; cursor:pointer;
     /* 底下墊一片霧白：大廳的地板是亮的、書咖的地板是暗的，深藍字直接放上去有的地方會看不到 */
-    border:0; border-radius:999px; background:rgba(255,255,255,.74); color:#1b3585;
+    border:0; border-radius:999px; background:rgba(255,255,255,.74); color:rgb(var(--lbh-a2));
     -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
     font-family:var(--lbh-serif); font-size:17px; font-weight:700; letter-spacing:2px;
 }
@@ -1412,7 +1424,7 @@
     display:flex !important; align-items:center !important; gap:12px; margin:0 !important;
     padding:7px 60px 7px 22px !important; border-radius:0 !important;
     border:0 !important; border-bottom:1px solid rgba(255,255,255,.55) !important;
-    background:linear-gradient(90deg, rgba(34,49,95,.88) 55%, rgba(34,49,95,0)) !important;
+    background:linear-gradient(90deg, rgba(var(--lbh-deep),.88) 55%, rgba(var(--lbh-deep),0)) !important;
     clip-path:polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
 }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag::before {
@@ -1426,9 +1438,9 @@
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text {
     box-sizing:border-box; padding:14px 22px 16px; min-height:calc(1.75em + 30px);
     font-family:var(--lbh-serif); font-size:clamp(16px, 1.5vw, 23px); font-weight:500; letter-spacing:.1em;
-    color:#fff !important; line-height:1.75 !important; text-shadow:0 1px 6px rgba(34,49,95,.6);
+    color:#fff !important; line-height:1.75 !important; text-shadow:0 1px 6px rgba(var(--lbh-deep),.6);
     max-height:min(34vh, 250px) !important;
-    border-radius:0 0 6px 6px; background:rgba(52,72,130,.64);
+    border-radius:0 0 6px 6px; background:rgba(var(--lbh-box),.66);
     -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
     scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.7) transparent;
 }
@@ -1453,7 +1465,7 @@
 }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-send-btn {
     width:88px !important; height:44px !important; flex:0 0 88px !important; border-radius:999px !important; font-size:19px;
-    background:linear-gradient(100deg, #3a63cf, #1b3585) !important; color:#fff !important;
+    background:linear-gradient(100deg, rgb(var(--lbh-a)), rgb(var(--lbh-a2))) !important; color:#fff !important;
     border:0 !important; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5) !important;
 }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-send-btn:hover { filter:brightness(1.15); }
@@ -1489,7 +1501,7 @@
     }
     /* 下緣一片往下變深的藍，右下那一排的白字才讀得到 */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-bg::after {
-        background:linear-gradient(180deg, rgba(40,58,116,0) 56%, rgba(40,58,116,.38) 82%, rgba(34,49,95,.74));
+        background:linear-gradient(180deg, rgba(var(--lbh-deep),0) 56%, rgba(var(--lbh-deep),.34) 82%, rgba(var(--lbh-deep),.72));
     }
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-hd {
         width:fit-content; right:auto; padding:14px 22px;
@@ -1586,7 +1598,7 @@
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-pick-t {
         position:absolute; left:0; right:0; bottom:0; justify-content:center; gap:5px; padding:12px 4px 4px;
         font-size:13px; letter-spacing:1px; color:#fff;
-        background:linear-gradient(180deg, rgba(34,49,95,0), rgba(34,49,95,.85));
+        background:linear-gradient(180deg, rgba(var(--lbh-deep),0), rgba(var(--lbh-deep),.85));
     }
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-all { margin:0; padding:4px 12px 4px 14px; font-size:14px; }
     /* 09-14 那顆塞在對話框底下的大按鈕不用了（大按鈕搬到上面那一塊；404 那套照舊用它） */
@@ -1822,8 +1834,8 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
 
     /* ── 背景：上暗（狀態列讀得清楚）、下緣深藍（11-16 起底下那幾排是白字） ── */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-pv-bg::after {
-        background:linear-gradient(180deg, rgba(23,39,58,.42) 0%, rgba(23,39,58,0) 22%, rgba(40,58,116,0) 56%,
-                                   rgba(40,58,116,.42) 80%, rgba(34,49,95,.84) 100%);
+        background:linear-gradient(180deg, rgba(23,39,58,.42) 0%, rgba(23,39,58,0) 22%, rgba(var(--lbh-deep, 34,49,95),0) 56%,
+                                   rgba(var(--lbh-deep, 34,49,95),.4) 80%, rgba(var(--lbh-deep, 34,49,95),.84) 100%);
     }
 
     /* ── 地點列：膠囊＋副標 ── */

@@ -616,6 +616,7 @@
             }
             restorePanel(); talkOff();
             curId = nextId; _curId = nextId;
+            box.dataset.place = nextId;   // 介面的顏色跟著地點換（色票在 lobby.css「顏色跟著地點走」那段；沒寫到的地點用大廳的藍）
             // 404 地點＝套上 404 皮：對話換成柴郡的軌道（人設、紀錄），離開就脫掉。
             // 🚨 舞台模式由 lstage-scene 事件做這件事，對話模式以前沒人做 → 在 404 跟柴郡講話其實是跟瀅瀅講。
             //    要在 go() 之前：primeTalk 看的是套好皮之後的狀態。
