@@ -583,26 +583,51 @@
     //   ③這個故事的角色：問大廳「他的小人是哪一把鑰匙」（LobbyNpcs.dressKeyFor；他現在就站在大廳就直接拿那個小人，換了當場看得到）
     //   ④問不到＝還沒進過大廳：沒有鑰匙，那一頁只剩立繪
     //   🚨 ③不拿名字去大廳裡找人：別的故事來的客人可能同名，會換到別人身上
+    //   🚨 他的外觀描述只有一份：設置 → 圖片 的「角色外觀登記表」那一筆（這個故事的頭像快取的 prompt）。
+    //     站在大廳的小人身上那份是他進大廳那一刻抄的，圖是之後才畫的就沒抄到 → 這裡一律回頭問登記表，別只看小人身上有沒有
+    //     （11-16 她：有 Q版的角色，三張要畫的卡卻寫「還不知道他長什麼樣」；「描述在設置圖片那裏，有角色列表」）
+    async function dressLookOf(ch) {
+        const C = Cache();
+        if (!C) return { key: ch, prompt: '' };
+        let rec = null;
+        try { rec = await C.get('avatar_cache', ch); } catch (e) {}
+        if (rec) return { key: ch, prompt: String(rec.prompt || '') };
+        // 名字寫法不一樣（簡繁、有沒有姓）也是同一個人，跟素材頁認「生成過的圖」同一套
+        try {
+            for (const e of await worldEntries('avatar_cache', ch)) {
+                const full = await C.getRaw('avatar_cache', e.key);
+                if (full) return { key: String(C.bareKeyOf(e) || ch), prompt: String(full.prompt || '') };
+            }
+        } catch (e) {}
+        return { key: ch, prompt: '' };
+    }
     async function dressCtx() {
         const off = S.offSel ? officialList().find(o => o.key === S.offSel) : null;
         const ch = off ? off.name : S.sel;
         if (!ch) return null;
-        if (S.actor && (off ? S.actor.key === off.key : sameChar(S.actor.name, ch))) return { a: S.actor };
+        const N = win.LobbyNpcs || window.LobbyNpcs;
+        // 站在大廳的他身上沒帶描述：請大廳照他那一輪再撈一次（別的故事來的客人也撈得到他自己那一輪的）
+        const fresh = async (n) => { if (n && !n.avatarPrompt && N && N.refreshGuest) { try { await N.refreshGuest(n); } catch (e) {} } return n; };
+        if (S.actor && (off ? S.actor.key === off.key : sameChar(S.actor.name, ch))) return { a: off ? S.actor : await fresh(S.actor) };
         const LS = win.LobbyStage || window.LobbyStage;
         const st = (LS && LS._S) || null;
         const live = st ? [st.player].concat(st.npcs || []).filter(Boolean) : [];
         if (off) return { a: live.find(x => x.key === off.key) || { key: off.key, name: off.name, portrait: off.portrait } };
         const C = Cache();
-        let rec = null;
-        try { rec = C ? await C.get('avatar_cache', ch) : null; } catch (e) {}
-        const prompt = (rec && rec.prompt) || '';
+        const look = await dressLookOf(ch);
         let hit = null;
-        try { const N = win.LobbyNpcs || window.LobbyNpcs; if (N && N.dressKeyFor && C) hit = await N.dressKeyFor(ch, C.getCurrentWorld(), sameChar); } catch (e) {}
+        try { if (N && N.dressKeyFor && C) hit = await N.dressKeyFor(ch, C.getCurrentWorld(), sameChar); } catch (e) {}
         if (hit) {
             const n = live.find(x => x.key === hit.key);
-            return { a: n || { key: hit.key, name: ch, avatarPrompt: prompt, avatarCacheKey: ch } };
+            if (n) {
+                await fresh(n);
+                // 大廳那邊還是對不到（名字寫法差太多）：他是這個故事的角色，登記表那一筆就是他的
+                if (!n.avatarPrompt && look.prompt) { n.avatarPrompt = look.prompt; if (!n.avatarCacheKey) n.avatarCacheKey = C.scopedKey(C.getCurrentWorld(), look.key); }
+                return { a: n };
+            }
+            return { a: { key: hit.key, name: ch, avatarPrompt: look.prompt, avatarCacheKey: look.key } };
         }
-        return { a: { key: '', name: ch, avatarPrompt: prompt, avatarCacheKey: ch } };
+        return { a: { key: '', name: ch, avatarPrompt: look.prompt, avatarCacheKey: look.key } };
     }
     // 裝扮頁的展示台問：劇情舞台現在會用哪張立繪（這裡認得本地上傳、世界書、網址庫；都沒有回空的，那邊再看立繪庫和頭像快取）
     async function dressSpriteOf(who) {

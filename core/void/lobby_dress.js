@@ -153,7 +153,7 @@
         const help = (A && A.helpBtn) ? A.helpBtn('lsd_dress') : '';
         const VN = window.VN_Core || (window.parent || window).VN_Core;
         const trio = !!(VN && typeof VN._trioOn === 'function' && VN._trioOn() && typeof VN.regenTrio === 'function');
-        const off = a.avatarPrompt ? '' : ' disabled';   // 沒有長相的資料（劇情裡生過頭像才有）：要畫的那幾張卡是暗的
+        const off = a.avatarPrompt ? '' : ' disabled';   // 沒有長相的資料（設置 → 圖片「角色外觀登記表」沒有他那一筆；角色中心開這頁前會先去那裡補，見 os_char_gallery.js 的 dressCtx）：要畫的那幾張卡是暗的
         const d = (text) => a.avatarPrompt ? text : '還不知道他長什麼樣，畫不出來';
         const box = document.createElement('div');
         box.className = 'lsd-embed';

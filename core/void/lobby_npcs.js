@@ -541,6 +541,18 @@
         for (const g of mine) { const p0 = _guestCands(g).parts[0]; if (p0 && n.indexOf(p0) >= 0) return keyOf(g); }
         return null;
     }
+    // 🎭 角色中心「裝扮」頁開的時候再找一次（11-16 她：有 Q版的角色，要畫的卡卻寫「還不知道他長什麼樣」）：
+    //   他身上的外觀描述、頭像、Q版只在進大廳那一刻撈一次（下面那支）；圖是他進大廳「之後」才畫出來的，他身上就一直是空的，
+    //   要等重進大廳才有。這支照他那一輪再撈一次：補上描述，沒換過造型的小人當場換成他的 Q版。回 true＝現在有描述了
+    async function _refreshGuest(npc) {
+        if (!npc || String(npc.key || '').indexOf('jr_') !== 0) return false;
+        let pool = [];
+        try { pool = await _journalGuestPool(); } catch (e) { return false; }
+        const g = pool.find(x => 'jr_' + (x.chatId || 'x') + '_' + x.rawName === npc.key);
+        if (!g) return false;
+        await _attachGuestPortrait(npc, g);
+        return !!npc.avatarPrompt;
+    }
     async function _attachGuestPortrait(npc, g) {
         try {
             const h = await _guestCacheHit(g);
@@ -600,6 +612,7 @@
         official: _official,                // 奧瑞亞官方立繪名冊（管理員＋SN 住民）
         officialOf: _officialOf,            // 名字（含別名）→ 那一筆，沒有回 null
         dressKeyFor: _dressKeyFor,          // 🎭 角色中心「裝扮」頁：這個故事的這個角色在大廳的小人是哪一把鑰匙（沒進過大廳回 null）
+        refreshGuest: _refreshGuest,        // 🎭 同一頁：站在大廳的他身上沒帶外觀描述（圖是他進來之後才畫的）→ 照他那一輪再撈一次
         // SN 住民（雷伊、丹）：小機培養室的「丹」那堂課要他的人設與頭像演小劇場
         snResident: (key) => {
             const r = SN_RESIDENTS.find(x => x.key === key);
