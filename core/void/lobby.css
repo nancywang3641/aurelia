@@ -1395,6 +1395,12 @@
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-ic { display:none; }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-fa { display:block; color:#fff; pointer-events:none; }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-label { color:#fff; font-family:var(--lbh-serif); white-space:nowrap; }
+/* 🚨 開著面板（專注）時這一排、大按鈕和地點那一塊都要收掉：上面那幾條為了蓋過手機舊規則帶了 #lb-dock、把 display 寫回 flex，
+   結果連「專注時藏起來」那條（.lobby-left:has(.lb-pv.is-focus) #lb-dock）也一起蓋掉了——11-16 她開世界門，這一排浮在面板上面。
+   所以在這裡用同樣的寫法再藏一次，而且一定要排在上面那幾條後面 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv.is-focus) #lb-dock { display:none; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-focus .lb-rail,
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-focus .lb-rail { display:none; }
 /* 收進更多的那幾顆有新東西（成就待兌換、有人在等她回、宿舍有紙條）→ 更多這顆亮點 */
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock:has(.lb-dock-btn:not([data-desk]).has-pending, #lb-dock-ai.lb-ai-news:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-prop:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-msg:not(.lb-entry-off)) #lb-dock-more::after {
     content:''; position:absolute; top:4px; right:22%; width:8px; height:8px; border-radius:50%;
