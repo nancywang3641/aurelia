@@ -37,9 +37,9 @@
     }
     const ASSET = {
         // 底圖per場景（SCENES[].base）；素材改版一律換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
-        ying:  CDN + 'lobby_ying_v2.png',    // 瀅瀅立繪(v2=Rae修圖;改版必換檔名防快取)
-        alice: CDN + 'lobby_alice_v3.png',   // 愛麗絲立繪(v3=Rae調尺寸 972x1882)
-        cheshire: CDN + 'lobby_cheshire_v2.png',   // 柴郡立繪(v2=Rae調尺寸 972x1882)
+        ying:  CDN + 'lobby_ying_v3.webp',   // 瀅瀅立繪(v3=11-16 阿洛重畫的六位管理員之一,708x1882;改版必換檔名防快取)
+        alice: CDN + 'lobby_alice_v4.webp',  // 愛麗絲立繪(v4=11-16 阿洛重畫;照 v3 的畫布 972x1882、人的高度和腳的位置對齊)
+        cheshire: CDN + 'lobby_cheshire_v3.webp',  // 柴郡立繪(v3=11-16 阿洛重畫;畫布、人的大小照 v2)
         mcF:   CDN + 'lobby_mc_f_silhouette.png',   // 通用小人預設=剪影版(Rae定案 2026-07-15)；換裝在裝扮室
         mcM:   CDN + 'lobby_mc_m_silhouette.png',
         walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖素體(列=下/左/右/上,欄=左步/立/右步)
@@ -51,11 +51,11 @@
         ray:      CDN + 'lobby_ray.png',           // 雷伊對話立繪
         dan:      CDN + 'lobby_dan.png',           // 丹對話立繪
         rabbitWalk: CDN + 'lobby_rabbit_walk_v1.png',   // 白兔先生走路圖(3×4；交易所店員)
-        rabbit: CDN + 'lobby_rabbit_portrait_v2.png',   // 白兔先生對話立繪(v2=Rae調尺寸 972x1882)
+        rabbit: CDN + 'lobby_rabbit_portrait_v3.webp',  // 白兔先生對話立繪(v3=11-16 阿洛重畫;畫布、人的大小照 v2)
         zhiweiWalk: CDN + 'lobby_zhiwei_walk_v1.png',       // 紫薇老師走路圖(3×4；占卜小屋店主)
-        zhiwei: CDN + 'lobby_zhiwei_portrait_v1.png',       // 紫薇老師對話立繪(972x1882)
+        zhiwei: CDN + 'lobby_zhiwei_portrait_v2.webp',      // 紫薇老師對話立繪(v2=11-16 阿洛重畫;972x1882)
         hatterWalk: CDN + 'lobby_hatter_walk_v1.png',       // 帽匠走路圖(3×4；奇想工坊店主)
-        hatter: CDN + 'lobby_hatter_portrait_v1.png',       // 帽匠對話立繪(972x1882)
+        hatter: CDN + 'lobby_hatter_portrait_v2.webp',      // 帽匠對話立繪(v2=11-16 阿洛重畫;972x1882)
     };
     const MAP_W = 1536, MAP_H = 1024;   // 底圖尺寸（兩場景同規格）
 
