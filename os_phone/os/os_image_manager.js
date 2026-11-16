@@ -844,7 +844,9 @@
                 });
                 const text = await resp.text();
                 if (!resp.ok && _withRefs && (resp.status === 404 || resp.status === 405)) {
-                    const e = new Error('這個站不收參考圖（到圖片設置把這個節點的「帶參考圖」關掉）：' + resp.status);
+                    // 節點上「帶參考圖」那個開關只管角色立繪那種；畫風底圖、三格母圖、小地圖草稿、小人樣張是呼叫端自己附的，關了那個開關也照送
+                    const _byNode = refs.some(r => r.kind !== 'style' && r.kind !== 'layout');
+                    const e = new Error((_byNode ? '這個站不收參考圖（到圖片設置把這個節點的「帶參考圖」關掉）：' : '這個站不收參考圖，這張沒畫：') + resp.status);
                     e.status = resp.status;
                     throw e;
                 }

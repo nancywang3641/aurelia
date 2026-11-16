@@ -677,7 +677,7 @@
     //   她：一次生三種把小人跟立繪擠在同一張，畫風是加在整張上的，小人被立繪的畫風帶走（「怎麼畫風全一樣了」）
     //   →「想做不倒翁到裝扮室?」：小人在這裡單獨生一張，走名冊自己那一列（OS_IMAGE_MANAGER.USES 的 doll），
     //     用哪組接口、加不加畫風都在 設置 → 圖片 → 畫風「每個地方用什麼」的「不倒翁小人」那列選，不跟立繪共用。
-    //   接自訂接口（GPT 那種讀句子的）：照下面這段畫一張三隻（正面／側面／背面並排），原樣送（raw：接口那格底詞常寫著她的畫風，不接）。
+    //   接自訂接口（GPT 那種讀句子的）：照下面這段畫一張三隻（正面／側面／背面並排），原樣送（raw：接口那格底詞常寫著她的畫風，不接），再附一張樣張（_dollRef）。
     //   接其他的（ComfyUI、NAI…吃標籤的）：外觀標籤＋「一個人、全身、站著」，畫風交給那組自己的底詞（她的小人 LoRA 包）；通常是一隻。
     //   出來的圖去背後看是不是三隻並排（VN_Core._chibiViews，同一次生三種那套）：是＝切三張、存成三面；不是＝一張。
     //   🚨 側面寫死「臉朝右」：大廳（lobby_stage.js 的 placeActor）當它朝右，往左走才鏡像；改這裡那邊要一起改。
@@ -693,6 +693,36 @@
         try { t = localStorage.getItem(DOLL_TPL_KEY); } catch (e) {}
         return (t && t.trim()) ? t : DOLL_TPL;
     }
+    // 🖼 樣張（11-16 她：「畫風怎麼感覺還是不對，怎麼沒參考圖嗎」→ 貼了一張她要的小人三面圖「拿這張」）：
+    //   接自訂接口、而且那組收得到圖時，每次都把這張當參考圖一起送（走 _layoutRef：不看節點上「帶參考圖」那個開關，那個只管插圖帶角色立繪）。
+    //   圖在素材庫 doll_ref_v1/，鎖 commit 抓、抓不到換 raw（同 lobby_cafe_regulars.js 的 DOLL_REF）。換樣張＝傳新圖、換下面這個 commit。
+    //   🚨 樣張的側面是臉朝右，跟 DOLL_TPL、大廳 placeActor 同一個方向；換圖時側面也要朝右。
+    //   抓不到樣張就不畫（丟錯），不退成只送文字：只送文字畫出來就是她說畫風不對的那種，白花一張。
+    const DOLL_REF_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@fe220418ef447c328979c7ab3c0772c65446e760/doll_ref_v1/tumbler_sheet.webp';
+    const DOLL_REF_LEAD = 'Image {n} is a finished sample sheet of this kind of doll, showing a different character. '
+        + 'Use it as the model for the drawing style and the layout: the same head shape and egg-shaped body, the same proportions between head and body, '
+        + 'the same way of drawing the eyes, face, ears and hair, the same thin outlines and flat coloring, '
+        + 'and the same three positions on a plain white background: front view on the left, side view with the face pointing to the right in the middle, back view on the right. '
+        + 'Only the character changes: give the doll the hair, eye color and outfit of the character described below.';
+    let _dollRefBlob = null;
+    async function _dollRef() {
+        if (!_dollRefBlob) {
+            const grab = async (u) => {
+                const r = await fetch(u);
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const b = await r.blob();
+                if (!/^image\//i.test(b.type)) throw new Error('拿到的不是圖');
+                return b;
+            };
+            try { _dollRefBlob = await grab(DOLL_REF_URL); }
+            catch (e) {
+                const alt = _b.sfMirror ? _b.sfMirror(DOLL_REF_URL) : null;
+                if (!alt) throw e;
+                _dollRefBlob = await grab(alt);
+            }
+        }
+        return { name: 'the sample doll sheet', kind: 'layout', lead: DOLL_REF_LEAD, blob: _dollRefBlob };
+    }
     const _blobToData = (b) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(b); });
     // 回 { views:{front,side,back} } 或 { img }（都是 dataURL）；接口沒回圖丟錯（字是給她看的）
     async function _genDoll(a) {
@@ -706,10 +736,17 @@
             const tpl = _dollTpl();
             prompt = tpl.indexOf(DOLL_LOOK) >= 0 ? tpl.split(DOLL_LOOK).join(look) : (tpl + ' ' + look);
             opts.raw = true; opts.width = 1536; opts.height = 1024;
+            if (typeof M.takesRefImages === 'function' && M.takesRefImages('doll')) {
+                try { opts._layoutRef = await _dollRef(); }
+                catch (e) { console.warn('[LobbyDress] 小人樣張抓不到', e); throw new Error('小人的樣張抓不到（多半是網路），這次沒有畫。等一下再按一次。'); }
+            }
         } else {
             prompt = _standeePromptOf(look, '');
         }
         const url = await M.generate(prompt, 'char', opts);
+        if (!url && opts._layoutRef && /不收參考圖/.test((M._lastCustomApiError || {}).msg || '')) {
+            throw new Error('這組接口不收參考圖，不倒翁沒辦法照樣張畫。到 設置 → 圖片 → 畫風，把「不倒翁小人」那列換成收得到圖的那組。');
+        }
         if (!url) throw new Error('接口沒回圖（到 設置 → 圖片 → 畫風 看「不倒翁小人」那列用的是哪組）');
         let blob = null;
         try { blob = await (await fetch(url)).blob(); } catch (e) { throw new Error('圖拿到了但讀不進來'); }
