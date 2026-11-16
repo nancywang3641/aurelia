@@ -83,7 +83,7 @@
                             </div>
                             <div class="model-row ${llmConfig.useSystemApi ? 'hidden' : ''}" id="model-row">
                                 <select class="set-select" id="os-api-model"><option value="${_capiEsc(llmConfig.model)}">${_capiEsc(llmConfig.model)} (當前)</option></select>
-                                <div class="btn-fetch" id="os-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從酒館同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '<i class="fa-solid fa-rotate"></i>'}</div>
+                                <div class="btn-fetch" id="os-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從酒館同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i><span class="btn-fetch-txt">拉清單</span>' : '<i class="fa-solid fa-rotate"></i><span class="btn-fetch-txt">同步</span>'}</div>
                             </div>
                         </div>
 
@@ -182,7 +182,7 @@
                             </div>
                             <div class="model-row ${secLlmConfig.useSystemApi ? 'hidden' : ''}" id="sec-model-row">
                                 <select class="set-select" id="sec-api-model"><option value="${_capiEsc(secLlmConfig.model)}">${_capiEsc(secLlmConfig.model)} (當前)</option></select>
-                                <div class="btn-fetch" id="sec-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從端點同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' : '<i class="fa-solid fa-rotate"></i>'}</div>
+                                <div class="btn-fetch" id="sec-fetch-btn" title="${isStandalone ? '拉取模型清單' : '從端點同步'}">${isStandalone ? '<i class="fa-solid fa-microchip"></i>' + '<span class="btn-fetch-txt">拉清單</span>' : '<i class="fa-solid fa-rotate"></i>' + '<span class="btn-fetch-txt">同步</span>'}</div>
                             </div>
                         </div>
 
@@ -286,7 +286,7 @@
                             <div class="img-srctab" data-imgtab="style" onclick="window._switchImgTab && window._switchImgTab('style')">畫風</div>
                             <div class="img-srctab" data-imgtab="novelai" onclick="window._switchImgTab && window._switchImgTab('novelai')">NAI</div>
                             <div class="img-srctab" data-imgtab="comfyui_direct" onclick="window._switchImgTab && window._switchImgTab('comfyui_direct')">ComfyUI</div>
-                            <div class="img-srctab" data-imgtab="tavern_sd" onclick="window._switchImgTab && window._switchImgTab('tavern_sd')">酒館</div>
+                            ${isStandalone ? '' : `<div class="img-srctab" data-imgtab="tavern_sd" onclick="window._switchImgTab && window._switchImgTab('tavern_sd')">酒館</div>`}
                             <div class="img-srctab" data-imgtab="custom_api" onclick="window._switchImgTab && window._switchImgTab('custom_api')">自訂接口</div>
                         </div>
 
@@ -395,7 +395,6 @@
                                 <span><i class="fa-solid fa-tag"></i> 角色名佔位${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2130') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <div class="set-desc img-looks-moved"><i class="fa-solid fa-user-pen"></i> 每個角色的長相搬到「角色」裡了：手機主畫面「角色」→ 點他 →「裝扮」→ 最下面「他的長相」，在那裡改、照它重畫。</div>
                             <!-- 插圖指令：每個插圖來源一份，點進去整頁改（_openScenePromptPage） -->
                             <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="extract">
                                 <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">插圖指令</span><span class="vncfg-lp-open-n">每個插圖來源一份</span><i class="fa-solid fa-chevron-right"></i>
@@ -1200,7 +1199,7 @@
 
                                 <div class="ka-item" id="ka-item-notify">
                                     <div class="set-label" style="margin-top:12px;">
-                                        <span><i class="fa-solid fa-bell"></i> 有人找妳就通知${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2486') : ''}</span>
+                                        <span><i class="fa-solid fa-bell"></i> 有人找你就通知${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2486') : ''}</span>
                                         <label class="toggle-switch"><input type="checkbox" id="ka-notify"><span class="slider"></span></label>
                                     </div>
                                     <div class="ka-why hidden" id="ka-why-notify">這台做不到這一招</div>

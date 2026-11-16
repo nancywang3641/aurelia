@@ -107,12 +107,12 @@
                 let html = '';
                 if (st.relay) html += '<div class="ka-note">托管開著，切出去那一輪本來就由伺服器跑完，下面這幾招其實用不到。</div>';
                 html += row('當成在放音樂', st.audio, '正在守著',
-                            st.audioWant ? '等妳碰一下畫面才開始' : '沒開');
+                            st.audioWant ? '等你碰一下畫面才開始' : '沒開');
                 html += row('螢幕不要自己關', st.wake, '鎖著不關',
                             st.wakeWant ? (caps.wake ? '畫面看不見時系統會收回' : '這台做不到') : '沒開');
                 html += row('小窗', st.pip, '開著', '沒開');
-                html += row('通知', st.notifyPerm === 'granted', '可以叮妳',
-                            st.notifyPerm === 'denied' ? '妳拒絕過，要去手機的設定裡改' : '還沒允許');
+                html += row('通知', st.notifyPerm === 'granted', '可以叮你',
+                            st.notifyPerm === 'denied' ? '你拒絕過，要去手機的設定裡改' : '還沒允許');
                 stateBox.innerHTML = html;
                 if (pipBtn) pipBtn.textContent = st.pip ? '收起小窗' : '開小窗';
             };

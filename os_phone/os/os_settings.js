@@ -68,19 +68,19 @@
             ss_vfor_list: { title: '誰講外語', body: '名字要跟劇情裡出現的角色名字一樣，名單上沒有的人照常講中文。想讓他用外國人的聲音念，到「語音 → 角色配音」幫他加一張同語言的卡。' },
             ss_vc_master: { title: '角色說話的聲音', body: '關掉就全部不念。開著的時候：角色配音名單上的人用他綁的聲音念，其他人照「沒在名單上的人」那格。' },
             ss_vc_others: { title: '沒在名單上的人', body: '隨機 NPC、路人這些沒綁聲音的人。選「本機念」就交給「本機」分頁設定的音色；選「不念」就只顯示字，不花錢也不佔顯卡。' },
-            ss_mm_mine: { title: '我的聲音', body: '妳在 Minimax 複製或設計的聲音。按「抓我的聲音」抓下來，角色配音的下拉選單就選得到。官方內建的聲音在「瀏覽官方音色庫」裡，按「加進名單」直接變成一格角色。' },
+            ss_mm_mine: { title: '我的聲音', body: '你在 Minimax 複製或設計的聲音。按「抓我的聲音」抓下來，角色配音的下拉選單就選得到。官方內建的聲音在「瀏覽官方音色庫」裡，按「加進名單」直接變成一格角色。' },
             ss_el_key: { title: 'ElevenLabs 金鑰', body: '在 ElevenLabs 網站左邊選單「開發者 → API Keys」建立。權限開「文字轉語音」跟「聲音（讀取）」就夠了，也可以幫這把金鑰設用量上限。' },
             ss_el_model: { title: '模型', body: 'v4 最自然，會照角色當下的表情在句子前面加語氣（像是笑、嘆氣、小聲說）。Multilingual v2 跟 Flash 不吃語氣，只照字念。' },
             ss_2413: { title: '顯示位置', body: '換了要重整酒館才會挪過去。' },
             ss_2420: { title: '高度', body: '100 就是跟對話框一樣高。調矮的話窗留在正中間，上下兩截露出聊天，改完當場就變。' },
             ss_2428: { title: '訊息可收合', body: '為每則訊息加上收合按鈕，太長的訊息可以收起來。' },
-            ss_2443: { title: '回覆交給伺服器跑', body: '開了之後按送出就可以切出去或鎖屏，回覆由伺服器跑完再通知妳。只對「直連 API」有效，跟著酒館的那種不行。' },
-            ss_2455: { title: '沒有伺服器的守候', body: '沒填上面那個網址的時候用這個：想辦法讓手機別把奧瑞亞凍起來，角色才會在妳沒看的時候開口。三招各自獨立，開一個就有效果。這台做不到的那一招會自己淡掉。' },
-            ss_2462: { title: '當成在放音樂', body: '播一段完全沒有聲音的音軌，手機就會把奧瑞亞當成音樂 app 留著，鎖屏還會出現一張播放卡。妳自己正在放的音樂會被停掉。' },
+            ss_2443: { title: '回覆交給伺服器跑', body: '開了之後按送出就可以切出去或鎖屏，回覆由伺服器跑完再通知你。只對「直連 API」有效，跟著酒館的那種不行。' },
+            ss_2455: { title: '沒有伺服器的守候', body: '沒填上面那個網址的時候用這個：想辦法讓手機別把奧瑞亞凍起來，角色才會在你沒看的時候開口。三招各自獨立，開一個就有效果。這台做不到的那一招會自己淡掉。' },
+            ss_2462: { title: '當成在放音樂', body: '播一段完全沒有聲音的音軌，手機就會把奧瑞亞當成音樂 app 留著，鎖屏還會出現一張播放卡。你自己正在放的音樂會被停掉。' },
             ss_2470: { title: '螢幕不要自己關', body: '畫面亮著的時候不讓它自動暗掉，同時讓背景的計時器繼續走。比較耗電。' },
             ss_2476: { title: '開一個小窗守著', body: '推出一個浮在最上面的小窗，上面寫著已經守了多久。小窗還在，這一頁就不會被凍起來。' },
-            ss_2486: { title: '有人找妳就通知', body: '妳沒在看的時候有人開口，就在手機上叮一下。第一次打開會問妳要不要允許通知。' },
-            ss_2499: { title: '手機通知', body: '丹自己醒來寫紙條的時候叮妳一下，點通知直接回到板子。' },
+            ss_2486: { title: '有人找你就通知', body: '你沒在看的時候有人開口，就在手機上叮一下。第一次打開會問你要不要允許通知。' },
+            ss_2499: { title: '手機通知', body: '丹自己醒來寫紙條的時候叮你一下，點通知直接回到板子。' },
             ss_2515: { title: '介面佈局', body: '頂部被遮擋時選「強制下移」。' },
             ss_2549: { title: '本地備份', body: '把資料匯出成一個 JSON 檔，存到相簿、iCloud 或雲端硬碟。全部勾著就是完整備份；只想帶一部分就把其他塊的勾取消。「設定」那塊有 API 金鑰，勾著匯出前會再提醒一次。還原時按「從本地 JSON 還原」，檔案裡有哪幾塊就還原哪幾塊。' },
             bk_local_st: { title: '奧瑞亞的資料備份', body: '只收奧瑞亞自己存的東西：劇情記憶和大總結、手機 app、狀態面板、大廳、創作室、成就，還有圖片、語音這些設定。\n\n聊天、角色卡、世界書、預設、正則是酒館在管的，用酒館自己的匯出就好，這裡不重複收。API 用酒館連線的話，那份設定也不收（金鑰在酒館那邊）。\n\n「設定」那塊有金鑰，勾著匯出前會再提醒一次。還原時按「從本地 JSON 還原」，完成會自己重新整理。' },
@@ -1989,7 +1989,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
         window._imgPersistPresets = _persistImgPresets;
 
-        const IMG_TABS = ['style', 'novelai', 'comfyui_direct', 'tavern_sd', 'custom_api'];
+        const IMG_TABS = ['style', 'novelai', 'comfyui_direct', 'tavern_sd', 'custom_api'].filter(t => !(isStandalone && t === 'tavern_sd'));   // 網頁版沒有酒館
         let imgTab = 'style';
         try { const t = localStorage.getItem('os_img_settings_tab'); if (IMG_TABS.indexOf(t) >= 0) imgTab = t; } catch (e) {}
         const _tabGroups = { novelai: [elNaiGroup], comfyui_direct: [elCfdGroup], tavern_sd: [elTavGroup], custom_api: [elCapiGroup] };
@@ -2090,7 +2090,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const _unset = M.USES.filter(u => !M.serviceForUse(u.id)).length;
             const _hint = _unset
                 ? '<div class="img-use-hint"><i class="fa-solid fa-circle-info"></i> 有 ' + _unset + ' 個地方還沒選接口，那些地方不會出圖。先到上面'
-                    + ['novelai:NAI', 'comfyui_direct:ComfyUI', 'custom_api:自訂接口', 'tavern_sd:酒館'].map(x => { const k = x.split(':'); return '<a class="img-use-hint-go" onclick="window._switchImgTab && window._switchImgTab(\'' + k[0] + '\')">' + k[1] + '</a>'; }).join('、')
+                    + ['novelai:NAI', 'comfyui_direct:ComfyUI', 'custom_api:自訂接口'].concat(isStandalone ? [] : ['tavern_sd:酒館']).map(x => { const k = x.split(':'); return '<a class="img-use-hint-go" onclick="window._switchImgTab && window._switchImgTab(\'' + k[0] + '\')">' + k[1] + '</a>'; }).join('、')
                     + '其中一頁接好，再回來這裡每一列選接口。</div>'
                 : '';
             box.innerHTML = _hint + M.USES.map(u => {
@@ -2100,7 +2100,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const showFam = fam || _FAM_OF_SVC[legacySvc] || '';
                 // 第一格：接口。原本是 ComfyUI 的列不給「照原本的」：那份舊設定改不到，選了等於把 LoRA 鎖死
                 const svcOpts = ((legacySvc === 'comfyui_direct' && r.conn) ? '' : '<option value=""' + (fam ? '' : ' selected') + '>' + (legacySvc ? '照原本的（' + _ie(SVC_DISP[legacySvc] || legacySvc) + '）' : '還沒選') + '</option>')
-                    + svcs.map(c => '<option value="' + _ie(c.id) + '"' + (c.id === fam ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('');
+                    + svcs.filter(c => !(isStandalone && c.id === 'tavern' && fam !== 'tavern')).map(c => '<option value="' + _ie(c.id) + '"' + (c.id === fam ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('');
                 // 第二格：那個接口自己的東西
                 let second = '', secondLabel = '預設包';
                 if (showFam === 'nai' || showFam === 'comfy') {
@@ -2687,7 +2687,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // Fetch Logic (Primary)
         btnFetch.onclick = async () => {
-            btnFetch.style.animation = "spin 1s linear infinite";
+            ((btnFetch.querySelector('i')) || btnFetch).style.animation = "spin 1s linear infinite";   // 只轉圖示，鈕上的字不轉
             status.innerText = "正在獲取模型列表...";
             
             try {
@@ -2717,14 +2717,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 console.error(e);
                 status.innerText = `同步失敗: ${e.message}` + TYPE_HINT;
             } finally {
-                btnFetch.style.animation = "none";
+                ((btnFetch.querySelector('i')) || btnFetch).style.animation = "none";   // 只轉圖示，鈕上的字不轉
                 _withTypeOpt(elModel);
             }
         };
 
         // Fetch Logic (Secondary)
         secFetch.onclick = async () => {
-            secFetch.style.animation = "spin 1s linear infinite";
+            ((secFetch.querySelector('i')) || secFetch).style.animation = "spin 1s linear infinite";   // 只轉圖示，鈕上的字不轉
             status.innerText = "正在獲取副模型列表...";
             
             try {
@@ -2758,7 +2758,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 console.error(e);
                 status.innerText = `副模型同步失敗: ${e.message}` + TYPE_HINT;
             } finally {
-                secFetch.style.animation = "none";
+                ((secFetch.querySelector('i')) || secFetch).style.animation = "none";   // 只轉圖示，鈕上的字不轉
                 _withTypeOpt(secModel);
             }
         };

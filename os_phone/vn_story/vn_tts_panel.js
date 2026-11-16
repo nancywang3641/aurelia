@@ -234,7 +234,7 @@ function renderModels(cfg, eng) {
     const models = ttsPick(cfg.models, eng);
     const ids = Object.keys(models);
     const cards = ids.length ? ids.map(id => renderModelCard(id, models[id])).join('') :
-        `<div class="vtts-empty">尚無模型，點擊下方按鈕新增</div>`;
+        `<div class="vtts-empty">還沒有模型，按上面的「＋ 新增模型」加一個</div>`;
     return `
 <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
   <button class="vtts-btn vtts-btn-cyan" onclick="VN_TTS_Panel.addModel()">＋ 新增模型</button>
@@ -500,7 +500,7 @@ function renderChars(cfg, eng) {
 <div class="vtts-card">
   <div class="vtts-card-title"><i class="fa-solid fa-plus"></i> 新增角色對應</div>
   <div class="vtts-row">
-    <input class="vtts-input" id="vtts-new-char" type="text" placeholder="角色名稱（與腳本 [Char|名稱|...] 一致）">
+    <input class="vtts-input" id="vtts-new-char" type="text" placeholder="角色名稱（跟劇情裡寫的一樣）">
     <select class="vtts-input" id="vtts-new-char-model">
       <option value="">選擇模型</option>
       ${modelOptions}
