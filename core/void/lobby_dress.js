@@ -681,12 +681,14 @@
     //   接其他的（ComfyUI、NAI…吃標籤的）：外觀標籤＋「一個人、全身、站著」，畫風交給那組自己的底詞（她的小人 LoRA 包）；通常是一隻。
     //   出來的圖去背後看是不是三隻並排（VN_Core._chibiViews，同一次生三種那套）：是＝切三張、存成三面；不是＝一張。
     //   🚨 側面寫死「臉朝右」：大廳（lobby_stage.js 的 placeActor）當它朝右，往左走才鏡像；改這裡那邊要一起改。
-    //   🚨 小人沒手沒腳用「只有兩個形狀：頭＋蛋形身體」正面講，不寫 no arms／no legs（生圖模型看不懂否定）。
+    //   🚨 沒手沒腳要明講（11-16 她：「你有沒有告知他不准有手和腳? 因為你的 api image 會跑出手」）：
+    //     原本只正面講「只有兩個形狀：頭＋蛋形身體」、不寫 no arms／no legs（那是吃標籤的模型看不懂否定句的教訓），
+    //     但這段只送給讀句子的自訂接口，它看得懂否定；長相裡寫著袖子、手套、鞋，它就照著長出手來。下面 DOLL_TPL 和樣張那段說法（DOLL_REF_LEAD）都寫了。
     const DOLL_LOOK = '【角色外觀】';
     const DOLL_TPL_KEY = 'os_doll_tpl';
     const DOLL_TPL = 'a turnaround sheet of one small round-bottomed tumbler toy doll, drawn in a flat, simple mascot style; the doll is this character: 【角色外觀】;\n\n'
         + 'the same doll appears three times side by side in one row, all three the same size and resting on the same ground line, on one continuous plain white background: on the left seen from the front, in the middle in full profile with its face pointing to the right, on the right seen from behind;\n\n'
-        + 'each doll is made of only two solid shapes, an oversized round head resting directly on a small smooth egg-shaped body with a rounded bottom; the head keeps the character\'s hairstyle, hair color and eye color, with large round eyes, a tiny mouth and round blush on the cheeks; the character\'s outfit is painted flat onto the surface of the egg-shaped body, and the doll seen from behind shows the back of the hair and the back of the outfit;\n\n'
+        + 'each doll is made of only two solid shapes, an oversized round head resting directly on a small smooth egg-shaped body with a rounded bottom; the doll has no arms, no hands, no legs and no feet, and nothing sticks out of the egg-shaped body; the head keeps the character\'s hairstyle, hair color and eye color, with large round eyes, a tiny mouth and round blush on the cheeks; the character\'s outfit is painted flat onto the surface of the egg-shaped body, and the doll seen from behind shows the back of the hair and the back of the outfit;\n\n'
         + 'flat colors, thin clean outlines; the image contains only these three dolls, evenly spaced with clear white gaps between them and clear white margin around them;';
     function _dollTpl() {
         let t = null;
@@ -701,12 +703,19 @@
     //     那時樣張是原圖的扁長條（2010×782），出圖是 3:2，它照樣張的排法填滿畫面就把小人往上拉。現在這張是原圖縮到 1536 寬、上下補白到 1024。
     //   抓不到樣張就不畫（丟錯），不退成只送文字：只送文字畫出來就是她說畫風不對的那種，白花一張。
     const DOLL_REF_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@00c3d185eeff0787fc05ee2a7ebdc04b1878bf9c/doll_ref_v1/tumbler_sheet_3x2.webp';
-    const DOLL_REF_LEAD = 'Image {n} is a finished sample sheet of this kind of doll, showing a different character. '
-        + 'Use it as the model for the drawing style and the layout: the same head shape and egg-shaped body, the same proportions between head and body, '
-        + 'the same way of drawing the eyes, face, ears and hair, the same thin outlines and flat coloring, '
-        + 'and the same three positions on a plain white background: front view on the left, side view with the face pointing to the right in the middle, back view on the right. '
-        + 'Keep the dolls as short and wide as in the sample and at the same size on the canvas, with the same empty white space above and below them. '
-        + 'Only the character changes: give the doll the hair, eye color and outfit of the character described below.';
+    //   說法照「直接改這張」寫、把「只改什麼」和「照原圖留著什麼」分開（11-16 她轉來阿洛試出來的：參考圖只帶得動外觀，鎖不住「沒有手」的結構；
+    //     當成樣張叫它照著畫，它換衣服時會順手補出普通小人的身體。直接改這隻、固定外輪廓、衣服只畫在原本身體裡，才留得住）。
+    const DOLL_REF_LEAD = 'Edit the doll sheet in image {n} directly: keep its three dolls and turn them into the character described below.\n'
+        + 'Change only: the hairstyle and hair color, anything worn on the head or face, the eye color, and the colors and patterns painted on the body, so that they match that character.\n'
+        + 'Keep exactly as in image {n}: the proportion between head and body, the outline of the head and the outline of the body, the chin sitting directly on the body, '
+        + 'the way the eyes, face and ears are drawn, the thin outlines and flat coloring, the plain white background, '
+        + 'the size and position of the three dolls on the canvas with the same empty white space above and below them, '
+        + 'and the three views: front view on the left, side view with the face pointing to the right in the middle, back view on the right.\n'
+        + 'The body stays one complete, short, round egg shape whose left and right outlines are smooth and unbroken. '
+        + 'Every detail of the outfit, such as a collar, buttons, pockets or an apron, is painted flat inside that egg outline. '
+        + 'The doll has no shoulders, no arms, no sleeves, no cuffs, no hands, no fingers, no legs and no feet; '
+        + 'where the description mentions them, or gloves, shoes or something held in the hand, leave them out. '
+        + 'It stays this tumbler doll and does not turn into an ordinary chibi figure wearing clothes.';
     let _dollRefBlob = null;
     async function _dollRef() {
         if (!_dollRefBlob) {
