@@ -231,6 +231,23 @@
 .acg-dress .lsd-tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .acg-dress .lsd-t { font-size: 14px; font-weight: 800; }
 .acg-dress .lsd-d { color: var(--acg-sub); font-size: 12px; font-weight: 400; line-height: 1.5; }
+/* 下：他的長相（11-16 從 設置 → 圖片 的角色外觀登記表搬來）——橫跨兩欄，一格字＋右下一顆照它重畫 */
+.acg-dress .lsd-look { grid-column: 1 / -1; margin-top: 4px; padding-top: 18px; border-top: 1px solid var(--acg-line); }
+.acg-dress .lsd-look-text {
+    display: block; width: 100%; min-height: 96px; box-sizing: border-box; padding: 12px 14px; resize: vertical;
+    border: 1px solid var(--acg-line); border-radius: 14px; background: var(--acg-card); color: var(--acg-ink);
+    font: inherit; font-size: 14px; font-weight: 400; line-height: 1.7;
+}
+.acg-dress .lsd-look-text:focus { outline: none; border-color: var(--acg-accent); }
+.acg-dress .lsd-look-text::placeholder { color: var(--acg-sub); }
+.acg-dress .lsd-look-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 36px; margin-top: 8px; }
+.acg-dress .lsd-look-tip { color: var(--acg-accent); font-size: 12px; }
+.acg-dress .lsd-look-redo {
+    display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border: 1px solid var(--acg-line); border-radius: 999px;
+    background: var(--acg-card); color: var(--acg-ink); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.acg-dress .lsd-look-redo:hover { border-color: var(--acg-accent); color: var(--acg-accent); }
+.acg-dress .lsd-look-redo[disabled] { opacity: .55; cursor: default; }
 .acg-dress [hidden] { display: none; }
 
 .acg-sec { margin-top: 26px; }
@@ -433,4 +450,5 @@
     .acg-dress .lsd-stage-pic { width: 44%; }
     .acg-dress .lsd-stage.is-sprite .lsd-stage-pic { width: 60%; }
     .acg-dress .lsd-cards { grid-template-columns: minmax(0, 1fr); }
+    .acg-dress .lsd-look-text { font-size: 16px; }   /* iPhone：小於 16 一點進去整個畫面會被放大 */
 }

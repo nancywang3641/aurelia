@@ -139,6 +139,10 @@
     //   opts.previewHost＝生成完那張預覽／調框窗要蓋在誰上面（角色中心自己那個窗；不給就蓋在大廳舞台上，角色中心開著會被擋住）
     //   opts.spriteOf＝問角色中心「劇情舞台現在會用哪張立繪」（它那邊認得本地上傳、世界書）；沒給或問不到就看立繪庫、頭像快取、大廳那張
     //   opts.onChange＝這一頁換了圖（角色中心那邊把記著的素材丟掉重讀）；opts.view＝一開始看哪一邊（'doll'／'sprite'）
+    //   opts.lookKey＝他的外觀描述存在頭像快取的哪一筆（角色中心算好給）：有給，最下面就多一格「他的長相」可以直接改、照它重畫；
+    //     沒給（管理員、別的故事來的客人）就沒有那一格。
+    //     🏷 11-16 從 設置 → 圖片 的「角色外觀登記表」搬過來（她：「或許角色表應該放到這個舞台上? 這樣就可以說圖片那邊是畫風和key設置，
+    //       和調用開關，人物外型放進舞台這裡?」）。讀寫的還是同一筆（頭像快取那一筆的 prompt），劇情插圖的 ##角色名## 也是展開這一段。
     function _dressCard(cls, icon, title, desc, attrs) {
         return '<button class="lsd-card ' + cls + '" type="button"' + (attrs || '') + '><span class="lsd-ic"><i class="fa-solid ' + icon + '"></i></span>' +
             '<span class="lsd-tx"><span class="lsd-t">' + title + '</span><span class="lsd-d">' + desc + '</span></span></button>';
@@ -153,8 +157,14 @@
         const help = (A && A.helpBtn) ? A.helpBtn('lsd_dress') : '';
         const VN = window.VN_Core || (window.parent || window).VN_Core;
         const trio = !!(VN && typeof VN._trioOn === 'function' && VN._trioOn() && typeof VN.regenTrio === 'function');
-        const off = a.avatarPrompt ? '' : ' disabled';   // 沒有長相的資料（設置 → 圖片「角色外觀登記表」沒有他那一筆；角色中心開這頁前會先去那裡補，見 os_char_gallery.js 的 dressCtx）：要畫的那幾張卡是暗的
-        const d = (text) => a.avatarPrompt ? text : '還不知道他長什麼樣，畫不出來';
+        const lk = (typeof opts.lookKey === 'string') ? opts.lookKey : '';
+        try {
+            if (A && A.registerHelp) A.registerHelp({ lsd_look: { title: '他的長相', body: '畫他的時候照這一段畫：小人、立繪、頭像，還有劇情插圖裡的他。\n\n劇情第一次寫到他時會自動記下來，多半是英文的畫圖用詞，可以直接改；改完點一下別的地方就存好了。\n\n照這段重畫：把劇情自動幫他畫的那張圖照現在這段重畫一張，蓋掉舊的。' } });
+        } catch (e) {}
+        // 要畫的那幾張卡：沒有長相就畫不出來，卡是暗的、寫原因（下面那格一寫好就亮，見 syncLook）
+        const noLook = lk ? '先在下面寫他的長相' : '還不知道他長什麼樣，畫不出來';
+        const d = (text) => text;
+        const off = ' data-d="1"';
         const box = document.createElement('div');
         box.className = 'lsd-embed';
         box.innerHTML =
@@ -188,9 +198,24 @@
                         (trio ? _dressCard('lsd-trio-btn', 'fa-layer-group', '立繪、頭像、Q版一起', d('三種整組重畫'), off) : '') +
                     '</div>' +
                 '</div>' +
-            '</div>';
+            '</div>' +
+            (lk ? ('<div class="lsd-look">' +
+                '<div class="lsd-h">他的長相' + ((A && A.helpBtn) ? A.helpBtn('lsd_look') : '') + '</div>' +
+                '<textarea class="lsd-look-text" rows="4" placeholder="還沒有他的長相。在這裡寫下來，之後畫他都照這段"></textarea>' +
+                '<div class="lsd-look-foot"><span class="lsd-look-tip" aria-live="polite"></span>' +
+                    '<button class="lsd-look-redo" type="button"><i class="fa-solid fa-rotate"></i><span>照這段重畫</span></button></div>' +
+            '</div>') : '');
         host.innerHTML = '';
         host.appendChild(box);
+        // 卡片亮不亮跟著「現在有沒有長相」：改那一格不重畫整頁（重畫會把她正要按的那張卡換掉，那一下就按空了）
+        const syncLook = () => box.querySelectorAll('.lsd-card[data-d]').forEach((c) => {
+            const t = c.querySelector('.lsd-d');
+            if (c.dataset.d === '1') c.dataset.d = t.textContent;
+            c.disabled = !a.avatarPrompt;
+            t.textContent = a.avatarPrompt ? c.dataset.d : noLook;
+        });
+        syncLook();
+        if (lk) _wireDressLook(box, a, lk, syncLook);
         box._pvHost = opts.previewHost || null;
         box._a = a;
         box._view = (opts.view === 'sprite' || opts.view === 'doll') ? opts.view : (a.key ? 'doll' : 'sprite');
@@ -203,6 +228,67 @@
         box.querySelector('.lsd-turn').addEventListener('click', (e) => { const b = e.target.closest('[data-face]'); if (b) { box._face = b.dataset.face; _dressShow(box, box._view); } });
         _dressShow(box, box._view);   // 圖還在讀：先把切換和卡片排好
         _dressLook(a, opts).then((L) => { if (box.isConnected) { box._look = L; _dressShow(box, box._view); } }).catch(() => {});
+    }
+    // 🏷 「他的長相」那一格：lk＝頭像快取那一筆的鑰匙（只有名字＝這個故事的；帶「那一輪::」的＝照寫）。
+    //   改完離開那一格就存（只換 prompt，圖和其他欄位照舊）；清空＝他沒有長相了（劇情插圖也不再展開他）。
+    //   大總結猜的那種（src:'summary'，劇情正式寫到他時會被換掉）她親手改過就拿掉記號，不然她改的會被蓋回去。
+    //   「照這段重畫」＝設置那張表原本的「重畫」：劇情自動畫的那張（頭像；開著立繪模式是立繪；開著一次生三種是三種一起）照這段重生、蓋掉舊的。
+    function _wireDressLook(box, a, lk, syncLook) {
+        const VC = window.VN_Cache || (window.parent || window).VN_Cache;
+        const ta = box.querySelector('.lsd-look-text'), tipEl = box.querySelector('.lsd-look-tip'), redo = box.querySelector('.lsd-look-redo');
+        if (!ta || !VC) return;
+        const tip = (t) => { tipEl.textContent = t; setTimeout(() => { if (tipEl.textContent === t) tipEl.textContent = ''; }, 2200); };
+        let saved = String(a.avatarPrompt || '');
+        ta.value = saved;
+        // 小人身上那份可能是舊的：以存著的那一筆為準（她還沒動手打字才換）
+        VC.get('avatar_cache', lk).then((rec) => {
+            if (!box.isConnected || !rec || ta.value !== saved) return;
+            saved = String(rec.prompt || '');
+            ta.value = saved; a.avatarPrompt = saved; syncLook();
+        }).catch(() => {});
+        const save = async () => {
+            const v = ta.value.trim();
+            if (v === saved) return true;
+            a.avatarPrompt = v; syncLook();   // 先讓卡片跟上：她可能正從這一格直接點去按卡
+            try {
+                const cur = await VC.get('avatar_cache', lk);
+                if (cur || v) {
+                    const rec = Object.assign({}, cur || {}, { prompt: v });
+                    delete rec.src;
+                    await VC.set('avatar_cache', lk, rec);
+                }
+                saved = v;
+                if (box.isConnected) tip(v ? '存好了' : '清掉了');
+                return true;
+            } catch (e) { AUI.alert('沒存到：' + ((e && e.message) || e)); return false; }
+        };
+        ta.addEventListener('blur', save);
+        let busy = false;
+        redo.addEventListener('click', async () => {
+            if (busy) return;
+            const desc = ta.value.trim();
+            if (!desc) { AUI.alert('先寫下他的長相再重畫。'); return; }
+            const VN = window.VN_Core || (window.parent || window).VN_Core;
+            if (!VN || typeof VN._makeCharImage !== 'function' || typeof VN._charRec !== 'function') { AUI.alert('劇情引擎還沒載入，稍等一下再按。'); return; }
+            busy = true; redo.disabled = true;
+            const lab = redo.querySelector('span'), orig = lab.textContent;
+            lab.textContent = '畫圖中…';
+            let done = false;
+            try {
+                if (!(await save())) return;
+                const img = await VN._makeCharImage(desc, 'Neutral', true);   // force：不拿記著的舊圖，也不排「幾個角色湊一張」的隊
+                if (!img || !img.dataUrl) throw new Error('沒有畫出來（看一下圖片接口和額度）');
+                const cur = (await VC.get('avatar_cache', lk)) || {};
+                await VC.set('avatar_cache', lk, VN._charRec(desc, img, cur));
+                const bare = lk.indexOf('::') >= 0 ? lk.slice(lk.indexOf('::') + 2) : lk;
+                try { delete VN._avatarMemCache[bare]; delete VN._faceMemCache[bare]; } catch (e) {}   // 這一輪記著的舊圖也丟掉，不然畫面上還是舊那張
+                done = true;
+            } catch (e) { AUI.alert('重畫沒成功：' + ((e && e.message) || e)); }
+            finally {
+                busy = false; redo.disabled = false; lab.textContent = orig;
+                if (done && box.isConnected && box._done) box._done();   // 整頁重畫：展示台換成新的
+            }
+        });
     }
     // 他現在的樣子：{ doll:{ label, src, views?, sheet?, own? }|null, base:{ src, views? }|null（沒換造型時的樣子，「換回原本的」當場換回它）, sprite:'' }
     async function _dressLook(a, opts) {

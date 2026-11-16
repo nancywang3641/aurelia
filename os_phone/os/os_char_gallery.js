@@ -583,9 +583,12 @@
     //   ③這個故事的角色：問大廳「他的小人是哪一把鑰匙」（LobbyNpcs.dressKeyFor；他現在就站在大廳就直接拿那個小人，換了當場看得到）
     //   ④問不到＝還沒進過大廳：沒有鑰匙，那一頁只剩立繪
     //   🚨 ③不拿名字去大廳裡找人：別的故事來的客人可能同名，會換到別人身上
-    //   🚨 他的外觀描述只有一份：設置 → 圖片 的「角色外觀登記表」那一筆（這個故事的頭像快取的 prompt）。
+    //   🚨 他的外觀描述只有一份：這個故事的頭像快取那一筆的 prompt（「角色外觀登記表」；劇情插圖的 ##角色名## 展開的也是它）。
     //     站在大廳的小人身上那份是他進大廳那一刻抄的，圖是之後才畫的就沒抄到 → 這裡一律回頭問登記表，別只看小人身上有沒有
     //     （11-16 她：有 Q版的角色，三張要畫的卡卻寫「還不知道他長什麼樣」；「描述在設置圖片那裏，有角色列表」）
+    //   🏷 同一天那張表從 設置 → 圖片 搬到這一頁最下面的「他的長相」（畫的是 lobby_dress.js 的 _wireDressLook）：
+    //     dressCtx 多回一個 lookKey＝他那一筆的鑰匙。認得出是哪一筆才給：這個故事的角色、你自己（照這個故事存）、
+    //     別的故事來的客人但大廳撈得到他那一輪的那一筆。管理員、撈不到的別輪客人、店員＝空的，那一格不出來。
     async function dressLookOf(ch) {
         const C = Cache();
         if (!C) return { key: ch, prompt: '' };
@@ -608,26 +611,35 @@
         const N = win.LobbyNpcs || window.LobbyNpcs;
         // 站在大廳的他身上沒帶描述：請大廳照他那一輪再撈一次（別的故事來的客人也撈得到他自己那一輪的）
         const fresh = async (n) => { if (n && !n.avatarPrompt && N && N.refreshGuest) { try { await N.refreshGuest(n); } catch (e) {} } return n; };
-        if (S.actor && (off ? S.actor.key === off.key : sameChar(S.actor.name, ch))) return { a: off ? S.actor : await fresh(S.actor) };
+        const actor = (S.actor && (off ? S.actor.key === off.key : sameChar(S.actor.name, ch))) ? S.actor : null;
         const LS = win.LobbyStage || window.LobbyStage;
         const st = (LS && LS._S) || null;
         const live = st ? [st.player].concat(st.npcs || []).filter(Boolean) : [];
-        if (off) return { a: live.find(x => x.key === off.key) || { key: off.key, name: off.name, portrait: off.portrait } };
+        if (off) return { a: actor || live.find(x => x.key === off.key) || { key: off.key, name: off.name, portrait: off.portrait }, lookKey: '' };
+        if (actor) {
+            await fresh(actor);
+            if (actor.avatarCacheKey) return { a: actor, lookKey: String(actor.avatarCacheKey) };   // 大廳認得他是哪一輪的哪一筆
+        }
         const C = Cache();
         const look = await dressLookOf(ch);
+        const mine = C ? C.scopedKey(C.getCurrentWorld(), look.key) : '';   // 這個故事裡他那一筆
         let hit = null;
         try { if (N && N.dressKeyFor && C) hit = await N.dressKeyFor(ch, C.getCurrentWorld(), sameChar); } catch (e) {}
+        // 站在大廳、而且確定是這個故事的人：身上沒帶描述就用登記的那一筆（大廳照名字撈不到＝名字寫法差太多）
+        const own = (n) => {
+            if (!n.avatarPrompt && look.prompt) { n.avatarPrompt = look.prompt; if (!n.avatarCacheKey && mine) n.avatarCacheKey = mine; }
+            return { a: n, lookKey: String(n.avatarCacheKey || mine) };
+        };
+        if (actor) {
+            if ((st && actor === st.player) || (hit && hit.key === actor.key)) return own(actor);
+            return { a: actor, lookKey: '' };   // 別的故事來的客人（那一輪沒有他的圖）、店員：不知道該存哪一筆，不給改
+        }
         if (hit) {
             const n = live.find(x => x.key === hit.key);
-            if (n) {
-                await fresh(n);
-                // 大廳那邊還是對不到（名字寫法差太多）：他是這個故事的角色，登記表那一筆就是他的
-                if (!n.avatarPrompt && look.prompt) { n.avatarPrompt = look.prompt; if (!n.avatarCacheKey) n.avatarCacheKey = C.scopedKey(C.getCurrentWorld(), look.key); }
-                return { a: n };
-            }
-            return { a: { key: hit.key, name: ch, avatarPrompt: look.prompt, avatarCacheKey: look.key } };
+            if (n) { await fresh(n); return own(n); }
+            return { a: { key: hit.key, name: ch, avatarPrompt: look.prompt, avatarCacheKey: look.key }, lookKey: look.key };
         }
-        return { a: { key: '', name: ch, avatarPrompt: look.prompt, avatarCacheKey: look.key } };
+        return { a: { key: '', name: ch, avatarPrompt: look.prompt, avatarCacheKey: look.key }, lookKey: look.key };
     }
     // 裝扮頁的展示台問：劇情舞台現在會用哪張立繪（這裡認得本地上傳、世界書、網址庫；都沒有回空的，那邊再看立繪庫和頭像快取）
     async function dressSpriteOf(who) {
@@ -650,7 +662,7 @@
         if (!S || tk !== S.token || S.tab !== 'dress' || (S.offSel || S.sel) !== who || !host.isConnected) return;
         if (!ctx) { host.innerHTML = '<div class="acg-dress-none">這一頁沒打開，再點一次試試。</div>'; return; }
         LD.mountInto(host, ctx.a, {
-            previewHost: S.root, view: S.dressView || '',
+            previewHost: S.root, view: S.dressView || '', lookKey: ctx.lookKey || '',
             spriteOf: () => dressSpriteOf(who),
             // 這一頁換了圖：記著的素材丟掉（切回素材頁、展示台重畫時重讀），關掉時舞台上的人重新找圖
             onChange: () => { if (!S) return; if (!S.offSel && S.sel === who) delete S.info[who]; S.changed = true; },

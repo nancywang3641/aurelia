@@ -1965,7 +1965,7 @@
             return await this._makeCharImageOne(prompt, exp, force);
         },
         _trioOn: function () { return VN_Config.data.spriteDirect === true && VN_Config.data.spriteTrio === true; },
-        // 存進 avatar_cache 的那一筆（四個寫入點共用：預熱、開口時、相簿重生、外觀登記表）。
+        // 存進 avatar_cache 的那一筆（四個寫入點共用：預熱、開口時、相簿重生、角色中心「他的長相」的照這段重畫）。
         //   一次生三種的 face／chibi（Q版畫成三面時多 chibiSide／chibiBack）跟著存；沒有就是 undefined——重生成單張時舊的自拍、Q版跟新立繪對不上，不留。
         _charRec: function (prompt, img, base) {
             const rec = Object.assign({}, base || {}, { prompt: prompt, url: img.dataUrl, face: img.face || undefined, chibi: img.chibi || undefined, chibiSide: img.chibiSide || undefined, chibiBack: img.chibiBack || undefined });

@@ -623,90 +623,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         return ok;
     }
 
-    // 🏷️ 角色外觀登記表編輯器：列出當前世界 avatar_cache 每個角色的「頭像生成詞」(=##角色名##佔位展開來源)，
-    //   可直接改/刪/新增。給 Rae 修現有資料。直接讀寫 VN_Cache.avatar_cache(依世界隔離)。
-    async function _openCharLooksEditor() {
-        const W = window.parent || window;
-        const C = W.VN_Cache || window.VN_Cache;
-        const doc = W.document || document;
-        if (!C || !C.getAllMeta) { AUI.alert('VN_Cache 未就緒（先進一次 VN）'); return; }
-        const _e = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
-        let all = [];
-        try { all = (await C.getAllMeta('avatar_cache')) || []; } catch (e) {}   // 只要名字與生成詞，不讀圖
-        const rows = all
-            .filter(e => !world || (C.worldOf ? C.worldOf(e) === world : true))
-            .map(e => ({ name: (C.bareKeyOf ? C.bareKeyOf(e) : e.key), prompt: e.prompt || '' }))
-            .filter(r => r.name);
-        const oldM = doc.getElementById('avl-modal'); if (oldM) oldM.remove();
-        const modal = doc.createElement('div');
-        modal.id = 'avl-modal'; modal.className = 'avl-modal';
-        modal.innerHTML = `<div class="avl-card">
-            <div class="avl-title"><i class="fa-solid fa-tag"></i> 角色外觀登記表<span class="avl-sub">（##角色名## 佔位展開用的頭像生成詞；改這裡＝改插圖會套的外觀）</span></div>
-            <div class="avl-list" id="avl-list"></div>
-            <div class="avl-addrow"><input class="avl-name-input" id="avl-new-name" placeholder="新角色名…"><button class="avl-btn" id="avl-add">＋ 新增</button></div>
-            <div class="avl-actions"><span class="avl-tip" id="avl-tip"></span><button class="avl-btn primary" id="avl-close">完成</button></div>
-        </div>`;
-        (doc.body || doc.documentElement).appendChild(modal);
-        const listEl = modal.querySelector('#avl-list');
-        const tip = (t) => { const el = modal.querySelector('#avl-tip'); if (el) { el.textContent = t; setTimeout(() => { if (el.textContent === t) el.textContent = ''; }, 2000); } };
-        function render() {
-            if (!rows.length) { listEl.innerHTML = '<div class="avl-empty">這個世界還沒有角色外觀資料。下面可手動新增。</div>'; return; }
-            listEl.innerHTML = rows.map((r, i) => `<div class="avl-row">
-                <div class="avl-name" title="${_e(r.name)}">${_e(r.name)}</div>
-                <textarea class="avl-prompt" data-i="${i}" rows="2" placeholder="這個角色的外觀描述（頭像生成詞）…">${_e(r.prompt)}</textarea>
-                <button class="avl-redo" data-i="${i}" type="button" title="照上面那段外觀詞重畫一張，蓋掉現在那張">重畫</button>
-                <button class="avl-del" data-i="${i}" type="button">刪除</button>
-            </div>`).join('');
-            listEl.querySelectorAll('.avl-prompt').forEach(ta => ta.onblur = async () => {
-                const i = +ta.getAttribute('data-i'); const r = rows[i]; const v = ta.value.trim();
-                if (v === r.prompt) return;
-                try { const cur = (await C.get('avatar_cache', r.name)) || {}; await C.set('avatar_cache', r.name, { ...cur, prompt: v }); r.prompt = v; tip('已存「' + r.name + '」'); }
-                catch (e) { AUI.alert('存失敗：' + (e && e.message || e)); }
-            });
-            // 🔁 重畫：改完外觀詞之後要能把圖換掉。
-            //    原本只有「改詞」跟「刪除整筆」——改了詞圖還是舊的，刪了又連詞一起沒了，
-            //    所以卡在裸體／比基尼的角色沒有路可以救（她：「我總不能讓角色一張裸體一直跑」）。
-            //    這顆照當下那段詞重生一張、蓋掉舊的，詞留著。
-            listEl.querySelectorAll('.avl-redo').forEach(b => b.onclick = async () => {
-                const i = +b.getAttribute('data-i'); const r = rows[i];
-                const ta = listEl.querySelector('.avl-prompt[data-i="' + i + '"]');
-                const desc = ((ta && ta.value) || r.prompt || '').trim();
-                if (!desc) { AUI.alert('先把外觀詞填上再重畫'); return; }
-                const VN = (window.parent || window).VN_Core || (window.parent || window).VN_PLAYER;
-                if (!VN || typeof VN._makeCharImage !== 'function') { AUI.alert('VN 還沒載入，先進故事一次再回來'); return; }
-                const old = b.textContent; b.disabled = true; b.textContent = '畫…';
-                try {
-                    // force=true：繞過記憶體快取，也不進「幾個角色湊一張寬圖」那個排隊（她要的是現在這一張）
-                    const img = await VN._makeCharImage(desc, 'Neutral', true);
-                    if (!img || !img.dataUrl) throw new Error('沒有生出圖（檢查圖片來源與額度）');
-                    const cur = (await C.get('avatar_cache', r.name)) || {};
-                    await C.set('avatar_cache', r.name, VN._charRec ? VN._charRec(desc, img, cur) : { ...cur, prompt: desc, url: img.dataUrl });
-                    try { delete VN._avatarMemCache[r.name]; delete VN._faceMemCache[r.name]; } catch (e) {}   // 本輪的記憶體快取也要清，不然畫面上還是舊那張
-                    r.prompt = desc;
-                    tip('已重畫「' + r.name + '」');
-                } catch (e) { AUI.alert('重畫失敗：' + (e && e.message || e)); }
-                b.disabled = false; b.textContent = old;
-            });
-            listEl.querySelectorAll('.avl-del').forEach(b => b.onclick = async () => {
-                const i = +b.getAttribute('data-i'); const r = rows[i];
-                if (!await AUI.confirm('刪除「' + r.name + '」的外觀資料？（不影響已生成的頭像圖，只刪外觀詞）')) return;
-                try { await C.delete('avatar_cache', r.name); rows.splice(i, 1); render(); tip('已刪「' + r.name + '」'); }
-                catch (e) { AUI.alert('刪失敗：' + (e && e.message || e)); }
-            });
-        }
-        modal.querySelector('#avl-add').onclick = async () => {
-            const ni = modal.querySelector('#avl-new-name'); const name = (ni.value || '').trim();
-            if (!name) { AUI.alert('先輸入角色名'); return; }
-            if (rows.some(r => r.name === name)) { AUI.alert('已有同名角色'); return; }
-            try { await C.set('avatar_cache', name, { prompt: '' }); rows.push({ name, prompt: '' }); ni.value = ''; render(); tip('已新增「' + name + '」，填上外觀詞'); }
-            catch (e) { AUI.alert('新增失敗：' + (e && e.message || e)); }
-        };
-        modal.querySelector('#avl-close').onclick = () => modal.remove();
-        modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-        render();
-    }
-    window.OS_AVATAR_LOOKS_OPEN = _openCharLooksEditor;
+    // 🏷 角色外觀登記表（每個角色的頭像生成詞）11-16 搬到角色中心「裝扮」頁最下面的「他的長相」：core/void/lobby_dress.js 的 _wireDressLook。
 
     // 合併而不是整份蓋掉:claude-codex-room 擴展會先在 OS_SETTINGS 掛
     // getClaudeRoomConfig 那組 shim,本檔載入比它晚時整份指派會把人家抹掉
@@ -1673,8 +1590,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                                 <span><i class="fa-solid fa-tag"></i> 角色名佔位${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2130') : ''}</span>
                                 <label class="toggle-switch"><input type="checkbox" id="img-scene-name-placeholder" ${imgConfig.sceneGen?.useNamePlaceholder !== false ? 'checked' : ''}><span class="slider"></span></label>
                             </div>
-                            <button class="avl-open-btn" onclick="window.OS_AVATAR_LOOKS_OPEN && window.OS_AVATAR_LOOKS_OPEN()"><i class="fa-solid fa-pen"></i> 編輯角色外觀登記表</button>
-                            <div class="set-desc" style="margin-top:4px;">列出每個角色的外觀（頭像生成詞），可直接改／刪／新增——修你之前的資料。</div>
+                            <div class="set-desc img-looks-moved"><i class="fa-solid fa-user-pen"></i> 每個角色的長相搬到「角色」裡了：手機主畫面「角色」→ 點他 →「裝扮」→ 最下面「他的長相」，在那裡改、照它重畫。</div>
                             <!-- 插圖指令：每個插圖來源一份，點進去整頁改（_openScenePromptPage） -->
                             <button type="button" class="vncfg-lp-open img-scene-prompt-open" data-scene-page="extract">
                                 <i class="fa-solid fa-list-ul"></i><span class="vncfg-lp-open-t">插圖指令</span><span class="vncfg-lp-open-n">每個插圖來源一份</span><i class="fa-solid fa-chevron-right"></i>
@@ -3700,7 +3616,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try { const G = (window.parent || window).OS_ROOM_GEN || window.OS_ROOM_GEN; if (G && G.getRoute && G.getRoute().mode !== 'comfy' && G.getRoute().style === id) out.push('房間'); } catch (e) {}
             return out;
         }
-        // 編輯畫風的小視窗（樣子跟「角色外觀登記表」同一套）
+        // 編輯畫風的小視窗（avl-＝以前「角色外觀登記表」那個小窗的樣子，表已搬到角色中心，樣式留給這裡用）
         function _openStyleEditor(style) {
             return new Promise(resolve => {
                 const s = Object.assign({ name: '', pos: '', neg: '', ref: '' }, style || {});
