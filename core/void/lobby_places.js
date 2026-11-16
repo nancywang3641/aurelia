@@ -467,7 +467,9 @@
               '<span class="lb-pv-sub"></span>' +
             '</div>' +
             '<img class="lb-pv-portrait" alt="">' +
-            '<div class="lb-pv-veil"></div>' +   // 拉近對話時蓋在人下半身上的那層紗（只有桌機那版用，其他版面不顯示）
+            '<div class="lb-pv-veil"></div>' +   // 拉近對話時蓋在人下半身上的那層紗（11-16 那版才用，404 不顯示）
+            // 頭旁邊的「聊聊」：對話平常是收起來的，這顆告訴第一次來的人「點他可以講話」；沒有立繪的人也靠它開對話
+            '<button class="lb-pv-poke" type="button"><i class="fa-regular fa-comment-dots"></i><span>聊聊</span></button>' +
             '<div class="lb-rail"></div>' +
             '<div class="lb-pv-pane"><button class="lb-pv-x" type="button" aria-label="收起"><i class="fa-solid fa-xmark"></i></button><div class="lb-pv-body"></div></div>';
 
@@ -497,10 +499,18 @@
         };
         const talkOff = () => { try { win.LobbyStage?.endTalk?.(); } catch (e) {} };
 
-        // 🔍 拉近對話（桌機，11-16）：平常人全身站著、對話框只有兩行；點他、點對話框、點進輸入框＝拉近成半身、對話框變大。
-        //    點旁邊空白或按 Esc 退回去。只是畫面遠近（.is-zoom），對話對象、紀錄都不動；只在對話那一態有意義。
-        //    手機和 404 沒有這一版的樣式，class 掛上去也沒有任何變化。
-        const zoom = (on) => { box.classList.toggle('is-zoom', !!on && box.classList.contains('is-talk')); };
+        // 🔍 拉近對話（11-16）：平常人全身站著、對話整個收起來（她：「反正你都要ｚｏｏｍ　ｉｎ才能聊，那一開始應該不需要顯示來占空間」）；
+        //    點他（或頭旁邊的「聊聊」）＝拉近成半身，名牌、台詞、輸入框從底下滑上來。點旁邊空白或按 Esc 退回去、對話收掉。
+        //    只是畫面遠近（.is-zoom），對話對象、紀錄都不動；只在對話那一態有意義。
+        //    404 皮沒有這一版的樣式，class 掛上去也沒有任何變化（那邊對話框照舊一直在）。
+        const zoom = (on) => {
+            const was = box.classList.contains('is-zoom');
+            const now = !!on && box.classList.contains('is-talk');
+            box.classList.toggle('is-zoom', now);
+            // 電腦：拉近了就能直接打字。手機不自動點進輸入框（鍵盤一彈出來畫面剩一半，要打字自己點）。
+            // 🚨 focus 帶 preventScroll：對話框還在滑上來的半路，不帶的話瀏覽器會把外層整個捲過去
+            if (now && !was && desktopRail.matches) { try { host.querySelector('.void-input')?.focus({ preventScroll: true }); } catch (err) {} }
+        };
         const onHostFocus = (e) => { if (e.target && e.target.matches && e.target.matches('.void-input')) zoom(true); };
         const onHostClick = (e) => { if (e.target && e.target.closest && e.target.closest('.void-dialogue-box')) zoom(true); };
         const onKey = (e) => {
@@ -513,6 +523,7 @@
         host.addEventListener('click', onHostClick);
         document.addEventListener('keydown', onKey);
         pimg.addEventListener('click', () => zoom(!box.classList.contains('is-zoom')));
+        box.querySelector('.lb-pv-poke').addEventListener('click', () => zoom(true));
         bg.addEventListener('click', () => zoom(false));
 
         // 🧍 立繪大小依「圖片原生比例」自動決定，不必為了不同人準備不同資產：
@@ -529,20 +540,23 @@
         let curNpc = null;      // 這個地點現在站著誰（我的家那位是非同步撈回來的）
         let paintTok = 0;       // 連點換地點時，晚回來的那張不准蓋掉新的
         const desktopRail = win.matchMedia('(min-width:761px)');
-        const loadRailThumbs = () => {
-            if (!desktopRail.matches) return;
+        const loadRailThumbs = async () => {
+            // 這一欄沒顯示就不抓（404 皮在手機上是藏起來的）；之後轉成看得到的寬度時會再叫一次補載。
+            // 11-16 起手機的新版面也有這三張，所以看「有沒有顯示」，不是看寬度。
+            try { if (getComputedStyle(rail).display === 'none') return; } catch (e) { return; }
             const tok = paintTok;
-            // 共用場景選擇器快取；窄畫面不抓隱藏圖片，旋轉回桌面寬度時補載。
-            rail.querySelectorAll('.lb-rail-thumb img[data-bg]:not([src])').forEach(async img => {
-                if (!img.dataset.bg) return;
+            // 共用場景選擇器快取。一張一張來：手機上同時解好幾張原圖很吃記憶體（見下面 _thumb 的說明）
+            for (const img of rail.querySelectorAll('.lb-rail-thumb img[data-bg]:not([src])')) {
+                if (!img.dataset.bg) continue;
                 try {
                     const url = await _thumb(img.dataset.bg);
-                    if (url && tok === paintTok && img.isConnected) {
+                    if (tok !== paintTok) return;   // 已經換地點重畫了，剩下的交給新的那一輪
+                    if (url && img.isConnected) {
                         img.src = url;
                         img.parentElement.classList.add('is-loaded');
                     }
                 } catch (e) { /* 保留圖示與文字入口，不影響導航 */ }
-            });
+            }
         };
         desktopRail.addEventListener('change', loadRailThumbs);
 

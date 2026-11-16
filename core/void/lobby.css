@@ -1243,61 +1243,259 @@
 .lb-guest-n { font-size:11px; letter-spacing:.5px; line-height:1.3; text-align:center;
   max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-/* 2026-11-16 桌機對話主頁改版（照阿洛的版面稿；小樣在本機 參考資料/LOBBY_HOME_LAB.html）。
-   取代 2026-09-11 那版「霧白右欄＋短幅對話框」：那版右半是當前區域＋九顆常用功能＋八個地點三張白卡，人被擠在左邊。
-   現在：人全身站在中間偏左；右邊一句話＋一顆大按鈕（這個地點最主要的事）＋三張常去的地點＋查看全部；
-        右下一排只留 藏書／章節／日誌／角色中心／更多；左下是他說的話和輸入框。
-        點人（或對話框、輸入框）＝拉近成半身、對話框變大（.lb-pv.is-zoom，lobby_places.js 的 zoom）；點旁邊或 Esc 退回。
-   只命中「桌機寬度＋對話模式（沒有舞台）＋非 404」。手機那版（檔尾 09-14）、404 黑底綠字、走路的舞台，一個字不動。
-   保留原 DOM／data-proxy／對話顯示控制；右邊那一欄的內容是 lobby_places.js 的 _homeHtml 畫的。 */
+/* 2026-11-16 對話主頁改版（照阿洛的版面稿；小樣在本機 參考資料/LOBBY_HOME_LAB.html）。電腦、手機同一套長相，只有擺的位置不同。
+   取代 2026-09-11 那版電腦的「霧白右欄＋短幅對話框」（右半是當前區域＋九顆常用功能＋八個地點三張白卡，人被擠在左邊），
+   和 2026-09-14 那版手機的霧白對話卡、右邊一柱五顆。
+   現在：人全身站著；一顆大按鈕（這個地點最主要的事）＋三張常去的地點＋查看全部；
+        一排只留 藏書／章節／日誌／角色中心／更多，其餘收進「更多」；
+        對話平常整個收起來（她：「反正你都要ｚｏｏｍ　ｉｎ才能聊，那一開始應該不需要顯示來占空間」），
+        點人（或頭旁邊的「聊聊」）＝拉近成半身，名牌、台詞、輸入框從底下滑上來（.lb-pv.is-zoom，lobby_places.js 的 zoom）；點旁邊或 Esc 退回。
+   只命中「對話模式（沒有舞台）＋非 404」。404 黑底綠字、走路的舞台，一個字不動。
+   保留原 DOM／data-proxy／對話顯示控制；大按鈕和地點那一塊的內容是 lobby_places.js 的 _homeHtml 畫的。
+   排法：先是兩邊共用的長相，再來「電腦擺哪」「手機擺哪」各一段。 */
 .lb-rail-thumb, .lb-rail-app-label { display:none; }
-/* 這一版才用的三樣東西，其他版面一律不顯示 */
-.lb-pv-veil { display:none; }
+/* 這一版才用的東西，其他版面（404、舞台）一律不顯示 */
+.lb-pv-veil, .lb-pv-poke { display:none; }
 .lb-dock-fa { display:none; }
 .lb-dock-btn.lb-dock-flat-only { display:none; }
+
+/* ───────── 共用的長相 ───────── */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) {
+    --lbh-serif:'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
+    --lbh-kai:'LXGW WenKai TC', 'Kaiti TC', 'DFKai-SB', 'BiauKai', 'Noto Serif TC', serif;
+    --lbh-ink:#27345e; --lbh-line:rgba(255,255,255,.78); --lbh-glass:rgba(72,96,164,.34);
+    --lbh-ease:cubic-bezier(.22,.8,.2,1);
+}
+/* 🚨 overflow 用 clip：拉近的人會超出畫面，hidden 的盒子還是捲得動，裡面的東西一拿到游標整個畫面就被推走 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv { overflow:clip; }
+/* 背景：拉近時跟著放大一點 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-bg { transform:scale(1.02); transition:transform .8s var(--lbh-ease); }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-zoom .lb-pv-bg { transform:scale(1.13) translateX(1.2%); }
+
+/* 人：全身、腳踩在地上；點了拉近。放大的支點在腳底，呼吸才是頭在動、腳不滑；
+   拉近時再往下移回來讓頭留在畫面上緣（各寬度移多少寫在下面兩段） */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk .lb-pv-portrait {
+    right:auto; max-width:none; object-position:center bottom;
+    transform:translateX(-50%); transform-origin:50% 100%;
+    pointer-events:auto; cursor:pointer;
+    filter:drop-shadow(0 18px 22px rgba(34,49,95,.22));
+    transition:transform .75s var(--lbh-ease);
+    animation:lbh-breathe 4.6s ease-in-out infinite;
+}
+/* 拉近後下半身會從對話框底下露出來：人的上面蓋一層往下變深的紗把它收進去 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-veil {
+    display:block; position:absolute; left:0; right:0; bottom:0; height:46%; z-index:2;
+    pointer-events:none; opacity:0; transition:opacity .6s var(--lbh-ease);
+    background:linear-gradient(180deg, rgba(40,58,116,0), rgba(40,58,116,.72) 42%, rgba(34,49,95,.96) 78%);
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk.is-zoom .lb-pv-veil { opacity:1; }
+/* 頭旁邊的「聊聊」：只有站著、還沒拉近的時候在 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk:not(.is-zoom) .lb-pv-poke {
+    display:inline-flex; align-items:center; gap:6px; position:absolute; z-index:3; margin:0; padding:7px 14px 7px 12px;
+    border:1px solid #fff; border-radius:999px 999px 999px 5px; cursor:pointer;
+    background:rgba(255,255,255,.86); color:var(--lbh-ink);
+    font-family:var(--lbh-serif); font-size:15px; font-weight:700; letter-spacing:2px; white-space:nowrap;
+    box-shadow:0 6px 16px rgba(34,49,95,.2);
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    animation:lbh-poke 3.2s ease-in-out infinite;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv .lb-pv-poke:hover { background:#fff; }
+
+/* 大按鈕＋三張地點＋查看全部（.lb-rail 裡，_homeHtml 畫的） */
+.void-tab:not(.mode-404) .lb-pv .lb-rail-slogan {
+    position:relative; align-self:flex-end; flex-shrink:0; margin:0 -22px calc(var(--lbh-u, 1px) * 30) 0;
+    font-family:var(--lbh-kai); font-weight:700; font-size:clamp(22px, 2.7vw, 43px); line-height:1.3; letter-spacing:.1em;
+    color:var(--lbh-ink); white-space:nowrap; transform:skewX(-7deg);
+    text-shadow:0 1px 0 rgba(255,255,255,.7); pointer-events:none;
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-slogan::after {
+    content:''; position:absolute; right:-2%; top:-58%; width:34px; height:34px;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath fill='%23fff' d='M20 2l3 15 15 3-15 3-3 15-3-15-15-3 15-3z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-cta {
+    display:flex; align-items:center; gap:22px; flex-shrink:0; box-sizing:border-box;
+    width:100%; height:calc(var(--lbh-u, 1px) * 80); min-height:50px; margin:0; padding:0 clamp(18px, 3vw, 48px);
+    border:0; cursor:pointer; color:#fff;
+    font-family:var(--lbh-serif); font-size:clamp(19px, 2.1vw, 32px); font-weight:700; letter-spacing:.22em;
+    background:linear-gradient(100deg, #2749aa, #1b3585 58%, #2c53ba);
+    clip-path:polygon(3.5% 0, 100% 0, 100% 70%, 96.5% 100%, 0 100%, 0 30%);
+    filter:drop-shadow(0 8px 14px rgba(27,53,133,.35)); transition:filter .2s, transform .2s;
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-cta:hover { filter:drop-shadow(0 10px 18px rgba(27,53,133,.5)) brightness(1.12); transform:translateY(-1px); }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-cta > i:first-child { font-size:1.1em; }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-cta > span { flex:1; min-width:0; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-picks {
+    display:flex; flex-direction:column; flex-shrink:0; gap:calc(var(--lbh-u, 1px) * 14); margin-top:calc(var(--lbh-u, 1px) * 44);
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick {
+    position:relative; display:flex; align-items:stretch; box-sizing:border-box; width:100%; height:calc(var(--lbh-u, 1px) * 76); min-height:50px;
+    margin:0; padding:0; border:0; overflow:hidden; border-radius:4px; cursor:pointer; font-family:inherit; color:var(--lbh-ink);
+    background:linear-gradient(90deg, rgba(255,255,255,.5), rgba(255,255,255,.78));
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    transition:transform .2s, background .2s;
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick:hover { transform:translateX(-6px); background:rgba(255,255,255,.92); }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick .lb-rail-thumb {
+    display:block; flex:0 0 60%; width:60%; height:100%;
+    clip-path:polygon(0 0, 100% 0, 91% 100%, 0 100%);
+    background:linear-gradient(135deg, #dce4f0, #b9bfd8);
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick .lb-rail-thumb img { display:block; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .25s; }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick .lb-rail-thumb.is-loaded img { opacity:1; }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick-t {
+    flex:1; min-width:0; display:flex; align-items:center; gap:10px; padding:0 6px 0 4px;
+    font-family:var(--lbh-serif); font-size:clamp(14px, 1.45vw, 23px); font-weight:700; letter-spacing:.08em; white-space:nowrap;
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick-t > i { flex-shrink:0; width:1.2em; text-align:center; font-size:.95em; }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-pick-t > span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.void-tab:not(.mode-404) .lb-pv .lb-rail-all {
+    display:flex; align-items:center; gap:8px; align-self:flex-end; flex-shrink:0;
+    margin:calc(var(--lbh-u, 1px) * 22) 0 0; padding:5px 14px 5px 16px; cursor:pointer;
+    /* 底下墊一片霧白：大廳的地板是亮的、書咖的地板是暗的，深藍字直接放上去有的地方會看不到 */
+    border:0; border-radius:999px; background:rgba(255,255,255,.74); color:#1b3585;
+    -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+    font-family:var(--lbh-serif); font-size:17px; font-weight:700; letter-spacing:2px;
+}
+.void-tab:not(.mode-404) .lb-pv .lb-rail-all:hover { background:#fff; }
+.void-tab:not(.mode-404) .lb-pv button:focus-visible,
+.void-tab:not(.mode-404) .lobby-left:has(.lb-pv) .lb-dock-btn:focus-visible { outline:2px solid #727bdb; outline-offset:2px; }
+
+/* 常用那一排：只留標 data-desk 的四顆＋更多，其餘收進「更多」（清單由 lobby_places.js 照「現在沒顯示的」列）。
+   🚨 帶 #lb-dock 寫：手機那段舊規則是用 id 寫的，只寫 class 蓋不過 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock {
+    top:auto; transform:none; width:auto; height:auto; max-height:none; box-sizing:border-box; overflow:visible;
+    display:flex; flex-direction:row; flex-wrap:nowrap; align-items:stretch; justify-content:flex-start; gap:0;
+    border:1.5px solid var(--lbh-line); background:var(--lbh-glass); box-shadow:none;
+    -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-sep { display:none; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-btn { display:none; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-btn[data-desk],
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock #lb-dock-more {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    width:auto; height:auto; min-height:0;
+    background:transparent; border:0; border-left:1px solid rgba(255,255,255,.35); border-radius:0; box-shadow:none;
+    -webkit-backdrop-filter:none; backdrop-filter:none; transition:transform .2s;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-btn[data-desk]:first-child { border-left:0; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-btn:hover { transform:translateY(-3px); background:transparent; box-shadow:none; }
+/* 只藏這一排上的彩色圖；「更多」清單裡的格子是拿同一張圖複製過去的，那邊要照常顯示 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-ic { display:none; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-fa { display:block; color:#fff; pointer-events:none; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-label { color:#fff; font-family:var(--lbh-serif); white-space:nowrap; }
+/* 收進更多的那幾顆有新東西（成就待兌換、有人在等她回、宿舍有紙條）→ 更多這顆亮點 */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock:has(.lb-dock-btn:not([data-desk]).has-pending, #lb-dock-ai.lb-ai-news:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-prop:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-msg:not(.lb-entry-off)) #lb-dock-more::after {
+    content:''; position:absolute; top:4px; right:22%; width:8px; height:8px; border-radius:50%;
+    background:#e0a52e; box-shadow:0 0 6px rgba(224,165,46,.8);
+}
+
+/* 對話：平常收著（看不到、點不到），拉近才從底下滑上來。
+   名牌是對話框裡的第一行；框本身透明，底色鋪在字那一塊。
+   🚨 藏用 visibility：對話框裡主線框／反應框是靠程式切 inline display 互斥的，不去碰 display */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-dialogue-wrap {
+    box-sizing:border-box; padding:0;
+    opacity:0; visibility:hidden; transform:translateY(40px);
+    transition:opacity .3s, transform .5s var(--lbh-ease), visibility 0s linear .5s;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv.is-zoom):not(.void-dock-open) .void-dialogue-wrap {
+    opacity:1; visibility:visible; transform:none;
+    transition:opacity .3s, transform .5s var(--lbh-ease), visibility 0s;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-dialogue-box {
+    box-sizing:border-box; width:100%; max-width:none; margin:0;
+    min-height:0 !important; padding:0 !important; border-radius:0 !important;
+    border:0 !important; background:none !important; box-shadow:none !important;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag {
+    position:static !important; top:auto !important; left:auto !important;
+    width:fit-content !important; min-width:0; box-sizing:border-box;
+    display:flex !important; align-items:center !important; gap:12px; margin:0 !important;
+    padding:7px 60px 7px 22px !important; border-radius:0 !important;
+    border:0 !important; border-bottom:1px solid rgba(255,255,255,.55) !important;
+    background:linear-gradient(90deg, rgba(34,49,95,.88) 55%, rgba(34,49,95,0)) !important;
+    clip-path:polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag::before {
+    content:''; flex:0 0 20px; width:20px; height:20px;
+    background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath fill='%23fff' d='M20 2l3 15 15 3-15 3-3 15-3-15-15-3 15-3z'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag > span {
+    font-family:var(--lbh-serif) !important; font-size:clamp(18px, 1.6vw, 25px) !important; font-weight:700 !important;
+    letter-spacing:.2em !important; color:#fff !important;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text {
+    box-sizing:border-box; padding:14px 22px 16px; min-height:calc(1.75em + 30px);
+    font-family:var(--lbh-serif); font-size:clamp(16px, 1.5vw, 23px); font-weight:500; letter-spacing:.1em;
+    color:#fff !important; line-height:1.75 !important; text-shadow:0 1px 6px rgba(34,49,95,.6);
+    max-height:min(34vh, 250px) !important;
+    border-radius:0 0 6px 6px; background:rgba(52,72,130,.64);
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+    scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.7) transparent;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text::-webkit-scrollbar { width:6px; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text::-webkit-scrollbar-thumb { background:rgba(255,255,255,.7); border-radius:3px; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-next { right:16px; bottom:8px; color:#fff; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-chat-input-row {
+    box-sizing:border-box; margin-top:12px; min-height:60px; padding:7px 8px 7px 10px; gap:8px; align-items:center;
+    border-radius:30px; border:1.5px solid var(--lbh-line); background:var(--lbh-glass); box-shadow:none;
+    -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input {
+    min-width:0; min-height:44px; max-height:132px; padding:10px 6px !important; border-radius:8px !important;
+    background:transparent !important; border-color:transparent !important; box-shadow:none !important;
+    color:#fff !important; font-family:var(--lbh-serif); font-size:17px; letter-spacing:.1em;
+    scrollbar-width:none;   /* 只有一行高，系統的捲軸會變成一塊白色方塊卡在送出鈕旁邊 */
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input::-webkit-scrollbar { width:0; height:0; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input::placeholder { color:rgba(255,255,255,.72) !important; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input:focus {
+    background:transparent !important; border-color:transparent !important; box-shadow:none !important;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-send-btn {
+    width:88px !important; height:44px !important; flex:0 0 88px !important; border-radius:999px !important; font-size:19px;
+    background:linear-gradient(100deg, #3a63cf, #1b3585) !important; color:#fff !important;
+    border:0 !important; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5) !important;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-send-btn:hover { filter:brightness(1.15); }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-hist-inline {
+    width:44px !important; height:44px !important; min-width:44px !important; border-radius:50% !important;
+    background:transparent !important; border:0 !important; color:#fff !important; font-size:20px;
+}
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-hist-inline:hover { background:rgba(255,255,255,.18) !important; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-retry-btn {
+    background:transparent !important; border-color:transparent !important; color:rgba(255,255,255,.88) !important;
+}
+/* 支點在腳底，所以是頭往上一點點、腳不動。用獨立的 scale，不跟拉近用的 transform 搶 */
+@keyframes lbh-breathe { 0%, 100% { scale:1 1; } 50% { scale:1 1.006; } }
+@keyframes lbh-poke { 0%, 100% { translate:0 0; } 50% { translate:0 -4px; } }
+@media (prefers-reduced-motion: reduce) {
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk .lb-pv-portrait,
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv .lb-pv-poke { animation:none; }
+}
+
+/* ───────── 電腦擺哪 ───────── */
 @media (min-width:761px) {
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) {
         --lb-pv-edge:clamp(20px, 3vw, 64px);
         --lbh-rail-w:min(31vw, 460px);
         /* 一格＝設計稿（992 高）上的 1px：矮螢幕整欄一起縮，三張地點卡才不會壓到右下那一排 */
         --lbh-u:clamp(.66px, calc(100vh / 992), 1px);
-        --lbh-serif:'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
-        --lbh-kai:'LXGW WenKai TC', 'Kaiti TC', 'DFKai-SB', 'BiauKai', 'Noto Serif TC', serif;
-        --lbh-ink:#27345e; --lbh-line:rgba(255,255,255,.78); --lbh-glass:rgba(72,96,164,.34);
-        --lbh-ease:cubic-bezier(.22,.8,.2,1);
     }
     /* 窗格（開世界門那種面板）的左右邊界照舊用 --lb-edge；右邊那一欄自己貼 7.5%，
-       所以「那一欄佔掉的寬」要把兩者的差補回去，沒人的地方開面板時窗格才會剛好停在它左邊。
-       🚨 overflow 用 clip：拉近的人會超出畫面，hidden 的盒子還是捲得動，裡面的東西一拿到游標整個畫面就被推走 */
+       所以「那一欄佔掉的寬」要把兩者的差補回去，沒人的地方開面板時窗格才會剛好停在它左邊 */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv {
         --lb-edge:var(--lb-pv-edge);
         --lb-rail-w:calc(7.5% - var(--lb-pv-edge) + var(--lbh-rail-w));
-        overflow:clip;
     }
-
-    /* ── 背景：下緣一片往下變深的藍，白字才讀得到；拉近時背景跟著放大一點 ── */
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-bg {
-        transform:scale(1.02); transition:transform .8s var(--lbh-ease);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-zoom .lb-pv-bg { transform:scale(1.13) translateX(1.2%); }
+    /* 下緣一片往下變深的藍，右下那一排的白字才讀得到 */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-bg::after {
-        background:linear-gradient(180deg, rgba(40,58,116,0) 52%, rgba(40,58,116,.42) 80%, rgba(34,49,95,.8));
+        background:linear-gradient(180deg, rgba(40,58,116,0) 56%, rgba(40,58,116,.38) 82%, rgba(34,49,95,.74));
     }
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-hd {
         width:fit-content; right:auto; padding:14px 22px;
         background:none; text-shadow:0 1px 6px #252638; font-family:var(--lbh-serif);
     }
-
-    /* ── 人：全身、腳踩在地上（不再靠對話框切掉下半身）；點了拉近。
-          放大的支點在腳底，呼吸才是頭在動、腳不滑；拉近時再往下移回來讓頭留在畫面上緣 ── */
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk .lb-pv-portrait {
-        left:38.5%; right:auto; bottom:9%; height:89%; max-width:none;
-        object-position:center bottom; transform:translateX(-50%); transform-origin:50% 100%;
-        pointer-events:auto; cursor:pointer;
-        filter:drop-shadow(0 18px 22px rgba(34,49,95,.22));
-        transition:transform .75s var(--lbh-ease);
-        animation:lbh-breathe 4.6s ease-in-out infinite;
-    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk .lb-pv-portrait { left:38.5%; bottom:9%; height:89%; }
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk.is-zoom .lb-pv-portrait {
         transform:translateX(-69%) translateY(70.8%) scale(1.72);
     }
@@ -1306,113 +1504,31 @@
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk.is-zoom .lb-pv-portrait.is-half {
         transform:translateX(-60%) translateY(22.7%) scale(1.24);
     }
-    /* 拉近後下半身會從對話框底下露出來：人的上面蓋一層往下變深的紗把它收進去。
-       半身圖平常就蓋一點：它的身體本來就在字的後面 */
+    /* 紗只蓋人站的那一半：右邊的東西不該跟著暗下去 */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv-veil {
-        display:block; position:absolute; left:0; right:0; bottom:0; height:46%; z-index:2;
-        pointer-events:none; opacity:0; transition:opacity .6s var(--lbh-ease);
-        background:linear-gradient(180deg, rgba(40,58,116,0), rgba(40,58,116,.72) 42%, rgba(34,49,95,.96) 78%);
-        /* 只蓋人站的那一半：右邊的「查看全部」是深藍字，整條蓋過去會看不到 */
         -webkit-mask-image:linear-gradient(90deg, #000 0, #000 50%, transparent 74%);
         mask-image:linear-gradient(90deg, #000 0, #000 50%, transparent 74%);
     }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk:has(.lb-pv-portrait.is-half) .lb-pv-veil { opacity:.8; height:36%; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk.is-zoom .lb-pv-veil { opacity:1; height:46%; }
+    /* 「聊聊」在頭的右上：人的寬高都跟著畫面高走，所以橫的位置也照畫面高算（52＝頂列） */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk:not(.is-zoom) .lb-pv-poke {
+        left:calc(38.5% + (100vh - 52px) * .115); top:13%;
+    }
 
-    /* ── 右邊：一句話＋大按鈕＋三張地點＋查看全部 ── */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv .lb-rail {
         top:13.5%; bottom:auto; right:7.5%; width:var(--lbh-rail-w);
         justify-content:flex-start; gap:0; padding:0; overflow:visible;
     }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-slogan {
-        position:relative; align-self:flex-end; flex-shrink:0; margin:0 -22px calc(var(--lbh-u) * 30) 0;
-        font-family:var(--lbh-kai); font-weight:700; font-size:clamp(22px, 2.7vw, 43px); line-height:1.3; letter-spacing:.1em;
-        color:var(--lbh-ink); white-space:nowrap; transform:skewX(-7deg);
-        text-shadow:0 1px 0 rgba(255,255,255,.7); pointer-events:none;
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-slogan::after {
-        content:''; position:absolute; right:-2%; top:-58%; width:34px; height:34px;
-        background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath fill='%23fff' d='M20 2l3 15 15 3-15 3-3 15-3-15-15-3 15-3z'/%3E%3C/svg%3E") center / contain no-repeat;
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-cta {
-        display:flex; align-items:center; gap:22px; flex-shrink:0; box-sizing:border-box;
-        width:100%; height:calc(var(--lbh-u) * 80); min-height:54px; margin:0; padding:0 clamp(18px, 3vw, 48px);
-        border:0; cursor:pointer; color:#fff;
-        font-family:var(--lbh-serif); font-size:clamp(20px, 2.1vw, 32px); font-weight:700; letter-spacing:.22em;
-        background:linear-gradient(100deg, #2749aa, #1b3585 58%, #2c53ba);
-        clip-path:polygon(3.5% 0, 100% 0, 100% 70%, 96.5% 100%, 0 100%, 0 30%);
-        filter:drop-shadow(0 8px 14px rgba(27,53,133,.35)); transition:filter .2s, transform .2s;
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-cta:hover { filter:drop-shadow(0 10px 18px rgba(27,53,133,.5)) brightness(1.12); transform:translateY(-1px); }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-cta > i:first-child { font-size:1.1em; }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-cta > span { flex:1; min-width:0; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-picks {
-        display:flex; flex-direction:column; flex-shrink:0; gap:calc(var(--lbh-u) * 14); margin-top:calc(var(--lbh-u) * 44);
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick {
-        display:flex; align-items:stretch; box-sizing:border-box; width:100%; height:calc(var(--lbh-u) * 76); min-height:50px;
-        margin:0; padding:0; border:0; overflow:hidden; border-radius:4px; cursor:pointer; font-family:inherit; color:var(--lbh-ink);
-        background:linear-gradient(90deg, rgba(255,255,255,.5), rgba(255,255,255,.78));
-        -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-        transition:transform .2s, background .2s;
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick:hover { transform:translateX(-6px); background:rgba(255,255,255,.92); }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick .lb-rail-thumb {
-        display:block; flex:0 0 60%; width:60%; height:100%;
-        clip-path:polygon(0 0, 100% 0, 91% 100%, 0 100%);
-        background:linear-gradient(135deg, #dce4f0, #b9bfd8);
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick .lb-rail-thumb img { display:block; width:100%; height:100%; object-fit:cover; opacity:0; transition:opacity .25s; }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick .lb-rail-thumb.is-loaded img { opacity:1; }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick-t {
-        flex:1; min-width:0; display:flex; align-items:center; gap:10px; padding:0 6px 0 4px;
-        font-family:var(--lbh-serif); font-size:clamp(14px, 1.45vw, 23px); font-weight:700; letter-spacing:.08em; white-space:nowrap;
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick-t > i { flex-shrink:0; width:1.2em; text-align:center; font-size:.95em; }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-pick-t > span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-all {
-        display:flex; align-items:center; gap:8px; align-self:flex-end; flex-shrink:0;
-        margin:calc(var(--lbh-u) * 22) 0 0; padding:5px 14px 5px 16px; cursor:pointer;
-        /* 底下墊一片霧白：大廳的地板是亮的、書咖的地板是暗的，深藍字直接放上去有的地方會看不到 */
-        border:0; border-radius:999px; background:rgba(255,255,255,.74); color:#1b3585;
-        -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-        font-family:var(--lbh-serif); font-size:17px; font-weight:700; letter-spacing:2px;
-    }
-    .void-tab:not(.mode-404) .lb-pv .lb-rail-all:hover { background:#fff; }
-    .void-tab:not(.mode-404) .lb-pv button:focus-visible,
-    .void-tab:not(.mode-404) .lobby-left:has(.lb-pv) .lb-dock-btn:focus-visible { outline:2px solid #727bdb; outline-offset:2px; }
 
-    /* ── 右下那一排：只留標 data-desk 的四顆＋更多，其餘收進「更多」（清單由 lobby_places.js 照「現在沒顯示的」列） ── */
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock {
-        top:auto; bottom:7%; left:auto; right:2%; transform:none; width:auto; height:auto; box-sizing:border-box;
-        display:flex; flex-direction:row; flex-wrap:nowrap; align-items:stretch; justify-content:flex-start;
-        gap:0; padding:12px 22px; border-radius:999px;
-        border:1.5px solid var(--lbh-line); background:var(--lbh-glass); box-shadow:none;
-        -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px);
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock {
+        bottom:7%; left:auto; right:2%; padding:12px 22px; border-radius:999px;
     }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock-sep { display:none; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock-btn { display:none; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock-btn[data-desk],
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock-more {
-        display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
-        width:auto; min-width:clamp(64px, 6.5vw, 104px); height:auto; padding:6px 10px 4px;
-        background:transparent; border:0; border-left:1px solid rgba(255,255,255,.35); border-radius:0; box-shadow:none;
-        -webkit-backdrop-filter:none; backdrop-filter:none; transition:transform .2s;
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-btn[data-desk],
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock #lb-dock-more {
+        gap:6px; min-width:clamp(64px, 6.5vw, 104px); padding:6px 10px 4px;
     }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock-btn[data-desk]:first-child { border-left:0; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock-btn:hover { transform:translateY(-3px); background:transparent; box-shadow:none; }
-    /* 只藏這一排上的彩色圖；「更多」清單裡的格子是拿同一張圖複製過去的，那邊要照常顯示 */
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock .lb-dock-ic { display:none; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock-fa { display:block; font-size:clamp(22px, 1.9vw, 30px); color:#fff; pointer-events:none; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) .lb-dock-label {
-        color:#fff; font-family:var(--lbh-serif); font-size:clamp(13px, 1.1vw, 17px); letter-spacing:.18em; white-space:nowrap;
-    }
-    /* 收進更多的那幾顆有新東西（成就待兌換、有人在等她回、宿舍有紙條）→ 更多這顆亮點 */
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock:has(.lb-dock-btn:not([data-desk]).has-pending, #lb-dock-ai.lb-ai-news:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-prop:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-msg:not(.lb-entry-off)) #lb-dock-more::after {
-        content:''; position:absolute; top:4px; right:22%; width:8px; height:8px; border-radius:50%;
-        background:#e0a52e; box-shadow:0 0 6px rgba(224,165,46,.8);
-    }
-    /* 「更多」在桌機不是整條從底部升起的清單，是從那一排上面長出來的小卡；點旁邊收掉 */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-fa { font-size:clamp(22px, 1.9vw, 30px); }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-label { font-size:clamp(13px, 1.1vw, 17px); letter-spacing:.18em; }
+    /* 「更多」在電腦不是整條從底部升起的清單，是從那一排上面長出來的小卡；點旁邊收掉 */
     .lobby-left:not(.lstage-on) > .lb-more .lb-more-veil { background:transparent; -webkit-backdrop-filter:none; backdrop-filter:none; }
     .lobby-left:not(.lstage-on) > .lb-more .lb-more-sheet {
         left:auto; right:2%; bottom:calc(7% + 112px); width:372px; max-height:none;
@@ -1423,88 +1539,100 @@
     .lobby-left:not(.lstage-on) > .lb-more .lb-more-grid { grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; padding:0; }
     .lobby-left:not(.lstage-on) > .lb-more .lb-more-item { background:#fff; }
     .lobby-left:not(.lstage-on) > .lb-more .lb-more-item:hover { background:#eef3ff; }
-    /* 「查看全部」開的那張換場景卡：桌機寬，排三欄 */
+    /* 「查看全部」開的那張換場景卡：電腦寬，排三欄 */
     .lobby-left:not(.lstage-on) > .lb-scn .lb-scn-card { width:min(640px, 100%); }
     .lobby-left:not(.lstage-on) > .lb-scn .lb-scn-grid { grid-template-columns:repeat(3, minmax(0,1fr)); }
 
-    /* ── 左下：他說的話＋輸入框。名牌是對話框裡的第一行；框本身透明，底色鋪在字那一塊（拉近才有） ── */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-dialogue-wrap {
-        left:2.2%; right:auto; width:47.5%; bottom:6.5%; padding:0; box-sizing:border-box;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-dialogue-box {
-        box-sizing:border-box; width:100%; max-width:none; margin:0;
-        min-height:0 !important; padding:0 !important; border-radius:0 !important;
-        border:0 !important; background:none !important; box-shadow:none !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag {
-        position:static !important; top:auto !important; left:auto !important;
-        width:fit-content !important; min-width:0; box-sizing:border-box;
-        display:flex !important; align-items:center !important; gap:12px; margin:0 !important;
-        padding:7px 60px 7px 22px !important; border-radius:0 !important;
-        border:0 !important; border-bottom:1px solid rgba(255,255,255,.55) !important;
-        background:linear-gradient(90deg, rgba(34,49,95,.88) 55%, rgba(34,49,95,0)) !important;
-        clip-path:polygon(12px 0, 100% 0, 100% 100%, 0 100%, 0 12px);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag::before {
-        content:''; flex:0 0 20px; width:20px; height:20px;
-        background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath fill='%23fff' d='M20 2l3 15 15 3-15 3-3 15-3-15-15-3 15-3z'/%3E%3C/svg%3E") center / contain no-repeat;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag > span {
-        font-family:var(--lbh-serif) !important; font-size:clamp(18px, 1.6vw, 25px) !important; font-weight:700 !important;
-        letter-spacing:.2em !important; color:#fff !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text {
-        box-sizing:border-box; padding:14px 22px 16px;
-        font-family:var(--lbh-serif); font-size:clamp(16px, 1.5vw, 23px); font-weight:500; letter-spacing:.1em;
-        color:#fff !important; line-height:1.75 !important; text-shadow:0 1px 6px rgba(34,49,95,.6);
-        /* 平常只留兩行；拉近才撐開 */
-        min-height:calc(1.75em + 30px); max-height:calc(3.5em + 30px) !important;
-        border-radius:0 0 6px 6px; background:rgba(52,72,130,0);
-        transition:max-height .55s var(--lbh-ease), background .4s;
-        scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.7) transparent;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv.is-zoom):not(.void-dock-open) .void-text {
-        max-height:min(34vh, 250px) !important; background:rgba(52,72,130,.64);
-        -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text::-webkit-scrollbar { width:6px; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text::-webkit-scrollbar-thumb { background:rgba(255,255,255,.7); border-radius:3px; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-next { right:16px; bottom:8px; color:#fff; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-chat-input-row {
-        box-sizing:border-box; margin-top:12px; min-height:60px; padding:7px 8px 7px 10px; gap:8px; align-items:center;
-        border-radius:30px; border:1.5px solid var(--lbh-line); background:var(--lbh-glass); box-shadow:none;
-        -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input {
-        min-width:0; min-height:44px; max-height:132px; padding:10px 6px; border-radius:8px;
-        background:transparent !important; border-color:transparent !important; box-shadow:none !important;
-        color:#fff !important; font-family:var(--lbh-serif); font-size:17px; letter-spacing:.1em;
-        scrollbar-width:none;   /* 只有一行高，系統的捲軸會變成一塊白色方塊卡在送出鈕旁邊 */
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input::-webkit-scrollbar { width:0; height:0; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input::placeholder { color:rgba(255,255,255,.72) !important; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input:focus {
-        background:transparent !important; border-color:transparent !important; box-shadow:none !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-send-btn {
-        width:88px; height:44px; flex:0 0 88px; border-radius:999px; font-size:19px;
-        background:linear-gradient(100deg, #3a63cf, #1b3585) !important; color:#fff !important;
-        border:0 !important; box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.5) !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-send-btn:hover { filter:brightness(1.15); }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-hist-inline {
-        width:44px !important; height:44px !important; min-width:44px !important; border-radius:50% !important;
-        background:transparent !important; border:0 !important; color:#fff !important; font-size:20px;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-hist-inline:hover { background:rgba(255,255,255,.18) !important; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-retry-btn {
-        background:transparent !important; border-color:transparent !important; color:rgba(255,255,255,.88) !important;
+        left:2.2%; right:auto; width:47.5%; bottom:6.5%;
     }
 }
-/* 支點在腳底，所以是頭往上一點點、腳不動。用獨立的 scale，不跟拉近用的 transform 搶 */
-@keyframes lbh-breathe { 0%, 100% { scale:1 1; } 50% { scale:1 1.006; } }
-@media (prefers-reduced-motion: reduce) {
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk .lb-pv-portrait { animation:none; }
+
+/* ───────── 手機擺哪（直的窄畫面）─────────
+   由下往上：常用那一排、大按鈕、三張地點、查看全部；人站在它們上面，頭上留一段空（她：「看著好像頂著背景天花板，好窘迫」）。
+   拉近時大按鈕和地點先讓開，同一個位置換成對話。地名膠囊、頂列透明、更多清單、換場景卡照 09-14 那段（在檔尾）。 */
+@media (max-width:760px) {
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-talk .lb-pv-portrait { left:50%; bottom:21%; height:63%; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-talk.is-zoom .lb-pv-portrait {
+        transform:translateX(-50%) translateY(43%) scale(1.5);   /* 光環要落在地名那一排底下，不然疊在字上 */
+    }
+    /* 半身圖：切口藏在底下那幾排後面 */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-talk .lb-pv-portrait.is-half { bottom:0; height:72%; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-talk.is-zoom .lb-pv-portrait.is-half {
+        transform:translateX(-50%) translateY(8%) scale(1.2);
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-pv-veil { height:54%; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-talk:not(.is-zoom) .lb-pv-poke {
+        left:calc(50% + 9vh); top:calc(16% - 6px); font-size:13px; padding:6px 12px 6px 10px;
+    }
+
+    /* 大按鈕＋三張地點：橫排，貼在常用那一排上面 */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail {
+        display:flex; flex-direction:column-reverse; justify-content:flex-start; gap:8px;
+        left:12px; right:12px; top:auto; bottom:calc(86px + env(safe-area-inset-bottom, 0px)); width:auto;
+        padding:0; overflow:visible;
+        transition:opacity .3s, transform .45s var(--lbh-ease), visibility 0s;
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-zoom .lb-rail {
+        opacity:0; visibility:hidden; transform:translateY(24px);
+        transition:opacity .3s, transform .45s var(--lbh-ease), visibility 0s linear .45s;
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-slogan { display:none; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-cta { height:50px; padding:0 22px; font-size:19px; gap:12px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-picks { flex-direction:row; gap:8px; margin-top:0; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-pick { flex:1 1 0; min-width:0; width:auto; height:64px; border-radius:10px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-pick:hover { transform:none; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-pick .lb-rail-thumb { flex:1 1 auto; width:100%; clip-path:none; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-pick-t {
+        position:absolute; left:0; right:0; bottom:0; justify-content:center; gap:5px; padding:12px 4px 4px;
+        font-size:13px; letter-spacing:1px; color:#fff;
+        background:linear-gradient(180deg, rgba(34,49,95,0), rgba(34,49,95,.85));
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-all { margin:0; padding:4px 12px 4px 14px; font-size:14px; }
+    /* 09-14 那顆塞在對話框底下的大按鈕不用了（大按鈕搬到上面那一塊；404 那套照舊用它） */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv) .void-dialogue-wrap .lb-pv-cta { display:none; }
+
+    /* 常用那一排：橫的貼底 */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock {
+        left:12px; right:12px; bottom:calc(10px + env(safe-area-inset-bottom, 0px)); padding:8px 6px; border-radius:24px;
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-btn[data-desk],
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock #lb-dock-more {
+        flex:1 1 0; min-width:0; gap:4px; padding:4px 0 2px;
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-btn:hover { transform:none; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-fa { font-size:20px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock .lb-dock-label { font-size:12px; letter-spacing:1px; }
+
+    /* 對話：拉近後出現在大按鈕和地點原本的位置 */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-dialogue-wrap {
+        left:12px; right:12px; width:auto; bottom:calc(88px + env(safe-area-inset-bottom, 0px));
+    }
+    /* 打字的時候（鍵盤起來，畫面只剩一半）常用那一排先讓開，對話貼到底 */
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):has(.void-input:focus) #lb-dock { display:none; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):has(.void-input:focus):not(.void-dock-open) .void-dialogue-wrap {
+        bottom:calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag { gap:8px; padding:5px 40px 5px 14px !important; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag::before { flex-basis:15px; width:15px; height:15px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-name-tag > span { font-size:17px !important; letter-spacing:3px !important; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text {
+        padding:10px 14px 12px; font-size:15px; letter-spacing:.06em; line-height:1.7 !important; max-height:30vh !important;
+    }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-chat-input-row { margin-top:8px; min-height:48px; padding:4px 5px 4px 6px; gap:4px; border-radius:24px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-input { min-height:40px; max-height:96px; padding:9px 4px !important; font-size:16px; letter-spacing:1px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-send-btn { width:60px !important; height:38px !important; flex:0 0 60px !important; font-size:16px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-hist-inline { width:40px !important; min-width:40px !important; height:40px !important; font-size:17px; }
+}
+/* 矮手機：人和底下那幾排一起縮 */
+@media (max-width:760px) and (max-height:700px) {
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv.is-talk .lb-pv-portrait { bottom:24%; height:60%; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail { gap:6px; bottom:calc(78px + env(safe-area-inset-bottom, 0px)); }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-cta { height:44px; font-size:17px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-rail-pick { height:52px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv) #lb-dock { padding:6px 6px; }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-dialogue-wrap { bottom:calc(80px + env(safe-area-inset-bottom, 0px)); }
+    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text { font-size:14px; max-height:26vh !important; }
 }
 
 /* 🎯 應用開著＝專注在那個面板（2026-09-11）。
@@ -1692,10 +1820,10 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
         background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.55);
     }
 
-    /* ── 背景：上暗（狀態列讀得清楚）下亮（玻璃卡讀得清楚） ── */
+    /* ── 背景：上暗（狀態列讀得清楚）、下緣深藍（11-16 起底下那幾排是白字） ── */
     .void-tab:not(.mode-404) .lobby-left:not(.lstage-on) > .lb-pv .lb-pv-bg::after {
-        background:linear-gradient(180deg, rgba(23,39,58,.42) 0%, rgba(23,39,58,0) 22%, rgba(23,39,58,0) 46%,
-                                   rgba(200,206,225,.45) 72%, rgba(239,240,245,.92) 100%);
+        background:linear-gradient(180deg, rgba(23,39,58,.42) 0%, rgba(23,39,58,0) 22%, rgba(40,58,116,0) 56%,
+                                   rgba(40,58,116,.42) 80%, rgba(34,49,95,.84) 100%);
     }
 
     /* ── 地點列：膠囊＋副標 ── */
@@ -1731,11 +1859,6 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
         flex-shrink:0; width:54px; min-height:54px; padding:6px 2px 5px; gap:4px; justify-content:center; border-radius:13px;
     }
     .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock .lb-dock-ic { width:22px; height:22px; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock .lb-dock-btn {
-        background:linear-gradient(135deg, rgba(248,250,255,.86), rgba(228,234,245,.8));
-        border:1px solid rgba(255,255,255,.8); box-shadow:0 3px 12px rgba(52,70,100,.1);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock .lb-dock-label { font-size:10px; letter-spacing:1px; color:#4f5d82; }
     /* 收進更多的那幾顆有新東西（成就待兌換、宿舍有紙條）→ 更多這顆亮點，不然藏起來就看不到了 */
     #lb-dock:has(.lb-dock-btn[data-more].has-pending, #lb-dock-ai.lb-ai-news:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-prop:not(.lb-entry-off), #lb-dock-ai.lb-ai-news-msg:not(.lb-entry-off)) #lb-dock-more::after {
         content:''; position:absolute; top:6px; right:7px; width:7px; height:7px; border-radius:50%;
@@ -1767,59 +1890,7 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
     .void-tab.mode-404 .lb-pv-cta { background:rgba(0,14,2,.92); border-color:rgba(0,255,65,.45); color:#9ef3b0; box-shadow:none; }
     .void-tab.mode-404 .lb-pv-cta-portal { background:rgba(0,40,8,.9); border-color:rgba(0,255,65,.5); color:#4ade80; box-shadow:none; }
 
-    /* 霧白玻璃對話卡：名字收進卡片第一行，後面拉一條細線；左上一小截色條 */
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-dialogue-box {
-        padding:6px 16px 12px !important; min-height:0 !important; border-radius:20px 20px 20px 6px !important;
-        background:linear-gradient(120deg, rgba(250,250,255,.94), rgba(247,248,255,.88)) !important;
-        border:1px solid rgba(255,255,255,.88) !important;
-        box-shadow:0 7px 22px rgba(56,66,104,.1) !important;
-        -webkit-backdrop-filter:blur(18px); backdrop-filter:blur(18px);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-dialogue-box::before {
-        content:''; position:absolute; left:20px; top:-1px; width:32px; height:2px; border-radius:2px; background:#7f8db6;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-name-tag {
-        position:static !important; top:auto !important; left:auto !important; width:100% !important; min-width:0 !important;
-        display:flex !important; align-items:center !important; gap:10px; height:34px; margin:0 !important; padding:0 !important;
-        background:none !important; border:none !important; border-radius:0 !important; box-shadow:none !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-name-tag > span {
-        font-family:'Noto Serif TC', 'Songti TC', 'PMingLiU', serif !important;
-        font-size:17px !important; font-weight:700 !important; letter-spacing:2px !important; color:#30364e !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-name-tag::after {
-        content:''; flex:1; height:1px; background:linear-gradient(90deg, #ccd0df, transparent);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-text {
-        font-size:14px !important; line-height:1.85 !important; color:#30364e !important; max-height:156px !important;
-    }
-
-    /* 輸入列：一整條玻璃；紀錄鈕在最左、用一條細線隔開 */
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-chat-input-row {
-        margin-top:10px; padding:4px 5px 4px 0; gap:4px; align-items:center; border-radius:17px;
-        background:rgba(251,252,255,.86); border:1px solid rgba(255,255,255,.9);
-        box-shadow:0 2px 12px rgba(66,78,108,.06); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px);
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-hist-inline {
-        width:46px !important; min-width:46px !important; height:40px !important;
-        background:transparent !important; border:0 !important; border-right:1px solid #d6dcea !important; border-radius:0 !important;
-        color:#8c96b3 !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-input {
-        min-width:0; min-height:40px; max-height:96px; padding:9px 8px !important; font-size:16px;
-        background:transparent !important; border:0 !important; border-radius:0 !important; box-shadow:none !important; color:#404968 !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-input { scrollbar-width:none; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-input::-webkit-scrollbar { width:0; height:0; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-input::placeholder { color:#9aa1b8 !important; font-size:13px; letter-spacing:1px; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-input:focus { background:transparent !important; border:0 !important; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-retry-btn {
-        background:transparent !important; border:0 !important; color:#8c96b3 !important;
-    }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-send-btn {
-        width:44px !important; height:44px !important; flex:0 0 44px !important; border-radius:12px !important;
-        background:#6477a4 !important; color:#fff !important; border:0 !important; box-shadow:none !important;
-    }
+    /* 對話卡、輸入列的長相：11-16 起跟電腦同一套，在「2026-11-16 對話主頁改版」那段 */
 }
 /* 矮手機（SE、橫幅瀏覽器列吃掉一截）：右側欄、大按鈕、對話卡一起縮，不然會疊在一起 */
 @media (max-width:760px) and (max-height:700px) {
@@ -1833,7 +1904,4 @@ html:has(#aurelia-standalone-root) #aurelia-chat-window.cw-window:not(.cw-embedd
     .lobby-left:not(.lstage-on):has(> .lb-pv) #lb-dock .lb-dock-ic { width:19px; height:19px; }
     .lobby-left:not(.lstage-on):has(> .lb-pv.is-talk) .lb-pv-cta { height:50px; margin-top:7px; }
     .lb-pv-cta-portal { flex-basis:34px; height:34px; font-size:15px; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-name-tag { height:28px; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-text { font-size:13px !important; line-height:1.7 !important; max-height:92px !important; }
-    .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(> .lb-pv):not(.void-dock-open) .void-chat-input-row { margin-top:7px; }
 }
