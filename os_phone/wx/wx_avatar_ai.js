@@ -23,7 +23,7 @@
 
     const ON_KEY  = 'wx_avatar_ai_enabled';    // '1' = 允許
     const SRC_KEY = 'wx_avatar_ai_provider';   // '' = 跟著圖片設置的頭像桶
-    const PROVIDERS = ['pollinations', 'novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'];
+    const PROVIDERS = ['novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'];   // 2026-11-17 拿掉 Pollinations：舊存的會讀成 ''（跟著圖片設置）
     const SIZE = { width: 512, height: 512 };
     const COOLDOWN_MS = 20 * 1000;   // 同一個聊天室的最短間隔，防同一輪連換好幾次
 

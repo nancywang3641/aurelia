@@ -1760,7 +1760,7 @@ ${facilityText}
             _clearAnimationTimers();
 
             // 替換為動態大頭娃娃渲染
-            // sceneMap 底板圖（用戶開了 pollinations 補圖才有）
+            // sceneMap 底板圖（開了補圖、又接了生圖接口才有）
             const sceneMap = STATE.activeFacility && STATE.activeFacility.sceneMap;
             let _painted = null;   // 直接畫的小地圖：{ url, pos: 地標 → 名牌位置 }
             if (sceneMap && sceneMap.backdropUrl) {

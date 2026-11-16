@@ -30,8 +30,8 @@
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
-            ss_img_uses: { title: '每個地方用什麼', body: '一列是一個會生圖的地方。「用哪組」是前面幾頁存好的連線與預設包，「畫風」是下面「我的畫風」裡的一包。選了就存，不用按底部保存。\n\n照原本的＝還沒換過，照改版前那套走。' },
-            ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖。上面每個地方挑一包，好幾個地方可以用同一包。' },
+            ss_img_uses: { title: '每個地方用什麼', body: '一列是一個會生圖的地方。先選「接口」，第二格就列那個接口自己的東西：NAI、ComfyUI 列它們的預設包；自訂接口列「自訂接口」那頁的畫風；酒館照酒館那邊的設定。選了就存，不用按底部保存。\n\n照原本的＝還沒換過，照改版前那套走。' },
+            ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖（只有自訂接口收得到底圖）。「畫風」頁每個選了自訂接口的地方挑一包，好幾個地方可以用同一包。NAI、ComfyUI 的長相寫在它們自己的預設包裡，不用這裡的畫風。' },
             ss_img_style_ref: { title: '底圖', body: '給生圖參考畫風用的一張圖。只有自訂接口收得到參考圖，其他接口會略過。' },
             ss_img_test: { title: '試畫一張', body: '選一個地方，照那一列現在的設定畫一張。ComfyUI 的預設包要先存好才試得到。' },
             ss_cfd_edit: { title: '預設包', body: '下面這些欄位就是 ComfyUI「目前的設定」。按底部「保存所有設定」存的是它，不會動到任何預設包。\n\n選一個包，欄位就換成那個包的內容。下拉直接選，或按「看圖挑」看著預覽圖按「套用」，兩個是一樣的；匯入、匯出、拖圖建包也在看圖挑那個窗裡。改完按「存回這個包」才會改到那個包；按「另存新的包」存成新的一個。選了包再按底部保存，目前的設定就變成畫面上這一份。\n\n哪個地方用目前的設定、哪個地方用哪個包，在「畫風」頁選。' },
@@ -48,9 +48,8 @@
             //   自訂接口位址那段跑到底詞、Pollinations 模型掛了一段早就拆掉的分頁說明）；各自換回欄位自己的那句，搬走的放回原處。
             ss_1809: { title: '工作流模式', body: '想用自己的工作流再開，否則不用碰。' },
             ss_tavern_sd: { title: '酒館的生圖', body: '用酒館原生「圖像生成」擴展的後端生圖（你在那邊設好的 WebUI / ComfyUI / NAI / Horde…）。這頁沒有要填的，下面那行是酒館那邊現在選的後端。提示詞交給你的後端＋酒館共用前綴處理，奧瑞亞不額外加底詞。前提：先在酒館「圖像生成」擴展設好一個後端來源；沒設好會跳提示，不會偷偷換成別的來源。手機版沒有酒館，這條用不了。' },
-            ss_1840: { title: '模型', body: '按價格排序。' },
             ss_1878: { title: '帶參考圖', body: '插圖附上出場角色的立繪，最多四個。只用角色中心裡你放的圖。' },
-            ss_capi_url: { title: '接口位址', body: '貼站方給的位址就好，兩種送法會自己認：網址帶 /sdapi 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟上面的 Pollinations 都不是同一種送法，所以各佔一格、不能只換網址。' },
+            ss_capi_url: { title: '接口位址', body: '貼站方給的位址就好，兩種送法會自己認：網址帶 /sdapi 走 Stable Diffusion 那種（模型不用填），其餘走 OpenAI 那種（要填模型）。跟其他接口都不是同一種送法，所以各佔一格、不能只換網址。' },
             ss_1893: { title: '底詞', body: '選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。' },
             ss_1919: { title: '防超免費尺寸', body: '超過免費上限自動縮回。' },
             ss_2095: { title: '場景插圖', body: '設定套用於所有場景插圖。' },
@@ -336,41 +335,17 @@
     function loadImageConfig(opts) {
         let saved = (opts && opts.defaults === true) ? null : localStorage.getItem(IMG_STORAGE_KEY);
         let config = {
-            service: 'pollinations',
-            serviceInanimate: 'pollinations', // 死物桶：背景/物品
-            serviceLiving: 'pollinations',    // legacy：舊「活物桶」(角色+插圖共用)，保留供遷移
-            serviceChar: 'pollinations',      // 頭像桶：char（角色頭像/立繪）
-            serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖/CG）
-            serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視底板）
+            // 各桶的接口：2026-11-17 拿掉 Pollinations 之後預設是「還沒接」（空字串），新玩家要先在畫風頁選一個
+            service: '',
+            serviceInanimate: '', // 死物桶：背景/物品
+            serviceLiving: '',    // legacy：舊「活物桶」(角色+插圖共用)，保留供遷移
+            serviceChar: '',      // 頭像桶：char（角色頭像/立繪）
+            serviceScene: '',     // 插圖桶：scene（場景插圖/CG）
+            serviceMap: '',       // 小地圖桶：map（場景俯視底板）
             imgSourceSynced: true,            // 背景來源是否同步頭像（true＝沿用頭像接口）
             // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API（送 JSON 回 JSON）。
             //    三格全部自己填，不內建站台清單——每個站支援的型號都不一樣，清單只會過期。
             customApi: { url: '', apiKey: '', model: '', quality: 'medium', basePrompt: '' },
-            pollinations: {
-                url: 'https://gen.pollinations.ai/image',
-                apiKey: '',
-                model: 'flux',
-                size: '512x512',
-                models: {
-                    'zimage': 'Z-Image Turbo (0.002p)',
-                    'flux': 'Flux Schnell (0.00175p)',
-                    'p-image': 'Pruna p-image (0.005p)',
-                    'klein': 'FLUX.2 Klein 4B (0.01p)',
-                    'grok-imagine': 'Grok Imagine (0.02p)',
-                    'qwen-image': 'Qwen Image Plus (0.03p)',
-                    'seedream': 'Seedream 4.0 (0.03p)',
-                    'seedream5': 'Seedream 5.0 Lite (0.035p)',
-                    'seedream-pro': 'Seedream 4.5 Pro (0.04p)',
-                    'ideogram-v4-turbo': 'Ideogram 4 Turbo (0.03p)',
-                    'nanobanana': 'NanoBanana',
-                    'nanobanana-pro': 'NanoBanana Pro',
-                    'gptimage': 'GPT Image 1 Mini',
-                    'gpt-image-2': 'GPT Image 2',
-                    'kontext': 'FLUX.1 Kontext (0.04p)'
-                },
-                charBasePrompt: 'anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines',
-                charNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text',
-            },
             novelai: {
                 token: '',
                 url: 'https://image.novelai.net/ai/generate-image',
@@ -463,8 +438,8 @@ EXAMPLE "prompt" value:
 格式範例（[方括號]是佔位，照正文實際內容填，不要照抄方括號裡的字）：
 SFW 2 人對話：2boys, a [膚色] adult on the left talks to a [膚色] adult on the right, [young_adult, left_side, [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], [服裝], standing, talking, looking_at_another] AND [adult_male, right_side, [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], [服裝], leaning_against_wall, listening], casual_conversation, eye_contact, [場景], [時間], from_side, bust_shot
 NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on top penetrating a [膚色] adult male underneath, [(adult:1.5), [膚色], [氣質], [臉型], [體型], [眼型], [髮型], [瀏海], naked_upper_body, kneeling, on_top, inserting, [表情]] AND [(adult:1.5), [膚色], [氣質], [臉型], [體型], [眼型], [髮型], naked, lying_on_back, legs_up, under_another, inserted, [表情]], same_height, bodies_intertwined, mating_press, penetration, [場景], from_side, medium_shot`,
-                // 💬 自然語言版（Pollinations / ComfyUI Anima：自然語言比標籤更好）
-                extractPromptNatural: `每張插圖的 "prompt" 用「自然語言英文句子」描述畫面（給 Pollinations / ComfyUI，自然語言比標籤更好）。
+                // 💬 自然語言版（自訂接口 / ComfyUI Anima：自然語言比標籤更好）
+                extractPromptNatural: `每張插圖的 "prompt" 用「自然語言英文句子」描述畫面（給 ComfyUI、自訂接口這類讀句子的生圖模型，自然語言比標籤更好）。
 - 只照「最新這段正文」真的發生、畫得出來的畫面，不要推理後續劇情、不腦補角色心理或感情。
 - 一句話交代：誰、在做什麼、在哪裡、光線氣氛、鏡頭遠近。
 - ★角色外觀(髮色/眼色/體型/服裝)一律以下方【角色外觀錨點】為權威，照它寫、不要漏、不要自己編；錨點沒列到的角色才依劇情與已知設定。
@@ -485,18 +460,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
         // 場景插圖：每接口獨立的副模型插圖指令（預設＝沿用舊的 標籤/自然語言 範本，NAI 用標籤、其餘用自然語言）
         config.sceneGen.extractPromptNovelai      = config.sceneGen.extractPromptTags;
-        config.sceneGen.extractPromptPollinations = config.sceneGen.extractPromptNatural;
         config.sceneGen.extractPromptComfy        = config.sceneGen.extractPromptNatural;
         config.sceneGen.extractPromptTavern       = config.sceneGen.extractPromptNatural;
         config.sceneGen.extractPromptCustom       = config.sceneGen.extractPromptNatural;   // 自訂接口：OpenAI 那種格式吃自然語言
         if (saved) {
             try {
                 const savedConfig = JSON.parse(saved);
-                const pol = savedConfig.pollinations || {};
-                if (pol.defaultPrompt && !pol.charBasePrompt) {
-                    pol.charBasePrompt = pol.defaultPrompt;
-                    delete pol.defaultPrompt;
-                }
                 config = {
                     ...config,
                     ...savedConfig,
@@ -504,11 +473,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     serviceChar:  savedConfig.serviceChar  || savedConfig.serviceLiving || savedConfig.service || config.service,
                     serviceScene: savedConfig.serviceScene || savedConfig.serviceLiving || savedConfig.service || config.service,
                     serviceMap:   savedConfig.serviceMap   || savedConfig.serviceInanimate || savedConfig.service || config.service,
-                    pollinations: {
-                        ...config.pollinations,
-                        ...pol,
-                        models: config.pollinations.models
-                    },
                     novelai: {
                         ...config.novelai,
                         ...(savedConfig.novelai || {})
@@ -526,7 +490,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         const _oldTags = (_saved.extractPromptTags || _sg.extractPromptTags || '').trim();
                         const _oldNat  = (_saved.extractPromptNatural || _sg.extractPromptNatural || _saved.extractPrompt || '').trim();
                         if (_saved.extractPromptNovelai      === undefined && _oldTags) _sg.extractPromptNovelai      = _oldTags;
-                        if (_saved.extractPromptPollinations === undefined && _oldNat)  _sg.extractPromptPollinations = _oldNat;
                         if (_saved.extractPromptComfy        === undefined && _oldNat)  _sg.extractPromptComfy        = _oldNat;
                         if (_saved.extractPromptTavern       === undefined && _oldNat)  _sg.extractPromptTavern       = _oldNat;
                         if (_saved.extractPromptCustom       === undefined && _oldNat)  _sg.extractPromptCustom       = _oldNat;
@@ -545,6 +508,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 };
             } catch(e) {}
         }
+        // 🗑 2026-11-17 拿掉 Pollinations：舊存檔裡選它的桶變「還沒接」，它那份設定（含插圖指令那一份）不再帶著
+        ['service', 'serviceInanimate', 'serviceLiving', 'serviceChar', 'serviceScene', 'serviceMap'].forEach(k => {
+            if (config[k] === 'pollinations') config[k] = '';
+        });
+        delete config.pollinations;
+        if (config.sceneGen) delete config.sceneGen.extractPromptPollinations;
         return config;
     }
     
@@ -593,13 +562,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             win.OS_IMAGE_MANAGER.config.serviceLiving = imgData.serviceLiving || imgData.serviceChar || imgData.service;
             win.OS_IMAGE_MANAGER.config.service = imgData.serviceLiving || imgData.serviceChar || imgData.service;
             if (typeof imgData.imgSourceSynced === 'boolean') win.OS_IMAGE_MANAGER.config.imgSourceSynced = imgData.imgSourceSynced;
-            if (imgData.pollinations) {
-                win.OS_IMAGE_MANAGER.config.pollinations = {
-                    ...win.OS_IMAGE_MANAGER.config.pollinations,
-                    ...imgData.pollinations,
-                    models: win.OS_IMAGE_MANAGER.config.pollinations.models
-                };
-            }
             if (imgData.novelai) {
                 win.OS_IMAGE_MANAGER.config.novelai = {
                     ...win.OS_IMAGE_MANAGER.config.novelai,
@@ -794,9 +756,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                 try {
                     // 立繪基礎 512×896 (約 4:7 直立，full body 站姿放得下腿)、依「精緻度倍率」放大、跳過 cache。
-                    // NAI 的提示詞格式跟 Pollinations 完全不同，純靠通用模板會很裸/畫質差 →
+                    // NAI 的提示詞是逗號標籤，純靠通用模板會很裸/畫質差 →
                     // 真的會走 NAI 時就「不 raw」，讓它套用「圖片設置」裡設好的 NAI 底詞/負詞（跟頭像同一套畫風）；
-                    // Pollinations（或 NAI 沒 token 退回）維持 raw（純模板，行為不變）。
+                    // 其他接口維持 raw（純模板，行為不變）。
                     const _imCfg = win2.OS_IMAGE_MANAGER.config;
                     // 立繪走圖片設置「畫風」頁「立繪」那一列（以前看全域 service，那格早就不是立繪用的了）
                     const _spSvc = (typeof win2.OS_IMAGE_MANAGER.serviceForUse === 'function') ? win2.OS_IMAGE_MANAGER.serviceForUse('sprite') : (_imCfg && _imCfg.service);
@@ -1144,13 +1106,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const vnD = (window.VN_SETTINGS_PANEL?.load) ? window.VN_SETTINGS_PANEL.load() : {};
         // 🎯 頭像那桶現在接的型號名（自訂接口那條才有）。節點只是預設組，選了之後值就在這幾格裡。
         const _charModelName = function (cfg) { try { return String((cfg.customApi && cfg.customApi.model) || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); } catch (e) { return ''; } };
-        // 判「是不是一張圖畫得準好幾個角色的那種」＝自訂接口型號名帶 GPT、Gemini、Banana，或 Pollinations 選 NanoBanana／GPT Image。
+        // 判「是不是一張圖畫得準好幾個角色的那種」＝自訂接口型號名帶 GPT、Gemini、Banana。
         //   只拿來寫說明那一行，不鎖任何東西。（10-15 她：「只有 gemini 或者 banana 才有這種準確可以一次幾個角色的準確度」）
         const _MULTI_OK = /gpt|gemini|banana/i;
         const _isGptChar = function (cfg) {
             try {
                 const svc = (cfg.serviceChar || cfg.serviceLiving || cfg.service) || '';
-                if (svc === 'pollinations') return _MULTI_OK.test(String((cfg.pollinations && cfg.pollinations.model) || ''));
                 if (svc !== 'custom_api') return false;
                 return _MULTI_OK.test(_charModelName(cfg));
             } catch (e) { return false; }
@@ -1321,15 +1282,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const secValPres = container.querySelector('#sec-val-pres');
 
         // 綁定元素 (圖片)
-        const elPolGroup = container.querySelector('#img-group-pollinations');
-        const elPolApiKey = container.querySelector('#img-pol-apikey');
-        const elPolModel = container.querySelector('#img-pol-model');
-        const elPolSize = container.querySelector('#img-avatar-size');   // 頭像尺寸下拉（舊 #img-pol-size 已移除；測試/儲存都讀這個）
+        const elAvatarSize = container.querySelector('#img-avatar-size');   // 頭像尺寸下拉（測試/儲存都讀這個）
         const elNaiGroup = container.querySelector('#img-group-nai');
         const elNaiToken = container.querySelector('#img-nai-token');
         const elNaiModel = container.querySelector('#img-nai-model');
-        const elStylePrompt = container.querySelector('#img-style-prompt');
-        const elCharNegPrompt = container.querySelector('#img-char-neg-prompt');
         const elImgTestPrompt = container.querySelector('#img-test-prompt');
         const btnImgTest = container.querySelector('#img-test-btn');
         const imgTestPreview = container.querySelector('#img-test-preview');
@@ -1736,20 +1692,17 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
         // 接口的顯示名（畫風頁「照原本的（…）」那一項用）
         const SVC_DISP = {
-            pollinations: 'Pollinations',
             novelai: 'NovelAI',
             tavern_sd: '酒館原生',
             comfyui_direct: 'ComfyUI 直連',
             custom_api: '自訂接口'
         };
-        const elImgPolPrompts = container.querySelector('#img-pol-prompts-group');
 
         // ── 插圖指令／獨立插圖規範：點進去整頁編輯（跟素材頁 BGM 清單同一種頁 .vncfg-lp），自己有保存鈕、當場寫進設定 ──
         //   🚨 底部「保存所有設定」會整份重組 sceneGen，它照 imgConfig.sceneGen 帶回這幾格 → 這頁存的時候存檔跟 imgConfig 兩邊都要寫。
         //   委派綁在 container 上：設定面板之後還會重建 DOM，直接綁在鈕上會掉（reference_settings_panel_bind_traps）。
         const _SCENE_PROMPT_TABS = [
             { svc: 'novelai',        key: 'extractPromptNovelai',      label: 'NovelAI',      hint: 'NovelAI 用 Danbooru 標籤（五層系統）。' },
-            { svc: 'pollinations',   key: 'extractPromptPollinations', label: 'Pollinations', hint: '寫自然語言英文句子。' },
             { svc: 'tavern_sd',      key: 'extractPromptTavern',       label: '酒館原生',     hint: '寫自然語言英文句子。' },
             { svc: 'comfyui_direct', key: 'extractPromptComfy',        label: 'ComfyUI',      hint: '寫自然語言英文句子。' },
             // 🚨 加新的插圖來源時加在這裡，不然那個來源沒有自己的一份可改
@@ -2106,11 +2059,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
         window._imgPersistPresets = _persistImgPresets;
 
-        const IMG_TABS = ['style', 'novelai', 'comfyui_direct', 'tavern_sd', 'custom_api', 'pollinations'];
+        const IMG_TABS = ['style', 'novelai', 'comfyui_direct', 'tavern_sd', 'custom_api'];
         let imgTab = 'style';
         try { const t = localStorage.getItem('os_img_settings_tab'); if (IMG_TABS.indexOf(t) >= 0) imgTab = t; } catch (e) {}
-        const _tabGroups = { novelai: [elNaiGroup], comfyui_direct: [elCfdGroup], tavern_sd: [elTavGroup], custom_api: [elCapiGroup], pollinations: [elPolGroup, elImgPolPrompts] };
-        window._switchImgTab = (tab) => {
+        const _tabGroups = { novelai: [elNaiGroup], comfyui_direct: [elCfdGroup], tavern_sd: [elTavGroup], custom_api: [elCapiGroup] };
+        window._switchImgTab = (tab, quiet) => {
             imgTab = IMG_TABS.indexOf(tab) >= 0 ? tab : 'style';
             _lsSet('os_img_settings_tab', imgTab, '圖片設置停在哪一頁');
             container.querySelectorAll('.img-conn-tabs .img-srctab').forEach(b => b.classList.toggle('active', b.dataset.imgtab === imgTab));
@@ -2119,7 +2072,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             Object.keys(_tabGroups).forEach(k => _tabGroups[k].forEach(el => { if (el) el.classList.toggle('hidden', k !== imgTab); }));
             const itB = container.querySelector('#img-nai-item-block');
             if (itB) itB.classList.remove('hidden');
-            if (imgTab === 'style') { _renderImgUses(); _renderImgStyles(); _renderRoomBlock(); }
+            if (imgTab === 'style') { _renderImgUses(); _renderRoomBlock(); if (!quiet) _imgStyleSplitNotice(); }
+            if (imgTab === 'custom_api') _renderImgStyles();   // 我的畫風 2026-11-17 搬進自訂接口那頁
             if (imgTab === 'tavern_sd') _paintTavernSd();
         };
         // 🍺 酒館那頁沒有要填的（生圖全照酒館「圖像生成」擴充那邊）：顯示那邊現在選的後端，名字照酒館自己下拉單上的字。
@@ -2152,16 +2106,36 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             el.classList.toggle('is-off', off);
         }
 
-        // ── 「用哪組」的選項：各接口頁存好的組合 ──
-        const _connChoices = () => {
-            const out = [{ id: 'poll', name: 'Pollinations' }, { id: 'nai', name: 'NAI・目前的設定' }];
-            _naiList().forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, name: 'NAI・' + (p.name || '未命名') }); });
-            out.push({ id: 'comfy', name: 'ComfyUI・目前的設定' });   // ComfyUI 頁面板上存的那份（底部保存）
-            _cfdList().forEach(p => { if (p && p.name) out.push({ id: 'comfy:' + p.name, name: 'ComfyUI・' + p.name }); });
-            out.push({ id: 'tavern', name: '酒館的生圖' }, { id: 'capi', name: '自訂接口・目前那組' });
+        // ── 每列第一格「接口」與第二格「那個接口的包」的選項（2026-11-17 改：以前一格「用哪組」混著接口和包，又疊一格跨接口的畫風）──
+        //   第一格：NAI／ComfyUI／酒館／自訂接口（自訂接口存好的節點各一項）。存進 os_img_routes 的 conn 照舊：
+        //   nai、nai:<包>、comfy、comfy:<包>、tavern、capi、capi:<節點>。第二格：NAI、ComfyUI 寫 conn（選包）；自訂接口寫 style（畫風）。
+        const _svcChoices = () => {
+            const out = [{ id: 'nai', name: 'NAI' }, { id: 'comfy', name: 'ComfyUI' }, { id: 'tavern', name: '酒館的生圖' }, { id: 'capi', name: '自訂接口・目前那組' }];
             _imgNodes('capi').forEach(n => { if (n && n.id && n.url) out.push({ id: 'capi:' + n.id, name: '自訂接口・' + (n.name || n.model || n.url) }); });
             return out;
         };
+        const _packChoices = (fam) => {
+            if (fam === 'nai') {
+                const out = [{ id: 'nai', name: '目前的設定' }];
+                _naiList().forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, name: p.name || '未命名' }); });
+                return out;
+            }
+            if (fam === 'comfy') {
+                const out = [{ id: 'comfy', name: '目前的設定' }];   // ComfyUI 頁面板上存的那份（底部保存）
+                _cfdList().forEach(p => { if (p && p.name) out.push({ id: 'comfy:' + p.name, name: p.name }); });
+                return out;
+            }
+            return [];
+        };
+        // conn → 第一格的值（nai:<包> 算 nai；自訂接口的節點各自是一項）
+        const _famOf = (conn) => {
+            conn = String(conn || '');
+            if (!conn) return '';
+            if (conn === 'nai' || conn.indexOf('nai:') === 0) return 'nai';
+            if (conn === 'comfy' || conn.indexOf('comfy:') === 0) return 'comfy';
+            return conn;   // tavern／capi／capi:<節點>
+        };
+        const _FAM_OF_SVC = { novelai: 'nai', comfyui_direct: 'comfy', tavern_sd: 'tavern', custom_api: 'capi' };
         // 有「原本的底詞」的列（劇情頭像、背景、物品本來就自己拼一段底詞）
         const LEGACY_STYLE = { avatar: '原本的頭像底詞', bg: '原本的背景底詞', item: '原本的物品底詞' };
         const FIXED_SIZE = { item: '跟著用它的地方', map: '1024×512', phone: '1024×1024', app: '跟著應用', doll: '寬圖（三隻並排）' };
@@ -2175,17 +2149,35 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const park = _parking();
             if (park) box.querySelectorAll('#img-avatar-size, #img-scene-size, #img-scene-size-custom, #img-bg-size').forEach(el => park.appendChild(el));
             try { _pinComfyLegacyRows(); } catch (e) {}   // 刪掉某個包之後，用它的列在這裡接回一模一樣的包
-            const routes = M.getRoutes(), styles = M.getStyles(), conns = _connChoices();
+            const routes = M.getRoutes(), styles = M.getStyles(), svcs = _svcChoices();
             box.innerHTML = M.USES.map(u => {
                 const r = routes[u.id] || {};
                 const legacySvc = M.legacyServiceOf(u.id);
-                // 原本是 ComfyUI 的列不給「照原本的」：那份舊設定改不到，選了等於把 LoRA 鎖死；要跟著面板走選「ComfyUI・目前的設定」
-                const connOpts = (legacySvc === 'comfyui_direct' ? '' : '<option value=""' + (r.conn ? '' : ' selected') + '>照原本的（' + _ie(SVC_DISP[legacySvc] || legacySvc) + '）</option>')
-                    + conns.map(c => '<option value="' + _ie(c.id) + '"' + (c.id === r.conn ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('');
-                const leg = LEGACY_STYLE[u.id];
-                const styleOpts = '<option value=""' + ((!r.style || (!leg && r.style === 'none')) ? ' selected' : '') + '>' + (leg || '不加') + '</option>'
-                    + (leg ? '<option value="none"' + (r.style === 'none' ? ' selected' : '') + '>不加</option>' : '')
-                    + styles.map(s => '<option value="' + _ie(s.id) + '"' + (s.id === r.style ? ' selected' : '') + '>' + _ie(s.name) + '</option>').join('');
+                const fam = _famOf(r.conn);
+                const showFam = fam || _FAM_OF_SVC[legacySvc] || '';
+                // 第一格：接口。原本是 ComfyUI 的列不給「照原本的」：那份舊設定改不到，選了等於把 LoRA 鎖死
+                const svcOpts = ((legacySvc === 'comfyui_direct' && r.conn) ? '' : '<option value=""' + (fam ? '' : ' selected') + '>' + (legacySvc ? '照原本的（' + _ie(SVC_DISP[legacySvc] || legacySvc) + '）' : '還沒選') + '</option>')
+                    + svcs.map(c => '<option value="' + _ie(c.id) + '"' + (c.id === fam ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('');
+                // 第二格：那個接口自己的東西
+                let second = '', secondLabel = '預設包';
+                if (showFam === 'nai' || showFam === 'comfy') {
+                    const cur = (fam === showFam && r.conn) ? r.conn : showFam;
+                    second = '<select class="set-select img-use-pack" data-use="' + u.id + '">'
+                        + _packChoices(showFam).map(c => '<option value="' + _ie(c.id) + '"' + (c.id === cur ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('')
+                        + '</select>';
+                } else if (showFam === 'capi' || showFam.indexOf('capi:') === 0) {
+                    secondLabel = '畫風';
+                    const leg = LEGACY_STYLE[u.id];
+                    second = '<select class="set-select img-use-style" data-use="' + u.id + '">'
+                        + '<option value=""' + ((!r.style || (!leg && r.style === 'none')) ? ' selected' : '') + '>' + (leg || '不加') + '</option>'
+                        + (leg ? '<option value="none"' + (r.style === 'none' ? ' selected' : '') + '>不加</option>' : '')
+                        + styles.map(s => '<option value="' + _ie(s.id) + '"' + (s.id === r.style ? ' selected' : '') + '>' + _ie(s.name) + '</option>').join('')
+                        + '</select>';
+                } else if (showFam === 'tavern') {
+                    second = '<span class="img-use-fixed">照酒館那邊的設定</span>';
+                } else {
+                    second = '<span class="img-use-fixed">先選接口</span>';
+                }
                 const size = FIXED_SIZE[u.id]
                     ? '<span class="img-use-fixed">' + FIXED_SIZE[u.id] + '</span>'
                     : (u.id === 'sprite'
@@ -2193,8 +2185,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         : '');
                 return '<div class="img-use-row" data-use="' + u.id + '">'
                     + '<div class="img-use-name">' + _ie(u.name) + '</div>'
-                    + '<span class="img-use-label">用哪組</span><select class="set-select img-use-conn" data-use="' + u.id + '">' + connOpts + '</select>'
-                    + '<span class="img-use-label">畫風</span><select class="set-select img-use-style" data-use="' + u.id + '">' + styleOpts + '</select>'
+                    + '<span class="img-use-label">接口</span><select class="set-select img-use-svc" data-use="' + u.id + '">' + svcOpts + '</select>'
+                    + '<span class="img-use-label">' + secondLabel + '</span><div class="img-use-second">' + second + '</div>'
                     + '<span class="img-use-label">尺寸</span><div class="img-use-size" data-use="' + u.id + '">' + size + '</div>'
                     + '</div>';
             }).join('');
@@ -2207,7 +2199,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const t = e.target, M = _IM();
             if (!M || !t || !t.classList) return;
             const use = t.getAttribute('data-use');
-            if (t.classList.contains('img-use-conn')) {
+            if (t.classList.contains('img-use-svc')) {
+                // 換接口：nai／comfy 先接「目前的設定」，第二格再挑包；整列重畫（第二格換成那個接口的東西）
+                M.setRoute(use, { conn: t.value });
+                if (use === 'sprite') _refreshSpriteBatchNote();
+                _renderImgUses();
+                _renderImgStyles();
+            } else if (t.classList.contains('img-use-pack')) {
                 if (/^(comfy|nai):/.test(t.value)) _persistImgPresets();
                 M.setRoute(use, { conn: t.value });
                 if (use === 'sprite') _refreshSpriteBatchNote();
@@ -2232,7 +2230,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const hit = r.conn ? M._resolveConn(r.conn) : null;
                 const svc = hit ? hit.provider : M.legacyServiceOf('sprite');
                 if (svc === 'custom_api') model = String(((hit && hit.customApi) || M.config.customApi || {}).model || '');
-                else if (svc === 'pollinations') model = String(((hit && hit.pollinations) || M.config.pollinations || {}).model || '');
             } catch (e) {}
             el.innerHTML = '湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>' + (_MULTI_OK.test(model)
                 ? '立繪現在接的是 <b>' + _ie(model) + '</b>，就是它擅長的事。'
@@ -2265,11 +2262,55 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 try { const url = await D.getImage(id); if (url) el.style.backgroundImage = "url('" + url + "')"; } catch (e) {}
             });
         }
-        // 哪些地方用這包（每一列＋房間；房間自己存在 aurelia_room_route）
+        // 🔔 2026-11-17 改版：NAI、ComfyUI 的列不再疊畫風（含原本的頭像／背景／物品底詞）。
+        //    第一次打開畫風頁時，把「改版前有疊、改版後不疊了」的列列給她看一次，要留的詞她自己貼進那個預設包。
+        const STYLE_SPLIT_KEY = 'os_img_style_split_v1';
+        function _imgStyleSplitNotice() {
+            try { if (localStorage.getItem(STYLE_SPLIT_KEY)) return; } catch (e) { return; }
+            const M = _IM();
+            if (!M || !M.USES) return;
+            const routes = M.getRoutes(), styles = M.getStyles(), lines = [], gone = [];
+            // 原本走 Pollinations 的列（列上選的、或沒選過但它那一桶是 Pollinations）：現在是「還沒選」，要她重選接口。
+            //   引擎載入時已經把桶裡的 Pollinations 換成空的，所以這裡看存檔原文
+            let rawCfg = {};
+            try { rawCfg = JSON.parse(localStorage.getItem('os_image_config') || '{}') || {}; } catch (e) {}
+            const rawBucket = (type) => type === 'char' ? (rawCfg.serviceChar || rawCfg.serviceLiving || rawCfg.service)
+                : type === 'scene' ? (rawCfg.serviceScene || rawCfg.serviceLiving || rawCfg.service)
+                : type === 'map' ? (rawCfg.serviceMap || rawCfg.serviceInanimate || rawCfg.service)
+                : (rawCfg.serviceInanimate || rawCfg.service);
+            M.USES.forEach(u => {
+                const r0 = routes[u.id] || {};
+                if (r0.conn === 'poll' || (!r0.conn && rawBucket(u.type) === 'pollinations')) {
+                    gone.push('・' + u.name);
+                    if (r0.conn === 'poll') M.setRoute(u.id, { conn: '' });
+                }
+            });
+            M.USES.forEach(u => {
+                const svc = M.serviceForUse(u.id);
+                if (svc !== 'novelai' && svc !== 'comfyui_direct') return;
+                const r = routes[u.id] || {};
+                let was = '';
+                if (r.style && r.style !== 'none') { const s = styles.find(x => x.id === r.style); if (s) was = '畫風「' + s.name + '」'; }
+                else if (!r.style && LEGACY_STYLE[u.id]) was = LEGACY_STYLE[u.id];
+                if (was) lines.push('・' + u.name + '（' + (SVC_DISP[svc] || svc) + '）：' + was);
+            });
+            _lsSet(STYLE_SPLIT_KEY, String(Date.now()), '圖片設置改版提示');
+            if (gone.length) _renderImgUses();
+            if (!lines.length && !gone.length) return;
+            const A = (window.parent || window).AUI || window.AUI;
+            let msg = '';
+            if (gone.length) msg += 'Pollinations 拿掉了。下面這幾個地方原本走它，現在是「還沒選」，要在這頁重選一個接口，不然不會出圖：\n\n' + gone.join('\n');
+            if (lines.length) msg += (msg ? '\n\n' : '') + '畫風現在只給自訂接口用。NAI、ComfyUI 的長相寫在它們自己的預設包裡，下面這幾個地方原本多疊的那層詞，從現在起不再加上去：\n\n'
+                + lines.join('\n')
+                + '\n\n要留的話，把那段詞貼進那個預設包的底詞。';
+            msg += '\n\n「我的畫風」搬到「自訂接口」那頁了。';
+            if (A && A.alert) A.alert(msg); else console.warn('[圖片設置] ' + msg);
+        }
+        // 哪些地方用這包（選了自訂接口的列＋房間；房間自己存在 aurelia_room_route）
         function _styleUsedBy(id) {
             const M = _IM(); if (!M) return [];
             const routes = M.getRoutes();
-            const out = M.USES.filter(u => (routes[u.id] || {}).style === id).map(u => u.name);
+            const out = M.USES.filter(u => (routes[u.id] || {}).style === id && M.serviceForUse(u.id) === 'custom_api').map(u => u.name);
             try { const G = (window.parent || window).OS_ROOM_GEN || window.OS_ROOM_GEN; if (G && G.getRoute && G.getRoute().mode !== 'comfy' && G.getRoute().style === id) out.push('房間'); } catch (e) {}
             return out;
         }
@@ -2583,7 +2624,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const svc = M.legacyServiceOf(use);
                 const t = (M.useOf(use) || {}).type;
                 if (svc === 'comfyui_direct') { const nm = bucketPreset[M._comfyBucketOf(t)]; return nm ? 'comfy:' + nm : ''; }
-                return { novelai: 'nai', custom_api: 'capi', tavern_sd: 'tavern', pollinations: 'poll' }[svc] || '';
+                return { novelai: 'nai', custom_api: 'capi', tavern_sd: 'tavern' }[svc] || '';
             };
             M.USES.forEach(u => {
                 const r = routes[u.id] || {};
@@ -2601,9 +2642,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try { _migrateImgRoutes(); } catch (e) { console.warn('[圖片設置] 轉舊設定失敗:', e); }
             try { _pinComfyLegacyRows(); } catch (e) { console.warn('[圖片設置] 照原本的列換成包失敗:', e); }
             try { window._cfdEdit && window._cfdEdit.refresh && window._cfdEdit.refresh(); } catch (e) {}
-            window._switchImgTab(imgTab);
+            window._switchImgTab(imgTab, true);   // 一開設置就畫好，但改版提示要等她真的點進圖片那頁才跳
             _refreshSpriteBatchNote();
             _fillTestUses();
+            if (mode !== 'album') {
+                const imgMainTab = container.querySelector('.set-tab[data-tab="img"]');
+                if (imgMainTab) imgMainTab.addEventListener('click', () => { if (imgTab === 'style') _imgStyleSplitNotice(); });
+            }
         }, 0);
 
         // ── 試畫一張：選一個地方，走真的分流 ──
@@ -2785,29 +2830,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
 
                 // 桶的接口（serviceChar／serviceScene…）面板上已經沒有格子：每個地方改在「畫風」頁一列一列選（os_img_routes）。
                 //   這幾個值照存檔原樣留著，給還沒改過的列當「照原本的」。
-                const _imgCharSvc  = imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service || 'pollinations';
+                const _imgCharSvc  = imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service || '';
                 // ComfyUI 頁面板上那一份＝目前的設定（跟 NAI 頁一樣）。🚨 這裡絕不寫回任何預設包——包只有「存回這個包」改得到。
                 let _cfdPanel = {};
                 try { _cfdPanel = (window._cfdEdit && window._cfdEdit.panelFields) ? window._cfdEdit.panelFields() : {}; } catch (e) {}
                 const imgData = {
-                    serviceInanimate: imgConfig.serviceInanimate || imgConfig.service || 'pollinations',
+                    serviceInanimate: imgConfig.serviceInanimate || imgConfig.service || '',
                     serviceChar:      _imgCharSvc,
                     serviceScene:     imgConfig.serviceScene || _imgCharSvc,
-                    serviceMap:       imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service || 'pollinations',
+                    serviceMap:       imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service || '',
                     serviceLiving:    _imgCharSvc,
                     service:          _imgCharSvc,
                     imgSourceSynced:  (typeof imgConfig.imgSourceSynced === 'boolean') ? imgConfig.imgSourceSynced : true,
-                    pollinations: {
-                        url: 'https://gen.pollinations.ai/image',
-                        apiKey: elPolApiKey.value.trim(),
-                        model: elPolModel.value,
-                        size: elPolSize?.value || imgConfig.pollinations?.size || '1024x1024',
-                        models: imgConfig.pollinations.models || {},
-                        charBasePrompt: elStylePrompt.value.trim(),
-                        charNegPrompt: elCharNegPrompt.value.trim(),
-                        itemBasePrompt: imgConfig.pollinations.itemBasePrompt,
-                        itemNegPrompt: imgConfig.pollinations.itemNegPrompt
-                    },
                     customApi: {
                         url:    (container.querySelector('#img-capi-url')?.value   || '').trim(),
                         apiKey: (container.querySelector('#img-capi-key')?.value   || '').trim(),
@@ -2861,7 +2895,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         //   這裡照記憶體裡那份帶回去。🚨 別改回讀畫面——讀不到就會整份存成空的。
                         standaloneSpec:            String(imgConfig.sceneGen?.standaloneSpec || ''),
                         extractPromptNovelai:      String(imgConfig.sceneGen?.extractPromptNovelai || '').trim(),
-                        extractPromptPollinations: String(imgConfig.sceneGen?.extractPromptPollinations || '').trim(),
                         extractPromptTavern:       String(imgConfig.sceneGen?.extractPromptTavern || '').trim(),
                         extractPromptComfy:        String(imgConfig.sceneGen?.extractPromptComfy || '').trim(),
                         extractPromptCustom:       String(imgConfig.sceneGen?.extractPromptCustom || '').trim(),
@@ -3682,11 +3715,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const win = window.parent || window;
                 const imageManager = win.OS_IMAGE_MANAGER;
                 if (!imageManager) throw new Error('ImageManager 未載入');
-
-                imageManager.config.pollinations.apiKey = elPolApiKey.value.trim();
-                imageManager.config.pollinations.model = elPolModel.value;
-                imageManager.config.pollinations.charBasePrompt = elStylePrompt.value.trim();
-                imageManager.config.pollinations.charNegPrompt = elCharNegPrompt.value.trim();
 
                 const getNum = (selector, def) => parseFloat(container.querySelector(selector)?.value ?? def);
                 const getInt = (selector, def) => parseInt(container.querySelector(selector)?.value ?? def);

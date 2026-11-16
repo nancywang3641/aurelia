@@ -183,7 +183,7 @@
         },
         _doFetchBg: async function(cacheId, prompt) {
             // 🆘 fallback(退路真實圖+磨砂)是「主來源掛掉時的應急」、不是正式背景：記憶體/IDB 都不吃它的快取，
-            //    一律往下重新走主來源 → Pollinations 恢復 / 切 comfyui 後就能拿正式清晰圖(治「切了來源還是糊、舊糊圖卡快取」)。
+            //    一律往下重新走主來源 → 主來源恢復 / 切了來源後就能拿正式清晰圖(治「切了來源還是糊、舊糊圖卡快取」)。
             if (this._bgMemCache[cacheId] && !String(this._bgMemCache[cacheId]).includes('#fallback')) return this._bgMemCache[cacheId];
             const cached = await VN_Cache.get('bg_cache', cacheId);
             if (cached && cached.fallback) {
@@ -203,19 +203,14 @@
             let forceFallback = false;
             try { forceFallback = JSON.parse(localStorage.getItem('os_image_config') || '{}').fallbackForce === true; } catch(e) {}
 
-            // 背景主來源 + timeout。⚠️ timeout 語義隨來源天差地遠：
-            //   Pollinations：generateBackgroundAsync 只「組 URL」瞬間回(下載那刻才生圖)→ 12 秒夠且必要(擋組 URL 卡住)。
-            //   comfyui_direct/novelai/tavern_sd：是「await 等本機/直連真生完才回」→ 本機生 1024×768 背景常 >12 秒，
-            //     套 12 秒會把還在生的圖砍掉、誤掉進 Pixabay 真實圖 fallback(+#fallback 玻璃磨砂)＝「comfyui 背景被套玻璃遮罩」真凶。
-            //   → 非 Pollinations 來源放寬到 150 秒(跟頭像/場景逾時同量級)，別再誤砍本機生圖。
+            // 背景主來源 + timeout：所有來源都是「await 等真的生完才回」，本機 ComfyUI 生一張 1024×768 背景動輒 20~60 秒，
+            //   逾時給 150 秒（跟頭像/場景同量級），別把還在生的圖砍掉、誤掉進 Pixabay 真實圖 fallback。
+            //   （以前 Pollinations 只組網址、瞬間回，所以它另外給 12 秒；2026-11-17 拿掉了。）
+            //   還沒接生圖接口的話 generateBackgroundAsync 直接回空 → 走下面的 Pixabay / LoremFlickr 備援。
             const _IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER || (window.parent && window.parent.OS_IMAGE_MANAGER);
-            // 🚨 預設值不能是 pollinations：拿不到 serviceFor 時會落到 12 秒逾時，
-            //    而本機 ComfyUI 生一張 1024×768 背景動輒 20~60 秒 → 圖還在生就被判逾時、
-            //    備援又接不上 → 回空＝「背景沒拿到圖」，但 ComfyUI 那邊其實生完了。
-            //    → 只有「確定是 pollinations」才用短逾時，問不出來一律當本機/直連放寬。
             let _bgSvc = '';
             try { if (_IM && typeof _IM.serviceForUse === 'function') _bgSvc = _IM.serviceForUse('bg') || ''; else if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || ''; } catch (e) {}
-            const _bgTimeoutMs = (_bgSvc === 'pollinations') ? 12000 : 150000;
+            const _bgTimeoutMs = 150000;
             let raw = '';
             if (!forceFallback) {
                 try {
@@ -247,8 +242,7 @@
 
             const savedPrompt = meta.translatedPrompt || prompt;
             try {
-                // 下載逾時保險：Pollinations 是「下載那一刻才真正生圖」，雲端掛了這格會永遠 pending
-                // （黑窗 ComfyUI 閒著、進度卡 4/5 的那種）→ 90 秒放棄，改走備援
+                // 下載逾時保險：遠端網址（備援圖）下載卡住的話這格會永遠 pending → 90 秒放棄，改走備援
                 const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
                 const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 90000) : null;
                 let fetchRes;

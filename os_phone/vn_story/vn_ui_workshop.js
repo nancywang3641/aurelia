@@ -42,7 +42,7 @@
                     <div class="vn-ws-group">
                         <label>4. 這個面板的配圖用哪個 AI 生</label>
                         <select class="vn-ws-input" id="vn-ws-img-provider">
-                            <option value="pollinations">POLL AI — 快、省額度、不會亂長人臉（物品 / 廣告圖推薦）</option>
+                            <option value="">跟著圖片設置 — 照「設置 → 圖片」那邊選的</option>
                             <option value="novelai">NAI — 精緻二次元角色風（流媒體 / 立繪類）</option>
                             <option value="tavern_sd">酒館原生 — 走你在酒館設好的那組 SD</option>
                             <option value="custom_api">自訂接口 — 圖片設置裡自己填的那組</option>
@@ -123,7 +123,7 @@
 
         // 還原「配圖來源」選擇
         const _ipSel = document.getElementById('vn-ws-img-provider');
-        if (_ipSel) _ipSel.value = (localStorage.getItem('vn_ws_img_provider') === 'novelai') ? 'novelai' : 'pollinations';
+        if (_ipSel) { const _v = localStorage.getItem('vn_ws_img_provider') || ''; _ipSel.value = ['novelai', 'tavern_sd', 'custom_api', 'comfyui_direct'].includes(_v) ? _v : ''; }
 
         const tabs = document.querySelectorAll('.vn-ws-tab');
         tabs.forEach(tab => {
@@ -554,13 +554,13 @@ ${scope === 'js' ? '- JS 仍會被 new Function(container, lines, onComplete, js
         document.getElementById('vn-ws-code').innerText = isRefine ? `正在請 AI 進行修改 (範圍：${scope})...` : "開始呼叫底層 API (純淨模式)...";
         let messages = [];
         let mode = 'full'; // 'full' 全包 JSON ／ 'partial' 單欄位
-        // 配圖來源：用戶在煉丹爐選的 provider（沒選預設 POLL AI），baked 進 AI 寫的 generate() 呼叫
+        // 配圖來源：用戶在煉丹爐選的 provider（沒選＝空字串＝跟著圖片設置），baked 進 AI 寫的 generate() 呼叫
         // 🚨 這裡以前是寫死的二選一：不是 novelai 就折成 pollinations。所以就算下拉單補了選項，
         //    選酒館原生／自訂接口／ComfyUI 也一樣被折回去。白名單跟 os_image_manager 的派發器同一份，
         //    它本來就吃這五種（options.provider），缺的只是這邊沒把值放行。
-        const _WS_PROVIDERS = ['pollinations', 'novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'];
+        const _WS_PROVIDERS = ['novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'];   // 2026-11-17 拿掉 Pollinations；舊 app 裡寫死的 "pollinations" 引擎不認，自動照圖片設置
         const _wsPick = document.getElementById('vn-ws-img-provider')?.value;
-        const _imgProvider = _WS_PROVIDERS.includes(_wsPick) ? _wsPick : 'pollinations';
+        const _imgProvider = _WS_PROVIDERS.includes(_wsPick) ? _wsPick : '';
         try { localStorage.setItem('vn_ws_img_provider', _imgProvider); } catch (e) {}
 
         if (isRefine && scope !== 'all' && generatedData && SCOPE_FIELD_INFO[scope]) {

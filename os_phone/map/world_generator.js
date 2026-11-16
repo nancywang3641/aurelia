@@ -2,7 +2,7 @@
 // [檔案] world_generator.js (V1.0 - Stage 1: 動態世界生成器)
 // 路徑：scripts/os_phone/map/world_generator.js
 // 職責：讀取當前世界書 + 角色卡 → AI 生成 zones/facilities JSON
-//        → 跑 pollinations 生設施背景圖 → 灌進 WORLD_RUNTIME + OS_DB
+//        → 照圖片設置生設施背景圖 → 灌進 WORLD_RUNTIME + OS_DB
 //        另一條「直接畫」（opts.painted）：只要 <world-plan> 清單，地圖交給 world_painter.js 畫，不生圖
 // 依賴：OS_API.buildContext / OS_API.chat / OS_IMAGE_MANAGER / WORLD_RUNTIME / OS_DB
 // ----------------------------------------------------------------

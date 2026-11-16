@@ -448,8 +448,8 @@
                     if (!url && !d) return;
                     if (!url) {   // 還沒拿到圖才生成（pf.url 直接用）；立繪模式由 _makeCharImage 內部換立繪 prompt + 去背
                         const img2 = await this._makeCharImage(d, exp);
-                        // 🚨 生成失敗不要在這裡 return —— 人物圖已經不回退 Pollinations（畫風不相容，
-                        //    退了比沒有更糟），所以失敗是真的會發生的事。直接 return 會繞過下面那條
+                        // 🚨 生成失敗不要在這裡 return —— 人物圖失敗不會換別的接口重畫（畫風不相容，
+                        //    退了比沒有更糟），沒接接口也會回空，所以失敗是真的會發生的事。直接 return 會繞過下面那條
                         //    「最終預設立繪」，畫面上什麼都不會出現，看起來像卡住。讓 url 保持空的往下走。
                         if (img2) {
                             url = img2.objUrl; this._avatarMemCache[name] = img2.objUrl;

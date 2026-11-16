@@ -14,7 +14,7 @@
         var preview = opts.preview ? 'true' : 'false';
         var wake = opts.wake ? 'true' : 'false';
         var appId = String(opts.appId || 'preview').replace(/[^a-zA-Z0-9_-]/g, '') || 'preview';
-        // 生圖來源：app 記錄有指定才帶；沒指定就留空，讓 OS_IMAGE_MANAGER 照使用者的圖片設定按類型分桶（以前寫死退回 pollinations，等於無視她的設定）
+        // 生圖來源：app 記錄有指定才帶；沒指定就留空，讓 OS_IMAGE_MANAGER 照使用者的圖片設定按類型分桶（以前寫死退回 Pollinations，等於無視她的設定；2026-11-17 Pollinations 整個拿掉了）
         var provider = String(opts.provider || '').replace(/[^a-z0-9_-]/gi, '');
         return '<scr' + 'ipt>(function(){'
             + 'var P; try { P = window.parent; } catch(e){ return; }'

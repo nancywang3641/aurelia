@@ -2341,7 +2341,7 @@
             }
         },
         _stripSpriteBgAI: function(blob, extra) {
-            // 不管上游生成是並行(Pollinations)還是串行，去背永遠一張跑完才下一張；模型在同一個工人裡只載一次。
+            // 不管上游生成是並行還是串行，去背永遠一張跑完才下一張；模型在同一個工人裡只載一次。
             const self = this;
             const run = async () => {
                 self._heavyBegin('bg', self._bgDevice() + (self._bgWorkerOff ? '' : '-w'));

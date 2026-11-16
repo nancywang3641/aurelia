@@ -165,7 +165,7 @@
         return t ? t.name : id;
     }
     const SRC_NAME = {
-        pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館原生生圖',
+        pollinations: 'Pollinations'  /* 11-17 拿掉了，留著給舊的用量紀錄顯示名字 */, novelai: 'NovelAI', tavern_sd: '酒館原生生圖',
         comfyui_direct: 'ComfyUI', custom_api: '自訂生圖接口'
     };
 

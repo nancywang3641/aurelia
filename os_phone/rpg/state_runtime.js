@@ -1210,7 +1210,6 @@ ${numberedText}`;
         try { svc = ((win.OS_IMAGE_MANAGER?.serviceForUse?.('scene') || win.OS_IMAGE_MANAGER?.serviceFor?.('scene'))) || win.OS_IMAGE_MANAGER?.config?.service || ''; } catch (e) {}
         const perIface = ({
             novelai:        cfg.extractPromptNovelai,
-            pollinations:   cfg.extractPromptPollinations,
             tavern_sd:      cfg.extractPromptTavern,
             comfyui_direct: cfg.extractPromptComfy,
             custom_api:     cfg.extractPromptCustom,

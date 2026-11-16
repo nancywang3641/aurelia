@@ -343,12 +343,14 @@
 /* 圖片設置分頁：六顆排成整齊的 3×2（一排擠不下，自然換行會長短不齊） */
 .img-srctab-row.img-conn-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 2px 4px; }
 .img-srctab-row.img-conn-tabs .img-srctab { text-align: center; white-space: nowrap; padding-left: 2px; padding-right: 2px; }
-/* 圖片設置「畫風」頁：一個地方一段，名字一行，下面「用哪組／畫風／尺寸」各一行（面板只有三百多寬，兩格並排會把名字切掉） */
-.img-use-row { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 8px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
+/* 圖片設置「畫風」頁：一個地方一段，名字一行，下面「接口／預設包（或畫風）／尺寸」各一行（面板只有三百多寬，兩格並排會把名字切掉）。
+   標題那欄固定寬：第二格的標題一列寫「預設包」一列寫「畫風」，用 auto 的話每列下拉單左邊對不齊（11-17） */
+.img-use-row { display: grid; grid-template-columns: 3.4em minmax(0, 1fr); gap: 6px 8px; align-items: center; padding: 10px 0; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
 .img-use-row:first-child { border-top: 0; padding-top: 2px; }
 .img-use-name { grid-column: 1 / -1; font-size: 13px; font-weight: 800; color: var(--os-ink); }
 .img-use-label { font-size: 11px; color: var(--os-ink-soft); }
 .img-use-row .set-select, .img-use-row .set-input { font-size: 12px; min-width: 0; width: 100%; }
+.img-use-second { min-width: 0; }
 .img-use-size { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
 .img-use-label:has(+ .img-use-size:empty), .img-use-size:empty { display: none; }
 .img-use-size .set-input { flex: 1 1 100%; margin-top: 0 !important; }

@@ -1291,7 +1291,7 @@
             const seeBadge = seeOn
                 ? '<span class="wx-pill is-on">已開啟</span>'
                 : '<span class="wx-pill">已關閉</span>';
-            const AV_SRC_LABEL = { '': '跟著圖片設置', pollinations: 'Pollinations', novelai: 'NovelAI', tavern_sd: '酒館原生', custom_api: '自訂接口', comfyui_direct: 'ComfyUI 直連' };
+            const AV_SRC_LABEL = { '': '跟著圖片設置', novelai: 'NovelAI', tavern_sd: '酒館原生', custom_api: '自訂接口', comfyui_direct: 'ComfyUI 直連' };
             const avOptions = Object.keys(AV_SRC_LABEL).map(function (v) {
                 return '<option value="' + v + '"' + (avSrc === v ? ' selected' : '') + '>' + AV_SRC_LABEL[v] + '</option>';
             }).join('');

@@ -164,7 +164,7 @@
                 const negPrompt = _neg || undefined;
                 // 角色頭像尺寸：讀「🎭 頭像 → 角色頭像尺寸」設定。
                 //   有設＝明確覆寫（所有接口一致吃這格）；留空＝真的交給接口自己——
-                //   ComfyUI 落到「基本參數/預設包」調的寬高、Pollinations/NAI 用引擎預設（跟下拉說明對齊）。
+                //   ComfyUI 落到「基本參數/預設包」調的寬高、NAI 用引擎預設（跟下拉說明對齊）。
                 //   ⚠️ 先前留空寫死 512×768 → ComfyUI 的包/面板寬高在劇情頭像上永遠無效＝「調了跟沒調一樣」（Rae 抓的）。
                 //   想要舊的 512×768 直式小圖＝下拉明選那格，不再是隱形預設。
                 const _avOpts = { negativePrompt: negPrompt, force: !!force, use: 'avatar', styleDone: true };
@@ -178,7 +178,7 @@
         //   ・自訂接口：raw 唯一的作用就是「不要附上她自己填的底詞」，而那格底詞就是她的畫風，
         //     生圖那支的註解自己寫著「畫風放這裡由程式保證每張都帶」 → 要 false，否則立繪完全沒有風格。
         //     （她的說法：「風格沒送，連自動立繪的底圖都沒送」。）
-        //   ・Pollinations／酒館原生／ComfyUI：它們的底詞是內建那套動漫底詞，會跟立繪模板打架 → 維持 true。
+        //   ・酒館原生／ComfyUI：它們的底詞是內建那套動漫底詞，會跟立繪模板打架 → 維持 true。
         _spriteRaw: function (svc) { return !(svc === 'novelai' || svc === 'custom_api'); },
         // 立繪前綴／後綴：她在立繪工作室存的那兩格（os_sprite_tpl_prefix/suffix）。只有「沒存過」才退預設，
         //   存了空字串＝她清掉了、就是不要（工作室另有「還原預設」鈕）。單張、多人一張、舞台一鍵生立繪都問這支，

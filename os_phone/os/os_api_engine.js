@@ -1206,7 +1206,7 @@
         // ── 插圖落點的「哪些不要選」：兩條插圖路共用一份 ──
         // 搭便車那條（本檔 extractScenes）與獨立插圖副模型那條（state_runtime 的 extractScenesStandalone）
         // 都叫這支，別各寫各的——兩份會漂，她改了一邊另一邊還是舊的。
-        // 只有自訂接口要（她接的是 OpenAI 官方，站方會拒畫）；Pollinations／NAI／ComfyUI 什麼都畫得出來，回空字串。
+        // 只有自訂接口要（她接的是 OpenAI 官方，站方會拒畫）；NAI／ComfyUI 什麼都畫得出來，回空字串。
         // 寫給不認識這個故事的人看：只講判準與替代做法，不給例句、不給關鍵詞清單——
         // 給了它會照著造句，也會把清單當成「要避開的詞」在提示裡繞著寫。
         sceneSafeRules: function (svc) {
@@ -1279,7 +1279,7 @@
             if (!specPrompt) { onFinish(storyText); return; }
 
             // ── 依「插圖來源」決定 prompt 格式指令：NAI → 標籤、其餘 → 自然語言 ──
-            const _globalSvc = ((typeof win.OS_IMAGE_MANAGER?.serviceForUse === 'function') ? win.OS_IMAGE_MANAGER.serviceForUse('scene') : (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('scene') : (win.OS_IMAGE_MANAGER?.config?.service)) || 'pollinations';
+            const _globalSvc = ((typeof win.OS_IMAGE_MANAGER?.serviceForUse === 'function') ? win.OS_IMAGE_MANAGER.serviceForUse('scene') : (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('scene') : (win.OS_IMAGE_MANAGER?.config?.service)) || '';
             const _useNatural = _globalSvc !== 'novelai';
 
             const _taskInstruction = _useNatural ? [
@@ -1330,7 +1330,7 @@
 
             // ── 自訂接口（她接的是 OpenAI 官方那條）：站方會拒畫的段落，這裡就不要選 ──
             // 選了也生不出來，那一段落空；不如一開始就挑別的落點。這段只在插圖來源是自訂接口時加，
-            // 其他來源（Pollinations／NAI／ComfyUI）什麼都畫得出來，不該被這條綁住。
+            // 其他來源（NAI／ComfyUI）什麼都畫得出來，不該被這條綁住。
             // 寫給不認識這個故事的人看：只講判準與替代做法，不給例句、不給關鍵詞清單——
             // 給了它會照著造句，也會把清單當成「要避開的詞」在提示裡繞著寫。
             // 這段兩條插圖路共用（搭便車在這裡、獨立插圖副模型在 state_runtime 的 extractScenesStandalone），

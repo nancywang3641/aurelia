@@ -288,7 +288,6 @@
                             <div class="img-srctab" data-imgtab="comfyui_direct" onclick="window._switchImgTab && window._switchImgTab('comfyui_direct')">ComfyUI</div>
                             <div class="img-srctab" data-imgtab="tavern_sd" onclick="window._switchImgTab && window._switchImgTab('tavern_sd')">酒館</div>
                             <div class="img-srctab" data-imgtab="custom_api" onclick="window._switchImgTab && window._switchImgTab('custom_api')">自訂接口</div>
-                            <div class="img-srctab" data-imgtab="pollinations" onclick="window._switchImgTab && window._switchImgTab('pollinations')">Pollinations</div>
                         </div>
 
                         <!-- ── 🎨 畫風：每個地方一列（_renderImgUses 照 OS_IMAGE_MANAGER.USES 畫）── -->
@@ -314,7 +313,7 @@
                                         <option value="3" ${vnD.spriteBatch === 3 ? 'selected' : ''}>三個一起（每個 512×1024）</option>
                                     </select>
                                     <div class="set-desc">湊滿就一起生；劇情只冒出一個角色時照樣單獨生，不會等。<br>${_isGptChar(imgConfig)
-                                        ? '你現在頭像接的是 <b>' + (_charModelName(imgConfig) || String((imgConfig.pollinations && imgConfig.pollinations.model) || '')) + '</b>，就是它擅長的事。'
+                                        ? '你現在頭像接的是 <b>' + _charModelName(imgConfig) + '</b>，就是它擅長的事。'
                                         : '會照指令把畫面分成等寬直欄的是 GPT、Gemini（NanoBanana）那幾種；畫風鬆散的接口可能把幾個角色糊在一起。'}</div>
                                 </div>
                                 <!-- 🎴 一次生三種（她 2026-10-05：「做一個勾選打開這種模式?」）：一張三格圖切成立繪／頭像／Q版。
@@ -387,11 +386,6 @@
                                 <textarea class="set-textarea trio-tpl" id="doll-tpl" rows="9" oninput="window._dollTplSave && window._dollTplSave(this.value)"></textarea>
                                 <div class="btn-test trio-reset" onclick="window._dollTplReset && window._dollTplReset()">還原預設提示詞</div>
                             </div>
-                            <div class="set-group" id="img-style-list-block">
-                                <div class="set-label"><i class="fa-solid fa-palette"></i> 我的畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_img_styles') : ''}</div>
-                                <div id="img-style-list" class="img-style-list"></div>
-                                <button class="set-btn" type="button" id="img-style-add" onclick="window._imgStyle && window._imgStyle.add()"><i class="fa-solid fa-plus"></i> 新增畫風</button>
-                            </div>
                             <div class="set-group" id="img-scene-extract-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
                             <div style="display:flex; align-items:center; justify-content:space-between;" title="開啟後：每輪「記憶抽取（AVS＋向量）」那次副模型呼叫會順便依正文吐 2 張插圖 prompt → 自動生圖、貼進對應訊息。不勞主模型、不多花 API。其它觸發：主模型直接吐 [Scene|]（世界書開規則，最省）。">
                                 <span><i class="fa-solid fa-image"></i> 自動插圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2125') : ''}</span>
@@ -433,7 +427,7 @@
                             <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay API Key（空白 = 不啟用退路）" value="${_capiEsc(imgConfig.pixabayKey || '')}">
                             <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
                                 <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
-                                <span style="font-size:12px; color:var(--os-ink);"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去 Pollinations）</span>
+                                <span style="font-size:12px; color:var(--os-ink);"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去生圖接口）</span>
                             </div>
                         </div>
                             <!-- 三個尺寸下拉照舊在這裡組好（存檔讀它們），_renderImgUses 再把它們搬進對應那一列 -->
@@ -627,35 +621,6 @@
                                 </div>
                             </div>
 
-                            <div id="img-group-pollinations" class="${((imgConfig.serviceInanimate || imgConfig.service) === 'pollinations' || (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
-                                <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
-                                <div class="set-group">
-                                    <div class="field-row">
-                                        <div class="set-label" title="現在已無免費方案，需儲值，請至官網獲取 Key。">API Key <span class="lbl-req">(必填)</span></div>
-                                        <input class="set-input" id="img-pol-apikey" type="password" placeholder="請輸入 Pollinations API Key..." value="${_capiEsc(imgConfig.pollinations.apiKey || '')}">
-                                    </div>
-                                    <div class="field-row">
-                                        <div class="set-label" title="按價格排序。">模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1840') : ''}</div>
-                                        <select class="set-select" id="img-pol-model">
-                                            <option value="zimage" ${imgConfig.pollinations.model === 'zimage' ? 'selected' : ''}>Z-Image Turbo (0.002p)</option>
-                                            <option value="flux" ${imgConfig.pollinations.model === 'flux' ? 'selected' : ''}>Flux Schnell (0.00175p)</option>
-                                            <option value="p-image" ${imgConfig.pollinations.model === 'p-image' ? 'selected' : ''}>Pruna p-image (0.005p)</option>
-                                            <option value="klein" ${imgConfig.pollinations.model === 'klein' ? 'selected' : ''}>FLUX.2 Klein 4B (0.01p)</option>
-                                            <option value="grok-imagine" ${imgConfig.pollinations.model === 'grok-imagine' ? 'selected' : ''}>Grok Imagine (0.02p)</option>
-                                            <option value="qwen-image" ${imgConfig.pollinations.model === 'qwen-image' ? 'selected' : ''}>Qwen Image Plus (0.03p)</option>
-                                            <option value="seedream" ${imgConfig.pollinations.model === 'seedream' ? 'selected' : ''}>Seedream 4.0 (0.03p)</option>
-                                            <option value="seedream5" ${imgConfig.pollinations.model === 'seedream5' ? 'selected' : ''}>Seedream 5.0 Lite (0.035p)</option>
-                                            <option value="seedream-pro" ${imgConfig.pollinations.model === 'seedream-pro' ? 'selected' : ''}>Seedream 4.5 Pro (0.04p)</option>
-                                            <option value="ideogram-v4-turbo" ${imgConfig.pollinations.model === 'ideogram-v4-turbo' ? 'selected' : ''}>Ideogram 4 Turbo (0.03p)</option>
-                                            <option value="nanobanana" ${imgConfig.pollinations.model === 'nanobanana' ? 'selected' : ''}>NanoBanana</option>
-                                            <option value="nanobanana-pro" ${imgConfig.pollinations.model === 'nanobanana-pro' ? 'selected' : ''}>NanoBanana Pro</option>
-                                            <option value="gptimage" ${imgConfig.pollinations.model === 'gptimage' ? 'selected' : ''}>GPT Image 1 Mini</option>
-                                            <option value="gpt-image-2" ${imgConfig.pollinations.model === 'gpt-image-2' ? 'selected' : ''}>GPT Image 2</option>
-                                            <option value="kontext" ${imgConfig.pollinations.model === 'kontext' ? 'selected' : ''}>FLUX.1 Kontext (0.04p)</option>
-                                        </select>
-                                    </div>
-                                </div>
-                            </div>
 
                             <div id="img-group-customapi" class="${[(imgConfig.serviceInanimate || imgConfig.service), (imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service), (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service), (imgConfig.serviceMap || imgConfig.serviceInanimate || imgConfig.service)].includes('custom_api') ? '' : 'hidden'}">
                                 <div class="iface-section-title is-first"><i class="fa-solid fa-plug"></i> 連線設定</div>
@@ -705,6 +670,12 @@
                                         <button class="set-btn" id="img-capi-test" type="button"><i class="fa-solid fa-plug"></i> 測試</button>
                                         <div class="set-desc" id="img-capi-status"></div>
                                     </div>
+                                </div>
+                                <!-- 🎨 我的畫風：2026-11-17 從「畫風」頁搬來。只有選了自訂接口的地方才用得到（NAI、ComfyUI 的長相在它們自己的預設包裡） -->
+                                <div class="set-group" id="img-style-list-block">
+                                    <div class="set-label"><i class="fa-solid fa-palette"></i> 我的畫風${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_img_styles') : ''}</div>
+                                    <div id="img-style-list" class="img-style-list"></div>
+                                    <button class="set-btn" type="button" id="img-style-add" onclick="window._imgStyle && window._imgStyle.add()"><i class="fa-solid fa-plus"></i> 新增畫風</button>
                                 </div>
                             </div>
 
@@ -869,22 +840,6 @@
                             </div>
                         </div>
 
-                        <div id="img-pol-prompts-group" class="${((imgConfig.serviceChar || imgConfig.serviceLiving || imgConfig.service) === 'pollinations' || (imgConfig.serviceScene || imgConfig.serviceLiving || imgConfig.service) === 'pollinations') ? '' : 'hidden'}">
-                        <div class="iface-section-title"><i class="fa-solid fa-pen-to-square"></i> 提示詞（底詞）</div>
-                        <div class="set-group">
-                            <div class="field-row">
-                                <div class="set-label" title="全模組共用：夜店 / 偵探 / 寶寶 / VN頭像。這裡的詞會自動加在所有角色頭像生圖最前面，VN 背景不受影響。"><i class="fa-solid fa-palette"></i> 角色頭像通用底詞</div>
-                                <textarea class="set-textarea" id="img-style-prompt">${_capiEsc(imgConfig.pollinations.charBasePrompt)}</textarea>
-                                <div class="field-hint">↑ 這裡設定的詞會自動加在所有角色頭像生圖的最前面。VN背景不受影響。VN頭像可在 VN 設定裡追加額外詞。</div>
-                                <div class="field-reset"><span onclick="document.getElementById('img-style-prompt').value='anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines'">[重置為預設]</span></div>
-                            </div>
-                            <div class="field-row">
-                                <div class="set-label"><i class="fa-solid fa-ban"></i> 角色負詞</div>
-                                <textarea class="set-textarea" id="img-char-neg-prompt">${_capiEsc(imgConfig.pollinations.charNegPrompt)}</textarea>
-                                <div class="field-reset"><span onclick="document.getElementById('img-char-neg-prompt').value='bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text'">[重置為預設]</span></div>
-                            </div>
-                        </div>
-                        </div>
 
                         </div><!-- /view-img-api -->
                         <div id="view-img-avatar" class="img-subtab-view" style="display:none;">

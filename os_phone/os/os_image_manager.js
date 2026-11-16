@@ -4,7 +4,7 @@
 // 職責：統一管理圖片生成，並整合 TranslationManager 自動翻譯
 // V3.0：
 //   ① 實作 NovelAI 圖片生成（ZIP 解壓 → Blob URL）
-//   ② 路由策略：背景永遠走 Pollinations，角色/物品有 NAI token 則走 NAI
+//   ② 路由：每個地方（USES）各自選接口；2026-11-17 起拿掉 Pollinations（免費額度沒了），沒接接口＝跳提示、這張不畫
 //   ③ 新增 V4 / V4 Full 模型選項
 // ----------------------------------------------------------------
 (function() {
@@ -20,7 +20,7 @@
     //   • 圖片發單前讓「即時語音」≤8 秒（即時語音是幾秒的短爆發）
     //   • 「預熱語音」反過來讓圖片：vn_tts._runPrewarm 每句前先等本機圖片清空
     //     （否則 15 句連發＝紅燈常駐，圖片白等之外還跟語音擠爆 12GB VRAM → ComfyUI 卡死）
-    // 只有本機路線（comfyui_direct / tavern_sd）參與；雲端（NAI/Pollinations）不搶顯卡、照舊並行。
+    // 只有本機路線（comfyui_direct / tavern_sd）參與；雲端（NAI、自訂接口）不搶顯卡、照舊並行。
     if (!win.AURELIA_GPU_LIGHT || !win.AURELIA_GPU_LIGHT.imgStart) {
         win.AURELIA_GPU_LIGHT = {
             _voiceBusy: 0,   // 即時語音（不含預熱）
@@ -49,7 +49,7 @@
     // ── 本機 GPU 單線佇列（2026-06-11 終極版：紅綠燈互讓有競態窗口，遲到的單照樣撞）──
     // 同時只跑「一件」本機 GPU 工作，物理上不可能再撞顯卡。
     // 優先序：0=即時語音（玩家正在聽，插隊）＞ 1=本機圖片 ＞ 2=預熱語音（未來台詞墊底）。
-    // 只有本機工作進佇列（SoVITS、ComfyUI 直連、酒館SD）；雲端（NAI/Pollinations）不進、照舊並行。
+    // 只有本機工作進佇列（SoVITS、ComfyUI 直連、酒館SD）；雲端（NAI、自訂接口）不進、照舊並行。
     if (!win.AURELIA_GPU_QUEUE) {
         win.AURELIA_GPU_QUEUE = {
             _q: [], _running: false, _seq: 0,
@@ -112,47 +112,21 @@
 
     const ImageManager = {
         config: {
-            service: 'pollinations', // 預設（legacy：單一全域服務，保留供舊讀者；新路由走三桶）
-            // 三桶各自選接口：死物桶(bg/item) vs 頭像桶(char) vs 插圖桶(scene)
-            serviceInanimate: 'pollinations', // 死物桶：bg / item
-            serviceLiving: 'pollinations',    // legacy：舊「活物桶」(char+scene 共用)，保留供遷移/舊讀者；新路由走 serviceChar/serviceScene
-            serviceChar: 'pollinations',      // 頭像桶：char（角色頭像／立繪）
-            serviceScene: 'pollinations',     // 插圖桶：scene（場景插圖／CG）
-            serviceMap: 'pollinations',       // 小地圖桶：map（場景俯視小地圖底板，畫風跟背景分開）
+            // 各桶選的接口。2026-11-17 拿掉 Pollinations 之後，預設是「還沒接」（空字串）：新玩家要先去設置 → 圖片接一個。
+            service: '',          // legacy：單一全域服務，保留供舊讀者；新路由走三桶
+            serviceInanimate: '', // 死物桶：bg / item
+            serviceLiving: '',    // legacy：舊「活物桶」(char+scene 共用)，保留供遷移/舊讀者
+            serviceChar: '',      // 頭像桶：char（角色頭像／立繪）
+            serviceScene: '',     // 插圖桶：scene（場景插圖／CG）
+            serviceMap: '',       // 小地圖桶：map（場景俯視小地圖底板，畫風跟背景分開）
             // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API。
             //    三格全部自己填，不內建站台清單——每個站的型號都不一樣，清單只會過期。
             customApi: { url: '', apiKey: '', model: '', quality: 'medium', basePrompt: '' },
-            pollinations: {
-                url: 'https://gen.pollinations.ai/image', // API 端點
-                apiKey: '', // Pollen API Key
-                model: 'flux', // 預設模型（zimage 2026-06-28 起在 gen 端點卡死/逾時，改用 flux：3 秒秒出、最便宜）
-                models: {
-                    'zimage': 'Z-Image Turbo (0.002p)',
-                    'flux': 'Flux Schnell (0.00175p)',
-                    'p-image': 'Pruna p-image (0.005p)',
-                    'klein': 'FLUX.2 Klein 4B (0.01p)',
-                    'grok-imagine': 'Grok Imagine (0.02p)',
-                    'qwen-image': 'Qwen Image Plus (0.03p)',
-                    'seedream': 'Seedream 4.0 (0.03p)',
-                    'seedream5': 'Seedream 5.0 Lite (0.035p)',
-                    'seedream-pro': 'Seedream 4.5 Pro (0.04p)',
-                    'ideogram-v4-turbo': 'Ideogram 4 Turbo (0.03p)',
-                    'nanobanana': 'NanoBanana',
-                    'nanobanana-pro': 'NanoBanana Pro',
-                    'gptimage': 'GPT Image 1 Mini',
-                    'gpt-image-2': 'GPT Image 2',
-                    'kontext': 'FLUX.1 Kontext (0.04p)'
-                },
-                charBasePrompt: 'anime style, 2d, cel shading, flat color, illustration, high quality, best quality, no photorealistic, no 3d, clean lines',
-                charNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text',
-                itemBasePrompt: 'item only, product shot, no background, white background, clean illustration, high quality',
-                itemNegPrompt: 'person, human, character, body, face, hands, people, crowd, anatomy, bad anatomy, blurry, low quality, worst quality, watermark, text'
-            },
             novelai: {
                 token: '',
                 url: 'https://image.novelai.net/ai/generate-image',
                 model: 'nai-diffusion-3',
-                // NAI 用 Danbooru tag 格式，與 Pollinations 自然語言格式完全不同
+                // NAI 用 Danbooru tag 格式（逗號標籤），跟自訂接口那種讀句子的模型完全不同
                 charBasePrompt: 'masterpiece, best quality, very aesthetic, absurdres, anime style, detailed face',
                 charNegPrompt: 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry',
                 itemBasePrompt: 'masterpiece, best quality, white background, simple background, no background, product image, detailed',
@@ -196,11 +170,6 @@
                         serviceScene: savedConfig.serviceScene || savedConfig.serviceLiving || savedConfig.service || this.config.service,
                         // 小地圖桶：沒存過 → 退死物桶(背景)，現狀不變（要分才分）
                         serviceMap:   savedConfig.serviceMap   || savedConfig.serviceInanimate || savedConfig.service || this.config.service,
-                        pollinations: {
-                            ...this.config.pollinations,
-                            ...savedConfig.pollinations,
-                            models: this.config.pollinations.models
-                        },
                         novelai: {
                             ...this.config.novelai,
                             ...savedConfig.novelai
@@ -220,12 +189,12 @@
                         }
                     };
                     
-                    if (!this.config.pollinations.models[this.config.pollinations.model]) {
-                        console.warn(`[ImageManager] 舊模型 ${this.config.pollinations.model} 已失效，重置為 flux`);
-                        this.config.pollinations.model = 'flux';
-                    }
-
-                    console.log('[ImageManager] ✅ 配置已載入，當前模型:', this.config.pollinations.model);
+                    // 🗑 2026-11-17 拿掉 Pollinations：舊存檔裡選它的桶一律變「還沒接」，它那份設定也不再帶著存
+                    ['service', 'serviceInanimate', 'serviceLiving', 'serviceChar', 'serviceScene', 'serviceMap'].forEach(k => {
+                        if (this.config[k] === 'pollinations') this.config[k] = '';
+                    });
+                    delete this.config.pollinations;
+                    console.log('[ImageManager] ✅ 配置已載入');
                 } catch(e){
                     console.error('[ImageManager] ❌ 載入配置失敗:', e);
                 }
@@ -234,8 +203,7 @@
 
         // --- 同 (prompt, type) 結果快取 ---
         // 解決 011.html 這類「ST 正則注入面板」script 多次重跑導致每次都吃新 seed / 耗 token 的問題。
-        // 同 prompt + type 第二次呼叫直接回傳第一次的 URL（Pollinations 是 deterministic-on-seed，
-        // 鎖住 URL = 鎖住圖；NAI 則直接複用既有 blob URL）。
+        // 同 prompt + type 第二次呼叫直接回傳第一次的結果（NAI／ComfyUI 等直接複用既有 blob URL）。
         // options.force = true 可跳過 cache 強制重生。
         _urlCache: new Map(),
 
@@ -307,12 +275,26 @@
 
         // --- 三桶路由：依 type 取該桶選的接口 ---
         // 頭像桶 char = serviceChar；插圖桶 scene = serviceScene；其餘(bg/item/pet…) = serviceInanimate。
-        // char/scene 多重 fallback：新桶 → 舊「活物桶」serviceLiving → legacy 全域 service → 'pollinations'，保證永不回 undefined。
+        // char/scene 多重 fallback：新桶 → 舊「活物桶」serviceLiving → legacy 全域 service；都沒有＝''（還沒接接口）。
         serviceFor: function(type) {
-            if (type === 'char')  return this.config.serviceChar  || this.config.serviceLiving || this.config.service || 'pollinations';
-            if (type === 'scene') return this.config.serviceScene || this.config.serviceLiving || this.config.service || 'pollinations';
-            if (type === 'map')   return this.config.serviceMap   || this.config.serviceInanimate || this.config.service || 'pollinations';
-            return this.config.serviceInanimate || this.config.service || 'pollinations';
+            const c = this.config;
+            let s;
+            if (type === 'char')       s = c.serviceChar  || c.serviceLiving || c.service;
+            else if (type === 'scene') s = c.serviceScene || c.serviceLiving || c.service;
+            else if (type === 'map')   s = c.serviceMap   || c.serviceInanimate || c.service;
+            else                       s = c.serviceInanimate || c.service;
+            return (s && s !== 'pollinations') ? s : '';
+        },
+        // 🔕 沒接接口／接口沒填好：跳一次提示（一分鐘內同一句只跳一次，拼車一批圖不會連噴），這張不畫
+        _noService: function(why) {
+            const msg = why || '還沒接生圖接口：到「設置 → 圖片」選一個（NAI、ComfyUI、自訂接口或酒館）';
+            const now = Date.now();
+            if (this._noSvcMsg !== msg || now - (this._noSvcAt || 0) > 60000) {
+                this._noSvcMsg = msg; this._noSvcAt = now;
+                try { win.AUI && win.AUI.toast && win.AUI.toast(msg); } catch (e) {}
+            }
+            console.warn('[ImageManager] ' + msg);
+            return null;
         },
         // 🪽 帶翼角色的畫框加寬（角色圖路徑各自呼叫，不做在 generate() 裡）
         //   翅膀的輪廓寬度是人身的 2~3 倍，人身比例的畫布必定切到翅膀；去背後那是一條直線切邊，
@@ -402,6 +384,10 @@
         setStyles: function(list) { return win.AUI.lsSet(this._STYLES_KEY, JSON.stringify(list || []), '畫風包'); },   // 存成回 true
         // 這一列選了畫風嗎：沒選回 null（照舊）；選「不加」回空的一包
         styleFor: function(use) {
+            // 🎨 2026-11-17 她定的：畫風只給自訂接口。NAI、ComfyUI 寫底詞的方式完全不同，長相在它們自己的預設包裡，
+            //    這兩種接口一律不再疊畫風（連「原本的頭像／背景／物品底詞」也不加）。酒館照舊。
+            const svc = this.serviceForUse(use);
+            if (svc === 'novelai' || svc === 'comfyui_direct') return { id: 'none', name: '不加', pos: '', neg: '', ref: '' };
             const r = this.getRoutes()[use];
             if (!r || !r.style) return null;
             if (r.style === 'none') return { id: 'none', name: '不加', pos: '', neg: '', ref: '' };
@@ -409,7 +395,7 @@
         },
         // 「用哪組」的選項：各接口頁存好的組合
         connList: function() {
-            const out = [{ id: 'poll', svc: 'pollinations', name: 'Pollinations' }];
+            const out = [];
             const nai = this.config.novelai || {};
             out.push({ id: 'nai', svc: 'novelai', name: 'NAI・目前的設定' });
             (nai.naiPresets || []).forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, svc: 'novelai', name: 'NAI・' + (p.name || '未命名') }); });
@@ -426,7 +412,7 @@
         _resolveConn: function(conn) {
             conn = String(conn || '');
             if (!conn) return null;
-            if (conn === 'poll')   return { provider: 'pollinations' };
+            if (conn === 'poll')   return null;   // 2026-11-17 拿掉 Pollinations：舊存的這格當作沒選
             if (conn === 'tavern') return { provider: 'tavern_sd' };
             if (conn === 'nai')    return { provider: 'novelai' };
             if (conn === 'capi')   return { provider: 'custom_api' };
@@ -553,8 +539,8 @@
             }
 
             // 🔥 步驟 2: 路由判斷（依 type 桶取接口：活物桶 char/scene、死物桶 bg/item/pet）
-            // options.provider 可「單次」覆蓋桶選擇（給 VN 面板各自選 NAI / POLL AI 用）；沒給就走該 type 的桶
-            const service = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider : this.serviceFor(type);
+            // options.provider 可「單次」覆蓋桶選擇（給 VN 面板、應用各自選接口用）；沒給就走該 type 的桶
+            const service = (['novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider : this.serviceFor(type);
             this._noteImgSent({ type: type, service: service, prompt: englishPrompt });   // 見 _noteImgSent：給她自己看送了什麼
             let result;
             if (service === 'custom_api') {
@@ -568,24 +554,13 @@
                 // ComfyUI 直連：奧瑞亞內部組 workflow（底詞由 comfyuiDirect.basePrompt 控制，不套 poll ai 底詞）
                 console.log(`[ImageManager] Final Prompt [${type}→ComfyUIDirect]: ${englishPrompt}`);
                 result = await this._genComfyuiDirect(englishPrompt, type, options);
-            } else if (service === 'novelai' && this.config.novelai.token) {
+            } else if (service === 'novelai') {
                 // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
                 console.log(`[ImageManager] Final Prompt [${type}→NAI${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
                 result = await this._genNovelAI(englishPrompt, type, options);
             } else {
-                // 🔥 步驟 3: Pollinations 底詞（只在走 Pollinations 時套用；options.raw=true 跳過）
-                if (type === 'char' && !options.raw) {
-                    const charBase = this.config.pollinations.charBasePrompt;
-                    if (charBase) englishPrompt = charBase + ', ' + englishPrompt;
-                }
-                console.log(`[ImageManager] Final Prompt [${type}→Pol${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
-
-                // 🔥 步驟 4: Pollinations 負詞（options.raw=true 跳過）
-                if (!options.negativePrompt && type === 'char' && !options.raw) {
-                    options = { ...options, negativePrompt: this.config.pollinations.charNegPrompt || undefined };
-                }
-
-                result = this._genPollinations(englishPrompt, type, options);
+                // 沒接接口（2026-11-17 拿掉 Pollinations 之後，新玩家預設就是這樣）：跳一次提示，這張不畫
+                return this._noService();
             }
 
             if (result) {
@@ -604,45 +579,12 @@
             return result;
         },
 
-        // --- Pollinations 生成邏輯 ---
-        _genPollinations: function(basePrompt, type, options = {}) {
-            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
-            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'pollinations', type: type }); } catch (e) {}   // 📊 長期用量帳
-            const seed = options.seed || Math.floor(Math.random() * 100000);
-            const width = options.width || 512;
-            const height = options.height || 512;
-            const model = options.model || this.config.pollinations.model;
-            // 🎥 這裡也選得到 GPT Image 那幾顆；它們跟官方一樣不吃權重括號跟 Danbooru 取景詞。flux 那些照舊。
-            let optimizedPrompt = this._isNaturalModel(model) ? this._naturalizePrompt(basePrompt) : basePrompt;
-            this._noteImgSent({ patch: true, sent: optimizedPrompt });   // 記錄要看得到真正出門的字
-            const encoded = encodeURIComponent(optimizedPrompt);
-
-            // 🔥 構建 URL
-            let url = `${this.config.pollinations.url}/${encoded}?width=${width}&height=${height}&model=${model}&seed=${seed}&nologo=true`;
-
-            // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，raw 也生效
-            const _polNeg = [options.negativePrompt, options.extraNegative].filter(Boolean).join(', ');
-            if (_polNeg) {
-                url += `&negative_prompt=${encodeURIComponent(_polNeg)}`;
-            }
-
-            // 檢查 API Key
-            if (this.config.pollinations.apiKey && this.config.pollinations.apiKey.trim() !== '') {
-                const apiKey = this.config.pollinations.apiKey.trim();
-                url += `&private=true&key=${apiKey}`;
-            }
-
-            console.log('[ImageManager] 生成 URL:', url);
-            return url;
-        },
-
         // --- 酒館原生 /sd 生成：走使用者在酒館 Image Generation 擴展設好的後端 ---
         // 不塞奧瑞亞底詞/負詞（尊重朋友的 SD 設定）；失敗回 null 並用 toastr 提示，不偷偷換來源。
         // 🌐 自訂接口（OpenAI 格式的生圖 API）
         // ------------------------------------------------------------------
         // 給「公益站／自架站」用：它們多半提供一條 OpenAI 相容的位址，
-        // 送 JSON、回 JSON，跟 Pollinations「提示詞塞網址、GET 回圖」完全是兩回事，
-        // 所以不能共用那格、只換網址。
+        // 送 JSON、回 JSON。
         // 模型名一律使用者自己填 —— 每個站支援的型號都不一樣，內建清單只會過期。
         // 📝 留一份「這張圖到底送了什麼字出去」。她沒有 console，那幾行 Final Prompt 她一輩子看不到，
         //    於是「畫風有沒有帶到」只能聽我說。這份給 DEBUG 那顆按鈕讀，她自己看得到。
@@ -654,7 +596,7 @@
                     const last = this._imgSentLog[this._imgSentLog.length - 1];
                     if (last) {
                         last.sent = e.sent;
-                        // 沒帶的欄位別覆寫成空：Pollinations 那條只回填送出去的字，它本來就沒有底詞/raw 這兩格
+                        // 沒帶的欄位別覆寫成空：有的線路只回填送出去的字，沒有底詞/raw 這兩格
                         if (e.base !== undefined) last.base = e.base;
                         if (e.raw !== undefined) last.raw = e.raw;
                     }
@@ -693,7 +635,7 @@
             s = s.replace(/\s*,\s*(?:,\s*)+/g, ', ').replace(/^[\s,]+|[\s,]+$/g, '').replace(/[ \t]{2,}/g, ' ');
             return say ? (s + '\n\n' + say) : s;
         },
-        // 這條線路背後是不是「讀句子」的模型（官方 GPT Image／DALL·E，Pollinations 那幾顆同名的也是）
+        // 這條線路背後是不是「讀句子」的模型（官方 GPT Image／DALL·E）
         _isNaturalModel: function (model) { return /^(gpt-?image|dall-?e)/i.test(String(model || '')); },
 
         // 自訂接口回錯 → 給她看的一句話＋站方原話。生圖（_genCustomApi）和帶圖編輯（capiEdit）共用。
@@ -1224,7 +1166,7 @@
             return out;
         },
         // 「立繪表情」那列用哪一種畫：'comfy'＝ComfyUI 一張一張重畫臉；'gpt'＝自訂接口（GPT 那種帶圖編輯）一通九宮格（OS_EXPR_GRID）；
-        //   '' ＝兩種都不是（Pollinations、NAI…），生表情做不了
+        //   '' ＝兩種都不是（NAI、酒館…），生表情做不了
         exprEngine: function() {
             const svc = this.serviceForUse(this.exprUse());
             return svc === 'comfyui_direct' ? 'comfy' : (svc === 'custom_api' ? 'gpt' : '');
@@ -1782,13 +1724,8 @@
             try { win.OS_USAGE && win.OS_USAGE.note({ source: 'novelai', type: type }); } catch (e) {}   // 📊 長期用量帳
             // 這一列選了某個 NAI 預設就用它那幾欄（_resolveConn 拼好的一份），不動全域設定——大廳換裝那種「暫時換掉再換回來」在並行時會互相蓋
             const cfg = options._naiCfg || this.config.novelai;
-            // 退到 Pollinations 時照樣帶這張要的尺寸、種子、負詞（以前空手退過去，一律變 512×512、負詞全掉）。
-            //   只挑兩邊意思一樣的那幾格：NAI 自己的連線、模型不帶過去
-            const _polOpts = { width: options.width, height: options.height, seed: options.seed, negativePrompt: options.negativePrompt, extraNegative: options.extraNegative };
-            if (!cfg.token) {
-                console.warn('[ImageManager] NAI token 未設定，回退 Pollinations');
-                return this._genPollinations(prompt, type, _polOpts);
-            }
+            // NAI 沒填 token：跳提示、這張不畫（以前退回 Pollinations，2026-11-17 拿掉了）
+            if (!cfg.token) return this._noService('NAI 還沒填 Token：到「設置 → 圖片 → NAI」填好再畫');
 
             // Mutex：等待前一個 NAI 請求完成後才開始，避免 429 Concurrent lock
             let _release;
@@ -1988,7 +1925,7 @@
             } catch (error) {
                 _release(); // 無論成功失敗都釋放
                 const _emsg = (error && error.message) || String(error);
-                console.error('[ImageManager] ❌ NAI 失敗，回退 Pollinations:', _emsg);
+                console.error('[ImageManager] ❌ NAI 失敗:', _emsg);
                 // 🔎 把 NAI 真實錯誤碼/內文彈到畫面（console 唯讀看不到）→ 撞錯誤立刻見真章：
                 //    併發限制是 429/"concurrent"；500=NAI 伺服器錯誤；400=prompt/參數問題；402=Anlas 不足。各自對策不同。
                 this._lastNaiError = { msg: _emsg, type: type, at: '' };
@@ -2007,46 +1944,10 @@
                         else _tr.warning('NAI 生圖失敗（非併發）：' + _emsg, 'NAI 錯誤', { timeOut: 8000 });
                     }
                 } catch (_) {}
-                // 🎯 人物圖（scene 插圖 / char 頭像立繪）：NAI 失敗「不」回退 Pollinations。
-                //    NAI 吃 Danbooru tag、Pollinations 吃自然語言，格式不相容 —— 硬退生出來的是
-                //    畫風完全不同的另一張圖，貼到舞台上比沒有更糟。寧可這張略過：
-                //    上游（_doFetchScene / 立繪解析鏈）都判空，會落到使用者自己設的預設立繪，
-                //    也可以按 🔄 重生。（char 那條 2026-08-31 由 Rae 拍板拿掉，理由同 scene。）
-                if (type === 'scene' || type === 'char') {
-                    console.warn('[ImageManager] ' + type + ' NAI 失敗 → 不回退 Pollinations（提示詞不相容），略過此張');
-                    return null;
-                }
-                // 死物（背景／物品）仍回退：那類圖 Pollinations 出得堪用，
-                // 而且背景缺圖會整片黑，比畫風不一致嚴重。
-                return this._genPollinations(prompt, type, _polOpts);
+                // NAI 失敗這張就略過（上游都判空：立繪落到她設的預設立繪、背景留原本那張），可以按 🔄 重生。
+                //   以前背景／物品會退回 Pollinations，2026-11-17 拿掉了。
+                return null;
             }
-        },
-
-        // 🔥 VN 背景生成器專用接口 (同步)
-        generateBackground: function(prompt, options = {}) {
-            console.log(`[ImageManager] 生成VN背景 (同步): ${prompt.substring(0, 50)}...`);
-
-            // 🗑️ 已拔除硬塞的 vnStylePrompt，完全使用傳入的 prompt
-            const finalPrompt = prompt;
-
-            // ✅ 保留 VN 專用 Negative Prompt (防路人與劣質畫風，這是必要的防護網)
-            const negativePrompt = 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render';
-
-            const seed = options.seed || Math.floor(Math.random() * 100000);
-            const width = options.width || 1024;
-            const height = options.height || 1024;
-            const model = options.model || this.config.pollinations.model;
-            
-            const encoded = encodeURIComponent(finalPrompt);
-            const encodedNegative = encodeURIComponent(negativePrompt);
-
-            let url = `${this.config.pollinations.url}/${encoded}?width=${width}&height=${height}&model=${model}&seed=${seed}&negative_prompt=${encodedNegative}&nologo=true`;
-
-            if (this.config.pollinations.apiKey && this.config.pollinations.apiKey.trim() !== '') {
-                url += `&private=true&key=${this.config.pollinations.apiKey.trim()}`;
-            }
-
-            return url;
         },
 
         // 🔥 異步版本 (給 Host/OS/VN_Core 使用)
@@ -2082,9 +1983,9 @@
             const _isMap = options.imgType === 'map';
             // 🌄 背景/小地圖接口由對應桶決定：背景→死物桶、小地圖→map 桶（各自的模型/負詞）。
             const _tp = _isMap ? 'map' : 'bg';
-            const _bgSvc = (['novelai', 'pollinations', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider
-                : ((typeof this.serviceFor === 'function') ? this.serviceFor(_tp) : 'pollinations');
-            if (_bgSvc !== 'pollinations') {
+            const _bgSvc = (['novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider
+                : this.serviceFor(_tp);
+            if (_bgSvc) {
                 const _bgOpts = { ...options, width: options.width || 1024, height: options.height || 1024 };
                 if (_isMap) {
                     delete _bgOpts.negativePrompt;   // 小地圖：負詞全聽 map 桶/預設包自己的
@@ -2100,43 +2001,25 @@
                     return await this._genTavernSd(optimizedPrompt, _tp, _bgOpts);
                 } else if (_bgSvc === 'custom_api') {
                     // 🚨 背景是獨立路徑、不走 generate()，新接口一定要在這裡也接一次，
-                    //    否則選了它背景會靜靜掉回 Pollinations（這個坑背景踩過兩次）。
+                    //    否則選了它背景會靜靜畫不出來（這個坑背景踩過兩次）。
                     return await this._genCustomApi(optimizedPrompt, _tp, _bgOpts);
                 }
-                // 接口未就緒(例如 NAI 沒填 token) → 往下 fall through 回 Pollinations，不讓背景生不出來
+                if (_bgSvc === 'novelai') return this._noService('NAI 還沒填 Token：到「設置 → 圖片 → NAI」填好再畫');
             }
-
-            // 預設：Pollinations
-            const seed = options.seed || Math.floor(Math.random() * 100000);
-            const width = options.width || 1024;
-            const height = options.height || 1024;
-            const model = options.model || this.config.pollinations.model;
-
-            const encoded = encodeURIComponent(optimizedPrompt);
-            // 小地圖(poll)也不再暗掛 MAP_NEG——負詞歸預設包/呼叫端
-            const encodedNegative = encodeURIComponent(negativePrompt);
-
-            let url = `${this.config.pollinations.url}/${encoded}?width=${width}&height=${height}&model=${model}&seed=${seed}&negative_prompt=${encodedNegative}&nologo=true`;
-
-            if (this.config.pollinations.apiKey && this.config.pollinations.apiKey.trim() !== '') {
-                url += `&private=true&key=${this.config.pollinations.apiKey.trim()}`;
-            }
-
-            // 📊 長期用量帳：背景走 Pollinations 是自己組 URL 直接回，不經過 _genPollinations，所以在這裡記
-            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'pollinations', type: 'bg' }); } catch (e) {}
-            return url;
+            // 沒接接口（2026-11-17 拿掉 Pollinations 之後，新玩家預設就是這樣）：跳一次提示，這張不畫
+            return this._noService();
         },
 
         // 🔥 物品生成專用接口（獨立底詞，不混用角色詞）
         generateItem: function(prompt, options = {}) {
             console.log(`[ImageManager] 生成物品: ${prompt.substring(0, 50)}...`);
             // 物品專用底詞/負詞（與角色分離），整條走統一 generate 路由：serviceFor('item')=死物桶，
-            //   pollinations / comfyui_direct / novelai / tavern_sd 全由 generate 內部分派 → 換哪條線路物品都跟著走。
+            //   comfyui_direct / novelai / tavern_sd / custom_api 全由 generate 內部分派 → 換哪條線路物品都跟著走。
             // 🗂 這一列選了畫風＝用那包取代原本的物品底詞（styleDone：generate 那邊不再加一次）
             const _st = options.use ? this.styleFor(options.use) : null;
-            const itemBase = _st ? _st.pos : this.config.pollinations.itemBasePrompt;
+            const itemBase = _st ? _st.pos : '';   // 以前沒選畫風會借 Pollinations 那份物品底詞，2026-11-17 拿掉了
             const finalPrompt = itemBase ? itemBase + ', ' + prompt : prompt;
-            const negPrompt = options.negativePrompt || (_st ? _st.neg : this.config.pollinations.itemNegPrompt) || undefined;
+            const negPrompt = options.negativePrompt || (_st ? _st.neg : '') || undefined;
             return this.generate(finalPrompt, 'item', {
                 ...options,
                 width: options.width || 512,
@@ -2145,11 +2028,6 @@
                 raw: true,
                 styleDone: true
             });
-        },
-
-        setApiKey: function(apiKey) {
-            this.config.pollinations.apiKey = apiKey;
-            this.saveConfig();
         },
 
         saveConfig: function() {

@@ -4,7 +4,7 @@
 // 職責：
 //   1. 進設施時即時 call AI 出 <scene-map> 標籤（底板 prompt + 3-5 個地標物件 + x/y 座標）
 //   2. parse 標籤 → 寫進 facility.sceneMap → 給 map_core 渲染 + 避撞
-//   3. 開關控制是否走 pollinations 補底板圖（預設關，省流量）
+//   3. 開關控制是否照圖片設置補底板圖（預設關，省流量）
 // ----------------------------------------------------------------
 (function() {
     console.log('[PhoneOS] 載入場景地標引擎 (V1.0)...');
@@ -168,19 +168,19 @@
 只輸出 <scene-map>...</scene-map> 包裹的內容，不要其他文字、不要 markdown 包裹。`;
 
     // 🔀 底板詞格式按「小地圖桶」當前接口自動切（Rae：Anima 吃自然語言、SDXL 反而不能吃）：
-    //    NAI / ComfyUI-SDXL(checkpoint) → 逗號標籤；Anima / Flux / Pollinations / 酒館原生 → 自然語言句子。
+    //    NAI / ComfyUI-SDXL(checkpoint) → 逗號標籤；Anima / Flux / 自訂接口 / 酒館原生 → 自然語言句子。
     //    按下探索那一刻現判，切接口即時生效，不用改設定。
     function _mapPromptStyle() {
         try {
             const IM = win.OS_IMAGE_MANAGER;
-            const svc = (IM && typeof IM.serviceForUse === 'function') ? IM.serviceForUse('map') : ((IM && typeof IM.serviceFor === 'function') ? IM.serviceFor('map') : 'pollinations');
+            const svc = (IM && typeof IM.serviceForUse === 'function') ? IM.serviceForUse('map') : ((IM && typeof IM.serviceFor === 'function') ? IM.serviceFor('map') : '');
             if (svc === 'novelai') return 'tags';
             if (svc === 'comfyui_direct') {
                 const cfg = (typeof IM.comfyCfgForUse === 'function') ? IM.comfyCfgForUse('map') : ((typeof IM._comfyCfgFor === 'function') ? IM._comfyCfgFor('map') : ((IM.config && IM.config.comfyuiDirect) || {}));
                 const mt = cfg.modelType;
                 return (mt === 'anima' || mt === 'flux') ? 'natural' : 'tags';   // SDXL(checkpoint)=標籤
             }
-            return 'natural';   // pollinations / tavern_sd：自然語言比標籤好
+            return 'natural';   // 自訂接口 / tavern_sd：自然語言比標籤好
         } catch (e) { return 'tags'; }
     }
     const BASEPLATE_RULE_TAGS =
