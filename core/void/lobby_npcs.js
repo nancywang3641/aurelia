@@ -583,7 +583,10 @@
     const STAFF = {
         ying:     { name: '瀅瀅',     persona: null,                subTitle: '視差書咖 · 店長',        portrait: ASSET.ying },
         alice:    { name: '愛麗絲',   personaFull: ALICE_PERSONA,   subTitle: '純白大廳 · 首席導覽官',  portrait: ASSET.alice,
-                    live: { idle: ASSET.aliceIdle, greet: ASSET.aliceGreet } },   // live＝對話模式裡會動的立繪（有就播，播不了留 portrait）
+                    // live＝對話模式裡會動的立繪（有就播，播不了留 portrait）。greetFrom＝歡迎那支從第幾秒開始播：
+                    //   原片前 1 秒是閉眼、睜眼，手到 1.25 秒才動；她：「抬手的那個要再開始時間要再往前一點好」→ 從 1 秒進，
+                    //   點下去 0.25 秒手就開始抬，拉近的鏡頭停下來時手剛好伸出去。1 秒那格剛好是影片的關鍵格，跳過去不用等。
+                    live: { idle: ASSET.aliceIdle, greet: ASSET.aliceGreet, greetFrom: 1 } },
         rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit },
         zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei },
         hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter },

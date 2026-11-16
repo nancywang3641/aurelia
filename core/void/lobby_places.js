@@ -448,7 +448,7 @@
     // ── 🎞 會動的立繪（11-16；她拿新立繪去生的綠幕影片）──────────────
     //   影片檔是「上半彩色（已乘透明度）＋下半透明度灰階」疊起來的普通 mp4：到處都播得了（iPhone 不認帶透明的 webm），
     //   這裡用 WebGL 把兩半合回一張透明的畫面，畫在 <canvas class="lb-pv-portrait lb-pv-live"> 上；它跟靜止那張 <img> 吃同一套版位。
-    //   誰有影片寫在 lobby_npcs.js 的 STAFF[x].live＝{ idle 站著循環, greet 進這個地點後第一次拉近時演一次 }。
+    //   誰有影片寫在 lobby_npcs.js 的 STAFF[x].live＝{ idle 站著循環, greet 進這個地點後第一次拉近時演一次, greetFrom 那支從第幾秒進場 }。
     //   🚨 起不來就什麼都不做：沒有 WebGL、檔案抓不到、瀏覽器不給自動播（省電模式）、系統設了減少動態 → 畫面上留靜止立繪。
     //      真的畫出第一格才掛 .lb-pv.is-live（CSS 這時才把 <img> 換成 <canvas>）。
     //   🚨 影片先整支抓成 blob 再播：jsDelivr 不給素材庫的 mp4（見 fetchUrl），只能靠 GitHub raw，而 raw 給的類型不是影片，
@@ -594,7 +594,7 @@
             greeted = true;
             try { vIdle.pause(); } catch (e) {}
             active = vGreet;
-            try { vGreet.currentTime = 0; } catch (e) {}
+            try { vGreet.currentTime = cur.greetFrom || 0; } catch (e) {}   // 從第幾秒進場各人自己訂（STAFF 的 live.greetFrom）
             schedule();
             const p = vGreet.play(); if (p && p.catch) p.catch(backToIdle);
         };
