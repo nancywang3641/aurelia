@@ -488,7 +488,7 @@ const IRIS_IDLE = [
             const nameBox = document.getElementById('iris-name-tag');
             if (box) box.innerHTML = is404Room
                 ? `<span style="color:#00cc33;font-style:italic;">(對話歷史已載入...)</span>`
-                : `<span style="color:#5c3a28;font-style:italic;">(素材檔案已載入，繼續吧。)</span>`;
+                : `<span class="void-nar" style="color:#5c3a28;font-style:italic;">(素材檔案已載入，繼續吧。)</span>`;
             if (nameBox) nameBox.style.display = 'none';
         } else {
             if (is404Room) {
@@ -1719,7 +1719,7 @@ const IRIS_IDLE = [
         if (IRIS_STATE.isTyping) {
             clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
             // 旁白是模型寫的（[Nar|…]）：轉義再放進斜體那層，帶 <img onerror> 的字只會照字顯示
-            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(IRIS_STATE.fullText)}</span>`;
+            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(IRIS_STATE.fullText)}</span>`;
             else textContent.innerText = IRIS_STATE.fullText;
             
             if (nextInd) {
@@ -1755,7 +1755,7 @@ const IRIS_IDLE = [
         IRIS_STATE.timer = setInterval(() => {
             if (i < IRIS_STATE.fullText.length) {
                 let partial = IRIS_STATE.fullText.substring(0, i + 1);
-                if (msg.type === 'Nar') textContent.innerHTML = `<span style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(partial)}</span>`;   // 先切字再轉義，&amp; 不會被切成半個
+                if (msg.type === 'Nar') textContent.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(partial)}</span>`;   // 先切字再轉義，&amp; 不會被切成半個
                 else textContent.innerText = partial;
                 i++;
             } else {
@@ -2209,7 +2209,7 @@ ${sections}`;
         const box = document.getElementById('iris-text');
         const nameBox = document.getElementById('iris-name-tag');
         if (nameBox) nameBox.style.display = 'none';
-        box.innerHTML = `<span style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : (npcTarget ? `(${_aiEsc(npcTarget.name)}想了想...)` : '(瀅瀅咬著羽毛筆思索中...)')}</span>`;   // 書卡客人的名字來自角色卡：轉義
+        box.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : (npcTarget ? `(${_aiEsc(npcTarget.name)}想了想...)` : '(瀅瀅咬著羽毛筆思索中...)')}</span>`;   // 書卡客人的名字來自角色卡：轉義
 
         if (!window.OS_API) {
             playIrisSequence("[Nar|(系統斷線：無法連接到 LUNA-VII 認知引擎)]\n[Char|瀅瀅|error|「抱歉，委託人，我好像找不到這段劇情的靈感了（無網路連線）。」]");
@@ -2512,7 +2512,7 @@ ${sections}`;
             if (isAbort) {
                 // 使用者主動停止：靜默處理，思考中文字換成已停止提示
                 const txtBox = document.getElementById('iris-text');
-                if (txtBox) txtBox.innerHTML = `<span style="color:${is404Room ? '#15a82f' : '#9c9083'}; font-style:italic; font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>`;
+                if (txtBox) txtBox.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#15a82f' : '#9c9083'}; font-style:italic; font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>`;
             } else {
                 console.error("[VoidTerminal Chat Error]", e);
                 if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);

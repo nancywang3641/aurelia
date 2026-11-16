@@ -1450,6 +1450,12 @@
     -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
     scrollbar-width:thin; scrollbar-color:rgba(255,255,255,.7) transparent;
 }
+/* 旁白、「想了想…」那種斜體字：void_terminal.js 是照舊版霧白對話卡寫死深咖啡色（#5c3a28），放到現在的深色底上看不清楚。
+   這一版改成跟著地點的淡色（白裡帶一點地點色），跟他說的話（純白）分得出來。那邊寫在 style 裡，所以要 !important */
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text .void-nar {
+    color:rgba(255,255,255,.86) !important;
+    color:color-mix(in srgb, #fff 80%, rgb(var(--lbh-soft))) !important;
+}
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text::-webkit-scrollbar { width:6px; }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-text::-webkit-scrollbar-thumb { background:rgba(255,255,255,.7); border-radius:3px; }
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-next { right:16px; bottom:8px; color:#fff; }
