@@ -30,7 +30,7 @@
             ss_1551: { title: '插圖 來源', body: '場景插圖／CG 用這個來源。' },
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
-            ss_img_uses: { title: '每個地方用什麼', body: '一列是一個會生圖的地方。先選「接口」，第二格就列那個接口自己的東西：NAI、ComfyUI 列它們的預設包；自訂接口列「自訂接口」那頁的畫風；酒館照酒館那邊的設定。選了就存，不用按底部保存。\n\n照原本的＝還沒換過，照改版前那套走。' },
+            ss_img_uses: { title: '每個地方用什麼', body: '一列是一個會生圖的地方。先選「接口」，第二格就列那個接口自己的東西：NAI、ComfyUI 列它們的預設包；自訂接口列「自訂接口」那頁的畫風；酒館照酒館那邊的設定。選了就存，不用按底部保存。\n\n最上面「全部一起選」：每個地方都要用同一個接口時，在那裡選一次、按「下面每一列都用這個」，就不用一列一列選；填完之後每一列還是可以單獨改。\n\n照原本的＝還沒換過，照改版前那套走。' },
             ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖。以前這頁的底詞包和底詞格也併進來了（11-17）。「畫風」頁每個選了自訂接口的地方挑一包，好幾個地方可以用同一包。NAI、ComfyUI 的長相寫在它們自己的預設包裡，不用這裡的畫風。' },
             ss_img_style_ref: { title: '底圖', body: '給生圖參考畫風用的一張圖。只有自訂接口收得到參考圖，其他接口會略過。' },
             ss_img_test: { title: '試畫一張', body: '選一個地方，照那一列現在的設定畫一張。ComfyUI 的預設包要先存好才試得到。' },
@@ -2078,6 +2078,78 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const FIXED_SIZE = { item: '跟著用它的地方', map: '1024×512', phone: '1024×1024', app: '跟著應用', doll: '寬圖（三隻並排）' };
         const SPRITE_SIZES = [['512x896', '512×896（窄·瘦）'], ['640x896', '640×896（標準）'], ['704x896', '704×896（寬·鎧甲）'], ['768x896', '768×896（超寬·厚甲）']];
         const _parking = () => container.querySelector('#img-size-parking');
+        // ── 最上面「全部一起選」（2026-11-17，Gemini 看設置頁：新手 11 列都是「還沒選」不知道從哪下手）──
+        //   選一個接口＋它的預設包（自訂接口是畫風），按一下，下面每一列都填成這個；之後每列照樣能單獨改。
+        //   這是「幫我填」的工具，不是另一層設定：存的還是每列自己那筆 os_img_routes，填完這格就清回空的，
+        //   免得它寫著 NAI、下面的列卻被她改成別的。
+        let _allPick = { svc: '', second: '' };
+        const _allHtml = (svcs, styles) => {
+            const list = svcs.filter(c => !(isStandalone && c.id === 'tavern'));
+            if (!list.some(c => c.id === _allPick.svc)) _allPick = { svc: '', second: '' };   // 選著的節點被刪了
+            const svc = _allPick.svc;
+            let second = '', secondLabel = '預設包';
+            if (svc === 'nai' || svc === 'comfy') {
+                const cur = _allPick.second || svc;
+                second = '<select class="set-select img-use-all-second">'
+                    + _packChoices(svc).map(c => '<option value="' + _ie(c.id) + '"' + (c.id === cur ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('')
+                    + '</select>';
+            } else if (svc === 'capi' || svc.indexOf('capi:') === 0) {
+                secondLabel = '畫風';
+                second = '<select class="set-select img-use-all-second">'
+                    + '<option value=""' + (_allPick.second ? '' : ' selected') + '>各列原本選的不動</option>'
+                    + '<option value="none"' + (_allPick.second === 'none' ? ' selected' : '') + '>不加</option>'
+                    + styles.map(st => '<option value="' + _ie(st.id) + '"' + (st.id === _allPick.second ? ' selected' : '') + '>' + _ie(st.name) + '</option>').join('')
+                    + '</select>';
+            } else if (svc === 'tavern') {
+                second = '<span class="img-use-fixed">照酒館那邊的設定</span>';
+            }
+            return '<div class="img-use-all">'
+                + '<div class="img-use-name">全部一起選</div>'
+                + '<span class="img-use-label">接口</span><select class="set-select img-use-all-svc">'
+                + '<option value=""' + (svc ? '' : ' selected') + '>選一個接口</option>'
+                + list.map(c => '<option value="' + _ie(c.id) + '"' + (c.id === svc ? ' selected' : '') + '>' + _ie(c.name) + '</option>').join('')
+                + '</select>'
+                + (svc ? '<span class="img-use-label">' + secondLabel + '</span><div class="img-use-second">' + second + '</div>'
+                       + '<div class="btn-test img-use-all-go"><i class="fa-solid fa-arrow-down"></i> 下面每一列都用這個</div>' : '')
+                + '</div>';
+        };
+        let _allBusy = false;   // 確認窗還開著時再按一次不疊第二個
+        async function _applyAllUses() {
+            if (_allBusy) return;
+            _allBusy = true;
+            try {
+                const M = _IM();
+                const svc = _allPick.svc;
+                if (!M || !M.USES || !svc) return;
+                const A = window.AUI || (window.parent && window.parent.AUI);
+                const isPack = (svc === 'nai' || svc === 'comfy');
+                const isCapi = (svc === 'capi' || svc.indexOf('capi:') === 0);
+                const conn = isPack ? (_allPick.second || svc) : svc;
+                const style = isCapi ? _allPick.second : '';
+                // 給她看的名字：接口＋選的包（「目前的設定」也寫出來，她才知道填的是哪一份）
+                let name = (_svcChoices().find(c => c.id === svc) || {}).name || svc;
+                if (isPack) name += '・' + ((_packChoices(svc).find(c => c.id === conn) || {}).name || '目前的設定');
+                // 已經選好別的列會被換掉：先講有幾個，她點頭才動
+                const routes = M.getRoutes();
+                //   接口一樣、只是畫風要整批換的也算（那一列原本自己挑的畫風會被蓋掉）
+                const taken = M.USES.filter(u => {
+                    const r = routes[u.id] || {};
+                    return M.serviceForUse(u.id) && (r.conn !== conn || (style && (r.style || '') !== style));
+                }).length;
+                if (taken && A && A.confirm && !(await A.confirm('有 ' + taken + ' 個地方已經選了別的，全部換成「' + name + '」嗎？'))) return;
+                if (/^(comfy|nai):/.test(conn)) _persistImgPresets();
+                M.USES.forEach(u => { M.setRoute(u.id, style ? { conn: conn, style: style } : { conn: conn }); });
+                // 真的都寫進去了才說好（空間滿的話 setRoute 自己會跳提示）
+                const after = M.getRoutes();
+                const ok = M.USES.every(u => (after[u.id] || {}).conn === conn);
+                _allPick = { svc: '', second: '' };
+                _renderImgUses();
+                _renderImgStyles();
+                _refreshSpriteBatchNote();
+                if (ok && A && A.toast) A.toast(M.USES.length + ' 個地方都改成「' + name + '」了');
+            } catch (e) { console.warn('[圖片設置] 全部一起選沒套成:', e); }
+            finally { _allBusy = false; }
+        }
         function _renderImgUses() {
             const box = container.querySelector('#img-use-table');
             const M = _IM();
@@ -2092,9 +2164,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const _hint = _unset
                 ? '<div class="img-use-hint"><i class="fa-solid fa-circle-info"></i> 有 ' + _unset + ' 個地方還沒選接口，那些地方不會出圖。先到上面'
                     + ['novelai:NAI', 'comfyui_direct:ComfyUI', 'custom_api:自訂接口'].concat(isStandalone ? [] : ['tavern_sd:酒館']).map(x => { const k = x.split(':'); return '<a class="img-use-hint-go" onclick="window._switchImgTab && window._switchImgTab(\'' + k[0] + '\')">' + k[1] + '</a>'; }).join('、')
-                    + '其中一頁接好，再回來這裡每一列選接口。</div>'
+                    + '其中一頁接好，再回來這裡選；都用同一個的話，下面「全部一起選」選一次就好。</div>'
                 : '';
-            box.innerHTML = _hint + M.USES.map(u => {
+            box.innerHTML = _hint + _allHtml(svcs, styles) + M.USES.map(u => {
                 const r = routes[u.id] || {};
                 const legacySvc = M.legacyServiceOf(u.id);
                 const fam = _famOf(r.conn);
@@ -2143,7 +2215,13 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             const t = e.target, M = _IM();
             if (!M || !t || !t.classList) return;
             const use = t.getAttribute('data-use');
-            if (t.classList.contains('img-use-svc')) {
+            if (t.classList.contains('img-use-all-svc')) {
+                // 最上面「全部一起選」：只是先記著選了什麼，按下面那顆才真的填
+                _allPick = { svc: t.value, second: '' };
+                _renderImgUses();
+            } else if (t.classList.contains('img-use-all-second')) {
+                _allPick.second = t.value;
+            } else if (t.classList.contains('img-use-svc')) {
                 // 換接口：nai／comfy 先接「目前的設定」，第二格再挑包；整列重畫（第二格換成那個接口的東西）
                 M.setRoute(use, { conn: t.value });
                 if (use === 'sprite') _refreshSpriteBatchNote();
@@ -2162,6 +2240,9 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const studio = document.getElementById('sprite-base-size');
                 if (studio) studio.value = t.value;
             }
+        });
+        if (_useBox) _useBox.addEventListener('click', (e) => {
+            if (e.target && e.target.closest && e.target.closest('.img-use-all-go')) _applyAllUses();
         });
         // 「一次生幾個角色」底下那行字：看立繪那列現在接的是不是 GPT
         function _refreshSpriteBatchNote() {
