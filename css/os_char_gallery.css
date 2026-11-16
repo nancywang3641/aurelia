@@ -164,31 +164,74 @@
 .acg-tab:hover { color: var(--acg-ink); }
 .acg-tab.is-on { background: var(--acg-card); color: var(--acg-ink); }
 
-/* 裝扮那頁：內容是大廳裝扮室那一份（core/void/lobby_dress.js 的 mountInto，class 是 lsd-／lep-），
-   放進這個窗就照這個窗的顏色和按鈕畫（大廳小窗那套是寫死的白底藍字，套深色主題會對不上） */
-.acg-dress { max-width: 460px; }
+/* 裝扮那頁（11-16 重做）：內容由大廳那支畫（core/void/lobby_dress.js 的 mountInto，class 是 lsd-），顏色和大小在這裡照這個窗的。
+   她看了第一版（裝扮室原樣搬進來的一排滿寬按鈕）：「怎麼設計介面不那麼像控制室? 太開發者了，不喜歡」
+   → 左邊展示台放他現在的樣子（主角是人），右邊是「換成什麼樣子」的卡片；格式說明收進小問號。小樣：參考資料/CHAR_HUB_DRESS_LAB.html */
+.acg-dress { max-width: 860px; }
 .acg-dress-none { padding: 20px 0; color: var(--acg-sub); font-size: 13px; }
-.acg-dress .lsd-embed { display: flex; flex-direction: column; gap: 26px; }
-.acg-dress .lsd-sec { display: flex; flex-direction: column; gap: 8px; }
-.acg-dress .lsd-sec-title { font-size: 14px; font-weight: 800; letter-spacing: 1px; margin-bottom: 2px; color: var(--acg-sub); }
-.acg-dress .lsd-cur { display: flex; align-items: center; gap: 12px; padding: 8px; border-radius: 10px; background: var(--acg-card); border: 1px solid var(--acg-line); }
-.acg-dress .lsd-cur-img {
-    width: 84px; height: 112px; flex-shrink: 0; border-radius: 7px; overflow: hidden; background: rgb(var(--os-tint-rgb));
-    display: flex; align-items: center; justify-content: center; color: var(--acg-sub); font-size: 28px;
+.acg-dress .lsd-embed { display: grid; grid-template-columns: minmax(240px, 320px) minmax(0, 1fr); gap: 22px; align-items: start; }
+/* 左：展示台 */
+.acg-dress .lsd-stage {
+    position: relative; aspect-ratio: 5 / 6; border-radius: 18px; overflow: hidden; border: 1px solid var(--acg-line);
+    background: linear-gradient(180deg, rgb(var(--os-tint-rgb)), color-mix(in srgb, var(--acg-accent) 16%, var(--acg-bg)));
+    display: flex; align-items: flex-end; justify-content: center;
 }
-.acg-dress .lsd-cur-img img { width: 100%; height: 100%; object-fit: contain; }
-.acg-dress .lsd-cur-txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.acg-dress .lsd-cur-k { font-size: 12px; color: var(--acg-sub); }
-.acg-dress .lsd-cur-src { font-size: 14px; font-weight: 700; color: var(--acg-ink); }
-.acg-dress .lsd-hint { color: var(--acg-sub); font-size: 12px; line-height: 1.6; }
-.acg-dress .lep-btn {
-    flex: 0 0 auto; width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px;
-    border: 1px solid var(--acg-line); border-radius: 9px; background: var(--acg-card); color: var(--acg-ink); font-size: 13px; font-weight: 700; cursor: pointer;
+.acg-dress .lsd-stage::before {
+    content: ''; position: absolute; left: 12%; right: 12%; top: 9%; bottom: 0; border-radius: 999px 999px 0 0;
+    background: color-mix(in srgb, var(--acg-card) 58%, transparent); border: 1px solid color-mix(in srgb, var(--acg-card) 90%, transparent); border-bottom: 0;
 }
-.acg-dress .lep-btn:hover { border-color: var(--os-ink-soft); background: var(--acg-card); }
-.acg-dress .lep-btn[disabled] { opacity: .45; cursor: default; }
-.acg-dress .lsd-gen { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--acg-line); border-radius: 10px; background: transparent; }
-.acg-dress .lsd-gen-title { color: var(--acg-sub); font-size: 12px; font-weight: 700; letter-spacing: .5px; }
+.acg-dress .lsd-stage::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: 7%; height: 5%; border-radius: 50%; background: rgba(var(--os-ink-rgb), 0.13); filter: blur(3px); }
+.acg-dress .lsd-stage-pic { position: relative; z-index: 1; width: 74%; height: 78%; margin-bottom: 9%; display: flex; align-items: flex-end; justify-content: center; }
+.acg-dress .lsd-stage-pic img { width: 100%; height: 100%; object-fit: contain; object-position: center bottom; }   /* 小張的圖也放大到站滿展示台，腳貼著地 */
+.acg-dress .lsd-stage.is-sprite::after { display: none; }
+.acg-dress .lsd-stage.is-sprite .lsd-stage-pic { width: 92%; height: 92%; margin-bottom: 0; }
+/* 走路圖只露正面站著那一格（3×4 的第一列中間） */
+.acg-dress .lsd-stage-cell { width: 100%; height: 100%; background-repeat: no-repeat; background-size: 300% 400%; background-position: 50% 0; }
+.acg-dress .lsd-badge {
+    position: absolute; z-index: 2; left: 12px; top: 12px; max-width: calc(100% - 24px); padding: 4px 10px; border-radius: 999px;
+    background: color-mix(in srgb, var(--acg-card) 92%, transparent); color: var(--acg-accent); font-size: 12px; font-weight: 700;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.acg-dress .lsd-stage-none { position: relative; z-index: 1; align-self: center; padding: 0 24px; text-align: center; color: var(--acg-sub); font-size: 13px; line-height: 1.8; }
+.acg-dress .lsd-stage-none i { display: block; margin-bottom: 8px; font-size: 34px; opacity: .55; }
+.acg-dress .lsd-turn { display: flex; justify-content: center; gap: 6px; margin-top: 10px; }
+.acg-dress .lsd-turn button {
+    width: 54px; padding: 4px 0 3px; display: flex; flex-direction: column; align-items: center; gap: 1px;
+    border: 1px solid var(--acg-line); border-radius: 9px; background: var(--acg-card); color: var(--acg-sub); font-size: 11px; cursor: pointer;
+}
+.acg-dress .lsd-turn button img { width: 30px; height: 34px; object-fit: contain; }
+.acg-dress .lsd-turn button.is-on { border-color: var(--acg-accent); color: var(--acg-accent); background: color-mix(in srgb, var(--acg-accent) 10%, var(--acg-card)); }
+.acg-dress .lsd-seg { display: flex; margin-top: 12px; padding: 4px; border-radius: 999px; background: rgba(var(--os-ink-rgb), 0.07); }
+.acg-dress .lsd-seg button {
+    flex: 1; min-width: 0; padding: 8px 0; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    border: 0; border-radius: 999px; background: transparent; color: var(--acg-sub); font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.acg-dress .lsd-seg button.is-on { background: var(--acg-accent); color: var(--os-on-accent, #fff); }
+.acg-dress .lsd-undo {
+    display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; margin-top: 10px; padding: 8px;
+    border: 0; background: transparent; color: var(--acg-sub); font-size: 13px; cursor: pointer;
+}
+.acg-dress .lsd-undo:hover { color: var(--acg-ink); }
+/* 右：換成什麼樣子 */
+.acg-dress .lsd-h { display: flex; align-items: center; gap: 6px; margin: 2px 0 12px; font-size: 16px; font-weight: 800; }
+.acg-dress .lsd-h .aui-help { color: var(--acg-sub); font-size: 15px; }
+.acg-dress .lsd-sub { margin: 20px 0 10px; color: var(--acg-sub); font-size: 13px; font-weight: 700; letter-spacing: 1px; }
+.acg-dress .lsd-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.acg-dress .lsd-card {
+    display: flex; align-items: center; gap: 12px; min-height: 72px; padding: 12px; text-align: left;
+    border: 1px solid var(--acg-line); border-radius: 14px; background: var(--acg-card); color: var(--acg-ink); font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.acg-dress .lsd-card:hover { border-color: var(--acg-accent); }
+.acg-dress .lsd-card[disabled] { opacity: .5; cursor: default; border-color: var(--acg-line); }
+.acg-dress .lsd-card.is-main { border-color: var(--acg-accent); background: color-mix(in srgb, var(--acg-accent) 6%, var(--acg-card)); }
+.acg-dress .lsd-ic {
+    width: 46px; height: 46px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border-radius: 12px;
+    background: color-mix(in srgb, var(--acg-accent) 12%, var(--acg-card)); color: var(--acg-accent); font-size: 20px;
+}
+.acg-dress .lsd-tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.acg-dress .lsd-t { font-size: 14px; font-weight: 800; }
+.acg-dress .lsd-d { color: var(--acg-sub); font-size: 12px; font-weight: 400; line-height: 1.5; }
+.acg-dress [hidden] { display: none; }
 
 .acg-sec { margin-top: 26px; }
 .acg-sec-title { font-size: 14px; font-weight: 800; letter-spacing: 1px; margin-bottom: 10px; color: var(--acg-sub); }
@@ -224,6 +267,25 @@
 /* 開在螢幕裡（奧瑞亞主窗口的螢幕，或大廳浮動手機的 app 區）：跟著螢幕的大小，不蓋滿整個酒館視窗。
    層級要高過螢幕裡的相簿(50)、劇情(51)、劇情抽取窗(1001)。 */
 .acg-root.acg-in-screen { position: absolute; z-index: 1100; }
+/* 開在浮動手機的 app 區：從狀態列底下開始（app 內容那層 .aps-app-body 本來就是這樣排，這個窗是直接掛在 #aps-app 上的，要自己讓）。
+   以前整個蓋到頂，返回鍵和標題被狀態列（時間、訊號那條）蓋住看不到（11-16 手機多了「角色」入口才看出來） */
+#aps-app > .acg-root.acg-in-screen { top: var(--aps-safe-top, 0px); }
+
+/* ── 浮窗（11-16）：開的那一格夠大（寬 900、高 620 以上，而且不是浮動手機裡）時，四邊留空、後面壓暗、用大廳那套白底藍字 ──
+   她：「我想要一個浮窗感，左右上下要有space，現在全屏給我一種很散的感覺，尤其在舞台內部」「而且還是米黃色，很奇怪」。
+   米黃是手機主題的顏色（這個窗以前不管開在哪都鋪滿、都跟手機主題）；開在大廳、劇情上面一大片時跟底下的畫面對不上 → 這裡把 --os-* 換成大廳那套。
+   開在浮動手機裡、或那一格本來就小（真的手機）：照舊鋪滿、跟手機主題——在那裡它是一個手機 app。
+   .acg-float 和後面壓暗那層 .acg-scrim 由 os_char_gallery.js 的 fitWin 掛（開的時候、視窗大小變的時候各量一次）；點暗的地方＝關掉。 */
+.acg-root.acg-float {
+    --os-ink: #23315e; --os-ink-rgb: 35, 49, 94; --os-ink-soft: #5a678c; --os-tint-rgb: 232, 238, 250;
+    --os-surface: #ffffff; --os-page-bg: #f3f6fc; --os-accent: #4a78d8; --os-accent-strong: #4a78d8; --os-on-accent: #ffffff; --os-danger: #c0392b;
+    inset: 0; margin: auto; width: min(1120px, calc(100% - 96px)); height: min(840px, calc(100% - 96px));
+    border-radius: 18px; overflow: hidden; box-shadow: 0 24px 70px rgba(18, 26, 52, 0.35);
+}
+.acg-root.acg-float .acg-head { padding-top: 12px; }   /* 不貼著螢幕頂，不用讓狀態列 */
+.acg-scrim { position: fixed; inset: 0; z-index: 2147481990; background: rgba(18, 26, 52, 0.48); }
+.acg-scrim.acg-in-screen { position: absolute; z-index: 1099; }
+
 
 /* 相簿頭像頁的入口：跟「頭像快取／角色立繪」同一排、同樣大小，排在最右邊 */
 .acg-open-chip {
@@ -360,4 +422,15 @@
     .acg-wb-row, .acg-wb-row-exp { grid-template-columns: minmax(0, 1fr) auto; }
     .acg-wb-row .acg-in-url { grid-column: 1 / -1; grid-row: 1; }
     .acg-ex-body { padding: 14px 14px 32px; }
+}
+
+/* 裝扮頁：這個窗窄於 900 時（手機、小視窗）展示台在上、卡片在下 */
+@container (max-width: 900px) {
+    .acg-dress .lsd-embed { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+    .acg-dress .lsd-stage { aspect-ratio: 4 / 3; }
+    .acg-dress .lsd-stage::before { left: 26%; right: 26%; }
+    .acg-dress .lsd-stage::after { left: 34%; right: 34%; }
+    .acg-dress .lsd-stage-pic { width: 44%; }
+    .acg-dress .lsd-stage.is-sprite .lsd-stage-pic { width: 60%; }
+    .acg-dress .lsd-cards { grid-template-columns: minmax(0, 1fr); }
 }

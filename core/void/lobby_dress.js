@@ -108,7 +108,10 @@
                 });
             } else if (act === 'reset') {
                 _b.saveSkin(a.key, null);
-                if (a.defaultSrc && a.el) _b.swapActorSrc(a, a.defaultSrc);
+                // 人在大廳：當場換回沒換造型時的樣子。角色中心那頁知道他有跟立繪一起畫的 Q版就換回那張（以前一律換成預設那張，要重進大廳才對）
+                const base = box._look && box._look.base;
+                if (a.el && base && base.src && !base.sheet) _b.swapActorSrc(a, base.views ? { views: base.views } : base.src);
+                else if (a.defaultSrc && a.el) _b.swapActorSrc(a, a.defaultSrc);
                 done();
             } else if (act === 'close') done();
         });
@@ -125,43 +128,151 @@
         S.dressEl = box;
         _dressBind(box, a, _closeDressRoom);
     }
-    // 🎭 角色中心的「裝扮」那一頁：同一份內容畫進 host（不是浮在大廳上的小窗）。
+    // 🎭 角色中心的「裝扮」那一頁（os_char_gallery.js 叫）：畫進 host，不是浮在大廳上的小窗。
+    //   11-16 第一版是把小窗的內容原樣搬進來（一排滿寬按鈕＋格式說明），她：「怎麼設計介面不那麼像控制室? 太開發者了，不喜歡」。
+    //   重做成（小樣：參考資料/CHAR_HUB_DRESS_LAB.html，她「好照這個」）：
+    //     左＝展示台放他現在的樣子（三面的可以點正面／側面／背面），下面切「大廳的小人／劇情的立繪」，換過造型才有「換回原本的小人」；
+    //     右＝「幫他畫一個新的小人」三張卡（不倒翁／Q版小人／會走路的小人）＋「或是用自己的圖」兩張卡；切到立繪是重畫立繪的卡。
+    //     卡片上只寫換完會變怎樣；格式說明、去哪裡選接口收進標題旁的小問號。
+    //   做事的還是原本那幾支（_dressBind／_wireDressGen／_wireDressSprite 照 class 和 data-act 認）：卡片就是那幾顆按鈕換了長相。
+    //   樣式在 css/os_char_gallery.css 的 .acg-dress .lsd-*（照那個窗的顏色）。
     //   opts.previewHost＝生成完那張預覽／調框窗要蓋在誰上面（角色中心自己那個窗；不給就蓋在大廳舞台上，角色中心開著會被擋住）
-    //   opts.chibi＝他跟立繪一起生的 Q版（沒換過造型時大廳用的就是它；只拿來畫「目前用的」）
+    //   opts.spriteOf＝問角色中心「劇情舞台現在會用哪張立繪」（它那邊認得本地上傳、世界書）；沒給或問不到就看立繪庫、頭像快取、大廳那張
+    //   opts.onChange＝這一頁換了圖（角色中心那邊把記著的素材丟掉重讀）；opts.view＝一開始看哪一邊（'doll'／'sprite'）
+    function _dressCard(cls, icon, title, desc, attrs) {
+        return '<button class="lsd-card ' + cls + '" type="button"' + (attrs || '') + '><span class="lsd-ic"><i class="fa-solid ' + icon + '"></i></span>' +
+            '<span class="lsd-tx"><span class="lsd-t">' + title + '</span><span class="lsd-d">' + desc + '</span></span></button>';
+    }
     function mountInto(host, a, opts) {
         opts = opts || {};
         if (!host || !a) return;
+        const A = window.AUI || (window.parent || window).AUI;
+        try {
+            if (A && A.registerHelp) A.registerHelp({ lsd_dress: { title: '幫他換小人', body: '不倒翁、Q版小人、會走路的小人：照他的長相畫一張，先給你看過，按套用才換上。\n\n用哪組接口來畫，在「設置 → 圖片 → 畫風」選：不倒翁是最上面那張表的「不倒翁小人」那一列，另外兩種是「大廳的小人」那兩格。\n\n放一張圖：一張站著的圖，他走路時會一跳一跳、左右轉身。\n\n放一組走路圖：一張圖裡排好十二格，三格一排、共四排，由上到下是朝下、朝左、朝右、朝上。' } });
+        } catch (e) {}
+        const help = (A && A.helpBtn) ? A.helpBtn('lsd_dress') : '';
+        const VN = window.VN_Core || (window.parent || window).VN_Core;
+        const trio = !!(VN && typeof VN._trioOn === 'function' && VN._trioOn() && typeof VN.regenTrio === 'function');
+        const off = a.avatarPrompt ? '' : ' disabled';   // 沒有長相的資料（劇情裡生過頭像才有）：要畫的那幾張卡是暗的
+        const d = (text) => a.avatarPrompt ? text : '還不知道他長什麼樣，畫不出來';
         const box = document.createElement('div');
         box.className = 'lsd-embed';
         box.innerHTML =
-            '<div class="lsd-sec"><div class="lsd-sec-title">大廳的小人</div>' +
-              (a.key
-                ? '<div class="lsd-cur"><div class="lsd-cur-img"></div><div class="lsd-cur-txt"><span class="lsd-cur-k">目前用的</span><span class="lsd-cur-src"></span></div></div>' +
-                  _dressSmallHtml(a) + _dressResetHtml(a)
-                : '<div class="lsd-hint lsd-nokey">這個角色還沒進過大廳，小人等他來了才能換。</div>') +
+            '<div class="lsd-left">' +
+                '<div class="lsd-stage"><span class="lsd-badge" hidden></span><div class="lsd-stage-pic" hidden></div><div class="lsd-stage-none" hidden></div></div>' +
+                '<div class="lsd-turn" hidden></div>' +
+                '<div class="lsd-seg">' +
+                    '<button type="button" data-view="doll"><i class="fa-solid fa-person"></i>大廳的小人</button>' +
+                    '<button type="button" data-view="sprite"><i class="fa-solid fa-image-portrait"></i>劇情的立繪</button>' +
+                '</div>' +
+                '<button class="lsd-undo" type="button" data-act="reset" hidden><i class="fa-solid fa-rotate-left"></i>換回原本的小人</button>' +
             '</div>' +
-            '<div class="lsd-sec"><div class="lsd-sec-title">立繪</div>' + _dressSpriteHtml(a) + '</div>';
+            '<div class="lsd-right">' +
+                '<div class="lsd-pane" data-pane="doll" hidden>' + (a.key ? (
+                    '<div class="lsd-h">幫他畫一個新的小人' + help + '</div>' +
+                    '<div class="lsd-cards">' +
+                        _dressCard('lsd-gen-btn-doll is-main', 'fa-egg', '不倒翁', d('圓滾滾的一隻，走路會轉身'), off) +
+                        _dressCard('lsd-gen-btn', 'fa-child-reaching', 'Q版小人', d('站著的一張，走路會彈跳'), off) +
+                        _dressCard('lsd-gen-btn-sheet', 'fa-person-walking', '會走路的小人', d('四個方向都有走路的樣子'), off) +
+                    '</div>' +
+                    '<div class="lsd-sub">或是用自己的圖</div>' +
+                    '<div class="lsd-cards">' +
+                        _dressCard('', 'fa-image', '放一張圖', '一張站著的圖', ' data-act="img"') +
+                        _dressCard('', 'fa-table-cells', '放一組走路圖', '十二格排好的那種', ' data-act="sheet"') +
+                    '</div>') : '') +
+                '</div>' +
+                '<div class="lsd-pane" data-pane="sprite" hidden>' +
+                    '<div class="lsd-h">幫他重畫立繪</div>' +
+                    '<div class="lsd-cards">' +
+                        _dressCard('lsd-sprite-btn is-main', 'fa-image-portrait', '只重畫立繪', d('劇情裡那張大圖，照現在的畫風'), off) +
+                        (trio ? _dressCard('lsd-trio-btn', 'fa-layer-group', '立繪、頭像、Q版一起', d('三種整組重畫'), off) : '') +
+                    '</div>' +
+                '</div>' +
+            '</div>';
         host.innerHTML = '';
         host.appendChild(box);
         box._pvHost = opts.previewHost || null;
-        _dressBind(box, a, () => { if (box.isConnected) mountInto(host, a, opts); });
-        _paintDressCur(box, a, opts);
+        box._a = a;
+        box._view = (opts.view === 'sprite' || opts.view === 'doll') ? opts.view : (a.key ? 'doll' : 'sprite');
+        box._face = 'front';
+        _dressBind(box, a, () => {
+            try { if (typeof opts.onChange === 'function') opts.onChange(); } catch (e) {}
+            if (box.isConnected) mountInto(host, a, Object.assign({}, opts, { view: box._view }));
+        });
+        box.querySelector('.lsd-seg').addEventListener('click', (e) => { const b = e.target.closest('[data-view]'); if (b) _dressShow(box, b.dataset.view); });
+        box.querySelector('.lsd-turn').addEventListener('click', (e) => { const b = e.target.closest('[data-face]'); if (b) { box._face = b.dataset.face; _dressShow(box, box._view); } });
+        _dressShow(box, box._view);   // 圖還在讀：先把切換和卡片排好
+        _dressLook(a, opts).then((L) => { if (box.isConnected) { box._look = L; _dressShow(box, box._view); } }).catch(() => {});
     }
-    // 目前用的小人：自己換過的那張 → 跟立繪一起生的 Q版 → 預設那張
-    async function _paintDressCur(box, a, opts) {
-        const img = box.querySelector('.lsd-cur-img'), lab = box.querySelector('.lsd-cur-src');
-        if (!img || !lab) return;
-        const skin = _b.skins()[a.key];
-        let src = '', txt = '';
-        if (skin) {
-            try { src = (await _b.resolveRef(skin.ref)) || ''; } catch (e) {}
-            if (src) txt = skin.kind === 'sheet' ? '自己換的走路圖' : (skin.kind === 'views' ? '不倒翁小人（正面、側面、背面）' : '自己換的立姿圖');
+    // 他現在的樣子：{ doll:{ label, src, views?, sheet?, own? }|null, base:{ src, views? }|null（沒換造型時的樣子，「換回原本的」當場換回它）, sprite:'' }
+    async function _dressLook(a, opts) {
+        const VC = window.VN_Cache || (window.parent || window).VN_Cache;
+        const key = a.avatarCacheKey || a.name;
+        let rec = null, sp = null;
+        try { if (VC && key) { rec = await VC.get('avatar_cache', key); sp = await VC.get('sprite_cache', key); } } catch (e) {}
+        const out = { doll: null, base: null, sprite: '' };
+        if (a.key) {
+            // 沒換造型時：跟立繪一起畫的 Q版（三面的連側面背面）→ 預設那張
+            if (rec && rec.chibi) out.base = { label: 'Q版', src: rec.chibi, views: (rec.chibiSide && rec.chibiBack) ? { front: rec.chibi, side: rec.chibiSide, back: rec.chibiBack } : null };
+            else {
+                const ds = a.defaultSrc;
+                if (typeof ds === 'string' && ds) out.base = { label: '預設的小人', src: ds };
+                else if (ds && ds.views && ds.views.front) out.base = { label: '預設的小人', src: ds.views.front, views: ds.views };
+                else if (ds && ds.sheet) out.base = { label: '預設的小人', src: ds.sheet, sheet: true };
+            }
+            const skin = _b.skins()[a.key];
+            if (skin) {
+                let src = '';
+                try { src = (await _b.resolveRef(skin.ref)) || ''; } catch (e) {}
+                if (src && skin.kind === 'views') {
+                    let side = '', back = '';
+                    try { side = (await _b.resolveRef(skin.side)) || ''; back = (await _b.resolveRef(skin.back)) || ''; } catch (e) {}
+                    out.doll = { label: '不倒翁小人', src: src, views: (side && back) ? { front: src, side: side, back: back } : null, own: true };
+                } else if (src) out.doll = { label: skin.kind === 'sheet' ? '走路圖' : '換過的小人', src: src, sheet: skin.kind === 'sheet', own: true };
+            }
+            if (!out.doll) out.doll = out.base;
         }
-        if (!src && opts && opts.chibi) { src = opts.chibi; txt = '跟立繪一起生的 Q版'; }
-        if (!src && a.defaultSrc) { src = a.defaultSrc; txt = '預設的小人'; }
-        if (!box.isConnected) return;
-        img.innerHTML = src ? '<img src="' + _esc(src) + '" alt="">' : '<i class="fa-solid fa-person"></i>';
-        lab.textContent = txt || '預設的小人';
+        let s2 = '';
+        try { if (typeof opts.spriteOf === 'function') s2 = (await opts.spriteOf()) || ''; } catch (e) {}
+        out.sprite = s2 || (sp && sp.url) || (rec && rec.isSprite && rec.url) || a.portrait || '';
+        return out;
+    }
+    // 展示台和右邊那一塊照「現在看哪一邊」畫
+    function _dressShow(box, view) {
+        const a = box._a, L = box._look || null;
+        box._view = view = (view === 'sprite') ? 'sprite' : 'doll';
+        const q = (sel) => box.querySelector(sel);
+        box.querySelectorAll('.lsd-seg [data-view]').forEach(b => b.classList.toggle('is-on', b.dataset.view === view));
+        q('[data-pane="doll"]').hidden = !(view === 'doll' && a.key);
+        q('[data-pane="sprite"]').hidden = (view !== 'sprite');
+        const stage = q('.lsd-stage'), badge = q('.lsd-badge'), pic = q('.lsd-stage-pic'), none = q('.lsd-stage-none'), turn = q('.lsd-turn'), undo = q('.lsd-undo');
+        const say = (icon, html) => { none.innerHTML = '<i class="fa-solid ' + icon + '"></i>' + html; none.hidden = false; };
+        badge.hidden = true; pic.hidden = true; none.hidden = true; turn.hidden = true; undo.hidden = true;
+        stage.classList.remove('is-sprite');
+        if (view === 'doll' && !a.key) { say('fa-door-closed', '他還沒來過大廳<br>等他來了再幫他換小人'); return; }
+        if (!L) return;   // 圖還沒讀到
+        if (view === 'sprite') {
+            if (!L.sprite) { say('fa-image-portrait', '他還沒有立繪'); return; }
+            stage.classList.add('is-sprite');
+            badge.textContent = '目前：立繪'; badge.hidden = false;
+            pic.innerHTML = '<img src="' + _esc(L.sprite) + '" alt="">'; pic.hidden = false;
+            return;
+        }
+        const D = L.doll;
+        if (!D || !D.src) { say('fa-person', '還沒有小人'); return; }
+        badge.textContent = '目前：' + D.label; badge.hidden = false;
+        const face = (D.views && D.views[box._face]) ? box._face : 'front';
+        if (D.sheet) {   // 走路圖：只露正面站著那一格
+            pic.innerHTML = '<div class="lsd-stage-cell"></div>';
+            pic.firstChild.style.backgroundImage = 'url("' + String(D.src).replace(/["\\\n\r]/g, m => '\\' + m) + '")';
+        } else pic.innerHTML = '<img src="' + _esc(D.views ? D.views[face] : D.src) + '" alt="">';
+        pic.hidden = false;
+        if (D.views) {
+            turn.innerHTML = [['front', '正面'], ['side', '側面'], ['back', '背面']].map(v =>
+                '<button type="button" data-face="' + v[0] + '"' + (v[0] === face ? ' class="is-on"' : '') + '><img src="' + _esc(D.views[v[0]]) + '" alt="">' + v[1] + '</button>').join('');
+            turn.hidden = false;
+        }
+        undo.hidden = !D.own;
     }
 
     // ── 💬 NPC 對話紀錄小面板（舞台上，仿裝扮室：查看/逐條刪/清空徹底遺忘）──
@@ -653,8 +764,21 @@
                     const sp = VC ? await VC.get('sprite_cache', key) : null;
                     if (sp && sp.url) { a.portrait = sp.url; a.portraitKind = 'sprite'; }   // 即時接上對話立繪(貼底)，不必等重新掛載
                 } finally {
-                    setTimeout(() => { btnSprite.innerHTML = orig; btnSprite.disabled = false; busy = false; }, 2700);   // autoGenSprite 還原純文字後把含圖標版蓋回
+                    setTimeout(() => { btnSprite.innerHTML = orig; btnSprite.disabled = false; busy = false; if (box._pvHost && box._done) box._done(); }, 2700);   // autoGenSprite 還原純文字後把含圖標版蓋回；角色中心那頁重畫（展示台換成新的）
                 }
+            });
+        }
+        // 🎴 立繪、頭像、Q版一起重畫（開著一次生三種才有這張卡）：劇情角色卡那顆同一支 VN_Core.regenTrio
+        const btnTrio = box.querySelector('.lsd-trio-btn');
+        if (btnTrio) {
+            let busy = false;
+            btnTrio.addEventListener('click', async () => {
+                if (busy || btnTrio.disabled) return;
+                const VN = window.VN_Core || (window.parent || window).VN_Core;
+                if (!VN || typeof VN.regenTrio !== 'function') { AUI.alert('劇情引擎還沒載入，稍等一下再按。'); return; }
+                busy = true;
+                try { await VN.regenTrio(a.avatarCacheKey || a.name, btnTrio); }
+                finally { setTimeout(() => { busy = false; if (box._done) box._done(); }, 2700); }   // regenTrio 自己會把按鈕的字還原，還原完再重畫
             });
         }
     }

@@ -428,6 +428,11 @@
         S = { root, sel: null, want: offHit ? '' : (name || ''), names: [], cast: [], wb: { exp: [], preset: [] }, wbOk: wbAvailable(),
               info: {}, marks: {}, draft: null, extra: [], changed: false, token: 0, filter: '', offSel: offHit ? offHit.key : null,
               tab: (opts && opts.tab === 'dress') ? 'dress' : 'assets', actor: actor, onClose: (opts && opts.onClose) || null };
+        // 開的那一格夠大（不是浮動手機裡）＝浮窗：四邊留空、後面壓暗一層，點暗的地方關掉（樣式在 css/os_char_gallery.css「浮窗」那段）
+        S.host = host;
+        S.onResize = () => fitWin();
+        try { win.addEventListener('resize', S.onResize); } catch (e) {}
+        fitWin();
         root.classList.toggle('acg-has-wb', S.wbOk);
         root.addEventListener('click', onClick);
         root.addEventListener('input', onInput);
@@ -436,12 +441,31 @@
         await reload();
     }
 
+    // 要不要當浮窗：開在浮動手機的 app 區＝不要（它在那裡是手機 app）；開在主窗口那一格或蓋滿畫面時，看那一格夠不夠大。
+    //   開的時候、視窗大小變的時候各量一次（她把酒館視窗拉小就鋪滿，拉大又變回浮窗）
+    function fitWin() {
+        if (!S) return;
+        const host = S.host;
+        const inShell = !!(host && host.id === 'aps-app');
+        const w = host ? host.clientWidth : (win.innerWidth || 0), h = host ? host.clientHeight : (win.innerHeight || 0);
+        const float = !inShell && w >= 900 && h >= 620;
+        S.root.classList.toggle('acg-float', float);
+        if (float && !S.scrim) {
+            const sc = doc.createElement('div');
+            sc.className = 'acg-scrim' + (host ? ' acg-in-screen' : '');
+            sc.addEventListener('click', () => close());
+            S.root.parentNode.insertBefore(sc, S.root);
+            S.scrim = sc;
+        } else if (!float && S.scrim) { S.scrim.remove(); S.scrim = null; }
+    }
     function close() {
         if (!S) return;
         if (S.ex) S.ex.stop = true;   // 生表情生到一半：做好的已經存了，後面的不排了
         const st = S; S = null;
         doc.removeEventListener('keydown', onKey, true);
         st.root.remove();
+        if (st.scrim) st.scrim.remove();
+        if (st.onResize) { try { win.removeEventListener('resize', st.onResize); } catch (e) {} }
         if (st.changed) refreshStage();
         if (typeof st.onClose === 'function') { try { st.onClose(); } catch (e) {} }
     }
@@ -563,22 +587,32 @@
         const off = S.offSel ? officialList().find(o => o.key === S.offSel) : null;
         const ch = off ? off.name : S.sel;
         if (!ch) return null;
-        if (S.actor && (off ? S.actor.key === off.key : sameChar(S.actor.name, ch))) return { a: S.actor, chibi: '' };
+        if (S.actor && (off ? S.actor.key === off.key : sameChar(S.actor.name, ch))) return { a: S.actor };
         const LS = win.LobbyStage || window.LobbyStage;
         const st = (LS && LS._S) || null;
         const live = st ? [st.player].concat(st.npcs || []).filter(Boolean) : [];
-        if (off) return { a: live.find(x => x.key === off.key) || { key: off.key, name: off.name }, chibi: '' };
+        if (off) return { a: live.find(x => x.key === off.key) || { key: off.key, name: off.name, portrait: off.portrait } };
         const C = Cache();
         let rec = null;
         try { rec = C ? await C.get('avatar_cache', ch) : null; } catch (e) {}
-        const chibi = (rec && rec.chibi) || '', prompt = (rec && rec.prompt) || '';
+        const prompt = (rec && rec.prompt) || '';
         let hit = null;
         try { const N = win.LobbyNpcs || window.LobbyNpcs; if (N && N.dressKeyFor && C) hit = await N.dressKeyFor(ch, C.getCurrentWorld(), sameChar); } catch (e) {}
         if (hit) {
             const n = live.find(x => x.key === hit.key);
-            return { a: n || { key: hit.key, name: ch, avatarPrompt: prompt, avatarCacheKey: ch }, chibi: chibi };
+            return { a: n || { key: hit.key, name: ch, avatarPrompt: prompt, avatarCacheKey: ch } };
         }
-        return { a: { key: '', name: ch, avatarPrompt: prompt, avatarCacheKey: ch }, chibi: chibi };
+        return { a: { key: '', name: ch, avatarPrompt: prompt, avatarCacheKey: ch } };
+    }
+    // 裝扮頁的展示台問：劇情舞台現在會用哪張立繪（這裡認得本地上傳、世界書、網址庫；都沒有回空的，那邊再看立繪庫和頭像快取）
+    async function dressSpriteOf(who) {
+        if (!S) return '';
+        if (S.offSel) { const o = officialList().find(x => x.key === S.offSel); return (o && o.portrait) || ''; }
+        const ch = S.sel;
+        if (!ch || ch !== who) return '';
+        const info = S.info[ch] || (S.info[ch] = await resolveChar(ch, S.wb));
+        const u = info && ((info.slots.find(x => x.exp === DEFAULT_EXP) || {}).used);
+        return (u && u.url) || '';
     }
     async function mountDress(tk) {
         const host = S && S.root.querySelector('.acg-dress');
@@ -590,7 +624,12 @@
         try { ctx = await dressCtx(); } catch (e) { console.warn('[CharGallery] 裝扮那頁沒開成', e); }
         if (!S || tk !== S.token || S.tab !== 'dress' || (S.offSel || S.sel) !== who || !host.isConnected) return;
         if (!ctx) { host.innerHTML = '<div class="acg-dress-none">這一頁沒打開，再點一次試試。</div>'; return; }
-        LD.mountInto(host, ctx.a, { previewHost: S.root, chibi: ctx.chibi || '' });
+        LD.mountInto(host, ctx.a, {
+            previewHost: S.root, view: S.dressView || '',
+            spriteOf: () => dressSpriteOf(who),
+            // 這一頁換了圖：記著的素材丟掉（切回素材頁、展示台重畫時重讀），關掉時舞台上的人重新找圖
+            onChange: () => { if (!S) return; if (!S.offSel && S.sel === who) delete S.info[who]; S.changed = true; },
+        });
     }
 
     async function renderMain() {
