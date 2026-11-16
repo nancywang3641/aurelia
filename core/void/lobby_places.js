@@ -42,6 +42,7 @@
     //             那顆鈕就變成「點了什麼都沒發生」的死鈕。寧可不顯示也不要給死鈕。
     // chip     沒有 scene 也要在快轉地圖給一顆（點了直接 open）
     // who()    地點卡上那行字（沒有管理員的地點用這個講現況）；沒給就用管理員名字
+    // slogan   桌機對話模式右邊那顆大按鈕上面的一句話（11-16 改版）；沒給就不放
     const PLACES = [
         {
             id: 'cafe', name: '書咖', flatName: '書咖櫃檯', icon: 'fa-mug-hot', npc: 'ying', bg: 'lobby_pv_bg_cafe_v1.jpg',
@@ -52,7 +53,7 @@
         },
         {
             id: 'hall', name: '大廳', flatName: '世界門', icon: 'fa-globe', npc: 'alice', bg: 'lobby_pv_bg_hall_v1.jpg',
-            obj: 'lobby_day', scene: 'hall',
+            obj: 'lobby_day', scene: 'hall', slogan: '下一段故事，等你開場。',
             ready: () => !!win.OS_WORLDGATE?.openGate,
             open: () => win.OS_WORLDGATE.openGate(),
             openIn: (c) => _mountFloating(c, () => win.OS_WORLDGATE.openGate(), '.wg-win', () => win.OS_WORLDGATE.closeGate && win.OS_WORLDGATE.closeGate()),
@@ -419,6 +420,31 @@
             '</div>';
     }
 
+    // 🏛 桌機對話模式的右邊（11-16 改版，照阿洛的版面稿；小樣在本機 參考資料/LOBBY_HOME_LAB.html）：
+    //   一句話 → 一顆大按鈕（這個地點最主要的那件事：大廳＝世界門、書咖＝書咖櫃檯…，字用 flatName、按下去＝go('app')）
+    //   → 三張常去的地點（清單順序裡前三個站得住的別處）→「查看全部」（開換場景那張卡片面板，全部地點都在）。
+    //   取代 09-11 那版「當前區域一張＋附近地點一整格」：那版八個地點加九顆功能鍵佔掉整個右半，人被擠到旁邊。
+    //   🚨 阿洛的圖上這顆寫「繼續故事」，那跟「章節」是同一件事；她看出來：「繼續故事，可能阿洛誤以為是世界門」。
+    //   404 皮照舊用上面那個 _railHtml（黑底綠字那套樣式是照它的結構寫的）。
+    function _homeHtml(curId) {
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const cards = _cards();
+        const cur = cards.filter(c => c.p.id === curId)[0];
+        const p = cur && cur.p;
+        const picks = cards.filter(c => c.p.id !== curId && c.on).slice(0, 3);
+        return ((p && p.slogan) ? '<p class="lb-rail-slogan">' + esc(p.slogan) + '</p>' : '') +
+            ((p && (p.openIn || p.open)) ? '<button class="lb-rail-cta" type="button">' +
+                '<i class="fa-solid ' + esc(p.icon || 'fa-door-open') + '"></i>' +
+                '<span>開啟' + esc(p.flatName || p.name) + '</span>' +
+                '<i class="fa-solid fa-arrow-right"></i></button>' : '') +
+            '<div class="lb-rail-picks">' + picks.map(c =>
+                '<button class="lb-rail-pick" type="button" data-id="' + esc(c.p.id) + '">' +
+                    '<span class="lb-rail-thumb" aria-hidden="true"><img alt="" data-bg="' + esc(c.p.bg || '') + '"></span>' +
+                    '<span class="lb-rail-pick-t"><i class="fa-solid ' + esc(c.p.icon) + '"></i><span>' + esc(c.p.name) + '</span></span>' +
+                '</button>').join('') + '</div>' +
+            '<button class="lb-rail-all" type="button">查看全部 <i class="fa-solid fa-chevron-right"></i></button>';
+    }
+
     function closeView() { if (_view) { try { _view(); } catch (e) {} _view = null; } }
 
     // 對話模式的主頁：進來就站在預設地點，不必按任何東西
@@ -441,6 +467,7 @@
               '<span class="lb-pv-sub"></span>' +
             '</div>' +
             '<img class="lb-pv-portrait" alt="">' +
+            '<div class="lb-pv-veil"></div>' +   // 拉近對話時蓋在人下半身上的那層紗（只有桌機那版用，其他版面不顯示）
             '<div class="lb-rail"></div>' +
             '<div class="lb-pv-pane"><button class="lb-pv-x" type="button" aria-label="收起"><i class="fa-solid fa-xmark"></i></button><div class="lb-pv-body"></div></div>';
 
@@ -469,6 +496,24 @@
             try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
         };
         const talkOff = () => { try { win.LobbyStage?.endTalk?.(); } catch (e) {} };
+
+        // 🔍 拉近對話（桌機，11-16）：平常人全身站著、對話框只有兩行；點他、點對話框、點進輸入框＝拉近成半身、對話框變大。
+        //    點旁邊空白或按 Esc 退回去。只是畫面遠近（.is-zoom），對話對象、紀錄都不動；只在對話那一態有意義。
+        //    手機和 404 沒有這一版的樣式，class 掛上去也沒有任何變化。
+        const zoom = (on) => { box.classList.toggle('is-zoom', !!on && box.classList.contains('is-talk')); };
+        const onHostFocus = (e) => { if (e.target && e.target.matches && e.target.matches('.void-input')) zoom(true); };
+        const onHostClick = (e) => { if (e.target && e.target.closest && e.target.closest('.void-dialogue-box')) zoom(true); };
+        const onKey = (e) => {
+            if (e.key !== 'Escape' || !box.classList.contains('is-zoom')) return;
+            if (_scn || _more) return;   // 開著的卡片面板先處理它自己的
+            zoom(false);
+            try { host.querySelector('.void-input')?.blur(); } catch (err) {}
+        };
+        host.addEventListener('focusin', onHostFocus);
+        host.addEventListener('click', onHostClick);
+        document.addEventListener('keydown', onKey);
+        pimg.addEventListener('click', () => zoom(!box.classList.contains('is-zoom')));
+        bg.addEventListener('click', () => zoom(false));
 
         // 🧍 立繪大小依「圖片原生比例」自動決定，不必為了不同人準備不同資產：
         //    細長(比例≥1.7)＝全身站高貼底，下緣讓對話框蓋掉＝自然的半身效果；
@@ -505,7 +550,7 @@
         const go = (mode) => {
             restorePanel();
             body.innerHTML = '';
-            box.classList.remove('is-talk', 'is-app', 'is-focus');
+            box.classList.remove('is-talk', 'is-app', 'is-focus', 'is-zoom');
             const p = get(curId);
             if (!p) return;
             if (mode === 'talk' && _hasNpc(p)) {
@@ -595,7 +640,8 @@
                     }
                 }).catch(() => {});
             }
-            rail.innerHTML = _railHtml(curId);
+            // 404 皮（上面 sync404 剛套好）用舊的那排卡；其餘用 11-16 的新版面。窄畫面這一欄整個不顯示，畫哪個都一樣
+            rail.innerHTML = host.closest('.void-tab.mode-404') ? _railHtml(curId) : _homeHtml(curId);
             loadRailThumbs();
             go(mode || (_hasNpc(p) ? 'talk' : 'app'));
         };
@@ -608,6 +654,12 @@
         };
 
         rail.addEventListener('click', (e) => {
+            // 11-16 新版面的三種鈕；點到這一欄的空白處＝點旁邊，拉近的對話退回去
+            if (e.target === rail) { zoom(false); return; }
+            if (e.target.closest('.lb-rail-all')) { openScenePicker(); return; }
+            if (e.target.closest('.lb-rail-cta')) { go('app'); return; }
+            const pick = e.target.closest('.lb-rail-pick');
+            if (pick) { paint(pick.dataset.id); return; }
             const b = e.target.closest('.lb-rail-main, .lb-rail-app');
             if (!b || b.disabled) return;
             const card = b.closest('.lb-rail-card');
@@ -636,6 +688,9 @@
             // 離開對話模式時站在 404 的話把皮脫掉；接著掛舞台的話，舞台的 lstage-scene 會照它的場景再套一次
             if (_curId === 'room404') { try { win.VoidTerminal?.sync404?.(false); } catch (e) {} }
             desktopRail.removeEventListener('change', loadRailThumbs);
+            host.removeEventListener('focusin', onHostFocus);
+            host.removeEventListener('click', onHostClick);
+            document.removeEventListener('keydown', onKey);
             if (_paint === paint) { _paint = null; _curId = null; _speakerOf = null; _reprime = null; }
             box.remove();
             if (_view === close) _view = null;
@@ -767,7 +822,12 @@
         closeMoreSheet();
 
         const is404 = !!host.closest('.void-tab.mode-404');
-        const src = [...dock.querySelectorAll('.lb-dock-btn[data-more]')].filter(b => !b.classList.contains('lb-entry-off'));
+        // 清單裡放的＝這一排現在沒顯示的那幾顆。手機藏的是標 data-more 的，桌機（11-16 改版）藏的是沒標 data-desk 的，
+        //   兩邊不一樣，所以看「現在有沒有顯示」而不是看哪個標記；這台沒裝的（lb-entry-off）哪邊都不放。
+        const src = [...dock.querySelectorAll('.lb-dock-btn')].filter(b => {
+            if (b.id === 'lb-dock-more' || b.classList.contains('lb-entry-off')) return false;
+            try { return getComputedStyle(b).display === 'none'; } catch (e) { return b.hasAttribute('data-more'); }
+        });
         const el = document.createElement('div');
         el.className = 'lb-more';
         el.innerHTML =

@@ -600,17 +600,35 @@ const IRIS_IDLE = [
                     <div class="lb-feed" id="lb-feed"><button class="lb-feed-now" type="button" title="世界頻道"><i class="fa-solid fa-tower-broadcast lb-feed-ic"></i><span class="lb-feed-text"></span></button><div class="lb-feed-list"></div></div>
                     <div class="lb-signature"></div>
                     <div class="lb-dock" id="lb-dock">
-                        <button class="lb-dock-btn" data-proxy="void-quest-btn" title="藏書">
+                        <!-- 桌機的對話模式（11-16 改版）這一排只留標 data-desk 的四顆＋更多，其餘收進「更多」；
+                             那一版用白色線條圖示（.lb-dock-fa），彩色那張圖（.lb-dock-ic）留給其他版面和「更多」清單 -->
+                        <button class="lb-dock-btn" data-proxy="void-quest-btn" data-desk="1" title="藏書">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-archive-flat.png" alt="">
+                            <i class="fa-solid fa-book-open lb-dock-fa" aria-hidden="true"></i>
                             <span class="lb-dock-label" data-cn-404="禁庫">藏書</span>
                         </button>
-                        <button class="lb-dock-btn" data-proxy="void-chapter-btn" title="章節選擇">
+                        <button class="lb-dock-btn" data-proxy="void-chapter-btn" data-desk="1" title="章節選擇">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-chapters-flat.png" alt="">
+                            <i class="fa-regular fa-square-plus lb-dock-fa" aria-hidden="true"></i>
                             <span class="lb-dock-label" data-cn-404="異常記錄">章節</span>
                         </button>
-                        <button class="lb-dock-btn" data-proxy="void-journal-btn" data-more="1" title="故事日誌">
+                        <button class="lb-dock-btn" data-proxy="void-journal-btn" data-more="1" data-desk="1" title="故事日誌">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-journal-flat.png" alt="">
+                            <i class="fa-solid fa-book-bookmark lb-dock-fa" aria-hidden="true"></i>
                             <span class="lb-dock-label" data-cn-404="案件日誌">日誌</span>
+                        </button>
+                        <!-- 角色中心：只在對話模式出現（桌機在這一排、手機在「更多」）；走路的舞台那一柱已經九顆，不再加。
+                             沒有 data-proxy（沒有對應的舊選單鈕），點擊在下面 #lb-dock 的監聽直接開。圖照控制台那顆同一套配色畫 -->
+                        <button class="lb-dock-btn lb-dock-flat-only" id="lb-dock-char" type="button" data-more="1" data-desk="1" title="角色中心">
+                            <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
+                                <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+                                    <path d="M88 432c0-96 72-152 168-152s168 56 168 152z" fill="#1ea7e8"/>
+                                    <circle cx="256" cy="170" r="92" fill="#f5f9fd"/>
+                                    <circle cx="372" cy="118" r="30" fill="#f2b632" stroke-width="16"/>
+                                </g>
+                            </svg>
+                            <i class="fa-regular fa-user lb-dock-fa" aria-hidden="true"></i>
+                            <span class="lb-dock-label" data-cn-404="名冊">角色中心</span>
                         </button>
                         <button class="lb-dock-btn" id="lb-dock-ach" data-proxy="void-achievement-btn" data-more="1" title="成就">
                             <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-achievements-flat.png" alt="">
@@ -656,6 +674,7 @@ const IRIS_IDLE = [
                                     <circle cx="352" cy="256" r="34" fill="#f2b632" stroke-width="16"/>
                                 </g>
                             </svg>
+                            <i class="fa-solid fa-ellipsis lb-dock-fa" aria-hidden="true"></i>
                             <span class="lb-dock-label" data-cn-404="其他">更多</span>
                         </button>
                         <div class="lb-dock-sep"></div>
@@ -1067,6 +1086,12 @@ const IRIS_IDLE = [
             if (lbDock) lbDock.addEventListener('click', function (e) {
                 const b = e.target.closest('.lb-dock-btn');
                 if (!b) return;
+                if (b.id === 'lb-dock-char') {   // 角色中心：沒有舊選單鈕可以代理，直接開（「更多」清單裡那格也是按這顆）
+                    const G = (window.parent || window).OS_CHAR_GALLERY;
+                    if (G && G.open) G.open();
+                    else (window.parent || window).AUI?.toast?.('角色中心還沒載好，等一下再按一次');
+                    return;
+                }
                 if (!b.dataset.proxy) return;
                 const proxy = tab.querySelector('#' + b.dataset.proxy);
                 if (proxy) proxy.click();
