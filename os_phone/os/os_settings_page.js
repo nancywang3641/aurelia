@@ -10,7 +10,7 @@
     'use strict';
 
     function html(ctx) {
-        const { llmConfig, secLlmConfig, imgConfig, minimaxConfig, vnD, voiceCast, elConfig, elModels, tavernExt, isStandalone, stHide, pwaOnly, primaryProfileOpts, secondaryProfileOpts, _vcEsc, _charModelName, _isGptChar, _capiEsc, _capiPackOptionsHTML, _imgNodeOptionsHTML, _nodeVal } = ctx;
+        const { llmConfig, secLlmConfig, imgConfig, minimaxConfig, vnD, voiceCast, elConfig, elModels, tavernExt, isStandalone, stHide, pwaOnly, primaryProfileOpts, secondaryProfileOpts, _vcEsc, _charModelName, _isGptChar, _capiEsc, _imgNodeOptionsHTML, _nodeVal } = ctx;
         return `
             <div class="set-container">
                 <div class="set-header sysh">
@@ -656,15 +656,6 @@
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label"><span><i class="fa-solid fa-images"></i> 帶參考圖${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1878') : ''}</span><label class="toggle-switch"><input type="checkbox" id="img-capi-ref" ${_nodeVal(imgConfig.customApi?.refImages) ? 'checked' : ''}><span class="slider"></span></label></div>
-                                    </div>
-                                    <div class="field-row">
-                                        <div class="set-label" title="選填，可空。接在每張提示詞後面一起送出，畫風寫在這裡就不必靠副模型每次記得寫。">底詞${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1893') : ''}</div>
-                                        <div class="capi-pack-row">
-                                            <select class="set-select" id="img-capi-pack" title="換一包就把那一包的底詞填進下面這格，當下就生效">${_capiPackOptionsHTML(imgConfig.customApi?.basePrompt || '')}</select>
-                                            <button class="set-btn" id="img-capi-pack-save" type="button" title="把下面這格現在的字存成一包"><i class="fa-solid fa-floppy-disk"></i> 存成包</button>
-                                            <button class="set-btn" id="img-capi-pack-del" type="button" title="刪掉選中的那一包（下面這格的字不會動）"><i class="fa-solid fa-trash"></i></button>
-                                        </div>
-                                        <textarea class="set-textarea" id="img-capi-base" placeholder="每張圖都要帶的固定描述，例如畫風">${(imgConfig.customApi?.basePrompt || '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</textarea>
                                     </div>
                                     <div class="field-row">
                                         <button class="set-btn" id="img-capi-test" type="button"><i class="fa-solid fa-plug"></i> 測試</button>

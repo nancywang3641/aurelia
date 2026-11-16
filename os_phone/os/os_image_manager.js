@@ -673,8 +673,9 @@
             const model = String(options.model || cfg.model || '').trim();
             if (!rawUrl) { console.warn('[ImageManager] 自訂接口沒填網址'); return null; }
 
-            // 底詞：跟別家接口一樣有一格，接在每張提示詞後面。畫風放這裡由程式保證每張都帶，
-            // 不必靠副模型每次記得寫（它會漏、會改寫）。options.raw 是「原樣送」的呼叫（她按原圖重生那種），不套。
+            // 底詞：以前設定頁有一格，接在每張提示詞後面。2026-11-17 併進「我的畫風」（每列自己選，_applyUse 拼在句首），
+            //   設定頁那格拿掉了、存的字已轉成一包畫風。這裡留著讀，只給呼叫端自己帶 customApi.basePrompt 的情況。
+            //   options.raw 是「原樣送」的呼叫（她按原圖重生那種），不套。
             const _basePrompt = String(cfg.basePrompt || '').trim();
 
             // 網址容錯：站方通常給到 .../v1，但她也可能整條貼進來

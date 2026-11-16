@@ -31,7 +31,7 @@
             ss_1566: { title: '小地圖 來源', body: '場景俯視小地圖底板用這個來源。ComfyUI 的模型／預設在下面「這組設定用於」選「小地圖」。' },
             ss_1589: { title: '畫風預設包', body: 'ComfyUI 畫房間時用哪個預設包。只列得出整房重繪那種模型的包。選好就生效。' },
             ss_img_uses: { title: '每個地方用什麼', body: '一列是一個會生圖的地方。先選「接口」，第二格就列那個接口自己的東西：NAI、ComfyUI 列它們的預設包；自訂接口列「自訂接口」那頁的畫風；酒館照酒館那邊的設定。選了就存，不用按底部保存。\n\n照原本的＝還沒換過，照改版前那套走。' },
-            ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖（只有自訂接口收得到底圖）。「畫風」頁每個選了自訂接口的地方挑一包，好幾個地方可以用同一包。NAI、ComfyUI 的長相寫在它們自己的預設包裡，不用這裡的畫風。' },
+            ss_img_styles: { title: '我的畫風', body: '一包是一段底詞加一段負詞，可以再放一張底圖。以前這頁的底詞包和底詞格也併進來了（11-17）。「畫風」頁每個選了自訂接口的地方挑一包，好幾個地方可以用同一包。NAI、ComfyUI 的長相寫在它們自己的預設包裡，不用這裡的畫風。' },
             ss_img_style_ref: { title: '底圖', body: '給生圖參考畫風用的一張圖。只有自訂接口收得到參考圖，其他接口會略過。' },
             ss_img_test: { title: '試畫一張', body: '選一個地方，照那一列現在的設定畫一張。ComfyUI 的預設包要先存好才試得到。' },
             ss_cfd_edit: { title: '預設包', body: '下面這些欄位就是 ComfyUI「目前的設定」。按底部「保存所有設定」存的是它，不會動到任何預設包。\n\n選一個包，欄位就換成那個包的內容。下拉直接選，或按「看圖挑」看著預覽圖按「套用」，兩個是一樣的；匯入、匯出、拖圖建包也在看圖挑那個窗裡。改完按「存回這個包」才會改到那個包；按「另存新的包」存成新的一個。選了包再按底部保存，目前的設定就變成畫面上這一份。\n\n哪個地方用目前的設定、哪個地方用哪個包，在「畫風」頁選。' },
@@ -111,14 +111,6 @@
     }
     function _capiPacksSave(list) { return _lsSet(CAPI_PACKS_KEY, JSON.stringify(list || []), '底詞包'); }
     function _capiEsc(x) { return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-    // 下拉的選項：底詞格裡現在的字剛好等於哪一包，就停在那一包
-    function _capiPackOptionsHTML(currentText, pickId) {
-        const cur = String(currentText || '').trim();
-        const packs = _capiPacks();
-        const on = pickId || ((packs.find(p => String(p.text || '').trim() === cur) || {}).id) || '';
-        return '<option value="">' + (packs.length ? '底詞包…' : '還沒有底詞包') + '</option>' +
-            packs.map(p => '<option value="' + _capiEsc(p.id) + '"' + (p.id === on ? ' selected' : '') + '>' + _capiEsc(p.name) + '</option>').join('');
-    }
     // 🔌 節點：同一種送法、不同的站（NovelAI 官方／公益站；GPT Image 官方／第三方）。[{ id, name, ...連線欄位 }]
     //    🚨 理由同底詞包，不放進 os_image_config：底部「儲存」會照畫面整份重組 novelai / customApi。
     //    正在用的那組照舊存在 os_image_config（生圖只讀那裡），節點只是「一鍵填回去」的清單。
@@ -1166,7 +1158,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             container.textContent = '設置頁的畫面沒有載入完整，請重新整理一次。';
             return;
         }
-        container.innerHTML = window.OS_SETTINGS_PAGE.html({ llmConfig, secLlmConfig, imgConfig, minimaxConfig, vnD, voiceCast, elConfig, elModels, tavernExt, isStandalone, stHide, pwaOnly, primaryProfileOpts, secondaryProfileOpts, _vcEsc, _charModelName, _isGptChar, _capiEsc, _capiPackOptionsHTML, _imgNodeOptionsHTML, _nodeVal });
+        container.innerHTML = window.OS_SETTINGS_PAGE.html({ llmConfig, secLlmConfig, imgConfig, minimaxConfig, vnD, voiceCast, elConfig, elModels, tavernExt, isStandalone, stHide, pwaOnly, primaryProfileOpts, secondaryProfileOpts, _vcEsc, _charModelName, _isGptChar, _capiEsc, _imgNodeOptionsHTML, _nodeVal });
 
         const backBtn = container.querySelector('#nav-home');
         backBtn.onclick = () => { const win = window.parent || window; if (win.PhoneSystem) win.PhoneSystem.goHome(); };
@@ -1809,73 +1801,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const elCfdGroup      = container.querySelector('#img-group-comfyui');
         const elCapiGroup     = container.querySelector('#img-group-customapi');
 
-        // 🎨 自訂接口的底詞包：換包＝把那包的字填進底詞格，而且當下寫進設定（不必再按儲存，免得她以為換了其實沒存）
-        const _capiAUI = () => (window.parent && window.parent.AUI) || window.AUI;
-        const _capiSay = (msg) => { const el = container.querySelector('#img-capi-status'); if (el) el.textContent = msg; };
-        const _capiRefill = (pickId) => {
-            const sel = container.querySelector('#img-capi-pack');
-            const ta = container.querySelector('#img-capi-base');
-            if (sel) sel.innerHTML = _capiPackOptionsHTML(ta ? ta.value : '', pickId);
-        };
-        const _capiApplyBase = (text) => {
-            const ta = container.querySelector('#img-capi-base');
-            if (ta) ta.value = text;
-            try {
-                const saved = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
-                saved.customApi = Object.assign({}, saved.customApi || {}, { basePrompt: text });
-                _lsSet(IMG_STORAGE_KEY, JSON.stringify(saved), '圖片設定');
-            } catch (e) {}
-            try {
-                const IM = (window.parent && window.parent.OS_IMAGE_MANAGER) || window.OS_IMAGE_MANAGER;
-                if (IM && IM.config) IM.config.customApi = Object.assign({}, IM.config.customApi || {}, { basePrompt: text });
-            } catch (e) {}
-        };
-        container.addEventListener('change', function (ev) {
-            const sel = ev.target && ev.target.closest && ev.target.closest('#img-capi-pack');
-            if (!sel) return;
-            const p = _capiPacks().find(x => x.id === sel.value);
-            if (!p) return;
-            _capiApplyBase(String(p.text || ''));
-            _capiSay('換成「' + p.name + '」了');
-        });
-        container.addEventListener('click', async function (ev) {
-            const saveBtn = ev.target && ev.target.closest && ev.target.closest('#img-capi-pack-save');
-            const delBtn = ev.target && ev.target.closest && ev.target.closest('#img-capi-pack-del');
-            if (!saveBtn && !delBtn) return;
-            const A = _capiAUI();
-            const sel = container.querySelector('#img-capi-pack');
-            const packs = _capiPacks();
-            if (saveBtn) {
-                const text = (container.querySelector('#img-capi-base')?.value || '').trim();
-                if (!text) { _capiSay('底詞格是空的，沒東西可以存'); return; }
-                const curPack = packs.find(x => x.id === (sel && sel.value));
-                const name = A && A.prompt ? await A.prompt('這包底詞叫什麼', curPack ? curPack.name : '') : '';
-                if (name == null) return;
-                const n = String(name).trim();
-                if (!n) return;
-                const same = packs.find(x => x.name === n);
-                if (same) {
-                    if (A && A.confirm && !(await A.confirm('已經有一包叫「' + n + '」，要用現在這格的字蓋掉它嗎？'))) return;
-                    same.text = text;
-                    _capiPacksSave(packs);
-                    _capiRefill(same.id);
-                    _capiSay('「' + n + '」更新了');
-                } else {
-                    const p = { id: 'capi_' + Date.now().toString(36), name: n, text: text };
-                    packs.push(p);
-                    _capiPacksSave(packs);
-                    _capiRefill(p.id);
-                    _capiSay('存成「' + n + '」了');
-                }
-                return;
-            }
-            const p = packs.find(x => x.id === (sel && sel.value));
-            if (!p) { _capiSay('先在左邊選要刪哪一包'); return; }
-            if (A && A.confirm && !(await A.confirm('刪掉底詞包「' + p.name + '」？底詞格裡現在的字不會動。'))) return;
-            _capiPacksSave(packs.filter(x => x.id !== p.id));
-            _capiRefill('');
-            _capiSay('「' + p.name + '」刪掉了');
-        });
+        // 🎨 自訂接口的底詞包、底詞格：2026-11-17 併進「我的畫風」（她：「併成一份」），這裡的事件拿掉了。舊資料怎麼轉見 _mergeCapiBase。
+        const _capiAUI = () => (window.parent && window.parent.AUI) || window.AUI;   // 下面節點那段也用
 
         // 🔌 節點：換節點＝把那組填回格子，而且當下寫進設定（不必再按儲存）。事件一律委派在 container，理由同底下「測試」鈕。
         const _nodeCur = (kind) => {
@@ -2019,7 +1946,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const out = await IM._genCustomApi(_refOn ? 'a cat playing with the red ball on a wooden table' : 'a cat sitting on a wooden table', 'bg',
                     { width: tw, height: th, refBlobs: _refBlobs, customApi: { url: url, apiKey: key, model: model,
                         quality: (q('#img-capi-quality')?.value || 'medium'),
-                        basePrompt: (q('#img-capi-base')?.value || '').trim(),
+                        basePrompt: '',   // 底詞格 11-17 併進我的畫風了
                         refImages: _refOn } });
                 if (out) say('通了，' + tw + '×' + th + ' 這個尺寸生得出圖' + (_refOn ? '，帶參考圖也收' : ''));
                 else say(((IM._lastCustomApiError && IM._lastCustomApiError.msg) || '沒拿到圖'));
@@ -2261,6 +2188,66 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!id) return;
                 try { const url = await D.getImage(id); if (url) el.style.backgroundImage = "url('" + url + "')"; } catch (e) {}
             });
+        }
+        // 🧩 2026-11-17 自訂接口的「底詞包」「底詞格」併進我的畫風（她：「併成一份」）。只跑一次（os_img_capi_merge_v1）：
+        //   ① 每個底詞包變一包畫風（同名同字的不重複建）；
+        //   ② 底詞格裡的字（以前每張自訂接口的圖都接在後面）變一包「自訂接口原本的底詞」：
+        //      走自訂接口、還沒選畫風（或選「不加」）的列改用它；本來就選了別的畫風的列只剩那包（列給她看）；
+        //      房間走自訂接口、沒選畫風的也接上它（房間以前沒選就借底詞格）；
+        //   ③ 底詞格清空，引擎不再在後面多接一段。
+        const CAPI_MERGE_KEY = 'os_img_capi_merge_v1';
+        function _mergeCapiBase() {
+            try { if (localStorage.getItem(CAPI_MERGE_KEY)) return; } catch (e) { return; }
+            const M = _IM();
+            if (!M || !M.USES) return;
+            const styles = M.getStyles();
+            const findSame = (name, pos) => styles.find(s => s.name === name && String(s.pos || '').trim() === String(pos || '').trim());
+            let added = 0;
+            _capiPacks().forEach(p => {
+                const text = String(p.text || '').trim();
+                if (!text || findSame(p.name, text)) return;
+                styles.push({ id: 'capipack_' + p.id, name: p.name, pos: text, neg: '', ref: '' });
+                added++;
+            });
+            const base = String(((M.config && M.config.customApi) || {}).basePrompt || '').trim();
+            const lost = [], moved = [];
+            let baseStyle = null;
+            if (base) {
+                baseStyle = findSame('自訂接口原本的底詞', base);
+                if (!baseStyle) { baseStyle = { id: 'capibase_' + Date.now().toString(36), name: '自訂接口原本的底詞', pos: base, neg: '', ref: '' }; styles.push(baseStyle); added++; }
+            }
+            if (added && !M.setStyles(styles)) return;   // 存不進去就整個不動，下次再試
+            if (baseStyle) {
+                const routes = M.getRoutes();
+                M.USES.forEach(u => {
+                    if (M.serviceForUse(u.id) !== 'custom_api') return;
+                    const r = routes[u.id] || {};
+                    if (!r.style || r.style === 'none') { M.setRoute(u.id, { style: baseStyle.id }); moved.push(u.name); }
+                    else { const s = styles.find(x => x.id === r.style); lost.push(u.name + (s ? '（畫風「' + s.name + '」）' : '')); }
+                });
+                try {
+                    const G = (window.parent || window).OS_ROOM_GEN || window.OS_ROOM_GEN;
+                    if (G && G.getRoute && G.setRoute) { const rr = G.getRoute(); if (rr.mode !== 'comfy' && !rr.style) { G.setRoute({ style: baseStyle.id }); moved.push('房間'); } }
+                } catch (e) {}
+                // 底詞格清空：引擎跟設定頁兩份都要寫（底部保存照 imgConfig 重組）
+                try {
+                    M.config.customApi = Object.assign({}, M.config.customApi || {}, { basePrompt: '' });
+                    if (imgConfig.customApi) imgConfig.customApi.basePrompt = '';
+                    const saved = JSON.parse(localStorage.getItem(IMG_STORAGE_KEY) || '{}');
+                    saved.customApi = Object.assign({}, saved.customApi || {}, { basePrompt: '' });
+                    if (!_lsSet(IMG_STORAGE_KEY, JSON.stringify(saved), '圖片設定')) return;
+                } catch (e) { return; }
+            }
+            _lsSet(CAPI_MERGE_KEY, String(Date.now()), '底詞包併進畫風');
+            if (!added && !moved.length && !lost.length) return;
+            let msg = '「自訂接口」那頁的底詞包和底詞格，併進「我的畫風」了，現在只有一份清單。';
+            if (added) msg += '\n\n多了 ' + added + ' 包畫風（從底詞包和底詞格轉過來的）。';
+            if (moved.length) msg += '\n\n這幾個地方改用「自訂接口原本的底詞」那包，底詞格那段字照樣會帶上（以前接在提示詞後面，現在放在最前面）：\n' + moved.map(x => '・' + x).join('\n');
+            if (lost.length) msg += '\n\n這幾個地方本來就選了別的畫風，以前會再多接一段底詞格的字，現在只剩它選的那包：\n' + lost.map(x => '・' + x).join('\n')
+                + '\n要的話，到「自訂接口」那頁改那包畫風，把字加進去。';
+            const A = (window.parent || window).AUI || window.AUI;
+            if (A && A.alert) A.alert(msg); else console.warn('[圖片設置] ' + msg);
+            try { _renderImgUses(); _renderImgStyles(); } catch (e) {}
         }
         // 🔔 2026-11-17 改版：NAI、ComfyUI 的列不再疊畫風（含原本的頭像／背景／物品底詞）。
         //    第一次打開畫風頁時，把「改版前有疊、改版後不疊了」的列列給她看一次，要留的詞她自己貼進那個預設包。
@@ -2642,6 +2629,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try { _migrateImgRoutes(); } catch (e) { console.warn('[圖片設置] 轉舊設定失敗:', e); }
             try { _pinComfyLegacyRows(); } catch (e) { console.warn('[圖片設置] 照原本的列換成包失敗:', e); }
             try { window._cfdEdit && window._cfdEdit.refresh && window._cfdEdit.refresh(); } catch (e) {}
+            if (mode !== 'album') { try { _mergeCapiBase(); } catch (e) { console.warn('[圖片設置] 底詞包併進畫風失敗:', e); } }
             window._switchImgTab(imgTab, true);   // 一開設置就畫好，但改版提示要等她真的點進圖片那頁才跳
             _refreshSpriteBatchNote();
             _fillTestUses();
@@ -2847,7 +2835,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         apiKey: (container.querySelector('#img-capi-key')?.value   || '').trim(),
                         model:  (container.querySelector('#img-capi-model')?.value || '').trim(),
                         quality: (container.querySelector('#img-capi-quality')?.value || 'medium'),
-                        basePrompt: (container.querySelector('#img-capi-base')?.value || '').trim(),
+                        basePrompt: '',   // 底詞格 11-17 併進我的畫風了：畫風在每列自己選
                         refImages: !!container.querySelector('#img-capi-ref')?.checked,
                     },
                     novelai: {
