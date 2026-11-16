@@ -581,7 +581,9 @@
     //       路上遇到的客人/旅人不進這張表，他們沿用底部對話框那條路。
     //    人設欄位要跟 initNpcs 裡生 NPC 時給的一致，否則同一個人在兩個模式會變成兩種個性。
     const STAFF = {
-        ying:     { name: '瀅瀅',     persona: null,                subTitle: '視差書咖 · 店長',        portrait: ASSET.ying },
+        ying:     { name: '瀅瀅',     persona: null,                subTitle: '視差書咖 · 店長',        portrait: ASSET.ying,
+                    // 她這支一開始（0.2 秒）手就舉起來揮了，照愛麗絲那邊試出來的「點下去 0.5～1 秒手才動」，先等 0.4 秒再開始演（greetDelay，毫秒）
+                    live: { idle: ASSET.yingIdle, greet: ASSET.yingGreet, greetFrom: 0, greetDelay: 400 } },
         alice:    { name: '愛麗絲',   personaFull: ALICE_PERSONA,   subTitle: '純白大廳 · 首席導覽官',  portrait: ASSET.alice,
                     // live＝對話模式裡會動的立繪（有就播，播不了留 portrait）。greetFrom＝歡迎那支從第幾秒開始播，照「點下去之後手幾秒開始動」調：
                     //   第一支（v1，沒台詞）從頭播，手 1.25 秒才動 → 她：「抬手的那個要再開始時間要再往前一點好」→ 改從 1 秒進（0.25 秒就動）。
