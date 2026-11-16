@@ -382,50 +382,12 @@
         }));
     }
 
-    // 一張地點卡。withApp＝右半那顆「直接進去」的鈕：只有「當前區域」那張給，
-    // 附近地點是兩欄格，每格再塞一顆箭頭會把四個字的地名擠掉尾字。
-    // 去別的地方＝點那張卡（走過去），到了之後再用當前區域那顆箭頭進去。
-    function _cardHtml(c, curId, withApp) {
-        const p = c.p;
-        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-        const cls = 'lb-rail-card' + (p.id === curId ? ' is-cur' : '') + (c.on ? '' : ' is-off');
-        return '<div class="' + cls + '" data-id="' + p.id + '">' +
-            '<button class="lb-rail-main" type="button" data-go="talk"' + (p.id === curId ? ' aria-current="location"' : '') + (c.on ? '' : ' disabled') + '>' +
-                '<span class="lb-rail-thumb" aria-hidden="true"><img alt="" data-bg="' + esc(p.bg || '') + '"></span>' +
-                '<span class="lb-rail-ic"><i class="fa-solid ' + (c.on ? p.icon : 'fa-lock') + '"></i></span>' +
-                '<span class="lb-rail-tx">' +
-                    '<span class="lb-rail-t">' + esc(p.name) + '</span>' +
-                    '<span class="lb-rail-who">' + esc(c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
-                '</span>' +
-            '</button>' +
-            ((c.on && withApp) ? '<button class="lb-rail-app" type="button" data-go="app" title="' + (p.flatName || p.name) + '">' +
-                '<i class="fa-solid fa-arrow-right-to-bracket"></i><span class="lb-rail-app-label">開啟</span></button>' : '') +
-        '</div>';
-    }
-
-    // 右欄分兩張卡：現在站在哪、旁邊有什麼。
-    // 舊版是七張同尺寸的斜票疊成一直排 —— 那個排法高度跟項目數綁在一起，
-    // 而畫面下緣還有對話框，項目一多最後一張就被壓在底下看不見。
-    function _railHtml(curId) {
-        const cards = _cards();
-        const cur = cards.filter(c => c.p.id === curId)[0];
-        const rest = cards.filter(c => c.p.id !== curId);
-        return (cur ? '<div class="lb-rail-sec lb-rail-now">' +
-                '<div class="lb-rail-hd">當前區域</div>' +
-                _cardHtml(cur, curId, true) +
-            '</div>' : '') +
-            '<div class="lb-rail-sec lb-rail-near">' +
-                '<div class="lb-rail-hd">附近地點</div>' +
-                '<div class="lb-rail-grid">' + rest.map(c => _cardHtml(c, curId, false)).join('') + '</div>' +
-            '</div>';
-    }
-
     // 🏛 桌機對話模式的右邊（11-16 改版，照阿洛的版面稿；小樣在本機 參考資料/LOBBY_HOME_LAB.html）：
     //   一句話 → 一顆大按鈕（這個地點最主要的那件事：大廳＝世界門、書咖＝書咖櫃檯…，字用 flatName、按下去＝go('app')）
     //   → 三張常去的地點（清單順序裡前三個站得住的別處）→「查看全部」（開換場景那張卡片面板，全部地點都在）。
     //   取代 09-11 那版「當前區域一張＋附近地點一整格」：那版八個地點加九顆功能鍵佔掉整個右半，人被擠到旁邊。
     //   🚨 阿洛的圖上這顆寫「繼續故事」，那跟「章節」是同一件事；她看出來：「繼續故事，可能阿洛誤以為是世界門」。
-    //   404 皮照舊用上面那個 _railHtml（黑底綠字那套樣式是照它的結構寫的）。
+    //   11-17 起 404 也用這個（以前它留著 09-11 那版的兩張卡；那組畫法和樣式已經拿掉）。
     function _homeHtml(curId) {
         const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const cards = _cards();
@@ -651,19 +613,6 @@
         const titleEl = box.querySelector('.lb-pv-title');
         const subEl   = box.querySelector('.lb-pv-sub');
         const placeBtn = box.querySelector('.lb-pv-place');
-        // 📱 手機的「開啟」＝對話框底下一顆大按鈕（世界門／書咖櫃檯／交易所…）。
-        //    以前是標題列地名後面一顆小膠囊：跟「現在在哪」擠在一起，也不在拇指搆得到的地方。
-        //    它住在共用的對話區（.void-dialogue-wrap）裡、輸入列正上方；桌機不顯示（桌機的開啟在右欄當前地點卡上）。
-        const cta = document.createElement('button');
-        cta.type = 'button';
-        cta.className = 'lb-pv-cta';
-        cta.innerHTML = '<span class="lb-pv-cta-portal"><i class="fa-solid"></i></span><span class="lb-pv-cta-name"></span><i class="fa-solid fa-arrow-right lb-pv-cta-go"></i>';
-        // 對話區是 void_terminal 建的，這裡只把鈕塞到輸入列上面；每次換地點再確認一次（對話區被重建過就重掛）
-        const mountCta = () => {
-            const wrap = host.querySelector('.void-dialogue-wrap');
-            const row = wrap && wrap.querySelector(':scope > .void-chat-input-row');
-            if (row && cta.nextElementSibling !== row) wrap.insertBefore(cta, row);
-        };
         const pimg    = box.querySelector('img.lb-pv-portrait');
         const lcv     = box.querySelector('.lb-pv-live');
         const live    = _livePortrait(box, lcv);
@@ -808,11 +757,6 @@
             //    現在它是常駐主畫面，切過去整片黑會讀成「壞掉了」。留著上一張，素材補上就自動換。
             if (p.bg) bg.style.backgroundImage = 'url(' + CDN + p.bg + ')';
             titleEl.textContent = p.name;
-            // 鈕上寫要開的是什麼（書咖櫃檯／世界門／交易所…），比「開啟」兩個字好懂；沒有這個名字就寫地名
-            cta.querySelector('.lb-pv-cta-name').textContent = p.flatName || p.name;
-            cta.querySelector('.lb-pv-cta-portal i').className = 'fa-solid ' + (p.icon || 'fa-door-open');
-            cta.hidden = !(p.openIn || p.open);
-            mountCta();
             closeMoreSheet();
             // 🚨 顯示/隱藏走 class 不走 inline style（專案鐵律）；背景圖是動態 URL，只能直接設 backgroundImage
             const applyNpc = (npc) => {
@@ -836,8 +780,8 @@
                     }
                 }).catch(() => {});
             }
-            // 404 皮（上面 sync404 剛套好）用舊的那排卡；其餘用 11-16 的新版面。窄畫面這一欄整個不顯示，畫哪個都一樣
-            rail.innerHTML = host.closest('.void-tab.mode-404') ? _railHtml(curId) : _homeHtml(curId);
+            // 11-17 起 404 也用同一套（大按鈕＋三張地點＋查看全部）；顏色在 lobby.css「404 的顏色」那段
+            rail.innerHTML = _homeHtml(curId);
             loadRailThumbs();
             go(mode || (_hasNpc(p) ? 'talk' : 'app'));
         };
@@ -855,17 +799,11 @@
             if (e.target.closest('.lb-rail-all')) { openScenePicker(); return; }
             if (e.target.closest('.lb-rail-cta')) { go('app'); return; }
             const pick = e.target.closest('.lb-rail-pick');
-            if (pick) { paint(pick.dataset.id); return; }
-            const b = e.target.closest('.lb-rail-main, .lb-rail-app');
-            if (!b || b.disabled) return;
-            const card = b.closest('.lb-rail-card');
-            if (!card) return;
-            paint(card.dataset.id, b.dataset.go);
+            if (pick) paint(pick.dataset.id);
         });
 
         // ✕ 只收起右邊的窗格（回到單純看立繪講話），不是關掉整個主頁——主頁沒有「關掉」這件事
         box.querySelector('.lb-pv-x').addEventListener('click', () => go('talk'));
-        cta.addEventListener('click', () => go('app'));
         placeBtn.addEventListener('click', () => { if (!desktopRail.matches) openScenePicker(); });
 
         // 窗格裡的面板按了它自己的 ✕（見 _mountFloating）：跟按窗格這顆 ✕ 是同一件事，回到對話。
@@ -879,7 +817,6 @@
 
         const close = () => {
             restorePanel(); talkOff(); closeScenePicker(); closeMoreSheet();
-            cta.remove();
             try { win.LobbyDress?.closeHistory?.(); } catch (e) {}
             // 離開對話模式時站在 404 的話把皮脫掉；接著掛舞台的話，舞台的 lstage-scene 會照它的場景再套一次
             if (_curId === 'room404') { try { win.VoidTerminal?.sync404?.(false); } catch (e) {} }
@@ -1087,13 +1024,13 @@
     // reprime()：把對話框換回眼前這位的（大廳開場流程比地點視圖晚一步時，會把書咖的開場旁白蓋上來）。
     const speaker = () => (_speakerOf ? _speakerOf() : undefined);
     const reprime = () => (_reprime ? _reprime() : false);
-    // 地點卡那行字會變的地點（SN 32 樓的「幾份等妳看」）：那邊一通知（lobby-place-who）就只改那行，不重畫整排
+    // 換場景卡上那行字會變的地點（SN 32 樓的「幾份等妳看」）：那邊一通知（lobby-place-who）就只改那行，不重畫整張
     function refreshWho() {
         PLACES.forEach(p => {
             if (!p.who) return;
             let t = '';
             try { t = p.who() || ''; } catch (e) {}
-            document.querySelectorAll('.lb-rail-card[data-id="' + p.id + '"] .lb-rail-who').forEach(el => { el.textContent = t || '　'; });
+            document.querySelectorAll('.lb-scn-item[data-id="' + p.id + '"]:not(.is-off) .lb-scn-who').forEach(el => { el.textContent = t || '　'; });
         });
     }
     try { win.addEventListener('lobby-place-who', refreshWho); } catch (e) {}
