@@ -1,10 +1,11 @@
 // ----------------------------------------------------------------
-// [檔案] os_settings_voice.js — 系統設置 🔊 角色說話的聲音（2026-07-17 自 os_settings.js 拆出；2026-10 改成三個小分頁）
+// [檔案] os_settings_voice.js — 系統設置 🔊 角色語音（2026-07-17 自 os_settings.js 拆出；2026-10 改成三個小分頁；
+//        2026-11-17 小分頁一排到底：角色配音／Minimax／ElevenLabs／本機，「雲端」那層拿掉）
 // 職責：
-//   總開關／「沒在名單上的人」→ 當場寫進 OS_VOICE_CAST（不用按保存）
+//   總開關（念出來／不用語音）／「沒在名單上的人」→ 當場寫進 OS_VOICE_CAST（不用按保存）
 //   角色配音：一個角色一張卡（名字、聲音下拉選單、別名、試聽）；保存時 os_settings.js 呼叫 collectCast() 收卡片
-//   雲端 → Minimax：抓我的聲音、官方音色庫（加進名單）、測試播放
-//   雲端 → ElevenLabs：抓我的聲音（官方預覽免費聽）、測試播放；金鑰／模型保存時才存
+//   Minimax：抓我的聲音、官方音色庫（加進名單）、測試播放
+//   ElevenLabs：抓我的聲音（官方預覽免費聽）、測試播放；金鑰／模型保存時才存
 //   本機：第一次切進來才叫 VN_TTS_Panel.initInline 畫
 // 依賴：參數注入 ctx = { container, minimaxConfig }（os_settings.js launchApp 的閉包變數）；
 //       入口＝window.OS_SETTINGS_VOICE.wire(ctx)、collectCast(container)。
@@ -59,7 +60,7 @@
         let html = `<option value="" ${cur ? '' : 'selected'}>選一個聲音</option>`;
         const el = elVoices();
         html += '<optgroup label="ElevenLabs">';
-        if (!el.length) html += '<option value="" disabled>先到「雲端 → ElevenLabs」抓聲音</option>';
+        if (!el.length) html += '<option value="" disabled>先到「ElevenLabs」那頁抓聲音</option>';
         let hit = false;
         el.forEach(v => {
             const val = `elevenlabs:${v.id}`;
@@ -170,7 +171,7 @@
         return card;
     }
 
-    // 卡片的試聽：先把「雲端」分頁現在填的金鑰存進去，再用這張卡選的聲音念一句（會花一次錢）
+    // 卡片的試聽：先把 Minimax、ElevenLabs 那兩頁現在填的金鑰存進去，再用這張卡選的聲音念一句（會花一次錢）
     let _ctx = null;
     async function tryVoice(card) {
         const v = cardVoice(card);
@@ -187,7 +188,7 @@
         btn.classList.remove('is-busy');
         if (!ok) toast(v.src === 'elevenlabs' ? '念不出來：檢查 ElevenLabs 金鑰跟聲音' : '念不出來：檢查 Minimax 的 Group ID、金鑰跟音色 ID', 'error');
     }
-    // 試聽前把雲端分頁現在填的值存進各自的設定（跟原本 Minimax 測試鈕一樣，不必先按保存）
+    // 試聽前把 Minimax、ElevenLabs 那兩頁現在填的值存進各自的設定（跟原本 Minimax 測試鈕一樣，不必先按保存）
     function stashCloudInputs() {
         if (!_ctx) return;
         const c = _ctx.container;
@@ -226,7 +227,7 @@
         const container = ctx.container;
         const q = (id) => container.querySelector('#' + id);
 
-        // ── 小分頁：角色配音／雲端／本機 ──
+        // ── 小分頁一排到底：角色配音／Minimax／ElevenLabs／本機 ──
         const tabs = Array.prototype.slice.call(container.querySelectorAll('.vcast-subtab'));
         let localDrawn = false;
         const go = (which) => {
@@ -240,25 +241,26 @@
         tabs.forEach(t => { t.onclick = () => go(t.dataset.vctab); });
         go('cast');
 
-        // 雲端裡的兩家
-        const cloudChips = Array.prototype.slice.call(container.querySelectorAll('[data-vccloud]'));
-        const goCloud = (which) => {
-            container.querySelectorAll('.vcast-cloudview').forEach(v => v.classList.toggle('vcast-off', v.id !== 'vccloud-' + which));
-            cloudChips.forEach(c => c.classList.toggle('active', c.dataset.vccloud === which));
-        };
-        cloudChips.forEach(c => { c.onclick = () => goCloud(c.dataset.vccloud); });
-        const mmCfg = MM() ? MM().getConfig() : {};
-        const elCfg = EL() ? EL().getConfig() : {};
-        goCloud(!mmCfg.apiKey && elCfg.apiKey ? 'elevenlabs' : 'minimax');
-
-        // ── 總開關、沒在名單上的人：當場生效 ──
+        // ── 總開關（念出來／不用語音）、沒在名單上的人：當場生效 ──
         const syncHidden = (r) => {
             if (!r) return;   // 沒存下來（已經跳過提示了）
             const mmEn = q('mm-enabled'); if (mmEn) mmEn.checked = !!r.on;
             const vt = container.querySelector('#vtts-enabled'); if (vt) vt.checked = !!(r.on && r.others === 'local');
         };
-        const onBox = q('vcast-on');
-        if (onBox) onBox.onchange = () => { if (V()) syncHidden(V().saveRoster({ on: onBox.checked })); };
+        const master = q('vcast-master'), masterSay = q('vcast-master-say');
+        const paintMaster = (on) => {
+            master.querySelectorAll('[data-v]').forEach(x => x.classList.toggle('active', (x.dataset.v === 'on') === !!on));
+            if (masterSay) masterSay.classList.toggle('vcast-off', !!on);
+        };
+        if (master) master.querySelectorAll('[data-v]').forEach(b => {
+            b.onclick = () => {
+                if (!V()) return;
+                const r = V().saveRoster({ on: b.dataset.v === 'on' });
+                if (!r) return;   // 沒存成就別把畫面切過去（已經跳過提示了）
+                paintMaster(r.on);
+                syncHidden(r);
+            };
+        });
         const others = q('vcast-others');
         if (others) others.querySelectorAll('[data-v]').forEach(b => {
             b.onclick = () => {

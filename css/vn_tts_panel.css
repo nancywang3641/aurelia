@@ -288,10 +288,11 @@ select.vtts-input option { background: var(--os-surface); color: var(--os-ink); 
 }
 .vtts-file-hidden { display: none; }
 
-/* 引擎二選一（顯存只夠一套，本來就該擇一）— 比分頁重、比標題輕 */
+/* 引擎二選一（顯存只夠一套，本來就該擇一）— 上面一行標題講明這是在選用哪一套 */
+.vtts-engine-label { margin-bottom: 8px; font-size: 13px; font-weight: 700; color: var(--os-ink); }
 .vtts-engine-bar { display: flex; gap: 8px; margin-bottom: 14px; }
 .vtts-engine-btn {
-    flex: 1; padding: 14px 10px; font-size: 16px; cursor: pointer;
+    flex: 1; padding: 10px 10px; font-size: 14px; cursor: pointer;
     border-radius: 10px; border: 1px solid rgba(var(--os-ink-rgb), 0.18);
     background: rgba(var(--os-ink-rgb), 0.03); color: var(--os-ink-soft);
     font-family: inherit; font-weight: 600; letter-spacing: 1px;

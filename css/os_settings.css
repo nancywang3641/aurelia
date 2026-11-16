@@ -426,19 +426,23 @@
 .bk-row-num { flex-shrink: 0; text-align: right; color: var(--os-ink); font-weight: 700; font-variant-numeric: tabular-nums; }
 .bk-row small { display: block; margin-top: 2px; font-size: 11px; font-weight: 400; color: rgba(var(--os-ink-rgb), 0.5); }
 
-/* ── 🔊 角色說話的聲音：總開關／角色配音名單／雲端兩家（os_settings_voice.js） ── */
+/* ── 🔊 角色語音：總開關／角色配音名單／Minimax／ElevenLabs（os_settings_voice.js） ── */
 .vcast-off { display: none !important; }
+/* 標題在左、開關在右的一列（一般 → 外語那頁的總開關在用） */
 .vcast-master-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .vcast-master-row .set-label { margin-bottom: 0; }
+/* 總開關選「不用語音」時底下那一行：告訴她現在是關著的 */
+.vcast-master-say { margin-top: 10px; font-size: 12px; line-height: 1.6; color: var(--os-ink-soft); }
+/* 四顆一排（角色配音／Minimax／ElevenLabs／本機）：手機框窄、字放大時也要整排看得到，左右留白收一點 */
+.vcast-tabs .api-subtab { padding-left: 4px; padding-right: 4px; }
 .vcast-row { display: flex; gap: 8px; align-items: stretch; }
 .vcast-grow { flex: 1; }
 .vcast-seg { display: flex; gap: 6px; padding: 4px; background: rgba(var(--os-ink-rgb), 0.06); border-radius: 6px; }
 .vcast-seg > div { flex: 1; text-align: center; padding: 9px 6px; border-radius: 4px; cursor: pointer; font-size: 13px; color: rgba(var(--os-ink-rgb), 0.55); user-select: none; transition: background 0.2s, color 0.2s; }
 .vcast-seg > div.active { background: rgba(var(--os-ink-rgb), 0.09); color: var(--os-ink); font-weight: 700; box-shadow: 0 0 0 1px rgba(var(--os-ink-rgb), 0.25) inset; }
-.vcast-cloud-seg { margin-bottom: 16px; }
 .vcast-narr-root { margin-bottom: 16px; }
 .vcast-cast-list { display: flex; flex-direction: column; gap: 10px; }
-.vcast-cast-list:empty::before { content: '還沒有角色。按下面「加角色」，或到「雲端」抓聲音後按「加進名單」。'; display: block; font-size: 12px; line-height: 1.6; color: var(--os-ink-soft); text-align: center; padding: 6px 4px; }
+.vcast-cast-list:empty::before { content: '還沒有角色。按下面「加角色」，或到「Minimax」「ElevenLabs」那頁抓聲音後按「加進名單」。'; display: block; font-size: 12px; line-height: 1.6; color: var(--os-ink-soft); text-align: center; padding: 6px 4px; }
 .vcast-card { background: rgba(var(--os-tint-rgb), 0.6); border: 1px solid rgba(var(--os-ink-rgb), 0.15); border-radius: 8px; overflow: hidden; }
 .vcast-card-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; user-select: none; }
 .vcast-card-caret { flex-shrink: 0; font-size: 12px; color: var(--os-ink-soft); transition: transform 0.2s; transform: rotate(90deg); }

@@ -41,7 +41,9 @@ const TTS_ENGINES = [
 ];
 
 function renderEngineBar(engine) {
+    // 加一行標題：這排是「選用哪一套」不是又一層分頁（沒標題時跟上下兩排分頁疊在一起，看起來像第四層）
     return `
+<div class="vtts-engine-label">本機用哪一套</div>
 <div class="vtts-engine-bar">
   ${TTS_ENGINES.map(e => `
   <button class="vtts-engine-btn${e.id === engine ? ' active' : ''}" onclick="VN_TTS_Panel.switchEngine('${e.id}')">${e.label}</button>`).join('')}

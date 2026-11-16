@@ -926,22 +926,22 @@
 
                     <div id="view-voice" class="tab-view hidden">
 
-                        <!-- 🎙 她講話 → 變成字（OS_VOICE_INPUT）。跟下面「角色說話的聲音」是兩件事，選單在 wireChannels 的 paintVoice 畫 -->
-                        <div class="set-group" id="voice-engine-group">
-                            <div class="set-label"><i class="fa-solid fa-microphone"></i> 語音轉文字${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2272') : ''}</div>
-                            <div id="voice-engine-box"></div>
-                        </div>
-
+                        <!-- 角色語音總開關：念出來／不用語音，點了當場生效（os_settings_voice.js）。
+                             排最上面、兩個狀態都寫出來：以前是「角色說話的聲音」＋一顆小開關，她找不到哪裡關語音 -->
                         <div class="set-group">
-                            <div class="vcast-master-row">
-                                <div class="set-label"><i class="fa-solid fa-volume-high"></i> 角色說話的聲音${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_vc_master') : ''}</div>
-                                <label class="toggle-switch"><input type="checkbox" id="vcast-on" ${voiceCast.on ? 'checked' : ''}><span class="slider"></span></label>
+                            <div class="set-label"><i class="fa-solid fa-volume-high"></i> 角色語音${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_vc_master') : ''}</div>
+                            <div class="vcast-seg" id="vcast-master">
+                                <div data-v="on" class="${voiceCast.on ? 'active' : ''}">念出來</div>
+                                <div data-v="off" class="${voiceCast.on ? '' : 'active'}">不用語音</div>
                             </div>
+                            <div class="vcast-master-say${voiceCast.on ? ' vcast-off' : ''}" id="vcast-master-say">現在角色不會念台詞。</div>
                         </div>
 
-                        <div class="api-subtab-row">
+                        <!-- 一排到底：以前是「角色配音／雲端／本機」，雲端裡面再分兩家，要多點一層 -->
+                        <div class="api-subtab-row vcast-tabs">
                             <div class="api-subtab vcast-subtab" data-vctab="cast">角色配音</div>
-                            <div class="api-subtab vcast-subtab" data-vctab="cloud">雲端</div>
+                            <div class="api-subtab vcast-subtab" data-vctab="minimax">Minimax</div>
+                            <div class="api-subtab vcast-subtab" data-vctab="elevenlabs">ElevenLabs</div>
                             <div class="api-subtab vcast-subtab" data-vctab="local">本機</div>
                         </div>
 
@@ -963,14 +963,8 @@
                             <div id="vn-narr-inline-root" class="vcast-narr-root"></div>
                         </div>
 
-                        <!-- 雲端：每一家一個小分頁，放金鑰、抓自己的聲音、試聽 -->
-                        <div id="vcview-cloud" class="vcast-subview">
-                            <div class="vcast-seg vcast-cloud-seg">
-                                <div data-vccloud="minimax">Minimax</div>
-                                <div data-vccloud="elevenlabs">ElevenLabs</div>
-                            </div>
-
-                            <div id="vccloud-minimax" class="vcast-cloudview">
+                        <!-- Minimax、ElevenLabs 各一頁：金鑰、抓自己的聲音、試聽 -->
+                        <div id="vcview-minimax" class="vcast-subview">
 
 
                         <!-- mm-enabled 跟著上面的總開關（保存時寫回 os_minimax_config.enabled） -->
@@ -1057,9 +1051,9 @@
                             <div id="mm-test-result" style="display:none; margin-top:10px; background:rgba(var(--os-tint-rgb), 0.90); border-radius:4px; padding:12px; font-size:12px; color:var(--os-ink); font-family:monospace; word-break:break-all;"></div>
                         </div>
 
-                            </div><!-- /vccloud-minimax -->
+                        </div><!-- /vcview-minimax -->
 
-                            <div id="vccloud-elevenlabs" class="vcast-cloudview">
+                        <div id="vcview-elevenlabs" class="vcast-subview">
                                 <div class="set-group">
                                     <div class="set-label">金鑰${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_el_key') : ''}</div>
                                     <input class="set-input" id="el-api-key" type="password" autocomplete="off" value="${_vcEsc(elConfig.apiKey)}">
@@ -1084,12 +1078,17 @@
                                     </div>
                                     <div class="vcast-result" id="el-test-result"></div>
                                 </div>
-                            </div><!-- /vccloud-elevenlabs -->
-                        </div><!-- /vcview-cloud -->
+                        </div><!-- /vcview-elevenlabs -->
 
                         <!-- 本機：SoVITS／IndexTTS（vn_tts_panel inline 注入點，第一次切進來才畫） -->
                         <div id="vcview-local" class="vcast-subview">
                             <div id="vn-tts-inline-root"></div>
+                        </div>
+
+                        <!-- 🎙 她講話 → 變成字（OS_VOICE_INPUT）。跟上面「角色語音」是兩件事，所以排在那一整區後面；選單在 wireChannels 的 paintVoice 畫 -->
+                        <div class="set-group" id="voice-engine-group">
+                            <div class="set-label"><i class="fa-solid fa-microphone"></i> 語音轉文字${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2272') : ''}</div>
+                            <div id="voice-engine-box"></div>
                         </div>
                     </div>
 
