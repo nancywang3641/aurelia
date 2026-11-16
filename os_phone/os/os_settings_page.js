@@ -54,7 +54,7 @@
 
                         <div class="set-group" id="manual-api-group">
                             <div><div class="set-label">API 網址</div><input class="set-input" id="os-api-url" placeholder="http://..." value="${_capiEsc(llmConfig.url)}"></div>
-                            <div style="margin-top:10px;"><div class="set-label">API 金鑰</div><input class="set-input" id="os-api-key" type="password" value="${_capiEsc(llmConfig.key)}"></div>
+                            <div style="margin-top:10px;"><div class="set-label">API 金鑰</div><input class="set-input" id="os-api-key" type="password" autocomplete="new-password" value="${_capiEsc(llmConfig.key)}"></div>
                         </div>
 
                         <!-- 請求格式：OpenAI 相容（多數站）／Gemini 原生（打 /v1beta/models/…:generateContent，附安全過濾全關；接 Gemini CLI 的公益站要用這個） -->
@@ -163,7 +163,7 @@
 
                         <div class="set-group" id="sec-manual-api-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : 'display:flex;'}">
                             <div><div class="set-label">API 網址</div><input class="set-input" id="sec-api-url" placeholder="http://..." value="${_capiEsc(secLlmConfig.url)}"></div>
-                            <div style="margin-top:10px;"><div class="set-label">API 金鑰</div><input class="set-input" id="sec-api-key" type="password" value="${_capiEsc(secLlmConfig.key)}"></div>
+                            <div style="margin-top:10px;"><div class="set-label">API 金鑰</div><input class="set-input" id="sec-api-key" type="password" autocomplete="new-password" value="${_capiEsc(secLlmConfig.key)}"></div>
                         </div>
 
                         <div class="set-group" id="sec-api-format-group" style="${(secLlmConfig.useSystemApi || secLlmConfig.syncWithPrimary) ? 'display:none;' : ''}">
@@ -263,7 +263,7 @@
                             <div class="set-label"><span><i class="fa-solid fa-dice"></i> 決策模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_jev') : ''}</span></div>
                             <div class="jev-field"><div class="set-label">網址</div><input class="set-input" id="jev-url" autocomplete="off"></div>
                             <div class="jev-field"><div class="set-label">模型</div><input class="set-input" id="jev-model" autocomplete="off"></div>
-                            <div class="jev-field"><div class="set-label">金鑰</div><input class="set-input" id="jev-key" type="password" autocomplete="off"></div>
+                            <div class="jev-field"><div class="set-label">金鑰</div><input class="set-input" id="jev-key" type="password" autocomplete="new-password"></div>
                             <div class="btn-test" id="jev-test-btn"><i class="fa-solid fa-plug"></i> 測試</div>
                             <div class="set-desc jev-test-result hidden" id="jev-test-result"></div>
                         </div>
@@ -423,7 +423,7 @@
                             <div class="set-group" id="img-pixabay-block" style="border-top:1px dashed rgba(var(--os-ink-rgb), 0.10); padding-top:14px; margin-top:14px;">
                             <div class="set-label" title="主來源卡住或逾時時，自動從 Pixabay 抓相符照片當背景，套玻璃磨砂遮罩。"><i class="fa-solid fa-life-ring"></i> 退路圖庫</div>
                             <div class="set-desc" style="margin-bottom:8px;">免費註冊 → <a href="https://pixabay.com/api/docs/" target="_blank" style="color:var(--os-ink);">pixabay.com/api/docs</a></div>
-                            <input class="set-input" id="img-pixabay-key" type="password" placeholder="Pixabay 金鑰（空白＝不啟用退路）" value="${_capiEsc(imgConfig.pixabayKey || '')}">
+                            <input class="set-input" id="img-pixabay-key" type="password" autocomplete="new-password" placeholder="Pixabay 金鑰（空白＝不啟用退路）" value="${_capiEsc(imgConfig.pixabayKey || '')}">
                             <div style="margin-top:10px; display:flex; align-items:center; gap:8px;">
                                 <label class="toggle-switch"><input type="checkbox" id="img-fallback-force" ${imgConfig.fallbackForce ? 'checked' : ''}><span class="slider"></span></label>
                                 <span style="font-size:12px; color:var(--os-ink);"><i class="fa-solid fa-flask"></i> 強制走退路圖庫（測試用，不去生圖接口）</span>
@@ -639,7 +639,7 @@
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label">金鑰</div>
-                                        <input class="set-input" id="img-capi-key" type="password" placeholder="站方給你的那把" value="${_capiEsc(imgConfig.customApi?.apiKey || '')}">
+                                        <input class="set-input" id="img-capi-key" type="password" autocomplete="new-password" placeholder="站方給你的那把" value="${_capiEsc(imgConfig.customApi?.apiKey || '')}">
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="照站方寫的型號名一字不差地填。每個站支援的型號都不一樣，所以這裡不給清單。網址帶 /sdapi 的站不用填，它自己決定。">模型</div>
@@ -687,7 +687,7 @@
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label">Token <span class="lbl-req">(必填)</span></div>
-                                        <input class="set-input" id="img-nai-token" type="password" placeholder="pst-..." value="${_capiEsc(imgConfig.novelai.token)}">
+                                        <input class="set-input" id="img-nai-token" type="password" autocomplete="new-password" placeholder="pst-..." value="${_capiEsc(imgConfig.novelai.token)}">
                                     </div>
                                     <div class="field-row">
                                         <div class="set-label" title="開啟＝NAI 生圖超過 1024×1024（Opus 免 Anlas 上限）自動等比縮回，防誤設大圖扣點數。想花 Anlas 出大圖再關。"><span><i class="fa-solid fa-shield-halved"></i> 防超免費尺寸${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1919') : ''}</span><label class="toggle-switch"><input type="checkbox" id="img-nai-cap-free" ${imgConfig.novelai.capFreeSize !== false ? 'checked' : ''}><span class="slider"></span></label></div>
@@ -985,7 +985,7 @@
 
                         <div class="set-group">
                             <div class="set-label">API 金鑰 <span style="font-size:11px; color:#fc8181;">(必填)</span></div>
-                            <input class="set-input" id="mm-api-key" type="password" placeholder="MiniMax 給你的 API 金鑰" value="${_capiEsc(minimaxConfig.apiKey || '')}">
+                            <input class="set-input" id="mm-api-key" type="password" autocomplete="new-password" placeholder="MiniMax 給你的 API 金鑰" value="${_capiEsc(minimaxConfig.apiKey || '')}">
                         </div>
 
                         <div class="set-group">
@@ -1056,7 +1056,7 @@
                         <div id="vcview-elevenlabs" class="vcast-subview">
                                 <div class="set-group">
                                     <div class="set-label">金鑰${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_el_key') : ''}</div>
-                                    <input class="set-input" id="el-api-key" type="password" autocomplete="off" value="${_vcEsc(elConfig.apiKey)}">
+                                    <input class="set-input" id="el-api-key" type="password" autocomplete="new-password" value="${_vcEsc(elConfig.apiKey)}">
                                     <div class="set-label">模型${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_el_model') : ''}</div>
                                     <select class="set-select" id="el-model">
                                         ${elModels.map(m => `<option value="${_capiEsc(m.id)}" ${elConfig.modelId === m.id ? 'selected' : ''}>${_vcEsc(m.name)}</option>`).join('')}
@@ -1140,7 +1140,7 @@
                         <div class="set-group" id="relay-group">
                             <div class="set-label"><i class="fa-solid fa-satellite-dish"></i> 回覆交給伺服器跑${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_2443') : ''}</div>
                             <input class="set-input" id="relay-url" placeholder="托管網址" />
-                            <input class="set-input" id="relay-token" type="password" placeholder="通行碼" style="margin-top:8px;" />
+                            <input class="set-input" id="relay-token" type="password" autocomplete="new-password" placeholder="通行碼" style="margin-top:8px;" />
                             <div style="display:flex; gap:8px; margin-top:10px;">
                                 <div class="btn-save" id="relay-save-btn" style="flex:1; padding:12px; font-size:13px;">開啟並測試</div>
                                 <div class="btn-test" id="relay-off-btn" style="flex:1; padding:12px; font-size:13px;">關掉</div>
@@ -1161,7 +1161,7 @@
                             <div class="cloudbk-gh" id="cloudbk-gh">
                                 <div class="cloudbk-gh-lab">倉庫與金鑰${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_cloudbk_gh') : ''}</div>
                                 <input class="set-input" id="cloudbk-gh-repo" placeholder="帳號/倉庫名" autocomplete="off" />
-                                <input class="set-input cloudbk-gh-token" id="cloudbk-gh-token" type="password" placeholder="金鑰" autocomplete="off" />
+                                <input class="set-input cloudbk-gh-token" id="cloudbk-gh-token" type="password" placeholder="金鑰" autocomplete="new-password" />
                             </div>
                             <div class="cloudbk-parts" id="cloudbk-parts"></div>
                             <div class="cloudbk-state" id="cloudbk-state"></div>
@@ -1217,7 +1217,7 @@
                                 要從主畫面開啟才收得到——分享鈕 → 加入主畫面，再從那顆圖示進來。
                             </div>
                             <input class="set-input" id="push-url" placeholder="通知伺服器的網址，不含 https://">
-                            <input class="set-input push-key-input" id="push-key" type="password" placeholder="金鑰，跟房間設定那把一樣">
+                            <input class="set-input push-key-input" id="push-key" type="password" autocomplete="new-password" placeholder="金鑰，跟房間設定那把一樣">
                             <div class="push-row">
                                 <div class="btn-save" id="push-on-btn">開啟通知</div>
                                 <div class="btn-test" id="push-test-btn">測試</div>
