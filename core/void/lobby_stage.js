@@ -39,6 +39,10 @@
         // 底圖per場景（SCENES[].base）；素材改版一律換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
         ying:  CDN + 'lobby_ying_v3.webp',   // 瀅瀅立繪(v3=11-16 阿洛重畫的六位管理員之一,708x1882;改版必換檔名防快取)
         alice: CDN + 'lobby_alice_v4.webp',  // 愛麗絲立繪(v4=11-16 阿洛重畫;照 v3 的畫布 972x1882、人的高度和腳的位置對齊)
+        // 🎞 愛麗絲會動的立繪（對話模式用，lobby_places.js 的 _livePortrait 播）：綠幕影片去背後存成「上半彩色（已乘透明度）＋下半透明度」疊起來的 mp4，
+        //    744x2880、24 格；人的大小位置對齊上面那張靜止立繪。idle＝站著循環（頭尾交叉淡入過）、greet＝第一次拉近時演一次的歡迎手勢（結尾落回 idle 第一格）。
+        aliceIdle:  CDN + 'lobby_alice_idle_v1.mp4',
+        aliceGreet: CDN + 'lobby_alice_greet_v1.mp4',
         cheshire: CDN + 'lobby_cheshire_v3.webp',  // 柴郡立繪(v3=11-16 阿洛重畫;畫布、人的大小照 v2)
         mcF:   CDN + 'lobby_mc_f_silhouette.png',   // 通用小人預設=剪影版(Rae定案 2026-07-15)；換裝在裝扮室
         mcM:   CDN + 'lobby_mc_m_silhouette.png',

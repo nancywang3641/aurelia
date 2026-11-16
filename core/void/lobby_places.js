@@ -445,6 +445,173 @@
             '<button class="lb-rail-all" type="button">查看全部 <i class="fa-solid fa-chevron-right"></i></button>';
     }
 
+    // ── 🎞 會動的立繪（11-16；她拿新立繪去生的綠幕影片）──────────────
+    //   影片檔是「上半彩色（已乘透明度）＋下半透明度灰階」疊起來的普通 mp4：到處都播得了（iPhone 不認帶透明的 webm），
+    //   這裡用 WebGL 把兩半合回一張透明的畫面，畫在 <canvas class="lb-pv-portrait lb-pv-live"> 上；它跟靜止那張 <img> 吃同一套版位。
+    //   誰有影片寫在 lobby_npcs.js 的 STAFF[x].live＝{ idle 站著循環, greet 進這個地點後第一次拉近時演一次 }。
+    //   🚨 起不來就什麼都不做：沒有 WebGL、檔案抓不到、瀏覽器不給自動播（省電模式）、系統設了減少動態 → 畫面上留靜止立繪。
+    //      真的畫出第一格才掛 .lb-pv.is-live（CSS 這時才把 <img> 換成 <canvas>）。
+    //   🚨 影片先整支抓成 blob 再播：jsDelivr 不給素材庫的 mp4（見 fetchUrl），只能靠 GitHub raw，而 raw 給的類型不是影片，
+    //      直接當 <video src> 有的瀏覽器不播；blob 也順便免掉跨網域的圖不能進 WebGL 的問題。
+    //   🚨 收掉時影片要拆乾淨（pause＋拿掉 src＋load、blob 網址還回去、放掉 WebGL），不然每進出一次大廳就多佔一份記憶體。
+    function _livePortrait(box, canvas) {
+        let cur = null, vIdle = null, vGreet = null, active = null;
+        const blobs = new Map();   // 影片網址 → Promise<blob 網址>。走開又回來不重抓（一支兩三 MB）；整個畫面收掉時才還回去
+        let gl = null, tok = 0, gen = 0, lastT = -1, greeted = false, dead = false;
+        const reduce = () => { try { return win.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+        const wantPlay = () => !!cur && !dead && canvas.isConnected && !document.hidden &&
+            box.classList.contains('is-talk') && !box.classList.contains('is-focus');
+
+        const fetchUrl = (url) => {
+            if (blobs.has(url)) return blobs.get(url);
+            const job = (async () => {
+                // 🚨 影片先走 GitHub raw、jsDelivr 當後備（跟圖片相反）：11-16 量過，jsDelivr 對素材庫的 mp4 一律回 503，
+                //    而且有時要拖 18 秒才回，等它失敗再換的話，人都拉近講完話了影片才到。raw 0.6 秒。
+                const alt = window.LobbyStage?._b?.sfMirror?.(url);
+                let r = await fetch(alt || url, { mode: 'cors' }).catch(() => null);
+                if ((!r || !r.ok) && alt) r = await fetch(url, { mode: 'cors' }).catch(() => null);
+                if (!r || !r.ok) throw new Error('HTTP ' + (r ? r.status : '連不上'));
+                return URL.createObjectURL(new Blob([await r.arrayBuffer()], { type: 'video/mp4' }));
+            })();
+            blobs.set(url, job);
+            job.catch(() => blobs.delete(url));   // 沒抓到的下次再試
+            return job;
+        };
+        const mkVideo = (src, loop) => {
+            const v = document.createElement('video');
+            v.muted = true; v.defaultMuted = true; v.playsInline = true; v.loop = !!loop; v.preload = 'auto';
+            v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+            v.src = src;
+            return v;
+        };
+        const initGl = () => {
+            if (gl) return true;
+            try {
+                const g = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false });
+                if (!g) return false;
+                const sh = (type, src) => { const s = g.createShader(type); g.shaderSource(s, src); g.compileShader(s); return s; };
+                const prog = g.createProgram();
+                g.attachShader(prog, sh(g.VERTEX_SHADER, 'attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }'));
+                // 上半取顏色、下半取透明度；兩半交界各往內縮一點，不然放大時會互相滲色。顏色本來就乘過透明度，壓縮造成的誤差用 min 收掉
+                g.attachShader(prog, sh(g.FRAGMENT_SHADER,
+                    'precision mediump float; uniform sampler2D t; varying vec2 uv;' +
+                    'void main(){ float y = 1.0 - uv.y; float e = 0.0008;' +
+                    ' vec3 c = texture2D(t, vec2(uv.x, clamp(y * 0.5, e, 0.5 - e))).rgb;' +
+                    ' float a = texture2D(t, vec2(uv.x, clamp(0.5 + y * 0.5, 0.5 + e, 1.0 - e))).r;' +
+                    ' a = smoothstep(0.03, 0.97, a); gl_FragColor = vec4(min(c, vec3(a)), a); }'));
+                g.linkProgram(prog);
+                if (!g.getProgramParameter(prog, g.LINK_STATUS)) return false;
+                g.useProgram(prog);
+                g.bindBuffer(g.ARRAY_BUFFER, g.createBuffer());
+                g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g.STATIC_DRAW);
+                const loc = g.getAttribLocation(prog, 'p');
+                g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+                g.bindTexture(g.TEXTURE_2D, g.createTexture());
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
+                g.clearColor(0, 0, 0, 0);
+                gl = g;
+                canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); gl = null; stop(); });
+                return true;
+            } catch (e) { return false; }
+        };
+        const draw = (v) => {
+            if (!gl || !v || v.readyState < 2 || !v.videoWidth) return false;
+            const w = v.videoWidth, h = v.videoHeight >> 1;
+            if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            return true;
+        };
+        // 影片出新的一格才畫（影片 24 格、螢幕 60 格，每格都重傳貼圖是白做工）；換播哪一支就重排，舊的那一輪作廢
+        const schedule = () => {
+            const my = ++gen, v = active;
+            if (!v || dead) return;
+            const step = () => {
+                if (my !== gen || dead || !cur) return;
+                try {
+                    if (v.requestVideoFrameCallback || v.currentTime !== lastT) {
+                        lastT = v.currentTime;
+                        if (draw(v) && !box.classList.contains('is-live')) box.classList.add('is-live');
+                    }
+                } catch (e) { console.warn('[LobbyPlaces] 會動的立繪畫不出來，退回靜止的', e); stop(); return; }
+                next();
+            };
+            const next = () => { if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(step); else requestAnimationFrame(step); };
+            next();
+        };
+        // 該播就播、不該播（開著面板、切到別的分頁、不在對話那一態）就停
+        const sync = () => {
+            if (!active) return;
+            if (wantPlay()) { const p = active.play(); if (p && p.catch) p.catch(() => {}); }
+            else { try { active.pause(); } catch (e) {} }
+        };
+        const backToIdle = () => {
+            if (!vIdle) return;
+            active = vIdle;
+            try { vIdle.currentTime = 0; } catch (e) {}
+            schedule(); sync();
+        };
+        function stop() {
+            tok++; gen++;
+            box.classList.remove('is-live');
+            [vIdle, vGreet].forEach(v => { if (v) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} } });
+            vIdle = vGreet = active = null; cur = null; lastT = -1;
+        }
+        // 換成這位的影片（live＝STAFF 的 live；沒有就收掉）。同一位再叫一次不重載
+        const set = async (live) => {
+            const want = (live && live.idle && !reduce()) ? live : null;
+            if (want && cur && want.idle === cur.idle) { sync(); return; }
+            stop();
+            if (!want || dead) return;
+            cur = want; greeted = false;
+            const my = tok;
+            try {
+                if (!initGl()) throw new Error('沒有 WebGL');
+                // 兩支一起抓：歡迎那支要趕在她第一次拉近之前到
+                if (want.greet) {
+                    fetchUrl(want.greet).then(g => {
+                        if (my !== tok) return;
+                        vGreet = mkVideo(g, false);
+                        vGreet.addEventListener('ended', backToIdle);
+                    }).catch(() => {});
+                }
+                const u = await fetchUrl(want.idle);
+                if (my !== tok) return;
+                vIdle = mkVideo(u, true); active = vIdle;
+                schedule(); sync();
+            } catch (e) {
+                console.warn('[LobbyPlaces] 會動的立繪沒起來，留靜止的', e);
+                if (my === tok) stop();
+            }
+        };
+        // 進這個地點後第一次拉近：演一次歡迎的動作，演完接回站著的那支。那支還沒抓到、或影片根本沒在播就不演（下次拉近再試）。
+        // 不等它「準備好」才播：影片已經整支在記憶體裡，叫它播幾毫秒就有畫面；它出第一格之前，畫面停在站著那支的最後一格
+        const greet = () => {
+            if (!cur || greeted || !vGreet || !box.classList.contains('is-live')) return;
+            greeted = true;
+            try { vIdle.pause(); } catch (e) {}
+            active = vGreet;
+            try { vGreet.currentTime = 0; } catch (e) {}
+            schedule();
+            const p = vGreet.play(); if (p && p.catch) p.catch(backToIdle);
+        };
+        const arrive = () => { greeted = false; };   // 換到一個地點（含走開又回來）：下次拉近再演一次
+        const onVis = () => sync();
+        document.addEventListener('visibilitychange', onVis);
+        const destroy = () => {
+            stop(); dead = true;
+            blobs.forEach(job => { job.then(u => { try { URL.revokeObjectURL(u); } catch (e) {} }).catch(() => {}); });
+            blobs.clear();
+            document.removeEventListener('visibilitychange', onVis);
+            try { gl && gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch (e) {}
+            gl = null;
+        };
+        return { set, sync, greet, arrive, destroy };
+    }
+
     function closeView() { if (_view) { try { _view(); } catch (e) {} _view = null; } }
 
     // 對話模式的主頁：進來就站在預設地點，不必按任何東西
@@ -467,6 +634,7 @@
               '<span class="lb-pv-sub"></span>' +
             '</div>' +
             '<img class="lb-pv-portrait" alt="">' +
+            '<canvas class="lb-pv-portrait lb-pv-live" aria-hidden="true"></canvas>' +   // 會動的立繪畫在這張上（有影片的人才用，見 _livePortrait）
             '<div class="lb-pv-veil"></div>' +   // 拉近對話時蓋在人下半身上的那層紗（11-16 那版才用，404 不顯示）
             // 頭旁邊的「聊聊」：對話平常是收起來的，這顆告訴第一次來的人「點他可以講話」；沒有立繪的人也靠它開對話
             '<button class="lb-pv-poke" type="button"><i class="fa-regular fa-comment-dots"></i><span>聊聊</span></button>' +
@@ -490,7 +658,9 @@
             const row = wrap && wrap.querySelector(':scope > .void-chat-input-row');
             if (row && cta.nextElementSibling !== row) wrap.insertBefore(cta, row);
         };
-        const pimg    = box.querySelector('.lb-pv-portrait');
+        const pimg    = box.querySelector('img.lb-pv-portrait');
+        const lcv     = box.querySelector('.lb-pv-live');
+        const live    = _livePortrait(box, lcv);
         const rail    = box.querySelector('.lb-rail');
         const body    = box.querySelector('.lb-pv-body');
 
@@ -510,6 +680,7 @@
             // 電腦：拉近了就能直接打字。手機不自動點進輸入框（鍵盤一彈出來畫面剩一半，要打字自己點）。
             // 🚨 focus 帶 preventScroll：對話框還在滑上來的半路，不帶的話瀏覽器會把外層整個捲過去
             if (now && !was && desktopRail.matches) { try { host.querySelector('.void-input')?.focus({ preventScroll: true }); } catch (err) {} }
+            if (now && !was) live.greet();   // 有影片的人：進這個地點後第一次拉近，演一次歡迎的動作
         };
         const onHostFocus = (e) => { if (e.target && e.target.matches && e.target.matches('.void-input')) zoom(true); };
         const onHostClick = (e) => { if (e.target && e.target.closest && e.target.closest('.void-dialogue-box')) zoom(true); };
@@ -523,6 +694,7 @@
         host.addEventListener('click', onHostClick);
         document.addEventListener('keydown', onKey);
         pimg.addEventListener('click', () => zoom(!box.classList.contains('is-zoom')));
+        lcv.addEventListener('click', () => zoom(!box.classList.contains('is-zoom')));
         box.querySelector('.lb-pv-poke').addEventListener('click', () => zoom(true));
         bg.addEventListener('click', () => zoom(false));
 
@@ -565,6 +737,7 @@
             restorePanel();
             body.innerHTML = '';
             box.classList.remove('is-talk', 'is-app', 'is-focus', 'is-zoom');
+            setTimeout(live.sync, 0);   // 這一態定下來之後：對話那一態影片照播，開著面板就停
             const p = get(curId);
             if (!p) return;
             if (mode === 'talk' && _hasNpc(p)) {
@@ -616,6 +789,7 @@
             }
             restorePanel(); talkOff();
             curId = nextId; _curId = nextId;
+            live.arrive();
             box.dataset.place = nextId;   // 介面的顏色跟著地點換（色票在 lobby.css「顏色跟著地點走」那段；沒寫到的地點用大廳的藍）
             // 404 地點＝套上 404 皮：對話換成柴郡的軌道（人設、紀錄），離開就脫掉。
             // 🚨 舞台模式由 lstage-scene 事件做這件事，對話模式以前沒人做 → 在 404 跟柴郡講話其實是跟瀅瀅講。
@@ -642,6 +816,7 @@
                     box.classList.remove('no-portrait');
                     if (pimg.getAttribute('src') !== npc.portrait) pimg.src = npc.portrait; else sizePortrait();
                 } else { box.classList.add('no-portrait'); pimg.removeAttribute('src'); }
+                live.set(npc && npc.portrait ? npc.live : null);
             };
             applyNpc((win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null);
             // 我的家的看板娘：名字在 localStorage（同步，上面已經拿來決定要不要直接進對話），圖在 IDB（非同步）
@@ -706,6 +881,7 @@
             host.removeEventListener('focusin', onHostFocus);
             host.removeEventListener('click', onHostClick);
             document.removeEventListener('keydown', onKey);
+            live.destroy();
             if (_paint === paint) { _paint = null; _curId = null; _speakerOf = null; _reprime = null; }
             box.remove();
             if (_view === close) _view = null;

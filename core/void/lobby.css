@@ -1477,6 +1477,12 @@
 .void-tab:not(.mode-404) .lobby-left:not(.lstage-on):has(.lb-pv):not(.void-dock-open) .void-retry-btn {
     background:transparent !important; border-color:transparent !important; color:rgba(255,255,255,.88) !important;
 }
+/* 🎞 會動的立繪（lobby_places.js 的 _livePortrait）：影片真的畫出第一格才掛 .is-live，這時才把靜止那張換成 <canvas>。
+   canvas 也帶 .lb-pv-portrait，位置、大小、拉近都吃同一套；影片自己會動，不用再加呼吸 */
+.lb-pv-live { display:none; }
+.lb-pv.is-live.is-talk .lb-pv-live { display:block; }
+.lb-pv.is-live.is-talk img.lb-pv-portrait { display:none; }
+.void-tab:not(.mode-404) .lobby-left:not(.lstage-on) .lb-pv.is-talk .lb-pv-portrait.lb-pv-live { animation:none; }
 /* 支點在腳底，所以是頭往上一點點、腳不動。用獨立的 scale，不跟拉近用的 transform 搶 */
 @keyframes lbh-breathe { 0%, 100% { scale:1 1; } 50% { scale:1 1.006; } }
 @keyframes lbh-poke { 0%, 100% { translate:0 0; } 50% { translate:0 -4px; } }
