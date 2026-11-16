@@ -315,6 +315,12 @@
             chkImg.checked = BACKUP.getSettings().exportImages !== false;
             chkImg.addEventListener('change', () => { const s = BACKUP.getSettings(); s.exportImages = chkImg.checked; BACKUP.saveSettings(s); });
         }
+        // 🔑 帶不帶 API 金鑰：預設不帶（11-17），勾了記在這台
+        const chkSecrets = container.querySelector('#bk-export-secrets');
+        if (chkSecrets && BACKUP) {
+            chkSecrets.checked = BACKUP.getSettings().exportSecrets === true;
+            chkSecrets.addEventListener('change', () => { const s = BACKUP.getSettings(); s.exportSecrets = chkSecrets.checked; BACKUP.saveSettings(s); });
+        }
         // 要匯出哪幾塊：跟雲端備份同一份名冊，酒館裡只列奧瑞亞自己管的（BACKUP.partsHere）；勾的記在這台
         const elParts = container.querySelector('#bk-parts');
         if (elParts && BACKUP && BACKUP.partsHere) {
@@ -335,11 +341,12 @@
             if (!BACKUP) { setStatus('OS_BACKUP 模組未載入', '#fc8181'); return; }
             const parts = elParts ? _pickedParts() : undefined;
             if (parts && !Object.keys(parts).some(k => parts[k])) { setStatus('一塊都沒勾', '#fc8181'); return; }
-            if (BACKUP.confirmSecrets && !await BACKUP.confirmSecrets(parts || BACKUP.exportPartsGet())) return;
+            const withSecrets = chkSecrets ? chkSecrets.checked : false;
+            if (withSecrets && BACKUP.confirmSecrets && !await BACKUP.confirmSecrets(parts || BACKUP.exportPartsGet())) return;
             setBtnLoading(btnExport, '準備中...');
             setStatus('正在打包資料...', 'rgba(26,28,40,0.25)');
             try {
-                const sizeKB = await BACKUP.exportLocal({ images: chkImg ? chkImg.checked : undefined, parts: parts });
+                const sizeKB = await BACKUP.exportLocal({ images: chkImg ? chkImg.checked : undefined, parts: parts, secrets: withSecrets });
                 const L = BACKUP.lastExport;
                 // 酒館（Tauri）下載不會跳任何東西，要講檔案去哪了
                 setStatus('匯出完成（' + sizeKB + ' KB' + (L && L.images ? '，含圖片和語音 ' + L.images + ' 張' : '') + '）' + (isStandaloneNow() ? '，請儲存至安全位置' : '，檔案在「下載」資料夾'), 'rgba(26,28,40,0.25)');

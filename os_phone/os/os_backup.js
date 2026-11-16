@@ -449,6 +449,7 @@
         if (data.localStorage && opts.restoreSettings !== false) {
             restored.lsFailed = 0;
             Object.entries(data.localStorage).forEach(([k, v]) => {
+                if (data.secretsStripped) v = _keepSecrets(k, v);   // 沒帶金鑰的備份：這台原本的金鑰不被蓋掉
                 if (win.AUI.lsSet(k, v, '還原的設定')) restored.localStorage++;
                 else restored.lsFailed++;
             });
@@ -464,9 +465,17 @@
     let lastExport = null;
     async function exportLocal(opts = {}) {
         const withImages = (typeof opts.images === 'boolean') ? opts.images : getSettings().exportImages !== false;
+        const withSecrets = (typeof opts.secrets === 'boolean') ? opts.secrets : exportSecretsOn();   // 預設不帶金鑰（見 _stripSecrets）
         const picked = opts.parts || exportPartsGet();
         if (!partsHere().some(p => picked[p.k])) throw new Error('一塊都沒勾');
         const data = await collectParts(picked, { type: 'full', images: withImages });
+        if (!withSecrets && data.localStorage) {
+            Object.keys(data.localStorage).forEach(k => {
+                const v = _stripSecrets(k, data.localStorage[k]);
+                if (v === null) delete data.localStorage[k]; else data.localStorage[k] = v;
+            });
+            data.secretsStripped = true;   // 還原時看到這個：這台原本的金鑰留著
+        }
         if (withImages) data.db.images = IMG_SLOT;
         const content = JSON.stringify(data, null, 2);
         let parts = [content], nImg = 0;
@@ -627,7 +636,7 @@
           ls: ['studio_quick_chips', 'vn_component_groups', 'vn_theme_gallery'], prefixes: ['os_studio_parsed_', 'studio_panel_type_'] },
         { k: 'ach', label: '成就', achievements: true },
         // 其他塊沒收的 LS_BACKUP_KEYS 全部歸這塊（下面那段自動補），這裡只列原本那幾個
-        { k: 'settings', label: '設定（含 API 金鑰）', tavernLabel: '設定（圖片、語音、接口，含金鑰）', off: true,
+        { k: 'settings', label: '設定（圖片、語音、接口…）', tavernLabel: '設定（圖片、語音、接口）', off: true,
           ls: ['os_global_config', 'os_secondary_llm_config', 'os_image_config', 'os_minimax_config', 'os_elevenlabs_config',
                'os_voice_cast', 'os_vn_foreign', 'vn_cfg_v4', 'wx_phone_api_config'] },
     ];
@@ -750,13 +759,52 @@
         const sel = PARTS.filter(p => parts[p.k] && shown.indexOf(p.k) !== -1);
         return _selLsKeys(sel).filter(k => _hasSecret(k, localStorage.getItem(k))).length;
     }
+    // 🔑 本地備份預設不帶金鑰（11-17 小斐看到「設定（含 API 金鑰）」預設勾著，檔案一分享金鑰就跟著出去；她：「先修備份預設帶金鑰那個」）。
+    //   「設定」那塊照樣帶（圖片、語音、接口那一大堆設定換手機還要用），只把裡面的金鑰欄位挖掉；要帶得自己勾「帶 API 金鑰」。
+    //   還原這種挖過的備份時，這台原本有的金鑰留著，不被空的蓋掉（_keepSecrets）。
+    function _secretWalk(o, fn, d) {
+        if (!o || typeof o !== 'object' || (d || 0) > 5) return;
+        Object.keys(o).forEach(k => {
+            const x = o[k];
+            if (typeof x === 'string') { if (SECRET_FIELD.test(k) && x.trim().length >= 6) fn(o, k); }
+            else _secretWalk(x, fn, (d || 0) + 1);
+        });
+    }
+    // 回 null＝整個 key 就是一把金鑰，別帶；其餘回挖掉金鑰欄位之後的字串
+    function _stripSecrets(lsKey, raw) {
+        if (!_hasSecret(lsKey, raw)) return raw;
+        let v;
+        try { v = JSON.parse(raw); } catch (e) { return null; }
+        if (typeof v !== 'object' || v === null) return null;
+        _secretWalk(v, (o, k) => { delete o[k]; });
+        return JSON.stringify(v);
+    }
+    // 還原挖過金鑰的備份：這台現在那份裡的金鑰欄位，備份那份沒有的話補回去
+    function _keepSecrets(lsKey, incoming) {
+        const cur = localStorage.getItem(lsKey);
+        if (!cur || !_hasSecret(lsKey, cur)) return incoming;
+        let a, b;
+        try { a = JSON.parse(cur); b = JSON.parse(incoming); } catch (e) { return incoming; }
+        if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return incoming;
+        const put = (src, dst, d) => {
+            if (!src || !dst || typeof src !== 'object' || typeof dst !== 'object' || d > 5) return;
+            Object.keys(src).forEach(k => {
+                const x = src[k];
+                if (typeof x === 'string') { if (SECRET_FIELD.test(k) && x.trim().length >= 6 && !(typeof dst[k] === 'string' && dst[k].trim())) dst[k] = x; }
+                else if (x && typeof x === 'object' && dst[k] && typeof dst[k] === 'object') put(x, dst[k], d + 1);
+            });
+        };
+        put(a, b, 0);
+        return JSON.stringify(b);
+    }
+    function exportSecretsOn() { return getSettings().exportSecrets === true; }
     // 匯出前問一聲：有金鑰才問；回 false＝她不要了
     async function confirmSecrets(parts) {
         const n = secretsIn(parts);
         if (!n) return true;
         const A = win.AUI || window.AUI;
         if (!A || !A.confirm) return true;
-        return A.confirm('這份備份裡有 API 金鑰或通行碼（' + n + ' 項設定）。檔案別傳給別人，也別放到公開的地方。\n不想帶的話，取消「設定」那塊的勾再匯出。',
+        return A.confirm('這份備份裡有 API 金鑰或通行碼（' + n + ' 項設定）。檔案別傳給別人，也別放到公開的地方。\n不想帶的話，取消「帶 API 金鑰」的勾再匯出。',
             { title: '備份裡有金鑰', okText: '照樣匯出', cancelText: '先不要', danger: false });
     }
     async function _sha(text) {
@@ -943,7 +991,7 @@
         const ok = await A.confirm((last ? '已經 ' + Math.floor((Date.now() - last) / DAY) + ' 天沒備份了。' : '還沒備份過。')
             + '手機版的資料只存在這支手機的瀏覽器裡，清掉或換手機就沒了。要現在匯出一份嗎？',
             { title: '備份', okText: '匯出', cancelText: '之後再說', danger: false });   // 句子裡有「清掉」會被判成危險、按鈕變紅
-        if (ok) { try { if (await confirmSecrets(exportPartsGet())) await exportLocal(); } catch (e) {} }
+        if (ok) { try { if (!exportSecretsOn() || await confirmSecrets(exportPartsGet())) await exportLocal(); } catch (e) {} }
         else win.AUI.lsSet(REMIND_KEY, String(Date.now() + 3 * DAY), '「之後再說」');
     }
     try { setTimeout(() => { _autoBoot().catch(() => {}); }, 20000); } catch (e) {}
@@ -962,7 +1010,7 @@
         _img: IMG,
         get lastExport() { return lastExport; },
         PARTS, autoGet, autoSave, relayOf, ghGet, ghSave, destReady, cloudBackup, cloudList, cloudGet, collectParts,
-        partsHere, exportPartsGet, exportPartsSave, secretsIn, confirmSecrets,
+        partsHere, exportPartsGet, exportPartsSave, secretsIn, confirmSecrets, exportSecretsOn,
         getSettings,
         saveSettings,
         applyData,

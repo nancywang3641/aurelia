@@ -1253,6 +1253,7 @@
                             <div class="cloudbk-parts" id="bk-parts"></div>
                             <div class="btn-save" id="bk-export-btn" style="padding:12px; font-size:13px;"><i class="fa-solid fa-upload"></i> 匯出備份 JSON</div>
                             <label class="bk-opt"><input type="checkbox" id="bk-export-img" checked><span>帶圖片</span>${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('bk_export_img') : ''}</label>
+                            <label class="bk-opt"><input type="checkbox" id="bk-export-secrets"><span>帶 API 金鑰</span>${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('bk_export_secrets') : ''}</label>
                             <div class="btn-test" id="bk-import-btn" style="margin-top:8px;"><i class="fa-solid fa-download"></i> 從本地 JSON 還原</div>
                             <input type="file" id="bk-file-input" accept=".json" style="display:none;" />
                         </div>
