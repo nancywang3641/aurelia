@@ -697,12 +697,15 @@
     //   接自訂接口、而且那組收得到圖時，每次都把這張當參考圖一起送（走 _layoutRef：不看節點上「帶參考圖」那個開關，那個只管插圖帶角色立繪）。
     //   圖在素材庫 doll_ref_v1/，鎖 commit 抓、抓不到換 raw（同 lobby_cafe_regulars.js 的 DOLL_REF）。換樣張＝傳新圖、換下面這個 commit。
     //   🚨 樣張的側面是臉朝右，跟 DOLL_TPL、大廳 placeActor 同一個方向；換圖時側面也要朝右。
+    //   🚨 樣張要跟出圖同一個比例（3:2，1536×1024）：她第一次生出來「感覺有被故意拉長了，可能尺寸不對???」——
+    //     那時樣張是原圖的扁長條（2010×782），出圖是 3:2，它照樣張的排法填滿畫面就把小人往上拉。現在這張是原圖縮到 1536 寬、上下補白到 1024。
     //   抓不到樣張就不畫（丟錯），不退成只送文字：只送文字畫出來就是她說畫風不對的那種，白花一張。
-    const DOLL_REF_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@fe220418ef447c328979c7ab3c0772c65446e760/doll_ref_v1/tumbler_sheet.webp';
+    const DOLL_REF_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@00c3d185eeff0787fc05ee2a7ebdc04b1878bf9c/doll_ref_v1/tumbler_sheet_3x2.webp';
     const DOLL_REF_LEAD = 'Image {n} is a finished sample sheet of this kind of doll, showing a different character. '
         + 'Use it as the model for the drawing style and the layout: the same head shape and egg-shaped body, the same proportions between head and body, '
         + 'the same way of drawing the eyes, face, ears and hair, the same thin outlines and flat coloring, '
         + 'and the same three positions on a plain white background: front view on the left, side view with the face pointing to the right in the middle, back view on the right. '
+        + 'Keep the dolls as short and wide as in the sample and at the same size on the canvas, with the same empty white space above and below them. '
         + 'Only the character changes: give the doll the hair, eye color and outfit of the character described below.';
     let _dollRefBlob = null;
     async function _dollRef() {
