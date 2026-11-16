@@ -2743,28 +2743,6 @@
     }
 
 
-    function handleNewMessages(chats, messageId) {
-        const configStr = localStorage.getItem('wx_phone_api_config');
-        if (configStr && JSON.parse(configStr).directMode) return;
-        const ids = Object.keys(chats);
-        // 🔧 兼容：酒館沒有 [wx_os] 資料時，別清空 wx 自己 api_chats 的聊天（之前 GLOBAL_CHATS={} 會把面板清光）
-        if (!ids.length) return;
-
-        const blockedStr = localStorage.getItem('wx_hidden_chat_ids');
-        const blockedList = blockedStr ? JSON.parse(blockedStr) : [];
-
-        // 🔧 兼容：只「合併/更新」橋接帶來的聊天，不整盤覆蓋 → 保留 wx 自己的資料
-        for (let id of ids) {
-            if (blockedList.includes(id)) continue;
-            GLOBAL_CHATS[id] = { ...chats[id], unread: true, pushedCount: 0, renderedCount: 0 };
-        }
-        if (APP_CONTAINER) { updateAppUI(); }
-    }
-
-    function scanAndRender_DEPRECATED() {
-        const configStr = localStorage.getItem('wx_phone_api_config');
-        if (configStr && JSON.parse(configStr).directMode) return;
-    }
 
     function updateAppUI() {
         if (!APP_CONTAINER) return;
@@ -5146,12 +5124,4 @@
         tick();
     })();
 
-    setTimeout(() => {
-        const configStr = localStorage.getItem('wx_phone_api_config');
-        let isApiMode = false;
-        if (configStr) { isApiMode = JSON.parse(configStr).directMode; }
-        if (isApiMode) { console.log('✅ [Core] 檢測到 API 模式：已強制阻斷 DOM 掃描'); return; }
-        if (win.WX_TAVERN_API_BRIDGE) { win.WX_TAVERN_API_BRIDGE.onMessage(handleNewMessages); win.WX_TAVERN_API_BRIDGE.setPollingInterval(500); win.WX_TAVERN_API_BRIDGE.start(); } 
-        else { setInterval(scanAndRender_DEPRECATED, 1500); }
-    }, 1000);
 })();

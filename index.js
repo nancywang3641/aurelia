@@ -162,6 +162,8 @@ const PHONE_FILES = [
     // === 🟢 OS 層 (系統基礎) ===
     'os/os_settings.js',
     'os/os_phone_theme.js', // 🎨 手機主題工坊：說一句話，AI 填一套主題的格子（配色／應用圖標／底部導覽）
+    'os/os_settings_page.js', // 🧾 設置頁整頁的 HTML 範本（2026-11-17 自 os_settings.js 拆出；參數注入 ctx，launchApp 開頁時才呼叫）
+    'os/os_settings_backup.js', // 💾 設置頁「備份」分頁的按鈕（2026-11-17 自 os_settings.js 拆出）
     'os/os_settings_comfyui.js', // 🧩 ComfyUI 直連設定（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_settings_voice.js', // 🎵 語音清單：Minimax 音色檔案卡＋官方音色庫＋測試播放（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_db.js',
@@ -318,7 +320,6 @@ const PHONE_FILES = [
     'wx/wx_zh.js', 'wx/wx_user_profile.js', 'wx/wx_theme.js',
     'wx/wx_contacts.js', 'wx/wx_chat_settings.js', 'wx/wx_bubble_settings.js', 'wx/wx_bubble_ai.js',
     'wx/wx_summary.js', 'wx/wx_wallet.js', 'wx/wx_avatar_ai.js', 'wx/wx_chat_media.js', 'wx/wx_cards.js', 'wx/wx_takeout.js', 'wx/wx_theme_pack.js', 'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_profile.js', 'wx/wx_notebook.js', 'wx/wx_moments.js', 'os/os_aurelia_tools.js', 'os/os_aurelia_edit.js', 'os/os_aurelia_preset.js', 'os/os_aurelia_vn.js', 'os/os_aurelia_theme.js', 'os/os_aurelia_fx.js', 'os/os_aurelia_vnrule.js', 'os/os_aurelia_bubble.js', 'os/os_xiaoji_lessons.js', 'os/os_xiaoji_make.js', 'os/os_xiaoji_sandbox.js', 'os/os_xiaoji_memory.js', 'os/os_xiaoji.js', 'wx/wx_tools.js', 'wx/wx_core.js',
-    'wx/wx_tavern_api_bridge.js',
 
     // === 📞 電話 (dialer) ===
     'os/os_dialer.js',

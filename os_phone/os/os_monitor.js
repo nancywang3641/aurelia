@@ -33,8 +33,7 @@
             { name: 'OS_API', ref: win.OS_API },
             { name: 'OS_DB', ref: win.OS_DB },
             { name: 'OS_PROMPTS', ref: win.OS_PROMPTS },
-            { name: 'OS_TAVERN_BRIDGE', ref: win.OS_TAVERN_BRIDGE },
-            { name: 'WX_TAVERN_API_BRIDGE', ref: win.WX_TAVERN_API_BRIDGE }
+            { name: 'OS_TAVERN_BRIDGE', ref: win.OS_TAVERN_BRIDGE }
         ];
 
         let modHtml = "";
@@ -132,11 +131,6 @@
             ui.updateSection('data-status', '<div class="mon-row"><span>狀態</span><span class="mon-val err">橋接器不可用</span></div>');
         }
 
-        if (win.WX_TAVERN_API_BRIDGE) {
-            ui.updateSection('wx-status', `<div class="mon-row"><span>監聽器</span><span class="mon-val ok">就緒</span></div>`);
-        } else {
-            ui.updateSection('wx-status', `<div class="mon-row"><span>監聽器</span><span class="mon-val err">未啟動</span></div>`);
-        }
     }
 
     // --- UI 渲染 ---
@@ -161,10 +155,6 @@
                         </div>
                         <div id="data-status"><span style="color:#666">...</span></div>
                         <div class="mon-log-box" id="mon-log"></div>
-                    </div>
-                    <div class="mon-card">
-                        <div class="mon-card-title">微信應用 (App Link)</div>
-                        <div id="wx-status"><span style="color:#666">...</span></div>
                     </div>
                 </div>
             </div>
