@@ -181,7 +181,7 @@
                 '<div class="lsd-pane" data-pane="doll" hidden>' + (a.key ? (
                     '<div class="lsd-h">幫他畫一個新的小人' + help + '</div>' +
                     '<div class="lsd-cards">' +
-                        _dressCard('lsd-gen-btn-doll is-main', 'fa-egg', '不倒翁', d('圓滾滾的一隻，走路會轉身'), off) +
+                        _dressCard('lsd-gen-btn-doll is-main', 'fa-egg', '不倒翁', d('圓滾滾的一隻，有小手小腳，走路會踏步'), off) +
                         _dressCard('lsd-gen-btn', 'fa-child-reaching', 'Q版小人', d('站著的一張，走路會彈跳'), off) +
                         _dressCard('lsd-gen-btn-sheet', 'fa-person-walking', '會走路的小人', d('四個方向都有走路的樣子'), off) +
                     '</div>' +
@@ -314,6 +314,10 @@
                     let side = '', back = '';
                     try { side = (await _b.resolveRef(skin.side)) || ''; back = (await _b.resolveRef(skin.back)) || ''; } catch (e) {}
                     out.doll = { label: '不倒翁小人', src: src, views: (side && back) ? { front: src, side: side, back: back } : null, own: true };
+                } else if (src && skin.kind === 'sheet' && skin.doll) {   // 接好手腳的不倒翁：存的是走路圖，切站著的三格出來看
+                    let v = null;
+                    try { v = await _dollCells(src); } catch (e) {}
+                    out.doll = v ? { label: '不倒翁小人', src: v.front, views: v, own: true } : { label: '不倒翁小人', src: src, sheet: true, own: true };
                 } else if (src) out.doll = { label: skin.kind === 'sheet' ? '走路圖' : '換過的小人', src: src, sheet: skin.kind === 'sheet', own: true };
             }
             if (!out.doll) out.doll = out.base;
@@ -679,7 +683,7 @@
     //     用哪組接口、加不加畫風都在 設置 → 圖片 → 畫風「每個地方用什麼」的「不倒翁小人」那列選，不跟立繪共用。
     //   接自訂接口（GPT 那種讀句子的）：照下面這段畫一張三隻（正面／側面／背面並排），原樣送（raw：接口那格底詞常寫著她的畫風，不接），再附一張樣張（_dollRef）。
     //   接其他的（ComfyUI、NAI…吃標籤的）：外觀標籤＋「一個人、全身、站著」，畫風交給那組自己的底詞（她的小人 LoRA 包）；通常是一隻。
-    //   出來的圖去背後看是不是三隻並排（VN_Core._chibiViews，同一次生三種那套）：是＝切三張、存成三面；不是＝一張。
+    //   出來的圖去背後看是不是三隻並排（VN_Core._chibiViews，同一次生三種那套）：是＝切三張、接上鞋和手拼成走路圖（_dollAttach）；不是＝一張。
     //   🚨 側面寫死「臉朝右」：大廳（lobby_stage.js 的 placeActor）當它朝右，往左走才鏡像；改這裡那邊要一起改。
     //   🚨 沒手沒腳要明講（11-16 她：「你有沒有告知他不准有手和腳? 因為你的 api image 會跑出手」）：
     //     原本只正面講「只有兩個形狀：頭＋蛋形身體」、不寫 no arms／no legs（那是吃標籤的模型看不懂否定句的教訓），
@@ -736,7 +740,157 @@
         return { name: 'the sample doll sheet', kind: 'layout', lead: DOLL_REF_LEAD, blob: _dollRefBlob };
     }
     const _blobToData = (b) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.onerror = rej; r.readAsDataURL(b); });
-    // 回 { views:{front,side,back} } 或 { img }（都是 dataURL）；接口沒回圖丟錯（字是給她看的）
+    // 🦶 接鞋和手（11-16 她生成功之後：「但面板上還是沒手沒腳」→ 看過小樣「好，接上」）：
+    //   圖故意畫成沒手沒腳，手腳由這裡接：鞋＝衣櫥那雙（素材庫 doll_ref_v1/shoes.png，六隻拼一張：正面兩隻、背面兩隻、側面近／遠，側面朝右），
+    //   手＝照他臉上的膚色畫的小圓。接好拼成 3×4 走路圖（列：往下／往左／往右／往上；欄：踏一步／站著／踏另一步，同書咖常客那種），
+    //   存成造型 kind:'sheet'＋doll:1——大廳本來就認走路圖，走路時腳會踏步；預覽、展示台從這張切站著的三格出來看（_dollCells）。
+    //   位置的數字是接鞋小樣（本機 lora-train 那邊）的單位：那邊正面身體寬 278，鞋的左上角相對「圓底中心、圓底最低點」，這裡照他正面身體多寬等比縮。
+    //   鞋子圖抓不到＝這次不接、講明（圖已經花錢畫好了，不整張作廢），照舊存三面；之後進大廳會再補接一次（_dollUpgrade）。
+    const DOLL_SHOES_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@dd66662b70a412a39ac940c6d75950fbf64f924a/doll_ref_v1/shoes.png';
+    const DOLL_LIMB = {
+        bodyW: 278, fistR: 33, fistUp: 105, below: 50, cellH: 420,
+        // 每隻鞋：在 shoes.png 的哪一塊 [x, y, w, h]＋左上角相對圓底 (dx, dy)；陣列裡先寫的先畫（在後面）
+        front: [{ r: [0, 0, 113, 69], dx: -117.5, dy: -20 }, { r: [113, 0, 113, 69], dx: 0.5, dy: -20 }],
+        back:  [{ r: [226, 0, 113, 69], dx: -119.5, dy: -20 }, { r: [339, 0, 113, 69], dx: -1.5, dy: -20 }],
+        side:  [{ r: [549, 0, 97, 79], dx: -55, dy: -46 }, { r: [452, 0, 97, 80], dx: -31, dy: -30 }],   // 遠的那隻先畫
+        // 三欄的姿勢（跳的高度換到大廳畫面上大約 6px，跟單張小人走路的彈跳一樣）：body＝整隻往上多少；shoe[i]＝那隻鞋偏多少 [dx, dy]；fist＝手偏多少 [dx, dy]
+        hop:     [{ body: -22, shoe: [[0, -30], [0, -12]], fist: [0, -6] }, { body: 0, shoe: [[0, 0], [0, 0]], fist: [0, 0] }, { body: -22, shoe: [[0, -12], [0, -30]], fist: [0, -6] }],
+        walk:    [{ body: -8, shoe: [[18, -9], [-16, 0]], fist: [-16, 0] }, { body: 0, shoe: [[0, 0], [0, 0]], fist: [0, 0] }, { body: -8, shoe: [[-16, 0], [18, -9]], fist: [16, 0] }],
+    };
+    function _loadImg(src, cors) {
+        return new Promise((res, rej) => { const im = new Image(); if (cors) im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => rej(new Error('圖讀不進來')); im.src = src; });
+    }
+    let _dollShoesImg = null;
+    async function _dollShoes() {
+        if (_dollShoesImg) return _dollShoesImg;
+        try { _dollShoesImg = await _loadImg(DOLL_SHOES_URL, true); }
+        catch (e) {
+            const alt = _b.sfMirror ? _b.sfMirror(DOLL_SHOES_URL) : null;
+            if (!alt) throw e;
+            _dollShoesImg = await _loadImg(alt, true);
+        }
+        return _dollShoesImg;
+    }
+    // 量一面：不透明的範圍、圓底中心（cx）和最低點（bot）、身體多寬（bw）
+    function _dollMeasure(img) {
+        const W = img.naturalWidth, H = img.naturalHeight;
+        const c = document.createElement('canvas'); c.width = W; c.height = H;
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(img, 0, 0);
+        const d = g.getImageData(0, 0, W, H).data;
+        const on = (x, y) => d[(y * W + x) * 4 + 3] >= 40;
+        let top = -1, bot = -1, left = W, right = -1;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (on(x, y)) { if (top < 0) top = y; bot = y; if (x < left) left = x; if (x > right) right = x; }
+        if (top < 0) return null;
+        const dh = bot - top + 1;
+        const med = (arr) => { const a = arr.slice().sort((p, q) => p - q); return a.length ? a[a.length >> 1] : null; };
+        // 一排裡最寬的那一段（旁邊垂下來的髮尾是另一段，不算）
+        const widest = (y) => { let best = null, s = -1; for (let x = 0; x <= W; x++) { const v = x < W && on(x, y); if (v && s < 0) s = x; if (!v && s >= 0) { if (!best || x - s > best[1] - best[0] + 1) best = [s, x - 1]; s = -1; } } return best; };
+        const mids = [];
+        for (let y = bot - Math.round(dh * 0.06); y <= bot - Math.round(dh * 0.01); y++) { const r = widest(y); if (r) mids.push((r[0] + r[1]) / 2); }
+        const cx = med(mids);
+        if (cx == null) return null;
+        // 身體寬：圓底往上一成到兩成二那一帶，穿過中心的那一段
+        const widths = [], X = Math.round(cx);
+        for (let y = bot - Math.round(dh * 0.22); y <= bot - Math.round(dh * 0.10); y++) {
+            if (!on(X, y)) continue;
+            let a = X, b = X; while (a > 0 && on(a - 1, y)) a--; while (b < W - 1 && on(b + 1, y)) b++;
+            widths.push(b - a + 1);
+        }
+        const bw = Math.max(dh * 0.24, Math.min(dh * 0.5, med(widths) || dh * 0.36));
+        return { img: img, W: W, data: d, top: top, bot: bot, left: left, right: right, dh: dh, cx: cx, bw: bw };
+    }
+    // 手的顏色：正面臉中間那一帶最多的顏色；外框＝同一個顏色壓深
+    function _dollSkin(m) {
+        const cnt = new Map(); let best = null, bn = 0;
+        const x0 = Math.max(0, Math.round(m.cx - m.dh * 0.12)), x1 = Math.min(m.W - 1, Math.round(m.cx + m.dh * 0.12));
+        for (let y = m.top + Math.round(m.dh * 0.40); y <= m.top + Math.round(m.dh * 0.58); y += 2) for (let x = x0; x <= x1; x += 2) {
+            const i = (y * m.W + x) * 4;
+            if (m.data[i + 3] < 200) continue;
+            const k = (m.data[i] >> 3) + ',' + (m.data[i + 1] >> 3) + ',' + (m.data[i + 2] >> 3);
+            const n = (cnt.get(k) || 0) + 1; cnt.set(k, n);
+            if (n > bn) { bn = n; best = k; }
+        }
+        const p = best ? best.split(',').map(v => (+v << 3) + 4) : [250, 222, 198];
+        const dark = [0.82, 0.68, 0.6];
+        return { fill: 'rgb(' + p.join(',') + ')', line: 'rgb(' + p.map((v, i) => Math.round(v * dark[i])).join(',') + ')' };
+    }
+    // 三面（去背好的 dataURL）→ { sheet: 3×4 走路圖, views: 站著的三格（接好手腳的正面／側面／背面） }
+    async function _dollAttach(views) {
+        const L = DOLL_LIMB, shoes = await _dollShoes(), M = {};
+        for (const k of ['front', 'side', 'back']) {
+            M[k] = _dollMeasure(await _loadImg(views[k]));
+            if (!M[k]) throw new Error('量不到小人的位置');
+        }
+        const s = M.front.bw / L.bodyW, R = L.fistR * s, skin = _dollSkin(M.front);   // 三面同一個比例：照正面的身體
+        let half = 0, up = 0;
+        for (const k in M) {
+            const m = M[k];
+            half = Math.max(half, m.cx - m.left, m.right - m.cx, k === 'side' ? 0 : m.bw / 2 + R * 1.4);
+            up = Math.max(up, m.bot - m.top);
+        }
+        half += 20 * s;                                       // 踏步、手前後擺要的寬
+        const ch0 = up * 1.01 + (L.below + 26) * s;           // 上面留跳起來的高（hop 的 body 最多 -22）
+        const k0 = Math.min(1, L.cellH / ch0);
+        const cw = Math.ceil(half * 2 * k0), ch = Math.ceil(ch0 * k0);
+        const cv = document.createElement('canvas'); cv.width = cw * 3; cv.height = ch * 4;
+        const g = cv.getContext('2d'); g.imageSmoothingQuality = 'high';
+        const cell = (col, row, key, pose, mirror) => {
+            const m = M[key];
+            g.save();
+            g.beginPath(); g.rect(col * cw, row * ch, cw, ch); g.clip();
+            if (mirror) { g.translate(col * cw + cw, row * ch); g.scale(-1, 1); } else g.translate(col * cw, row * ch);
+            g.translate(cw / 2, ch - 1); g.scale(k0, k0); g.translate(0, -L.below * s);   // 原點＝圓底中心、圓底最低點；格底＝鞋底
+            L[key].forEach((o, i) => { const p = pose.shoe[i]; g.drawImage(shoes, o.r[0], o.r[1], o.r[2], o.r[3], (o.dx + p[0]) * s, (o.dy + p[1]) * s, o.r[2] * s, o.r[3] * s); });
+            const by = pose.body * s, fy = (pose.body + pose.fist[1] - L.fistUp) * s, fx = m.bw / 2 + R * 0.35, sw = pose.fist[0] * s;
+            const fist = (x) => { g.beginPath(); g.arc(x, fy, R, 0, Math.PI * 2); g.fillStyle = skin.fill; g.fill(); g.lineWidth = Math.max(2, 3 * s); g.strokeStyle = skin.line; g.stroke(); };
+            if (key === 'back') { fist(-fx); fist(fx); }       // 背面：手在身體後面
+            g.drawImage(m.img, -m.cx, by - m.bot);
+            if (key === 'front') { fist(-fx); fist(fx); }
+            if (key === 'side') fist(12 * s + sw);
+            g.restore();
+        };
+        for (let c = 0; c < 3; c++) {
+            cell(c, 0, 'front', L.hop[c]);          // 往下：正面一跳一跳
+            cell(c, 1, 'side', L.walk[c], true);    // 往左：側面翻過來
+            cell(c, 2, 'side', L.walk[c]);          // 往右：側面踏步
+            cell(c, 3, 'back', L.hop[c]);           // 往上：背面一跳一跳
+        }
+        const cut = (row) => { const o = document.createElement('canvas'); o.width = cw; o.height = ch; o.getContext('2d').drawImage(cv, cw, row * ch, cw, ch, 0, 0, cw, ch); return o.toDataURL('image/png'); };
+        return { sheet: cv.toDataURL('image/png'), views: { front: cut(0), side: cut(2), back: cut(3) } };
+    }
+    // 接好的走路圖 → 站著的三格（展示台的正面／側面／背面用）；同一張只切一次
+    const _dollCellMemo = new Map();
+    async function _dollCells(sheetSrc) {
+        if (_dollCellMemo.has(sheetSrc)) return _dollCellMemo.get(sheetSrc);
+        const im = await _loadImg(sheetSrc), cw = Math.floor(im.naturalWidth / 3), ch = Math.floor(im.naturalHeight / 4);
+        const cut = (row) => { const o = document.createElement('canvas'); o.width = cw; o.height = ch; o.getContext('2d').drawImage(im, cw, row * ch, cw, ch, 0, 0, cw, ch); return o.toDataURL('image/png'); };
+        const v = { front: cut(0), side: cut(2), back: cut(3) };
+        if (_dollCellMemo.size > 8) _dollCellMemo.clear();
+        _dollCellMemo.set(sheetSrc, v);
+        return v;
+    }
+    // 接手腳之前存的三面造型（kind:'views'）→ 補接、改存成走路圖；大廳套造型時叫（lobby_stage.js 的 _applySkin）。接不成回 null＝照舊三面
+    const _dollUpBusy = new Map();
+    function _dollUpgrade(key, skin) {
+        if (_dollUpBusy.has(key)) return _dollUpBusy.get(key);
+        const p = (async () => {
+            try {
+                const v = { front: await _b.resolveRef(skin.ref), side: await _b.resolveRef(skin.side), back: await _b.resolveRef(skin.back) };
+                if (!v.front || !v.side || !v.back) return null;
+                const lim = await _dollAttach(v);
+                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await _b.idbPut(id, lim.sheet);
+                const next = { kind: 'sheet', ref: { idb: id }, doll: 1 };
+                if (_b.saveSkin(key, next) === false) { try { await _b.idbDel(id); } catch (e) {} return null; }
+                for (const r of [skin.ref, skin.side, skin.back]) { if (r && r.idb) { try { await _b.idbDel(r.idb); } catch (e) {} } }
+                return next;
+            } catch (e) { console.warn('[LobbyDress] 舊的不倒翁補接手腳沒成', e); return null; }
+        })();
+        _dollUpBusy.set(key, p);
+        p.then(() => _dollUpBusy.delete(key), () => _dollUpBusy.delete(key));
+        return p;
+    }
+    // 回 { views:{front,side,back}, sheet? } 或 { img }（都是 dataURL）；三隻的會接上鞋和手（sheet＝拼好的走路圖，views＝站著的三格）；接口沒回圖丟錯（字是給她看的）
     async function _genDoll(a) {
         const M = _imgMgr();
         if (!M) throw new Error('生圖引擎還沒載入');
@@ -776,12 +930,27 @@
         if (!cut) cut = blob;
         let views = null;
         if (V && typeof V._chibiViews === 'function') { try { views = await V._chibiViews(cut); } catch (e) {} }
-        if (views) return { views: { front: await _blobToData(views[0]), side: await _blobToData(views[1]), back: await _blobToData(views[2]) } };
+        if (views) {
+            const v3 = { front: await _blobToData(views[0]), side: await _blobToData(views[1]), back: await _blobToData(views[2]) };
+            try { const lim = await _dollAttach(v3); return { views: lim.views, sheet: lim.sheet }; }
+            catch (e) {
+                console.warn('[LobbyDress] 鞋和手沒接上', e);
+                try { AUI.toastr && AUI.toastr.warning('鞋子圖抓不到（多半是網路），這張先沒接手和腳；套用後下次進大廳會再補接一次。', '不倒翁小人', { timeOut: 8000 }); } catch (e2) {}
+                return { views: v3 };
+            }
+        }
         return { img: await _blobToData(cut) };
     }
     // 存成這個小人的造型：三面＝三張各自落地，鑰匙那筆記 kind:'views'；一張＝跟「生成單張立姿圖」同一種
     async function _saveDollSkin(key, r) {
         if (!r.views) return await _saveSpriteSkin(key, r.img, 'img');
+        if (r.sheet) {   // 接好手腳的：一張走路圖，doll:1＝展示台照不倒翁那樣給正面／側面／背面看、大廳縮小時平滑
+            const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+            await _b.idbPut(id, r.sheet);
+            const ok = _b.saveSkin(key, { kind: 'sheet', ref: { idb: id }, doll: 1 });
+            if (ok === false) { try { await _b.idbDel(id); } catch (e) {} return false; }
+            return true;
+        }
         const ids = [];
         try {
             for (const k of ['front', 'side', 'back']) {
@@ -932,6 +1101,7 @@
         genSpriteInto,                  // 無人值守生立姿（世界門旅人自動補圖；與裝扮室同一條管線）
         listPresets: _dressPresetsOf,   // 給設置頁列預設包（免得那邊再抄一份取法）
         packOf: _dressPackOf,           // 設置頁「大廳的小人」那兩格現在選的是哪一包（kind＝'img'／'sheet'）
+        dollUpgrade: _dollUpgrade,                    // 🦶 舊的三面不倒翁補接手腳（lobby_stage.js 套造型時叫）
         DOLL_TPL, DOLL_TPL_KEY, dollTpl: _dollTpl,   // 🧸 不倒翁小人的提示詞（接自訂接口時用）：設置頁那格讀寫
         setPack: _dressSetPack,         // 設置頁選了就存
         presetKeyOf: _dressPresetKey,

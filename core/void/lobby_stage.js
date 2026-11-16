@@ -1190,7 +1190,8 @@
     }
     // 換裝：把角色元素整顆換掉（img↔div 走路圖兩種形態）
     //   src 三種：網址字串＝單張；{ sheet }＝3×4 走路圖；{ views:{ front, side, back } }＝三面小人（單張的做法，照面向換那一張，見 placeActor）
-    function _swapActorSrc(a, src) {
+    //   opts.smooth＝這張不是像素圖（接好手腳的不倒翁），縮小時平滑
+    function _swapActorSrc(a, src, opts) {
         const isSheet = (typeof src === 'object' && src && src.sheet);
         const views = (!isSheet && typeof src === 'object' && src && src.views && src.views.front && src.views.side && src.views.back) ? src.views : null;
         if (views) src = views.front;
@@ -1199,7 +1200,7 @@
         a._viewKeep = views ? [views.side, views.back].map(u => { const im = new Image(); im.src = u; return im; }) : null;
         if (views) a.flip = false;
         const el = document.createElement(isSheet ? 'div' : 'img');
-        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + (a.smooth ? ' lstage-smooth' : '') + ' lstage-loading';   // 換好的圖載入才顯示
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ((a.smooth || (opts && opts.smooth)) ? ' lstage-smooth' : '') + ' lstage-loading';   // 換好的圖載入才顯示
         a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
         a.frameW = a.frameH = null;
         a._left = a._top = a._z = a._bg = a._tf = a._trBase = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
@@ -1240,13 +1241,21 @@
         // 🧸 三面（裝扮頁「生成不倒翁小人」存的：正面在 ref，側面、背面另外兩張）：跟一次生三種的 Q版三面同一種小人，走路、轉向會換面。
         //   側面或背面讀不到就退成單張（只有正面，照舊左右鏡像）
         if (skin.kind === 'views') {
+            // 🦶 接手腳之前存的三面：補接、改存成走路圖（lobby_dress.js 的 _dollUpgrade）；接不成照舊三面
+            let up = null;
+            try { const LD = window.LobbyDress; if (LD && typeof LD.dollUpgrade === 'function') up = await LD.dollUpgrade(key, skin); } catch (e) {}
+            if (up) {
+                const s2 = await resolveRef(up.ref);
+                if (!a.el || !S.active) return;
+                if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); return; }
+            }
             let side = '', back = '';
             try { side = (await resolveRef(skin.side)) || ''; back = (await resolveRef(skin.back)) || ''; } catch (e) {}
             if (!a.el || !S.active) return;
             _swapActorSrc(a, (side && back) ? { views: { front: src, side: side, back: back } } : src);
             return;
         }
-        _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src);
+        _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src, { smooth: !!skin.doll });
     }
 
     // 👗 右鍵角色選單/裝扮室/對話紀錄窗/內建生成 → 拆到 lobby_dress.js（走 _b 橋；2026-07-16）
