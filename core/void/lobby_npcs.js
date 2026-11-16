@@ -583,11 +583,12 @@
     const STAFF = {
         ying:     { name: '瀅瀅',     persona: null,                subTitle: '視差書咖 · 店長',        portrait: ASSET.ying },
         alice:    { name: '愛麗絲',   personaFull: ALICE_PERSONA,   subTitle: '純白大廳 · 首席導覽官',  portrait: ASSET.alice,
-                    // live＝對話模式裡會動的立繪（有就播，播不了留 portrait）。greetFrom＝歡迎那支從第幾秒開始播：
-                    //   她：「抬手的那個要再開始時間要再往前一點好」→ 不從頭播，從 1 秒進（那格剛好是影片的關鍵格，跳過去不用等）。
-                    //   現在這支（greet v2，有開口說話）前 1 秒是站著眨一下眼，手在 0.9 秒左右開始分開；從 1 秒進＝點下去手就在動，
-                    //   拉近的鏡頭停下來時手已經伸出去。換新影片時要重看一次手是第幾秒開始動的。
-                    live: { idle: ASSET.aliceIdle, greet: ASSET.aliceGreet, greetFrom: 1 } },
+                    // live＝對話模式裡會動的立繪（有就播，播不了留 portrait）。greetFrom＝歡迎那支從第幾秒開始播，照「點下去之後手幾秒開始動」調：
+                    //   第一支（v1，沒台詞）從頭播，手 1.25 秒才動 → 她：「抬手的那個要再開始時間要再往前一點好」→ 改從 1 秒進（0.25 秒就動）。
+                    //   換成 v2（有開口說話，手 0.9 秒左右開始分開）後還是從 1 秒進＝點下去手已經在動 → 她：「得往後移動 延遲一點，我這裡看有點緊迫」。
+                    //   → v2 從頭播（0）：先眨一下眼、0.67 秒開口、0.9 秒手開始抬，拉近的鏡頭（0.75 秒）停下來之後才伸出去。
+                    //   她覺得舒服的大約是「點下去 0.5～1 秒手才動」。跳到不是整數秒的地方要從前一個關鍵格解起（影片每 1 秒一個），手機上會頓一下。
+                    live: { idle: ASSET.aliceIdle, greet: ASSET.aliceGreet, greetFrom: 0 } },
         rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit },
         zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei },
         hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter },
