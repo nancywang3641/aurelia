@@ -49,6 +49,8 @@
         rabbitGreet: CDN + 'lobby_rabbit_greet_v1.mp4',
         hatterIdle:  CDN + 'lobby_hatter_idle_v1.mp4',   // 帽匠的兩支（11-17）：手上那疊色卡留在影片裡（歡迎那支會收成一疊、攤成扇形、說完再收回手上）
         hatterGreet: CDN + 'lobby_hatter_greet_v1.mp4',
+        zhiweiIdle:  CDN + 'lobby_zhiwei_idle_v1.mp4',   // 紫薇的兩支（11-17）：歡迎那支是把酒杯朝人抬一下、開口說話，再放回去
+        zhiweiGreet: CDN + 'lobby_zhiwei_greet_v1.mp4',
         aliceGreet: CDN + 'lobby_alice_greet_v3.mp4',   // 她重生的、有開口說話的那支（生的時候給了一句台詞，嘴才會一直動；最早那支沒台詞，嘴只開合一下）
         cheshire: CDN + 'lobby_cheshire_v3.webp',  // 柴郡立繪(v3=11-16 阿洛重畫;畫布、人的大小照 v2)
         mcF:   CDN + 'lobby_mc_f_silhouette.png',   // 通用小人預設=剪影版(Rae定案 2026-07-15)；換裝在裝扮室

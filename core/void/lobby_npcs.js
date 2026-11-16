@@ -594,7 +594,9 @@
         rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit,
                     // 這支也是 0.25 秒手和懷錶就開始動，同瀅瀅先等 0.4 秒
                     live: { idle: ASSET.rabbitIdle, greet: ASSET.rabbitGreet, greetFrom: 0, greetDelay: 400 } },
-        zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei },
+        zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei,
+                    // 這支前 0.4 秒只眨眼，0.55 秒酒杯才開始抬、0.63 秒開口（生的時候寫了「前半秒只眨眼」）→ 從頭播、不用等
+                    live: { idle: ASSET.zhiweiIdle, greet: ASSET.zhiweiGreet, greetFrom: 0 } },
         hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter,
                     // 這支 0.25 秒色卡就開始收攏（1 秒攤開、開口），同白兔先等 0.4 秒
                     live: { idle: ASSET.hatterIdle, greet: ASSET.hatterGreet, greetFrom: 0, greetDelay: 400 } },
