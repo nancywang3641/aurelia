@@ -10,8 +10,12 @@
 //         ＝原本的系統設置頁整頁掛進來（OS_SETTINGS.launchApp，一個窗只掛一次），它自己那排主分頁和標題列藏起來，
 //           由這裡的分類去按它對應的那一顆（.set-tab[data-tab]／.gen-subtab[data-gentab]）。
 //           欄位 id、綁定、底部「保存所有設定」都是它原本那一套，這支不碰。
-// 版面：開的那一格夠大＝浮在中間、四邊留空、後面壓暗（點暗處或右上 ✕ 關）；小（手機寬）＝鋪滿，上面一排分類、左上返回。
-//       顏色一律白底藍字，不跟手機主題（樣式在 css/os_settings_window.css）。
+// 長相兩套，看打開那一下人在哪（skinNow，寫在最外層的 data-skin；開著窗口時不會換場，所以只在打開時決定）：
+//       她：「c在大廳，b在vn劇情。因為vn劇情是黑金，大廳是白藍…不然在黑金 vn劇情面板那裏打開白藍設置窗口，會很突兀」
+//       lobby＝人在大廳：圓潤的白藍浮窗（夠大時浮在中間、四邊留空、後面壓暗，點暗處或右上 ✕ 關）
+//       story＝劇情畫面開著（不管是按劇情的「設定」還是從手機圖示進來）：黑金、鋪滿整個畫面，左下「回到劇情」
+//       手機寬兩套都鋪滿，上面一排分類、左上返回，只差顏色和字級。內容的 HTML 只有一份。
+//       顏色、圓角、字級、間距全在 css/os_settings_window.css 最上面那幾組變數，不跟手機主題。
 // 入口：window.OS_SETTINGS_WINDOW.open(分類 id, { onClose, sub })／close()／isOpen()／go(分類 id, 小分頁 id)。
 //       分類 id：home（總覽）／ai／img／voice／story／lobby／sys。沒有那個分類就開第一個。
 //       總覽＝這支自己畫（mountHome）：四列現況——寫故事的模型接了沒、圖片還有幾個地方沒選、角色語音開沒開、上次什麼時候備份；
@@ -30,11 +34,11 @@
     //     sys＝系統設置頁的哪個主分頁（api／img／voice／vn／sys）；gen＝再按「一般」裡的哪個小分頁
     //     only＝'st' 只有酒館有、'pwa' 只有網頁版有（跟系統設置頁原本藏的一樣）
     const SECTIONS = [
-        { id: 'home', name: '總覽', short: '總覽', fresh: true, mount: function (box) { mountHome(box); } },   // fresh＝每次切到都重畫
-        { id: 'ai', name: 'AI 模型', short: '模型', sys: 'api' },
-        { id: 'img', name: '圖片', short: '圖片', sys: 'img' },
-        { id: 'voice', name: '語音', short: '語音', sys: 'voice' },
-        { id: 'story', name: '劇情', short: '劇情', subs: [
+        { id: 'home', name: '總覽', short: '總覽', icon: 'fa-table-cells-large', fresh: true, mount: function (box) { mountHome(box); } },   // fresh＝每次切到都重畫
+        { id: 'ai', name: 'AI 模型', short: '模型', icon: 'fa-plug', sys: 'api' },
+        { id: 'img', name: '圖片', short: '圖片', icon: 'fa-image', sys: 'img' },
+        { id: 'voice', name: '語音', short: '語音', icon: 'fa-volume-high', sys: 'voice' },
+        { id: 'story', name: '劇情', short: '劇情', icon: 'fa-book-open', subs: [
             { id: 'view', name: '畫面與聲音', mount: function (box) { const V = win.VN_Settings || window.VN_Settings; if (V && V.mountInto) return V.mountInto(box); box.textContent = '劇情還沒載入完整，請重新整理一次。'; } },
             { id: 'asset', name: '素材資料夾', sys: 'vn', gen: 'asset' },
             { id: 'ctx', name: '記得多少章', sys: 'vn', gen: 'ctx' },
@@ -42,8 +46,8 @@
             { id: 'panel', name: '面板', sys: 'vn', gen: 'panel', only: 'st' },
             { id: 'back', name: '後台', sys: 'vn', gen: 'back', only: 'pwa' },
         ] },
-        { id: 'lobby', name: '大廳', short: '大廳', mount: function (box) { const L = win.LobbyStage || window.LobbyStage; if (L && L.mountSettings) return L.mountSettings(box); box.textContent = '大廳還沒載入完整，請重新整理一次。'; } },
-        { id: 'sys', name: '備份與系統', short: '備份', sys: 'sys' },
+        { id: 'lobby', name: '大廳', short: '大廳', icon: 'fa-house', mount: function (box) { const L = win.LobbyStage || window.LobbyStage; if (L && L.mountSettings) return L.mountSettings(box); box.textContent = '大廳還沒載入完整，請重新整理一次。'; } },
+        { id: 'sys', name: '備份與系統', short: '備份', icon: 'fa-database', sys: 'sys' },
     ];
     const secOf = function (id) { return SECTIONS.find(function (s) { return s.id === id; }) || SECTIONS[0]; };
     const subsOf = function (sec) {
@@ -115,8 +119,8 @@
         else h += card('sys', '備份', '', '', where + before + '先存一份。');
         h += '</div>'
            + '<div class="asw-foot">'
-           +   '<span>想調字的大小、音量：<span class="asw-on-float">左邊</span><span class="asw-on-full">上面</span>「劇情」</span>'
-           +   '<span>想關音效、小劇場：<span class="asw-on-float">左邊</span><span class="asw-on-full">上面</span>「大廳」</span>'
+           +   '<span>想調字的大小、音量：<span class="asw-on-wide">左邊</span><span class="asw-on-full">上面</span>「劇情」</span>'
+           +   '<span>想關音效、小劇場：<span class="asw-on-wide">左邊</span><span class="asw-on-full">上面</span>「大廳」</span>'
            + '</div>';
         box.classList.add('asw-home');
         box.innerHTML = h;
@@ -146,9 +150,15 @@
         return (shown(scr) && scr.parentElement && scr.parentElement !== doc.body) ? scr.parentElement : null;
     }
 
+    // 用哪套長相：劇情畫面真的開著（那一整格看得到）＝story，不然＝lobby。看畫面的狀態，不看是誰叫的
+    function skinNow() {
+        return (shown(doc.getElementById('aurelia-vn-panel')) || shown(doc.getElementById('page-game'))) ? 'story' : 'lobby';
+    }
+
     function navHtml() {
         return SECTIONS.map(function (s) {
             return '<button type="button" class="asw-nav-item" role="tab" data-sec="' + s.id + '">'
+                 +   '<i class="fa-solid ' + s.icon + ' asw-nav-ic"></i>'
                  +   '<span class="asw-nav-long">' + s.name + '</span><span class="asw-nav-short">' + s.short + '</span>'
                  + '</button>';
         }).join('');
@@ -157,8 +167,10 @@
     function open(section, opts) {
         if (S) { go(section, opts && opts.sub); return; }
         const host = pickHost();
+        const skin = skinNow();
         const root = doc.createElement('div');
         root.className = 'asw-root' + (host ? ' asw-in-screen' : '');
+        root.dataset.skin = skin;
         root.setAttribute('role', 'dialog');
         root.setAttribute('aria-modal', 'true');
         root.setAttribute('aria-label', '設置');
@@ -169,8 +181,10 @@
           + '</div>'
           + '<div class="asw-frame">'
           +   '<aside class="asw-side">'
-          +     '<div class="asw-side-title"><i class="fa-solid fa-gear"></i><span>設置</span></div>'
+          +     '<div class="asw-side-title"><span class="asw-side-badge"><i class="fa-solid fa-gear"></i></span>'
+          +       '<span class="asw-side-tx"><span class="asw-side-name">設置</span><b class="asw-side-ask">想調哪裡？</b></span></div>'
           +     '<nav class="asw-nav" role="tablist">' + navHtml() + '</nav>'
+          +     '<button type="button" class="asw-leave" data-act="close"><i class="fa-solid fa-chevron-left"></i><span>回到劇情</span></button>'
           +   '</aside>'
           +   '<main class="asw-main">'
           +     '<header class="asw-head"><h2 class="asw-title"></h2>'
@@ -182,11 +196,12 @@
           + '</div>';
         const scrim = doc.createElement('div');
         scrim.className = 'asw-scrim' + (host ? ' asw-in-screen' : '');
+        scrim.dataset.skin = skin;
         scrim.addEventListener('click', function () { close(); });
         const parent = host || doc.fullscreenElement || doc.webkitFullscreenElement || doc.body;
         parent.appendChild(scrim);
         parent.appendChild(root);
-        S = { root: root, scrim: scrim, host: host, sec: null, sub: {}, pages: {}, sysBox: null, offs: [], onClose: (opts && opts.onClose) || null };
+        S = { root: root, scrim: scrim, host: host, skin: skin, sec: null, sub: {}, pages: {}, sysBox: null, offs: [], onClose: (opts && opts.onClose) || null };
         S.onResize = function () { fit(); };
         try { win.addEventListener('resize', S.onResize); } catch (e) {}
         root.addEventListener('click', onClick);
@@ -195,13 +210,15 @@
         go(section, opts && opts.sub);
     }
 
-    // 夠大就浮在中間（左邊一排分類）；不夠大（手機寬，或視窗被拉小）就鋪滿（上面一排分類）。開的時候、視窗大小變的時候各量一次
+    // 夠大＝分類在左邊一排（asw-wide）；大廳那套這時浮在中間、後面壓暗（asw-float），劇情那套鋪滿。
+    //   不夠大（手機寬，或視窗被拉小）＝鋪滿、上面一排分類（asw-full）。開的時候、視窗大小變的時候各量一次
     function fit() {
         if (!S) return;
         const w = S.host ? S.host.clientWidth : (win.innerWidth || 0), h = S.host ? S.host.clientHeight : (win.innerHeight || 0);
-        const float = w >= 860 && h >= 560;
+        const wide = w >= 860 && h >= 560, float = wide && S.skin === 'lobby';
+        S.root.classList.toggle('asw-wide', wide);
         S.root.classList.toggle('asw-float', float);
-        S.root.classList.toggle('asw-full', !float);
+        S.root.classList.toggle('asw-full', !wide);
         S.scrim.classList.toggle('asw-on', float);
     }
 
@@ -320,7 +337,7 @@
         close();
     }
 
-    const api = { open: open, close: close, go: go, isOpen: function () { return !!S; }, current: function () { return S ? S.sec : null; } };
+    const api = { open: open, close: close, go: go, isOpen: function () { return !!S; }, current: function () { return S ? S.sec : null; }, skin: function () { return S ? S.skin : null; } };
     win.OS_SETTINGS_WINDOW = api;
     window.OS_SETTINGS_WINDOW = api;
 })();

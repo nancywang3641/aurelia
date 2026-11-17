@@ -674,14 +674,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             window._switchAvatarSub = function(el, subId) {
                 document.querySelectorAll('.av-sub').forEach(t => {
                     t.classList.remove('active');
-                    t.style.color = 'rgba(26,28,40,0.40)';
+                    t.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.40)';
                     t.style.borderColor = '#444';
                     t.style.background = 'transparent';
                 });
                 el.classList.add('active');
                 el.style.color = '#1A1C28';
-                el.style.borderColor = 'rgba(26,28,40,0.25)';
-                el.style.background = 'rgba(26,28,40,0.06)';
+                el.style.borderColor = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.25)';
+                el.style.background = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.06)';
                 document.querySelectorAll('.avatar-sub-view').forEach(v => v.style.display = 'none');
                 const target = document.getElementById('avatar-sub-' + subId);
                 if (target) target.style.display = 'block';
@@ -704,7 +704,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 const el = document.getElementById('sprite-status');
                 if (!el) return;
                 el.textContent = msg || '';
-                el.style.color = isErr ? '#fc8181' : 'rgba(26,28,40,0.40)';
+                el.style.color = isErr ? '#fc8181' : 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.40)';
             };
             const enableBtn = (id, on) => {
                 const b = document.getElementById(id);
@@ -3054,7 +3054,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             //   以前給 50，一想就用光、回空的，測試看起來失敗、實際生成卻正常（11-13 小斐驗收 Vertex 3.1-pro 抓到）。給 2048 讓它想完
             const TEST_MAX = 2048;
             resultEl.style.display = 'block';
-            resultEl.style.color = 'rgba(26,28,40,0.40)';
+            resultEl.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.40)';
             resultEl.textContent = '測試中...';
             try {
                 let replyText = '';
@@ -3160,7 +3160,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     replyText = data?.choices?.[0]?.message?.content || data?.content || JSON.stringify(data);
                 }
 
-                resultEl.style.color = 'rgba(26,28,40,0.25)';
+                resultEl.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.25)';
                 resultEl.textContent = '回應: ' + replyText;
                 status.innerText = 'API 連線成功';
             } catch (e) {

@@ -18,7 +18,7 @@
         const elStatus    = container.querySelector('#bk-status');
 
         function setStatus(msg, color) {
-            if (elStatus) { elStatus.textContent = msg; elStatus.style.color = color || 'rgba(26,28,40,0.40)'; }
+            if (elStatus) { elStatus.textContent = msg; elStatus.style.color = color || 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.40)'; }
         }
         // 忙完還原成原本的樣子（含圖示）：第一次變忙時先記下原本的 HTML
         function setBtnLoading(btn, text) { if (btn) { if (btn.__html0 == null) btn.__html0 = btn.innerHTML; btn.textContent = text; btn.style.opacity = '0.5'; btn.style.pointerEvents = 'none'; } }
@@ -344,12 +344,12 @@
             const withSecrets = chkSecrets ? chkSecrets.checked : false;
             if (withSecrets && BACKUP.confirmSecrets && !await BACKUP.confirmSecrets(parts || BACKUP.exportPartsGet())) return;
             setBtnLoading(btnExport, '準備中...');
-            setStatus('正在打包資料...', 'rgba(26,28,40,0.25)');
+            setStatus('正在打包資料...', 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.25)');
             try {
                 const sizeKB = await BACKUP.exportLocal({ images: chkImg ? chkImg.checked : undefined, parts: parts, secrets: withSecrets });
                 const L = BACKUP.lastExport;
                 // 酒館（Tauri）下載不會跳任何東西，要講檔案去哪了
-                setStatus('匯出完成（' + sizeKB + ' KB' + (L && L.images ? '，含圖片和語音 ' + L.images + ' 張' : '') + '）' + (isStandaloneNow() ? '，請儲存至安全位置' : '，檔案在「下載」資料夾'), 'rgba(26,28,40,0.25)');
+                setStatus('匯出完成（' + sizeKB + ' KB' + (L && L.images ? '，含圖片和語音 ' + L.images + ' 張' : '') + '）' + (isStandaloneNow() ? '，請儲存至安全位置' : '，檔案在「下載」資料夾'), 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.25)');
             } catch(e) { setStatus('匯出失敗：' + e.message, '#fc8181'); }
             setBtnDone(btnExport, '匯出備份 JSON');
         });
@@ -361,7 +361,7 @@
             const file = e.target.files?.[0];
             if (!file || !BACKUP) return;
             if (!await AUI.confirm('用這份備份還原？會跟這台現有的資料合併，同一筆以備份那份為準。還原完會自己重新整理。', { okText: '還原', title: '從備份檔還原' })) return;
-            setStatus('正在匯入...', 'rgba(26,28,40,0.25)');
+            setStatus('正在匯入...', 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.25)');
             try {
                 const result = await BACKUP.importLocal(file);
                 BACKUP.afterRestore(result, '從備份檔還原');   // 馬上重整：開著的畫面還是舊的，不重整會被寫回去（os_backup.js 那段）

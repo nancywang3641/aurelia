@@ -20,22 +20,22 @@
     margin-top: 10px;
     padding: 10px 12px;
     border-radius: 6px;
-    background: rgba(26, 28, 40, 0.06);
-    border: 1px solid rgba(26, 28, 40, 0.12);
+    background: rgba(var(--os-ink-rgb, 26, 28, 40), 0.06);
+    border: 1px solid rgba(var(--os-ink-rgb, 26, 28, 40), 0.12);
     font-size: 12px;
     line-height: 1.9;
     color: #1A1C28;
 }
 .ka-state b { font-weight: 800; color: #1A1C28; }
 .ka-state .on { color: #2f6b4f; font-weight: 800; }
-.ka-state .off { color: rgba(26, 28, 40, 0.5); }
+.ka-state .off { color: rgba(var(--os-ink-rgb, 26, 28, 40), 0.5); }
 
 /* 這台不支援的那一招：整列淡掉、開關不給按 */
 .ka-unsupported { opacity: .45; }
 .ka-unsupported .toggle-switch { pointer-events: none; }
 .ka-why {
     font-size: 11px;
-    color: rgba(26, 28, 40, 0.6);
+    color: rgba(var(--os-ink-rgb, 26, 28, 40), 0.6);
     margin-top: 4px;
 }
 
@@ -50,11 +50,11 @@
     gap: 10px;
     padding: 4px 0;
 }
-.ka-state-row + .ka-state-row { border-top: 1px solid rgba(26, 28, 40, 0.08); }
-.ka-state-row > span:first-child { color: rgba(26, 28, 40, 0.62); }
+.ka-state-row + .ka-state-row { border-top: 1px solid rgba(var(--os-ink-rgb, 26, 28, 40), 0.08); }
+.ka-state-row > span:first-child { color: rgba(var(--os-ink-rgb, 26, 28, 40), 0.62); }
 .ka-note {
     padding-bottom: 6px;
     margin-bottom: 4px;
-    border-bottom: 1px solid rgba(26, 28, 40, 0.12);
+    border-bottom: 1px solid rgba(var(--os-ink-rgb, 26, 28, 40), 0.12);
     color: #1A1C28;
 }

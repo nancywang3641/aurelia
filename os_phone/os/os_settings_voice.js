@@ -421,13 +421,13 @@
                 if (!voiceId) { mmResult.style.color = '#fc8181'; mmResult.textContent = '請輸入語音 ID（如 male-01）'; return; }
                 mmTestBtn.style.opacity = '0.5';
                 mmTestBtn.textContent = '合成中...';
-                mmResult.style.color = 'rgba(26,28,40,0.40)';
+                mmResult.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.40)';
                 mmResult.textContent = '正在呼叫 Minimax TTS API...';
                 if (MM()) {
                     stashCloudInputs();
                     const ok = await MM().play(text, voiceId);
                     if (ok) {
-                        mmResult.style.color = 'rgba(26,28,40,0.25)';
+                        mmResult.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.25)';
                         mmResult.textContent = '語音播放中...';
                         if (mmStopBtn) mmStopBtn.style.display = 'block';
                     } else {
@@ -442,7 +442,7 @@
         if (mmStopBtn) mmStopBtn.onclick = () => {
             if (MM()) MM().stop();
             mmStopBtn.style.display = 'none';
-            if (mmResult) { mmResult.style.color = 'rgba(26,28,40,0.40)'; mmResult.textContent = '已停止播放'; }
+            if (mmResult) { mmResult.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.40)'; mmResult.textContent = '已停止播放'; }
         };
 
         // ── ElevenLabs：我的聲音 ──

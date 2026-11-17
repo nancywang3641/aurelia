@@ -128,7 +128,7 @@
             <label class="set-label" style="font-size:11px; margin-top:8px;">結尾</label>
             <input class="set-input" type="text" id="vncfg-sum-close" spellcheck="false" placeholder="${_sumDef.close}" value="${_sumEsc(_sumNow.close)}" oninput="window.VN_SETTINGS_PANEL.trySum()">
             <div class="set-label" style="font-size:11px; margin-top:8px;">拿最新一章試抓</div>
-            <div id="vncfg-sum-preview" class="set-desc" style="min-height:34px; padding:8px 10px; border:1px dashed rgba(26,28,40,0.22); border-radius:6px; white-space:pre-wrap; word-break:break-word;">按上面的欄位就會試抓</div>
+            <div id="vncfg-sum-preview" class="set-desc" style="min-height:34px; padding:8px 10px; border:1px dashed rgba(var(--os-ink-rgb, 26, 28, 40), 0.22); border-radius:6px; white-space:pre-wrap; word-break:break-word;">按上面的欄位就會試抓</div>
         </div>`;
 
             // BGM／音效清單：素材是自己的，資料夾裡有哪些檔名就寫哪些（AI 只從清單挑）。內容存在 VN 指令（os_vn_rules）。
