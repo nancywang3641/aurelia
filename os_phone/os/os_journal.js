@@ -733,7 +733,7 @@
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
             const onKey = (e) => {
                 if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }   // 被下一個彈窗直接換掉的
-                if (e.key === 'Escape') close();
+                if (e.key === 'Escape') { e.preventDefault(); close(); }   // 標記處理過：AUI 的 Esc 就不會再關下面那層
             };
             document.addEventListener('keydown', onKey);
         }
@@ -766,7 +766,7 @@
             // ESC 關閉
             const onKey = (e) => {
                 if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }
-                if (e.key === 'Escape') close();
+                if (e.key === 'Escape') { e.preventDefault(); close(); }   // 標記處理過：AUI 的 Esc 就不會再關下面那層
             };
             document.addEventListener('keydown', onKey);
         }
@@ -862,7 +862,7 @@
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
             const onKey = (e) => {
                 if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }
-                if (e.key === 'Escape') close();
+                if (e.key === 'Escape') { e.preventDefault(); close(); }   // 標記處理過：AUI 的 Esc 就不會再關下面那層
             };
             document.addEventListener('keydown', onKey);
         }
@@ -927,7 +927,7 @@
             modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
             const onKey = (e) => {
                 if (!modal.isConnected) { document.removeEventListener('keydown', onKey); return; }
-                if (e.key === 'Escape') close();
+                if (e.key === 'Escape') { e.preventDefault(); close(); }   // 標記處理過：AUI 的 Esc 就不會再關下面那層
             };
             document.addEventListener('keydown', onKey);
         }

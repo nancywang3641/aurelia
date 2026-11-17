@@ -220,7 +220,7 @@
             renderDiary();
             diaryWrap.hidden = false;
         }
-        function onDiaryKey(e) { if (e.key === 'Escape' && diaryWrap && !diaryWrap.hidden) diaryWrap.hidden = true; }
+        function onDiaryKey(e) { if (e.key === 'Escape' && diaryWrap && !diaryWrap.hidden) { e.preventDefault(); diaryWrap.hidden = true; } }
         window.addEventListener('keydown', onDiaryKey);
 
         // ── 偷吃一口 ─────────────────────────────────

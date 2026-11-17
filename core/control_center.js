@@ -814,6 +814,21 @@
         });
     }
 
+    // 大廳那一整格窗口（地圖、房產、後院、日曆…）開著沒、把它收掉：Esc 和右側欄「換一個開」用
+    function _openPanel() {
+        const p = document.getElementById('aurelia-panel-container');
+        return (p && p.style.display !== 'none' && p.dataset.tileOut !== '1' && p.getClientRects().length) ? p : null;
+    }
+    AureliaControlCenter.panelOpen = function () { return !!_openPanel(); };
+    AureliaControlCenter.closePanel = function () {
+        const p = _openPanel();
+        if (!p) return false;
+        _panelClosing(p, false);
+        return true;
+    };
+    // 這一格的 app 多半只有「返回」沒有關閉鈕，Esc 找不到可按的，在這裡登記怎麼關
+    if (window.AUI && window.AUI.escLayer) window.AUI.escLayer(_openPanel, AureliaControlCenter.closePanel);
+
     AureliaControlCenter.launchGameApp = function(key) {
         const GAME_APP_MAP = {
             tarot:      () => window.OS_TAROT?.launch,
@@ -953,8 +968,9 @@
     document.addEventListener('MSFullscreenChange', onFsChange);
 
     // 2. keydown ESC：當瀏覽器原生全螢幕被拒、僅 CSS 假全屏時的 fallback
+    //    有窗口開著時 Esc 先關窗口（AUI 的 Esc 會關），不退出全螢幕
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && isFullscreen) {
+        if (e.key === 'Escape' && isFullscreen && !e.defaultPrevented && !(window.AUI && window.AUI.escTarget && window.AUI.escTarget())) {
             e.preventDefault();
             AureliaControlCenter.exitFullscreen();
         }

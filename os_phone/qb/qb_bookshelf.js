@@ -1762,7 +1762,7 @@ status = "正常"`;
                 };
                 innerView.querySelector('#qb-greet-replace-close').onclick = closeRepl;
                 replacePanel.onclick = (e) => { if (e.target === replacePanel) closeRepl(); };   // 點遮罩收掉
-                replacePanel.addEventListener('keydown', e => { if (e.key === 'Escape') closeRepl(); });
+                replacePanel.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); closeRepl(); } });
             }
 
             if (doReplBtn) {

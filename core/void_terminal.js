@@ -1093,6 +1093,15 @@ const IRIS_IDLE = [
                     return;
                 }
                 if (!b.dataset.proxy) return;
+                // 右側欄＝換一個開，不是再疊一層（小斐 11-17 新玩家檢查第 6 條：藏書開著再點章節，疊出第二層）。
+                //   電腦寬時藏書是浮在大廳中間的一塊、全螢幕窗口也不蓋右側欄，兩者都還點得到旁邊這排
+                const toShelf = b.dataset.proxy === 'void-quest-btn';
+                const shelf = tab.querySelector('#qb-bookshelf-overlay');
+                if (shelf && shelf.style.display !== 'none') {
+                    if (toShelf) { tab.querySelector('#close-bookshelf-btn')?.click(); return; }   // 再按一次藏書＝收起來（原本就是這樣）
+                    tab.querySelector('#close-bookshelf-btn')?.click();
+                }
+                if (toShelf) window.AureliaControlCenter?.closePanel?.();
                 const proxy = tab.querySelector('#' + b.dataset.proxy);
                 if (proxy) proxy.click();
             });

@@ -598,5 +598,59 @@
         .filter((d, i, a) => d && a.indexOf(d) === i)
         .forEach(d => { d.addEventListener('pointerdown', _onSelPtr, true); d.addEventListener('mousedown', _onSelDown, true); });
 
-    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset, lsSet, safeHtml, openSelect };
+    // ── Esc＝關掉最上面那一層（小斐 11-17 新玩家檢查第 6 條：藏書開著按 Esc 關不掉）─────────
+    //   窗口上百個、關閉鈕各取各的名字，不一個一個接：Esc 時找「畫面上真的露在最上面」的關閉鈕
+    //   （id 或 class 裡有 close 這個字、或標著「關閉」），替她按一下，走的就是那個窗口自己的關法。
+    //   - 自己就會處理 Esc 的窗口（設置、角色中心、日誌、小窗…）照舊：它們先收到、標記處理過（preventDefault），這裡就不動。
+    //   - 在輸入框裡按 Esc 不算（很多輸入框用 Esc 取消編輯）。
+    //   - 沒有關閉鈕的窗口（大廳那一整格全螢幕窗口）用 escLayer(找得到就回那一層, 怎麼關) 登記。
+    //   - 頂欄、右側欄、酒館自己的介面不算；「關閉奧瑞亞」那兩顆是關整個奧瑞亞，不是關窗口。
+    const ESC_SKIP = '#aurelia-global-close-btn, #void-close-btn';
+    const ESC_OUTSIDE = '.void-top-bar, #lb-dock, #sheld, #top-settings-holder, #left-nav-panel, #right-nav-panel, dialog.popup';
+    const _escLayers = [];
+    function escLayer(find, close) { _escLayers.push({ find: find, close: close }); }
+    function _escNamed(el) {
+        const lab = el.getAttribute('aria-label') || el.getAttribute('title') || '';
+        if (lab === '關閉') return true;
+        const cls = typeof el.className === 'string' ? el.className : (el.getAttribute('class') || '');
+        return /(^|[\s_-])close($|[\s_-])/.test((el.id || '') + ' ' + cls);
+    }
+    function _escOnTop(el) {
+        const r = el.getBoundingClientRect();
+        if (r.width < 4 || r.height < 4) return false;
+        const d = el.ownerDocument, x = r.left + r.width / 2, y = r.top + r.height / 2;
+        if (x < 0 || y < 0 || x > d.documentElement.clientWidth || y > d.documentElement.clientHeight) return false;
+        const h = d.elementFromPoint(x, y);
+        return !!h && (h === el || el.contains(h));
+    }
+    // 現在按 Esc 會關哪一層：{ el, close } 或 null（控制中心靠它決定 Esc 要先關窗口還是退出全螢幕）
+    function escTarget() {
+        if (document.querySelector('.aud-mask.on')) return null;   // 對話窗開著：它自己管 Esc
+        let pick = null;
+        document.querySelectorAll('[id*="close" i], [class*="close" i], [aria-label="關閉"], [title="關閉"]').forEach(function (el) {
+            if (el.disabled || el.matches(ESC_SKIP) || el.closest(ESC_OUTSIDE) || !_escNamed(el) || !_escOnTop(el)) return;
+            pick = el;   // 都露在最上面的話取後面那顆（通常是疊在後面、比較裡層的那個小窗）
+        });
+        if (pick) { const b = pick; return { el: b, close: function () { b.click(); } }; }
+        for (let i = _escLayers.length - 1; i >= 0; i--) {
+            let el = null;
+            try { el = _escLayers[i].find(); } catch (e) {}
+            if (el && _escOnTop(el)) return { el: el, close: _escLayers[i].close };
+        }
+        return null;
+    }
+    function _onEscKey(e) {
+        if (e.key !== 'Escape' || e.repeat || e.isComposing) return;
+        const t = e.target;
+        if (t && t.closest && t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
+        // 等這一下所有監聽都跑完：有窗口自己處理掉了（preventDefault）就不再關第二層
+        setTimeout(function () {
+            if (e.defaultPrevented) return;
+            const tg = escTarget();
+            if (tg) { try { tg.close(); } catch (err) { console.warn('[AUI] Esc 關窗口失敗', err); } }
+        }, 0);
+    }
+    document.addEventListener('keydown', _onEscKey);
+
+    window.AUI = { __v: 1, toast, alert, confirm, prompt, toastr, registerHelp, helpBtn, enterSends, isTouchKeyboard, kbReset, lsSet, safeHtml, openSelect, escLayer, escTarget };
 })();

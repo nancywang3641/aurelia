@@ -642,6 +642,8 @@
         const onKey = (e) => {
             if (e.key !== 'Escape' || !box.classList.contains('is-zoom')) return;
             if (_scn || _more) return;   // 開著的卡片面板先處理它自己的
+            if (window.AUI && window.AUI.escTarget && window.AUI.escTarget()) return;   // 上面還開著窗口：這次 Esc 先關窗口
+            e.preventDefault();   // 標記處理過：AUI 的 Esc 不再關別的
             zoom(false);
             try { host.querySelector('.void-input')?.blur(); } catch (err) {}
         };
