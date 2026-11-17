@@ -177,7 +177,7 @@
 
                 // 「最新這輪」直插用：記下這次的圖。VN 因「生成結束」載最新 script 時(loadScript 尾端 applyLatestFresh)直接插、不靠 ID 數字。
                 //   msgId 一起帶著 → 章節存檔才知道「這批是哪一樓的」，同樓重生時能先清掉上一版（見 _persistToLatestChapter）
-                this._latest = { chatId: chatId, msgId: msgId, entries: entries };
+                this._latest = { chatId: chatId, msgId: msgId, entries: entries, t0: (typeof ctx.t0 === 'number' ? ctx.t0 : 0) };
                 console.log('[VN_SceneInsert] 已記最新這輪 ' + entries.length + ' 張(已預熱) msg#' + msgId);
 
                 // ★持久化主力：把 ID-only [Scene|cacheId] 標籤寫回酒館正文錨點位置（fire-and-forget）。
@@ -259,7 +259,7 @@
                     if (n) console.log('[VN_SceneInsert] 最新這輪：直接 splice ' + n + ' 張(不靠ID)，往下點即播');
                 }
                 // 寫回「最新這章」存檔（章節選擇/重整後回放也看得到，不丟）；圖檔本就在硬碟，只補「插哪一段」的資訊
-                this._persistToLatestChapter(L.entries, L.msgId);
+                this._persistToLatestChapter(L.entries, L.msgId, L.t0);
                 // ★用完即清：下一個「沒出插圖的輪」載 script 時 _latest 會是 null → 不會把這張舊圖誤插進新劇本
                 this._latest = null;
             } catch (e) {
@@ -271,7 +271,7 @@
         // 🚨 同一樓重生要「先清舊版再寫新版」：舊版只加不刪 → 刪掉某樓重新生成後，
         //    章節存檔會同時留著兩批（舊的那批正文早就沒了、_spliceInto 的「正文已有就跳過」對它無效），
         //    回放時舊插圖就硬插回來 ＝ Rae 遇到的「重複展示刪除過的舊插畫」。
-        _persistToLatestChapter: async function (entries, msgId) {
+        _persistToLatestChapter: async function (entries, msgId, t0) {
             try {
                 if (!Array.isArray(entries) || !entries.length) return;
                 if (!win.OS_DB || !win.OS_DB.getAllVnChapters || !win.OS_DB.saveVnChapter) return;
@@ -281,7 +281,9 @@
                 for (let i = 1; i < all.length; i++) if ((all[i].createdAt || 0) > (latest.createdAt || 0)) latest = all[i];
                 if (!latest) return;
                 // 守衛：最新章節必須是「剛存的」(2分鐘內)——否則多半是本輪章節還沒存好，別把新圖誤掛到上一章
-                if (Date.now() - (latest.createdAt || 0) > 120000) { console.log('[VN_SceneInsert🔎] 寫回章節跳過：最新章節非近期(本輪可能還沒存)'); return; }
+                //   副模型回得慢（晚到幾分鐘）時，從它開跑那一刻往前算 2 分鐘：章節在開跑前後存的都算這一輪
+                const _since = (typeof t0 === 'number' && t0 > 0) ? t0 : Date.now();
+                if (_since - (latest.createdAt || 0) > 120000) { console.log('[VN_SceneInsert🔎] 寫回章節跳過：最新章節非近期(本輪可能還沒存)'); return; }
                 let saved = Array.isArray(latest.scenes) ? latest.scenes.slice() : [];
                 // 同樓重生：先移除這一樓先前存的插圖（沒帶 msgId 的舊資料保守留著，避免誤刪別輪的）
                 let dropped = 0;

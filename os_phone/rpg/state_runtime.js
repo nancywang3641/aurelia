@@ -1678,10 +1678,14 @@ ${numberedText}`;
     }
 
     let _sceneRunning = false;
+    let _sceneRunId = 0;          // 第幾通插圖；晚到的那通被下一輪蓋過時，靠它認出自己已經過期
+    let _sceneRunLate = false;    // 正在跑的那通已經超過 60 秒（劇情先播了）→ 下一輪可以另開一通，不用等它
     let _sceneDebounce = null;
     async function extractScenesStandalone() {
-        if (_sceneRunning) return;
+        if (_sceneRunning && !_sceneRunLate) return;
+        const _myRun = ++_sceneRunId;
         _sceneRunning = true;
+        _sceneRunLate = false;
         try {
             if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過場景插圖'); return; }
             if (win.__AURELIA_SUMMARIZING) return;
@@ -1745,14 +1749,35 @@ ${numberedText}`;
                 { role: 'system', content: spec + _override + _facesNote + _safe },
                 { role: 'user', content: userMsg }
             ];
+            // ⏱️ 等多久（11-18 她：「插圖沒注入? 看有調用，但劇情裡看不到」——那通 90 秒才回，60 秒就丟掉了）：
+            //   60 秒只是「先別讓劇情乾等」：到點先放開開播閘門，回覆照樣等；真的 5 分鐘都沒回才算失敗。
+            //   晚到的圖照常插（還沒播到的地方）、寫回正文和章節存檔；中間她已經送出下一輪的話就丟掉，免得插錯章。
+            const _t0 = Date.now();
+            let _late = false;
             const raw = await new Promise((res, rej) => {
                 let done = false;
-                const timer = setTimeout(() => { if (done) return; done = true; rej(new Error('獨立插圖副模型超時')); }, CONFIG.timeoutMs);
+                const soft = setTimeout(() => {
+                    if (done) return;
+                    _late = true;
+                    if (_myRun === _sceneRunId) _sceneRunLate = true;
+                    console.warn('🖼️ [獨立插圖] 副模型超過 ' + Math.round(CONFIG.timeoutMs / 1000) + ' 秒還沒回 → 劇情先播，插圖回來再補上');
+                    _sceneGateRelease('standalone');
+                }, CONFIG.timeoutMs);
+                const hard = setTimeout(() => { if (done) return; done = true; clearTimeout(soft); rej(new Error('獨立插圖副模型 5 分鐘都沒回')); }, Math.max(CONFIG.timeoutMs, 300000));
+                const fin = () => { done = true; clearTimeout(soft); clearTimeout(hard); };
                 win.OS_API.chatSecondary(messages, null,
-                    (text) => { if (done) return; done = true; clearTimeout(timer); res(text); },
-                    (err) => { if (done) return; done = true; clearTimeout(timer); rej(err); },
+                    (text) => { if (done) return; fin(); res(text); },
+                    (err) => { if (done) return; fin(); rej(err); },
                     { task: 'illust' });
             });
+            if (_myRun !== _sceneRunId) { console.warn('[獨立插圖] 回覆晚到，下一輪的插圖已經開跑 → 這批不插'); return; }
+            if (_late) {
+                // 晚到：這段時間換了聊天室、或已經有新的一樓（她送出下一輪／重生），這批就不是現在這樓的了
+                let _stillHere = false;
+                try { const g = await gatherRecentMessages(); _stillHere = getChatId() === chatId && String(g && g.lastId) === String(lastId); } catch (e) {}
+                if (!_stillHere) { console.warn('[獨立插圖] 回覆晚到 ' + Math.round((Date.now() - _t0) / 1000) + ' 秒，這段時間已經換了一樓 → 這批不插'); return; }
+                console.log('[獨立插圖] 回覆晚到 ' + Math.round((Date.now() - _t0) / 1000) + ' 秒，還是同一樓 → 照常插');
+            }
             const json = extractJSON(raw);
             try { if (_faces && json) await win.VN_FREE_MODE.commitFill(_faces, json.faces, chatId); } catch (e) {}   // 這章沒挑到插圖也照存表情
             if (!json || !Array.isArray(json.scenes) || !json.scenes.length) { console.warn('[獨立插圖] 輸出不含 scenes'); return; }
@@ -1770,11 +1795,11 @@ ${numberedText}`;
             if (mapped.length) {
                 // 派發對位 msgId 用 getChatMessages(-1) 的「窗口號」lastId——跟 VN(_currentMessageId/loadScript)同一個 id 空間。
                 // ⚠️別用 _trueLastId(/api/chats/search 的磁碟真號)：懶載大聊天(如 493 樓只載入窗口顯示 101)時，真號(493)≠VN 窗口號(101)、差 392 插不進。
-                win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: lastId });
+                win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: lastId, t0: _t0 });
                 console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (msg#${lastId})`);
             }
         } catch (e) { console.warn('[獨立插圖] 失敗:', e?.message || e); }
-        finally { _sceneRunning = false; _sceneGateRelease('standalone'); }   // 插圖已派發（或這輪沒有）→ 放開 VN 開播閘門
+        finally { if (_myRun === _sceneRunId) { _sceneRunning = false; _sceneRunLate = false; _sceneGateRelease('standalone'); } }   // 插圖已派發（或這輪沒有）→ 放開 VN 開播閘門；被下一輪蓋過的那通不碰下一輪的閘門
     }
 
     // ===== 🎬 導演模式（Rae 定案）：資訊不對稱帳本，走「奧瑞亞主模型接口」chatMain =====
