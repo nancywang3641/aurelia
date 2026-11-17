@@ -115,6 +115,8 @@
     --asw-card-pad-x: 18px;
     --asw-card-pad-y: 14px;
     --asw-row-h: 52px;
+    --asw-label-min: 6em;               /* 一列的標籤最少留這麼寬（六個字），不夠時右邊的按鈕掉到下一行 */
+    --asw-range-min: 96px;              /* 滑桿最短這麼長，不夠時掉到下一行 */
     --asw-tog-w: 52px;                  /* 開關 */
     --asw-tog-h: 30px;
     --asw-tog-knob-gap: 3px;
@@ -193,7 +195,7 @@
     --asw-pad-y: 44px;
     --asw-gap: 64px;
     --asw-nav-w: 250px;
-    --asw-nav-h: 52px;
+    --asw-nav-h: clamp(44px, 6.5vh, 52px);   /* 視窗矮的時候分類矮一點，七個加「回到劇情」才排得下 */
     --asw-nav-gap: 4px;
     --asw-nav-pad: 20px;
     --asw-main-pad-x: 0px;
@@ -270,7 +272,7 @@
 
 .asw-frame { flex: 1; min-height: 0; display: flex; }
 .asw-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--asw-panel); border-radius: var(--asw-r-panel); overflow: hidden; }
-.asw-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.asw-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; container-type: inline-size; container-name: aswbody; }
 .asw-body::-webkit-scrollbar { width: 6px; }
 .asw-body::-webkit-scrollbar-thumb { background: var(--asw-scroll); border-radius: var(--asw-r-pill); }
 .asw-page { padding: 0 var(--asw-main-pad-x) var(--asw-main-pad-bottom); }
@@ -278,9 +280,11 @@
 /* ── 夠大：分類在左邊一排（兩套都是）── */
 .asw-root.asw-wide > .asw-top { display: none; }   /* 共用標題列寫的是 .sysh.sysh（兩層），這裡要三層才蓋得過 */
 .asw-wide .asw-frame { gap: var(--asw-gap); padding: var(--asw-pad-y) var(--asw-pad-x); }
-.asw-wide .asw-side { flex: 0 0 var(--asw-nav-w); display: flex; flex-direction: column; gap: var(--asw-nav-gap); min-height: 0; overflow-y: auto; scrollbar-width: none; }
-.asw-wide .asw-side::-webkit-scrollbar { display: none; }
-.asw-wide .asw-nav { display: flex; flex-direction: column; gap: var(--asw-nav-gap); }
+/* 左邊那一欄：上面的標題和最下面的「回到劇情」固定，中間那排分類自己捲（視窗很矮時「回到劇情」不會被擠到看不見） */
+.asw-wide .asw-side { flex: 0 0 var(--asw-nav-w); display: flex; flex-direction: column; gap: var(--asw-nav-gap); min-height: 0; }
+.asw-wide .asw-nav { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: var(--asw-nav-gap); overflow-y: auto; scrollbar-width: none; }
+.asw-wide .asw-nav::-webkit-scrollbar { display: none; }
+.asw-wide .asw-nav-item { flex: 0 0 auto; }
 .asw-nav-item {
     display: flex; align-items: center; gap: 12px; margin: 0; border: none; background: none; cursor: pointer;
     font: inherit; font-size: var(--asw-fs-nav); color: var(--asw-nav-ink); text-align: left; -webkit-tap-highlight-color: transparent;
@@ -326,12 +330,11 @@
 .asw-wide[data-skin="story"] .asw-head { display: none; }
 .asw-wide[data-skin="story"] .asw-main { padding-top: var(--asw-main-pad-top); }
 .asw-wide[data-skin="story"] .asw-leave {
-    margin: auto 0 0; display: flex; align-items: center; gap: 10px; min-height: var(--asw-nav-h); padding: 0 var(--asw-nav-pad);
+    margin: var(--asw-nav-gap) 0 0; display: flex; align-items: center; gap: 10px; min-height: var(--asw-nav-h); padding: 0 var(--asw-nav-pad);
     border: 1px solid var(--asw-line); border-radius: var(--asw-r-pill); background: none; color: var(--asw-ink);
     font: inherit; font-size: var(--asw-fs-ctl); cursor: pointer; flex: 0 0 auto;
 }
 .asw-wide[data-skin="story"] .asw-leave:hover { border-color: var(--asw-accent); color: var(--asw-accent); }
-.asw-wide[data-skin="story"] .asw-nav { margin-bottom: var(--asw-gap); }
 
 /* ── 手機寬：鋪滿，上面一排分類（兩套都是）── */
 .asw-full .asw-side-title, .asw-full .asw-head, .asw-full .asw-nav-ic, .asw-full .asw-nav-long, .asw-full .asw-nav-tag { display: none; }
@@ -388,16 +391,28 @@
 .asw-full .asw-col, [data-skin="story"] .asw-col { display: contents; }
 .asw-full .asw-late, [data-skin="story"] .asw-late { order: 2; }
 .asw-full .asw-note, [data-skin="story"] .asw-note { order: 3; }
+/* 內容那一塊不夠寬時（視窗在 860～1100 中間那段：浮窗還是分類在左，內容只剩五六百）也改成一欄：
+   兩欄並排一張卡只剩一百多，標籤會被右邊那排藥丸鈕擠成一個字一行（11-17 她在 800×600 的窗格看到「城市天氣」直排）。
+   量的是內容那一塊自己的寬度，不是整個視窗。🚨 這個 780px 是版面的門檻不是長相，而且 @container 的條件不能用變數，所以寫在這裡：
+   一張卡最少要放得下「六個字的標籤＋四顆藥丸鈕」≈350，兩張加間距、留白≈780。 */
+@container aswbody (max-width: 780px) {
+    .asw-cols { display: flex; flex-direction: column; align-items: stretch; }
+    .asw-col { display: contents; }
+    .asw-late { order: 2; }
+    .asw-note { order: 3; }
+}
 /* 一堆設定：大廳那套是一張淡藍的卡片；劇情那套沒有卡片，一列一條線 */
 .asw-group { display: flex; flex-direction: column; min-width: 0; padding: var(--asw-card-pad-y) var(--asw-card-pad-x); border-radius: var(--asw-r-card); background: var(--asw-card); }
 .asw-group-title { margin: 0 0 4px; font-size: var(--asw-fs-group); font-weight: 700; letter-spacing: var(--asw-ls-group); color: var(--asw-group-ink); }
+/* 一列：標籤保底六個字寬（--asw-label-min），右邊的開關、藥丸鈕放不下時整組掉到下一行靠右，不去擠標籤 */
 .asw-row {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--asw-row-h); padding: 6px 0; margin: 0;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; min-height: var(--asw-row-h); padding: 6px 0; margin: 0;
     border-bottom: 1px solid var(--asw-row-line); color: var(--asw-ink); font-size: var(--asw-fs-row);
 }
 label.asw-row { cursor: pointer; }
 /* 名字和小問號排成一行字：名字太長折行時，小問號跟在最後一個字後面，不會自己掉到下一行 */
-.asw-row-tx { min-width: 0; }
+.asw-row-tx { flex: 1 1 var(--asw-label-min); min-width: 0; }
+.asw-row > :not(.asw-row-tx) { margin-left: auto; }
 .asw-row-tx > .aui-help, .asw-chiprow-tx > .aui-help { margin-left: 4px; vertical-align: middle; color: var(--asw-sub); }
 /* 開關：藥丸形（本體還是一個勾選框，change、checked 照舊；樣子整個自己畫） */
 .asw-check {
@@ -412,11 +427,11 @@ label.asw-row { cursor: pointer; }
 .asw-check:checked { background: var(--asw-tog-on); }
 .asw-check:checked::after { transform: translateX(calc(var(--asw-tog-w) - var(--asw-tog-h))); background: var(--asw-tog-knob-on); }
 /* 幾選一：一排藥丸鈕（小／中／大、自動／晴／雨／雪） */
-.asw-seg { flex: 0 0 auto; display: inline-flex; gap: var(--asw-seg-gap); padding: var(--asw-seg-pad); border-radius: var(--asw-r-pill); background: var(--asw-seg-bg); }
+.asw-seg { flex: 0 1 auto; max-width: 100%; display: inline-flex; gap: var(--asw-seg-gap); padding: var(--asw-seg-pad); border-radius: var(--asw-r-pill); background: var(--asw-seg-bg); }
 .asw-seg.is-off { opacity: 0.4; pointer-events: none; }
 .asw-seg-btn {
-    min-width: var(--asw-seg-min); min-height: var(--asw-seg-h); padding: 0 10px; margin: 0; border: 1px solid var(--asw-seg-line); border-radius: var(--asw-r-pill);
-    background: none; color: var(--asw-seg-ink); font: inherit; font-size: var(--asw-fs-ctl); cursor: pointer;
+    flex: 0 0 auto; min-width: var(--asw-seg-min); min-height: var(--asw-seg-h); padding: 0 10px; margin: 0; border: 1px solid var(--asw-seg-line); border-radius: var(--asw-r-pill);
+    background: none; color: var(--asw-seg-ink); white-space: nowrap; font: inherit; font-size: var(--asw-fs-ctl); cursor: pointer;
 }
 .asw-seg-btn.is-on { background: var(--asw-seg-on-bg); border-color: var(--asw-seg-on-line); color: var(--asw-seg-on-ink); font-weight: 700; box-shadow: var(--asw-seg-on-shadow); }
 .asw-num-wrap { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; color: var(--asw-sub); font-size: var(--asw-fs-small); }
@@ -426,16 +441,17 @@ label.asw-row { cursor: pointer; }
 }
 .asw-num:focus { outline: none; border-color: var(--asw-accent); }
 /* 滑桿列：名字固定寬、滑桿撐滿、右邊一個小字（大小／快中慢／百分比） */
-.asw-row-slide { gap: 14px; }
+.asw-row-slide { gap: 6px 14px; }
 .asw-row-slide .asw-row-tx { flex: 0 0 5em; }
-.asw-range { flex: 1 1 auto; min-width: 0; height: 22px; margin: 0; padding: 0; background: none; cursor: pointer; accent-color: var(--asw-accent); -webkit-appearance: none; appearance: none; }
+.asw-row-slide > .asw-val { margin-left: 0; }
+.asw-range { flex: 1 1 var(--asw-range-min); min-width: var(--asw-range-min); height: 22px; margin: 0; padding: 0; background: none; cursor: pointer; accent-color: var(--asw-accent); -webkit-appearance: none; appearance: none; }
 .asw-range::-webkit-slider-runnable-track { height: 4px; border-radius: var(--asw-r-pill); background: var(--asw-track); }
 .asw-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -7px; border-radius: 50%; border: 2px solid var(--asw-thumb-line); background: var(--asw-accent); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
 .asw-range::-moz-range-track { height: 4px; border-radius: var(--asw-r-pill); background: var(--asw-track); }
 .asw-range::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--asw-thumb-line); background: var(--asw-accent); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3); }
 .asw-val { flex: 0 0 2.8em; text-align: right; color: var(--asw-accent); font-size: var(--asw-fs-small); font-variant-numeric: tabular-nums; }
 /* 顏色：一格色塊＋名字，三個排一列 */
-.asw-colors { flex: 0 1 auto; display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; }
+.asw-colors { flex: 0 1 auto; max-width: 100%; display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; }
 .asw-color { display: inline-flex; align-items: center; gap: 6px; color: var(--asw-sub); font-size: var(--asw-fs-small); cursor: pointer; }
 .asw-color-in { width: 30px; height: 30px; padding: 0; margin: 0; border: 1px solid var(--asw-chip-line); border-radius: 50%; background: none; cursor: pointer; overflow: hidden; -webkit-appearance: none; appearance: none; }
 .asw-color-in::-webkit-color-swatch-wrapper { padding: 3px; }
