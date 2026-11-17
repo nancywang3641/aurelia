@@ -9,7 +9,8 @@
 // 通行碼：每次打開產生一組（三組四碼），只顯示在這一格、只放記憶體（重整就關、碼作廢），她複製給丹。
 //   工作和結果都用它簽名（PBKDF2 → HMAC-SHA256），碼本身不在線上傳：住戶或網頁就算先佔了那個埠、
 //   偷看了排隊的工作，也拿不到碼、做不出能用的工作。同一件只做一次（記編號，十分鐘內送來的才收）。
-// 只收白名單兩種：image（OS_IMAGE_MANAGER.generate）、voice（OS_MINIMAX.synth）。不收程式碼、不回設定或金鑰；
+// 只收白名單四種：image（OS_IMAGE_MANAGER.generate）、voice（OS_MINIMAX.synth）、text（OS_API 照「哪件事走哪個模型」叫，11-18）、
+//   jev（決策模型，11-18）。不收程式碼、不回設定或金鑰；
 //   找不到接口時列出來的只有名字、模型、編號，沒有網址和金鑰。
 // 每件記一行在這一格底下（aurelia_keyrun_log，最近 60 筆；紀錄檔不進備份）；生圖照舊由生圖那支記進 OS_USAGE，
 //   念台詞這裡記一筆 kind:'voice'。
@@ -173,7 +174,7 @@
         _done.add(id);
         const kind = String(job.kind || '');
         const H = Object.prototype.hasOwnProperty.call(JOBS, kind) ? JOBS[kind] : null;
-        if (!H) return _answer(key, id, { ok: false, text: '不收這種工作（只收畫圖 image、念台詞 voice）。' },
+        if (!H) return _answer(key, id, { ok: false, text: '不收這種工作（只收畫圖 image、念台詞 voice、叫文字模型 text、問 Jev jev）。' },
             { kind: '', what: '不收的工作' + (kind ? '：' + kind.slice(0, 24) : ''), quiet: true });
         let args;
         try { args = H.check((job.args && typeof job.args === 'object' && !Array.isArray(job.args)) ? job.args : {}); }
@@ -257,7 +258,7 @@
             fr.readAsDataURL(blob);
         });
     }
-    function _ext(mime) { return ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/mpeg': 'mp3' })[mime] || 'png'; }
+    function _ext(mime) { return ({ 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'audio/mpeg': 'mp3', 'text/plain': 'txt', 'application/json': 'json' })[mime] || 'png'; }
     function _chars(s) { return Array.from(String(s || '')).length; }
 
     // ── 畫圖：用哪組接口 ──
@@ -324,10 +325,12 @@
         try { win.OS_USAGE && win.OS_USAGE.note({ kind: 'voice', source: 'minimax', model: (cost && cost.model) || '', chars: (cost && cost.chars) || 0, ok: ok }); } catch (e) {}
     }
 
-    // ── 白名單：只有這兩種 ──
+    // ── 白名單：只有這四種 ──
     const IMG_KEYS = ['prompt', 'conn', 'width', 'height', 'quality', 'type', 'raw', 'model', 'refs'];
     const QUALITY_NAME = { low: '低畫質', medium: '中畫質', high: '高畫質' };
     const VOICE_KEYS = ['text', 'voice', 'lang', 'speed', 'emotion'];
+    const TEXT_KEYS = ['system', 'user', 'task', 'via'];
+    const JEV_KEYS = ['state', 'questions'];
     const JOBS = {
         image: {
             name: '畫圖', busy: '正在畫圖…',
@@ -429,6 +432,102 @@
                 return { ok: true, text: '念好了', files: [{ name: 'voice.mp3', mime: 'audio/mpeg', b64: await _blobB64(blob) }], cost: cost };
             },
             what(a) { return ['念台詞', a.voice, _chars(a.text) + ' 字'].join('・'); },
+        },
+        // 11-18 加：叫文字模型、問 Jev（世界門場記表要先拿舊章考「判岔路準不準」，她：「可以，我開那個key給你測」）。
+        //   照她設置裡「哪件事走哪個模型」那張表走（task＝那一列，預設 extract＝每輪記狀態那通），回覆存成文字檔交回。
+        //   叫模型的記帳照舊由 OS_API 那邊記；Jev 記進 OS_JEV_USAGE（tag keyrun）。
+        text: {
+            name: '叫文字模型', busy: '正在叫文字模型…',
+            check(a) {
+                _onlyKeys(a, TEXT_KEYS, '叫文字模型');
+                const user = _str(a.user, 60000, '要送的內容（user）');
+                if (!user) throw new Error('少了要送的內容（user）');
+                const S = win.OS_SETTINGS;
+                const tasks = (S && Array.isArray(S.LLM_TASKS)) ? S.LLM_TASKS : [];
+                const task = _str(a.task, 40, '哪件事（task）', /^[\w\-]+$/) || 'extract';
+                const row = tasks.find(t => t.id === task);
+                if (tasks.length && !row) throw new Error('「' + task + '」不是「哪件事走哪個模型」裡的一列。這裡有：' + tasks.map(t => t.id + '（' + t.name + '）').join('、'));
+                const via = _str(a.via, 10, '走哪個入口（via）', /^(sec|main)$/) || 'sec';
+                return { system: _str(a.system, 20000, '系統指令（system）'), user: user, task: task, taskName: row ? row.name : task, via: via };
+            },
+            async run(a) {
+                const API = win.OS_API;
+                const fn = API && (a.via === 'main' ? API.chatMain : API.chatSecondary);
+                if (typeof fn !== 'function') throw new Error('這個頁面叫不到文字模型');
+                const messages = (a.system ? [{ role: 'system', content: a.system }] : []).concat([{ role: 'user', content: a.user }]);
+                const reply = await new Promise((resolve, reject) => {
+                    let done = false;
+                    const timer = setTimeout(() => { if (done) return; done = true; reject(new Error('模型 5 分鐘沒回')); }, 300000);
+                    fn.call(API, messages, null,
+                        (t) => { if (done) return; done = true; clearTimeout(timer); resolve(String(t == null ? '' : t)); },
+                        (e) => { if (done) return; done = true; clearTimeout(timer); reject(e instanceof Error ? e : new Error(String((e && e.message) || e))); },
+                        { task: a.task });
+                });
+                if (!reply.trim()) throw new Error('模型回了空的');
+                return { ok: true, text: '回好了（' + _chars(reply) + ' 字）',
+                    files: [{ name: 'reply.txt', mime: 'text/plain', b64: await _blobB64(new Blob([reply], { type: 'text/plain' })) }] };
+            },
+            what(a) { return ['叫文字模型', a.taskName, _chars(a.system) + _chars(a.user) + ' 字'].join('・'); },
+        },
+        jev: {
+            name: '問 Jev', busy: '正在問 Jev…',
+            check(a) {
+                _onlyKeys(a, JEV_KEYS, '問 Jev');
+                const obj = (v) => v && typeof v === 'object' && !Array.isArray(v);
+                if (!obj(a.state)) throw new Error('state 要是一個物件');
+                if (JSON.stringify(a.state).length > 60000) throw new Error('state 太長（最多 6 萬字）');
+                if (!obj(a.questions)) throw new Error('questions 要是一個物件');
+                const ids = Object.keys(a.questions);
+                if (!ids.length || ids.length > 10) throw new Error('一次問 1～10 題（Jev 一批太多題常常失敗）');
+                const questions = {};
+                ids.forEach(id => {
+                    if (!/^[\w\-]{1,40}$/.test(id)) throw new Error('題目代號「' + id.slice(0, 20) + '」只能用英文字母、數字、底線');
+                    const q = a.questions[id];
+                    if (!obj(q)) throw new Error(id + ' 要是一個物件');
+                    _onlyKeys(q, ['type', 'instructions', 'criteria'], '每一題');
+                    const type = _str(q.type, 10, id + ' 的題型（type）', /^(boolean|choice|score)$/);
+                    if (!type) throw new Error(id + ' 少了題型（boolean、choice、score）');
+                    const ins = _str(q.instructions, 2000, id + ' 的題目（instructions）');
+                    if (!ins) throw new Error(id + ' 少了題目（instructions）');
+                    const out = { type: type, instructions: ins };
+                    if (q.criteria != null) {
+                        const c = q.criteria;
+                        const list = Array.isArray(c) ? c : (obj(c) ? Object.keys(c) : null);
+                        if (!list || list.length > 30 || JSON.stringify(c).length > 8000) throw new Error(id + ' 的選項（criteria）最多 30 個');
+                        out.criteria = c;
+                    }
+                    questions[id] = out;
+                });
+                return { state: a.state, questions: questions };
+            },
+            async run(a) {
+                const J = win.OS_JEV_CONN;
+                if (!J || !J.ready()) throw new Error('Jev 還沒接（設置 → AI 模型 → 決策模型那三格要填）');
+                const c = J.get();
+                const ctrl = new AbortController();
+                const timer = setTimeout(() => ctrl.abort(), 30000);
+                let res, data = null;
+                try {
+                    res = await fetch(c.url, {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + c.key, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ model: c.model, state: a.state, questions: a.questions }),
+                        signal: ctrl.signal,
+                    });
+                    data = await res.json().catch(() => null);
+                } catch (e) {
+                    throw new Error(ctrl.signal.aborted ? 'Jev 30 秒沒回' : ((e && e.message) || String(e)));
+                } finally { clearTimeout(timer); }
+                const ok = !!(res && res.ok && data && data.answers);
+                try { win.OS_JEV_USAGE && win.OS_JEV_USAGE.add('keyrun', data, ok); } catch (e) {}
+                if (!ok) throw new Error('Jev 沒回答：' + ((data && data.error && (data.error.message || data.error)) || ('HTTP ' + (res ? res.status : '?'))));
+                const gw = data.providerMetadata && data.providerMetadata.gateway;
+                const cost = (gw && typeof gw.cost === 'number') ? { usd: gw.cost } : null;
+                const json = JSON.stringify({ answers: data.answers }, null, 1);
+                return { ok: true, text: '答好了（' + Object.keys(data.answers).length + ' 題）', cost: cost,
+                    files: [{ name: 'answers.json', mime: 'application/json', b64: await _blobB64(new Blob([json], { type: 'application/json' })) }] };
+            },
+            what(a) { return ['問 Jev', Object.keys(a.questions).length + ' 題'].join('・'); },
         },
     };
 
@@ -560,7 +659,7 @@
     function _regHelp() {
         if (!(win.AUI && win.AUI.registerHelp)) return;
         win.AUI.registerHelp({ keyrun: { title: '借接口給電腦上的 AI',
-            body: '打開後，這台電腦上的 AI（像丹）可以請奧瑞亞用妳接好的接口畫圖、念台詞，只拿得到圖和聲音，拿不到金鑰。'
+            body: '打開後，這台電腦上的 AI（像丹）可以請奧瑞亞用妳接好的接口畫圖、念台詞、叫文字模型、問 Jev，只拿得到圖、聲音和模型回的字，拿不到金鑰。叫文字模型照妳「哪件事走哪個模型」那張表走。'
                 + '它要有這次的通行碼才叫得動，時間到或重整頁面就自己關。瀏覽器問要不要讓網頁連到這台裝置，按允許。' } });
     }
     function mount(el) {
