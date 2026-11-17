@@ -2621,104 +2621,94 @@
         catch (e) { console.warn('[LobbyStage] 黑市面板開啟失敗', e); }
     }
 
-    // ── ⚙️ 大廳設置小面板（舞台上，仿裝扮室）──
-    function _closeLobbySettings() { S.setEl?.remove(); S.setEl = null; }
+    // ── ⚙️ 大廳的設定：畫進「設置」窗口的「大廳」那一頁（os_phone/os/os_settings_window.js 叫 mountSettings）──
+    //   11-17 以前是舞台上自己的一個小面板（齒輪開）；三個設置合成一個窗口之後，齒輪改開那個窗口、停在「大廳」。
+    //   分三堆：聲音和動畫／大廳裡的人／書咖。改了就生效，不用保存。說明都收進小問號。零件的樣式（.asw-*）在 css/os_settings_window.css。
     function _openLobbySettings() {
         _closeWins();
-        const useLore = localStorage.getItem('lobby_worldview_use_lorebook') === '1';
-        const seeStory = localStorage.getItem('lobby_npc_see_current_story') === '1';
-        const box = document.createElement('div');
-        box.className = 'lstage-dress lstage-settings';
-        // 2026-11-17 以前這窗有兩個分頁，另一頁「人設 / 世界觀」可以幫瀅瀅、柴郡他們和世界觀各補一段字；她說不太需要了，整頁連同那七份補充都拿掉，只剩選項
-        function renderList() {
-            box.innerHTML =
-                '<div class="lsd-title"><i class="fa-solid fa-gear"></i> 大廳設置</div>' +
-                '<div class="lset-body">' + _optsHtml() + '</div>' +
-                '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
-            _bindOpts();
-        }
-        function _optsHtml() {
-            const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
-            const sfxVol = String(Math.round((window.VoidUiSfx ? window.VoidUiSfx.getVol() : 0.35) * 100));
-            return '<label class="lset-row"><span class="lset-tx">介面音效</span>' +
-                  '<input type="checkbox" class="lset-chk" data-k="uisfx"' + (sfxOn ? ' checked' : '') + '></label>' +
-                '<div class="lset-row"><span class="lset-tx">音效音量</span>' +
-                  '<span class="ltheater-freq' + (sfxOn ? '' : ' off') + '" data-volrow>' +
-                    ['15:小','35:中','60:大'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; return '<button class="ltheater-freq-btn'+(sfxVol===v?' on':'')+'" data-vol="'+v+'">'+t+'</button>'; }).join('') +
-                  '</span></div>' +
-                '<div class="lset-hint">大廳按鈕的點擊、滑過、開關面板提示音。點音量會馬上放一聲給你聽。</div>' +
-                '<label class="lset-row"><span class="lset-tx">演出動畫</span>' +
-                  '<input type="checkbox" class="lset-chk" data-k="revealfx"' + (localStorage.getItem('aurelia_reveal_fx') !== '0' ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">劇情冒出新線索時，線索頁會先拉近、用小卡片講一遍再收進清單（每條只演一次）；電腦上打開故事日誌會先翻開封面，換故事、換書籤時翻一頁。關掉＝都直接出現。</div>' +
-                '<label class="lset-row"><span class="lset-tx">讀取角色卡世界書</span>' +
-                  '<input type="checkbox" class="lset-chk" data-k="lore"' + (useLore ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">預設用大總結摘要的世界觀。勾選＝改讀角色卡的完整世界書（含角色之間的橫向關係，大總結不會寫）。</div>' +
-                '<label class="lset-row"><span class="lset-tx">大廳 NPC 看你當前劇情</span>' +
-                  '<input type="checkbox" class="lset-chk" data-k="story"' + (seeStory ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">預設關（各書隔離）。勾選＝NPC 會知道你在別的故事裡的近況，可能跨書吐槽你 XD。</div>' +
-                '<label class="lset-row"><span class="lset-tx">NPC 小劇場</span>' +
-                  '<input type="checkbox" class="lset-chk" data-k="theater"' + (localStorage.getItem('lobby_theater_on') !== '0' ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">兩個 NPC 偶爾會湊在一起聊天，點頭頂泡泡或右上「小劇場」可以偷聽。</div>' +
-                '<div class="lset-row"><span class="lset-tx">出現頻率</span>' +
-                  '<span class="ltheater-freq' + (localStorage.getItem('lobby_theater_on') === '0' ? ' off' : '') + '" data-freqrow>' +
-                    ['low:低','mid:中','high:高'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_theater_freq')||'mid'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-freq="'+v+'">'+t+'</button>'; }).join('') +
-                  '</span></div>' +
-                '<div class="lset-row"><span class="lset-tx">城市天氣</span>' +
-                  '<span class="ltheater-freq">' +
-                    ['auto:自動','clear:晴','rain:雨','snow:雪'].map(o => { const v=o.split(':')[0], t=o.split(':')[1]; const cur=localStorage.getItem('lobby_weather_v1')||'auto'; return '<button class="ltheater-freq-btn'+(cur===v?' on':'')+'" data-wx="'+v+'">'+t+'</button>'; }).join('') +
-                  '</span></div>' +
-                '<div class="lset-hint">只影響戶外大地圖。自動＝每次進城隨機（晴／雨／雪）。</div>' +
-                '<label class="lset-row"><span class="lset-tx">書咖離線訪客</span>' +
-                  '<input type="checkbox" class="lset-chk" data-k="cafe"' + (localStorage.getItem('cafe_offline_visits') !== '0' ? ' checked' : '') + '></label>' +
-                '<div class="lset-hint">開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請 AI 記一次他的口味）。關閉＝書咖不營業。</div>' +
-                (window.LobbyDecider ? window.LobbyDecider.settingsHtml() : '');   // 🎲 書咖的丹那三格（lobby_decider.js）
-        }
-        function _bindOpts() {
-            box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
-                const k = e.target.dataset.k;
-                if (k === 'lore') {
-                    // 沒存成功就不重掛：重掛會照舊值讀回來，等於白閃一次
-                    if (!AUI.lsSet('lobby_worldview_use_lorebook', e.target.checked ? '1' : '0', '「讀取角色卡世界書」的開關')) return;
-                    _closeLobbySettings();
-                    unmount(); tryMount();
-                } else if (k === 'story') {
-                    AUI.lsSet('lobby_npc_see_current_story', e.target.checked ? '1' : '0', '「大廳 NPC 看你當前劇情」的開關');
-                } else if (k === 'theater') {
-                    AUI.lsSet('lobby_theater_on', e.target.checked ? '1' : '0', '「NPC 小劇場」的開關');
-                    // 灰掉「出現頻率」那列；只寫 .ltheater-freq 會抓到排在前面的音效音量那列
-                    const fr = box.querySelector('[data-freqrow]'); if (fr) fr.classList.toggle('off', !e.target.checked);
-                } else if (k === 'revealfx') {
-                    AUI.lsSet('aurelia_reveal_fx', e.target.checked ? '1' : '0', '「演出動畫」的開關');
-                } else if (k === 'cafe') {
-                    AUI.lsSet('cafe_offline_visits', e.target.checked ? '1' : '0', '「書咖離線訪客」的開關');
-                } else if (k === 'uisfx') {
-                    window.VoidUiSfx?.setOn(e.target.checked);
-                    const vr = box.querySelector('[data-volrow]'); if (vr) vr.classList.toggle('off', !e.target.checked);
-                    if (e.target.checked) window.VoidUiSfx?.play('toggle');
-                }
-            }));
-            window.LobbyDecider?.bindSettings(box);   // 🎲 書咖的丹那三格
-            box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(btn => btn.addEventListener('click', () => {
-                window.VoidUiSfx?.setVol(parseInt(btn.dataset.vol, 10));
-                box.querySelectorAll('.ltheater-freq-btn[data-vol]').forEach(b => b.classList.toggle('on', b === btn));
-                window.VoidUiSfx?.play('click');   // 改完馬上放一聲，不用關掉設置去試
-            }));
-            box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(btn => btn.addEventListener('click', () => {
-                AUI.lsSet('lobby_theater_freq', btn.dataset.freq, '小劇場的出現頻率');
-                box.querySelectorAll('.ltheater-freq-btn[data-freq]').forEach(b => b.classList.toggle('on', b === btn));
-            }));
-            box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(btn => btn.addEventListener('click', () => {
-                AUI.lsSet('lobby_weather_v1', btn.dataset.wx, '城市天氣的設定');
-                _wxSetting = btn.dataset.wx;   // 快取同步→下一幀立即生效
-                S._wxRoll = null;              // 切回自動時重擲
-                box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(b => b.classList.toggle('on', b === btn));
-            }));
-        }
-
-        renderList();
-        S.root.appendChild(box);
-        S.setEl = box;
-        box.addEventListener('click', (e) => { if (e.target.closest('[data-act="close"]')) _closeLobbySettings(); });
+        const W = window.OS_SETTINGS_WINDOW;
+        if (W && W.open) W.open('lobby');
+    }
+    if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
+        lset_sfx: { title: '按鈕的提示音', body: '大廳按鈕的點擊、滑過、開關面板時的提示音。\n\n點「提示音多大聲」會馬上放一聲給你聽。' },
+        lset_reveal: { title: '演出動畫', body: '劇情冒出新線索時，線索頁會先拉近、用小卡片講一遍再收進清單（每條只演一次）；電腦上打開故事日誌會先翻開封面，換故事、換書籤時翻一頁；大廳開大窗口、換地點時畫面會一格一格換。\n\n關掉＝都直接出現。' },
+        lset_weather: { title: '城市天氣', body: '只影響戶外的大地圖。\n\n自動＝每次進城隨機（晴、雨、雪）。' },
+        lset_theater: { title: '小劇場', body: '大廳裡的兩個人偶爾會湊在一起聊天。點他們頭頂的泡泡，或右上角的「小劇場」，可以偷聽。' },
+        lset_story: { title: '他們知道你在別本故事的近況', body: '平常關著：每本故事各管各的。\n\n打開＝大廳裡的人會知道你在別本故事裡的近況，可能拿來吐槽你。' },
+        lset_lore: { title: '讀角色卡的完整世界書', body: '平常用大總結整理出來的世界觀。\n\n打開＝改讀角色卡的完整世界書（裡面有角色之間的關係，大總結不會寫）。\n\n切換後會重新進一次這個地方。' },
+        lset_cafe: { title: '你不在的時候常客會自己來', body: '開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請模型記一次他的口味）。\n\n關掉＝書咖不營業。' },
+    });
+    function mountSettings(box) {
+        const H = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
+        const ls = (k) => localStorage.getItem(k);
+        const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
+        const sfxVol = String(Math.round((window.VoidUiSfx ? window.VoidUiSfx.getVol() : 0.35) * 100));
+        const chk = (k, label, on, help) => '<label class="asw-row"><span class="asw-row-tx">' + label + (help ? H(help) : '') + '</span>' +
+            '<input type="checkbox" class="asw-check" data-k="' + k + '"' + (on ? ' checked' : '') + '></label>';
+        const seg = (label, attr, cur, opts, off, help) => '<div class="asw-row"><span class="asw-row-tx">' + label + (help ? H(help) : '') + '</span>' +
+            '<span class="asw-seg' + (off ? ' is-off' : '') + '" data-segrow="' + attr + '">' +
+            opts.map(o => '<button type="button" class="asw-seg-btn' + (cur === o[0] ? ' is-on' : '') + '" data-' + attr + '="' + o[0] + '">' + o[1] + '</button>').join('') +
+            '</span></div>';
+        const group = (title, rows, late) => '<section class="asw-group' + (late ? ' asw-late' : '') + '"><h3 class="asw-group-title">' + title + '</h3>' + rows + '</section>';
+        box.innerHTML = '<div class="asw-cols">' +
+            '<div class="asw-col">' +
+              group('聲音和動畫',
+                chk('uisfx', '按鈕的提示音', sfxOn, 'lset_sfx') +
+                seg('提示音多大聲', 'vol', sfxVol, [['15', '小'], ['35', '中'], ['60', '大']], !sfxOn) +
+                chk('revealfx', '演出動畫', ls('aurelia_reveal_fx') !== '0', 'lset_reveal') +
+                seg('城市天氣', 'wx', ls('lobby_weather_v1') || 'auto', [['auto', '自動'], ['clear', '晴'], ['rain', '雨'], ['snow', '雪']], false, 'lset_weather')) +
+              group('書咖',
+                chk('cafe', '你不在的時候常客會自己來', ls('cafe_offline_visits') !== '0', 'lset_cafe') +
+                (window.LobbyDecider ? window.LobbyDecider.settingsHtml() : ''), true) +   // 🎲 店員自己決定去哪那三格（lobby_decider.js）；true＝手機一欄時排在「大廳裡的人」後面
+            '</div>' +
+            '<div class="asw-col">' +
+              group('大廳裡的人',
+                chk('theater', '兩個人湊在一起聊天（小劇場）', ls('lobby_theater_on') !== '0', 'lset_theater') +
+                seg('多常出現', 'freq', ls('lobby_theater_freq') || 'mid', [['low', '少'], ['mid', '中'], ['high', '多']], ls('lobby_theater_on') === '0') +
+                chk('story', '他們知道你在別本故事的近況', ls('lobby_npc_see_current_story') === '1', 'lset_story') +
+                chk('lore', '讀角色卡的完整世界書', ls('lobby_worldview_use_lorebook') === '1', 'lset_lore')) +
+              '<div class="asw-note"><b class="asw-note-title">這頁改了就生效</b>不用按保存。關掉窗口就回到剛才的地方。</div>' +
+            '</div>' +
+          '</div>';
+        const segOff = (attr, off) => { const r = box.querySelector('[data-segrow="' + attr + '"]'); if (r) r.classList.toggle('is-off', off); };
+        const segPick = (attr, btn) => box.querySelectorAll('.asw-seg-btn[data-' + attr + ']').forEach(b => b.classList.toggle('is-on', b === btn));
+        box.querySelectorAll('.asw-check[data-k]').forEach(chkEl => chkEl.addEventListener('change', (e) => {
+            const k = e.target.dataset.k, on = e.target.checked;
+            if (k === 'lore') {
+                // 沒存成功就不重掛：重掛會照舊值讀回來，等於白閃一次
+                if (!AUI.lsSet('lobby_worldview_use_lorebook', on ? '1' : '0', '「讀角色卡的完整世界書」的開關')) return;
+                if (S.active) { unmount(); tryMount(); }
+            } else if (k === 'story') {
+                AUI.lsSet('lobby_npc_see_current_story', on ? '1' : '0', '「他們知道你在別本故事的近況」的開關');
+            } else if (k === 'theater') {
+                AUI.lsSet('lobby_theater_on', on ? '1' : '0', '「小劇場」的開關');
+                segOff('freq', !on);
+            } else if (k === 'revealfx') {
+                AUI.lsSet('aurelia_reveal_fx', on ? '1' : '0', '「演出動畫」的開關');
+            } else if (k === 'cafe') {
+                AUI.lsSet('cafe_offline_visits', on ? '1' : '0', '「你不在的時候常客會自己來」的開關');
+            } else if (k === 'uisfx') {
+                window.VoidUiSfx?.setOn(on);
+                segOff('vol', !on);
+                if (on) window.VoidUiSfx?.play('toggle');
+            }
+        }));
+        window.LobbyDecider?.bindSettings(box);   // 🎲 店員自己決定去哪那三格
+        box.querySelectorAll('.asw-seg-btn[data-vol]').forEach(btn => btn.addEventListener('click', () => {
+            window.VoidUiSfx?.setVol(parseInt(btn.dataset.vol, 10));
+            segPick('vol', btn);
+            window.VoidUiSfx?.play('click');   // 改完馬上放一聲，不用關掉設置去試
+        }));
+        box.querySelectorAll('.asw-seg-btn[data-freq]').forEach(btn => btn.addEventListener('click', () => {
+            AUI.lsSet('lobby_theater_freq', btn.dataset.freq, '小劇場多常出現');
+            segPick('freq', btn);
+        }));
+        box.querySelectorAll('.asw-seg-btn[data-wx]').forEach(btn => btn.addEventListener('click', () => {
+            AUI.lsSet('lobby_weather_v1', btn.dataset.wx, '城市天氣的設定');
+            _wxSetting = btn.dataset.wx;   // 快取同步→下一幀立即生效
+            S._wxRoll = null;              // 切回自動時重擲
+            segPick('wx', btn);
+        }));
     }
 
     // ── 掛載/卸載 ─────────────────────────────────────────
@@ -2732,7 +2722,7 @@
         root.innerHTML = '<div class="lstage-world">' +
             '<img class="lstage-map" src="' + (SCENES[S.scene].dynamic ? ((S.dyn && S.dyn.base) || '') : (CDN + _sceneBase(SCENES[S.scene]))) + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
             '<div class="lstage-click"></div></div>' +
-            '<button class="lstage-set-btn" title="大廳設置"><i class="fa-solid fa-gear"></i></button>' +
+            '<button class="lstage-set-btn" title="設置"><i class="fa-solid fa-gear"></i></button>' +
             '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
             '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-badge"></span></button>' +
             // 🏙 快轉地圖：每個走得到的場景都要有（404 進出走完整轉場流程，見 _openCityMap 的 jump）
@@ -3190,7 +3180,7 @@
     // ── 🔌 拆檔橋＋窗口互斥登記制 ──
     //    子模組（lobby_theater.js…）經 window.LobbyStage._b 借核心狀態/工具，載入順序=lobby_stage 先。
     //    各小窗把自己的 close 函式 regWin() 進互斥圈；誰要開窗先 closeWins() 全關（含自己的舊窗）。
-    const _winClosers = [_closeLobbySettings, _closeStorePanel];   // 裝扮室三小窗在 lobby_dress.js 自己 regWin
+    const _winClosers = [_closeStorePanel];   // 裝扮室三小窗在 lobby_dress.js 自己 regWin
     function _regWin(fn) { _winClosers.push(fn); return fn; }
     function _unregWin(fn) { const i = _winClosers.indexOf(fn); if (i >= 0) _winClosers.splice(i, 1); }
     // 每開一次就登記一次的窗（快轉地圖、占卜、工坊、點家具開的面板）走這支：收掉時順手退出互斥圈、只收一次。
@@ -3205,6 +3195,7 @@
 
     window.LobbyStage = {
         tryMount, unmount,
+        mountSettings,                      // ⚙️ 「設置」窗口的「大廳」那一頁（os_settings_window.js 叫）
         enter404Stage, exit404Stage,
         enterRoom,                          // 🏠 走進一間房（房產／公寓那條線用）
         isActive: () => S.active,
@@ -3259,7 +3250,7 @@
             // 給 lobby_decider.js（自己決定下一步的 NPC）：找路走路、放置小人、面向、設置頁重進場景
             findFreeSpot, blockedPath, slideMove: _slideMove, isNightNow: _isNightNow,
             placeNpcExtras, npcNearCheck: _npcNearCheck, WALK_FRAMES, WALK_FRAME_MS,
-            remount: () => { _closeLobbySettings(); unmount(); tryMount(); },
+            remount: () => { unmount(); tryMount(); },
             // 給 lobby_npcs.js（NPC 生成/名冊）：素材表/生NPC/碰撞判定/站位開闊度採樣
             ASSET, addNpc, blocked, whiteRatio: _whiteRatio,
             startTalk,   // 給 os_worldgate.js（旅人偶遇窗「隨便聊聊」退回自由對話軌道）

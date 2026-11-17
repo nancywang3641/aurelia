@@ -46,7 +46,7 @@
     };
 
     // 大廳 tab 之外，只多放行章節選擇面板 —— 它是 VN 層的全屏 overlay，不在大廳 tab 裡
-    const ROOT_SEL = '#aurelia-home-tab, #chapter-overlay';
+    const ROOT_SEL = '#aurelia-home-tab, #chapter-overlay, .asw-root';   // .asw-root＝「設置」窗口（大廳的設定搬進去了，開關照樣有聲）
 
     // 點擊規則：由上往下比對，第一個命中的勝
     const CLICK_RULES = [
@@ -55,7 +55,7 @@
         ['[data-act="back"], .lb-back-btn', 'cancel'],
         ['#iris-send-btn, #iris-retry-btn, [data-act="save"], .lep-done, .hist-edit-confirm-btn', 'confirm'],
         ['.danger, #hist-clear-btn, #ach-clear-btn, #hist-del-sel', 'error'],
-        ['#lobby-bgm-toggle, #lstage-toggle, #aurelia-fullscreen-btn, .achv2-tab, .ltheater-freq-btn, .lset-chk, .hist-edit-cancel-btn', 'toggle'],
+        ['#lobby-bgm-toggle, #lstage-toggle, #aurelia-fullscreen-btn, .achv2-tab, .asw-nav-item, .asw-seg-btn, .asw-check, .hist-edit-cancel-btn', 'toggle'],
         ['.lb-dock-btn, .lstage-set-btn, .lstage-edit-btn, .lstage-theater-btn, .lstage-city-btn, #lb-top-user, #iris-hist-btn, #cheshire-hist-btn, [data-app-launch], [data-os-launch], [data-proxy], .void-btn, .void-hist-btn, .lb-icon-btn, .hist-icon-btn, .hist-action-btn, .lep-btn, .lb-persona-item', 'click'],
     ];
     const HOVER_SEL = '.lb-dock-btn, .lb-icon-btn, .lstage-set-btn, .lstage-edit-btn, .lstage-theater-btn, .lstage-city-btn, .void-hist-btn, .void-btn, .achv2-tab';

@@ -1,0 +1,111 @@
+/* ═══════════════════════════════════════════════════════════════════
+   「設置」窗口（os_phone/os/os_settings_window.js，2026-11-17）
+   三個設置合成的那一個窗：大廳齒輪、劇情設置鈕、手機「設置」圖示都開它。
+   白底藍字跟大廳同一套（墨色 #23315e、強調 #2f5fc4），不跟手機主題的顏色——所以把 --os-* 整組換掉，
+   搬進來的系統設置頁（css/os_settings.css 那些 .set-*）吃到的就是這一組。
+   兩種排法由 JS 的 fit() 掛 class：
+     .asw-float＝開的那一格夠大：浮在中間、四邊留空、左邊一排分類、右上 ✕；後面 .asw-scrim.asw-on 壓暗
+     .asw-full ＝手機寬：鋪滿，最上面共用的標題列（.sysh：返回＋「設置」），下面一排分類
+   ═══════════════════════════════════════════════════════════════════ */
+.asw-root {
+    --asw-ink: #23315e; --asw-ink-rgb: 35, 49, 94; --asw-sub: #5a678c; --asw-accent: #2f5fc4; --asw-accent-rgb: 47, 95, 196;
+    --asw-line: rgba(35, 49, 94, 0.14); --asw-side: #f3f6fc; --asw-card: #ffffff; --asw-warn-bg: #fdf0d5; --asw-warn-ink: #8a5a00;
+    --os-ink: #23315e; --os-ink-rgb: 35, 49, 94; --os-ink-soft: #5a678c; --os-ink-dim: rgba(35, 49, 94, 0.72);
+    --os-tint-rgb: 243, 246, 252; --os-surface: #ffffff; --os-page-bg: #ffffff;
+    --os-accent: #2f5fc4; --os-accent-strong: #2f5fc4; --os-accent-glow: rgba(47, 95, 196, 0.30); --os-on-accent: #ffffff;
+    --os-danger: #c0392b; --os-line: rgba(35, 49, 94, 0.15); --os-hover: rgba(35, 49, 94, 0.08);
+    --os-chrome-bg: #ffffff; --os-chrome-tabs-bg: #ffffff;
+    position: fixed; inset: 0; z-index: 2147481900;
+    display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box;
+    background: var(--asw-card); color: var(--asw-ink); color-scheme: light;
+    font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 14px; line-height: 1.5; text-align: left;
+}
+.asw-root *, .asw-root *::before, .asw-root *::after { box-sizing: border-box; }
+.asw-root [hidden] { display: none !important; }
+/* 開在奧瑞亞主窗口那一格裡：跟著那一格的大小。層級要高過裡面的相簿(50)、劇情(51)、劇情抽取窗(1001)，
+   還有大廳舞台那些浮鈕、右邊那排入口（3000～9990，它們跟這個窗在同一層比大小） */
+.asw-root.asw-in-screen { position: absolute; z-index: 20001; }
+.asw-scrim { position: fixed; inset: 0; z-index: 2147481899; background: rgba(18, 26, 52, 0.48); display: none; }
+.asw-scrim.asw-in-screen { position: absolute; z-index: 20000; }
+.asw-scrim.asw-on { display: block; }
+
+.asw-frame { flex: 1; min-height: 0; display: flex; }
+.asw-main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.asw-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.asw-body::-webkit-scrollbar { width: 6px; }
+.asw-body::-webkit-scrollbar-thumb { background: rgba(var(--asw-ink-rgb), 0.18); border-radius: 3px; }
+
+/* ── 浮窗（電腦）── */
+.asw-root.asw-float {
+    inset: 0; margin: auto; width: min(1080px, calc(100% - 96px)); height: min(760px, calc(100% - 80px));
+    border-radius: 18px; box-shadow: 0 24px 70px rgba(18, 26, 52, 0.35);
+}
+.asw-root.asw-float > .asw-top { display: none; }   /* 共用標題列寫的是 .sysh.sysh（兩層），這裡要三層才蓋得過 */
+.asw-float .asw-side { flex: 0 0 220px; display: flex; flex-direction: column; gap: 14px; padding: 22px 14px; background: var(--asw-side); border-right: 1px solid var(--asw-line); overflow-y: auto; }
+.asw-side-title { display: flex; align-items: center; gap: 10px; padding: 4px 10px 6px; font-size: 18px; font-weight: 800; letter-spacing: 3px; color: var(--asw-ink); }
+.asw-side-title i { font-size: 16px; color: var(--asw-accent); }
+.asw-float .asw-nav { display: flex; flex-direction: column; gap: 4px; }
+.asw-nav-item {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; border: none; background: none; cursor: pointer;
+    font: inherit; color: var(--asw-ink); text-align: left; -webkit-tap-highlight-color: transparent;
+}
+.asw-float .asw-nav-item { min-height: 40px; padding: 8px 12px; border-radius: 9px; font-size: 14px; }
+.asw-float .asw-nav-item:hover { background: rgba(var(--asw-ink-rgb), 0.07); }
+.asw-float .asw-nav-item.is-on { background: var(--asw-ink); color: #fff; font-weight: 700; }
+.asw-float .asw-nav-short { display: none; }
+/* 分類旁邊的小牌子（例：AI 模型還沒接） */
+.asw-nav-tag { flex: 0 0 auto; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.6; background: var(--asw-warn-bg); color: var(--asw-warn-ink); }
+.asw-float .asw-head { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 24px 32px 10px; }
+.asw-title { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: 1px; color: var(--asw-ink); }
+.asw-x {
+    flex: 0 0 auto; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; padding: 0;
+    border: 1px solid var(--asw-line); border-radius: 10px; background: var(--asw-card); color: var(--asw-ink); font-size: 16px; cursor: pointer;
+}
+.asw-x:hover { border-color: var(--asw-ink); }
+.asw-float .asw-page { padding: 8px 32px 28px; }
+
+/* ── 鋪滿（手機寬）── */
+.asw-full .asw-side-title, .asw-full .asw-head { display: none; }
+.asw-full .asw-frame { flex-direction: column; }
+.asw-full .asw-side { flex: 0 0 auto; border-bottom: 1px solid var(--asw-line); background: var(--asw-card); }
+/* 七個分類平分一排：每格最少也放得下兩個字，340px 不捲、不切字 */
+.asw-full .asw-nav { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 0 6px; }
+.asw-full .asw-nav-item { position: relative; justify-content: center; padding: 11px 0 10px; font-size: 13px; color: var(--asw-sub); white-space: nowrap; }
+.asw-full .asw-nav-item.is-on { color: var(--asw-accent); font-weight: 800; }
+.asw-full .asw-nav-item.is-on::after { content: ''; position: absolute; left: 18%; right: 18%; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--asw-accent); }
+.asw-full .asw-nav-long, .asw-full .asw-nav-tag { display: none; }
+.asw-full .asw-page { padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+
+/* ── 頁面裡共用的零件（大廳頁、劇情頁、總覽頁都用這幾樣，各頁長一樣）── */
+.asw-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 44px; align-items: start; }
+/* 手機一欄：兩欄拆開照「畫面上的順序」排（.asw-late 的那一堆排到後面），不是先排完左欄再排右欄 */
+.asw-full .asw-cols { display: flex; flex-direction: column; align-items: stretch; gap: 22px; }
+.asw-full .asw-col { display: contents; }
+.asw-full .asw-late { order: 2; }
+.asw-full .asw-note { order: 3; }
+.asw-col { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.asw-group { display: flex; flex-direction: column; min-width: 0; }
+.asw-group-title { margin: 0 0 4px; font-size: 13px; font-weight: 800; letter-spacing: 1px; color: var(--asw-ink); }
+.asw-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 46px; padding: 6px 0; margin: 0; color: var(--asw-ink); font-size: 14px; }
+label.asw-row { cursor: pointer; }
+.asw-row-tx { min-width: 0; display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.asw-row-tx > .aui-help { color: var(--asw-sub); }
+.asw-check { flex: 0 0 auto; width: 20px; height: 20px; margin: 0; cursor: pointer; accent-color: var(--asw-accent); }
+/* 幾選一的小按鈕（小／中／大、自動／晴／雨／雪） */
+.asw-seg { flex: 0 0 auto; display: inline-flex; gap: 6px; }
+.asw-seg.is-off { opacity: 0.4; pointer-events: none; }
+.asw-seg-btn {
+    min-width: 40px; height: 34px; padding: 0 10px; margin: 0; border: 1px solid rgba(var(--asw-ink-rgb), 0.22); border-radius: 9px;
+    background: var(--asw-card); color: var(--asw-sub); font: inherit; font-size: 13px; cursor: pointer;
+}
+.asw-seg-btn:hover { border-color: var(--asw-ink); }
+.asw-seg-btn.is-on { background: var(--asw-ink); border-color: var(--asw-ink); color: #fff; font-weight: 700; }
+.asw-num-wrap { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 8px; color: var(--asw-sub); font-size: 13px; }
+.asw-num {
+    width: 72px; height: 34px; padding: 0 10px; margin: 0; border: 1px solid rgba(var(--asw-ink-rgb), 0.22); border-radius: 9px;
+    background: var(--asw-card); color: var(--asw-ink); font: inherit; font-size: 14px; text-align: right;
+}
+.asw-num:focus { outline: none; border-color: var(--asw-accent); }
+/* 淡藍底的小說明（「這頁改了就生效」） */
+.asw-note { padding: 14px 16px; border-radius: 12px; background: var(--asw-side); color: var(--asw-sub); font-size: 13px; line-height: 1.6; }
+.asw-note-title { display: block; margin-bottom: 2px; color: var(--asw-ink); font-weight: 800; }

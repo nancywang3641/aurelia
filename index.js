@@ -165,6 +165,7 @@ const PHONE_FILES = [
     'os/os_settings_page.js', // 🧾 設置頁整頁的 HTML 範本（2026-11-17 自 os_settings.js 拆出；參數注入 ctx，launchApp 開頁時才呼叫）
     'os/os_settings_backup.js', // 💾 設置頁「備份」分頁的按鈕（2026-11-17 自 os_settings.js 拆出）
     'os/os_settings_comfyui.js', // 🧩 ComfyUI 直連設定（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
+    'os/os_settings_window.js', // ⚙️ 「設置」窗口：系統設置、大廳設置、劇情設定合成的那一個窗（大廳齒輪／劇情設置鈕／手機「設置」圖示都開它）
     'os/os_settings_voice.js', // 🎵 語音清單：Minimax 音色檔案卡＋官方音色庫＋測試播放（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
     'os/os_db.js',
     'os/os_zh_fold.js',     // 簡繁折成同一把鑰匙（只比對不顯示）：記憶的人名、約定的標題
@@ -534,6 +535,7 @@ async function initializeExtension() {
 
         // os_phone/os 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings_window.css');   // 「設置」窗口
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_keyrun.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_phone_theme.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_control_room.css');

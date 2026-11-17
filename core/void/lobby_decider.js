@@ -1,7 +1,7 @@
 // [檔案] lobby_decider.js — 大廳裡「自己決定下一步」的 NPC（2026-09-23 自 lobby_stage.js 拆出）
 // 職責：書咖的丹（帶 decider:true 的 NPC）站著倒數，時間到就問 NPC_DECIDE（npc_decide.js）接下來做什麼，
 //       照答案挑一個目的地、找路走過去；小劇場抓到他就走去對方旁邊；她跟他說話時給一行「他此刻在店裡的狀況」；
-//       大廳設置→選項最下面那三格也在這裡。
+//       「設置」窗口→大廳→書咖那一堆的後三格也在這裡。
 // 拆出來的原因：她要這塊能整支拿掉。拿掉這支檔，大廳照常，丹回到以前那樣站著不動
 //   （lobby_stage 裡只剩「有 LobbyDecider 就交給它」那幾行，全部是 ?. 呼叫）。
 // 靠 LobbyStage._b 拆檔橋借核心狀態與工具 → 載入順序必須排在 lobby_stage.js 後面。
@@ -275,26 +275,26 @@
         _b.placeActor(n); _b.placeNpcExtras(n); _b.npcNearCheck(n);
     }
 
-    // ── 大廳設置→選項最下面三格（lobby_stage 的設置頁有這支才畫、才綁）──
+    // ── 「設置」窗口→大廳→書咖那一堆的後三格（lobby_stage 的 mountSettings 有這支才畫、才綁；零件樣式 .asw-* 在 css/os_settings_window.css）──
     const _help = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
     if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
-        lset_npcdec: { title: '書咖的丹自己決定去哪', body: '打開以後，每次進書咖丹都會在，而且會自己走動：站一會兒就決定下一步，可能走去書櫃、走到桌子旁、走過來找你、在店裡晃，或待在原地；待滿五分鐘後也可能離開書咖。\n\n關掉就跟以前一樣，偶爾出現、站著不動。\n\n他用決策模型（Jev 那種）決定下一步，一次不到台幣 0.001 元，要先在設置→API→決策模型設好。多久想一次照下面那格填的分鐘數。\n\n你 5 分鐘沒碰滑鼠、鍵盤或螢幕，他就停在原地不想；一碰就繼續。視窗縮小或切走時也不想。\n\n切換後會重新進一次這個地方。' },
-        lset_npcfb: { title: 'Jev 不能用時改問副模型', body: '決策模型沒設好、額度用完（例如你在 Vercel 設的每月上限到了，或 Jev 漲價用得比較快）、或那一次 Jev 沒回應時：\n\n打開＝丹改問你的副模型，照樣會走。每一次都是一通正常的副模型呼叫，算在你副模型那邊的帳上。\n\n關掉＝丹就站在原地，照「多久想一次」的時間之後再試 Jev，不會花副模型的錢。\n\n這格只存在這台裝置上。' },
+        lset_npcdec: { title: '店員自己決定去哪', body: '打開以後，每次進書咖丹都會在，而且會自己走動：站一會兒就決定下一步，可能走去書櫃、走到桌子旁、走過來找你、在店裡晃，或待在原地；待滿五分鐘後也可能離開書咖。\n\n關掉就跟以前一樣，偶爾出現、站著不動。\n\n他用決策模型決定下一步，一次不到台幣 0.001 元，要先在設置→AI 模型→決策模型設好。多久想一次照下面那格填的分鐘數。\n\n你 5 分鐘沒碰滑鼠、鍵盤或螢幕，他就停在原地不想；一碰就繼續。視窗縮小或切走時也不想。\n\n切換後會重新進一次這個地方。' },
+        lset_npcfb: { title: '決策模型不能用時改問副模型', body: '決策模型沒設好、額度用完（例如你設的每月上限到了）、或那一次沒回應時：\n\n打開＝丹改問你的副模型，照樣會走。每一次都是一通正常的副模型呼叫，算在你副模型那邊的帳上。\n\n關掉＝丹就站在原地，照「多久想一次」的時間之後再試，不會花副模型的錢。\n\n這格只存在這台裝置上。' },
     });
     function settingsHtml() {
         const ND = window.NPC_DECIDE;
-        return '<label class="lset-row"><span class="lset-tx">書咖的丹自己決定去哪' + _help('lset_npcdec') + '</span>' +
-              '<input type="checkbox" class="lset-chk lset-npcdec" data-k="npcdec"' + (_decOn() ? ' checked' : '') + '></label>' +
-            '<label class="lset-row"><span class="lset-tx">Jev 不能用時改問副模型' + _help('lset_npcfb') + '</span>' +
-              '<input type="checkbox" class="lset-chk lset-npcfb" data-k="npcfb"' + (!ND || ND.getFallback() ? ' checked' : '') + '></label>' +
-            '<div class="lset-row"><span class="lset-tx">多久想一次下一步</span>' +
-              '<span class="lset-numwrap"><input type="number" class="lset-num" inputmode="numeric" min="' + DEC_MINS_MIN + '" max="' + DEC_MINS_MAX + '" step="1" value="' + _decMins() + '">' +
-              '<span class="lset-unit">分鐘</span></span></div>';
+        return '<label class="asw-row"><span class="asw-row-tx">店員自己決定去哪' + _help('lset_npcdec') + '</span>' +
+              '<input type="checkbox" class="asw-check lset-npcdec"' + (_decOn() ? ' checked' : '') + '></label>' +
+            '<label class="asw-row"><span class="asw-row-tx">決策模型不能用時改問副模型' + _help('lset_npcfb') + '</span>' +
+              '<input type="checkbox" class="asw-check lset-npcfb"' + (!ND || ND.getFallback() ? ' checked' : '') + '></label>' +
+            '<div class="asw-row"><span class="asw-row-tx">多久想一次下一步</span>' +
+              '<span class="asw-num-wrap"><input type="number" class="asw-num lset-num" inputmode="numeric" min="' + DEC_MINS_MIN + '" max="' + DEC_MINS_MAX + '" step="1" value="' + _decMins() + '">' +
+              '<span>分鐘</span></span></div>';
     }
     function bindSettings(box) {
         box.querySelector('.lset-npcdec')?.addEventListener('change', (e) => {
             // 沒存成功就不重掛：重掛照舊值讀回來，等於白閃一次
-            if (!window.AUI.lsSet('npc_decide_on', e.target.checked ? '1' : '0', '「書咖的丹自己決定去哪」的開關')) return;
+            if (!window.AUI.lsSet('npc_decide_on', e.target.checked ? '1' : '0', '「店員自己決定去哪」的開關')) return;
             if (S.scene === 'cafe') _b.remount();
         });
         box.querySelector('.lset-npcfb')?.addEventListener('change', (e) => { window.NPC_DECIDE?.setFallback(e.target.checked); });
@@ -317,6 +317,6 @@
         // 小劇場凍人前問：這個人要不要例外（不凍，交給 step 走過去找對方）
         exemptFromFreeze: (n) => !!(n && n.decider && _decOn()),
         talkCtx: _decTalkCtx,       // void_terminal 組人設時帶
-        settingsHtml, bindSettings, // lobby_stage 的大廳設置→選項
+        settingsHtml, bindSettings, // lobby_stage 的 mountSettings（「設置」窗口的大廳頁）
     };
 })();
