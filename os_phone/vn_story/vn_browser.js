@@ -474,7 +474,25 @@
 
         // 底圖：世界的概念圖；沒有就拿 SN 畫的第一張
         _pvBase: function (pv) { return pv ? String(pv.art || ((pv.imgs || []).find(Boolean)) || '') : ''; },
-        _pvSetImg: function (img, src) { img.style.setProperty('--br-vart', 'url("' + String(src).replace(/["\\\n\r]/g, m => '\\' + m) + '")'); },
+        // 🚨 圖走 CSS 變數（--br-vart）：Chrome 的 var() 超過約 2MB 就整個不算數 → 沒圖、整片黑（#296：潮痕港的概念圖 2.4MB 的 data URL）。
+        //   大張的 data URL 先轉成 blob: 短網址再放進去；同一張只轉一次，最多留 8 張（一支片最多五張圖）
+        _pvUrl: function (src) {
+            src = String(src || '');
+            if (src.indexOf('data:') !== 0 || src.length < 500000) return src;
+            const C = this._pvBlobs || (this._pvBlobs = new Map());
+            if (C.has(src)) return C.get(src);
+            try {
+                const cut = src.indexOf(','), meta = src.slice(5, cut), body = src.slice(cut + 1);
+                const bin = /;base64/i.test(meta) ? atob(body) : decodeURIComponent(body);
+                const arr = new Uint8Array(bin.length);
+                for (let k = 0; k < bin.length; k++) arr[k] = bin.charCodeAt(k);
+                const url = URL.createObjectURL(new Blob([arr], { type: meta.split(';')[0] || 'image/png' }));
+                C.set(src, url);
+                while (C.size > 8) { const k0 = C.keys().next().value; try { URL.revokeObjectURL(C.get(k0)); } catch (e) {} C.delete(k0); }
+                return url;
+            } catch (e) { return src; }
+        },
+        _pvSetImg: function (img, src) { img.style.setProperty('--br-vart', 'url("' + this._pvUrl(src).replace(/["\\\n\r]/g, m => '\\' + m) + '")'); },
         // 播一次：畫面照時間算（不靠動畫排程，預覽窗 rAF 慢也不亂）；一次只播一支，新的開始舊的就停
         //   SN 收尾畫過畫面的（pv.imgs）一句換一張，沒畫到的那句、片名用底圖
         //   同一個時鐘可以同時畫好幾格（卡片那格＋轉橫那格 st.views），轉過去、轉回來都接得上
