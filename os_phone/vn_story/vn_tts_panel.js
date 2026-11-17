@@ -1474,9 +1474,11 @@ const VN_TTS_Panel = {
         tts.unlockNpcVoice(charName);
         this._renderBody('chars');
     },
-    clearCardLocks() {
+    async clearCardLocks() {
         const tts = this._tts();
         if (!tts || typeof tts.clearCardLocks !== 'function') return;
+        // 清空類一律再問一次（小斐 11-17 新玩家檢查第 7 條）
+        if (!await AUI.confirm('清空這張卡的 NPC 聲線鎖？\n鎖住的路人會重新分配聲音。')) return;
         tts.clearCardLocks();
         this._toast('✓ 已清空本卡 NPC 聲線鎖');
         this._renderBody('chars');

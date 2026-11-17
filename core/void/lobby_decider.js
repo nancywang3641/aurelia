@@ -179,7 +179,11 @@
         window.NPC_DECIDE.decide(_decState(n, D), _decActions(n, D))
             .then(r => { if (S.scene === scene && S.npcs.indexOf(n) >= 0 && !D.chatWith) _decApply(n, D, r); })   // 問到一半被小劇場抓走→這次答案作廢
             // 沒決定成（Jev 沒回應又關了副模型頂替、或副模型也失敗）→ 站著，照她填的時間之後再試
-            .catch(e => { console.warn('[NPC決策] 這次沒決定成', e); D.waitT = _decMins() * 60000; })
+            .catch(e => {
+                // 還沒接模型不算出錯（npc_decide 根本沒叫），不往控制台訊息頁丟一串英文
+                if (!(e && e.message === '還沒接模型')) console.warn('[NPC決策] 這次沒決定成', e);
+                D.waitT = _decMins() * 60000;
+            })
             .finally(() => { D.busy = false; });
     }
     // 跟他說話時帶一行「他此刻在店裡的狀況」：不帶的話，他自己走到她旁邊、她一開口，他會當成是她來找他；

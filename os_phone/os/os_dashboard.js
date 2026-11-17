@@ -485,7 +485,7 @@
         }
         html += _sec('最近十四天') + spark +
             '<div class="dsh-actions"><span class="dsh-note">點柱子看那一天</span><span class="sp"></span>' +
-            '<button class="dsh-btn" id="dsh-clear-usage">清空所有用量紀錄</button></div>' +
+            '<button class="dsh-btn warn" id="dsh-clear-usage">清空所有用量紀錄</button></div>' +
             '<div class="dsh-actions dsh-dev"><span class="dsh-note">除錯訊息（程式的英文紀錄，找丹修東西時才需要）</span><span class="sp"></span>' +
             '<button class="dsh-btn" id="dsh-dev-toggle">' + (_devOn() ? '收起「訊息」頁' : '打開「訊息」頁') + '</button></div>';
 
@@ -724,7 +724,13 @@
                 return;
             }
             const cl = e.target.closest ? e.target.closest('#dsh-clear-msgs') : null;
-            if (cl) { MSGS.length = 0; _render(); }
+            if (cl) {
+                // 清空類一律紅色＋再問一次（小斐 11-17 新玩家檢查第 7 條）
+                _confirm('把這頁的訊息全部清掉？清掉就看不到了，要給丹看錯誤的話先按「複製這頁」。').then(function (ok) {
+                    if (!ok) return;
+                    MSGS.length = 0; _render();
+                });
+            }
         };
     }
 
