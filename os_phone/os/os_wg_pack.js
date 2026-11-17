@@ -69,16 +69,21 @@
             '換 PT：交給白兔先生收購。到交易所的「戰利品估值」按一下，他估好價就入帳。\n\n' +
             '不帶：就留在那個世界。\n\n' +
             '同行旅人按「留聯絡」：回奧瑞亞後他會在聊天 app 的通訊錄裡，可以傳訊息給他。\n\n' +
-            '全部不選也可以直接出發。' } });
+            '全部不選也可以直接出發。\n\n' +
+            '走之前要收的事：列的是這個世界還開著的線索、還沒赴的約定。勾著「收尾」的，回程那一章主角會先親手做完才離開；不想管的點成「不用」。底下那格可以自己補，一行一件。\n\n' +
+            '要好幾天才辦得完的事，按「再待一下」，先在劇情裡玩完再撤離。' } });
         return A.helpBtn('wg_pack');
     }
 
-    // 回程行李頁。opts：{ world, items:[{name,desc,look}], travelers:[旅人物件] }
-    //   回 Promise：出發＝{ items:[{name,desc,look,mode:'keep'|'pt'}], contacts:[旅人物件] }；再待一下＝null
+    // 回程行李頁。opts：{ world, items:[{name,desc,look}], travelers:[旅人物件], pending:[{kind:'thread'|'plan', text}] }
+    //   回 Promise：出發＝{ items:[{name,desc,look,mode:'keep'|'pt'}], contacts:[旅人物件], todo:[要先收的事] }；再待一下＝null
+    //   pending＝這個世界還開著的線索、還沒赴的約定（#297：回程章寫「突然有急事要走」把事丟下；她 11-07 說好先盤點給她看）
     function open(opts) {
         const o = opts || {};
         const items = (o.items || []).filter(x => x && x.name);
         const trav = (o.travelers || []).filter(t => t && t.name);
+        const pend = (o.pending || []).filter(x => x && x.text);
+        const take = pend.map(() => true);
         d.getElementById('wgpk')?.remove();
         const mode = items.map(() => '');
         const keep = trav.map(() => false);
@@ -105,6 +110,13 @@
                   '<button type="button" class="wgpk-tog" aria-pressed="false"><i class="fa-regular fa-address-book"></i>留聯絡</button>' +
                 '</div>').join('')
             : '<div class="wgpk-empty">這一趟沒有同行旅人。</div>';
+        // 走之前要收的事：勾著的回程章會點名、讓主角親手做完再走；不想收的點掉。底下一格可以自己補
+        const todoRows = pend.map((x, i) =>
+            '<div class="wgpk-row todo" data-p="' + i + '">' +
+              '<span class="wgpk-thumb"><i class="fa-solid ' + (x.kind === 'plan' ? 'fa-calendar-day' : 'fa-thumbtack') + '"></i></span>' +
+              '<div class="wgpk-tx"><b>' + _esc(x.text) + '</b></div>' +
+              '<button type="button" class="wgpk-tog on" aria-pressed="true"><i class="fa-solid fa-check"></i>收尾</button>' +
+            '</div>').join('');
         ov.innerHTML =
             '<div class="wgpk-paper" role="dialog" aria-label="回程行李">' +
               '<div class="wgpk-hd">' +
@@ -117,6 +129,9 @@
                 itemRows +
                 '<div class="wgpk-sec"><span>同行旅人</span></div>' +
                 travRows +
+                '<div class="wgpk-sec"><span>走之前要收的事</span>' + (pend.length ? '<em>' + pend.length + ' 件還開著</em>' : '') + '</div>' +
+                todoRows +
+                '<textarea class="wgpk-todo" rows="2" aria-label="自己補要收的事"></textarea>' +
               '</div>' +
               '<div class="wgpk-ft">' +
                 '<button type="button" class="wgpk-btn ghost" data-k="stay">再待一下</button>' +
@@ -140,6 +155,16 @@
                 b.classList.toggle('on', keep[i]);
                 b.setAttribute('aria-pressed', keep[i] ? 'true' : 'false');
                 b.innerHTML = keep[i] ? '<i class="fa-solid fa-check"></i>留聯絡' : '<i class="fa-regular fa-address-book"></i>留聯絡';
+            });
+        });
+        ov.querySelectorAll('.wgpk-row[data-p]').forEach(row => {
+            const i = +row.dataset.p;
+            const b = row.querySelector('.wgpk-tog');
+            b.addEventListener('click', () => {
+                take[i] = !take[i];
+                b.classList.toggle('on', take[i]);
+                b.setAttribute('aria-pressed', take[i] ? 'true' : 'false');
+                b.innerHTML = take[i] ? '<i class="fa-solid fa-check"></i>收尾' : '不用';
             });
         });
         // 圖慢慢補上：道具圖、旅人頭像都只讀已經有的，沒有就維持圖示／名字第一個字
@@ -168,6 +193,8 @@
             ov.querySelector('[data-k="go"]').addEventListener('click', () => finish({
                 items: items.map((it, i) => Object.assign({}, it, { mode: mode[i] })).filter(it => it.mode),
                 contacts: trav.filter((t, i) => keep[i]),
+                todo: pend.filter((x, i) => take[i]).map(x => x.text)
+                    .concat(String(ov.querySelector('.wgpk-todo').value || '').split(/\n+/).map(t => t.trim()).filter(Boolean)),
             }));
         });
     }

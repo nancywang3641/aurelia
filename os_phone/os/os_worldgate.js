@@ -4320,7 +4320,7 @@
         if (from && P && P.open) {
             let items = [];
             try { items = await _tripItems(from); } catch (e) {}
-            pack = await P.open({ world: from.name, items, travelers: (from.travelers || []).filter(t => t && t.recruited && !t.gone && !t.home) });
+            pack = await P.open({ world: from.name, items, travelers: (from.travelers || []).filter(t => t && t.recruited && !t.gone && !t.home), pending: await _tripPending(from) });
             if (!pack) return { ok: false, stay: true, msg: '先不撤離，想走再按一次撤離' };
         }
         const r = await _gate()?.exitParallax?.();
@@ -4342,6 +4342,22 @@
         if (sent === 'stuck') return { ok: true, back: sent, msg: '已返回主世界，但回程指令送不出去（還沒設定 AI？）。內容留在輸入框，設定好再按送出就接得上。' };
         const why = { noapi: '還沒設定 AI', busy: '劇情那邊正在寫上一段', nofield: _pwa() ? '劇情畫面打不開' : '找不到酒館輸入框' };
         return { ok: true, back: sent, msg: '已返回主世界，回程這一章沒送出去（' + (why[sent] || why.nofield) + '），下一章照常玩就好' };
+    }
+    // 🧳 走之前要收的事（#297，11-07 她說好的：「看看哪些東西沒收尾，比如線索和日程有沒有遺留」）：
+    //   這一趟還沒赴的約定＋線索帳裡在這個世界開著的線（記帳時記了在哪個世界；沒記地方的舊線不列，認不出是哪裡的）。
+    //   回程行李頁列給她勾，勾著的進回程章點名。回 [{ kind:'plan'|'thread', text }]
+    async function _tripPending(w) {
+        const out = [];
+        try { (await _tripPlans(w)).forEach(x => out.push({ kind: 'plan', text: x.text })); } catch (e) {}
+        try {
+            const T = win.OS_STORY_THREADS || window.OS_STORY_THREADS;
+            const s = (T && T.snapshot) ? await T.snapshot() : null;
+            const zk = v => { try { const Z = win.OS_ZH || window.OS_ZH; if (Z && Z.key) return Z.key(String(v || '')); } catch (e) {} return String(v || '').replace(/\s/g, ''); };
+            const here = zk(w.name);
+            ((s && s.open) || []).filter(r => (r.places || []).some(p => zk(p) === here))
+                .forEach(r => out.push({ kind: 'thread', text: String(r.label || '') + (r.fact ? '：' + String(r.fact) : '') }));
+        } catch (e) {}
+        return out.slice(0, 12);
     }
     // 📅 這一趟在那個世界裡約好、還沒赴的約定（劇情寫進日曆的那種；她自己記的、聊天 app 說好的、委託卡不算）。
     //   11-06 她說「好，收掉」：撤離後那個世界的約定還掛在主角狀態「近期約定」，回奧瑞亞每輪都送給模型。
@@ -4435,8 +4451,15 @@
         //   開頭兩句就把人傳送到大廳。現在從世界檔案把那句抄過來，三段都要演：在世界裡交代、照它的方式離開 → 回大廳的過程 → 大廳、下線
         const way = _exitWay(w);
         const plans = (left || []).map(x => String((x && x.text) || '').trim()).filter(Boolean);
+        // 她在回程行李頁勾著、自己補的「走之前要收的事」（#297：她 11-07 刪章、在指令寫「請收尾：…再安心撤離」才演對，這裡照那個做）
+        const todo = pack && Array.isArray(pack.todo) ? pack.todo.map(t => String(t || '').trim()).filter(Boolean) : null;
+        //   她勾了要主角去做的約定，就不再列進「赴不了、跟對方說一聲」那條（同一件兩條指令會打架）
+        if (todo && todo.length) for (let i = plans.length - 1; i >= 0; i--) if (todo.indexOf(plans[i]) >= 0) plans.splice(i, 1);
         const rules = [
             '這一章是回程,從主角還在「' + w.name + '」寫起,照順序寫完三段,每一段都要演出來,不要開場就已經人在大廳、也不要一兩句就換場:(一)在「' + w.name + '」把事情交代完、照這個世界的方式離開;(二)離開那一刻到回到純白大廳;(三)在純白大廳結算、跟旅人分開,最後下線,意識回到奧瑞亞城裡自己的身體醒來為止。這一章之後劇情在奧瑞亞接著走,不再接著寫「' + w.name + '」。',
+            '(一)接著上一章正在發生的事寫下去:上一章主角手上正在做、還沒做完的事,主角親手做完、親眼看到結果才走。' +
+                (todo && todo.length ? '玩家要主角走之前先收完這些:「' + todo.join('」「') + '」;一件一件演出來,做完再離開。' : '') +
+                '不准寫成主角突然有急事、臨時被叫走,也不准把事情交給別人處理就先走;要等的就照實寫等的過程。',
             (plans.length
                 ? '(一)走之前先把在「' + w.name + '」還沒了的事交代掉。這些約定主角赴不了了,系統已經記成取消:「' + plans.join('」「') + '」;一件一件當面跟對方說一聲、留話或託人轉告,其他答應過的人也一樣。'
                 : '(一)走之前先把在「' + w.name + '」還沒了的事交代掉:答應過的人、主角狀態「近期約定」裡還沒赴的約,一件一件當面說一聲、留話或託人轉告。') +
