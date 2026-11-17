@@ -5,6 +5,7 @@
 //       VN劇情裡的那個設置按鈕也能打開設置窗口?」。版面照 Claude Design 那份（本機 tmp/settings_window_design）。
 // 這支只管殼：開關、左邊（手機是上面）那排分類、哪個分類畫哪一頁。每一頁的內容由原本管那些設定的檔案畫進來：
 //       大廳＝LobbyStage.mountSettings(box)（core/void/lobby_stage.js）。
+//       劇情→畫面與聲音＝VN_Settings.mountInto(box)（os_phone/vn_story/vn_panels.js；劇情右上「設定」鈕開的就是這頁）。
 //       AI 模型／圖片／語音／備份與系統＋劇情底下的面板、素材資料夾、記得多少章、外語角色、後台
 //         ＝原本的系統設置頁整頁掛進來（OS_SETTINGS.launchApp，一個窗只掛一次），它自己那排主分頁和標題列藏起來，
 //           由這裡的分類去按它對應的那一顆（.set-tab[data-tab]／.gen-subtab[data-gentab]）。
@@ -31,10 +32,11 @@
         { id: 'img', name: '圖片', short: '圖片', sys: 'img' },
         { id: 'voice', name: '語音', short: '語音', sys: 'voice' },
         { id: 'story', name: '劇情', short: '劇情', subs: [
-            { id: 'panel', name: '面板', sys: 'vn', gen: 'panel', only: 'st' },
+            { id: 'view', name: '畫面與聲音', mount: function (box) { const V = win.VN_Settings || window.VN_Settings; if (V && V.mountInto) return V.mountInto(box); box.textContent = '劇情還沒載入完整，請重新整理一次。'; } },
             { id: 'asset', name: '素材資料夾', sys: 'vn', gen: 'asset' },
             { id: 'ctx', name: '記得多少章', sys: 'vn', gen: 'ctx' },
             { id: 'foreign', name: '外語角色', sys: 'vn', gen: 'foreign' },
+            { id: 'panel', name: '面板', sys: 'vn', gen: 'panel', only: 'st' },
             { id: 'back', name: '後台', sys: 'vn', gen: 'back', only: 'pwa' },
         ] },
         { id: 'lobby', name: '大廳', short: '大廳', mount: function (box) { const L = win.LobbyStage || window.LobbyStage; if (L && L.mountSettings) return L.mountSettings(box); box.textContent = '大廳還沒載入完整，請重新整理一次。'; } },

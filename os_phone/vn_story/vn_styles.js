@@ -410,42 +410,7 @@
                 <!-- 第三方插件 HTML block 展示層 -->
                 <div id="html-block-overlay" style="display:none;"></div>
 
-                <div id="game-settings-overlay">
-                    <div id="game-settings-window">
-                        <div id="gs-titlebar">
-                            <span class="gs-title">設定</span>
-                            <button class="gs-close" onclick="window.VN_PLAYER.closeGameSettings()">✕</button>
-                        </div>
-                        <div id="gs-body">
-                            <div class="gs-section-title"><i class="fa-solid fa-gear"></i> 基礎設置</div>
-                            <div class="gs-row"><span class="gs-label">字體大小</span><input type="range" class="gs-slider" id="gs-font-size" min="12" max="24" value="19" oninput="window.VN_Settings.applyFontSize(this.value)"><span class="gs-val" id="gs-font-size-val">19px</span></div>
-                            <div class="gs-row"><span class="gs-label">打字速度</span><input type="range" class="gs-slider" id="gs-tw-speed" min="10" max="100" value="30" oninput="window.VN_Settings.applyTwSpeed(this.value)"><span class="gs-val" id="gs-tw-speed-val">30ms</span></div>
-                            <div class="gs-row"><span class="gs-label">彈幕速度</span><input type="range" class="gs-slider" id="gs-danmu-speed" min="6" max="30" value="18" oninput="window.VN_Settings.applyDanmuSpeed(this.value)"><span class="gs-val" id="gs-danmu-speed-val">18s</span></div>
-                            <div class="gs-row"><span class="gs-label">BGM 音量</span><input type="range" class="gs-slider" id="gs-bgm-vol" min="0" max="100" value="10" oninput="window.VN_Settings.applyBgmVol(this.value)"><span class="gs-val" id="gs-bgm-vol-val">10%</span></div>
-                            <div class="gs-row"><span class="gs-label">音效音量</span><input type="range" class="gs-slider" id="gs-sfx-vol" min="0" max="100" value="50" oninput="window.VN_Settings.applySfxVol(this.value)"><span class="gs-val" id="gs-sfx-vol-val">50%</span></div>
-                            <div class="gs-row"><span class="gs-label">語音音量</span><input type="range" class="gs-slider" id="gs-tts-vol" min="0" max="100" value="80" oninput="window.VN_Settings.applyTtsVol(this.value)"><span class="gs-val" id="gs-tts-vol-val">80%</span></div>
-                            <hr class="gs-divider">
-                            <!-- 🌍 世界題材快捷（取代原本「開啟應用」那顆鈕）：內容由 VN_Settings.renderWorldQuick 畫 -->
-                            <div class="gs-section-title"><i class="fa-solid fa-earth-asia"></i> 世界題材</div>
-                            <div class="gs-chips" id="gs-world-themes"></div>
-                            <div class="gs-sub">BGM</div>
-                            <div class="gs-chips" id="gs-world-bgm"></div>
-                            <div class="gs-sub">音效增補</div>
-                            <div class="gs-chips" id="gs-world-sfx"></div>
-                            <div class="gs-world-note" id="gs-world-note"></div>
-                            <hr class="gs-divider">
-                            <div class="gs-section-title"><i class="fa-solid fa-puzzle-piece"></i> 內建格式<button type="button" class="aui-help" data-help="vn_builtin" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
-                            <div class="gs-chips" id="gs-builtin"></div>
-                            <hr class="gs-divider">
-                            <div class="gs-section-title"><i class="fa-solid fa-palette"></i> 字體顏色設置</div>
-                            <div class="gs-color-row"><span class="gs-color-label">文章字體顏色</span><input type="color" class="gs-color-input" id="gs-text-color" value="#dcd8d0" oninput="window.VN_Settings.applyTextColor(this.value)"></div>
-                            <div class="gs-color-row"><span class="gs-color-label">內心獨白顏色</span><input type="color" class="gs-color-input" id="gs-inner-color" value="#d4af37" oninput="window.VN_Settings.applyInnerColor(this.value)"></div>
-                            <div class="gs-color-row"><span class="gs-color-label">名稱標籤字體顏色</span><input type="color" class="gs-color-input" id="gs-name-color" value="#d4af37" oninput="window.VN_Settings.applyNameColor(this.value)"></div>
-                            <hr class="gs-divider">
-                            <button class="gs-reset-btn" onclick="window.VN_Settings.resetColors()">重置為默認顏色</button>
-                        </div>
-                    </div>
-                </div>
+                <!-- ⚙ 設定窗（#game-settings-overlay）11-17 拿掉了：右上「設定」鈕改開「設置」窗口的「劇情→畫面與聲音」（VN_Settings.mountInto，vn_panels.js） -->
             </div>
 
             <div id="chapter-overlay">

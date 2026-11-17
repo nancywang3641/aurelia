@@ -94,36 +94,54 @@
 
     /* =========================================
        ⚙ 遊戲內設定
+       11-17 起畫面搬進「設置」窗口的「劇情→畫面與聲音」（os_phone/os/os_settings_window.js 叫 mountInto）；
+       以前劇情畫面裡自己有一個黑金的設定窗（#game-settings-overlay），拿掉了。劇情右上「設定」鈕改開那個窗口。
+       欄位的 id（gs-*）沒變，所以 _syncUI／apply*／renderWorldQuick 照舊認得；零件的樣式（.asw-*）在 css/os_settings_window.css。
+       這頁在大廳也開得到（沒進劇情）：那時畫面上沒有台詞框，所有「當場套用」都要先看元素在不在。
        ========================================= */
     const VN_Settings = {
         defaults: { fontSize: 19, twSpeed: 30, danmuSpeed: 18, bgmVolume: 10, sfxVolume: 50, ttsVolume: 80, textColor: '#dddddd', innerColor: '#c9aaff', nameColor: '#d4af37' },
         data: {},
         load: function() { const saved = localStorage.getItem('vn_game_settings'); this.data = saved ? { ...this.defaults, ...JSON.parse(saved) } : { ...this.defaults }; this._syncUI(); this._applyAll(); },
+        // 還沒進過劇情（load 沒跑過）就開設置：先把存檔讀進來，別拿空的蓋掉存檔
+        ensure: function() {
+            if (this.data && this.data.fontSize != null) return;
+            try { const s = localStorage.getItem('vn_game_settings'); this.data = s ? { ...this.defaults, ...JSON.parse(s) } : { ...this.defaults }; }
+            catch (e) { this.data = { ...this.defaults }; }
+        },
         save: function() { return win.AUI.lsSet('vn_game_settings', JSON.stringify(this.data), '遊戲內設定'); },
         // 🔊 語音面板（VN_TTS_Panel）那顆音量也寫進這裡：語音音量以這份為準，每次開 VN 都拿它蓋回本機語音的設定，
         //    以前語音面板只改自己那份，下次開 VN 就被這裡的舊值蓋掉。這份還沒讀過（沒開過 VN）就先從存檔讀，別拿空的蓋存檔
         syncTtsVolume: function(vol) {
-            if (!this.data || this.data.ttsVolume == null) {
-                try { const s = localStorage.getItem('vn_game_settings'); this.data = s ? { ...this.defaults, ...JSON.parse(s) } : { ...this.defaults }; }
-                catch (e) { this.data = { ...this.defaults }; }
-            }
+            if (!this.data || this.data.ttsVolume == null) this.ensure();
             this.data.ttsVolume = Math.round(Math.max(0, Math.min(1, Number(vol) || 0)) * 100);
             win._vnTtsVolume = this.data.ttsVolume / 100;
             return this.save();
         },
+        // 滑桿旁邊那個字：大小寫數字、音量寫百分比、速度寫快／中／慢（存的是「一個字隔幾毫秒」「飄過去要幾秒」，數字小＝快）
+        _valText: function(k, v) {
+            v = parseInt(v, 10);
+            if (k === 'twSpeed') return v <= 20 ? '快' : (v <= 45 ? '中' : '慢');
+            if (k === 'danmuSpeed') return v <= 12 ? '快' : (v <= 22 ? '中' : '慢');
+            if (k === 'fontSize') return String(v);
+            return v + '%';
+        },
+        _setVal: function(id, k, v) { const el = document.getElementById(id); if (el) el.textContent = this._valText(k, v); },
         _syncUI: function() {
             const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-            const setText = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
-            set('gs-font-size', this.data.fontSize);   setText('gs-font-size-val', this.data.fontSize + 'px');
-            set('gs-tw-speed',  this.data.twSpeed);    setText('gs-tw-speed-val',  this.data.twSpeed  + 'ms');
-            set('gs-danmu-speed', this.data.danmuSpeed); setText('gs-danmu-speed-val', this.data.danmuSpeed + 's');
-            set('gs-bgm-vol',   this.data.bgmVolume);  setText('gs-bgm-vol-val',   this.data.bgmVolume + '%');
-            set('gs-sfx-vol',   this.data.sfxVolume);  setText('gs-sfx-vol-val',   this.data.sfxVolume + '%');
-            set('gs-tts-vol',   this.data.ttsVolume);  setText('gs-tts-vol-val',   this.data.ttsVolume + '%');
+            set('gs-font-size', this.data.fontSize);     this._setVal('gs-font-size-val', 'fontSize', this.data.fontSize);
+            set('gs-tw-speed',  this.data.twSpeed);      this._setVal('gs-tw-speed-val', 'twSpeed', this.data.twSpeed);
+            set('gs-danmu-speed', this.data.danmuSpeed); this._setVal('gs-danmu-speed-val', 'danmuSpeed', this.data.danmuSpeed);
+            set('gs-bgm-vol',   this.data.bgmVolume);    this._setVal('gs-bgm-vol-val', 'bgmVolume', this.data.bgmVolume);
+            set('gs-sfx-vol',   this.data.sfxVolume);    this._setVal('gs-sfx-vol-val', 'sfxVolume', this.data.sfxVolume);
+            set('gs-tts-vol',   this.data.ttsVolume);    this._setVal('gs-tts-vol-val', 'ttsVolume', this.data.ttsVolume);
             set('gs-text-color',  this.data.textColor); set('gs-inner-color', this.data.innerColor); set('gs-name-color',  this.data.nameColor);
+            this._previewFont(this.data.fontSize);
         },
         _applyAll: function() { this._applyFontSize(this.data.fontSize); this._applyTwSpeed(this.data.twSpeed); this._applyDanmuSpeed(this.data.danmuSpeed); this._applyBgmVol(this.data.bgmVolume); this._applyTtsVol(this.data.ttsVolume); this._applyColors(); },
-        _applyFontSize: function(v) { document.getElementById('dialogue-text').style.fontSize = v + 'px'; },
+        // 設置窗口裡那句預覽台詞跟著字的大小變（窗口蓋住劇情，調的時候看不到真的台詞框）
+        _previewFont: function(v) { document.querySelectorAll('.asw-vnpv-text').forEach(el => { el.style.fontSize = parseInt(v, 10) + 'px'; }); },
+        _applyFontSize: function(v) { const dt = document.getElementById('dialogue-text'); if (dt) dt.style.fontSize = v + 'px'; this._previewFont(v); },
         // VN_Core 在運行期已載入（vn_core.js 後於本檔），透過 window 取
         _applyTwSpeed: function(v) { if (window.VN_Core) window.VN_Core._twSpeed = parseInt(v); },
         _applyDanmuSpeed: function(v) { if (window.VN_Core) window.VN_Core._danmuSpeed = parseInt(v); },
@@ -158,16 +176,75 @@
             if (dt) dt.style.color = '';
             if (sn) sn.style.color = '';
         },
-        applyFontSize: function(v) { this.data.fontSize = parseInt(v); document.getElementById('gs-font-size-val').textContent = v + 'px'; this._applyFontSize(v); this.save(); },
-        applyTwSpeed: function(v) { this.data.twSpeed = parseInt(v); document.getElementById('gs-tw-speed-val').textContent = v + 'ms'; this._applyTwSpeed(v); this.save(); },
-        applyDanmuSpeed: function(v) { this.data.danmuSpeed = parseInt(v); document.getElementById('gs-danmu-speed-val').textContent = v + 's'; this._applyDanmuSpeed(v); this.save(); },
-        applyBgmVol: function(v) { this.data.bgmVolume = parseInt(v); document.getElementById('gs-bgm-vol-val').textContent = v + '%'; this._applyBgmVol(v); this.save(); },
-        applySfxVol: function(v) { this.data.sfxVolume = parseInt(v); document.getElementById('gs-sfx-vol-val').textContent = v + '%'; this.save(); },
-        applyTtsVol: function(v) { this.data.ttsVolume = parseInt(v); document.getElementById('gs-tts-vol-val').textContent = v + '%'; this._applyTtsVol(v); this.save(); },
+        applyFontSize: function(v) { this.data.fontSize = parseInt(v); this._setVal('gs-font-size-val', 'fontSize', v); this._applyFontSize(v); this.save(); },
+        applyTwSpeed: function(v) { this.data.twSpeed = parseInt(v); this._setVal('gs-tw-speed-val', 'twSpeed', v); this._applyTwSpeed(v); this.save(); },
+        applyDanmuSpeed: function(v) { this.data.danmuSpeed = parseInt(v); this._setVal('gs-danmu-speed-val', 'danmuSpeed', v); this._applyDanmuSpeed(v); this.save(); },
+        applyBgmVol: function(v) { this.data.bgmVolume = parseInt(v); this._setVal('gs-bgm-vol-val', 'bgmVolume', v); this._applyBgmVol(v); this.save(); },
+        applySfxVol: function(v) { this.data.sfxVolume = parseInt(v); this._setVal('gs-sfx-vol-val', 'sfxVolume', v); this.save(); },
+        applyTtsVol: function(v) { this.data.ttsVolume = parseInt(v); this._setVal('gs-tts-vol-val', 'ttsVolume', v); this._applyTtsVol(v); this.save(); },
         applyTextColor: function(v) { this.data.textColor = v; this._applyColors(); this.save(); },
         applyInnerColor: function(v) { this.data.innerColor = v; this._applyColors(); this.save(); },
         applyNameColor: function(v) { this.data.nameColor = v; this._applyColors(); this.save(); },
-        resetColors: function() { this.data.textColor = this.defaults.textColor; this.data.innerColor = this.defaults.innerColor; this.data.nameColor = this.defaults.nameColor; document.getElementById('gs-text-color').value = this.data.textColor; document.getElementById('gs-inner-color').value = this.data.innerColor; document.getElementById('gs-name-color').value = this.data.nameColor; this._applyColors(); this.save(); },
+        resetColors: function() {
+            this.data.textColor = this.defaults.textColor; this.data.innerColor = this.defaults.innerColor; this.data.nameColor = this.defaults.nameColor;
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            set('gs-text-color', this.data.textColor); set('gs-inner-color', this.data.innerColor); set('gs-name-color', this.data.nameColor);
+            this._applyColors(); this.save();
+        },
+
+        // 🪟 畫進「設置」窗口的「劇情→畫面與聲音」。最上面一句預覽台詞：拉字的大小、改顏色時它跟著變。拉了就存、當場生效。
+        mountInto: function(box) {
+            const H = (k) => (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn(k) : '';
+            const slide = (label, id, min, max, flip) => '<div class="asw-row asw-row-slide"><span class="asw-row-tx">' + label + '</span>' +
+                '<input type="range" class="asw-range" id="' + id + '" min="' + min + '" max="' + max + '"' + (flip ? ' dir="rtl"' : '') + ' aria-label="' + label + '">' +
+                '<span class="asw-val" id="' + id + '-val"></span></div>';
+            const color = (label, id) => '<label class="asw-color"><input type="color" class="asw-color-in" id="' + id + '"><span>' + label + '</span></label>';
+            const chips = (label, id, help) => '<div class="asw-chiprow"><span class="asw-chiprow-tx">' + label + (help ? H(help) : '') + '</span><div class="asw-chips" id="' + id + '"></div></div>';
+            box.innerHTML =
+                '<div class="asw-vnpv">' +
+                  '<div class="asw-vnpv-cap">調的時候看這裡，就是劇情裡的樣子</div>' +
+                  '<div class="asw-vnpv-name">愛麗絲</div>' +
+                  '<div class="asw-vnpv-text">「歡迎回來。」<em>（她今天看起來心情不錯。）</em></div>' +
+                '</div>' +
+                '<div class="asw-cols">' +
+                  '<div class="asw-col">' +
+                    '<section class="asw-group"><h3 class="asw-group-title">字</h3>' +
+                      slide('字的大小', 'gs-font-size', 12, 24) +
+                      // 這兩格存的是「隔多久」，數字小＝快；滑桿反過來擺，往右＝快
+                      slide('出字速度', 'gs-tw-speed', 10, 100, true) +
+                      slide('彈幕速度', 'gs-danmu-speed', 6, 30, true) +
+                      '<div class="asw-row"><span class="asw-row-tx">顏色</span><span class="asw-colors">' +
+                        color('台詞', 'gs-text-color') + color('心聲', 'gs-inner-color') + color('名字', 'gs-name-color') + '</span></div>' +
+                      '<div class="asw-row asw-row-end"><button type="button" class="asw-btn" data-vnset="reset-colors">顏色改回原本的</button></div>' +
+                    '</section>' +
+                    '<div class="asw-note"><b class="asw-note-title">拉了就生效</b>不用按保存。關掉窗口就回到剛才那一句。</div>' +
+                  '</div>' +
+                  '<div class="asw-col">' +
+                    '<section class="asw-group"><h3 class="asw-group-title">聲音</h3>' +
+                      slide('背景音樂', 'gs-bgm-vol', 0, 100) +
+                      slide('音效', 'gs-sfx-vol', 0, 100) +
+                      slide('角色語音', 'gs-tts-vol', 0, 100) +
+                    '</section>' +
+                    '<section class="asw-group"><h3 class="asw-group-title">這個世界</h3>' +
+                      chips('題材', 'gs-world-themes') +
+                      chips('音樂', 'gs-world-bgm') +
+                      chips('音效增補', 'gs-world-sfx') +
+                      '<div class="asw-hint" id="gs-world-note"></div>' +
+                      chips('內建格式', 'gs-builtin', 'vn_builtin') +
+                    '</section>' +
+                  '</div>' +
+                '</div>';
+            this.ensure();
+            this._applyColors();   // 預覽那句的顏色吃的是整頁的 --text-color／--em-color／--name-color；沒進過劇情時還沒設過
+            this._syncUI();
+            this.renderWorldQuick();
+            const on = (id, fn) => { const el = box.querySelector('#' + id); if (el) el.addEventListener('input', () => fn.call(this, el.value)); };
+            on('gs-font-size', this.applyFontSize); on('gs-tw-speed', this.applyTwSpeed); on('gs-danmu-speed', this.applyDanmuSpeed);
+            on('gs-bgm-vol', this.applyBgmVol); on('gs-sfx-vol', this.applySfxVol); on('gs-tts-vol', this.applyTtsVol);
+            on('gs-text-color', this.applyTextColor); on('gs-inner-color', this.applyInnerColor); on('gs-name-color', this.applyNameColor);
+            const rst = box.querySelector('[data-vnset="reset-colors"]');
+            if (rst) rst.addEventListener('click', () => this.resetColors());
+        },
 
         // 🌍 世界題材／BGM／音效增補快捷（取代原本「開啟應用」那顆鈕，Rae 2026-09-16）
         //   開關狀態全在 OS_VN_RULES（手機格式跟著 BGM 走也在那邊），這裡只負責畫與轉發點擊
@@ -178,12 +255,12 @@
             const note = document.getElementById('gs-world-note');
             if (!boxT || !boxB || !boxS) return;
             const VR = win.OS_VN_RULES || window.OS_VN_RULES;
-            if (!VR || !VR.quickState) { boxT.textContent = '還沒準備好，稍後再打開一次設定'; boxB.textContent = ''; boxS.textContent = ''; return; }
+            if (!VR || !VR.quickState) { boxT.textContent = '還沒準備好，稍後再打開一次設置'; boxB.textContent = ''; boxS.textContent = ''; return; }
             const st = VR.quickState();
             const chip = (label, on, fn) => {
                 const b = document.createElement('button');
                 b.type = 'button';
-                b.className = 'gs-chip' + (on ? ' on' : '');
+                b.className = 'asw-chip' + (on ? ' is-on' : '');
                 b.textContent = label;
                 b.onclick = () => { try { fn(); } catch (e) { console.warn('[VN設定] 世界題材切換失敗', e); } this.renderWorldQuick(); };
                 return b;
@@ -191,7 +268,7 @@
             boxT.replaceChildren(...st.themes.map(t => chip(t.label, st.theme === t.key, () => VR.setTheme(t.key))));
             boxB.replaceChildren(...st.bgm.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
             boxS.replaceChildren(...st.sfx.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
-            if (note) note.textContent = st.phoneAutoOff ? '手機格式已自動關閉（BGM 沒開現代一般）' : '';
+            if (note) { note.textContent = st.phoneAutoOff ? '手機格式已自動關閉（音樂沒開「現代一般」）' : ''; note.hidden = !st.phoneAutoOff; }
             // 🧩 內建格式：手機格式、直播彈幕、戰鬥、主角狀態，一個一個開關
             const boxI = document.getElementById('gs-builtin');
             if (boxI && VR.builtinState) boxI.replaceChildren(...VR.builtinState().map(x => chip(x.label, x.on, () => VR.setBuiltin(x.key, !x.on))));
@@ -204,8 +281,13 @@
         if (_A && _A.registerHelp) _A.registerHelp({ vn_builtin: { title: '內建格式', body: '寫死在 VN 指令裡的幾種格式，只能開關。\n手機格式：劇情裡的通話和手機聊天。\n直播彈幕：畫面上飄過的彈幕。\n戰鬥：打起來時交給系統擲骰。\n主角狀態：左上的日期、HP、狀態效果；關掉就不記也不顯示，之前的資料留著。' } });
     } catch (e) {}
 
-    function openGameSettings() { VN_Settings._syncUI(); VN_Settings.renderWorldQuick(); document.getElementById('game-settings-overlay').classList.add('active'); }
-    function closeGameSettings() { document.getElementById('game-settings-overlay').classList.remove('active'); }
+    // 劇情右上的「設定」鈕、章末面板的設定鍵：開「設置」窗口、停在「劇情→畫面與聲音」。窗口蓋在劇情上面，關掉就回到剛才那一句
+    function openGameSettings() {
+        const W = win.OS_SETTINGS_WINDOW || window.OS_SETTINGS_WINDOW;
+        if (W && W.open) W.open('story', { sub: 'view' });
+        else { try { (win.AUI || window.AUI).toast('設置還沒載入完整，請重新整理一次', { type: 'warn' }); } catch (e) {} }
+    }
+    function closeGameSettings() { const W = win.OS_SETTINGS_WINDOW || window.OS_SETTINGS_WINDOW; if (W && W.close) W.close(); }
 
     /* =========================================
        📱 聊天背景面板

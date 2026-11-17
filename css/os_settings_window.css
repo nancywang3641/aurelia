@@ -81,6 +81,8 @@
 .asw-subtabs::-webkit-scrollbar { display: none; }
 .asw-float .asw-subtabs { margin: 0 32px; }
 .asw-full .asw-subtabs { padding: 0 6px; }
+/* 手機寬：五個小分頁平分一排、字小一號，340px 也整排看得到（「畫面與聲音／素材資料夾／記得多少章／外語角色／後台」共 20 個字） */
+.asw-full .asw-subtab { flex: 1 1 auto; padding: 10px 4px; font-size: 12px; text-align: center; }
 .asw-subtab {
     position: relative; flex: 0 0 auto; margin: 0; padding: 10px 12px; border: none; background: none; cursor: pointer;
     font: inherit; font-size: 13px; color: var(--asw-sub); white-space: nowrap; -webkit-tap-highlight-color: transparent;
@@ -136,6 +138,52 @@ label.asw-row { cursor: pointer; }
     background: var(--asw-card); color: var(--asw-ink); font: inherit; font-size: 14px; text-align: right;
 }
 .asw-num:focus { outline: none; border-color: var(--asw-accent); }
+/* 滑桿列：名字固定寬、滑桿撐滿、右邊一個小字（大小／快中慢／百分比） */
+.asw-row-slide { gap: 14px; }
+.asw-row-slide .asw-row-tx { flex: 0 0 5em; }
+.asw-range { flex: 1 1 auto; min-width: 0; height: 22px; margin: 0; padding: 0; background: none; cursor: pointer; accent-color: var(--asw-accent); -webkit-appearance: none; appearance: none; }
+.asw-range::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: rgba(var(--asw-ink-rgb), 0.16); }
+.asw-range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -6px; border-radius: 50%; border: 2px solid #fff; background: var(--asw-accent); box-shadow: 0 1px 4px rgba(var(--asw-ink-rgb), 0.35); }
+.asw-range::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(var(--asw-ink-rgb), 0.16); }
+.asw-range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #fff; background: var(--asw-accent); box-shadow: 0 1px 4px rgba(var(--asw-ink-rgb), 0.35); }
+.asw-val { flex: 0 0 2.6em; text-align: right; color: var(--asw-accent); font-size: 13px; font-variant-numeric: tabular-nums; }
+/* 顏色：一格色塊＋名字，三個排一列 */
+.asw-colors { flex: 0 1 auto; display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px 14px; }
+.asw-color { display: inline-flex; align-items: center; gap: 6px; color: var(--asw-sub); font-size: 13px; cursor: pointer; }
+.asw-color-in { width: 26px; height: 26px; padding: 0; margin: 0; border: 1px solid rgba(var(--asw-ink-rgb), 0.3); border-radius: 6px; background: none; cursor: pointer; -webkit-appearance: none; appearance: none; }
+.asw-color-in::-webkit-color-swatch-wrapper { padding: 2px; }
+.asw-color-in::-webkit-color-swatch { border: none; border-radius: 3px; }
+.asw-color-in::-moz-color-swatch { border: none; border-radius: 3px; }
+.asw-row-end { justify-content: flex-end; min-height: 0; padding-top: 2px; }
+/* 一般的小按鈕（白底藍框）和主要按鈕（藍底） */
+.asw-btn {
+    min-height: 36px; padding: 0 14px; margin: 0; border: 1px solid rgba(var(--asw-accent-rgb), 0.55); border-radius: 9px;
+    background: var(--asw-card); color: var(--asw-accent); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.asw-btn:hover { border-color: var(--asw-accent); background: rgba(var(--asw-accent-rgb), 0.06); }
+.asw-btn.is-main { background: var(--asw-accent); border-color: var(--asw-accent); color: #fff; }
+.asw-btn.is-main:hover { background: #2853ad; }
+/* 一排可以點亮的小籤（題材、音樂、內建格式）：名字在上、小籤在下 */
+.asw-chiprow { display: flex; flex-direction: column; gap: 6px; padding: 8px 0; }
+.asw-chiprow-tx { display: inline-flex; align-items: center; gap: 4px; color: var(--asw-ink); font-size: 14px; }
+.asw-chiprow-tx > .aui-help { color: var(--asw-sub); }
+.asw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.asw-chip {
+    min-height: 32px; padding: 0 12px; margin: 0; border: 1px solid rgba(var(--asw-ink-rgb), 0.22); border-radius: 999px;
+    background: var(--asw-card); color: var(--asw-sub); font: inherit; font-size: 13px; cursor: pointer;
+}
+.asw-chip:hover { border-color: var(--asw-ink); }
+.asw-chip.is-on { background: var(--asw-ink); border-color: var(--asw-ink); color: #fff; font-weight: 700; }
+.asw-hint { color: var(--asw-sub); font-size: 12px; line-height: 1.6; }
+
+/* ── 劇情→畫面與聲音最上面那句預覽台詞：深色底（劇情的對話框是深色的），名字、台詞、心聲的顏色和字的大小跟著設定變 ──
+   顏色吃的是 VN_Settings._applyColors 寫在整頁上的 --name-color／--text-color／--em-color，字的大小由 _previewFont 寫在那一行上 */
+.asw-vnpv { margin: 4px 0 22px; padding: 16px 20px 18px; border-radius: 12px; background: #131a2e; }
+.asw-vnpv-cap { margin-bottom: 8px; color: rgba(255, 255, 255, 0.55); font-size: 12px; }
+.asw-vnpv-name { margin-bottom: 4px; color: var(--name-color, #d4af37); font-size: 14px; font-weight: 700; letter-spacing: 1px; }
+.asw-vnpv-text { color: var(--text-color, #dddddd); font-family: 'Playfair Display', 'Noto Serif TC', serif; font-size: 19px; font-weight: 300; line-height: 1.7; letter-spacing: 1px; overflow-wrap: anywhere; }
+.asw-vnpv-text em { font-style: italic; color: var(--em-color, #c9aaff); }
+
 /* 淡藍底的小說明（「這頁改了就生效」） */
 .asw-note { padding: 14px 16px; border-radius: 12px; background: var(--asw-side); color: var(--asw-sub); font-size: 13px; line-height: 1.6; }
 .asw-note-title { display: block; margin-bottom: 2px; color: var(--asw-ink); font-weight: 800; }
