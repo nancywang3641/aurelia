@@ -20,7 +20,7 @@
                 <div class="set-container cr-root">
                     <div class="set-header sysh">
                         <div class="set-back-btn sysh-back" id="cr-nav-home">‹</div>
-                        <div class="set-title sysh-title">控制室</div>
+                        <div class="set-title sysh-title">本機引擎</div>
                         <div class="set-back-btn sysh-act" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></div>
                     </div>
 
@@ -79,7 +79,7 @@
                             <div style="width:32px"></div>
                         </div>
                         <div class="set-content cr-help-body">
-                            <p class="cr-help-lead">這個「控制室」是一支遙控器，讓你電腦上的<b>語音</b>跟<b>生圖</b>縮在螢幕右下角、安靜地在背景跑，不用一直開著一堆黑色小視窗。<br><span class="cr-help-note">不需要任何帳號或會員，它只是遙控你自己電腦裡已經裝好的程式。</span></p>
+                            <p class="cr-help-lead">這個「本機引擎」是一支遙控器，讓你電腦上的<b>語音</b>跟<b>生圖</b>縮在螢幕右下角、安靜地在背景跑，不用一直開著一堆黑色小視窗。<br><span class="cr-help-note">不需要任何帳號或會員，它只是遙控你自己電腦裡已經裝好的程式。</span></p>
 
                             <div class="cr-help-sect">
                                 <div class="cr-help-h">開始前，你電腦要先有這兩個</div>

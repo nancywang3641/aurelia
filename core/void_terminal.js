@@ -577,7 +577,7 @@ const IRIS_IDLE = [
                     <button class="lb-icon-btn" id="aurelia-global-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">⏻</button>
                     <audio id="lobby-bgm-player" loop style="display:none;"></audio>
                 </div>
-                <div class="lb-top-user" id="lb-top-user" title="我的人設">
+                <div class="lb-top-user" id="lb-top-user" title="關於我">
                     <img class="lb-top-user-avatar" id="lb-top-user-avatar" src="${URLS.PERSONA_FALLBACK}" alt="">
                     <div class="lb-top-user-meta">
                         <div class="lb-top-user-name" id="lb-top-user-name">USER</div>

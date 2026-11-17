@@ -55,7 +55,7 @@
                     <div class="void-login-title">LOGIN</div>
                     <div class="void-login-desc">請輸入您的委託人代號以建立神經連結。</div>
                     <div class="void-login-input-group">
-                        <label>委託人代號 (USER NAME)</label>
+                        <label>委託人代號</label>
                         <div class="void-login-name-row">
                             <input type="text" id="void-login-name" value="${savedName}" placeholder="例如: 約翰" autocomplete="off">
                             <button class="void-persona-pick-btn" id="void-layout-btn" title="介面佈局與人設設定"><i class="fa-solid fa-gear"></i></button>

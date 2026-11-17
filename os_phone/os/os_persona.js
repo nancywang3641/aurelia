@@ -90,7 +90,7 @@
             if (p) {
                 CURRENT_PERSONA = { ...p };
             } else {
-                const defaultP = { id: 'p_' + Date.now(), name: 'User', desc: '這是一個預設的體驗者身分。', avatar: '' };
+                const defaultP = { id: 'p_' + Date.now(), name: 'User', desc: '這是一個預設的身分。', avatar: '' };
                 saveLocalPersonas([defaultP]);
                 saveCurrentId(defaultP.id);
                 CURRENT_PERSONA = { ...defaultP };
@@ -137,7 +137,7 @@
                     <button class="ps-tab" type="button" data-tab="me"><i class="fa-solid fa-address-card"></i> 關於我</button>
                     <button class="ps-tab" type="button" data-tab="wb"><i class="fa-solid fa-book"></i> 世界書</button>
                </div>`
-            : `<div class="ps-title"><i class="fa-solid fa-address-card"></i> PERSONA / 關於我</div>`;
+            : `<div class="ps-title"><i class="fa-solid fa-address-card"></i> 關於我</div>`;
         container.innerHTML = `
             <div class="ps-app" id="ps-app-root">
                 <div class="ps-header">${head}</div>

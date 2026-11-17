@@ -59,7 +59,7 @@
         { id: 'appstore', name: '應用商城', icon: 'fa-bag-shopping', mode: 'inside', go: function (c) { return _need(win.APP_STORE && win.APP_STORE.launch ? win.APP_STORE : null, '應用商城').launch(c); } },
         // 🧩 組件：應用商城的對照物 —— 商城是「拿到一個應用、裝到桌面」，這裡是「做一個組件、放到主畫面」
         { id: 'widgets', name: '組件', icon: 'fa-shapes', mode: 'inside', go: function (c) { return _need(win.OS_WIDGETS && win.OS_WIDGETS.launch ? win.OS_WIDGETS : null, '組件').launch(c); } },
-        { id: 'ctrlroom', name: '控制室', icon: 'fa-sliders', mode: 'inside', go: function (c) { return _need(win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp ? win.OS_CONTROL_ROOM : null, '控制室').launchApp(c); } },
+        { id: 'ctrlroom', name: '本機引擎', icon: 'fa-sliders', mode: 'inside', go: function (c) { return _need(win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp ? win.OS_CONTROL_ROOM : null, '控制室').launchApp(c); } },
         // 🤖 AI 助手已移出手機：入口收攏成大廳 dock 的「宿舍」一顆（房間是獨立擴展，
         //    分兩個入口＝朋友沒裝時要顧兩處，而且以後住戶要站到舞台上也只該有一個門）。
     ];
@@ -635,7 +635,7 @@
             { id: 'sysset', name: '設置', icon: 'fa-gear', mode: 'over', go: function () { var W = win.OS_SETTINGS_WINDOW; if (W && W.open) W.open('home'); else if (win.AUI && win.AUI.toast) win.AUI.toast('設置還沒載入完整，請重新整理一次', { type: 'warn' }); } },
             { id: 'album',  name: '相簿',   icon: 'fa-images', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
             // 🎭 角色中心（11-16）：每個角色的素材和裝扮。它自己開一個窗蓋在 app 區上，按它的返回＝回主畫面
-            { id: 'chars',  name: '角色',   icon: 'fa-address-book', mode: 'inside', go: function (c) { var G = win.OS_CHAR_GALLERY; if (G && G.open) { G.open('', { from: c, onClose: function () { if (!_inLeave) _home(); } }); } else { c.innerHTML = '<div class="aps-fail">角色中心還沒載入</div>'; } } },
+            { id: 'chars',  name: '角色中心', icon: 'fa-address-book', mode: 'inside', go: function (c) { var G = win.OS_CHAR_GALLERY; if (G && G.open) { G.open('', { from: c, onClose: function () { if (!_inLeave) _home(); } }); } else { c.innerHTML = '<div class="aps-fail">角色中心還沒載入</div>'; } } },
             { id: 'avsvar', name: '狀態檔案', icon: 'fa-dice', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
             // 創作室獨立 app 已移除：所有創作功能都從「應用商城」進(工坊首頁已內含 製作面板/主題/世界書/我的角色 等入口)
             { id: 'phone',  name: '電話',   icon: 'fa-phone', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">電話模組未載入</div>'; } } },
