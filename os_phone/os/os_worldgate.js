@@ -1569,6 +1569,7 @@
     function _planBlock(w) {
         const p = w && w.plan;
         if (!p || !((p.nodes || []).length || (p.endings || []).length)) return '';
+        if (logOn()) return _logBlock(w);   // 🎬 場記表開著：主持AI 不拿整份企劃（11-18）
         const hit = w.planHit || {};
         const T = _planTree(w);
         const done = T.nodes.concat(T.endings).filter(x => hit[x.code]).map(x => x.code + ' ' + x.name);
@@ -1762,6 +1763,306 @@
         console.log('[Worldgate③] 🌳「' + fresh.name + '」的岔路圖補好線了');
         return _planTree(fresh);
     }
+    // ═══ 🎬 場記表（11-18）═══════════════════════════════════════════════════════════
+    // 克語問「導演手上有沒有正文拿不到的東西」：以前 SN 企劃整份（岔路內容、結局、祕密）每輪寫進條目交給主持AI，
+    //   它握著整份劇本（劇透、為了走到結局硬推都從這來），岔路、結局也是它自己標。
+    //   場記表開著（預設開，設置 → 劇情 → 導演可關）：
+    //   ① 條目只給主持AI「已經發生過的局面、祕密（知情的人知道、時機未到不說）、這一幕不能提、下一幕方向（只送一次）」（_logBlock）。
+    //   ② 每輪記狀態那一通便宜模型順便判岔路：near＝碰到那個情況、done＝做了選擇（她：「兩段都要」）、endings＝結局成定局
+    //      （logAddendum／logCommit，state_runtime 的 extractOnce 搭便車）。done 由程式把 [Branch|代號] 寫回正文那一段後面，
+    //      岔路圖、播到時的小卡照舊（_scanPlan 收帳）；near 只記在場記表，給程式和大模型看。
+    //   ③ 結局一律先叫大模型確認才寫 [Ending|代號]（她選的；11-18 拿舊章考過，便宜模型和 Jev 判結局都不可靠）。
+    //   ④ 大模型（「哪件事走哪個模型」的導演模式那列）只在四種時候想下一步：開門第一章、換場、連兩章脫稿、卡住
+    //      （卡住幾章照導演頁的「推劇情的力道」：輕 5、平常 3、積極 2），回一兩句方向＋這一幕不能提＋偏向哪個結局。
+    // 存在世界檔案 w.log：{ near:{代號:{at}}, stall, off, place, started, chapters, hint:{next,forbid,lean,why,at,used} }
+    const LOG_KEY = 'aurelia_scene_log';
+    const LOG_STALL = { soft: 5, normal: 3, bold: 2 };
+    function logOn() { try { return localStorage.getItem(LOG_KEY) !== '0'; } catch (e) { return true; } }
+    async function setLogOn(on) {
+        const A = win.AUI || window.AUI;
+        const ok = A && A.lsSet ? A.lsSet(LOG_KEY, on ? '1' : '0', '世界門場記表的開關') : false;
+        // 條目跟著換寫法（網頁版組提示詞時現組，不用寫）
+        try { const id = await _getCurrentId(); const w = id ? await _worldById(id) : null; if (ok && w && w.entryText && !_pwa()) await _writeEntry(w, w.entryText); } catch (e) {}
+        return ok;
+    }
+    function _logOf(w) {
+        const l = (w && w.log) || {};
+        return { near: Object.assign({}, l.near || {}), stall: l.stall | 0, off: l.off | 0, place: String(l.place || ''), started: !!l.started, chapters: l.chapters | 0, hint: l.hint || null, lastKey: String(l.lastKey || '') };
+    }
+    // 企劃全文（只給便宜模型和大模型，不進條目）
+    function _planFull(w) {
+        const p = (w && w.plan) || {};
+        return {
+            nodes: (p.nodes || []).map((n, i) => ({ code: 'N' + (i + 1), name: String(n.name || ''), when: String(n.when || ''), content: String(n.content || '') })),
+            endings: (p.endings || []).map((e, i) => ({ code: 'E' + (i + 1), name: String(e.name || ''), kind: _ENDING_KIND[e.kind] || '', content: String(e.content || '') })),
+            secret: String(p.secret || ''),
+        };
+    }
+    function _endedBlock(ended) {
+        if (!ended.length) return '';
+        return '\n### 結局之後(已經走到結局「' + ended.join('」「') + '」)\n' +
+            '- 這個世界的故事已經有了結局,玩家留下來是在過日子、收拾、道別。從現在起世界不再主動丟給玩家新的主線、委託、任務或危機;還沒收尾的小事可以收掉,不要再長出新的。\n' +
+            '- 玩家自己主動要去找事做,就照玩家的意思演。\n' +
+            '- 視差系統會用只有玩家和旅人看得到的系統提示(像防沉迷提示)提醒:這個世界的冒險已經結束,可以撤離了。結局之後的第一章提醒一次,之後不要每章都提,玩家又待了好幾章才再提醒一次。本世界的人看不到這個提示。\n';
+    }
+    // ① 條目裡給主持AI的那段（場記表開著時取代 _planBlock 的整份企劃）
+    function _logBlock(w) {
+        const P = _planFull(w), hit = w.planHit || {}, L = _logOf(w);
+        const done = P.nodes.filter(n => hit[n.code]).map(n => n.name);
+        const ended = P.endings.filter(e => hit[e.code]).map(e => e.name);
+        const H = L.hint || {};
+        const forbid = (Array.isArray(H.forbid) ? H.forbid : []).map(x => String(x || '').trim()).filter(Boolean);
+        return '\n\n## 這個世界的場記(給主持AI,玩家看不到)\n' +
+            '- 故事往哪走由玩家的行動決定;世界照自己的規則運作,不要為了讓某件事發生去製造巧合,也不要把劇情推向哪個方向。\n' +
+            '- 壞的結果和失敗是真的可以發生的,不要在最後一刻替玩家救回來。玩家什麼都不碰、只在這裡過日子也可以。\n' +
+            (done.length ? '- 已經發生過的局面:' + done.join('、') + '\n' : '') +
+            (P.secret ? '### 祕密與真相(知情的角色心裡知道;時機未到,旁白不提,知情的人也不會自己說出來)\n' + P.secret + '\n' : '') +
+            (forbid.length ? '### 這一幕不能提(還不是揭開的時候)\n' + forbid.map(x => '- ' + x).join('\n') + '\n' : '') +
+            (H.next && !H.used ? '### 下一幕可以往這裡走(只是選項;玩家走別的路就照玩家的)\n' + String(H.next).trim() + '\n' : '') +
+            _endedBlock(ended);
+    }
+    // 這一章最後一個 [Bg|季節|時段_地點|…] 的地點：換了就算換場
+    function _placeOf(text) {
+        const all = String(text || '').match(/\[Bg\|[^|\]]*\|([^|\]]*)/g) || [];
+        if (!all.length) return '';
+        const m = all[all.length - 1].match(/\[Bg\|[^|\]]*\|([^|\]]*)/);
+        const s = String((m && m[1]) || '').trim();
+        return (s.indexOf('_') >= 0 ? s.slice(s.indexOf('_') + 1) : s).trim();
+    }
+    // 現在這個聊天室在一個有企劃、還有沒走到的岔路或結局的世界裡？→ 那個世界
+    async function _logWorld() {
+        if (!logOn()) return null;
+        const id = await _getCurrentId();
+        const w = id ? await _worldById(id) : null;
+        if (!w || !_planTree(w)) return null;
+        const P = _planFull(w), hit = w.planHit || {};
+        if (!P.nodes.some(n => !hit[n.code]) && !P.endings.some(e => !hit[e.code])) return null;
+        return w;
+    }
+    async function logWanted() { try { return !!(await _logWorld()); } catch (e) { return false; } }
+    // ② 掛在記狀態那一通後面的指令。paras＝這一章的段落（跟插圖同一套切法）；opts.numbered＝上面插圖那段已經印過編號段落
+    async function logAddendum(paras, opts) {
+        const w = await _logWorld();
+        if (!w || !Array.isArray(paras) || !paras.length) return null;
+        const P = _planFull(w), hit = w.planHit || {}, L = _logOf(w);
+        const left = P.nodes.filter(n => !hit[n.code]);
+        const leftE = P.endings.filter(e => !hit[e.code]);
+        const near = left.filter(n => L.near[n.code]).map(n => n.code + ' ' + n.name);
+        const block = '\n\n═══ 額外任務:世界門場記(跟上面要求的一起輸出,放在同一個 JSON 的 "plan_log" 欄) ═══\n' +
+            '這個世界事先規劃了幾個岔路和可能的結局(玩家和寫劇情的 AI 都看不到)。只看「這一章」,判斷:\n' +
+            '- near:某個岔路「什麼情況下會碰到」寫的那個情況,在這一章出現了(玩家碰上了就算,還沒做決定也算)。\n' +
+            '- done:玩家在某個岔路上已經做了選擇或行動,那個局面已經往某個方向走了。同一個岔路可以同時列在 near 和 done。\n' +
+            '- endings:某個結局在這一章已經發生、收不回來(快要發生、可能發生都不算)。\n' +
+            '- off:這一章玩家做的事跟下面每一個岔路都扯不上關係,填 true;有關係填 false。\n' +
+            '- 「已經靠近」的不要再列進 near。沒發生就不要列,寧可漏也不要猜。after_paragraph 填它發生在第幾段之後。\n' +
+            '格式:"plan_log":{"near":[{"code":"岔路代號","after_paragraph":段落編號}],"done":[{"code":"岔路代號","after_paragraph":段落編號}],"endings":[{"code":"結局代號","after_paragraph":段落編號}],"off":false}\n' +
+            '【岔路】\n' + (left.length ? left.map(n => n.code + ' ' + n.name + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '') + ':' + n.content).join('\n') : '(都已經走過了)') +
+            '\n【可能的結局】\n' + (leftE.length ? leftE.map(e => e.code + ' ' + e.name + ':' + e.content).join('\n') : '(都已經發生了)') +
+            '\n【已經靠近】' + (near.length ? near.join('、') : '(還沒有)') +
+            (opts && opts.numbered
+                ? '\n【這一章】段落編號跟上面插圖那段的 [P1]、[P2]… 一樣。'
+                : '\n【這一章(編號段落)】\n' + paras.map((t, i) => '[P' + (i + 1) + '] ' + t).join('\n'));
+        return { block, handle: { id: w.id, paras: paras.slice() } };
+    }
+    // 叫模型回 JSON（task 照「哪件事走哪個模型」那張表；main＝走主模型入口）；沒回、回壞都回 null
+    function _askJSON(system, user, task, main) {
+        return new Promise((resolve) => {
+            const api = win.OS_API || window.OS_API;
+            const fn = api && (main ? api.chatMain : api.chatSecondary);
+            if (typeof fn !== 'function') return resolve(null);
+            let done = false;
+            const timer = setTimeout(() => { if (done) return; done = true; resolve(null); }, 300000);
+            try {
+                fn.call(api, [{ role: 'system', content: system }, { role: 'user', content: user }], null,
+                    (t) => { if (done) return; done = true; clearTimeout(timer); resolve(_extractJSON(String(t || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''))); },
+                    () => { if (done) return; done = true; clearTimeout(timer); resolve(null); },
+                    { task: task });
+            } catch (e) { if (!done) { done = true; clearTimeout(timer); resolve(null); } }
+        });
+    }
+    // 把 [Branch|代號]／[Ending|代號] 寫回這一章那一段後面：酒館寫回那一樓正文、網頁版寫回那一章存檔；
+    //   劇情正在播這一章、還沒播到那一段的話，也插進播放器手上那份（播到時照舊跳小卡、結局卡）。寫完交給 _scanPlan 收帳
+    async function _tagBack(h, items, ctx) {
+        const SI = win.VN_SceneInsert || window.VN_SceneInsert;
+        if (!SI || typeof SI._findAnchor !== 'function' || !items.length) return;
+        const withText = items.map(x => Object.assign({}, x, { para: h.paras[(x.after | 0) - 1] || '' }));
+        const put = (text) => {
+            const lines = String(text || '').split('\n');
+            let cEnd = lines.findIndex(l => l.indexOf('</content>') >= 0);
+            if (cEnd < 0) cEnd = lines.length;
+            withText.forEach(x => {
+                if (String(text).indexOf(x.tag) >= 0) return;
+                let i = x.para ? SI._findAnchor(lines, x.para) : -1;
+                const pos = (i >= 0 && i < cEnd) ? i + 1 : cEnd;
+                lines.splice(pos, 0, x.tag);
+                if (pos <= cEnd) cEnd++;
+            });
+            return lines.join('\n');
+        };
+        let newText = '', chId;
+        try {
+            if (_pwa()) {
+                const db = _db();
+                if (!db || !db.getAllVnChapters || !db.saveVnChapter) return;
+                const ch = (await db.getAllVnChapters()).find(c => c && String(c.id) === String(ctx.lastId));
+                if (!ch) return;
+                newText = put(ch.content);
+                if (newText !== ch.content) { ch.content = newText; await db.saveVnChapter(ch, { silent: true }); }
+                chId = ch.id;
+            } else {
+                const TH = win.TavernHelper;
+                if (!TH || !TH.getChatMessages || !TH.setChatMessages) return;
+                const msgs = await TH.getChatMessages(ctx.lastId);
+                const m = msgs && msgs[0];
+                if (!m || m.role === 'user' || m.is_user) return;
+                const old = String(m.message || m.mes || '');
+                newText = put(old);
+                if (newText !== old) await TH.setChatMessages([{ message_id: m.message_id, message: newText }], { refresh: 'none' });
+            }
+        } catch (e) { console.warn('[Worldgate③] 場記：標記寫回失敗', e); return; }
+        // 播放器手上那份：還沒播到那一段才插
+        try {
+            const VN = win.VN_Core || window.VN_Core;
+            if (VN && Array.isArray(VN.script) && VN.script.length) {
+                withText.forEach(x => {
+                    if (!x.para || VN.script.some(l => typeof l === 'string' && l.indexOf(x.tag) >= 0)) return;
+                    const i = SI._findAnchor(VN.script, x.para);
+                    if (i < 0 || i < (VN.index | 0)) return;
+                    VN.script.splice(i + 1, 0, x.tag);
+                });
+            }
+        } catch (e) {}
+        try { await _scanPlan(newText, chId); } catch (e) {}
+        console.log('[Worldgate③] 🎬 場記：寫回 ' + items.map(x => x.tag).join(' '));
+    }
+    // ③ 結局確認：便宜模型說某個結局成了定局 → 大模型看這一章再判一次（可能換成另一個、也可能都不算）
+    async function _confirmEnding(h, claimed, ctx) {
+        const w = await _worldById(h.id);
+        if (!w) return;
+        const P = _planFull(w), hit = w.planHit || {};
+        const leftE = P.endings.filter(e => !hit[e.code]);
+        if (!leftE.length) return;
+        const r = await _askJSON(
+            '你是這個互動小說世界的監製。判斷這一章裡,有沒有哪個結局已經成了定局。\n' +
+            '- 定局＝已經發生、收不回來;快要發生、可能發生都不算。\n' +
+            '- 結局之間可能有重疊,選最貼近這一章實際發生的那一個;都不像就回空字串。\n' +
+            '只輸出一個 JSON,前後不要任何文字:{"code":"結局代號或空字串","after_paragraph":段落編號,"why":"一句話"}',
+            '【可能的結局】\n' + leftE.map(e => e.code + ' ' + e.name + ':' + e.content).join('\n') +
+            '\n【已經發生過的局面】' + (P.nodes.filter(n => hit[n.code]).map(n => n.name).join('、') || '(還沒有)') +
+            '\n【記帳的人覺得是】' + claimed.map(x => x.code).join('、') +
+            '\n【這一章(編號段落)】\n' + h.paras.map((t, i) => '[P' + (i + 1) + '] ' + t).join('\n'),
+            'director', true);
+        const code = String((r && r.code) || '').trim().toUpperCase();
+        if (!code || !leftE.some(e => e.code === code)) { console.log('[Worldgate③] 🎬 場記：結局 ' + claimed.map(x => x.code).join('、') + ' 大模型判定還不算' + (r && r.why ? '（' + r.why + '）' : '')); return; }
+        const after = parseInt(r.after_paragraph, 10) || ((claimed.find(x => x.code === code) || claimed[0]).after | 0);
+        await _tagBack(h, [{ tag: '[Ending|' + code + ']', after }], ctx);
+    }
+    // ④ 大模型想下一步
+    const _thinkBusy = {};
+    async function _think(id, why, paras) {
+        if (_thinkBusy[id]) return;
+        _thinkBusy[id] = true;
+        try {
+            const w = await _worldById(id);
+            if (!w) return;
+            const P = _planFull(w), hit = w.planHit || {}, L = _logOf(w);
+            const tag = (c) => hit[c] ? '(已經走過)' : (L.near[c] ? '(已經碰到情況,還沒做選擇)' : '');
+            let focus = '';
+            try { const D = win.OS_STATE_RUNTIME && win.OS_STATE_RUNTIME.director; const f = D && D.getFocus ? D.getFocus() : null; focus = f ? String(f.text || '').trim() : ''; } catch (e) {}
+            const WHY = { '開門': '玩家剛進這個世界,這是第一章。', '換場': '劇情換了地點。', '脫稿': '玩家連著兩章做的事都跟規劃的岔路扯不上關係。', '卡住': '已經連著 ' + L.stall + ' 章沒有新的局面。' };
+            const r = await _askJSON(
+                '你是這個互動小說世界的監製。你寫的東西玩家看不到;寫劇情的 AI 只會看到你給的「下一幕方向」和「這一幕不能提」。\n' +
+                '- 只給方向,不寫劇情、不寫對白、不安排具體情節。方向是選項不是任務。\n' +
+                '- 玩家脫稿時,想的是這個世界怎麼接住玩家正在做的事,不是把玩家拉回岔路上。\n' +
+                '- 壞的結果是真的可以發生的,不要替玩家把路鋪平。\n' +
+                '- 「不能提」只列這一幕寫劇情的 AI 還不該說出口的事:還沒到時機的真相、還沒碰到的岔路裡才會揭開的事。每條一句,最多五條。\n' +
+                '- lean:照目前走過的局面,最可能走向哪個結局,填代號;看不出來填空字串。\n' +
+                '只輸出一個 JSON,前後不要任何文字:{"next":"一兩句","forbid":["一句"],"lean":"結局代號或空字串"}',
+                '【為什麼叫你】' + (WHY[why] || why) +
+                '\n【岔路】\n' + P.nodes.map(n => n.code + ' ' + n.name + tag(n.code) + (n.when ? '(什麼情況下會碰到:' + n.when + ')' : '') + ':' + n.content).join('\n') +
+                '\n【可能的結局】\n' + P.endings.map(e => e.code + ' ' + e.name + (hit[e.code] ? '(已經發生)' : '') + ':' + e.content).join('\n') +
+                (P.secret ? '\n【祕密與真相】\n' + P.secret : '') +
+                (focus ? '\n【玩家希望這個故事多留意的方向】\n' + focus : '') +
+                '\n【最近這一章】\n' + (paras || []).join('\n'),
+                'director', true);
+            if (!r || !String(r.next || '').trim()) { console.warn('[Worldgate③] 🎬 場記：想下一步沒回成（' + why + '）'); return; }
+            const fresh = await _worldById(id);
+            if (!fresh) return;
+            const L2 = Object.assign({}, fresh.log || {});
+            const lean = String(r.lean || '').trim().toUpperCase();
+            L2.hint = { next: String(r.next).trim().slice(0, 400), forbid: (Array.isArray(r.forbid) ? r.forbid : []).map(x => String(x || '').trim().slice(0, 160)).filter(Boolean).slice(0, 5),
+                lean: P.endings.some(e => e.code === lean) ? lean : '', why, at: Date.now(), used: false };
+            L2.stall = 0; L2.off = 0;
+            fresh.log = L2;
+            await _saveWorld(fresh, ['log']);
+            if (!_pwa() && fresh.entryText) { try { await _writeEntry(fresh, fresh.entryText); } catch (e) {} }
+            console.log('[Worldgate③] 🎬 場記：想好下一步（' + why + '）');
+        } catch (e) { console.warn('[Worldgate③] 🎬 場記：想下一步失敗', e); }
+        finally { _thinkBusy[id] = false; }
+    }
+    // ② 收帳：記狀態那一通回來之後叫。plog＝JSON 的 plan_log；ctx＝{ lastId, floorMoved, text（這一章原文）}
+    async function logCommit(h, plog, ctx) {
+        if (!h || !h.id) return;
+        ctx = ctx || {};
+        const w = await _worldById(h.id);
+        const T = w ? _planTree(w) : null;
+        if (!T) return;
+        const hit = w.planHit || {};
+        const codes = new Set(T.nodes.concat(T.endings).map(x => x.code));
+        const norm = (a) => (Array.isArray(a) ? a : []).map(x => ({ code: String((x && x.code) || '').trim().toUpperCase(), after: parseInt(x && x.after_paragraph, 10) || 0 })).filter(x => codes.has(x.code));
+        const p = (plog && typeof plog === 'object') ? plog : {};
+        const near = norm(p.near).filter(x => x.code[0] === 'N' && !hit[x.code]);
+        const done = norm(p.done).filter(x => x.code[0] === 'N' && !hit[x.code]);
+        const ends = norm(p.endings).filter(x => x.code[0] === 'E' && !hit[x.code]);
+        const L = _logOf(w);
+        // 同一樓又判一次（重新生成、狀態面板「立即抽一次」）：照樣收岔路，但章數、卡住、脫稿不重算，也不再叫大模型
+        const again = ctx.lastId != null && String((w.log || {}).lastKey || '') === String(ctx.lastId);
+        L.lastKey = String(ctx.lastId == null ? '' : ctx.lastId);
+        let progressed = done.length > 0 || ends.length > 0;
+        near.concat(done).forEach(x => { if (!L.near[x.code]) { L.near[x.code] = { at: Date.now() }; progressed = true; } });
+        if (!again) {
+            L.off = (p.off === true && !progressed) ? L.off + 1 : 0;
+            L.stall = progressed ? 0 : L.stall + 1;
+        } else if (progressed) { L.stall = 0; L.off = 0; }
+        const hintFlip = !again && !!(L.hint && L.hint.next && !L.hint.used);
+        if (hintFlip) L.hint = Object.assign({}, L.hint, { used: true });   // 下一幕方向只送一次
+        const place = _placeOf(ctx.text);
+        const moved = !again && !!(place && L.place && place !== L.place);
+        if (place) L.place = place;
+        const first = !L.started;
+        L.started = true;
+        if (!again) L.chapters = L.chapters + 1;
+        const fresh = (await _worldById(h.id)) || w;
+        fresh.log = L;
+        await _saveWorld(fresh, ['log']);
+        if (!ctx.floorMoved && done.length) await _tagBack(h, done.map(x => ({ tag: '[Branch|' + x.code + ']', after: x.after })), ctx);
+        else if (hintFlip && !_pwa() && fresh.entryText) { try { await _writeEntry(fresh, fresh.entryText); } catch (e) {} }
+        if (!ctx.floorMoved && ends.length) _confirmEnding(h, ends, ctx).catch(() => {});
+        let push = 'normal';
+        try { const D = win.OS_STATE_RUNTIME && win.OS_STATE_RUNTIME.director; const f = D && D.getFocus ? D.getFocus() : null; if (f && LOG_STALL[f.push]) push = f.push; } catch (e) {}
+        const why = again ? '' : first ? '開門' : moved ? '換場' : L.off >= 2 ? '脫稿' : L.stall >= LOG_STALL[push] ? '卡住' : '';
+        if (why && !ctx.floorMoved) _think(h.id, why, h.paras).catch(() => {});
+        console.log('[Worldgate③] 🎬 場記：' + fresh.name + ' 第 ' + L.chapters + ' 章' + (near.length ? ' 靠近 ' + near.map(x => x.code).join('、') : '') + (done.length ? ' 走過 ' + done.map(x => x.code).join('、') : '') + (ends.length ? ' 結局待確認 ' + ends.map(x => x.code).join('、') : '') + (why ? ' → 想下一步（' + why + '）' : '') + '（卡住 ' + L.stall + '、脫稿 ' + L.off + '）');
+    }
+    // 給設置頁看的場記表：平常那層只有不劇透的；author＝true 才給劇透欄
+    async function logView() {
+        const id = await _getCurrentId();
+        const w = id ? await _worldById(id) : null;
+        const T = w ? _planTree(w) : null;
+        if (!T) return null;
+        const P = _planFull(w), hit = w.planHit || {}, L = _logOf(w);
+        const name = (c) => { const x = P.nodes.concat(P.endings).find(y => y.code === c); return x ? x.name : c; };
+        const H = L.hint || null;
+        return {
+            world: String(w.name || ''), on: logOn(), chapters: L.chapters, stall: L.stall, off: L.off,
+            done: P.nodes.filter(n => hit[n.code]).map(n => n.name),
+            ended: P.endings.filter(e => hit[e.code]).map(e => e.name),
+            nodesTotal: P.nodes.length,
+            near: P.nodes.filter(n => L.near[n.code] && !hit[n.code]).map(n => n.name),
+            hint: H ? { next: String(H.next || ''), forbid: (H.forbid || []).slice(), lean: H.lean ? name(H.lean) : '', why: String(H.why || ''), at: H.at || 0, used: !!H.used } : null,
+        };
+    }
+
     // 🌳 補亮：岔路標記是 10-29 才有的，之前就在玩的世界，前面走過的岔路舊章節裡沒有標記、圖上不會亮。
     //   她「補亮」→ 第一次打開岔路圖時叫一次副模型，讀這個聊天室進世界以後的章節，判斷哪幾個岔路、結局已經發生過、在第幾章。
     //   補過（不管有沒有找到）就記 planBackfill:'done' 不再叫；讀不到章節、模型沒回成就這次開著不重叫，下次打開再試。
@@ -3275,7 +3576,7 @@
     //   酒館裡那條條目還是舊那份：主持AI 不知道要標記，岔路圖永遠不會亮（她問「當前的劇本可以繼續跑齁」才想到）。
     //   跟成就那條同一招：條目原文重寫一次（不叫模型），存版號，每個世界只做一次。網頁版的條目是組提示詞時現組的，本來就是新的。
     //   每輪確認＋換聊天室／開機那次都會叫：打開聊天室的第一章就用得上，不用等第一章寫完
-    const PLAN_BLOCK_V = 2;   // 1=10-29 岔路代號＋標記 2=10-31 結局之後不再派新任務（已經走到結局的世界要重寫一次才帶得到）
+    const PLAN_BLOCK_V = 3;   // 1=10-29 岔路代號＋標記 2=10-31 結局之後不再派新任務（已經走到結局的世界要重寫一次才帶得到） 3=11-18 場記表（開著的話條目換成場記那份；關著照舊）
     async function _upgradePlanBlock(id) {
         if (!id || _pwa()) return;
         const w = await _worldById(id);
@@ -5579,6 +5880,7 @@
     win.OS_WORLDGATE = window.OS_WORLDGATE = { openGate, closeGate, closeMeet: _closeMeet, getCurrentWorld, worldNames, castInfo, tripsInfo, pwaWorldLore, getWorldPanel, getBattleAllies, resolveAchvCode, syncTheme,
         planCodeNow, markEndingShown, chapterNow, fillPlanLinks, backfillPlan, planRecap, markPlanToured, leaveAfterChapter, chapterEnded, snKit,
         receivePlan, takeBackPlan, planStatus, usedNames, orbitArts,
-        inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen, pvImgGet };
+        inviteNow, setInvitePick, inviteText, diveSeen, pvOf, pvSeen, pvImgGet,
+        logOn, setLogOn, logWanted, logAddendum, logCommit, logView };   // 🎬 場記表（11-18）
     console.log('[Worldgate③] 世界門面板就緒');
 })();

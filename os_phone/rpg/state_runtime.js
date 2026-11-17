@@ -461,8 +461,8 @@
                 // 結合觸發後：updates(狀態) / memories(記憶) / scenes(插圖) 任一存在即算成功
                 //   🖼️ scenes 也要認：「只有插圖」那一路(沒有變數包、記憶走自己的路)回的就是純 scenes，
                 //      以前不認 → 被判定失敗、重試兩次後整通拋掉，插圖永遠不會派發。
-                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories) || Array.isArray(json.scenes))) return json;
-                lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates/memories/scenes`);
+                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories) || Array.isArray(json.scenes) || (json.plan_log && typeof json.plan_log === 'object'))) return json;
+                lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates/memories/scenes/plan_log`);
                 console.warn('[State Runtime]', lastErr.message, 'raw head:', String(raw).slice(0, 300));
             } catch(e) {
                 lastErr = e;
@@ -1328,7 +1328,11 @@ ${numberedText}`;
             // 🖼️ 插圖也算一件事：以前只看狀態/記憶，於是「插圖開著但沒有變數包」時整通直接 return，
             //    使用者看到的是「插圖開了卻永遠不生」而且沒有任何訊息。PWA 尤其明顯 ——
             //    記憶在獨立版走自己的路(wantMemory 恆 false)，等於插圖被綁死在「必須先有 AVS 變數包」。
-            if (!hasState && !wantMemory && !wantScenes) return;   // 三件事都沒得做
+            // 🎬 世界門場記表（11-18）：人在白板企劃展開的世界裡、還有沒走到的岔路或結局 → 這一通順便判岔路（os_worldgate.js 的 logAddendum／logCommit）。
+            //   建檔／套預設的初始填充（skipScenes）不是劇情推進，不判
+            let wantLog = false;
+            try { wantLog = !(opts && opts.skipScenes) && !!(win.OS_WORLDGATE?.logWanted && await win.OS_WORLDGATE.logWanted()); } catch (e) {}
+            if (!hasState && !wantMemory && !wantScenes && !wantLog) return;   // 四件事都沒得做
 
             const currentState = win._AVS_ENGINE?.read?.() || {};
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
@@ -1353,7 +1357,7 @@ ${numberedText}`;
             const stateAlreadyDone = !_force && hasState && _hasId(lastId) && _doneIds.some(id => _known.has(id));
             const doState = hasState && !stateAlreadyDone && !!recentText && _hasId(lastId);
 
-            if (!doState && !wantMemory && !wantScenes) return;
+            if (!doState && !wantMemory && !wantScenes && !wantLog) return;
 
             // 組 prompt：狀態部分用原本 buildExtractPrompt(不動，保品質)；要記憶就附加 memories 區段共用同一通
             let prompt;
@@ -1393,7 +1397,8 @@ ${numberedText}`;
             } else {
                 // 只有插圖：不抽狀態也不抽記憶，這通就純粹是「挑段落 + 寫插圖提示詞」。
                 // 指令本體由下面的 _sceneAddendum 附上（跟搭便車模式同一份規範，不另寫一套）。
-                prompt = '你是插圖分鏡助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。';
+                prompt = wantScenes ? '你是插圖分鏡助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。'
+                                    : '你是互動小說的記帳助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。';   // 只有場記表要判
             }
             // 📇 NPC 檔案搭便車：登場記帳(0 API) + 回頭客建檔候選附進同一通（sp_npc_dossier=0 可關）
             let _npc = null;
@@ -1428,6 +1433,16 @@ ${numberedText}`;
                     }
                 }
             }
+
+            // 🎬 場記表搭便車：段落跟插圖同一套切法；插圖那段已經印過編號就不再印一次
+            let _logH = null;
+            try {
+                if (wantLog && recentText) {
+                    const _lp = _sceneParas.length ? _sceneParas : _segmentStory(_lastFull || lastContent || '');
+                    _logH = await win.OS_WORLDGATE.logAddendum(_lp, { numbered: _sceneParas.length > 0 });
+                    if (_logH && _logH.block) prompt += _logH.block;
+                }
+            } catch (e) {}
 
             // 🎬 記憶導演：給副模型「全記憶帶碼目錄」，讓它挑下一輪主模型該被提醒哪幾條（搭這通、不多打 API）
             let _recallCat = null;
@@ -1608,6 +1623,12 @@ ${numberedText}`;
                     win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId, t0: _t0 });
                     console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
                 } catch(e) { console.warn('[State Runtime] 場景插圖派發失敗:', e?.message || e); }
+            }
+
+            // 🎬 場記表收帳：判到的岔路寫回正文、結局交大模型確認、該想下一步就叫（換了一樓就只記帳不寫回）
+            if (_logH && _logH.handle) {
+                try { await win.OS_WORLDGATE.logCommit(_logH.handle, json.plan_log, { lastId, floorMoved: _floorMoved, text: _lastFull || lastContent || '' }); }
+                catch (e) { console.warn('[State Runtime] 場記表收帳失敗:', e?.message || e); }
             }
 
             // 🎬 便車稿落地：從同一通原始輸出抓《導演稿開始/結束》（容繁簡）；缺失/不合格 → 降級獨立補一通

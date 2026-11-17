@@ -529,3 +529,9 @@ label.asw-row { cursor: pointer; }
 .asw-full .asw-card.is-need { flex-direction: column; align-items: stretch; gap: 12px; }
 .asw-full .asw-card:not(.is-need) .asw-card-go { display: none; }
 .asw-full .asw-card:not(.is-need) .asw-card-chev { display: block; }
+
+/* 🎬 場記表（設置 → 劇情 → 導演）：一行一項，左邊項目名、右邊內容 */
+.asw-dlog { display: flex; flex-direction: column; gap: 4px; padding-top: 4px; }
+.asw-dlog-line { display: flex; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--asw-row-line); font-size: var(--asw-fs-small); line-height: 1.6; }
+.asw-dlog-k { flex: 0 0 8em; color: var(--asw-sub); }
+.asw-dlog-v { flex: 1 1 auto; min-width: 0; color: var(--asw-ink); overflow-wrap: anywhere; }

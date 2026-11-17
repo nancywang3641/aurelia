@@ -609,8 +609,9 @@
         _dirHelpDone = true;
         A.registerHelp({
             ds_on: { title: '導演模式', body: '開著時，每輪劇情寫完會另外整理一份「導演稿」：大家都知道的事、每個人自己才知道的事、誰做了什麼、這一輪可以推的點。下一輪寫劇情時一起交給寫正文的 AI，角色才不會讀心、旁白不會洩底。\n用哪個模型：設置 → AI 模型 →「哪件事走哪個模型」的「導演模式」那列（預設主模型）。開著的時候，「狀態抽取 / 記憶 / 人物檔案」那一通也會改走主模型（那列另外指定了通道的照它）。\n每輪多花一通模型的錢；開著狀態欄的話，導演稿會搭狀態那一通一起寫，不多打。' },
-            ds_focus: { title: '導演多留意什麼', body: '選這個故事偏哪一種，導演整理時就多留意那方面：戀愛會多記人物之間的距離和沒說出口的心意，懸疑會多記誰握著哪條線索，冒險會多記傷勢、資源和下一步的代價。\n選了之後下面會顯示交給導演的那段話；直接在框裡改，就變成「自己寫」。\n每個故事各存一份。只改導演留意什麼、往哪個方向挑可以推的點，不改導演稿的格式。' },
-            ds_push: { title: '推劇情的力道', body: '導演每輪會列幾個「可以推的點」給寫正文的 AI 參考。\n輕：多留白，最多一個；沒有適合的時機就只寫「留白」。\n平常：照導演自己判斷。\n積極：除非剛打完、受傷或累壞了，每輪至少給一個能讓劇情往前走的點。\n都只是建議，不會逼角色硬撐。' },
+            ds_focus: { title: '導演多留意什麼', body: '選這個故事偏哪一種，導演整理時就多留意那方面：戀愛會多記人物之間的距離和沒說出口的心意，懸疑會多記誰握著哪條線索，冒險會多記傷勢、資源和下一步的代價。\n選了之後下面會顯示交給導演的那段話；直接在框裡改，就變成「自己寫」。\n每個故事各存一份。只改導演留意什麼、往哪個方向挑可以推的點，不改導演稿的格式。\n世界門場記表請大模型想下一步時也會看這段。' },
+            ds_push: { title: '推劇情的力道', body: '導演每輪會列幾個「可以推的點」給寫正文的 AI 參考。\n輕：多留白，最多一個；沒有適合的時機就只寫「留白」。\n平常：照導演自己判斷。\n積極：除非剛打完、受傷或累壞了，每輪至少給一個能讓劇情往前走的點。\n都只是建議，不會逼角色硬撐。\n世界門場記表：輕＝連 5 章、平常＝3 章、積極＝2 章沒有新局面，才請大模型想下一步。' },
+            ds_log: { title: '世界門場記表', body: '白板企劃展開的世界裡，寫劇情的 AI 不再拿整份企劃（岔路、結局），只拿「已經發生過的局面、祕密、這一幕不能提、下一幕可以往哪走」，比較不會劇透、不會為了走到某個結局硬推。\n每輪記狀態那一通會順便判你走到哪個岔路：碰到那個情況先記在場記表，做了選擇岔路圖才亮。結局會先請大模型確認才算。\n大模型（「哪件事走哪個模型」的「導演模式」那列）只在進門第一章、換地點、連兩章做的事都跟岔路無關、連著好幾章沒有新局面時，出來想一下下一步；一個世界大概幾次。\n關掉就回到以前：整份企劃交給寫劇情的 AI，岔路由它自己標。' },
         });
     }
     function mountDirector(box) {
@@ -641,8 +642,14 @@
               + '<div class="asw-ddraft" id="asw-ddraft" hidden><textarea class="asw-text asw-text-tall" id="asw-ddraft-text"></textarea>'
               + '<div class="asw-row asw-row-end"><button type="button" class="asw-btn is-main" id="asw-ddraft-save">存起來（下一輪生效）</button></div></div>'
             : noStory;
+        const W = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        const logRows = (W && W.logOn)
+            ? '<label class="asw-row"><span class="asw-row-tx">白板企劃的世界用場記表' + H('ds_log') + '</span><input type="checkbox" class="asw-check" id="asw-log-on"' + (W.logOn() ? ' checked' : '') + '></label>'
+              + '<div class="asw-dlog" id="asw-dlog"><div class="asw-hint">讀取中…</div></div>'
+            : '<div class="asw-hint">世界門還沒載好。</div>';
         box.innerHTML = '<div class="asw-cols">'
             + '<div class="asw-col">'
+            +   group('世界門場記表', logRows)
             +   group('導演模式', '<label class="asw-row"><span class="asw-row-tx">每輪整理一份導演稿' + H('ds_on') + '</span><input type="checkbox" class="asw-check" id="asw-dir-on"' + (D.isOn() ? ' checked' : '') + '></label>')
             +   group('這個故事的導演', storyRows)
             + '</div>'
@@ -653,6 +660,38 @@
             + '</div>';
 
         const q = (s) => box.querySelector(s);
+        // 🎬 場記表：開關＋這個世界走到哪（平常那層不劇透；「我要當作者」才看得到碰到了還沒選的、下一幕方向、不能提、偏向哪個結局）
+        const logOnEl = q('#asw-log-on');
+        if (logOnEl) logOnEl.addEventListener('change', async () => {
+            const ok = await W.setLogOn(logOnEl.checked);
+            if (!ok) { logOnEl.checked = !logOnEl.checked; toast('沒存到，請再試一次', 'error'); return; }
+            toast(logOnEl.checked ? '場記表開了：寫劇情的 AI 下一輪起只拿場記' : '場記表關了：回到整份企劃交給寫劇情的 AI', 'success');
+        });
+        const logBox = q('#asw-dlog');
+        if (logBox && W && W.logView) (async () => {
+            let v = null;
+            try { v = await W.logView(); } catch (e) {}
+            if (!logBox.isConnected) return;
+            if (!v) { logBox.innerHTML = '<div class="asw-hint">現在不在白板企劃展開的世界裡。進到那種世界玩一章，這裡就看得到場記。</div>'; return; }
+            const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? m + ' 分鐘前' : m < 1440 ? Math.round(m / 60) + ' 小時前' : Math.round(m / 1440) + ' 天前'; };
+            const line = (k, val) => '<div class="asw-dlog-line"><span class="asw-dlog-k">' + k + '</span><span class="asw-dlog-v">' + val + '</span></div>';
+            const H2 = v.hint;
+            logBox.innerHTML = '<div class="asw-hint">「' + esc(v.world) + '」・記了 ' + v.chapters + ' 章</div>'
+                + line('走過的岔路', v.done.length ? esc(v.done.join('、')) + '（' + v.done.length + '／' + v.nodesTotal + '）' : '還沒有（共 ' + v.nodesTotal + ' 個）')
+                + (v.ended.length ? line('走到的結局', esc(v.ended.join('、'))) : '')
+                + line('連著沒有新局面', v.stall + ' 章')
+                + (H2 ? line('上次請大模型想下一步', esc(H2.why) + '・' + ago(H2.at)) : '')
+                + '<div class="asw-row asw-row-end"><button type="button" class="asw-btn" id="asw-dlog-author">我要當作者（會劇透）</button></div>'
+                + '<div class="asw-ddraft" id="asw-dlog-more" hidden>'
+                +   line('碰到了、還沒選', v.near.length ? esc(v.near.join('、')) : '沒有')
+                +   (H2 ? line('下一幕方向', esc(H2.next) + (H2.used ? '（已經交給寫劇情的 AI 用過了）' : '（下一輪會交給寫劇情的 AI）'))
+                        + line('這一幕不能提', H2.forbid.length ? H2.forbid.map(x => esc(x)).join('<br>') : '沒有')
+                        + line('看起來偏向', H2.lean ? esc(H2.lean) : '看不出來')
+                      : line('大模型', '還沒出場過'))
+                + '</div>';
+            const btn = logBox.querySelector('#asw-dlog-author'), more = logBox.querySelector('#asw-dlog-more');
+            if (btn && more) btn.addEventListener('click', () => { more.hidden = !more.hidden; btn.textContent = more.hidden ? '我要當作者（會劇透）' : '收起來'; });
+        })();
         const on = q('#asw-dir-on');
         if (on) on.addEventListener('change', () => { D.setOn(on.checked); toast(on.checked ? '導演模式開了，下一輪劇情寫完就整理第一份' : '導演模式關了', 'success'); });
 
