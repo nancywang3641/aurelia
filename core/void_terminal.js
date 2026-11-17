@@ -783,7 +783,7 @@ const IRIS_IDLE = [
                             <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
                         </div>
                     </div>
-                    <div class="void-btn" id="void-apps-btn" title="應用（手機殼：微信 / 微薄 / 塔羅 / RPG / 閱讀 / 黑市）">
+                    <div class="void-btn" id="void-apps-btn" title="應用（手機：聊天、微薄、日曆、閱讀、後院…）">
                         <div class="void-btn-inner">
                             <i class="lb-menu-icon fa-solid fa-mobile-screen-button"></i>
                             <div class="lb-menu-txt">

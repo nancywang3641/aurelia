@@ -341,7 +341,10 @@
 .lstage-citymap { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5100;
   background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28); border-radius:16px;
   padding:12px; box-shadow:0 12px 34px rgba(40,60,110,.28); color:#23315e; font-size:12px;
-  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  width:min-content; }   /* 跟著地圖寬：底下地點鈕放不下就換排，不把整個窗撐寬（手機上會被右側欄蓋住） */
+/* 手機寬：置中的話右邊會壓到側欄那排鈕（11-18 量到），改靠左、邊距縮一點 */
+@media (max-width: 480px) { .lstage-citymap { left:8px; transform:translateY(-50%); padding:8px; } }
 .lcm-title { display:flex; align-items:center; gap:6px; padding:0 2px 9px; white-space:nowrap; font-weight:700; letter-spacing:1px; color:#23315e; }
 .lcm-title i { color:#4f74c8; }
 .lcm-title .lcm-close { margin-left:auto; background:none; border:none; color:#8a93ad; cursor:pointer; font-size:15px; padding:2px 6px; }
@@ -351,12 +354,17 @@
 .lcm-spot { position:absolute; z-index:4500; background:transparent; border:1px dashed transparent; border-radius:6px;
   cursor:pointer; padding:0; display:flex; align-items:flex-end; justify-content:center; }
 .lcm-spot span { background:rgba(255,255,255,.92); color:#23315e; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px;
-  border:1px solid rgba(60,80,130,.3); margin-bottom:2px; opacity:0; transition:opacity .12s; pointer-events:none; white-space:nowrap; }
+  border:1px solid rgba(60,80,130,.3); margin-bottom:2px; transition:background .12s, color .12s; pointer-events:none; white-space:nowrap; }
+/* 地標名牌一直亮著（11-18：以前滑過才出現，手機沒有滑過、地圖上看不出哪棟是哪裡） */
 .lcm-spot:hover { border-color:#4a78d8; background:rgba(74,120,216,.15); }
-.lcm-spot:hover span { opacity:1; }
+.lcm-spot:hover span { background:#23315e; color:#fff; }
+.lcm-map.is-loading .lcm-obj, .lcm-map.is-loading .lcm-spot { visibility:hidden; }
+.lcm-wait { position:absolute; inset:0; display:none; align-items:center; justify-content:center; color:#6b7590; font-size:12px; letter-spacing:1px; }
+.lcm-map.is-loading .lcm-wait { display:flex; }
 .lcm-chips { display:flex; gap:6px; padding-top:9px; flex-wrap:wrap; }
-.lcm-chip { flex:1; min-width:44px; background:rgba(240,244,252,.8); border:1px solid rgba(60,80,130,.25);
-  color:#23315e; border-radius:999px; padding:5px 0; cursor:pointer; font-size:12px; font-weight:600; letter-spacing:1px; }
+/* 地點名不准斷成兩行（11-18：「占卜小屋」被拆成兩行）：放不下就整顆換到下一排 */
+.lcm-chip { flex:1 1 auto; min-width:44px; white-space:nowrap; background:rgba(240,244,252,.8); border:1px solid rgba(60,80,130,.25);
+  color:#23315e; border-radius:999px; padding:5px 10px; cursor:pointer; font-size:12px; font-weight:600; letter-spacing:1px; }
 .lcm-chip:hover { background:#23315e; color:#fff; }
 .lcm-chip:disabled { opacity:.35; cursor:default; background:rgba(240,244,252,.8); color:#23315e; }
 

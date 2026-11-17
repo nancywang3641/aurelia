@@ -1008,6 +1008,8 @@
         getListHTML: function(chats, activeId) {
             const chatIds = Object.keys(chats).filter(k => k !== 'unknown_chat' && chats[k] && !chats[k].wxRemoved && Array.isArray(chats[k].messages) && chats[k].messages.length > 0);   // 沒聊過的只在通訊錄；刪掉的好友（wxRemoved）都不列
             if (chatIds.length === 0 && chats['unknown_chat'] && chats['unknown_chat'].messages.length > 0) chatIds.push('unknown_chat');
+            // 一間都沒有：寫一句，別只有一片白（小斐 11-17：聊天是一片全白，沒有空狀態文字）
+            if (!chatIds.length) return '<div class="wx-list-empty">還沒有聊天。<br>按右上角＋加朋友、開群聊；故事裡有人傳訊息給你，也會出現在這裡。</div>';
             return chatIds.map(id => {
                 const c = chats[id];
                 const displayName = c.name; 

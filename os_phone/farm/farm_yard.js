@@ -58,7 +58,7 @@
             '<div class="farm-drawer-backdrop" data-farm="shop-backdrop" hidden></div>' +
             '<aside class="farm-shop" data-farm="shop" aria-label="種子商店" hidden>' +
             '<header class="shop-head">' +
-            '<div><strong>種子商店</strong><span>要賣東西：放進出貨箱，隔天早上結算</span></div>' +
+            '<div><strong>種子商店</strong><span>這裡只賣種子；收成要賣，放進出貨箱</span></div>' +
             '<button type="button" data-farm="shop-close" aria-label="關閉商店">×</button>' +
             '</header>' +
             '<div class="shop-wallet"><span>手上的金幣</span><strong data-farm="shop-coins"></strong></div>' +

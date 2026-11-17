@@ -2418,7 +2418,7 @@
             '<div class="lcm-title"><i class="fa-solid fa-map-location-dot"></i> ' +
               (locked ? '快轉——點地圖上的地標' : '快轉——點地圖上任何地方') +
               '<button class="lcm-close"><i class="fa-solid fa-xmark"></i></button></div>' +
-            '<div class="lcm-map" style="width:' + Math.round(MAP_W * K) + 'px;height:' + Math.round(MAP_H * K) + 'px"></div>' +
+            '<div class="lcm-map is-loading" style="width:' + Math.round(MAP_W * K) + 'px;height:' + Math.round(MAP_H * K) + 'px"><span class="lcm-wait">地圖載入中…</span></div>' +
             '<div class="lcm-chips">' +
               chips.map(c => '<button class="lcm-chip" data-go="' + c[0] + '"' + (S.scene === c[0] ? ' disabled' : '') + '>' + c[1] + '</button>').join('') +
             '</div>';
@@ -2434,9 +2434,14 @@
             if (flip) im.style.transform = 'scaleX(-1)';
             resolveRef(typeof fileOrRef === 'string' ? { file: fileOrRef } : fileOrRef).then(src => { if (src) im.src = src; });
             map.appendChild(im);
+            return im;
         };
         // 底板 + 前後牆框（跟真場景同一套圖與層級）
-        put(df(SCENES.city.base), 0, 0, MAP_W, 1);
+        //   底板還沒到時先寫「載入中」，別只露一塊灰框（小斐 11-17：圖片先出現空白灰框）
+        const baseIm = put(df(SCENES.city.base), 0, 0, MAP_W, 1);
+        const mapReady = () => map.classList.remove('is-loading');
+        baseIm.addEventListener('load', mapReady); baseIm.addEventListener('error', mapReady);
+        setTimeout(mapReady, 6000);
         (Array.isArray(SCENES.city.lower) ? SCENES.city.lower : (SCENES.city.lower ? [SCENES.city.lower] : [])).forEach(f => put(df(f), 0, 0, MAP_W, 2));
         (Array.isArray(SCENES.city.upper) ? SCENES.city.upper : (SCENES.city.upper ? [SCENES.city.upper] : [])).forEach(f => put(df(f), 0, 0, MAP_W, 4000));
         // 物件（地塊空↔房照真實狀態）

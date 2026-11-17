@@ -400,7 +400,7 @@
         function render() {
             var body;
             if (!enabled()) {
-                body = '<p class="fc-state is-offline">' + fa('fa-cloud') + '要先開雲端存檔，他們才找得到自己的地。</p>' +
+                body = '<p class="fc-state is-offline">' + fa('fa-cloud') + '住戶是宿舍裡的 AI，他們的地放在你自己的伺服器上。接好雲端存檔（填你的伺服器網址和通行碼）才看得到他們；沒有伺服器的話，這裡用不到。</p>' +
                     '<div class="fc-acts"><button type="button" class="fc-btn is-main" data-fr="cloud">' + fa('fa-cloud') + '打開雲端存檔</button></div>';
             } else if (!doc) {
                 body = '<p class="fc-state ' + (err ? 'is-error' : 'is-busy') + '">' + fa(err ? 'fa-triangle-exclamation' : 'fa-cloud-arrow-down') + esc(err || '讀取中…') + '</p>';

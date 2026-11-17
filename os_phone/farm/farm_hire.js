@@ -98,7 +98,7 @@
             if (dead) return;
             var body;
             if (!C || !C.enabled()) {
-                body = '<p class="fc-state is-offline">' + fa('fa-cloud') + '要先開雲端存檔，雇的人才找得到你的地。</p>' +
+                body = '<p class="fc-state is-offline">' + fa('fa-cloud') + '雇來的是宿舍裡的 AI，他們要從你自己的伺服器上來幫忙。接好雲端存檔（填你的伺服器網址和通行碼）才能雇人；沒有伺服器的話，自己做就好。</p>' +
                     '<div class="fc-acts"><button type="button" class="fc-btn is-main" data-fh="cloud">' + fa('fa-cloud') + '打開雲端存檔</button></div>';
             } else {
                 var st = opts.state(), sz = sizeOf(pick.size);
