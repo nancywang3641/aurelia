@@ -506,3 +506,26 @@
 .trio-row .set-label { margin-top: 8px; }
 .trio-tpl { min-height: 170px; font-size: 12px; }
 .trio-reset { margin-top: 6px; padding: 8px; font-weight: 600; }
+
+/* ── 進階參數（11-17）：主模型、副模型各一格，點開才看得到字數上限、溫度、Top P、兩個懲罰值、自訂前置指令。
+   收著的那一行右邊寫現在的值（#os-adv-now／#sec-adv-now，os_settings.js 的 wireAdv 填）。
+   她的規矩是不准摺疊，這是她點頭的例外：收著也看得到現況、裡面是平常不用碰的。🚨 別把別的東西也收成這樣。 */
+.set-adv > summary { list-style: none; display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; }
+.set-adv > summary::-webkit-details-marker { display: none; }
+.set-adv-name { flex: 0 0 auto; font-size: 13px; font-weight: 800; letter-spacing: 1px; color: var(--os-ink); white-space: nowrap; }
+.set-adv-now { flex: 1 1 auto; min-width: 0; font-size: 12px; line-height: 1.5; color: var(--os-ink-soft); text-align: right; overflow-wrap: anywhere; }
+.set-adv-chev { flex: 0 0 auto; font-size: 11px; color: var(--os-ink-soft); transition: transform 0.2s; }
+.set-adv[open] .set-adv-chev { transform: rotate(180deg); }
+.set-adv-body { display: flex; flex-direction: column; gap: 14px; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
+.set-adv-num { width: 100%; margin-top: 6px; }
+.set-adv-cot { width: 100%; margin-top: 8px; resize: vertical; line-height: 1.5; min-height: 120px; }
+
+/* ── 測試連線的結果：白話一行（給人看要去改什麼）＋小字原文一行（查問題用）。is-fail 失敗、is-fix 連上了但網址要改、is-ok 成功、is-busy 測試中 ── */
+.api-test-result { margin-top: 10px; padding: 12px; border-radius: 4px; background: rgba(var(--os-tint-rgb), 0.90); border: 1px solid rgba(var(--os-ink-rgb), 0.10); max-height: 200px; overflow-y: auto; }
+.api-test-result[hidden] { display: none; }
+.api-test-plain { font-size: 13px; line-height: 1.6; font-weight: 700; color: var(--os-ink); overflow-wrap: anywhere; }
+.api-test-raw { font-family: monospace; font-size: 11px; line-height: 1.5; color: var(--os-ink-soft); white-space: pre-wrap; word-break: break-all; }
+.api-test-plain + .api-test-raw { margin-top: 6px; }
+.api-test-result.is-fail { border-color: var(--os-danger, #a32d2d); }
+.api-test-result.is-fail .api-test-plain { color: var(--os-danger, #a32d2d); }
+.api-test-result.is-fix { border-color: var(--os-accent-strong); }

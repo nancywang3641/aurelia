@@ -1091,6 +1091,22 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
     }
 
+    // 🧹 網址、金鑰貼進來常帶著前後空白、換行，或多貼一段尾巴：存檔和測試前先清（11-17）。只清這些，不改別的字。
+    //   金鑰：換行、Tab 全拿掉（金鑰裡不會有），前後空白去掉。
+    //   網址：同上＋結尾的斜線；「…/v1/chat/completions」剝成「…/v1」（送生成時會自己補回來，結果一樣）。
+    //   🚨 不是 /v1 結尾的「…/chat/completions」不能剝：送生成的規則是「網址裡有 /chat/completions 就原樣用，沒有就補 /v1/chat/completions」，
+    //      沒有 /v1 的站只能靠填整條網址表示，剝掉會變成打 …/v1/chat/completions、本來能用的反而壞掉。
+    //   full＝這格填的本來就是整條網址（決策模型那格，原樣拿去打）：只清空白和換行。
+    function _cleanApiKey(v) { return String(v == null ? '' : v).replace(/[\r\n\t]+/g, '').trim(); }
+    function _cleanApiUrl(v, full) {
+        let u = String(v == null ? '' : v).replace(/[\r\n\t]+/g, '').trim();
+        if (full) return u;
+        u = u.replace(/\/+$/, '');
+        const m = u.match(/^(.*\/v1)\/chat\/completions$/i);
+        if (m) u = m[1];
+        return u;
+    }
+
     function launchApp(container, mode) {
         const llmConfig = loadLlmConfig();
         const secLlmConfig = loadSecLlmConfig();
@@ -1371,12 +1387,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 if (!el) return;
                 el.value = cur[k];
                 el.addEventListener('input', () => J.set({ [k]: el.value }));
+                if (k !== 'model') el.addEventListener('change', () => { const v = (k === 'url') ? _cleanApiUrl(el.value, true) : _cleanApiKey(el.value); if (v !== el.value) { el.value = v; J.set({ [k]: v }); } });
             });
             const btn = box.querySelector('#jev-test-btn');
             const out = box.querySelector('#jev-test-result');
             btn?.addEventListener('click', async () => {
                 if (btn.dataset.busy) return;
                 btn.dataset.busy = '1';
+                [['url', '#jev-url'], ['key', '#jev-key']].forEach(([k, sel]) => { const el = box.querySelector(sel); if (!el) return; const v = (k === 'url') ? _cleanApiUrl(el.value, true) : _cleanApiKey(el.value); if (v !== el.value) { el.value = v; J.set({ [k]: v }); } });
                 out.classList.remove('hidden');
                 out.textContent = '問問看…';
                 try {
@@ -1491,8 +1509,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         const list = loadChannels();
                         if (!list[idx]) return;
                         list[idx].name = box.querySelector('.ch-name').value.trim();
-                        list[idx].url = box.querySelector('.ch-url').value.trim();
-                        list[idx].key = box.querySelector('.ch-key').value.trim();
+                        const _cu = box.querySelector('.ch-url'), _ck = box.querySelector('.ch-key');
+                        _cu.value = _cleanApiUrl(_cu.value); _ck.value = _cleanApiKey(_ck.value);   // 多貼的空白、換行、尾巴先清掉
+                        list[idx].url = _cu.value;
+                        list[idx].key = _ck.value;
                         list[idx].model = box.querySelector('.ch-model').value.trim();
                         list[idx].maxTokens = box.querySelector('.ch-max').value.trim();
                         list[idx].temperature = box.querySelector('.ch-temp').value.trim();
@@ -2845,6 +2865,29 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
         };
 
+        // 🎚 進階參數收著的那一行：寫出現在的值，拉了跟著變（範本在 os_settings_page.js 的 .set-adv）。
+        //   字數上限、溫度一定寫；Top P、兩個懲罰值動過（不是 1／0）才寫；有填前置指令寫「有前置指令」。
+        (function wireAdv() {
+            const f = (v) => { const n = parseFloat(v); if (!isFinite(n)) return '—'; const t = n.toFixed(2).replace(/0$/, ''); return t; };
+            [['os', elMaxTokens, elTemp, elTopP, elFreqPenalty, elPresPenalty, container.querySelector('#os-custom-cot')],
+             ['sec', secMaxTokens, secTemp, secTopP, secFreqPenalty, secPresPenalty, container.querySelector('#sec-custom-cot')]].forEach(function (row) {
+                const now = container.querySelector('#' + row[0] + '-adv-now'), box = container.querySelector('#' + row[0] + '-adv');
+                if (!now) return;
+                const mt = row[1], t = row[2], tp = row[3], fp = row[4], pp = row[5], cot = row[6];
+                const paint = function () {
+                    const parts = ['字數上限 ' + ((mt && String(mt.value).trim()) || '—'), '溫度 ' + f(t && t.value)];
+                    if (tp && f(tp.value) !== '1.0') parts.push('Top P ' + f(tp.value));
+                    if (fp && f(fp.value) !== '0.0') parts.push('Frequency ' + f(fp.value));
+                    if (pp && f(pp.value) !== '0.0') parts.push('Presence ' + f(pp.value));
+                    if (cot && cot.value.trim()) parts.push('有前置指令');
+                    now.textContent = parts.join('・');
+                };
+                [mt, t, tp, fp, pp, cot].forEach(function (el) { if (el) { el.addEventListener('input', paint); el.addEventListener('change', paint); } });
+                if (box) box.addEventListener('toggle', paint);   // 換連接預設會換一份前置指令（不發 input），點開收合時再看一次
+                paint();
+            });
+        })();
+
         btnSave.onclick = () => {
             try {
                 const layoutMode = container.querySelector('#os-layout-mode')?.value || 'auto';
@@ -2870,11 +2913,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }
                 }
 
+                // 網址、金鑰先清掉多貼的空白、換行、尾巴，清完的字寫回格子（她看得到存進去的是什麼）
+                [elUrl, secUrl].forEach(function (el) { if (el) el.value = _cleanApiUrl(el.value); });
+                [elKey, secKey].forEach(function (el) { if (el) el.value = _cleanApiKey(el.value); });
                 const llmData = {
                     useSystemApi: elSystemApi.checked,
                     stProfileId: elStProfile.value,
-                    url: elUrl.value.trim(),
-                    key: elKey.value.trim(),
+                    url: elUrl.value,
+                    key: elKey.value,
                     model: elModel.value === MODEL_TYPE ? llmConfig.model : elModel.value,
                     usePresetPrompts: elUsePresetPrompts ? elUsePresetPrompts.checked : false,
                     presetName: (elPresetName ? elPresetName.value : '') || '',
@@ -2898,8 +2944,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     useSystemApi: secSystemApi.checked,
                     stProfileId: secStProfile.value,
                     syncWithPrimary: isSecSync,
-                    url: isSecSync ? elUrl.value.trim() : secUrl.value.trim(),
-                    key: isSecSync ? elKey.value.trim() : secKey.value.trim(),
+                    url: isSecSync ? elUrl.value : secUrl.value,
+                    key: isSecSync ? elKey.value : secKey.value,
                     model: secModel.value === MODEL_TYPE ? secLlmConfig.model : secModel.value,
                     usePresetPrompts: secUsePresetPrompts ? secUsePresetPrompts.checked : false,
                     presetName: (secPresetName ? secPresetName.value : '') || '',
@@ -3049,15 +3095,73 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
 
         // --- Test API Logic (共用) ---
+        // 測試失敗時畫面上兩行：第一行白話（給不懂 API 的人看要去改什麼），第二行小字留原文（查問題要用，不能拿掉）。
+        //   她看了 Gemini 的建議：「普通人api接不上，別妄想他們填…還是提示錯誤更好」
+        //   狀態碼判斷得出來才有白話那行，判斷不了就只顯示原文（酒館那幾條路常常只有一句包過的話）。
+        function _apiFailPlain(e, raw) {
+            const msg = String((e && e.message) || '') + ' ' + String(raw || '');
+            // 連不上：瀏覽器只給 Failed to fetch／Load failed，分不出是網址錯、站不讓網頁連、還是站那邊出錯沒帶該有的標頭（她踩過最後這種）
+            if (/Failed to fetch|Load failed|NetworkError|Network request failed|fetch failed/i.test(msg)) {
+                return '連不到這個網址。常見原因：網址打錯、這個站不讓網頁直接連、站那邊剛好出錯、或現在沒網路。';
+            }
+            let st = (e && e.status) || 0;
+            if (!st) { const m = msg.match(/\b(?:HTTP|status(?: code)?)[ :]*([1-5]\d\d)\b/i); if (m) st = parseInt(m[1], 10); }
+            // 酒館那幾條路常常沒有數字、只有英文的狀態字：認得出來的才判，認不出來就不講白話（只顯示原文）
+            if (!st) {
+                if (/unauthorized|forbidden|invalid api key|incorrect api key/i.test(msg)) st = 401;
+                else if (/too many requests|rate limit|quota/i.test(msg)) st = 429;
+                else if (/not found/i.test(msg)) st = 404;
+                else if (/bad request/i.test(msg)) st = 400;
+            }
+            if (st === 401 || st === 403) return '金鑰不對或過期，或這把金鑰沒有額度、沒有開這個模型。';
+            if (st === 404) return '網址後面那段不對，或這個站沒有這個模型名。';
+            if (st === 400) return '站方退回了這次請求：' + String((e && e.siteMsg) || raw || '').replace(/\s+/g, ' ').trim().slice(0, 200);
+            if (st === 429) return '太頻繁，或額度用完了。';
+            if (st >= 500 && st < 600) return '站那邊出錯了，等一下再試。';
+            return '';
+        }
+        function _apiTestShow(resultEl, kind, plain, raw) {
+            resultEl.hidden = false;
+            resultEl.style.display = '';
+            resultEl.style.color = '';
+            resultEl.className = 'api-test-result is-' + kind;
+            resultEl.textContent = '';
+            if (plain) { const a = document.createElement('div'); a.className = 'api-test-plain'; a.textContent = plain; resultEl.appendChild(a); }
+            if (raw) { const b = document.createElement('div'); b.className = 'api-test-raw'; b.textContent = raw; resultEl.appendChild(b); }
+        }
+        // 站方回的錯誤字：通常在 error.message，也有直接放 error（字串）、message、detail 的；都沒有就拿回應開頭那一段
+        function _apiSiteMsg(data, text) {
+            try {
+                if (data && data.error) { if (typeof data.error === 'string') return data.error; return data.error.message || JSON.stringify(data.error); }
+                if (data && (data.message || data.detail)) return String(data.message || (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail)));
+            } catch (_) {}
+            return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+        }
+        function _apiHttpErr(status, statusText, siteMsg) {
+            const er = new Error('HTTP ' + status + ': ' + (siteMsg || statusText || ''));
+            er.status = status; er.siteMsg = siteMsg || '';
+            return er;
+        }
+        // OpenAI 相容那條遇到 404 時的「另一種網址」：有 /v1 ↔ 沒有 /v1。回 { target: 這次要打的整條網址, field: 網址格該填什麼 }
+        //   送生成時的規則（os_api_engine.js，這裡不動它）：網址裡有 /chat/completions 就原樣用；沒有就補「/v1（結尾已經是 /v1 就不補）＋/chat/completions」。
+        //   所以「沒有 /v1 的站」只能把整條 …/chat/completions 填進網址格才表示得出來。
+        function _apiAltV1(base) {
+            const hasCc = /\/chat\/completions/i.test(base);
+            const root = hasCc ? base.replace(/\/chat\/completions.*$/i, '') : base;
+            if (/\/v1$/i.test(root)) { const t = root.replace(/\/v1$/i, '') + '/chat/completions'; return { target: t, field: t }; }
+            if (hasCc) return { target: root + '/v1/chat/completions', field: root + '/v1' };
+            const t = root + '/chat/completions';
+            return { target: t, field: t };
+        }
+
         async function runApiTest(cfg, modelVal, resultEl) {
             // 測試只說一句 Hi，但會先想的模型（Gemini 3.x pro、Claude 5.5、o 系列）想的部分也算在字數裡：
             //   以前給 50，一想就用光、回空的，測試看起來失敗、實際生成卻正常（11-13 小斐驗收 Vertex 3.1-pro 抓到）。給 2048 讓它想完
             const TEST_MAX = 2048;
-            resultEl.style.display = 'block';
-            resultEl.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.40)';
-            resultEl.textContent = '測試中...';
+            _apiTestShow(resultEl, 'busy', '', '測試中...');
             try {
                 let replyText = '';
+                let fixedUrl = '';   // OpenAI 相容那條：原本的網址 404、換另一種通了 → 這裡是網址格該填的字
                 const win = window.parent || window;
                 const doc = win.document;
 
@@ -3116,7 +3220,11 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             headers: { ...headers, 'Content-Type': 'application/json' },
                             body: JSON.stringify(_tbody)
                         });
-                        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                        if (!res.ok) {
+                            const _t = await res.text().catch(() => '');
+                            let _d = null; try { _d = JSON.parse(_t); } catch (_) {}
+                            throw _apiHttpErr(res.status, res.statusText, _apiSiteMsg(_d, _t));
+                        }
                         const data = await res.json();
                         replyText = data?.choices?.[0]?.message?.content || data?.content || JSON.stringify(data);
                     }
@@ -3141,42 +3249,67 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         });
                     }
                     const data = await res.json().catch(() => null);
-                    if (!res.ok) throw new Error(win.OS_API.vertexHint(cfg.url, `HTTP ${res.status}: ` + ((data && data.error && (data.error.message || JSON.stringify(data.error))) || res.statusText)));
+                    if (!res.ok) {
+                        const _sm = (data && data.error && (data.error.message || JSON.stringify(data.error))) || res.statusText;
+                        const er = new Error(win.OS_API.vertexHint(cfg.url, `HTTP ${res.status}: ` + _sm));
+                        er.status = res.status; er.siteMsg = _sm;
+                        throw er;
+                    }
                     replyText = (cfg.apiFormat === 'gemini'
                         ? ((data?.candidates?.[0]?.content?.parts) || []).filter(p => p && !p.thought).map(p => p.text || '').join('')
                         : ((data?.content) || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(''))
                         || JSON.stringify(data);
                 } else {
                     if (!cfg.url) throw new Error('請先填寫 API 地址');
-                    let targetUrl = cfg.url.replace(/\/$/, '');
-                    if (!targetUrl.includes('/chat/completions')) targetUrl += (targetUrl.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
-                    const res = await fetch(targetUrl, {
-                        method: 'POST',
-                        headers: window.OS_API.authHeaders(targetUrl, cfg.key, { json: true }),
-                        body: JSON.stringify({ model: modelVal, messages: [{ role: 'user', content: 'Hi' }], max_tokens: TEST_MAX, stream: false })
-                    });
-                    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-                    const data = await res.json();
-                    replyText = data?.choices?.[0]?.message?.content || data?.content || JSON.stringify(data);
+                    const base = cfg.url.replace(/\/$/, '');
+                    const build = (u) => u.includes('/chat/completions') ? u : u + (u.endsWith('/v1') ? '' : '/v1') + '/chat/completions';   // 跟送生成同一條規則
+                    // 回應的內容整段讀出來：以前失敗只拿 res.statusText（常常是空的），站方講的原因（通常在 error.message）看不到
+                    const post = async (target) => {
+                        const res = await fetch(target, {
+                            method: 'POST',
+                            headers: window.OS_API.authHeaders(target, cfg.key, { json: true }),
+                            body: JSON.stringify({ model: modelVal, messages: [{ role: 'user', content: 'Hi' }], max_tokens: TEST_MAX, stream: false })
+                        });
+                        const text = await res.text().catch(() => '');
+                        let data = null; try { data = JSON.parse(text); } catch (_) {}
+                        return { res, text, data };
+                    };
+                    let r = await post(build(base));
+                    if (r.res.status === 404) {
+                        // 404 最常見是 /v1 多了或少了：另一種再試一次，通了就告訴她哪個才對
+                        const alt = _apiAltV1(base);
+                        let r2 = null;
+                        try { r2 = await post(alt.target); } catch (_) {}
+                        if (r2 && r2.res.ok) { r = r2; fixedUrl = alt.field; }
+                    }
+                    if (!r.res.ok) throw _apiHttpErr(r.res.status, r.res.statusText, _apiSiteMsg(r.data, r.text));
+                    const data = r.data;
+                    replyText = data?.choices?.[0]?.message?.content || data?.content || r.text || JSON.stringify(data);
                 }
 
-                resultEl.style.color = 'rgba(var(--os-ink-rgb, 26, 28, 40), 0.25)';
-                resultEl.textContent = '回應: ' + replyText;
-                status.innerText = 'API 連線成功';
+                if (fixedUrl) {
+                    // 網址格改成通的那個給她看，但不偷偷存：要她自己按「保存所有設定」
+                    if (cfg.urlEl) cfg.urlEl.value = fixedUrl;
+                    _apiTestShow(resultEl, 'fix', '連上了，但網址要改成：' + fixedUrl + '。上面的網址格已經幫你改好，記得按最下面的「保存所有設定」。', '回應: ' + replyText);
+                    status.innerText = 'API 連線成功（網址改了，還沒保存）';
+                } else {
+                    _apiTestShow(resultEl, 'ok', '', '回應: ' + replyText);
+                    status.innerText = 'API 連線成功';
+                }
             } catch (e) {
                 // 酒館把所有失敗都包成 `API request failed`，真正的原因在 cause 裡 → 攤平顯示
                 let _msg = e.message;
                 try { _msg = (window.parent || window).OS_API?._causeText?.(e) || _msg; } catch (_) {}
-                resultEl.style.color = '#fc8181';
-                resultEl.textContent = '錯誤: ' + _msg;
+                _apiTestShow(resultEl, 'fail', _apiFailPlain(e, _msg), '錯誤: ' + _msg);
                 status.innerText = 'API 測試失敗';
             }
         }
 
         btnTest.onclick = async () => {
             btnTest.style.opacity = '0.5'; btnTest.textContent = '測試中...';
+            elUrl.value = _cleanApiUrl(elUrl.value); elKey.value = _cleanApiKey(elKey.value);   // 測試前先清掉多貼的空白、換行、尾巴
             await runApiTest(
-                { useSystemApi: elSystemApi.checked, stProfileId: elStProfile.value, url: elUrl.value.trim(), key: elKey.value.trim(),
+                { useSystemApi: elSystemApi.checked, stProfileId: elStProfile.value, url: elUrl.value, key: elKey.value, urlEl: elUrl,
                   apiFormat: (container.querySelector('#os-api-format') || {}).value || 'openai' },
                 elModel.value,
                 container.querySelector('#os-test-result')
@@ -3188,10 +3321,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         secTestBtn.onclick = async () => {
             secTestBtn.style.opacity = '0.5'; secTestBtn.textContent = '測試中...';
             const isSecSync = secSyncPrimary && secSyncPrimary.checked;
-            const testUrl = isSecSync ? elUrl.value.trim() : secUrl.value.trim();
-            const testKey = isSecSync ? elKey.value.trim() : secKey.value.trim();
+            const uEl = isSecSync ? elUrl : secUrl, kEl = isSecSync ? elKey : secKey;
+            uEl.value = _cleanApiUrl(uEl.value); kEl.value = _cleanApiKey(kEl.value);
             await runApiTest(
-                { useSystemApi: secSystemApi.checked, stProfileId: secStProfile.value, url: testUrl, key: testKey,
+                { useSystemApi: secSystemApi.checked, stProfileId: secStProfile.value, url: uEl.value, key: kEl.value, urlEl: uEl,
                   // 同步主模型時格式跟主模型走（跟保存時一樣）
                   apiFormat: (container.querySelector(isSecSync ? '#os-api-format' : '#sec-api-format') || {}).value || 'openai' },
                 secModel.value,
@@ -3946,6 +4079,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             + (r.styles || []).map(x => '<option value="' + _e(x.name) + '"' + (x.name === r.style ? ' selected' : '') + '>' + _e(x.name) + '</option>').join('');
     };
     window.OS_SETTINGS.launchApp = launchApp;
+    window.OS_SETTINGS.cleanApiUrl = _cleanApiUrl;
+    window.OS_SETTINGS.cleanApiKey = _cleanApiKey;
     // 相簿 app（大廳手機殼）：用同一引擎跑「只顯示畫廊」模式
     window.OS_SETTINGS.launchAlbum = function (container) { return launchApp(container, 'album'); };
 

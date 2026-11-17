@@ -67,15 +67,6 @@
                             </select>
                         </div>
 
-                        <!-- 主模型的自訂前置指令：以前藏在「用酒館的連線」那格底下，PWA 沒有酒館整格不顯示、直連也沒吃到；
-                             現在跟副模型一樣自己一格，酒館連線時每個連接預設各記各的，自己填網址時只有一份。 -->
-                        <div class="set-group">
-                            <details>
-                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在主模型所有訊息最前面；直連、托管、酒館連線都生效。用酒館連線時每個連接預設各記各的。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1278') : ''}</summary>
-                                <textarea class="set-input" id="os-custom-cot" rows="7" placeholder="貼上要放在主模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                            </details>
-                        </div>
-
                         <div class="set-group">
                             <div class="set-label">選擇模型</div>
                             <div id="model-system-notice" class="${llmConfig.useSystemApi ? '' : 'hidden'}" style="background:rgba(var(--os-ink-rgb), 0.06); padding:10px; border-radius:4px; font-size:12px; color:var(--os-ink); border:1px solid rgba(var(--os-ink-rgb), 0.15);">
@@ -100,27 +91,43 @@
                             </div>
                         </div>
 
+                        <!-- 進階參數（11-17）：字數上限、溫度、Top P、兩個懲罰值、自訂前置指令收成一格，點開才看得到；收著那一行寫出現在的值，
+                             拉了跟著變（os_settings.js 的 wireAdv）。她的規矩是不准摺疊，這是她點頭的例外：條件是收著也看得到現況、裡面是平常不用碰的。
+                             🚨 別把別的東西也收進來；欄位 id 都沒變，存檔照舊。 -->
                         <div class="set-group">
-                            <div class="set-slider-container">
-                                <div class="set-label"><span>Max Tokens</span></div>
-                                <input type="number" min="100" max="200000" step="100" value="${_capiEsc(llmConfig.maxTokens)}" class="set-input" id="os-max-tokens" style="margin-top:6px; width:100%;">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Temperature</span><span class="set-slider-val" id="val-temp">${llmConfig.temperature}</span></div>
-                                <input type="range" min="0" max="2" step="0.05" value="${_capiEsc(llmConfig.temperature)}" class="set-slider" id="os-temperature">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Top P</span><span class="set-slider-val" id="val-topp">${llmConfig.top_p ?? 1.0}</span></div>
-                                <input type="range" min="0" max="1" step="0.01" value="${_capiEsc(llmConfig.top_p ?? 1.0)}" class="set-slider" id="os-top-p">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Frequency Penalty</span><span class="set-slider-val" id="val-freq">${llmConfig.frequency_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(llmConfig.frequency_penalty ?? 0)}" class="set-slider" id="os-freq-penalty">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Presence Penalty</span><span class="set-slider-val" id="val-pres">${llmConfig.presence_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(llmConfig.presence_penalty ?? 0)}" class="set-slider" id="os-pres-penalty">
-                            </div>
+                            <details class="set-adv" id="os-adv">
+                                <summary class="set-adv-sum">
+                                    <span class="set-adv-name"><i class="fa-solid fa-sliders"></i> 進階參數</span>
+                                    <span class="set-adv-now" id="os-adv-now"></span>
+                                    <i class="fa-solid fa-chevron-down set-adv-chev"></i>
+                                </summary>
+                                <div class="set-adv-body">
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>字數上限（Max Tokens）</span></div>
+                                        <input type="number" min="100" max="200000" step="100" value="${_capiEsc(llmConfig.maxTokens)}" class="set-input set-adv-num" id="os-max-tokens">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>溫度（Temperature）</span><span class="set-slider-val" id="val-temp">${llmConfig.temperature}</span></div>
+                                        <input type="range" min="0" max="2" step="0.05" value="${_capiEsc(llmConfig.temperature)}" class="set-slider" id="os-temperature">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>Top P</span><span class="set-slider-val" id="val-topp">${llmConfig.top_p ?? 1.0}</span></div>
+                                        <input type="range" min="0" max="1" step="0.01" value="${_capiEsc(llmConfig.top_p ?? 1.0)}" class="set-slider" id="os-top-p">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>Frequency Penalty</span><span class="set-slider-val" id="val-freq">${llmConfig.frequency_penalty ?? 0}</span></div>
+                                        <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(llmConfig.frequency_penalty ?? 0)}" class="set-slider" id="os-freq-penalty">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>Presence Penalty</span><span class="set-slider-val" id="val-pres">${llmConfig.presence_penalty ?? 0}</span></div>
+                                        <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(llmConfig.presence_penalty ?? 0)}" class="set-slider" id="os-pres-penalty">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label" title="以 system 角色插在主模型所有訊息最前面；直連、托管、酒館連線都生效。用酒館連線時每個連接預設各記各的。"><span><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1278') : ''}</span></div>
+                                        <textarea class="set-input set-adv-cot" id="os-custom-cot" rows="7" placeholder="貼上要放在主模型訊息最前面的 system 指令">${(llmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
 
                         <div class="set-group">
@@ -137,7 +144,7 @@
                         <div class="set-group">
                             <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="os-test-btn">發送測試訊息</div>
-                            <div id="os-test-result" style="display:none; margin-top:10px; background:rgba(var(--os-tint-rgb), 0.90); border-radius:4px; padding:12px; font-size:12px; color:var(--os-ink-soft); font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
+                            <div id="os-test-result" class="api-test-result" hidden></div>
                         </div>
                     </div>
 
@@ -189,13 +196,6 @@
                         <!-- ⛔ 副模型的「僅讀取摘要」已移除：沒有任何程式讀 os_secondary_llm_config.enableSummaryOnly，
                              它從頭到尾只是一顆存得起來、但誰也不看的開關。歷史用量控制在主模型那格。 -->
 
-                        <div class="set-group">
-                            <details>
-                                <summary style="cursor:pointer; user-select:none; font-size:13px; color:var(--os-ink);" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／）都生效。"><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1402') : ''}</summary>
-                                <textarea class="set-input" id="sec-custom-cot" rows="7" placeholder="貼上要放在副模型訊息最前面的 system 指令" style="margin-top:8px; width:100%; resize:vertical; line-height:1.5; min-height:120px;">${(secLlmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
-                            </details>
-                        </div>
-
                         <div class="set-group"${stHide}>
                             <div class="set-label">
                                 <span><i class="fa-solid fa-clipboard"></i> 注入 Preset 自訂條目</span>
@@ -209,33 +209,49 @@
                             </div>
                         </div>
 
+                        <!-- 進階參數（11-17）：字數上限、溫度、Top P、兩個懲罰值、自訂前置指令收成一格，點開才看得到；收著那一行寫出現在的值，
+                             拉了跟著變（os_settings.js 的 wireAdv）。她的規矩是不准摺疊，這是她點頭的例外：條件是收著也看得到現況、裡面是平常不用碰的。
+                             🚨 別把別的東西也收進來；欄位 id 都沒變，存檔照舊。 -->
                         <div class="set-group">
-                            <div class="set-slider-container">
-                                <div class="set-label"><span>Max Tokens</span></div>
-                                <input type="number" min="100" max="200000" step="100" value="${_capiEsc(secLlmConfig.maxTokens)}" class="set-input" id="sec-max-tokens" style="margin-top:6px; width:100%;">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Temperature</span><span class="set-slider-val" id="sec-val-temp">${secLlmConfig.temperature}</span></div>
-                                <input type="range" min="0" max="2" step="0.05" value="${_capiEsc(secLlmConfig.temperature)}" class="set-slider" id="sec-temperature">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Top P</span><span class="set-slider-val" id="sec-val-topp">${secLlmConfig.top_p ?? 1.0}</span></div>
-                                <input type="range" min="0" max="1" step="0.01" value="${_capiEsc(secLlmConfig.top_p ?? 1.0)}" class="set-slider" id="sec-top-p">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Frequency Penalty</span><span class="set-slider-val" id="sec-val-freq">${secLlmConfig.frequency_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(secLlmConfig.frequency_penalty ?? 0)}" class="set-slider" id="sec-freq-penalty">
-                            </div>
-                            <div class="set-slider-container" style="margin-top:10px;">
-                                <div class="set-label"><span>Presence Penalty</span><span class="set-slider-val" id="sec-val-pres">${secLlmConfig.presence_penalty ?? 0}</span></div>
-                                <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(secLlmConfig.presence_penalty ?? 0)}" class="set-slider" id="sec-pres-penalty">
-                            </div>
+                            <details class="set-adv" id="sec-adv">
+                                <summary class="set-adv-sum">
+                                    <span class="set-adv-name"><i class="fa-solid fa-sliders"></i> 進階參數</span>
+                                    <span class="set-adv-now" id="sec-adv-now"></span>
+                                    <i class="fa-solid fa-chevron-down set-adv-chev"></i>
+                                </summary>
+                                <div class="set-adv-body">
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>字數上限（Max Tokens）</span></div>
+                                        <input type="number" min="100" max="200000" step="100" value="${_capiEsc(secLlmConfig.maxTokens)}" class="set-input set-adv-num" id="sec-max-tokens">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>溫度（Temperature）</span><span class="set-slider-val" id="sec-val-temp">${secLlmConfig.temperature}</span></div>
+                                        <input type="range" min="0" max="2" step="0.05" value="${_capiEsc(secLlmConfig.temperature)}" class="set-slider" id="sec-temperature">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>Top P</span><span class="set-slider-val" id="sec-val-topp">${secLlmConfig.top_p ?? 1.0}</span></div>
+                                        <input type="range" min="0" max="1" step="0.01" value="${_capiEsc(secLlmConfig.top_p ?? 1.0)}" class="set-slider" id="sec-top-p">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>Frequency Penalty</span><span class="set-slider-val" id="sec-val-freq">${secLlmConfig.frequency_penalty ?? 0}</span></div>
+                                        <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(secLlmConfig.frequency_penalty ?? 0)}" class="set-slider" id="sec-freq-penalty">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label"><span>Presence Penalty</span><span class="set-slider-val" id="sec-val-pres">${secLlmConfig.presence_penalty ?? 0}</span></div>
+                                        <input type="range" min="-2" max="2" step="0.01" value="${_capiEsc(secLlmConfig.presence_penalty ?? 0)}" class="set-slider" id="sec-pres-penalty">
+                                    </div>
+                                    <div class="set-slider-container">
+                                        <div class="set-label" title="以 system 角色插在副模型所有訊息最前面；不分派發路徑（直連／跟隨酒館／）都生效。"><span><i class="fa-solid fa-pen-to-square"></i> 自訂前置指令${(window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_1402') : ''}</span></div>
+                                        <textarea class="set-input set-adv-cot" id="sec-custom-cot" rows="7" placeholder="貼上要放在副模型訊息最前面的 system 指令">${(secLlmConfig.customCot || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</textarea>
+                                    </div>
+                                </div>
+                            </details>
                         </div>
 
                         <div class="set-group">
                             <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="sec-test-btn">發送測試訊息</div>
-                            <div id="sec-test-result" style="display:none; margin-top:10px; background:rgba(var(--os-tint-rgb), 0.90); border-radius:4px; padding:12px; font-size:12px; color:var(--os-ink-soft); font-family:monospace; white-space:pre-wrap; word-break:break-all; max-height:120px; overflow-y:auto;"></div>
+                            <div id="sec-test-result" class="api-test-result" hidden></div>
                         </div>
                     </div>
 
