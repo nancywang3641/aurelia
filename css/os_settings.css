@@ -529,3 +529,6 @@
 .api-test-result.is-fail { border-color: var(--os-danger, #a32d2d); }
 .api-test-result.is-fail .api-test-plain { color: var(--os-danger, #a32d2d); }
 .api-test-result.is-fix { border-color: var(--os-accent-strong); }
+
+/* ── 常用的站（11-17）：網址上面那個下拉，選了預填網址和請求格式（os_settings.js 的 API_SITES／wireSites） ── */
+.api-site-row { margin-bottom: 10px; }

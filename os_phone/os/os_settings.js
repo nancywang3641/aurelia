@@ -13,6 +13,7 @@
         if (!A || !A.registerHelp) return false;
         A.registerHelp({
             ss_1249: { title: '用酒館的連線', body: '關掉就用下面自己填的網址與金鑰。' },
+            ss_api_site: { title: '常用的站', body: '選了只是幫你把網址和請求格式填好，還是可以自己改；金鑰要自己貼。\n\n用別的站就留在「自己填」，網址照自己的填。' },
             ss_1269: { title: '請求格式', body: '回覆被站整段攔掉（內容為空、content_filter）時，換成 Gemini 原生：這個格式會附上「安全過濾全關」，跟酒館送 Google 的一樣。\n接 Claude 官方（或支援 Claude 格式的站）選 Claude 原生：同一段開頭再送一次時會讀緩存，比較省。OpenAI 相容這個格式接 Claude 沒有緩存。\n用 Google Cloud 的 Vertex（現在叫 Agent Platform）：選「Gemini 原生／Vertex」，API 地址填 https://aiplatform.googleapis.com，Key 填「綁在服務帳戶上」的 API 金鑰（Google Cloud 建金鑰時先在「選取 API 限制」選 Agent Platform API，再綁一個有「Agent Platform 使用者」角色的服務帳戶；一般的金鑰 Vertex 不收）。建金鑰時說被組織政策擋住：到「組織政策」找 iam.managed.disableServiceAccountApiKeyCreation，在 allowedServices 多加一行 aiplatform.googleapis.com。\n這種金鑰拉不到模型清單，模型選單最下面選「自己輸入模型名稱」，照 Vertex 上的寫（例如 gemini-3.1-pro-preview）。會先想的模型想的也算在 Max Tokens 裡，寫劇情建議 16000 以上。下載下來的那種 JSON 鑰匙檔網頁版用不了，只有酒館收。' },
             ss_1278: { title: '自訂前置指令', body: '這段會放在主模型每次收到的訊息最前面。直連、托管、酒館連線都有效；用酒館連線時每個連接預設各記一份。\n留空就不放。' },
             ss_1298: { title: '注入 Preset 自訂條目', body: '把你挑的那個 Preset 裡自己寫的條目，放進主模型的指令裡。要裝酒館助手才有。' },
@@ -1107,6 +1108,59 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         return u;
     }
 
+    // 🏷 常用的站（11-17）：網址上面那個下拉。她：「內建官方。做法改成『預填』而不是『鎖死』」。
+    //   選了＝把那一家的官方網址和請求格式填進下面原本的格子，玩家只要再貼金鑰；填完照樣能自己改，改了就照改的。
+    //   存檔不多記「選了哪一家」：重開時看現在的網址和格式對不對得上某一家（_apiSiteOf），對得上顯示那家，對不上顯示「自己填」。
+    //   🚨 只放官方的：不放中轉站、不放任何人自己的網址；下拉旁邊也不放灰字範例網址。哪家改網址只改這一列。
+    //   url＝填進網址格的字（要讓送生成那條規則打到官方寫的那個端點）；fmt＝請求格式那格的值。出處是 2026-11-17 查的官方文件：
+    //   ・Google Gemini：主機 generativelanguage.googleapis.com（官方 JS SDK 說明 googleapis/js-genai 的 README：Gemini Developer API 的 Endpoint），
+    //     路徑 /v1beta/models/{model}:generateContent（ai.google.dev/api/generate-content，現在轉到 aistudio.google.com/api-reference/generate-content），
+    //     金鑰標頭 x-goog-api-key（ai.google.dev/gemini-api/docs/text-generation 的 REST 範例）。原生格式會自己從根網址接路徑，所以填到主機就好。
+    //   ・OpenAI：https://api.openai.com/v1（官方 Node SDK 原始碼 openai/openai-node 的 src/client.ts 預設 baseURL；platform.openai.com 的文件頁擋機器人讀不到）。
+    //   ・Anthropic：https://api.anthropic.com，POST /v1/messages（docs.anthropic.com/en/api/getting-started、/en/api/messages，現在轉到 platform.claude.com/docs）。
+    //   ・DeepSeek：base_url https://api.deepseek.com，範例打的是 https://api.deepseek.com/chat/completions（api-docs.deepseek.com 首頁）。
+    //     文件沒有寫可以加 /v1，而送生成的規則是「網址裡沒有 /chat/completions 就補 /v1/chat/completions」，所以這裡填整條，才會打到文件寫的那個端點。
+    //   ・OpenRouter：https://openrouter.ai/api/v1（openrouter.ai/docs/quickstart；/chat/completions 在 openrouter.ai/docs/api-reference/chat-completion）。
+    const API_SITES = [
+        { id: 'gemini',     name: 'Google Gemini',      url: 'https://generativelanguage.googleapis.com',     fmt: 'gemini' },
+        { id: 'openai',     name: 'OpenAI',             url: 'https://api.openai.com/v1',                     fmt: 'openai' },
+        { id: 'anthropic',  name: 'Anthropic（Claude）', url: 'https://api.anthropic.com',                     fmt: 'anthropic' },
+        { id: 'deepseek',   name: 'DeepSeek',           url: 'https://api.deepseek.com/chat/completions',     fmt: 'openai' },
+        { id: 'openrouter', name: 'OpenRouter',         url: 'https://openrouter.ai/api/v1',                  fmt: 'openai' },
+    ];
+    // 比對用：把網址剝到根（結尾斜線、/chat/completions、/messages、/v1beta…、/v1 都不算），大小寫不分
+    function _apiSiteRoot(u) {
+        return _cleanApiUrl(u).replace(/\/chat\/completions$/i, '').replace(/\/messages$/i, '').replace(/\/v1beta.*$/i, '').replace(/\/v1$/i, '').replace(/\/+$/, '').toLowerCase();
+    }
+    // 現在的網址＋格式是不是某一家官方：回那一列，對不上回 null
+    function _apiSiteOf(url, fmt) {
+        const r = _apiSiteRoot(url);
+        if (!r) return null;
+        return API_SITES.find(function (x) { return x.fmt === (fmt || 'openai') && _apiSiteRoot(x.url) === r; }) || null;
+    }
+    function _apiSiteOptions(first) {
+        return '<option value="">' + first + '</option>' + API_SITES.map(function (x) { return '<option value="' + x.id + '">' + x.name + '</option>'; }).join('');
+    }
+    // 把一個下拉接到它管的網址格、格式格：選了就填（金鑰不動）；手改網址或格式就重新比對
+    function _wireApiSite(sel, urlEl, fmtEl, after) {
+        if (!sel || !urlEl || !fmtEl) return;
+        const sync = function () { const hit = _apiSiteOf(urlEl.value, fmtEl.value); sel.value = hit ? hit.id : ''; };
+        sel.addEventListener('change', function () {
+            const hit = API_SITES.find(function (x) { return x.id === sel.value; });
+            if (!hit) return;   // 選回「自己填」：格子裡的字不動，她自己改
+            urlEl.value = hit.url;
+            fmtEl.value = hit.fmt;
+            // 讓原本聽這兩格的程式也知道值變了（跟她自己改一樣）
+            try { fmtEl.dispatchEvent(new Event('change', { bubbles: true })); urlEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (e) {}
+            sel.value = hit.id;
+            if (typeof after === 'function') after();
+        });
+        urlEl.addEventListener('input', sync);
+        urlEl.addEventListener('change', sync);
+        fmtEl.addEventListener('change', sync);
+        sync();
+    }
+
     function launchApp(container, mode) {
         const llmConfig = loadLlmConfig();
         const secLlmConfig = loadSecLlmConfig();
@@ -1491,6 +1545,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     listBox.innerHTML = chans.map(function (c, i) {
                         return '<div class="set-channel" data-idx="' + i + '">'
                             + '<input class="set-input ch-name" placeholder="通道名字（例如 便宜大容量）" value="' + esc(c.name) + '">'
+                            + '<select class="set-select ch-site">' + _apiSiteOptions('常用的站：自己填') + '</select>'   // 選了預填這條通道的網址和請求格式（API_SITES），不鎖
                             + '<input class="set-input ch-url" placeholder="API 網址" value="' + esc(c.url) + '">'
                             + '<input class="set-input ch-key" type="password" placeholder="金鑰" value="' + esc(c.key) + '">'
                             + '<input class="set-input ch-model" placeholder="模型名稱" value="' + esc(c.model) + '">'
@@ -1520,7 +1575,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                         saveChannels(list);
                         paintRoutes();
                     };
-                    box.querySelectorAll('input, select').forEach(function (el) { el.onchange = save; });
+                    box.querySelectorAll('input, select').forEach(function (el) { if (!el.classList.contains('ch-site')) el.onchange = save; });
+                    _wireApiSite(box.querySelector('.ch-site'), box.querySelector('.ch-url'), box.querySelector('.ch-fmt'), save);   // 選了一家＝填好就存
                     box.querySelector('.ch-del').onclick = async function () {
                         const list = loadChannels();
                         const gone = list[idx];
@@ -2865,6 +2921,21 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             }
         };
 
+        // 🏷 常用的站：主模型、副模型的網址上面各一個下拉（表在上面 API_SITES；選了預填網址和請求格式，不鎖）
+        (function wireSites() {
+            [['os', '#manual-api-group', elUrl, container.querySelector('#os-api-format')],
+             ['sec', '#sec-manual-api-group', secUrl, container.querySelector('#sec-api-format')]].forEach(function (row) {
+                const group = container.querySelector(row[1]);
+                if (!group || !row[2] || !row[3]) return;
+                const wrap = document.createElement('div');
+                wrap.className = 'api-site-row';
+                wrap.innerHTML = '<div class="set-label">常用的站' + ((window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn('ss_api_site') : '') + '</div>'
+                    + '<select class="set-select api-site" id="' + row[0] + '-api-site">' + _apiSiteOptions('自己填') + '</select>';
+                group.insertBefore(wrap, group.firstChild);
+                _wireApiSite(wrap.querySelector('select'), row[2], row[3]);
+            });
+        })();
+
         // 🎚 進階參數收著的那一行：寫出現在的值，拉了跟著變（範本在 os_settings_page.js 的 .set-adv）。
         //   字數上限、溫度一定寫；Top P、兩個懲罰值動過（不是 1／0）才寫；有填前置指令寫「有前置指令」。
         (function wireAdv() {
@@ -4080,6 +4151,8 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     };
     window.OS_SETTINGS.launchApp = launchApp;
     window.OS_SETTINGS.cleanApiUrl = _cleanApiUrl;
+    window.OS_SETTINGS.API_SITES = API_SITES;
+    window.OS_SETTINGS.apiSiteOf = _apiSiteOf;
     window.OS_SETTINGS.cleanApiKey = _cleanApiKey;
     // 相簿 app（大廳手機殼）：用同一引擎跑「只顯示畫廊」模式
     window.OS_SETTINGS.launchAlbum = function (container) { return launchApp(container, 'album'); };
