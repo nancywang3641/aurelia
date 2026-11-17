@@ -159,8 +159,12 @@
             var evHtml = ev.length ? '<h4>昨天發生的事</h4><ul class="fs-events">' + ev.map(function (e) {
                 return '<li' + (e.bad ? ' class="bad"' : '') + '>' + fa(e.icon) + '<span>' + esc(e.text) + '</span></li>';
             }).join('') + '</ul>' : '';
+            // 結算單是昨天的：後院寫第 10 日、單子寫第 9 日看起來像算錯，標明是昨天（小斐 11-17）
+            var nowDay = 0;
+            try { nowDay = (opts.state() || {}).day || 0; } catch (e) { }
+            var title = nowDay === rep.day + 1 ? '昨天（第 ' + rep.day + ' 日）的結算' : '第 ' + rep.day + ' 日結算';
             wrap.innerHTML = '<section class="fs-card fs-report" role="dialog" aria-label="結算單">' +
-                '<header class="fs-head"><strong>' + fa('fa-receipt') + '第 ' + rep.day + ' 日結算</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<header class="fs-head"><strong>' + fa('fa-receipt') + title + '</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
                 '<div class="fs-body">' +
                 '<div class="fs-net ' + (rep.net >= 0 ? 'up' : 'down') + '"><span>這一天淨賺</span><strong>' + money(rep.net) + '</strong><small>金幣 ' + rep.coinsStart + ' → ' + rep.coinsEnd + '</small></div>' +
                 '<h4>出貨<b>+' + rep.income + 'G</b></h4>' +

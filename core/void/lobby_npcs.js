@@ -611,8 +611,11 @@
     //   比對只認全名和這裡寫的別名，不做包含比對（「丹」不能吃到「丹尼爾」）。
     const OFFICIAL_ALIAS = { rabbit: ['白兔'], zhiwei: ['紫薇'] };
     const _offNorm = (n) => String(n || '').replace(/[·・•\s]/g, '');
+    // 管理員在大廳走路用的那張（角色中心「裝扮」頁沒看到他本人站在眼前時，用這張當「預設的小人」，別寫還沒有小人）
+    const OFFICIAL_WALK = { ying: 'yingWalk', alice: 'aliceWalk', rabbit: 'rabbitWalk', zhiwei: 'zhiweiWalk', hatter: 'hatterWalk', cheshire: 'cheshireWalk' };
     function _official() {
-        const one = (key, r) => ({ key: key, name: r.name, subTitle: r.subTitle, portrait: r.portrait, aliases: OFFICIAL_ALIAS[key] || [] });
+        const one = (key, r) => ({ key: key, name: r.name, subTitle: r.subTitle, portrait: r.portrait, aliases: OFFICIAL_ALIAS[key] || [],
+                                   walk: r.walk || (OFFICIAL_WALK[key] && ASSET[OFFICIAL_WALK[key]]) || '' });
         return Object.keys(STAFF).map(k => one(k, STAFF[k])).concat(SN_RESIDENTS.map(r => one(r.key, r)));
     }
     function _officialOf(name) {

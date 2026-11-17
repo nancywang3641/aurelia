@@ -615,7 +615,8 @@
         const LS = win.LobbyStage || window.LobbyStage;
         const st = (LS && LS._S) || null;
         const live = st ? [st.player].concat(st.npcs || []).filter(Boolean) : [];
-        if (off) return { a: actor || live.find(x => x.key === off.key) || { key: off.key, name: off.name, portrait: off.portrait }, lookKey: '' };
+        // 他不在眼前這個場景（例如人在大廳、瀅瀅在書咖）：帶上他走路那張，裝扮頁才看得到他的小人
+        if (off) return { a: actor || live.find(x => x.key === off.key) || { key: off.key, name: off.name, portrait: off.portrait, defaultSrc: off.walk ? { sheet: off.walk } : undefined }, lookKey: '' };
         if (actor) {
             await fresh(actor);
             if (actor.avatarCacheKey) return { a: actor, lookKey: String(actor.avatarCacheKey) };   // 大廳認得他是哪一輪的哪一筆
@@ -674,7 +675,10 @@
         if (S.offSel && renderOfficial(main)) return;
         const ch = S.sel;
         if (!ch) {
-            main.innerHTML = '<div class="acg-empty-main"><i class="fa-solid fa-user-plus"></i><div class="acg-empty-title">還沒有角色</div>'
+            // 左邊有「奧瑞亞官方」那幾位時，別寫「還沒有角色」（小斐 11-17：左邊列了 8 個，右邊卻說沒有）
+            const hasOff = officialList().length > 0;
+            main.innerHTML = '<div class="acg-empty-main"><i class="fa-solid fa-user-plus"></i><div class="acg-empty-title">' + (hasOff ? '還沒有你自己的角色' : '還沒有角色') + '</div>'
+              + (hasOff ? '<div class="acg-empty-sub">左邊「奧瑞亞官方」那幾位是內建的，點了看得到他們的樣子</div>' : '')
               + '<div class="acg-empty-acts"><button class="acg-btn acg-btn-main" type="button" data-act="add-char">新增角色</button>'
               + (S.wbOk ? '<button class="acg-btn" type="button" data-act="import">匯入清單</button>' : '') + '</div></div>';
             return;

@@ -277,6 +277,7 @@
 .acg-empty-main { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--acg-sub); }
 .acg-empty-main > i { font-size: 34px; opacity: .45; }
 .acg-empty-title { font-size: 15px; font-weight: 700; }
+.acg-empty-sub { font-size: 12.5px; text-align: center; max-width: 260px; line-height: 1.6; }
 .acg-empty-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
 
 .acg-file { display: none; }

@@ -355,9 +355,10 @@
                     ? ('你不在的這 ' + res.days + ' 天，收到房租 ' + res.earned + '。')
                     : (res.days > 0 ? ('過了 ' + res.days + ' 天，目前沒有房客繳租。') : '今天的房租已經收過了。')));
         strip.innerHTML = _esc(line) + (refundLine ? '<br><small>' + _esc(refundLine) + '</small>' : '');
-        page.appendChild(strip);
-
         const state = res.state || {};
+        // 還沒有出租房：沒有房租可收，別寫「今天的房租已經收過了」（小斐 11-17：什麼都沒有卻說收過了），底下那條會講怎麼隔出租房
+        const noUnits = !(state.units || []).length;
+        if (!(noUnits && !res.payFailed && !res.saveFailed && !(res.earned > 0) && !refundLine)) page.appendChild(strip);
         const unitsWrap = d.createElement('div'); unitsWrap.className = 'llb-units';
         page.appendChild(unitsWrap);
 
@@ -712,10 +713,11 @@
         page.innerHTML = '';
 
         // 已擁有
-        page.appendChild(_secTitle('已擁有'));
+        // 標題叫「我的藍圖」：叫「已擁有」底下又寫「還沒有藍圖」，讀起來像自相矛盾（小斐 11-17）
+        page.appendChild(_secTitle('我的藍圖'));
         if (!all.owned.length) {
             const m = d.createElement('div'); m.className = 'llb-msg';
-            m.textContent = '還沒有藍圖。下面貨架挑一張，或請設計師訂製一張。買斷入冊，之後想套哪一戶都行。';
+            m.textContent = '一張都還沒有。下面貨架挑一張，或請設計師訂製一張。買斷入冊，之後想套哪一戶都行。';
             page.appendChild(m);
         } else {
             const grid = d.createElement('div'); grid.className = 'llb-bps';
