@@ -496,7 +496,7 @@
 
     // ── 書籤②：通道 ────────────────────────────────────────────────
     // 🚨 這一頁只給看，不給改。以前這裡放了下拉單跟「新增／編輯／刪掉通道」，
-    //    跟設置 → API → 通道那頁是同一份資料、兩個地方都能改 —— 她的原話是
+    //    跟設置 → AI 模型 → 通道那頁是同一份資料、兩個地方都能改 —— 她的原話是
     //    「控制台這裡只是看的，為啥還有添加通道按鈕，別哪裡都塞」。要改就回設置那一頁改。
     async function _renderChannels(page) {
         const S = _S(), U = _U();
@@ -531,7 +531,7 @@
                     '<span class="dsh-route-v' + (off ? ' off' : '') + '">' +
                     (off ? '酒館自己生成，不走這裡' : _esc(chanName(routes[t.id] || t.def))) + '</span></div>';
             }).join('') + '</div>' +
-            '<div class="dsh-actions"><span class="dsh-note">要改走哪一條，在設置 → API → 通道</span></div>';
+            '<div class="dsh-actions"><span class="dsh-note">要改走哪一條，在設置 → AI 模型 → 通道</span></div>';
 
         html += _sec('我的通道');
         html += '<div class="dsh-chans">';

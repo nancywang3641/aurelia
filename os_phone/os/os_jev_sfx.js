@@ -2,14 +2,14 @@
 // [檔案] os_jev_sfx.js
 // 路徑：os_phone/os/os_jev_sfx.js
 // 職責：VN 的音效和背景音樂交給 Jev（決策模型）配，正文 AI 不再選（也不再每輪讀那兩張清單）。
-//   開關：設置→一般→素材「音效和音樂交給 Jev 配」（localStorage jev_sfx_on）。真的生效還要設好決策模型（設置→API→決策模型，os_jev_conn.js）。
+//   開關：設置→一般→素材「音效和音樂交給 Jev 配」（localStorage jev_sfx_on）。真的生效還要設好決策模型（設置→AI 模型→決策模型，os_jev_conn.js）。
 //   生效時 os_vn_rules 會把 BGM／音效清單和那串「翻書≠撕紙」規則從 VN 指令拿掉、vn_core 不理 AI 寫的 #音效# 和 [BGM|]。
 // 怎麼問（她 09-23 拍板 B1）：每一格旁白先問「這格發出哪一類聲音」（類別名附幾個範例，加「不放」），
 //   有的再問「這一類裡哪一個」；一次最多 10 題（Jev 一批題目太多會回 503）。音樂：每一場（換背景算一場）問一題「配哪首」。
 //   考卷（參考資料/STAGE_JEV_LAB）：一定要放的 12/15、硬塞類似的 0、音樂 5/5；一章市價約台幣 0.05 元。
 // 什麼時候問：正文 AI 還在寫的時候就開始（vn_avatar_earlybird 每 1.5 秒把寫到一半的正文餵進 feed），
 //   後面已經有換行的格才問；一場寫完（換背景或整章結束）才問那場的音樂。章節載入時（plan）把還沒問的補問完，排成時間表交給 vn_core。
-// 連到哪：設置→API→決策模型那三格。沒設好、關掉、Jev 沒回應 → 那一章照舊聽 AI 寫的（此時清單也照舊送給 AI）。
+// 連到哪：設置→AI 模型→決策模型那三格。沒設好、關掉、Jev 沒回應 → 那一章照舊聽 AI 寫的（此時清單也照舊送給 AI）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -26,7 +26,7 @@
     const MAX_BGM_PER_CHAPTER = 3;   // 她原本的規則「一章最多換 2 次」：第一場一首＋最多換兩次
     const RULE = '只有這一格「真的發出」清單上這個聲音時才選它。清單裡沒有一模一樣的聲音（例如磨豆機、唱歌、吹蠟燭）就選「' + NONE + '」，不要拿類似的來代替；只是提到、回憶、或聲音已經停了也選「' + NONE + '」。大部分的格都應該是「' + NONE + '」。';
 
-    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    // 決策模型連到哪：設置→AI 模型→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
     function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
     function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) === '1'; } catch (e) { return false; } }

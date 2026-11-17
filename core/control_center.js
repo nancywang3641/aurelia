@@ -888,7 +888,6 @@
             container.appendChild(div);
 
             const map = {
-                '設置': window.OS_SETTINGS,
                 '世界書': window.OS_WORLDBOOK || window.OS_LOREBOOK,
                 'worldbook': window.OS_WORLDBOOK || window.OS_LOREBOOK,
                 '提示詞': window.OS_PROMPTS,

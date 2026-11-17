@@ -398,7 +398,7 @@
     function _isRefusal(s) { return !!_refusalOf(s); }
 
     function _noAnswer(contact, note) { return _dialEnd(contact, '對方沒有接聽', true, note); }
-    function _dialFailed(contact) { return _dialEnd(contact, '沒接通 —— 到「設置 → 主模型」確認 API 有設好', false); }
+    function _dialFailed(contact) { return _dialEnd(contact, '沒接通 —— 到「設置 → AI 模型 → 主模型」確認 API 有設好', false); }
     async function _dialEnd(contact, statusText, writeMissed, note) {
         if (!_root) return;
         _clearTimer();
@@ -858,7 +858,7 @@
                 done();
                 if (stale()) { restore(); return; }
                 if (opts.firstRing) { restore(); _dialFailed(contact); return; }   // 還在響鈴：沒有通話畫面可以冒泡
-                _appendCallBubble(false, '（沒接通——到「設置 → 主模型」確認 API/連線有設好）', contact.name);
+                _appendCallBubble(false, '（沒接通——到「設置 → AI 模型 → 主模型」確認 API/連線有設好）', contact.name);
                 restore();
                 _vmAfterTurn();
             }, 40000);

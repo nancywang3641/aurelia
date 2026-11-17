@@ -278,7 +278,7 @@
 
         const config = (win.OS_SETTINGS?.getConfig?.()) || {};
         if (!config.url && !config.useSystemApi) {
-            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 尚未設定 API。請先到 <b>設置 → <i class="fa-solid fa-brain"></i> 主模型</b> 填入 API URL 與 Key。';
+            statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 尚未設定 API。請先到 <b>設置 → AI 模型 → 主模型</b> 填入 API URL 與 Key。';
             statusEl.className = 'err';
             return;
         }

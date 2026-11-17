@@ -3478,7 +3478,7 @@
             await gate.exitParallax();
             await _syncFreeMode();
             await _setCurrentId(''); await _syncWorldLamps('', '撤離');   // 進不去就把剛點的燈收回來
-            const why = { noapi: '還沒設定 AI（設置 → API），設定好再 DIVE 一次', busy: '劇情那邊正在寫上一段，等它寫完再 DIVE 一次',
+            const why = { noapi: '還沒設定 AI（設置 → AI 模型），設定好再 DIVE 一次', busy: '劇情那邊正在寫上一段，等它寫完再 DIVE 一次',
                           nofield: _pwa() ? '劇情畫面打不開' : '找不到酒館輸入框' };
             return { ok: false, msg: (why[sent] || why.nofield) + '，已切回主世界' };
         }

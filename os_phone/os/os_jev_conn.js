@@ -2,7 +2,7 @@
 // [檔案] os_jev_conn.js
 // 路徑：os_phone/os/os_jev_conn.js
 // 職責：決策模型（Jev 那種只做選擇題、打分數、是非題的模型）連到哪裡：網址、模型、鑰匙三格。
-//   設置→API→決策模型那頁填。10-04 以前網址跟模型寫死在每一支用到它的檔案裡（Vercel AI Gateway＋typesafe-ai/jev），
+//   設置→AI 模型→決策模型那頁填。10-04 以前網址跟模型寫死在每一支用到它的檔案裡（Vercel AI Gateway＋typesafe-ai/jev），
 //   鑰匙填在大廳設置；她：「先把jev接口放到 設置吧? 感覺先不要特定URL，這樣到時候我朋友也可以搞一個?」
 //   三格都填了才算能用（ready）；少一格就跟以前沒填鑰匙一樣，各功能照舊走自己的退路。
 // 誰在讀：書咖的丹（core/void/npc_decide.js）、記憶影子比對（os_jev_shadow.js）、立繪什麼時候收（os_jev_stage.js）、

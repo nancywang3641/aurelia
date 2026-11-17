@@ -32,7 +32,7 @@
     try {
         (win.AUI || window.AUI).registerHelp({
             mem_on:       { title: '劇情記憶', body: '每存一章，會自動把重點記下來；AI 下筆前會翻出相關的記憶給它看，避免忘記以前發生過的事。\n關掉就不記、也不翻。' },
-            mem_tidy:     { title: '整理舊記憶', body: '把比較舊、零零碎碎的記憶合併成少量精簡的幾條，每輪送給 AI 的東西會少一點。\n重要的人物、關係、代表台詞不動，最近 40 條不動；原本那些只是藏起來，不會刪。\n會呼叫模型：按下去前會先告訴你叫幾次；用哪個模型在 設置 → API → 通道 的「整理舊記憶」。想定期自動整理，到 CTX 面板打開「自動整理記憶」。' },
+            mem_tidy:     { title: '整理舊記憶', body: '把比較舊、零零碎碎的記憶合併成少量精簡的幾條，每輪送給 AI 的東西會少一點。\n重要的人物、關係、代表台詞不動，最近 40 條不動；原本那些只是藏起來，不會刪。\n會呼叫模型：按下去前會先告訴你叫幾次；用哪個模型在 設置 → AI 模型 → 通道 的「整理舊記憶」。想定期自動整理，到 CTX 面板打開「自動整理記憶」。' },
             mem_reconcile:{ title: '對齊劇情', body: '刪掉或重寫劇情之後用。\n把「來源那一樓已經不在了」的記憶清掉，AI 就不會再想起被刪掉的事。現有劇情的記憶一條都不動；讀不到完整劇情會自己停下，不會誤刪。\n不呼叫模型、不花錢。' },
             mem_backfill: { title: '建立記憶向量', body: '讓記憶可以照「意思」被找出來，不只是比對字面。\n剛開記憶服務、或換了本地模型之後，舊的記憶要補算一次。用的是記憶服務，不是聊天用的模型。' },
             mem_service:  { title: '記憶服務', body: '用來算「記憶之間像不像」的服務，找相關記憶時用。\n用本地模型：在你電腦裡算，文字不外流。\n用線上服務：填 SiliconFlow 這類服務，免費的 BAAI/bge-m3 就夠用。' },
@@ -343,7 +343,7 @@
             let plan;
             try { plan = await win.OS_STATE_RUNTIME.compressOldMemories({ storyId: sid, plan: true }); }
             catch (e) { AUI.alert(e?.message || String(e)); return; }
-            if (!await AUI.confirm(`把 ${plan.targets} 條舊的零碎記憶併成精簡版？會呼叫模型 ${plan.calls} 次。\n\n• 用哪個模型：設置 → API → 通道 的「整理舊記憶」\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原`)) return;
+            if (!await AUI.confirm(`把 ${plan.targets} 條舊的零碎記憶併成精簡版？會呼叫模型 ${plan.calls} 次。\n\n• 用哪個模型：設置 → AI 模型 → 通道 的「整理舊記憶」\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原`)) return;
             const res = q('#avs-mem-tidy-result');
             tidyBtn.disabled = true; const _o = tidyBtn.textContent; tidyBtn.textContent = '整理中…';
             try {

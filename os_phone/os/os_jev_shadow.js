@@ -10,7 +10,7 @@
 //   Jev 取排名前 8 必要的全送到、送出量只有副模型的一半；副模型判「過期」大量冤枉還成立的舊事。
 //   但只考過兩個短故事、Jev 服務又不穩 → 先在她真的玩的時候影子跑，對過再決定要不要接手。
 // 花費：每回合 5 條一通（40 條＝8 通，每通都附同一段劇情），約台幣 0.02 元以下。沒填鑰匙、關掉、或 Jev 掛了 → 這輪不比，不影響任何東西。
-// 連到哪：設置→API→決策模型那三格（os_jev_conn.js）。
+// 連到哪：設置→AI 模型→決策模型那三格（os_jev_conn.js）。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -28,7 +28,7 @@
     const TXT_MAX = 70;           // 記錄裡每條記憶只留前 70 字，免得撐爆 localStorage
     const SCENE_MAX = 3000;       // 送給 Jev 的「剛發生的劇情」最多這麼長
 
-    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    // 決策模型連到哪：設置→AI 模型→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
     function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
     function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) === '1'; } catch (e) { return false; } }

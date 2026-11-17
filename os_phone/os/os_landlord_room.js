@@ -128,7 +128,7 @@
         _injectStyle();
         const stage = _STAGE();
         if (!stage || typeof stage.enterRoom !== 'function') { _sorry(container, '這個版本的大廳還進不了房間。'); return; }
-        if (typeof stage.isOn === 'function' && !stage.isOn()) { _sorry(container, '舞台目前是關的，先在大廳設置把它打開就能走進房間。'); return; }
+        if (typeof stage.isOn === 'function' && !stage.isOn()) { _sorry(container, '舞台目前是關的，先按大廳右上的手把圖示把它打開就能走進房間。'); return; }
 
         const LL = _LL(), GEN = _GEN();
         if (!LL || !GEN) { _sorry(container, '房間功能還沒載入完，稍等一下再試。'); return; }
@@ -397,7 +397,7 @@
         const LL = _LL(), GEN = _GEN(), stage = _STAGE();
         if (!LL || !GEN) { _sorry(null, '房間功能還沒載入完，稍等一下再試。'); return; }
         if (!stage || typeof stage.enterRoom !== 'function') { _sorry(null, '這個版本的大廳還進不了房間。'); return; }
-        if (typeof stage.isOn === 'function' && !stage.isOn()) { _sorry(null, '舞台目前是關的，先在大廳設置把它打開就能上樓。'); return; }
+        if (typeof stage.isOn === 'function' && !stage.isOn()) { _sorry(null, '舞台目前是關的，先按大廳右上的手把圖示把它打開就能上樓。'); return; }
 
         let units = [];
         try {

@@ -28,7 +28,7 @@
 
     let _st = null, _stChat = null;
     function _chat() { try { return (win.OS_STORY_TOOLS && win.OS_STORY_TOOLS.getChatId && win.OS_STORY_TOOLS.getChatId()) || ''; } catch (e) { return ''; } }
-    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    // 決策模型連到哪：設置→AI 模型→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
     function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
     function _key() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem('npc_decide_key') || '').trim(); } catch (e) { return ''; } }
     async function _load() {

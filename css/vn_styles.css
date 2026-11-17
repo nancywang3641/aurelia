@@ -1285,7 +1285,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         /* 末尾選單鈕直排 + 同寬 */
         #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-threads, #vn-end-btn-map, #vn-end-btn-regen { box-sizing: border-box; width: 200px; text-align: center; }
         /* 🎨 VN 主題不准碰這幾個的 position（會打散排版），但主題要在它們身上掛 ::before/::after 裝飾 → 錨點由這裡給 */
-        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-threads, #vn-end-btn-map, #vn-end-btn-regen, #game-settings-window, #gs-titlebar, #gs-body, .gs-row, .gs-chips, .gs-color-row, .gs-chip, .gs-reset-btn, #gs-titlebar .gs-close { position: relative; }
+        #vn-end-btn-data, #vn-end-btn-ctx, #vn-end-btn-journal, #vn-end-btn-threads, #vn-end-btn-map, #vn-end-btn-regen { position: relative; }
         #vn-end-btn-data {
             pointer-events: auto;
             padding: 14px 44px; background: rgba(5,5,8,0.92);
@@ -2022,40 +2022,7 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             animation: pulseOp 2s infinite;
         }
 
-        #game-settings-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(10px); z-index: 60; display: flex; justify-content: center; align-items: center; padding-top: var(--safe-top, env(safe-area-inset-top, 0px)); padding-bottom: var(--safe-bottom, env(safe-area-inset-bottom, 0px)); box-sizing: border-box; opacity: 0; pointer-events: none; transition: opacity 0.4s ease; }
-        #game-settings-overlay.active { opacity: 1; pointer-events: auto; }
-        #game-settings-window { width: calc(100% - 30px); max-width: 410px; max-height: calc(100% - 40px); background: linear-gradient(135deg, #111 0%, #050505 100%); border: 1px solid var(--glass-border); border-radius: 2px; box-shadow: 0 20px 60px rgba(0,0,0,0.9); display: flex; flex-direction: column; transform: scale(0.98) translateY(10px); opacity: 0; transition: transform 0.4s, opacity 0.4s; overflow: hidden; }
-        #game-settings-overlay.active #game-settings-window { transform: scale(1) translateY(0); opacity: 1; }
-        #gs-titlebar { background: rgba(10,10,10,0.8); border-bottom: 1px solid var(--gold-dark); padding: 15px 20px; display: flex; align-items: center; justify-content: space-between; }
-        #gs-titlebar .gs-title { color: var(--gold); font-family: var(--font-classic); font-size: 1.2rem; letter-spacing: 4px; }
-        #gs-titlebar .gs-close { width: 32px; height: 32px; background: transparent; border: 1px solid transparent; color: var(--gold-dark); font-size: 1.2rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; }
-        #gs-titlebar .gs-close:hover { color: var(--gold); border-color: var(--gold); }
-        #gs-body { padding: 30px 25px; overflow-y: auto; flex: 1; }
-        #gs-body::-webkit-scrollbar { width: 4px; }
-        #gs-body::-webkit-scrollbar-track { background: transparent; }
-        #gs-body::-webkit-scrollbar-thumb { background: var(--gold-dark); }
-        .gs-section-title { color: var(--gold); font-size: 0.9rem; font-family: var(--font-classic); letter-spacing: 3px; margin-bottom: 25px; border-bottom: 1px solid rgba(212,175,55,0.2); padding-bottom: 8px; }
-        .gs-row { display: flex; align-items: center; gap: 15px; margin-bottom: 22px; }
-        .gs-label { color: #aaa; font-size: 0.9rem; white-space: nowrap; flex-shrink: 0; min-width: 80px; }
-        .gs-val { color: var(--gold-light); font-size: 0.85rem; font-family: monospace; min-width: 45px; text-align: right; flex-shrink: 0; }
-        .gs-slider { -webkit-appearance: none; appearance: none; flex: 1; height: 2px; background: rgba(255,255,255,0.2); outline: none; cursor: pointer; }
-        .gs-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--gold); cursor: pointer; transition: 0.2s; border: 2px solid #000; }
-        .gs-slider::-webkit-slider-thumb:hover { transform: scale(1.3); }
-        .gs-color-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; border-bottom: 1px dashed rgba(255,255,255,0.05); padding-bottom: 10px; }
-        .gs-color-label { color: #aaa; font-size: 0.9rem; }
-        .gs-color-input { width: 40px; height: 24px; border: 1px solid #555; cursor: pointer; background: none; padding: 1px; }
-        .gs-color-input::-webkit-color-swatch-wrapper { padding: 0; }
-        .gs-color-input::-webkit-color-swatch { border: none; }
-        .gs-divider { border: none; margin: 25px 0; }
-        .gs-reset-btn { width: 100%; background: transparent; border: 1px solid var(--gold-dark); color: var(--gold-dark); padding: 12px; font-size: 0.9rem; cursor: pointer; transition: all 0.3s; letter-spacing: 2px; font-family: var(--font-classic); text-transform: uppercase; }
-        .gs-reset-btn:hover { border-color: var(--gold); color: var(--gold); }
-        /* 🌍 世界題材／BGM／音效增補快捷：一排可點的小框，開著的填金色底 */
-        .gs-chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-        .gs-chip { background: transparent; border: 1px solid rgba(212,175,55,0.35); color: #aaa; padding: 7px 12px; font-size: 0.85rem; cursor: pointer; letter-spacing: 1px; font-family: var(--font-classic); transition: all 0.2s; }
-        .gs-chip:hover { border-color: var(--gold); color: var(--gold-light); }
-        .gs-chip.on { background: rgba(212,175,55,0.16); border-color: var(--gold); color: var(--gold-light); }
-        .gs-sub { color: #888; font-size: 0.8rem; letter-spacing: 2px; margin: 4px 0 8px; }
-        .gs-world-note { color: #8a8a8a; font-size: 0.8rem; line-height: 1.6; }
+        /* ⚙ 設定窗（#game-settings-overlay、.gs-*）11-17 拿掉了：設定搬進「設置」窗口的「劇情→畫面與聲音」，樣式在 css/os_settings_window.css */
 
         /* =========================================
            📱 手機 UI (回歸現代寫實風, 不套用古典)
@@ -2408,8 +2375,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             h1 { font-size: 2.2rem; }
             .btn { font-size: 1rem; padding: 11px 28px; margin: 8px; }
 
-            /* 遊戲設定 */
-            #game-settings-window { width: 88vw; }
 
             /* 對話框 */
             #text-panel-wrapper { width: 90%; bottom: 25px; }
@@ -2489,12 +2454,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
             .vn-log-item { padding: 12px 14px; }
             .vn-log-text { font-size: 0.95rem; }
 
-            /* 遊戲設定面板 */
-            #game-settings-window { width: 93vw; }
-            #gs-titlebar .gs-title { font-size: 1rem; letter-spacing: 2px; }
-            #gs-body { padding: 20px 18px; }
-            .gs-section-title { letter-spacing: 1px; font-size: 0.85rem; }
-            .gs-label { font-size: 0.82rem; min-width: 65px; }
 
             /* 手機裝置框：置中顯示；寬度由 aspect-ratio(1:2) 自動推、維持手機比例 */
             #phone-overlay { align-items: center; padding: 0; }

@@ -200,7 +200,7 @@ const PHONE_FILES = [
     'os/os_vector_engine.js', // 向量記憶引擎（embed/ingest/search；酒館原本沒載入，補上）
     'os/os_inject_blocks.js', // 奧瑞亞每種注入包成一塊 <名字>…</名字>（要在所有注入器之前）
     'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
-    'os/os_jev_conn.js', // 決策模型（Jev 那種）連到哪：設置→API→決策模型的網址、模型、鑰匙三格；以前填過鑰匙的裝置自動補上原本那組
+    'os/os_jev_conn.js', // 決策模型（Jev 那種）連到哪：設置→AI 模型→決策模型的網址、模型、鑰匙三格；以前填過鑰匙的裝置自動補上原本那組
     'os/os_jev_usage.js', // Jev 呼叫的次數＋花費帳本（DEBUG 看）；記憶／立繪影子比對、書咖的丹都記在這
     'os/os_jev_shadow.js', // 記憶召回的 Jev 影子比對：副模型挑完記憶後讓 Jev 也排一次，只記進 DEBUG 對照、不改送出的東西
     'os/os_jev_stage.js', // 立繪什麼時候收交給 Jev：每章劇本載入時排好誰從第幾段起不在；Jev 沒回應就走舊的幾行沒開口自動收
@@ -621,10 +621,7 @@ async function initializeExtension() {
                     window.PhoneSystem.install('故事模式', '📖', '#ff69b4', window.VN_STORY.launch);
                 }
 
-                // 註冊設置 (確保它在最後)
-                if (window.OS_SETTINGS) {
-                     window.PhoneSystem.install('設置', '⚙️', '#4c4c4c', window.OS_SETTINGS.launchApp);
-                }
+                // 設置不再註冊成手機 app（11-17）：手機的「設置」圖示、大廳齒輪、劇情「設定」鈕都開「設置」窗口（os/os_settings_window.js）
             }
             
             // 啟動監聽器

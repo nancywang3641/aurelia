@@ -586,7 +586,7 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     window.OS_SETTINGS = Object.assign(window.OS_SETTINGS || {}, {
         getConfig: loadLlmConfig,
         getSecondaryConfig: loadSecLlmConfig,
-        // 🔌 哪件事走哪條（通道清單在設置 → API → 分流）
+        // 🔌 哪件事走哪條（通道清單在設置 → AI 模型 → 分流）
         getConfigFor: getConfigForTask,
         getRouteOverride: getRouteOverride,
         getChannels: loadChannels,
@@ -3949,10 +3949,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
     // 相簿 app（大廳手機殼）：用同一引擎跑「只顯示畫廊」模式
     window.OS_SETTINGS.launchAlbum = function (container) { return launchApp(container, 'album'); };
 
-    function install() {
-        const win = window.parent || window;
-        if (win.PhoneSystem) { win.PhoneSystem.install('設置', '⚙️', '#4c4c4c', launchApp); }
-        else { setTimeout(install, 500); }
-    }
-    install();
+    // 11-17 起不再把「設置」註冊成手機 app：整頁改由「設置」窗口（os_settings_window.js）掛進去（它叫 launchApp(box)），
+    //   窗口自己的分類去按這頁的主分頁；相簿照舊用 launchAlbum。
 })();

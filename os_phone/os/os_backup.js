@@ -592,7 +592,7 @@
         const A = win.AUI || window.AUI;
         // 「系統/備份」那一頁 10-20 起酒館也有
         const msg = '這台裝置留給奧瑞亞的空間已經用了 ' + Math.round(st.ratio * 100) + '%。'
-                  + '到 設置 → 系統/備份 先匯出一份備份，再到相簿壓縮或清掉不要的圖。';
+                  + '到 設置 → 備份與系統 先匯出一份備份，再到相簿壓縮或清掉不要的圖。';
         try { if (A && A.toast) A.toast(msg, { type: 'warn' }); } catch (e) {}
     }
     try { setTimeout(() => { _bootCheck().catch(() => {}); }, 6000); } catch (e) {}

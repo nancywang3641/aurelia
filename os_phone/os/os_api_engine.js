@@ -1543,7 +1543,7 @@
             if (this.isStandalone() && (config.useSystemApi || config.useGenerateRaw)) {
                 config = { ...config, useSystemApi: false, useGenerateRaw: false };
                 if (!config.url || !config.key) {
-                    const err = new Error('獨立模式需填入 API URL 與 Key（設置 → 主模型）');
+                    const err = new Error('獨立模式需填入 API URL 與 Key（設置 → AI 模型 → 主模型）');
                     console.error('[OS_API]', err.message);
                     if (onError) onError(err);
                     return;

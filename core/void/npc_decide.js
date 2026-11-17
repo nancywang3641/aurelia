@@ -3,7 +3,7 @@
 //    只做決定，不寫台詞、不動小人；小人怎麼走由 lobby_stage.js 照答案去做。
 //
 //    走哪個模型：
-//    - 決策模型設好了（設置→API→決策模型：網址、模型、鑰匙三格）→ 問 Jev 那種決策模型。
+//    - 決策模型設好了（設置→AI 模型→決策模型：網址、模型、鑰匙三格）→ 問 Jev 那種決策模型。
 //      Jev 不生字，一次回三題：挑哪件事（附每件的機率）、心情幾分、會不會主動搭話（機率）。
 //      「待在原地」不放進選項：放進去的話，只要選到一次，狀況寫著「上一步待在原地」，Jev 就給它九成以上，
 //      永遠站著（09-23 實測）。多久想一次改由她在大廳設置填（分鐘），兩次之間他本來就站著。
@@ -20,7 +20,7 @@
     const LOG_MAX = 20;
     const log = [];   // 最近幾次決定（DEBUG 執行框看：NPC_DECIDE.log）
 
-    // 決策模型連到哪：設置→API→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
+    // 決策模型連到哪：設置→AI 模型→決策模型（os_jev_conn.js）那三格；網址或模型沒填就當沒鑰匙
     function _jev() { try { return { url: (localStorage.getItem('npc_decide_url') || '').trim(), model: (localStorage.getItem('npc_decide_model') || '').trim() }; } catch (e) { return { url: '', model: '' }; } }
     function getKey() { const c = _jev(); if (!c.url || !c.model) return ''; try { return (localStorage.getItem(KEY_LS) || '').trim(); } catch (e) { return ''; } }
     function isOn() { try { return localStorage.getItem(ON_LS) !== '0'; } catch (e) { return true; } }

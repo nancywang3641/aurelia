@@ -3522,7 +3522,7 @@
             try {
                 if (!AUI.toastr) {}
                 else if (!next) AUI.toastr.info('已關閉', '微信');
-                else if (visionOff) AUI.toastr.warning('設置 → API → 通道裡的「看圖」還是不給模型看圖，要先選一種看法，它才看得到', '微信');
+                else if (visionOff) AUI.toastr.warning('設置 → AI 模型 → 通道裡的「看圖」還是不給模型看圖，要先選一種看法，它才看得到', '微信');
                 else AUI.toastr.success('下次換頭像時它會看一眼', '微信');
             } catch (e) {}
         },

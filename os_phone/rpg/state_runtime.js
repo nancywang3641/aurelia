@@ -2705,7 +2705,7 @@ _directorSpec(castNames);
     async function deepConsolidate() {
         const chatId = getChatId();
         if (!chatId || !win.OS_DB?.getStateData) return { ok: false, msg: '沒有進行中的故事' };
-        if (!win.OS_API || typeof win.OS_API.chatMain !== 'function') return { ok: false, msg: '主模型不可用（先到系統設置設定）' };
+        if (!win.OS_API || typeof win.OS_API.chatMain !== 'function') return { ok: false, msg: '主模型不可用（先到 設置 → AI 模型 設定）' };
         const currentState = win._AVS_ENGINE?.read?.() || {};
         if (!Object.keys(currentState).length) return { ok: false, msg: '目前沒有狀態可整理' };
         let summary = '';
