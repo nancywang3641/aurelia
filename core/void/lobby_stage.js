@@ -1270,6 +1270,16 @@
             _swapActorSrc(a, (side && back) ? { views: { front: src, side: side, back: back } } : src);
             return;
         }
+        // ✊ 11-17 之前接好手腳的不倒翁，手是估的小圓：換成衣櫥的拳頭、改存（lobby_dress.js 的 _dollRefist）；換不成就照舊那張
+        if (skin.kind === 'sheet' && skin.doll === 1) {
+            let up = null;
+            try { const LD = window.LobbyDress; if (LD && typeof LD.dollRefist === 'function') up = await LD.dollRefist(key, skin); } catch (e) {}
+            if (up) {
+                const s2 = await resolveRef(up.ref);
+                if (!a.el || !S.active) return;
+                if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); return; }
+            }
+        }
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src, { smooth: !!skin.doll });
     }
 

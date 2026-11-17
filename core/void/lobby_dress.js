@@ -315,6 +315,9 @@
                     try { side = (await _b.resolveRef(skin.side)) || ''; back = (await _b.resolveRef(skin.back)) || ''; } catch (e) {}
                     out.doll = { label: '不倒翁小人', src: src, views: (side && back) ? { front: src, side: side, back: back } : null, own: true };
                 } else if (src && skin.kind === 'sheet' && skin.doll) {   // 接好手腳的不倒翁：存的是走路圖，切站著的三格出來看
+                    if (skin.doll === 1) {   // ✊ 11-17 之前接的小圓手：先換成衣櫥的拳頭（換不成就照舊那張）
+                        try { const up = await _dollRefist(a.key, skin); if (up) src = (await _b.resolveRef(up.ref)) || src; } catch (e) {}
+                    }
                     let v = null;
                     try { v = await _dollCells(src); } catch (e) {}
                     out.doll = v ? { label: '不倒翁小人', src: v.front, views: v, own: true } : { label: '不倒翁小人', src: src, sheet: true, own: true };
@@ -743,12 +746,26 @@
     // 🦶 接鞋和手（11-16 她生成功之後：「但面板上還是沒手沒腳」→ 看過小樣「好，接上」）：
     //   圖故意畫成沒手沒腳，手腳由這裡接：鞋＝衣櫥那雙（素材庫 doll_ref_v1/shoes.png，六隻拼一張：正面兩隻、背面兩隻、側面近／遠，側面朝右），
     //   手＝照他臉上的膚色畫的小圓。接好拼成 3×4 走路圖（列：往下／往左／往右／往上；欄：踏一步／站著／踏另一步，同書咖常客那種），
-    //   存成造型 kind:'sheet'＋doll:1——大廳本來就認走路圖，走路時腳會踏步；預覽、展示台從這張切站著的三格出來看（_dollCells）。
+    //   存成造型 kind:'sheet'＋doll:2（1＝11-17 之前接的小圓手，進大廳或開裝扮頁時會換成衣櫥的拳頭，見 _dollRefist）——大廳本來就認走路圖，走路時腳會踏步；預覽、展示台從這張切站著的三格出來看（_dollCells）。
     //   位置的數字是接鞋小樣（本機 lora-train 那邊）的單位：那邊正面身體寬 278，鞋的左上角相對「圓底中心、圓底最低點」，這裡照他正面身體多寬等比縮。
     //   鞋子圖抓不到＝這次不接、講明（圖已經花錢畫好了，不整張作廢），照舊存三面；之後進大廳會再補接一次（_dollUpgrade）。
     const DOLL_SHOES_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@dd66662b70a412a39ac940c6d75950fbf64f924a/doll_ref_v1/shoes.png';
+    // ✊ 拳頭＝衣櫥那顆，形狀、大小、位置都照衣櫥（11-17 她：「這小拳頭是怎麼回事...請認真去隔壁衣櫥看一下尺寸」）。
+    //   11-16 第一版是我自己估的小圓（半徑 33、貼在身體邊上），寬只有身體的兩成多；衣櫥的拳頭寬是身體的六成多、離身體一小段懸著。
+    //   數字的來源：衣櫥 mochi-wardrobe.js 的 FIST_D（中心 92.5,301，約 60×57）、DEFAULT.fist { x:100.06, y:318, s:1.0345 }、
+    //   身體中線 190、身體最低點 337.62。衣櫥一單位＝這裡 2.71（本機 參考資料/CUT_FIX_LAB.html 11-15 量的那把尺，鞋也是照它縮的）。
+    //   衣櫥在哪：C:\Users\<她>\.codex\visualizations\2026\10\18\01a1501a-…\ember-wardrobe（桌面捷徑「小火苗衣櫥」）。
+    const DOLL_FIST = {
+        d: 'M91 274 C77 272 65 284 64 296 C60 313 72 326 88 328 C103 331 119 320 121 307 C124 290 108 275 96 275Z',
+        thumb: 'M102 304 Q94 304 94 314 L90 327', gloss: 'M74 285 Q82 278 90 279', cx: 92.5, cy: 301,
+    };
     const DOLL_LIMB = {
-        bodyW: 278, fistR: 33, fistUp: 105, below: 50, cellH: 420,
+        bodyW: 278, below: 50, cellH: 420,
+        fistK: 2.803,     // 拳頭那條外框放大幾倍：1.0345 × 2.71
+        fistX: 243.7,     // 拳頭中心離身體中線：(190 − 100.06) × 2.71
+        fistUp: 53.2,     // 拳頭中心比圓底最低點高多少：(337.62 − 318) × 2.71
+        fistSideX: 29,    // 側面那顆在身體中線前面一點（衣櫥側面站著時量的 10.8 單位）
+        fistHalf: 88,     // 拳頭半寬含外框（算格子要多寬用）
         // 每隻鞋：在 shoes.png 的哪一塊 [x, y, w, h]＋左上角相對圓底 (dx, dy)；陣列裡先寫的先畫（在後面）
         front: [{ r: [0, 0, 113, 69], dx: -117.5, dy: -20 }, { r: [113, 0, 113, 69], dx: 0.5, dy: -20 }],
         back:  [{ r: [226, 0, 113, 69], dx: -119.5, dy: -20 }, { r: [339, 0, 113, 69], dx: -1.5, dy: -20 }],
@@ -810,9 +827,31 @@
             const n = (cnt.get(k) || 0) + 1; cnt.set(k, n);
             if (n > bn) { bn = n; best = k; }
         }
-        const p = best ? best.split(',').map(v => (+v << 3) + 4) : [250, 222, 198];
+        return _dollSkinOf(best ? best.split(',').map(v => (+v << 3) + 4) : [250, 222, 198]);
+    }
+    // 膚色 [r,g,b] → 拳頭用的三個顏色：底色、外框和拇指線（壓深）、手背那道亮線（提亮）
+    function _dollSkinOf(p) {
         const dark = [0.82, 0.68, 0.6];
-        return { fill: 'rgb(' + p.join(',') + ')', line: 'rgb(' + p.map((v, i) => Math.round(v * dark[i])).join(',') + ')' };
+        return {
+            rgb: p,
+            fill: 'rgb(' + p.join(',') + ')',
+            line: 'rgb(' + p.map((v, i) => Math.round(v * dark[i])).join(',') + ')',
+            gloss: 'rgb(' + p.map(v => Math.round(v + (255 - v) * 0.6)).join(',') + ')',
+        };
+    }
+    // 畫一顆衣櫥的拳頭：中心在 (x, y)，k＝外框放大幾倍；mirror＝左右翻（畫面右邊那隻、朝右的側面）
+    let _dollFistP = null;
+    function _dollFist(g, x, y, k, mirror, skin) {
+        if (!_dollFistP) _dollFistP = { d: new Path2D(DOLL_FIST.d), thumb: new Path2D(DOLL_FIST.thumb), gloss: new Path2D(DOLL_FIST.gloss) };
+        const P = _dollFistP, w = 1 / 1.0345;   // 線寬照衣櫥的單位：外框 2、拇指線 2.2、亮線 2.6
+        g.save();
+        g.translate(x, y); g.scale(mirror ? -k : k, k); g.translate(-DOLL_FIST.cx, -DOLL_FIST.cy);
+        g.lineJoin = 'round'; g.lineCap = 'round';
+        g.fillStyle = skin.fill; g.fill(P.d);
+        g.strokeStyle = skin.line; g.lineWidth = 2 * w; g.stroke(P.d);
+        g.lineWidth = 2.2 * w; g.stroke(P.thumb);
+        g.strokeStyle = skin.gloss; g.lineWidth = 2.6 * w; g.stroke(P.gloss);
+        g.restore();
     }
     // 三面（去背好的 dataURL）→ { sheet: 3×4 走路圖, views: 站著的三格（接好手腳的正面／側面／背面） }
     async function _dollAttach(views) {
@@ -821,11 +860,11 @@
             M[k] = _dollMeasure(await _loadImg(views[k]));
             if (!M[k]) throw new Error('量不到小人的位置');
         }
-        const s = M.front.bw / L.bodyW, R = L.fistR * s, skin = _dollSkin(M.front);   // 三面同一個比例：照正面的身體
+        const s = M.front.bw / L.bodyW, skin = _dollSkin(M.front);   // 三面同一個比例：照正面的身體
         let half = 0, up = 0;
         for (const k in M) {
             const m = M[k];
-            half = Math.max(half, m.cx - m.left, m.right - m.cx, k === 'side' ? 0 : m.bw / 2 + R * 1.4);
+            half = Math.max(half, m.cx - m.left, m.right - m.cx, k === 'side' ? 0 : (L.fistX + L.fistHalf) * s);   // 正面、背面要放得下兩邊懸著的拳頭
             up = Math.max(up, m.bot - m.top);
         }
         half += 20 * s;                                       // 踏步、手前後擺要的寬
@@ -841,12 +880,12 @@
             if (mirror) { g.translate(col * cw + cw, row * ch); g.scale(-1, 1); } else g.translate(col * cw, row * ch);
             g.translate(cw / 2, ch - 1); g.scale(k0, k0); g.translate(0, -L.below * s);   // 原點＝圓底中心、圓底最低點；格底＝鞋底
             L[key].forEach((o, i) => { const p = pose.shoe[i]; g.drawImage(shoes, o.r[0], o.r[1], o.r[2], o.r[3], (o.dx + p[0]) * s, (o.dy + p[1]) * s, o.r[2] * s, o.r[3] * s); });
-            const by = pose.body * s, fy = (pose.body + pose.fist[1] - L.fistUp) * s, fx = m.bw / 2 + R * 0.35, sw = pose.fist[0] * s;
-            const fist = (x) => { g.beginPath(); g.arc(x, fy, R, 0, Math.PI * 2); g.fillStyle = skin.fill; g.fill(); g.lineWidth = Math.max(2, 3 * s); g.strokeStyle = skin.line; g.stroke(); };
-            if (key === 'back') { fist(-fx); fist(fx); }       // 背面：手在身體後面
+            const by = pose.body * s, fy = (pose.body + pose.fist[1] - L.fistUp) * s, fx = L.fistX * s, sw = pose.fist[0] * s;
+            const fist = (x, flip) => _dollFist(g, x, fy, L.fistK * s, flip, skin);
+            if (key === 'back') { fist(-fx, false); fist(fx, true); }       // 背面：手在身體後面
             g.drawImage(m.img, -m.cx, by - m.bot);
-            if (key === 'front') { fist(-fx); fist(fx); }
-            if (key === 'side') fist(12 * s + sw);
+            if (key === 'front') { fist(-fx, false); fist(fx, true); }
+            if (key === 'side') fist(L.fistSideX * s + sw, true);           // 這格朝右，衣櫥的側面朝左，所以翻過來
             g.restore();
         };
         for (let c = 0; c < 3; c++) {
@@ -880,7 +919,7 @@
                 const lim = await _dollAttach(v);
                 const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
                 await _b.idbPut(id, lim.sheet);
-                const next = { kind: 'sheet', ref: { idb: id }, doll: 1 };
+                const next = { kind: 'sheet', ref: { idb: id }, doll: 2 };
                 if (_b.saveSkin(key, next) === false) { try { await _b.idbDel(id); } catch (e) {} return null; }
                 for (const r of [skin.ref, skin.side, skin.back]) { if (r && r.idb) { try { await _b.idbDel(r.idb); } catch (e) {} } }
                 return next;
@@ -889,6 +928,190 @@
         _dollUpBusy.set(key, p);
         p.then(() => _dollUpBusy.delete(key), () => _dollUpBusy.delete(key));
         return p;
+    }
+    // ✊ 11-17 之前接好的不倒翁（doll:1）：手是我估的小圓。當時沒手沒腳的原圖沒留，沒辦法重接，所以直接改那張走路圖：
+    //   找出舊的小圓（整片同一個顏色）→ 從它的位置反推當時的比例 → 擦掉 → 照衣櫥畫新的拳頭 → 存回去記 doll:2。
+    //   認不出兩顆小圓（顏色、大小、左右、高度對不上）就不動、回 null：寧可留著小拳頭，也不亂塗她花錢生的圖。
+    const _dollRefistBusy = new Map(), _dollRefistNo = new Set();
+    function _dollRefist(key, skin) {
+        if (!skin || skin.kind !== 'sheet' || skin.doll !== 1 || _dollRefistNo.has(key)) return Promise.resolve(null);
+        if (_dollRefistBusy.has(key)) return _dollRefistBusy.get(key);
+        const p = (async () => {
+            try {
+                const src = await _b.resolveRef(skin.ref);
+                const fixed = src ? await _dollRefistSheet(src) : null;
+                if (!fixed) { _dollRefistNo.add(key); return null; }   // 這次開著就不再試（每次套造型都會經過這裡）
+                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                await _b.idbPut(id, fixed);
+                const next = { kind: 'sheet', ref: { idb: id }, doll: 2 };
+                if (_b.saveSkin(key, next) === false) { try { await _b.idbDel(id); } catch (e) {} return null; }
+                if (skin.ref && skin.ref.idb) { try { await _b.idbDel(skin.ref.idb); } catch (e) {} }
+                return next;
+            } catch (e) { console.warn('[LobbyDress] 舊的小圓手沒換成', e); _dollRefistNo.add(key); return null; }
+        })();
+        _dollRefistBusy.set(key, p);
+        p.then(() => _dollRefistBusy.delete(key), () => _dollRefistBusy.delete(key));
+        return p;
+    }
+    // 舊的走路圖（dataURL）→ 換好拳頭的走路圖（dataURL）；認不出來回 null
+    //   舊的畫法（11-16）：手＝半徑 33 的圓，中心離身體中線 139＋0.35×33＝150.55、比圓底最低點高 105；
+    //   正面畫在身體上面、背面畫在身體後面、側面畫在身體中線前面 12。單位都是「正面身體寬＝278」那把尺，下面的 u＝這張圖上一單位幾 px。
+    async function _dollRefistSheet(sheetSrc) {
+        const L = DOLL_LIMB, im = await _loadImg(sheetSrc);
+        const cw = Math.floor(im.naturalWidth / 3), ch = Math.floor(im.naturalHeight / 4);
+        if (cw < 40 || ch < 40) return null;
+        const c0 = document.createElement('canvas'); c0.width = cw * 3; c0.height = ch * 4;
+        const g0 = c0.getContext('2d', { willReadFrequently: true }); g0.drawImage(im, 0, 0);
+        // 1. 站著的正面那格（中間那欄、第一列）下半找舊的手：一整片同一個顏色的兩顆圓。
+        //    手的底色每個數字除以 8 都餘 4（_dollSkin 的算法）；鞋子、衣服也可能剛好有這種顏色，所以照多到少一個一個試，
+        //    要「左右各一顆實心圓、一樣大、一樣高、離中線一樣遠、大小和高度對得上舊的畫法」才算
+        const d = g0.getImageData(cw, 0, cw, ch).data, y0 = Math.floor(ch * 0.45), cnt = new Map();
+        for (let y = y0; y < ch; y++) for (let x = 0; x < cw; x++) {
+            const i = (y * cw + x) * 4;
+            if (d[i + 3] !== 255 || (d[i] & 7) !== 4 || (d[i + 1] & 7) !== 4 || (d[i + 2] & 7) !== 4) continue;
+            const k = (d[i] << 16) | (d[i + 1] << 8) | d[i + 2];
+            cnt.set(k, (cnt.get(k) || 0) + 1);
+        }
+        const disc = (o) => {   // 是不是一顆實心圓：實心圓的點在兩個方向的散開程度都是半徑的一半
+            if (o.n < 40) return null;
+            const x = o.sx / o.n, y = o.sy / o.n, R = Math.sqrt(o.n / Math.PI);
+            const dx = Math.sqrt(Math.max(0, o.sxx / o.n - x * x)), dy = Math.sqrt(Math.max(0, o.syy / o.n - y * y));
+            return (dx > R * 0.38 && dx < R * 0.62 && dy > R * 0.38 && dy < R * 0.62) ? { x: x, y: y, R: R } : null;
+        };
+        let rgb = null, u = 0, yb = 0;
+        for (const [k] of Array.from(cnt.entries()).sort((p1, p2) => p2[1] - p1[1]).slice(0, 8)) {
+            const c3 = [k >> 16, (k >> 8) & 255, k & 255];
+            const two = [0, 1].map(() => ({ n: 0, sx: 0, sy: 0, sxx: 0, syy: 0 }));
+            for (let y = y0; y < ch; y++) for (let x = 0; x < cw; x++) {
+                const i = (y * cw + x) * 4;
+                if (d[i + 3] !== 255 || d[i] !== c3[0] || d[i + 1] !== c3[1] || d[i + 2] !== c3[2]) continue;
+                const o = two[x < cw / 2 ? 0 : 1]; o.n++; o.sx += x; o.sy += y; o.sxx += x * x; o.syy += y * y;
+            }
+            const a = disc(two[0]), b = disc(two[1]);
+            if (!a || !b) continue;
+            const Dl = cw / 2 - a.x, Dr = b.x - cw / 2, Rm = (a.R + b.R) / 2, uu = (Dl + Dr) / 2 / 150.55;
+            if (!(uu > 0.05) || Math.abs(Dl - Dr) > Rm * 0.5 || Math.abs(a.y - b.y) > Rm * 0.5 || Math.abs(a.R - b.R) > Rm * 0.3) continue;
+            if (Rm < 26 * uu || Rm > 36 * uu) continue;                           // 舊的手半徑 33，框線吃掉外面一圈
+            const bottom = (a.y + b.y) / 2 + 105 * uu;                            // 圓底最低點在這格的哪一排
+            if (Math.abs(bottom + L.below * uu - (ch - 1)) > 6 * uu + 2) continue;   // 鞋底應該貼著格子底
+            rgb = c3; u = uu; yb = bottom;
+            break;
+        }
+        if (!rgb) return null;
+
+        // 2. 格子加寬到放得下新的拳頭，舊圖照原樣搬到每格正中間
+        const cw2 = Math.max(cw, Math.ceil((L.fistX + L.fistHalf + 6) * u) * 2), ox = Math.floor((cw2 - cw) / 2);
+        const cv = document.createElement('canvas'); cv.width = cw2 * 3; cv.height = ch * 4;
+        const g = cv.getContext('2d', { willReadFrequently: true });
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) g.drawImage(c0, c * cw, r * ch, cw, ch, c * cw2 + ox, r * ch, cw, ch);
+        const W = cv.width, H = cv.height, I = g.getImageData(0, 0, W, H), p = I.data;
+        const skin = _dollSkinOf(rgb), lineRgb = rgb.map((v, i) => Math.round(v * [0.82, 0.68, 0.6][i]));
+        const at = (x, y) => (y * W + x) * 4;
+        const isFill = (i) => p[i + 3] === 255 && p[i] === rgb[0] && p[i + 1] === rgb[1] && p[i + 2] === rgb[2];
+        const nearFist = (i) => {   // 顏色落在「手的底色到框線色」那條線附近（框線、邊緣的半透明）
+            const v = [lineRgb[0] - rgb[0], lineRgb[1] - rgb[1], lineRgb[2] - rgb[2]], q = [p[i] - rgb[0], p[i + 1] - rgb[1], p[i + 2] - rgb[2]];
+            const t = Math.max(0, Math.min(1, (q[0] * v[0] + q[1] * v[1] + q[2] * v[2]) / ((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) || 1)));
+            const e0 = q[0] - t * v[0], e1 = q[1] - t * v[1], e2 = q[2] - t * v[2];
+            return e0 * e0 + e1 * e1 + e2 * e2 < 900;
+        };
+        const band = Math.ceil(3 * u) + 2, Rout = 35 * u + 2;
+        // 擦掉一顆舊的手：圓裡整片同色的點＋往外一圈框線。how＝它當時怎麼畫的：
+        //   'edge'（正面）：畫在身體上面、蓋住身體的邊 → 那一圈全擦，再把身體的邊補回來；
+        //   'mid'（側面）：畫在身體中間 → 全擦，洞用左右兩邊的顏色橫著補（衣服的條紋多半是橫的）；新的拳頭會蓋住大半，只有上緣露一點；
+        //   'behind'（背面）：身體蓋著它 → 只擦顏色像手的，身體一點都不碰
+        const wipe = (cx, cy, how, inner) => {
+            const onTop = how !== 'behind';
+            const x0 = Math.max(0, Math.floor(cx - Rout - band)), x1 = Math.min(W - 1, Math.ceil(cx + Rout + band));
+            const y0b = Math.max(0, Math.floor(cy - Rout - band)), y1 = Math.min(H - 1, Math.ceil(cy + Rout + band));
+            const bw = x1 - x0 + 1, bh = y1 - y0b + 1, core = new Uint8Array(bw * bh), mask = new Uint8Array(bw * bh);
+            let any = false;
+            for (let y = y0b; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+                if ((x - cx) * (x - cx) + (y - cy) * (y - cy) > Rout * Rout) continue;
+                if (isFill(at(x, y))) { core[(y - y0b) * bw + (x - x0)] = 1; any = true; }
+            }
+            if (!any) return;
+            for (let y = y0b; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+                const m = (y - y0b) * bw + (x - x0);
+                if (core[m]) { mask[m] = 1; continue; }
+                let hit = false;
+                for (let yy = Math.max(y0b, y - band); yy <= Math.min(y1, y + band) && !hit; yy++) for (let xx = Math.max(x0, x - band); xx <= Math.min(x1, x + band); xx++) {
+                    if (core[(yy - y0b) * bw + (xx - x0)] && (xx - x) * (xx - x) + (yy - y) * (yy - y) <= band * band) { hit = true; break; }
+                }
+                if (hit && (onTop || p[at(x, y) + 3] < 255 || nearFist(at(x, y)))) mask[m] = 1;
+            }
+            let top = -1, bot = -1;
+            for (let y = y0b; y <= y1; y++) for (let x = x0; x <= x1; x++) if (mask[(y - y0b) * bw + (x - x0)]) { if (top < 0) top = y; bot = y; p[at(x, y) + 3] = 0; }
+            if (!onTop || top < 0) return;
+            if (how === 'mid') {
+                for (let y = top; y <= bot; y++) {
+                    let x = x0;
+                    while (x <= x1) {
+                        if (!mask[(y - y0b) * bw + (x - x0)]) { x++; continue; }
+                        let xe = x; while (xe + 1 <= x1 && mask[(y - y0b) * bw + (xe + 1 - x0)]) xe++;
+                        const li = x - 1 >= 0 ? at(x - 1, y) : -1, ri = xe + 1 < W ? at(xe + 1, y) : -1;
+                        const lo = li >= 0 && p[li + 3] >= 200, ro = ri >= 0 && p[ri + 3] >= 200;
+                        if (lo || ro) for (let xx = x; xx <= xe; xx++) {
+                            const t = (lo && ro) ? (xx - x + 1) / (xe - x + 2) : (lo ? 0 : 1), i = at(xx, y);
+                            const A = lo ? li : ri, B = ro ? ri : li;
+                            p[i] = Math.round(p[A] * (1 - t) + p[B] * t); p[i + 1] = Math.round(p[A + 1] * (1 - t) + p[B + 1] * t); p[i + 2] = Math.round(p[A + 2] * (1 - t) + p[B + 2] * t); p[i + 3] = 255;
+                        }
+                        x = xe + 1;
+                    }
+                }
+                return;
+            }
+            // 補身體的邊：被擦掉那塊的上面一排、下面一排各找身體的邊在哪，中間照直線連過去；每排從身體那一側把顏色往外抹到邊，最外面兩點用邊線的顏色
+            const dir = inner > 0 ? -1 : 1;                      // 往外走的方向：inner＝身體在這顆手的哪一邊（+1 右邊、−1 左邊）
+            const start = Math.round(cx + inner * (Rout + 139 * u * 0.4));   // 身體裡面的一點
+            const edgeAt = (y) => {
+                if (y < 0 || y >= H || start < 0 || start >= W || p[at(start, y) + 3] < 128) return null;
+                let x = start; while (x + dir >= 0 && x + dir < W && p[at(x + dir, y) + 3] >= 128) x += dir;
+                return x;
+            };
+            const eT = edgeAt(top - 2), eB = edgeAt(bot + 2);
+            if (eT == null && eB == null) return;
+            const rowT = eT != null ? top - 2 : bot + 2, colT = eT != null ? eT : eB;
+            const edgeCol = [0, 1].map(k => { const i = at(colT - dir * k, rowT); return [p[i], p[i + 1], p[i + 2], p[i + 3]]; });
+            for (let y = top; y <= bot; y++) {
+                const t = (bot === top) ? 0 : (y - top) / (bot - top);
+                const e = Math.round((eT != null ? eT : eB) * (1 - t) + (eB != null ? eB : eT) * t);
+                // 這一排被擦掉的範圍裡，最靠身體的那一點再往身體走一點＝拿來抹的顏色
+                let xin = null;
+                for (let x = (inner > 0 ? x1 : x0); inner > 0 ? x >= x0 : x <= x1; x -= inner) if (mask[(y - y0b) * bw + (x - x0)]) { xin = x + inner; break; }
+                if (xin == null || xin < 0 || xin >= W) continue;
+                const si = at(Math.max(0, Math.min(W - 1, xin + inner)), y);
+                if (p[si + 3] < 200) continue;                   // 這一排旁邊沒有身體（手的上下緣凸出身體外）
+                for (let x = xin - inner; (dir > 0 ? x <= e : x >= e); x += dir) {
+                    if (x < x0 || x > x1 || !mask[(y - y0b) * bw + (x - x0)]) continue;
+                    const i = at(x, y), k = Math.abs(e - x), col = k < 2 ? edgeCol[k] : [p[si], p[si + 1], p[si + 2], 255];
+                    p[i] = col[0]; p[i + 1] = col[1]; p[i + 2] = col[2]; p[i + 3] = col[3];
+                }
+            }
+        };
+        const cellX = (c) => c * cw2 + ox + cw / 2, cellY = (r) => r * ch + yb;   // 每格的身體中線、圓底最低點
+        for (let c = 0; c < 3; c++) for (const r of [0, 3]) {
+            const pose = L.hop[c], fy = cellY(r) + (pose.body + pose.fist[1] - 105) * u;
+            wipe(cellX(c) - 150.55 * u, fy, r === 0 ? 'edge' : 'behind', +1);
+            wipe(cellX(c) + 150.55 * u, fy, r === 0 ? 'edge' : 'behind', -1);
+        }
+        for (let c = 0; c < 3; c++) for (const r of [1, 2]) {   // 側面：舊的手在身體中線前面 12，跟著擺手前後動；往左那列是往右那列左右翻
+            const pose = L.walk[c], off = (12 + pose.fist[0]) * u;
+            wipe(cellX(c) + (r === 2 ? off : -off), cellY(r) + (pose.body + pose.fist[1] - 105) * u, 'mid', 0);
+        }
+        g.putImageData(I, 0, 0);
+        // 3. 畫新的拳頭（位置、大小跟 _dollAttach 現在的畫法一樣；側面那兩列新的拳頭比舊的大一圈，直接蓋上去）
+        g.imageSmoothingQuality = 'high';
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
+            const pose = (r === 0 || r === 3) ? L.hop[c] : L.walk[c];
+            const fy = cellY(r) + (pose.body + pose.fist[1] - L.fistUp) * u, k = L.fistK * u, X = cellX(c);
+            g.save();
+            g.beginPath(); g.rect(c * cw2, r * ch, cw2, ch); g.clip();
+            if (r === 0 || r === 3) { _dollFist(g, X - L.fistX * u, fy, k, false, skin); _dollFist(g, X + L.fistX * u, fy, k, true, skin); }
+            else if (r === 2) _dollFist(g, X + (L.fistSideX + pose.fist[0]) * u, fy, k, true, skin);     // 往右
+            else _dollFist(g, X - (L.fistSideX + pose.fist[0]) * u, fy, k, false, skin);                 // 往左＝往右那格左右翻
+            g.restore();
+        }
+        return cv.toDataURL('image/png');
     }
     // 回 { views:{front,side,back}, sheet? } 或 { img }（都是 dataURL）；三隻的會接上鞋和手（sheet＝拼好的走路圖，views＝站著的三格）；接口沒回圖丟錯（字是給她看的）
     async function _genDoll(a) {
@@ -944,10 +1167,10 @@
     // 存成這個小人的造型：三面＝三張各自落地，鑰匙那筆記 kind:'views'；一張＝跟「生成單張立姿圖」同一種
     async function _saveDollSkin(key, r) {
         if (!r.views) return await _saveSpriteSkin(key, r.img, 'img');
-        if (r.sheet) {   // 接好手腳的：一張走路圖，doll:1＝展示台照不倒翁那樣給正面／側面／背面看、大廳縮小時平滑
+        if (r.sheet) {   // 接好手腳的：一張走路圖，doll:2＝展示台照不倒翁那樣給正面／側面／背面看、大廳縮小時平滑
             const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
             await _b.idbPut(id, r.sheet);
-            const ok = _b.saveSkin(key, { kind: 'sheet', ref: { idb: id }, doll: 1 });
+            const ok = _b.saveSkin(key, { kind: 'sheet', ref: { idb: id }, doll: 2 });
             if (ok === false) { try { await _b.idbDel(id); } catch (e) {} return false; }
             return true;
         }
@@ -1101,6 +1324,8 @@
         genSpriteInto,                  // 無人值守生立姿（世界門旅人自動補圖；與裝扮室同一條管線）
         listPresets: _dressPresetsOf,   // 給設置頁列預設包（免得那邊再抄一份取法）
         packOf: _dressPackOf,           // 設置頁「大廳的小人」那兩格現在選的是哪一包（kind＝'img'／'sheet'）
+        dollRefist: _dollRefist,                      // ✊ 11-17 之前接的小圓手換成衣櫥的拳頭（lobby_stage.js 套造型時叫）
+        dollRefistSheet: _dollRefistSheet, dollAttach: _dollAttach,   // 本機測試用
         dollUpgrade: _dollUpgrade,                    // 🦶 舊的三面不倒翁補接手腳（lobby_stage.js 套造型時叫）
         DOLL_TPL, DOLL_TPL_KEY, dollTpl: _dollTpl,   // 🧸 不倒翁小人的提示詞（接自訂接口時用）：設置頁那格讀寫
         setPack: _dressSetPack,         // 設置頁選了就存
