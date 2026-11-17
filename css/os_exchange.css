@@ -89,6 +89,7 @@
     background: linear-gradient(135deg, #8cbcff, #4a6fd1); box-shadow: 0 6px 14px rgba(74, 111, 209, .3); }
 .osx-card.ach .osx-card-ic { background: linear-gradient(135deg, #ffd978, #d49a26); box-shadow: 0 6px 14px rgba(212, 154, 38, .32); }
 .osx-card.loot .osx-card-ic { background: linear-gradient(135deg, #9fb4e8, #2c4a7e); box-shadow: 0 6px 14px rgba(44, 74, 126, .32); }
+.osx-card.cafe .osx-card-ic { background: linear-gradient(135deg, #f2c79a, #b46f3c); box-shadow: 0 6px 14px rgba(180, 111, 60, .3); }
 .osx-card.locked .osx-card-ic { background: linear-gradient(135deg, #d9dde8, #aab2c6); box-shadow: none; }
 .osx-card-tx { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
 .osx-card-name { font-size: 15px; font-weight: 800; letter-spacing: .08em; color: #2b3663; }

@@ -248,7 +248,7 @@
             });
         },
         // 同一個 app 的好幾筆一起寫、同一筆交易：要嘛全寫進去、要嘛全沒寫（錢包餘額＋已付記號要綁在一起，os_pt.js 用）。
-        //   entries = [{ key, value, chatId? }]
+        //   entries = [{ key, value, chatId?, appId? }]（appId 不給＝用第一個參數；書咖帳戶換 PT 時兩個 app 一起寫）
         saveAppDataMany: async function(appId, entries) {
             const db = await this.init();
             const list = Array.isArray(entries) ? entries : [];
@@ -259,7 +259,7 @@
                     const st = tx.objectStore(STORE_NAME_APP_DATA);
                     const now = Date.now();
                     list.forEach(e => {
-                        const id = String(appId || 'app') + '::' + (e.chatId ? ('chat:' + e.chatId) : 'global') + '::' + String(e.key || '');
+                        const id = String(e.appId || appId || 'app') + '::' + (e.chatId ? ('chat:' + e.chatId) : 'global') + '::' + String(e.key || '');
                         st.put({ id: id, value: e.value, ts: now });
                     });
                     tx.oncomplete = () => resolve(true);

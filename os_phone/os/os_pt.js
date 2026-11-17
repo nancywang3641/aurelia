@@ -20,6 +20,8 @@
         fallbackCap: 20,        // 機械底(字數部分)上限
         housePrice: 1000,       // 玩家房價
         ledgerCap: 100,         // ledger 保留筆數
+        cafeRate: 1,            // 書咖帳戶換 PT：幾塊書咖的錢換 1 PT（書咖菜單本來就照 PT 定價，一比一）
+        cafeDailyCap: 200,      // 書咖帳戶一天最多換幾 PT（約兩章結算；不讓書咖變印鈔機）
     };
 
     const APP_ID = 'pt_wallet';   // OS_DB app_data 命名空間
@@ -144,6 +146,50 @@
     }
 
     function _now() { try { return Date.now(); } catch (e) { return 0; } }
+    // 本地午夜換日（跟書咖同一套）
+    function _dayNum(ts) { return Math.floor((ts - new Date(ts).getTimezoneOffset() * 60000) / 86400000); }
+
+    // ── ☕ 書咖帳戶換 PT（單向；每天有上限、店裡至少留開張那筆底）──
+    //   書咖的鎖 → 錢包的隊 → 書咖帳戶、PT 餘額、今天換了多少，三筆同一個交易寫進去：不會扣了書咖沒進 PT，也不會進了 PT 沒扣書咖
+    const K_CAFE_DAY = 'cafe_xfer';   // { day, n }：今天已經換了幾 PT
+    async function cafeXferInfo() {
+        const cafe = win.OS_CAFE || window.OS_CAFE;
+        let coins = null;
+        const keep = cafe && cafe.fundKeep ? cafe.fundKeep() : 300;
+        try { if (cafe && cafe.getFund) coins = (await cafe.getFund()).coins; } catch (e) {}
+        let used = 0;
+        try { const v = await _db().getAppData(APP_ID, K_CAFE_DAY); if (v && v.day === _dayNum(_now())) used = Number(v.n) || 0; } catch (e) {}
+        const room = Math.max(0, PT_CFG.cafeDailyCap - used);
+        const spare = coins == null ? 0 : Math.max(0, coins - keep);
+        return { coins, keep, room, can: Math.min(room, Math.floor(spare / PT_CFG.cafeRate)) };
+    }
+    function cafeToPT(want) {
+        const cafe = win.OS_CAFE || window.OS_CAFE;
+        if (!cafe || !cafe.withdrawFund) return Promise.resolve({ ok: false, msg: '書咖還沒開張，這筆帳轉不了' });
+        return cafe.withdrawFund((f, keep, fundEntry) => _serial(async () => {
+            const db = _db();
+            if (!db || !db.saveAppDataMany) return { ok: false, msg: '帳本還沒準備好，晚點再來' };
+            const today = _dayNum(_now());
+            const xd = await db.getAppData(APP_ID, K_CAFE_DAY);
+            const used = xd && xd.day === today ? (Number(xd.n) || 0) : 0;
+            const room = PT_CFG.cafeDailyCap - used;
+            if (room <= 0) return { ok: false, msg: '今天的額度換完了，明天再來' };
+            const spare = Math.floor((Number(f.coins) || 0) - keep);
+            if (spare < PT_CFG.cafeRate) return { ok: false, msg: '書咖帳戶要留 ' + keep + ' 備料，現在沒有多的可以換' };
+            let gain = Math.min(room, Math.floor(spare / PT_CFG.cafeRate));
+            if (want != null) gain = Math.min(gain, Math.max(0, Math.floor(Number(want) || 0)));
+            if (gain <= 0) return { ok: false, msg: '沒有可以換的' };
+            const nf = Object.assign({}, f, { coins: f.coins - gain * PT_CFG.cafeRate });
+            const next = (await getPT()) + gain;
+            await db.saveAppDataMany(APP_ID, [
+                { key: K_BALANCE, value: next },
+                { key: K_CAFE_DAY, value: { day: today, n: used + gain } },
+                fundEntry(nf),
+            ]);
+            await _pushLedger({ ts: _now(), delta: gain, reason: '書咖帳戶轉入', balanceAfter: next });
+            return { ok: true, gain, balance: next, cafeLeft: nf.coins, roomLeft: room - gain };
+        }));
+    }
 
     // ── 地塊 built 狀態 ──────────────────────────────────
     async function getPlotBuilt(plotId) {
@@ -596,6 +642,13 @@
         const lootBtn = lootN
             ? '<button class="osx-card-btn gold" id="os-pt-redeem-loot">估值 ' + lootN + ' 件</button>'
             : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
+        // ☕ 書咖帳戶換 PT
+        const cx = await cafeXferInfo();
+        const cafeBtn = cx.coins == null ? '<button class="osx-card-btn locked" disabled>書咖還沒開張</button>'
+            : cx.can > 0 ? '<button class="osx-card-btn gold" id="os-pt-cafe-xfer">換 ' + cx.can + ' PT</button>'
+            : '<button class="osx-card-btn locked" disabled>' + (cx.room <= 0 ? '今天換完了' : '店裡沒有多的') + '</button>';
+        const cafeDesc = cx.coins == null ? '瀅瀅店裡賺的錢換成 PT'
+            : '店裡有 ' + cx.coins + '，留 ' + cx.keep + ' 備料；一比一，今天還能換 ' + cx.room;
 
         // 一張卡＝圖示、名字、一句它是做什麼的、按鈕（插圖圖片退役，圖示用 FA）
         const card = (cls, icon, name, desc, btn) =>
@@ -609,7 +662,7 @@
             card('house' + (built ? ' done' : ''), 'fa-house-chimney', '蓋你的房', built ? '視差城市裡已經有你的家' : '在視差城市擁有一間自己的房子', houseBtn) +
             card('ach', 'fa-award', '成就兌換', '成就交給白兔估值換 PT；異常成就找 404 的柴郡', achBtn) +
             card('loot', 'fa-suitcase-rolling', '戰利品估值', '從視差世界帶回來、選了換 PT 的東西', lootBtn) +
-            card('soon locked', 'fa-gift', '限時商品', '之後會開', '<button class="osx-card-btn locked" disabled>敬請期待</button>');
+            card('cafe' + (cx.can > 0 ? '' : ' locked'), 'fa-mug-hot', '書咖帳戶', cafeDesc, cafeBtn);
 
         if (msgEl) {
             msgEl.className = 'm';
@@ -631,6 +684,20 @@
             if (msgEl) { msgEl.className = 'm ok'; msgEl.textContent = '簽約完成，你在視差城市有家了。'; }
             try { window.dispatchEvent(new CustomEvent('os-pt-plot-changed', { detail: { plotId: 'player', built: true } })); } catch (e) {}
             await _renderShopBody(mask);   // 重繪：餘額↓、按鈕→已擁有
+        });
+
+        const cafeXBtn = mask.querySelector('#os-pt-cafe-xfer');
+        if (cafeXBtn) cafeXBtn.addEventListener('click', async () => {
+            cafeXBtn.disabled = true;
+            const r = await cafeToPT();
+            if (!r.ok) {
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = r.msg || '沒轉成，再試一次'; }
+                cafeXBtn.disabled = false;
+                return;
+            }
+            await _renderShopBody(mask);
+            const _m = mask.querySelector('#os-pt-shop-msg');
+            if (_m) { _m.className = 'm ok'; _m.textContent = '書咖帳戶轉入 ' + r.gain + ' PT，店裡還有 ' + r.cafeLeft + '。'; }
         });
 
         const redeemBtn = mask.querySelector('#os-pt-redeem-ach');
@@ -678,6 +745,7 @@
         settleSummary,
         evaluateAchievementsPT,
         getLoot, addLoot, evaluateLootPT,
+        cafeXferInfo, cafeToPT,
         openExchange, closeExchange,
         _cfg: PT_CFG,
         _showSettleCard,   // 診斷用：不跑結算也能把卡叫出來看位置

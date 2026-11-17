@@ -149,6 +149,14 @@
         return _freshFund(f, today);
     }
     function getFund() { return _locked(_fundLoad); }
+    // 書咖帳戶的錢提出去（交易所換 PT，os_pt.js 的 cafeToPT）：在書咖的鎖裡跑，結算或備料不會插進來。
+    //   pay(帳戶, 要留在店裡的底, 把帳戶新值包成一筆寫入) 自己決定提多少，並把帳戶新值跟 PT 寫在同一筆交易（OS_DB.saveAppDataMany）
+    function withdrawFund(pay) {
+        return _locked(async () => {
+            const f = await _fundLoad();
+            return pay(f, CAFE_CFG.fund.start, (nf) => ({ appId: APP_ID, key: K_FUND, value: nf }));
+        });
+    }
     async function _fundOrNull() { try { return await getFund(); } catch (e) { return null; } }   // 畫面用：讀不到就顯示「—」
     // 一批料在某天某時刻能不能用：那批上架那天起放 shelfDays 天；上架那天要到上架時間（她備的＝9 點、店員當天補的＝補好那刻）
     function _usable(b, day, t) {
@@ -1240,6 +1248,6 @@
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
         isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid,
         labResult: _labResult, finishRd: _finishRdNow, prices: CAFE_CFG.prices, tierText: TIER_TEXT, esc: _esc };   // 研發台（os_cafe_kitchen.js）用
-    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, makeBatch, startRd, revealRd, cafeDev, collectFromFarm, getPantry, _settle, _b };   // _settle=console 診斷用
+    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, withdrawFund, fundKeep: () => CAFE_CFG.fund.start, makeBatch, startRd, revealRd, cafeDev, collectFromFarm, getPantry, _settle, _b };   // _settle=console 診斷用
     console.log('[Cafe] 書咖經營系統就緒');
 })();
