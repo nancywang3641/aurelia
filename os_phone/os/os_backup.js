@@ -71,7 +71,7 @@
         'os_prompt_bundles',          // 提示詞預設包
         'os_universal_cot',
         'os_iris_persona', 'os_cheshire_persona', 'os_rabbit_persona', 'os_alice_persona',
-        'os_zhiwei_persona', 'os_hatter_persona', 'os_lobby_world',  // 大廳的人和世界觀
+        'os_zhiwei_persona', 'os_hatter_persona', 'os_lobby_world',  // 大廳的人和世界觀的補充：11-17 那頁拿掉、程式不再讀，她以前寫的字照舊跟著備份走
         'os_vn_rules_custom',         // VN 指令自己改的
         'sp_summary_tpl',             // 大總結的模板
         'os_vn_extra_tags_prompt', 'os_vn_tags_keyword',            // 創作室：自訂標籤的教學

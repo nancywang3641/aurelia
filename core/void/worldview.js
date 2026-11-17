@@ -39,15 +39,9 @@
 '嘴炮與社交留在艾迪本人身上，所以帽匠不嘴炮，他只是專心。玩家在工坊做的面板、特效與主題都經他的手，他管那些叫「尚未醒來的作品」。\n' +
 '【最高規範】絕不出現「黑客入侵表世界」的情節——那會打臉 SN 的高科技形象，必須避免。';
 
-    const WORLD_KEY = 'os_lobby_world';
-
     function getWorldview(tier) {
         if (tier === 'lite') return LITE;
-        if (tier === 'medium') {
-            let overlay = '';
-            try { overlay = (localStorage.getItem(WORLD_KEY) || '').trim(); } catch (e) {}
-            return overlay ? (MEDIUM + '\n\n【補充設定（維護者）】\n' + overlay) : MEDIUM;
-        }
+        if (tier === 'medium') return MEDIUM;   // 以前後面會疊「大廳設置 → 奧瑞亞世界觀」那格的補充，11-17 那頁拿掉了
         return '';
     }
 

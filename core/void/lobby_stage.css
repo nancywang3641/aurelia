@@ -273,17 +273,12 @@
 .void-tab.mode-404 .lstage-edit-btn:hover, .void-tab.mode-404 .lstage-set-btn:hover,
 .void-tab.mode-404 .lstage-city-btn:hover, .void-tab.mode-404 .lstage-theater-btn:hover {
   background:rgba(0,18,4,.9); }
-/* ⚙️ 大廳設置：白色系（跟快轉/收藏冊/小劇場同一家），同窗兩分頁＋限高捲動 */
+/* ⚙️ 大廳設置：白色系（跟快轉/收藏冊/小劇場同一家），限高捲動（11-17 起只剩選項一頁） */
 .lstage-settings { background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28);
   box-shadow:0 12px 34px rgba(40,60,110,.28); width:280px; max-height:82%;
   -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
 .lstage-settings .lsd-title { color:#23315e; letter-spacing:1px; }
 .lstage-settings .lsd-title i { color:#4f74c8; }
-.lstage-settings .lset-tabs { display:flex; gap:4px; background:rgba(35,49,94,.06);
-  border:1px solid rgba(35,49,94,.12); border-radius:999px; padding:3px; flex-shrink:0; }
-.lstage-settings .lset-tab { flex:1; border:none; background:transparent; border-radius:999px;
-  padding:6px 4px; font-size:12px; color:#5a6784; cursor:pointer; letter-spacing:1px; font-family:inherit; }
-.lstage-settings .lset-tab.on { background:#23315e; color:#fff; font-weight:700; }
 .lstage-settings .lset-body { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:2px; }
 .lstage-settings .lset-body::-webkit-scrollbar { width:4px; }
 .lstage-settings .lset-body::-webkit-scrollbar-thumb { background:rgba(35,49,94,.2); border-radius:2px; }
@@ -297,28 +292,9 @@
   background:rgba(240,244,252,.65); color:#23315e; font-size:12px; font-family:inherit; text-align:right; }
 .lstage-settings .lset-num:focus { outline:none; border-color:#4a78d8; }
 .lstage-settings .lset-unit { color:#5a6784; font-size:12px; }
-.lstage-settings .lset-list { display:flex; flex-direction:column; gap:6px; }
-.lstage-settings .lset-item { display:flex; align-items:center; gap:10px; width:100%;
-  padding:9px 10px; border:1px solid rgba(60,80,130,.18); border-radius:12px; cursor:pointer; text-align:left;
-  background:rgba(240,244,252,.65); color:#23315e; font-family:inherit; }
-.lstage-settings .lset-item:hover { border-color:#4a78d8; background:rgba(74,120,216,.08); }
-.lstage-settings .lset-item-ic { width:18px; text-align:center; color:#4f74c8; flex:0 0 auto; }
-.lstage-settings .lset-item-tx { display:flex; flex-direction:column; flex:1; min-width:0; }
-.lstage-settings .lset-item-name { font-size:13px; font-weight:700; }
-.lstage-settings .lset-item-sub { font-size:11px; color:#8a93ad; }
-.lstage-settings .lset-item-arrow { color:#8a93ad; opacity:.7; font-size:12px; flex:0 0 auto; }
-.lstage-settings .lset-editor-title { display:flex; align-items:center; gap:8px; }
-.lstage-settings .lset-back { border:1px solid rgba(35,49,94,.25); background:#fff; color:#23315e;
-  width:28px; height:28px; border-radius:8px; cursor:pointer; flex:0 0 auto; }
-.lstage-settings .lset-back:hover { border-color:#23315e; }
-.lstage-settings .lset-ta { width:100%; box-sizing:border-box; min-height:150px; margin:8px 0; padding:10px;
-  border-radius:10px; border:1px solid rgba(35,49,94,.25); background:rgba(255,255,255,.85); color:#2b3652;
-  font:inherit; line-height:1.5; resize:vertical; }
-.lstage-settings .lset-ta:focus { outline:none; border-color:#c8a96e; }
 .lstage-settings .lep-btn { background:rgba(240,244,252,.8); color:#23315e; border:1px solid rgba(60,80,130,.25); flex-shrink:0; }
 .lstage-settings .lep-btn:hover { border-color:#23315e; }
 .lstage-settings .lep-btn.lep-done { background:linear-gradient(135deg,#6a9be0,#4a78d8); color:#fff; border:none; }
-.lstage-settings .lep-btn.lset-saved { background:#2e8a52; color:#fff; }
 /* 小劇場頻率 segmented */
 .lstage-settings .ltheater-freq { display:inline-flex; gap:4px; }
 .lstage-settings .ltheater-freq-btn { border:1px solid rgba(60,80,130,.22); border-radius:999px; padding:4px 10px; cursor:pointer;

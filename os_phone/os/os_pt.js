@@ -320,16 +320,12 @@
             `${i + 1}. 成就名稱：「${a.name}」\n   描述：${a.desc || '（無描述）'}`
         ).join('\n');
         // 白兔的人格（點評口吻）：跟大廳那份同一個人，這裡只取估值櫃檯用得到的部分。
-        // 使用者在「大廳設置 → 人設 → 白兔先生」填的補充，兩邊共用同一槽。
-        const rabbitExtra = (() => {
-            try { return (win.OS_PROMPTS?.loadRabbit?.() || '').trim(); } catch (e) { return ''; }
-        })();
         const RABBIT_VOICE =
             '你不擺架子、不勸說、不奉承，只把價碼算清楚攤在客人面前。' +
             '點評一句話講完：精算、守時、帶一點看戲的興味；漂亮的操作你不吝於承認，蠢事你也會禮貌地記上一筆。' +
             '難聽的話要包成客氣的提醒，但不要因此說得含糊。';
         const systemPrompt = '你是「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，斯文、守時、照章辦事。' +
-            RABBIT_VOICE + (rabbitExtra ? `\n【補充人設】\n${rabbitExtra}\n` : '') +
+            RABBIT_VOICE +
             `你的工作是替客人「估值」他們在故事中達成的成就，換算成正派貨幣「PT」。` +
             `評分標準：日常小事 5~${cc.normal} PT，亮眼表現 ${cc.normal + 5}~${cc.great} PT，值得紀念的里程碑 ${cc.great + 10}~${cc.legend} PT。` +
             '請以 JSON 陣列格式回覆，每筆格式如下：' +
@@ -408,10 +404,8 @@
         if (!api) return { ok: false, msg: 'API 尚未初始化' };
         const cc = PT_CFG.achvCaps;
         const list = pending.map((x, i) => `${i + 1}. 「${x.name}」（從視差世界「${x.world || '不明'}」帶回來）\n   說明：${x.desc || '（沒有說明）'}`).join('\n');
-        const rabbitExtra = (() => { try { return (win.OS_PROMPTS?.loadRabbit?.() || '').trim(); } catch (e) { return ''; } })();
         const systemPrompt = '你是「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，斯文、守時、照章辦事。' +
             '你不擺架子、不勸說、不奉承，只把價碼算清楚攤在客人面前。點評一句話講完：精算、守時、帶一點看戲的興味。' +
-            (rabbitExtra ? `\n【補充人設】\n${rabbitExtra}\n` : '') +
             '客人從視差世界撤離時，把在那裡拿到的東西交給交易所收購（實物留在交易所，客人拿 PT）。你的工作是逐件開收購價。' +
             `評分標準：尋常的東西 5~${cc.normal} PT，少見或有用的 ${cc.normal + 5}~${cc.great} PT，稀有珍品 ${cc.great + 10}~${cc.legend} PT。` +
             '請以 JSON 陣列格式回覆，每筆格式如下：{"name":"東西的名字","pt":整數,"comment":"白兔先生的一句話點評"}' +

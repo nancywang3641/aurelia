@@ -2619,41 +2619,13 @@
         const seeStory = localStorage.getItem('lobby_npc_see_current_story') === '1';
         const box = document.createElement('div');
         box.className = 'lstage-dress lstage-settings';
-        const P = window.OS_PROMPTS || {};
-        // 第一層清單定義：名稱 / 副標 / FA 圖標 / load / save
-        const EDITS = [
-            { id:'iris',  name:'瀅瀅（店長）',    sub:'視差書咖駐店小說家', icon:'fa-book',           load:P.loadIris,    save:P.saveIris },
-            { id:'chess', name:'柴郡（404）',     sub:'404 號房管理員',     icon:'fa-cat',            load:P.loadCheshire, save:P.saveCheshire },
-            { id:'alice', name:'愛麗絲（導覽官）', sub:'純白大廳首席導覽',   icon:'fa-user-astronaut', load:P.loadAlice,   save:P.saveAlice },
-            { id:'rabbit',name:'白兔先生（交易所）', sub:'交易區職員 · 成就估值', icon:'fa-stopwatch',   load:P.loadRabbit,  save:P.saveRabbit },
-            { id:'zhiwei',name:'紫薇老師（占卜小屋）', sub:'微醺星軌店主 · 只管聊天',  icon:'fa-moon',    load:P.loadZhiwei,  save:P.saveZhiwei },
-            { id:'hatter',name:'帽匠（奇想工坊）',   sub:'造物工坊店主 · 只管聊天',  icon:'fa-hat-wizard', load:P.loadHatter, save:P.saveHatter },
-            { id:'world', name:'奧瑞亞世界觀',    sub:'主世界觀補充設定',   icon:'fa-globe',          load:P.loadWorld,   save:P.saveWorld },
-        ];
-
-        let curTab = 'chars';   // 'chars'=人設/世界觀、'opts'=選項（窗口越疊越長→改同窗分頁）
+        // 2026-11-17 以前這窗有兩個分頁，另一頁「人設 / 世界觀」可以幫瀅瀅、柴郡他們和世界觀各補一段字；她說不太需要了，整頁連同那七份補充都拿掉，只剩選項
         function renderList() {
             box.innerHTML =
                 '<div class="lsd-title"><i class="fa-solid fa-gear"></i> 大廳設置</div>' +
-                '<div class="lset-tabs">' +
-                  '<button class="lset-tab' + (curTab === 'chars' ? ' on' : '') + '" data-tab="chars">人設 / 世界觀</button>' +
-                  '<button class="lset-tab' + (curTab === 'opts' ? ' on' : '') + '" data-tab="opts">選項</button>' +
-                '</div>' +
-                '<div class="lset-body">' + (curTab === 'chars' ? _charsHtml() : _optsHtml()) + '</div>' +
+                '<div class="lset-body">' + _optsHtml() + '</div>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
-            box.querySelectorAll('.lset-tab').forEach(b => b.addEventListener('click', () => { curTab = b.dataset.tab; renderList(); }));
-            if (curTab === 'chars') _bindChars(); else _bindOpts();
-        }
-        function _charsHtml() {
-            return '<div class="lset-list">' +
-                EDITS.map(e =>
-                    '<button class="lset-item" data-edit="' + e.id + '">' +
-                      '<i class="fa-solid ' + e.icon + ' lset-item-ic"></i>' +
-                      '<span class="lset-item-tx"><span class="lset-item-name">' + e.name + '</span>' +
-                      '<span class="lset-item-sub">' + e.sub + '</span></span>' +
-                      '<i class="fa-solid fa-chevron-right lset-item-arrow"></i>' +
-                    '</button>').join('') +
-                '</div>';
+            _bindOpts();
         }
         function _optsHtml() {
             const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
@@ -2690,12 +2662,6 @@
                   '<input type="checkbox" class="lset-chk" data-k="cafe"' + (localStorage.getItem('cafe_offline_visits') !== '0' ? ' checked' : '') + '></label>' +
                 '<div class="lset-hint">開著＝常客會自己來書咖消費、留下紀錄（每位第一次上門會請 AI 記一次他的口味）。關閉＝書咖不營業。</div>' +
                 (window.LobbyDecider ? window.LobbyDecider.settingsHtml() : '');   // 🎲 書咖的丹那三格（lobby_decider.js）
-        }
-        function _bindChars() {
-            box.querySelectorAll('.lset-item').forEach(btn => btn.addEventListener('click', () => {
-                const e = EDITS.find(x => x.id === btn.dataset.edit);
-                if (e) renderEditor(e);
-            }));
         }
         function _bindOpts() {
             box.querySelectorAll('.lset-chk').forEach(chk => chk.addEventListener('change', (e) => {
@@ -2737,28 +2703,6 @@
                 S._wxRoll = null;              // 切回自動時重擲
                 box.querySelectorAll('.ltheater-freq-btn[data-wx]').forEach(b => b.classList.toggle('on', b === btn));
             }));
-        }
-
-        function renderEditor(e) {
-            const cur = (e.load && e.load()) || '';
-            box.innerHTML =
-                '<div class="lsd-title lset-editor-title">' +
-                  '<button class="lset-back" data-act="back"><i class="fa-solid fa-chevron-left"></i></button>' +
-                  '<span><i class="fa-solid ' + e.icon + '"></i> ' + e.name + '</span>' +
-                '</div>' +
-                '<div class="lset-hint">' + e.sub + '。留空則不注入補充。</div>' +
-                '<textarea class="lset-ta" placeholder="在這裡補充設定，會疊加在內建世界觀/人設之後..."></textarea>' +
-                '<button class="lep-btn lep-done" data-act="save"><i class="fa-solid fa-floppy-disk"></i> 保存</button>';
-            const ta = box.querySelector('.lset-ta');
-            ta.value = cur;
-            box.querySelector('[data-act="back"]').addEventListener('click', renderList);
-            box.querySelector('[data-act="save"]').addEventListener('click', function () {
-                if (e.save) e.save(ta.value);
-                const btn = this;
-                btn.innerHTML = '<i class="fa-solid fa-check"></i> 已保存';
-                btn.classList.add('lset-saved');
-                setTimeout(() => { btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 保存'; btn.classList.remove('lset-saved'); }, 1200);
-            });
         }
 
         renderList();

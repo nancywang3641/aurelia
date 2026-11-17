@@ -102,10 +102,10 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
 
     // buildNpcPrompt(npc, ctx) — 書咖舞台的典籍角色對話
     //   npc: { name, storyTitle, persona, personaFull }
-    //   ctx: { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, personaSupplement, stageCtx }
+    //   ctx: { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, stageCtx }
     //   stageCtx：會自己在店裡走動的 NPC（書咖的丹）此刻在哪、剛才做了什麼、心情；其他人沒有就空
     function buildNpcPrompt(npc, ctx) {
-        const { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, personaSupplement, stageCtx } = ctx || {};
+        const { userName, userPersona, memorySummary, timeCtx, lobbyTemplateSec, worldCtx, stageCtx } = ctx || {};
         const stageSec = stageCtx ? ('\n\n【你此刻在店裡的狀況】\n' + stageCtx) : '';
         // 對話對象：優先當前酒館 persona（含描述），沒有才退登入名/訪客
         const who = (userPersona && userPersona.name)
@@ -117,10 +117,9 @@ ${supplement ? `\n\n---\n\n${supplement}` : ''}`;
         const lobbySec = lobbyTemplateSec ? ('\n\n' + lobbyTemplateSec) : '';
         // 主世界觀（tier 已由呼叫端決定：愛麗絲/SN=medium、guest 書卡=lite）
         const worldSec = worldCtx ? ('\n\n【世界觀】\n' + worldCtx) : '';
-        // personaFull=完整人設卡（如愛麗絲），直接採用＋overlay 補充＋格式段
+        // personaFull=完整人設卡（如愛麗絲），直接採用＋格式段
         if (npc.personaFull) {
-            const supp = personaSupplement ? ('\n\n' + personaSupplement) : '';
-            return npc.personaFull + supp + worldSec + memBlock + lobbySec + stageSec + '\n\n【對話對象】\n' + who + '。\n\n' +
+            return npc.personaFull + worldSec + memBlock + lobbySec + stageSec + '\n\n【對話對象】\n' + who + '。\n\n' +
 '【對話輸出格式】\n旁白/動作：[Nar|動作描述]\n角色對話：[Char|' + npc.name + '|表情|「對話內容」]\n表情只用：normal/smile/think/surprise/warning/error。\n' +
 (timeCtx || '');
         }

@@ -2225,8 +2225,6 @@ ${sections}`;
         }
 
         try {
-            const irisSupplement    = (window.OS_PROMPTS ? window.OS_PROMPTS.get('iris_system')    : '') || '';
-            const cheshireSupplement = (window.OS_PROMPTS ? window.OS_PROMPTS.get('cheshire_system') : '') || '';
             const currentUserName = IRIS_STATE.userName || '未知';
             const lobbyTemplateSec = await VoidCanvas.buildTemplateCtx();
 
@@ -2236,15 +2234,6 @@ ${sections}`;
             const _isGuestCard = !!(npcTarget && !npcTarget.personaFull);   // 有 personaFull=系統/原生NPC；沒有=外來書卡
             const _worldTier = _isGuestCard ? 'lite' : (npcTarget?.worldTier || 'medium');
             const worldCtx   = _wv ? _wv.getWorldview(_worldTier) : '';
-            // 使用者自填的補充人設：愛麗絲、白兔各一槽（大廳設置→人設）
-            let aliceSupplement = '';
-            try {
-                if (npcTarget && npcTarget.key === 'alice') aliceSupplement = (window.OS_PROMPTS?.loadAlice?.() || '').trim();
-                else if (npcTarget && npcTarget.key === 'rabbit') aliceSupplement = (window.OS_PROMPTS?.loadRabbit?.() || '').trim();
-                else if (npcTarget && npcTarget.key === 'zhiwei') aliceSupplement = (window.OS_PROMPTS?.loadZhiwei?.() || '').trim();
-                else if (npcTarget && npcTarget.key === 'hatter') aliceSupplement = (window.OS_PROMPTS?.loadHatter?.() || '').trim();
-            } catch (e) {}
-
             // USER 身分：guest NPC 用「那輪大總結紀錄的 persona」(認得古風輪的你，不靠當前 USER)；
             //   固定 NPC(瀅瀅/柴郡/愛麗絲)或沒紀錄 → 退當前 persona
             let userPersona = null;
@@ -2284,7 +2273,6 @@ ${sections}`;
                     // 愛麗絲=視差看板娘/系統NPC，跟瀅瀅同級可調用大廳組件；書中角色 guest 不給(不該憑空生UI)
                     lobbyTemplateSec: (npcTarget.key === 'alice') ? lobbyTemplateSec : '',
                     worldCtx,
-                    personaSupplement: aliceSupplement,
                     stageCtx: window.LobbyDecider?.talkCtx?.(npcTarget) || '',   // 🎲 會自己走動的 NPC：此刻在哪、剛才做了什麼（lobby_decider.js）
                 })
                 : VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
@@ -2292,8 +2280,7 @@ ${sections}`;
                 visit404Count,
                 timeCtx: _buildTimeCtx(),
                 lobbyTemplateSec,
-                supplement: (is404Room ? cheshireSupplement : irisSupplement) +
-                    (fixedMemSummary ? ('\n\n【你和這位訪客先前的相處記憶】\n' + fixedMemSummary) : ''),
+                supplement: (fixedMemSummary ? ('\n\n【你和這位訪客先前的相處記憶】\n' + fixedMemSummary) : ''),
                 justReturnedFrom404: _justReturnedFrom404,
                 journalCtx,
                 worldCtx,
