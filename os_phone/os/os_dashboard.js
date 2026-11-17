@@ -178,11 +178,26 @@
     const _openLogs = {};   // 展開的呼叫記錄（重畫時要記得誰是開著的）
 
     const TAB_NAME = { today: '今天', chan: '通道', log: '記錄', msg: '訊息' };
+    // 「訊息」頁是程式自己印的英文紀錄（給丹查錯用）：新玩家打開控制台看到一堆 [LobbyStage] unmounted 只會以為壞了。
+    //   預設收起來，要找丹修東西時在「今天」頁最下面打開（小斐 11-17 新玩家檢查第 1 條）。訊息照樣在背景收，打開就看得到之前的
+    const K_DEV = 'aurelia_dsh_devmsg';
+    function _devOn() { try { return localStorage.getItem(K_DEV) === '1'; } catch (e) { return false; } }
+    function _tabsHtml() {
+        return Object.keys(TAB_NAME).filter(function (k) { return k !== 'msg' || _devOn(); }).map(function (k) {
+            return '<button class="dsh-tab' + (k === _tab ? ' on' : '') + '" data-tab="' + k + '">' + TAB_NAME[k] + '</button>';
+        }).join('');
+    }
+    function _bindTabs() {
+        _root.querySelectorAll('.dsh-tab').forEach(function (b) {
+            b.onclick = function () { _switch(b.dataset.tab); };
+        });
+    }
 
     function open() {
         if (_root) { close(); return; }
         const U = _U();
         _pickDay = U ? U.dayKey() : '';
+        if (_tab === 'msg' && !_devOn()) _tab = 'today';
         _root = d.createElement('div');
         _root.id = 'dsh-root';
         _root.innerHTML =
@@ -190,11 +205,7 @@
             '  <button class="dsh-close" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
             '  <div class="dsh-title-row"><div class="dsh-wing"></div><h1 class="dsh-h1">控制台<span class="dsh-ver" id="dsh-ver" title="這台裝置現在跑的版本"></span><button type="button" class="dsh-upd" id="dsh-upd" hidden><i class="fa-solid fa-arrows-rotate"></i><span>有新版</span></button></h1><div class="dsh-wing r"></div></div>' +
             '  <div class="dsh-head">' +
-            '    <div class="dsh-tabs">' +
-            Object.keys(TAB_NAME).map(function (k) {
-                return '<button class="dsh-tab' + (k === _tab ? ' on' : '') + '" data-tab="' + k + '">' + TAB_NAME[k] + '</button>';
-            }).join('') +
-            '    </div>' +
+            '    <div class="dsh-tabs">' + _tabsHtml() + '</div>' +
             '    <div class="dsh-pill" id="dsh-pill"><i class="fa-solid fa-bolt"></i><span>—</span></div>' +
             '  </div>' +
             '  <div class="dsh-page" id="dsh-page"></div>' +
@@ -202,9 +213,7 @@
         d.body.appendChild(_root);
         _root.querySelector('.dsh-close').onclick = close;
         _root.addEventListener('click', function (e) { if (e.target === _root) close(); });
-        _root.querySelectorAll('.dsh-tab').forEach(function (b) {
-            b.onclick = function () { _switch(b.dataset.tab); };
-        });
+        _bindTabs();
         _render();
         _checkUpdate();
         // 🚨 記錄與訊息是一直在長的東西，但**不要**定時整頁重畫：重畫＝捲動的框從頭開始，
@@ -476,7 +485,9 @@
         }
         html += _sec('最近十四天') + spark +
             '<div class="dsh-actions"><span class="dsh-note">點柱子看那一天</span><span class="sp"></span>' +
-            '<button class="dsh-btn" id="dsh-clear-usage">清空所有用量紀錄</button></div>';
+            '<button class="dsh-btn" id="dsh-clear-usage">清空所有用量紀錄</button></div>' +
+            '<div class="dsh-actions dsh-dev"><span class="dsh-note">除錯訊息（程式的英文紀錄，找丹修東西時才需要）</span><span class="sp"></span>' +
+            '<button class="dsh-btn" id="dsh-dev-toggle">' + (_devOn() ? '收起「訊息」頁' : '打開「訊息」頁') + '</button></div>';
 
         _paint(page, html);
         page.querySelectorAll('.dsh-spark-col').forEach(function (c) {
@@ -484,6 +495,16 @@
         });
         const bt = page.querySelector('#dsh-back-today');
         if (bt) bt.onclick = function () { _pickDay = today; _render(); };
+        const dv = page.querySelector('#dsh-dev-toggle');
+        if (dv) dv.onclick = function () {
+            const on = !_devOn();
+            if (!win.AUI.lsSet(K_DEV, on ? '1' : '0', '控制台的除錯訊息開關')) return;
+            const tabs = _root.querySelector('.dsh-tabs');
+            if (tabs) { tabs.innerHTML = _tabsHtml(); _bindTabs(); }
+            page.__dshHtml = null;
+            _render();
+            _toast(on ? '上面多了「訊息」頁。' : '「訊息」頁收起來了。');
+        };
         const cl = page.querySelector('#dsh-clear-usage');
         if (cl) cl.onclick = async function () {
             const ok = await _confirm('把所有的用量紀錄清掉？每天的數字會全部歸零，而且回不來。');

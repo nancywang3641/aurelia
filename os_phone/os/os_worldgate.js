@@ -3532,6 +3532,10 @@
             '.wg-warn i{flex:none;}.wg-warn span{flex:1;min-width:0;}' +
             '.wg-warn .wg-mgr-btn{flex:none;background:rgba(180,80,60,.14);border-color:rgba(180,80,60,.3);color:#a05040;}' +
             '.wg-warn .wg-mgr-btn:hover{background:#a05040;color:#fff;border-color:#a05040;}' +
+            '.wg-warn.info{background:rgba(42,74,128,.07);border-color:rgba(42,74,128,.24);color:#2a4a80;}' +
+            '.wg-warn.info .wg-mgr-btn{background:rgba(42,74,128,.1);border-color:rgba(42,74,128,.3);color:#2a4a80;}' +
+            '.wg-warn.info .wg-mgr-btn:hover{background:#2a4a80;color:#fff;border-color:#2a4a80;}' +
+            '.wg-mode-pill{cursor:pointer;}' +
             '.wg-mgr-btn{display:inline-flex;align-items:center;gap:4px;padding:2px 9px;border-radius:9px;cursor:pointer;' +
               'font-family:inherit;font-size:10px;font-weight:700;color:#5a5e75;background:rgba(26,28,40,.06);border:1px solid rgba(26,28,40,.12);}' +
             '.wg-mgr-btn:hover,.wg-mgr-btn.on{background:#1A1C28;color:#fff;border-color:#1A1C28;}' +
@@ -4097,6 +4101,10 @@
             closeGate();
             try { (win.LobbyStage || window.LobbyStage)?.endTalk?.(); } catch (e) {}
         });
+        // 「主世界」那顆是現在在哪的牌子：以前點了沒反應，像壞掉。點了講一句現在在哪、怎麼進去
+        box.querySelector('[data-wg-mode]')?.addEventListener('click', () => {
+            _toast(_gate()?.isInParallax?.() ? '現在在視差世界裡。要回奧瑞亞，按下面的「撤離視差」。' : '現在在奧瑞亞城裡（主世界）。挑一個世界 DIVE，就會進到視差。');
+        });
         _refreshModePill();
         _renderList();
     }
@@ -4124,8 +4132,10 @@
         if (!L) return '';                                   // 問不到就不提示
         // 網頁版：沒有書可掛，只看現在打開的是不是藏書「奧瑞亞」那本（世界門只開在那本）
         if (L.pwa) {
-            return L.ours ? '' : '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
-                '<span>現在打開的故事不是「奧瑞亞」那本。到藏書打開奧瑞亞、踏入故事之後，才進得了世界。你可以先挑好世界。</span></div>';
+            // 不是壞掉，是還沒開那本書：用一般提示的顏色、給一顆直接去藏書（小斐 11-17 新玩家檢查第 5 條：一進來就紅色警告，像沒做完）
+            return L.ours ? '' : '<div class="wg-warn info"><i class="fa-solid fa-book-open"></i>' +
+                '<span>世界門要在「奧瑞亞」的故事裡才進得去。可以先挑好世界，再去藏書打開奧瑞亞、踏入故事。</span>' +
+                '<button class="wg-mgr-btn" data-act="shelf">去藏書</button></div>';
         }
         if (L.missing && L.missing.length) {
             return '<div class="wg-warn"><i class="fa-solid fa-triangle-exclamation"></i>' +
@@ -4267,6 +4277,13 @@
             _toast('已從檔案庫移除 ' + hit.length + ' 個世界');
             _mgrOff();
             _renderList();
+        });
+        // 去藏書：關掉世界門，按大廳的「藏書」那顆（側欄、更多選單也是照這顆轉按，data-proxy="void-quest-btn"）
+        b.querySelector('[data-act="shelf"]')?.addEventListener('click', () => {
+            closeGate();
+            try { (win.LobbyStage || window.LobbyStage)?.endTalk?.(); } catch (e) {}
+            const q = win.document.getElementById('void-quest-btn');
+            if (q) q.click(); else _toast('從大廳的「藏書」打開奧瑞亞');
         });
         b.querySelector('[data-act="link"]')?.addEventListener('click', async (ev) => {
             ev.currentTarget.disabled = true;

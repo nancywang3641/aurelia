@@ -94,6 +94,11 @@
             if (!window.OS_API || !window.OS_SETTINGS) { reject(new Error('模型接口還沒載好')); return; }
             const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
             const config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+            // 還沒接模型（新玩家一打開）：不叫，直接當這次沒問到，他站著等下一輪。
+            //   以前照叫，什麼都沒按控制台就記「呼叫 2 次・失敗 2 次」（小斐 11-17 新玩家檢查第 2 條）。判斷跟設置總覽「寫故事的模型接了沒」同一套
+            const standalone = !!(window.OS_API.isStandalone && window.OS_API.isStandalone());
+            const ready = config && ((!standalone && (config.useSystemApi || config.useGenerateRaw)) || (config.url && config.model));
+            if (!ready) { reject(new Error('還沒接模型')); return; }
             const keys = Object.keys(actions);
             const list = keys.map(k => k + '：' + actions[k]).join('\n');
             const messages = [
