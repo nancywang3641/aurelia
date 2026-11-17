@@ -247,6 +247,27 @@
                 } catch (e) { reject(e); }
             });
         },
+        // 同一個 app 的好幾筆一起寫、同一筆交易：要嘛全寫進去、要嘛全沒寫（錢包餘額＋已付記號要綁在一起，os_pt.js 用）。
+        //   entries = [{ key, value, chatId? }]
+        saveAppDataMany: async function(appId, entries) {
+            const db = await this.init();
+            const list = Array.isArray(entries) ? entries : [];
+            if (!list.length) return true;
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    const st = tx.objectStore(STORE_NAME_APP_DATA);
+                    const now = Date.now();
+                    list.forEach(e => {
+                        const id = String(appId || 'app') + '::' + (e.chatId ? ('chat:' + e.chatId) : 'global') + '::' + String(e.key || '');
+                        st.put({ id: id, value: e.value, ts: now });
+                    });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止'));
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
         getAppData: async function(appId, key, chatId) {
             const db = await this.init();
             const id = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(key || '');

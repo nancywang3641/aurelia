@@ -110,7 +110,7 @@
         // 大廳
         'lobby_city_plots_v1',        // 城裡的地塊誰住
         'lobby_home_guest',           // 我的家請進來的人
-        'cheshire_shards', 'cheshire_items',                        // 黑市：碎片、買的東西
+        'cheshire_shards', 'cheshire_items', 'cheshire_paid',       // 黑市：碎片、買的東西、兌換時的已付記號
         // 創作室
         'studio_quick_chips',         // 自訂的要求
         'vn_component_groups'         // VN 組件的分組
@@ -630,7 +630,7 @@
           ls: ['avs_condition_rules', 'aurelia_rules_tavern', 'avs_current_state', 'avs_active_ui_templates', 'avs_furnace_presets', 'avs_init_my_chips'],
           prefixes: ['avs_state_'] },
         { k: 'lobby', label: '大廳', stores: ['lobby_history', 'lobby_summary_index', 'lobby_npc_memory'],
-          ls: ['lobby_city_plots_v1', 'lobby_home_guest', 'lobby_theater_log', 'cheshire_shards', 'cheshire_items'],
+          ls: ['lobby_city_plots_v1', 'lobby_home_guest', 'lobby_theater_log', 'cheshire_shards', 'cheshire_items', 'cheshire_paid'],
           prefixes: ['lobby_stage_layout_', 'lstage_hist_'] },
         { k: 'studio', label: '創作室', stores: ['studio_chats', 'studio_drafts'],
           ls: ['studio_quick_chips', 'vn_component_groups', 'vn_theme_gallery'], prefixes: ['os_studio_parsed_', 'studio_panel_type_'] },

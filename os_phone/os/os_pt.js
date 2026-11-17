@@ -67,27 +67,80 @@
         } catch (e) { console.warn('[PT] 寫 ledger 失敗', e); }
     }
 
+    // ── 進出錢包排隊：一次只跑一筆 ──
+    //   addPT/spendPT 都是「讀餘額→算→寫回」；章總結結算和櫃檯兌換同時入帳時，兩邊讀到同一個舊餘額，後寫的蓋掉先寫的，少一筆。
+    let _walletQ = Promise.resolve();
+    function _serial(fn) {
+        const run = _walletQ.then(fn);
+        _walletQ = run.catch(() => {});
+        return run;
+    }
+
+    // ── 已付記號：同一筆（某份章總結、某個成就、某件戰利品、某段房租）重試幾次都只付一次 ──
+    //   { <txId>: { n: 已付多少, note, at } }。跟餘額同一筆交易寫進去（OS_DB.saveAppDataMany），
+    //   入帳後、標「已兌換」前當掉，下次再來會看到已付過，只補標記不再付錢。
+    const K_PAID = 'paid';
+    const PAID_CAP = 500;   // 只要撐過「入帳到標記」那一下；兌換完的東西不會再回來，舊的可以丟
+    async function _getPaid() {
+        try { const v = await _db().getAppData(APP_ID, K_PAID); return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
+        catch (e) { return {}; }
+    }
+    async function paidOf(txId) {
+        if (!txId) return null;
+        const p = await _getPaid();
+        return p[txId] || null;
+    }
+
     // 加 PT（reason 進 ledger；items＝結算明細，給 VN 卡攤開）
-    async function addPT(n, meta) {
-        n = Math.floor(Number(n) || 0);
-        if (n <= 0) return await getPT();
-        const cur = await getPT();
-        const next = cur + n;
-        await _setPT(next);
-        await _pushLedger({ ts: _now(), delta: n, reason: (meta && meta.reason) || '結算', items: (meta && meta.items) || null, balanceAfter: next });
-        return next;
+    //   meta.tx = [{ id, n, note }]：照筆入帳；那一筆已付過的不再付（付過的比這次少，只補差額，像房租隔天再補算）。
+    //   帶 tx 時實際入帳 = 各筆差額加總，n 不看。
+    function addPT(n, meta) {
+        return _serial(async () => {
+            const tx = meta && Array.isArray(meta.tx) ? meta.tx.filter(t => t && t.id) : null;
+            const cur = await getPT();
+            let pay = Math.floor(Number(n) || 0);
+            let paid = null;
+            if (tx && tx.length) {
+                paid = await _getPaid();
+                pay = 0;
+                const at = _now();
+                tx.forEach(t => {
+                    const want = Math.max(0, Math.floor(Number(t.n) || 0));
+                    const had = paid[t.id] ? (Number(paid[t.id].n) || 0) : 0;
+                    if (want > had) pay += want - had;
+                    paid[t.id] = { n: Math.max(want, had), note: t.note != null ? String(t.note) : (paid[t.id] && paid[t.id].note) || '', at: at };
+                });
+                const keys = Object.keys(paid);
+                if (keys.length > PAID_CAP) {
+                    keys.sort((a, b) => (paid[a].at || 0) - (paid[b].at || 0)).slice(0, keys.length - PAID_CAP).forEach(k => { delete paid[k]; });
+                }
+            }
+            if (pay <= 0 && !paid) return cur;
+            const next = cur + Math.max(0, pay);
+            const db = _db();
+            if (paid && db && db.saveAppDataMany) {
+                await db.saveAppDataMany(APP_ID, [{ key: K_BALANCE, value: next }, { key: K_PAID, value: paid }]);
+            } else {
+                if (pay > 0) await _setPT(next);
+                if (paid && db && db.saveAppData) await db.saveAppData(APP_ID, K_PAID, paid);
+            }
+            if (pay > 0) await _pushLedger({ ts: _now(), delta: pay, reason: (meta && meta.reason) || '結算', items: (meta && meta.items) || null, balanceAfter: next });
+            return next;
+        });
     }
 
     // 花 PT：夠才扣，回傳 { ok, balance, short }
-    async function spendPT(n, reason) {
-        n = Math.floor(Number(n) || 0);
-        const cur = await getPT();
-        if (n <= 0) return { ok: false, balance: cur, short: 0 };
-        if (cur < n) return { ok: false, balance: cur, short: n - cur };
-        const next = cur - n;
-        await _setPT(next);
-        await _pushLedger({ ts: _now(), delta: -n, reason: reason || '消費', balanceAfter: next });
-        return { ok: true, balance: next, short: 0 };
+    function spendPT(n, reason) {
+        return _serial(async () => {
+            n = Math.floor(Number(n) || 0);
+            const cur = await getPT();
+            if (n <= 0) return { ok: false, balance: cur, short: 0 };
+            if (cur < n) return { ok: false, balance: cur, short: n - cur };
+            const next = cur - n;
+            await _setPT(next);
+            await _pushLedger({ ts: _now(), delta: -n, reason: reason || '消費', balanceAfter: next });
+            return { ok: true, balance: next, short: 0 };
+        });
     }
 
     function _now() { try { return Date.now(); } catch (e) { return 0; } }
@@ -209,10 +262,17 @@
             let lastSettled = 0;
             try { lastSettled = Number(await db.getAppData(APP_ID, settledKey)) || 0; } catch (e) {}
             if (summaryCount <= lastSettled) { console.log('[PT] 第' + summaryCount + '份已結算過，跳過'); return; }
+            // 錢付了、「已結算」沒寫進去就當掉：下次來這裡補寫記號就好，不再估一次、不再付一次
+            const txId = 'sum:' + chatId + '#' + summaryCount;
+            if (await paidOf(txId)) {
+                await db.saveAppData(APP_ID, settledKey, summaryCount);
+                console.log('[PT] 第' + summaryCount + '份上次已入帳，只補「已結算」記號');
+                return;
+            }
 
             const raw = await _valuate(finalContent);
             const { items, total } = _scoreToTotal(raw);
-            const balance = await addPT(total, { reason: '本章結算(第' + summaryCount + '份)', items });
+            const balance = await addPT(total, { reason: '本章結算(第' + summaryCount + '份)', items, tx: [{ id: txId, n: total }] });
             await db.saveAppData(APP_ID, settledKey, summaryCount);   // 標記已結算
             console.log('[PT] ✅ 第' + summaryCount + '份結算 +' + total + ' PT（餘額 ' + balance + '）', items);
             try { _showSettleCard({ items, total, balance, fallback: !!raw._fallback }); } catch (e) { console.warn('[PT] 結算卡失敗', e); }
@@ -310,8 +370,17 @@
         return all.filter(a => vp.emotionOwner(a.emotion) !== 'cheshire');
     }
     async function evaluateAchievementsPT(list) {
-        const pending = (Array.isArray(list) && list.length) ? list : _rabbitPending();
+        let pending = (Array.isArray(list) && list.length) ? list : _rabbitPending();
         if (!pending.length) return { ok: false, msg: '目前沒有白兔要收的成就' };
+        // 上次已經付過錢、只差蓋「已兌換」的：直接補蓋，不再送去估、不再付
+        const achApi0 = win.OS_ACHIEVEMENT || window.OS_ACHIEVEMENT;
+        const paid0 = await _getPaid();
+        const done0 = pending.filter(a => paid0['ach:' + a.id]);
+        if (done0.length && achApi0) {
+            for (const a of done0) { const p = paid0['ach:' + a.id]; await achApi0.markRedeemed(a.id, p.n, 'pt', p.note); }
+            pending = pending.filter(a => !paid0['ach:' + a.id]);
+            if (!pending.length) return { ok: true, results: [], totalPT: 0 };
+        }
         const api = win.OS_API || window.OS_API;
         if (!api) return { ok: false, msg: 'API 尚未初始化' };
 
@@ -370,7 +439,8 @@
             });
             const totalPT = picks.reduce((s, p) => s + p.pt, 0);
             // 🚨 先入帳、成功了才把成就標成已兌換：以前先標記再入帳，入帳失敗時成就被收走、PT 卻沒加
-            if (totalPT > 0) await addPT(totalPT, { reason: '成就兌換（交易所）' });
+            //   每個成就一筆已付記號（跟餘額同一筆寫入）：標記寫到一半當掉，下次那幾個只補標記、不重付
+            if (picks.length) await addPT(totalPT, { reason: '成就兌換（交易所）', tx: picks.map(p => ({ id: 'ach:' + p.a.id, n: p.pt, note: p.comment })) });
             for (const p of picks) await achApi.markRedeemed(p.a.id, p.pt, 'pt', p.comment);
             console.log(`[PT] 白兔估值完成，共兌換 ${totalPT} PT`);
             return { ok: true, results, totalPT };
@@ -398,8 +468,15 @@
         return add.length;
     }
     async function evaluateLootPT() {
-        const pending = await getLoot();
+        let pending = await getLoot();
         if (!pending.length) return { ok: false, msg: '櫃檯上沒有等估值的東西' };
+        // 上次已經付過錢、還沒從櫃檯收走的：直接收走，不再估、不再付
+        const paid0 = await _getPaid();
+        if (pending.some(y => paid0['loot:' + y.id])) {
+            pending = pending.filter(y => !paid0['loot:' + y.id]);
+            await _db().saveAppData(APP_ID, K_LOOT, pending);
+            if (!pending.length) return { ok: true, picks: [], totalPT: 0, left: 0 };
+        }
         const api = win.OS_API || window.OS_API;
         if (!api) return { ok: false, msg: 'API 尚未初始化' };
         const cc = PT_CFG.achvCaps;
@@ -430,12 +507,12 @@
                 if (!x && results.length === pending.length && pending[i] && !used.has(pending[i])) x = pending[i];
                 if (!x) return;
                 used.add(x);
-                picks.push({ name: x.name, pt: Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0)), comment: String(r.comment || '') });
+                picks.push({ id: x.id, name: x.name, pt: Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0)), comment: String(r.comment || '') });
             });
             if (!picks.length) return { ok: false, msg: '白兔先生的估價單對不上櫃檯上的東西，再按一次' };
             const totalPT = picks.reduce((s, p) => s + p.pt, 0);
-            // 先入帳、成功了才從櫃檯收走（同成就那條）
-            if (totalPT > 0) await addPT(totalPT, { reason: '戰利品收購（交易所）', items: picks });
+            // 先入帳、成功了才從櫃檯收走（同成就那條）；每件一筆已付記號，收走前當掉也不會再付一次
+            await addPT(totalPT, { reason: '戰利品收購（交易所）', items: picks, tx: picks.map(p => ({ id: 'loot:' + p.id, n: p.pt })) });
             const left = (await getLoot()).filter(y => !pending.some(p => used.has(p) && p.id === y.id));
             await _db().saveAppData(APP_ID, K_LOOT, left);
             return { ok: true, picks, totalPT, left: left.length };

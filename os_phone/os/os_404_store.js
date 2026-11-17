@@ -259,9 +259,26 @@ ${JSON.stringify({ shards, items: itemsState })}`;
         if (!vp || !vp.emotionOwner) return all;   // 分流表沒載到→照舊全收，別把兌換卡死
         return all.filter(a => vp.emotionOwner(a.emotion) === 'cheshire');
     }
+    // 已付記號（跟白兔那份同一招）：{ 成就id: { n, note, at } }。碎片入帳那一下就寫，
+    //   之後蓋「已兌換」寫到一半出事，下次那幾個只補蓋、不再付碎片。只要撐過那一下，留最近 300 筆
+    const KEY_PAID = 'cheshire_paid';
+    function _getPaid() { try { const v = JSON.parse(localStorage.getItem(KEY_PAID) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+    function _setPaid(p) {
+        const keys = Object.keys(p);
+        if (keys.length > 300) keys.sort((a, b) => (p[a].at || 0) - (p[b].at || 0)).slice(0, keys.length - 300).forEach(k => { delete p[k]; });
+        return win.AUI.lsSet(KEY_PAID, JSON.stringify(p), '碎片已付記號');
+    }
+
     async function evaluateAchievements(list) {
-        const pending = (Array.isArray(list) && list.length) ? list : _cheshirePending();
+        let pending = (Array.isArray(list) && list.length) ? list : _cheshirePending();
         if (!pending.length) return { ok: false, msg: '目前沒有柴郡要收的成就' };
+        const paid0 = _getPaid();
+        const done0 = pending.filter(a => paid0[a.id]);
+        if (done0.length && win.OS_ACHIEVEMENT) {
+            for (const a of done0) await win.OS_ACHIEVEMENT.markRedeemed(a.id, paid0[a.id].n, 'shards', paid0[a.id].note);
+            pending = pending.filter(a => !paid0[a.id]);
+            if (!pending.length) return { ok: true, results: [], totalShards: 0 };
+        }
 
         if (!win.OS_API) return { ok: false, msg: 'API 尚未初始化' };
 
@@ -323,6 +340,10 @@ ${JSON.stringify({ shards, items: itemsState })}`;
             const totalShards = picks.reduce((s, p) => s + p.shards, 0);
             // 先入帳、成功了才把成就標成已兌換（跟白兔那份同順序）：入帳失敗的話成就留著，下次再估
             if (totalShards > 0 && !addShards(totalShards)) return { ok: false, msg: '碎片沒存下來，成就先留著，下次再找柴郡' };
+            //   緊接著寫已付記號（中間沒有 await，不會插進別的事）
+            const paid = _getPaid(), at = Date.now();
+            picks.forEach(p => { paid[p.a.id] = { n: p.shards, note: p.comment || '', at: at }; });
+            _setPaid(paid);
             for (const p of picks) await win.OS_ACHIEVEMENT.markRedeemed(p.a.id, p.shards, 'shards', p.comment);
 
             console.log(`[OS_404_STORE] 評估完成，共兌換 ${totalShards} 碎片`);

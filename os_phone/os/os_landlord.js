@@ -561,7 +561,8 @@
             const pt = win.OS_PT || window.OS_PT;
             try {
                 if (!pt || typeof pt.addPT !== 'function') throw new Error('包租戶錢包尚未就緒');
-                await pt.addPT(r.earned, { reason: '房租收入', items: r.perUnit });
+                // 已付記號照「從哪天開始算」：入帳後存檔沒寫進去，下次同一段只補差額（隔天再開會多算的那幾天），不重付
+                await pt.addPT(r.earned, { reason: '房租收入', items: r.perUnit, tx: [{ id: 'rent:' + state.lastSettleDay, n: r.earned }] });
             } catch (e) {
                 console.warn('[Landlord] 入帳失敗,本次房租暫不結算,下次開啟再補算', e);
                 // 不存檔 → lastSettleDay 保持原樣,下次開 app 會重新補算這段期間
