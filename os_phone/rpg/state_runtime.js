@@ -29,6 +29,7 @@
     let _repairDebounce = null;     // 開頭設置(Bg/BGM)補救的 debounce
     let _selfEditing = false;       // 開頭補救正在改寫訊息 → 擋 onMessageInvalidated 誤砍本則剛存的 patch
     let _running = false;           // 防止並發抽取
+    let _missedRun = null;          // 抽取還在等副模型時又來了一次（下一輪寫完了）→ 記下來，這通跑完補抽那一樓
     let _genStopped = false;        // 本通生成是否被「手動停止」(GENERATION_STOPPED)→ 全副模型跳過，別拿半截正文白燒
     let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
     let _lastRulesUninject = null;  // 上次 rules inject 的 uninject 函式
@@ -386,11 +387,13 @@
                 { role: 'system', content: '你是嚴謹的劇情狀態抽取器。先做「極精簡」分析：出場角色/本輪變化/新角色/主角/校對，每項最多一行、全部合計不超過 300 字。嚴禁長篇逐步推理、嚴禁「等等我再想想」式反覆重想或自我對話、嚴禁重算同一數值。分析越短越好，抽取 JSON 才是重點。分析後立刻輸出一個 ```json 程式碼區塊。' },
                 { role: 'user', content: prompt }
             ];
+            // 副模型也一樣（11-18 她的副模型一通要 90 秒）：以前 60 秒就當失敗 → 回覆晚到被丟、還自動再打一通，
+            //   兩通都丟就這輪狀態、記憶全沒記。改成最多等 5 分鐘；劇情不用等它（插圖閘門 60 秒先放，見 extractOnce）。
             let done = false;
             const timer = setTimeout(() => {
                 if (done) return; done = true;
                 reject(new Error(_viaMain ? '抽取(主接口)超時' : '副模型超時'));
-            }, CONFIG.timeoutMs * (_viaMain ? 6 : 1));
+            }, _viaMain ? CONFIG.timeoutMs * 6 : Math.max(CONFIG.timeoutMs, 300000));
             const dispatch = _viaMain
                 ? win.OS_API.chatMain.bind(win.OS_API)
                 : win.OS_API.chatSecondary.bind(win.OS_API);
@@ -444,6 +447,8 @@
         const _viaMain = directorOn() && typeof win.OS_API?.chatMain === 'function';
         let lastErr;
         for (let i = 0; i < CONFIG.retryCount; i++) {
+            // 副模型等了 5 分鐘都沒回＝那邊真的卡住了，再自動打一通只是多花一次錢；回錯、JSON 壞掉這種才自動重試
+            if (i > 0 && !_viaMain && lastErr && /逾時|超時|timeout/i.test(lastErr.message || '')) { console.log('🛰️ [State Runtime] 副模型等 5 分鐘沒回 → 不自動再打一通'); break; }
             if (i > 0 && _viaMain) {
                 const _slow = lastErr && /逾時|超時|timeout/i.test(lastErr.message || '');
                 const _go = await _askRetry(_slow ? '這一輪的狀態／記憶等太久沒回來' : '這一輪的狀態／記憶沒成功回來');
@@ -1225,9 +1230,10 @@ ${numberedText}`;
 
     // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
     async function extractOnce(opts) {
-        if (_running) return;
+        if (_running) { _missedRun = { opts: opts || {} }; return; }
         _running = true;
         let pendingMem = null, memIngested = false, _dedupe = null, _dirRide = false, _dirLanded = false;
+        let _runLastId = null, _softGate = null;
         // 🎬 便車搶跑修正：導演開著就「同步」先搶下本輪防抖旗標——別等跑到下面設（那行藏在向量召回等 await 之後，
         //    慢召回會讓獨立導演在 2.7s 先開打＝雙導演稿＋多打一通主接口）。真正落地與否由下方 _dirRide/_dirLanded 決定；
         //    沒落地就在 finally 補一通獨立（extractDirector 自帶同樓/截斷/停止守門，重複呼叫也安全）。
@@ -1326,6 +1332,7 @@ ${numberedText}`;
 
             const currentState = win._AVS_ENGINE?.read?.() || {};
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
+            _runLastId = lastId;
 
             const data = (await win.OS_DB.getStateData(chatId)) || {};
             // force（狀態面板「立即抽一次」）＝無視「這樓已抽過」守門重抽——按鈕的意義就是換好模型重來一次，
@@ -1463,7 +1470,24 @@ ${numberedText}`;
                 }
             } catch (e) {}
 
+            // 劇情不陪副模型乾等：60 秒還沒回就先放開開播閘門（插圖晚到照樣插），回覆照等
+            const _t0 = Date.now();
+            let _wasLate = false;
+            _softGate = setTimeout(() => { _wasLate = true; console.warn('🖼️ [State Runtime] 副模型超過 ' + Math.round(CONFIG.timeoutMs / 1000) + ' 秒還沒回 → 劇情先播，狀態和插圖回來再補'); _sceneGateRelease('ride'); }, CONFIG.timeoutMs);
             const json = await runWithRetry(prompt);
+            const _lateSec = Math.round((Date.now() - _t0) / 1000);
+            // 晚到時這段時間可能已經有新的一樓：狀態照樣記在原本那樓（patch 認的是那樓的標記），插圖就不插，免得插進下一章
+            let _floorMoved = false;
+            if (_wasLate) {
+                try { const g = await gatherRecentMessages(); _floorMoved = getChatId() !== chatId || String(g && g.lastId) !== String(lastId); } catch (e) {}
+                console.log('🛰️ [State Runtime] 副模型 ' + _lateSec + ' 秒才回' + (_floorMoved ? '，這段時間已經換了一樓 → 狀態照記在 msg#' + lastId + '，插圖不插' : '，還是同一樓 → 照常'));
+            }
+            if (_floorMoved && getChatId() !== chatId) {
+                // 換了聊天室：狀態、插圖寫進去會落到現在這間（引擎和正文標記都跟著畫面走），整份不寫；
+                //   記憶帶著自己那本故事的編號，照樣收進原本那本
+                if (wantMemory && Array.isArray(json.memories)) { try { await win.OS_VECTOR_ENGINE.ingestEntries(json.memories, pendingMem.storyId, pendingMem.chapterId); memIngested = true; } catch (e) {} }
+                return;
+            }
             // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
             _lastExtract = { at: Date.now(), msgId: lastId, raw: _lastRawText, updates: null, memories: Array.isArray(json.memories) ? json.memories : null, current: null };
 
@@ -1565,7 +1589,7 @@ ${numberedText}`;
             }
 
             // --- 場景插圖（副模型版）：把 scenes 交給渲染器（認 message_id 回填、防 desync）---
-            if (wantScenes && Array.isArray(json.scenes) && json.scenes.length && win.VN_SceneInsert?.fromExtract) {
+            if (wantScenes && !_floorMoved && Array.isArray(json.scenes) && json.scenes.length && win.VN_SceneInsert?.fromExtract) {
                 try {
                     // AI 只給段號 → 換成程式自己存的那段原文(逐字)當錨點；VN_SceneInsert 拿原文去 VN 劇本逐字對位
                     const mapped = json.scenes.map(s => {
@@ -1581,7 +1605,7 @@ ${numberedText}`;
                         _warnTrailingInteraction(_p);
                         return { after: after, prompt: _p, cast: _looksMap ? _sceneCastOf(s.prompt, _looksMap) : [] };
                     }).filter(s => s && s.prompt);
-                    win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId });
+                    win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId, t0: _t0 });
                     console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
                 } catch(e) { console.warn('[State Runtime] 場景插圖派發失敗:', e?.message || e); }
             }
@@ -1613,8 +1637,20 @@ ${numberedText}`;
             //    Rae 要的「只打一通、失敗就這輪算了」——別對同一個慢/卡住的接口重複觸發。
             //    _directorHandledThisRound 已在開頭同步搶下＝獨立防抖那顆不會再跑；extractDirector 自帶同樓/截斷/停止守門。
             if (_dirIntended && !_dirRide && !_dirLanded) { try { extractDirector(); } catch (_) {} }
+            clearTimeout(_softGate);
             _running = false;
             _sceneGateRelease('ride');   // 搭便車路的插圖已派發（或這輪沒有）→ 交棒給真正的生圖單，放開 VN 開播閘門
+            // 等副模型的時候下一輪已經寫完、那次觸發被擋掉了 → 補抽「現在最新那一樓」。
+            //   只在真的換了一樓時補：同一樓再抽一次只會白打一通（狀態有「這樓抽過」守門，插圖沒有）
+            if (_missedRun) {
+                const _m = _missedRun; _missedRun = null;
+                const _did = _runLastId;
+                gatherRecentMessages().then(g => {
+                    if (!g || !_hasId(g.lastId) || String(g.lastId) === String(_did)) return;
+                    console.log('🛰️ [State Runtime] 剛才等副模型時 msg#' + g.lastId + ' 寫完了 → 補抽這一樓');
+                    extractOnce(_m.opts);
+                }).catch(() => {});
+            }
         }
     }
 
