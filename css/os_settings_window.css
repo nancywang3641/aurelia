@@ -184,6 +184,39 @@ label.asw-row { cursor: pointer; }
 .asw-vnpv-text { color: var(--text-color, #dddddd); font-family: 'Playfair Display', 'Noto Serif TC', serif; font-size: 19px; font-weight: 300; line-height: 1.7; letter-spacing: 1px; overflow-wrap: anywhere; }
 .asw-vnpv-text em { font-style: italic; color: var(--em-color, #c9aaff); }
 
+/* ── 總覽：四列現況。一列＝一顆大按鈕，整列都能點 ── */
+.asw-home { display: flex; flex-direction: column; min-height: 100%; }
+.asw-lead { margin: 0 0 14px; color: var(--asw-sub); font-size: 13px; }
+.asw-cards { display: flex; flex-direction: column; gap: 12px; }
+.asw-card {
+    display: flex; align-items: center; gap: 16px; width: 100%; margin: 0; padding: 16px 18px; border: 1px solid var(--asw-line); border-radius: 12px;
+    background: var(--asw-card); color: var(--asw-ink); font: inherit; text-align: left; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.asw-card:hover { border-color: rgba(var(--asw-accent-rgb), 0.55); }
+.asw-card.is-need { border: 2px solid var(--asw-accent); padding: 15px 17px; }   /* 一定要接的那一列：加框 */
+.asw-card-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.asw-card-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.asw-card-name { font-size: 15px; font-weight: 800; }
+.asw-card-desc { color: var(--asw-sub); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.asw-card-go { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; min-width: 64px; }
+.asw-card-chev { display: none; flex: 0 0 auto; color: var(--asw-sub); font-size: 13px; }
+/* 名字旁邊的小牌子：平常灰藍、要注意的黃、好了的藍 */
+.asw-tag { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.7; background: rgba(var(--asw-ink-rgb), 0.07); color: var(--asw-sub); white-space: nowrap; }
+.asw-tag:empty { display: none; }
+.asw-tag.is-warn { background: var(--asw-warn-bg); color: var(--asw-warn-ink); }
+.asw-tag.is-ok { background: rgba(var(--asw-accent-rgb), 0.12); color: var(--asw-accent); }
+.asw-foot { margin-top: auto; padding-top: 14px; display: flex; flex-wrap: wrap; gap: 4px 28px; color: var(--asw-sub); font-size: 12px; }
+.asw-cards + .asw-foot { border-top: 1px solid var(--asw-line); }
+.asw-float .asw-home .asw-cards { margin-bottom: 24px; }
+.asw-float .asw-on-full, .asw-full .asw-on-float { display: none; }
+/* 手機：一定要接的那列按鈕放到下面一整條；其他列右邊只留一個箭頭 */
+.asw-full .asw-card { padding: 14px; gap: 10px; }
+.asw-full .asw-card.is-need { flex-direction: column; align-items: stretch; padding: 13px; gap: 12px; }
+.asw-full .asw-card.is-need .asw-card-go { min-height: 42px; font-size: 14px; }
+.asw-full .asw-card:not(.is-need) .asw-card-go { display: none; }
+.asw-full .asw-card:not(.is-need) .asw-card-chev { display: block; }
+.asw-full .asw-home .asw-cards { margin-bottom: 20px; }
+
 /* 淡藍底的小說明（「這頁改了就生效」） */
 .asw-note { padding: 14px 16px; border-radius: 12px; background: var(--asw-side); color: var(--asw-sub); font-size: 13px; line-height: 1.6; }
 .asw-note-title { display: block; margin-bottom: 2px; color: var(--asw-ink); font-weight: 800; }
