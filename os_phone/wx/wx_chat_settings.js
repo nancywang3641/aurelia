@@ -337,7 +337,7 @@
             }
 
             // 🌐 外語：這一間誰講哪種語言（私聊＝他一個；群聊＝我以外的每個成員）。存在 chat.foreign = { on, langs: { 成員id: 'en' } }
-            //    預設語言：這一間設過的 → 設置「一般 → 外語」名單裡同名的 → 私聊英文、群聊中文
+            //    預設語言：這一間設過的 → 角色中心選了語言的同名角色 → 私聊英文、群聊中文
             const _fgn = (function () {
                 const F = win.OS_VN_FOREIGN;
                 if (!F) return { html: '', rows: [] };

@@ -1116,7 +1116,6 @@
                             <div class="api-subtab gen-subtab" data-gentab="panel"${stHide}>面板</div>
                             <div class="api-subtab gen-subtab" data-gentab="asset">素材</div>
                             <div class="api-subtab gen-subtab" data-gentab="ctx">上下文</div>
-                            <div class="api-subtab gen-subtab" data-gentab="foreign">外語</div>
                             <div class="api-subtab gen-subtab" data-gentab="back"${!isStandalone ? ' style="display:none"' : ''}>後台</div>
                         </div>
 
@@ -1147,7 +1146,6 @@
                         ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getAssetHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
                         </div>
 
-                        <div id="gview-foreign" class="gen-subview" style="display:none;">${(window.parent || window).OS_VN_FOREIGN ? (window.parent || window).OS_VN_FOREIGN.html() : ''}</div>
                         <div id="gview-ctx" class="gen-subview" style="display:none;">
                         ${window.VN_SETTINGS_PANEL ? window.VN_SETTINGS_PANEL.getCtxHTML() : '<div class="set-desc" style="padding:20px; text-align:center;"><i class="fa-solid fa-triangle-exclamation"></i> vn_settings.js 尚未載入</div>'}
                         </div>

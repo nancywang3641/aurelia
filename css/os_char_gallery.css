@@ -453,3 +453,12 @@
     .acg-dress .lsd-cards { grid-template-columns: minmax(0, 1fr); }
     .acg-dress .lsd-look-text { font-size: 16px; }   /* iPhone：小於 16 一點進去整個畫面會被放大 */
 }
+
+/* 🌐 講什麼話（外語角色，11-18 從設置搬來） */
+.acg-lang { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.acg-lang-lab { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--acg-sub); }
+.acg-lang-sel {
+    min-width: 0; max-width: 100%; padding: 6px 10px; border-radius: 8px;
+    border: 1px solid var(--acg-line); background: var(--acg-card); color: var(--acg-ink); font-size: 13px; font-family: inherit;
+}
+.acg-lang .aui-help { color: var(--acg-sub); }

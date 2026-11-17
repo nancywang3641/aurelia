@@ -58,6 +58,7 @@
     try {
         const A = AUIx();
         if (A && A.registerHelp) A.registerHelp({
+            acg_lang: { title: '講什麼話', body: '選一種外語，這個角色在劇情裡開口就講那種語言，對話框下面一行小字放中文翻譯；語音只念原文。選「中文」就跟平常一樣。\n名字要跟劇情裡出現的名字一樣才對得上（簡體繁體不同沒關係）。只管這個角色講的台詞，他的內心話和旁白照常是中文。\n想讓他用外國人的聲音念，到「設置 → 語音 → 角色配音」幫他加一張同語言的卡。聊天 app 裡要他傳外語訊息，在那間聊天室的設置裡開「外語」。' },
             acg_official: { title: '奧瑞亞官方立繪', body: '大廳的管理員（還有丹、雷伊）的固定立繪，跟著奧瑞亞一起來的，這裡換不了。\n大廳、小機培養室的小劇場、地圖番外遇到這幾位，舞台都用這張，不會另外生圖。\n你自己的故事裡如果也有同名的角色，那是另一個角色，照舊用自己的圖。' },
             acg_expr: { title: '生一組表情', body: '拿這個角色「預設」那張圖，只重畫臉那一圈，做出微笑、生氣、哭這些表情。身體、衣服、頭髮都不會變。\n劇情寫到哪個表情，舞台就換那張；寫的字不一樣（像 Smiling、Furious）也會找意思最近的那張。\n劇情沒寫表情的話（選了「不寫」、或在視差世界裡），在劇情 CTX 小窗或開頭那排把「表情」選成「副模型補」：副模型讀劇本時會順便替有表情圖的角色挑。\n圈圈是會重畫的地方：從眉毛到下巴就好，瀏海留在圈外，每張的頭髮才會一樣。找到臉會自動放大到只看頭部，圈比較好拉；想看整張圖按右上角「看整張」。\n「講話動嘴、會眨眼」開著的話，每張圖會順便做微張、張開兩種嘴和一張閉眼；劇情裡他講話時，字在跑、配音在響，嘴就會開合，平常隔幾秒眨一下眼。圈裡的小圈是嘴和兩隻眼睛的位置，跟著大圈走；哪個沒套到就直接拖那個小圈，嘴和兩隻眼睛各拖各的，下次打開這個角色還記得。\n側臉：只看得到一隻眼睛的話，按下面「左邊眼睛」或「右邊眼睛」把看不到的那隻關掉，眨眼就只做看得到的那隻；頭歪的立繪，拖大圈正上方那顆空心圓點把圈轉正對著臉，小圈跟著一起轉。想回到原本的位置和角度，按「圈放回原位」。大笑、驚訝嘴本來就開著，不做嘴；大笑眼睛瞇著，不做閉眼。沒做到的表情，講話、眨眼時借同一個人差不多的表情來用。\n「眼睛顏色」「臉上要留著的」：重畫時會照這幾樣畫，眼鏡才不會被畫掉、眼睛不會換顏色。AI 生的立繪會從它的外觀描述自動勾好，不對就點掉或改選；你改過就照你選的。\n「內收」給靦腆、冷淡、壓抑的角色：表情動作小、嘴巴多半閉著，生氣是冷冷瞪著、哭是忍著淚。每個角色記得自己選哪個；換了就整組重做。\n用什麼畫看設置→圖片「每個地方用什麼」的「立繪表情」那列（沒選就跟「立繪」那列用同一個）：\n・選 ComfyUI 的包：一個表情畫一次，不用錢；畫好的臉會照原圖校一次膚色。\n・選自訂接口（GPT 那種）：一次把七個表情一起畫好，顏色跟原圖最接近；開著動嘴眨眼的話再多畫一到兩次做嘴和閉眼（一次四張圖）。每次都會花一點生圖的錢，只存你選的那幾個。\n換了預設那張圖，表情要重做，不然換表情時身體會對不上。' }
         });
@@ -364,6 +365,7 @@
                 (await C.getAllMeta('sprite_cache')).forEach(e => { if (C.worldOf(e) === cur) add(C.bareKeyOf(e)); });
             } catch (e) {}
         }
+        try { const F = win.OS_VN_FOREIGN || window.OS_VN_FOREIGN; if (F && F.names) F.names().forEach(add); } catch (e) {}   // 選過外語的人也列出來，才改得回去
         (S && S.extra || []).forEach(add);
         return out;
     }
@@ -436,6 +438,7 @@
         root.classList.toggle('acg-has-wb', S.wbOk);
         root.addEventListener('click', onClick);
         root.addEventListener('input', onInput);
+        root.addEventListener('change', onChange);
         root.querySelector('.acg-file').addEventListener('change', onFile);
         doc.addEventListener('keydown', onKey, true);
         await reload();
@@ -670,6 +673,28 @@
         });
     }
 
+    // 🌐 講什麼話（11-18 從設置「外語角色」搬來：她「外語角色感覺可以放到角色中心?」）。名單在 OS_VN_FOREIGN，改了當場存
+    function langRow(ch) {
+        const F = win.OS_VN_FOREIGN || window.OS_VN_FOREIGN;
+        if (!F || !F.LANGS || !F.langOf) return '';
+        const cur = F.langOf(ch);
+        const A = AUIx();
+        return '<div class="acg-lang"><label class="acg-lang-lab" for="acg-lang-sel"><i class="fa-solid fa-language"></i>講什麼話</label>'
+             + '<select class="acg-lang-sel" id="acg-lang-sel"><option value="">中文（照常）</option>'
+             + F.LANGS.map(function (x) { return '<option value="' + x[0] + '"' + (cur === x[0] ? ' selected' : '') + '>' + esc(x[1]) + '</option>'; }).join('')
+             + '</select>' + (A && A.helpBtn ? A.helpBtn('acg_lang') : '') + '</div>';
+    }
+    function onChange(ev) {
+        const t = ev.target;
+        if (!t.classList || !t.classList.contains('acg-lang-sel') || !S || !S.sel) return;
+        const F = win.OS_VN_FOREIGN || window.OS_VN_FOREIGN;
+        if (!F || !F.setLang) return;
+        const ch = S.sel;
+        if (F.setLang(ch, t.value) === false) { t.value = F.langOf(ch); return; }   // 沒存到：選單放回原本的
+        const name = (F.LANGS.find(function (x) { return x[0] === t.value; }) || [])[1];
+        toast(name ? ch + '在劇情裡會講' + name + '，下面附中文翻譯' : ch + '照常講中文', 'success');
+    }
+
     async function renderMain() {
         const main = S.root.querySelector('.acg-main');
         if (S.offSel && renderOfficial(main)) return;
@@ -694,6 +719,7 @@
         const stranger = S.marks[ch] === 'stranger';
         let h = '<div class="acg-main-head"><div class="acg-name">' + esc(ch) + '</div>'
               + (stranger && S.tab !== 'dress' ? '<div class="acg-note acg-note-stranger"><i class="fa-solid fa-circle-exclamation"></i> 這個故事沒有叫這個名字的角色</div>' : '')
+              + (S.tab !== 'dress' ? langRow(ch) : '')
               + '</div>' + tabsHtml();
         if (S.tab === 'dress') {   // 裝扮那頁：大廳裝扮室搬進來的那一份（LobbyDress.mountInto）
             main.innerHTML = h + DRESS_BOX;

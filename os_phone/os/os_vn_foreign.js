@@ -2,13 +2,13 @@
 // [檔案] os_vn_foreign.js
 // 路徑：os_phone/os/os_vn_foreign.js
 // 職責：🌐 外語角色（VN 正文）
-//   設置 → 一般 → 外語：一個開關＋名單（誰講哪種語言）。開著時名單上的角色開口一律用他的語言，
+//   角色中心每個角色頁上「講什麼話」選一種語言（11-18 從設置搬過去，沒有總開關）。名單上的角色開口一律用他的語言，
 //   括號附中文翻譯；對話框把翻譯拆到下面一行小字（VN_Core._splitTL），語音只念原文
 //   （_speechOnly 只取「」內，翻譯在」外面），英文句自動挑角色配音的英文聲音。
 //   VN 指令本來就有「外語台詞：[Char|名|表情|「外语」(简体翻译)]」這行，這裡只告訴它「誰」要這樣寫：
 //   OS_VN_RULES.list() 在 core_format／core_format_free 後面接 promptLine()，酒館與手機版兩條路都吃得到。
-//   關著或名單空的時候一個字都不多送。
-// 存在 localStorage 'os_vn_foreign'：{ on, list: [{ name, lang }] }。改了當場存，不等「保存所有設定」。
+//   名單空的時候一個字都不多送。
+// 存在 localStorage 'os_vn_foreign'：{ v: 2, list: [{ name, lang, off? }] }（舊的 { on, list } 讀的時候換過來，見 _raw）。改了當場存。
 // ----------------------------------------------------------------
 (function () {
     'use strict';
@@ -21,25 +21,57 @@
     ];
     const LANG_NAME = {};
     LANGS.forEach(([k, v]) => { LANG_NAME[k] = v; });
-    const esc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
+    // 11-18 起改在角色中心一個人一個選（她：「外語角色感覺可以放到角色中心?」），沒有總開關了：
+    //   存 { v: 2, list: [{ name, lang, off? }] }；名單上有人就算開著。
+    //   舊的 { on, list }：on 是 false 的那份名單整份標 off（劇情照舊講中文，角色中心那格顯示「中文」），選了語言就拿掉 off。
+    function _raw() {
+        let r = {};
+        try { r = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { r = {}; }
+        const oldOff = r.v !== 2 && !r.on;
+        return (Array.isArray(r.list) ? r.list : [])
+            .map(x => ({ name: String((x && x.name) || '').trim(), lang: LANG_NAME[x && x.lang] ? x.lang : 'en', off: !!(oldOff || (x && x.off)) }))
+            .filter(x => x.name);
+    }
+    function _write(list) {
+        return win.AUI.lsSet(KEY, JSON.stringify({ v: 2, list: list.map(x => x.off ? { name: x.name, lang: x.lang, off: true } : { name: x.name, lang: x.lang }) }), '外語角色名單');
+    }
+    // 名字找人：簡繁、間隔號不同也算同一個（OS_ZH.key），一字不差的優先
+    function _idx(list, name) {
+        const n = String(name || '').trim();
+        if (!n) return -1;
+        let i = list.findIndex(x => x.name === n);
+        if (i >= 0) return i;
+        const Z = win.OS_ZH || window.OS_ZH;
+        if (!Z || !Z.key) return -1;
+        const k = Z.key(n);
+        return k ? list.findIndex(x => Z.key(x.name) === k) : -1;
+    }
     function get() {
-        try {
-            const r = JSON.parse(localStorage.getItem(KEY) || '{}') || {};
-            return {
-                on: !!r.on,
-                list: (Array.isArray(r.list) ? r.list : [])
-                    .map(x => ({ name: String((x && x.name) || '').trim(), lang: LANG_NAME[x && x.lang] ? x.lang : 'en' }))
-            };
-        } catch (e) { return { on: false, list: [] }; }
+        const list = _raw().filter(x => !x.off).map(x => ({ name: x.name, lang: x.lang }));
+        return { on: list.length > 0, list };
     }
-    function save(patch) {
-        const next = { ...get(), ...(patch || {}) };
-        win.AUI.lsSet(KEY, JSON.stringify(next), '外語角色名單');   // 以前失敗只印 console，她看不到
-        return next;
+    /** 這個角色講哪種語言（'en'…）；講中文回 '' */
+    function langOf(name) {
+        const list = _raw();
+        const i = _idx(list, name);
+        return (i >= 0 && !list[i].off) ? list[i].lang : '';
     }
+    /** 角色中心改語言：lang 空或不認得＝講中文（從名單拿掉）。回 false＝沒存到 */
+    function setLang(name, lang) {
+        const n = String(name || '').trim();
+        if (!n) return false;
+        const list = _raw();
+        const i = _idx(list, n);
+        if (!LANG_NAME[lang]) { if (i < 0) return true; list.splice(i, 1); }
+        else if (i >= 0) list[i] = { name: list[i].name, lang };
+        else list.push({ name: n, lang });
+        return _write(list);
+    }
+    /** 名單上所有名字（含舊名單關著的那些）：角色中心左邊要列出來，才改得到 */
+    function names() { return _raw().map(x => x.name); }
 
-    /** 插在 VN 指令「- 外語台詞：…」那行底下的一段（子項目）；關著或名單空回 '' */
+    /** 插在 VN 指令「- 外語台詞：…」那行底下的一段（子項目）；名單空回 '' */
     function promptLine() {
         const st = get();
         if (!st.on) return '';
@@ -47,57 +79,6 @@
         if (!rows.length) return '';
         return '  - 下列角色開口時一律說自己的語言，每一句台詞都照這個寫法：「」裡寫該語言的原文，括號裡附上翻譯，翻譯用跟旁白同一種中文。他們的內心獨白、旁白，以及名單外的角色照常用中文。\n'
             + rows.map(x => `    ${x.name}：${LANG_NAME[x.lang]}`).join('\n');
-    }
-
-    // ── 設置頁 ──
-    function html() {
-        const st = get();
-        const help = (id) => (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn(id) : '';
-        return `
-            <div class="set-group">
-                <div class="vcast-master-row">
-                    <div class="set-label"><i class="fa-solid fa-language"></i> 外語角色${help('ss_vfor_on')}</div>
-                    <label class="toggle-switch"><input type="checkbox" id="vfor-on" ${st.on ? 'checked' : ''}><span class="slider"></span></label>
-                </div>
-            </div>
-            <div class="set-group">
-                <div class="set-label"><i class="fa-solid fa-users"></i> 誰講外語${help('ss_vfor_list')}</div>
-                <div id="vfor-list" class="vfor-list"></div>
-                <div class="btn-test" id="vfor-add"><i class="fa-solid fa-plus"></i> 加角色</div>
-            </div>`;
-    }
-
-    function wire(container) {
-        const q = (id) => container.querySelector('#' + id);
-        const list = q('vfor-list');
-        if (!list) return;
-        const collect = () => Array.prototype.map.call(list.querySelectorAll('.vfor-row'), r => ({
-            name: (r.querySelector('.vfor-name').value || '').trim(),
-            lang: r.querySelector('.vfor-lang').value
-        }));
-        let t = null;
-        const persist = () => { clearTimeout(t); t = setTimeout(() => save({ list: collect() }), 250); };
-        const row = (x) => {
-            const r = document.createElement('div');
-            r.className = 'vfor-row';
-            r.innerHTML = `
-                <input class="set-input vfor-name" type="text" placeholder="角色名字" value="${esc(x.name)}">
-                <select class="set-select vfor-lang">${LANGS.map(([k, v]) => `<option value="${k}" ${x.lang === k ? 'selected' : ''}>${v}</option>`).join('')}</select>
-                <div class="vfor-del" title="拿掉"><i class="fa-solid fa-trash-can"></i></div>`;
-            r.querySelector('.vfor-name').addEventListener('input', persist);
-            r.querySelector('.vfor-lang').addEventListener('change', persist);
-            r.querySelector('.vfor-del').onclick = () => { r.remove(); persist(); };
-            return r;
-        };
-        get().list.forEach(x => list.appendChild(row(x)));
-        const add = q('vfor-add');
-        if (add) add.onclick = () => {
-            const r = row({ name: '', lang: 'en' });
-            list.appendChild(r);
-            r.querySelector('.vfor-name').focus({ preventScroll: true });
-        };
-        const on = q('vfor-on');
-        if (on) on.onchange = () => save({ on: on.checked });
     }
 
     // ── 聊天 app 用：訊息「原文(翻譯)」把結尾那個括號拆出來 ──
@@ -127,7 +108,7 @@
     }
     function langName(k) { return LANG_NAME[k] || ''; }
 
-    const API = { LANGS, get, save, promptLine, html, wire, splitTail, stripTl, langName };
+    const API = { LANGS, get, langOf, setLang, names, promptLine, splitTail, stripTl, langName };
     win.OS_VN_FOREIGN = API;
     if (win !== window) window.OS_VN_FOREIGN = API;
 })();
