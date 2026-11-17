@@ -478,6 +478,17 @@ label.asw-row { cursor: pointer; }
 .asw-chip:hover { border-color: var(--asw-accent); }
 .asw-chip.is-on { background: var(--asw-chip-on-bg); border-color: var(--asw-chip-on-bg); color: var(--asw-chip-on-ink); font-weight: 700; }
 .asw-hint { color: var(--asw-sub); font-size: var(--asw-fs-small); line-height: 1.6; }
+/* 多行字（導演重點、導演稿）：跟輸入框同一套顏色和圓角 */
+.asw-text {
+    display: block; width: 100%; min-width: 0; min-height: 7.5em; margin: 0; padding: 10px 12px; resize: vertical;
+    border: 1px solid var(--asw-chip-line); border-radius: var(--asw-r-field); background: var(--asw-field); color: var(--asw-ink);
+    font: inherit; font-size: var(--asw-fs-small); line-height: 1.7;
+}
+.asw-text:focus { outline: none; border-color: var(--asw-accent); }
+.asw-text::placeholder { color: var(--asw-sub); }
+.asw-text-tall { min-height: 16em; }
+.asw-row-end > .asw-btn + .asw-btn { margin-left: 0; }
+.asw-ddraft { display: flex; flex-direction: column; gap: 8px; padding-top: 8px; }
 /* 小說明（「這頁改了就生效」） */
 .asw-note { padding: var(--asw-card-pad-y) var(--asw-card-pad-x); border-radius: var(--asw-r-card); background: var(--asw-card); color: var(--asw-sub); font-size: var(--asw-fs-small); line-height: 1.6; }
 .asw-note-title { display: block; margin-bottom: 2px; color: var(--asw-ink); font-weight: 800; }

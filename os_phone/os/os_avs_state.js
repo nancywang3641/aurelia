@@ -332,27 +332,16 @@
             <div class="avs-st-story-name">${storyTitle ? esc(storyTitle) : '<span class="avs-st-dim">（尚未開啟故事）</span>'}</div>
         </div>`;
 
-        // 🎬 導演卡片：獨立系統，跟 AVS 追蹤解耦——AVS 未初始化(init 畫面)也要照樣露出，別被 hasSchema 一起擋掉
+        // 🎬 導演卡片：11-18 起開關、這個故事的導演重點、導演稿都搬到「設置 → 劇情 → 導演」（她：「導演模式 是不是放到 設置好點啊?」），
+        //    這裡只留一張說明卡＋一顆過去的鈕。跟 AVS 追蹤解耦——AVS 未初始化(init 畫面)也要照樣露出
+        const _dirOn = !!(win.OS_STATE_RUNTIME?.director?.isOn?.());
         const directorCardHtml = `<div class="avs-card avs-st-director-card">
             <div class="avs-st-toggle-row">
                 <div class="avs-st-toggle-text">
-                    <div class="avs-st-toggle-name"><i class="fa-solid fa-clapperboard"></i> 導演模式</div>
-                    <div class="avs-st-toggle-desc">開啟後，每輪劇情結束由「主模型接口」整理一份導演稿（誰知道什麼、誰在隱瞞、可用的衝突點），下一輪自動給寫正文的 AI 參考</div>
+                    <div class="avs-st-toggle-name"><i class="fa-solid fa-clapperboard"></i> 導演模式・${_dirOn ? '開著' : '關著'}</div>
+                    <div class="avs-st-toggle-desc">開關、這個故事要導演多留意什麼、查看和改導演稿，都在「設置 → 劇情 → 導演」</div>
                 </div>
-                <div class="avs-st-toggle${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' on' : ''}" id="avs-st-director-toggle" role="switch"></div>
-            </div>
-            <div class="avs-st-director-tools${(win.OS_STATE_RUNTIME?.director?.isOn?.()) ? ' is-visible' : ''}" id="avs-st-director-tools">
-                <div class="avs-st-btn-grid col1">
-                    <button class="avs-btn avs-btn-outline" id="avs-st-director-view"><i class="fa-solid fa-scroll"></i> 查看／編輯導演稿</button>
-                    <button class="avs-btn avs-btn-outline" id="avs-st-director-now" title="不等下一輪，現在就照最近劇情產一份導演稿"><i class="fa-solid fa-clapperboard"></i> 立刻產一份</button>
-                </div>
-                <div class="avs-st-director-editor" id="avs-st-director-editor">
-                    <textarea class="avs-textarea avs-st-director-text" id="avs-st-director-text"></textarea>
-                    <div class="avs-st-btn-grid avs-st-director-actions">
-                        <button class="avs-btn avs-btn-primary" id="avs-st-director-save"><i class="fa-solid fa-floppy-disk"></i> 儲存（下一輪生效）</button>
-                        <button class="avs-btn avs-btn-outline" id="avs-st-director-close">收起</button>
-                    </div>
-                </div>
+                <button class="avs-btn avs-btn-outline" id="avs-st-director-go"><i class="fa-solid fa-gear"></i> 去設置</button>
             </div>
         </div>`;
 
@@ -600,49 +589,126 @@
         _bind(stateKey, snapCount);
     }
 
-    // 🎬 導演模式：開關 + 導演稿查看/手改/立產。抽成獨立函式，因為 init 畫面(AVS 未初始化)
-    //    與 home 佈局都要綁——導演跟 AVS 追蹤是兩個獨立系統，不共命。
+    // 🎬 變數工坊那張導演卡只剩一顆「去設置」（11-18 搬家）。init 畫面與 home 佈局都要綁
     function _bindDirector() {
-        const q = sel => _host.querySelector(sel);
-        const dirToggle = q('#avs-st-director-toggle');
-        if (dirToggle) dirToggle.onclick = function () {
-            const on = this.classList.toggle('on');
-            try { win.OS_STATE_RUNTIME?.director?.setOn?.(on); } catch (e) {}
-            const tools = q('#avs-st-director-tools');
-            if (tools) tools.classList.toggle('is-visible', on);
+        const go = _host && _host.querySelector('#avs-st-director-go');
+        if (go) go.onclick = () => {
+            const W = win.OS_SETTINGS_WINDOW || window.OS_SETTINGS_WINDOW;
+            if (W && W.open) W.open('story', { sub: 'director' });
         };
-        const _dirLoadText = async () => {
-            const ta = q('#avs-st-director-text');
+    }
+
+    // ── 🎬 設置 → 劇情 → 導演（os_settings_window.js 的 story/director 叫它）──
+    //   開關（同一把 sp_director_on）、這個故事的導演重點（OS_STATE_RUNTIME.director.getFocus/setFocus，一個故事一份）、
+    //   導演稿查看／改／立刻產一份。改了就生效，不用按保存。零件一律 .asw-*，不寫 inline style。
+    let _dirHelpDone = false;
+    function _dirHelp() {
+        if (_dirHelpDone) return;
+        const A = win.AUI || window.AUI;
+        if (!A || !A.registerHelp) return;
+        _dirHelpDone = true;
+        A.registerHelp({
+            ds_on: { title: '導演模式', body: '開著時，每輪劇情寫完會另外整理一份「導演稿」：大家都知道的事、每個人自己才知道的事、誰做了什麼、這一輪可以推的點。下一輪寫劇情時一起交給寫正文的 AI，角色才不會讀心、旁白不會洩底。\n用哪個模型：設置 → AI 模型 →「哪件事走哪個模型」的「導演模式」那列（預設主模型）。開著的時候，「狀態抽取 / 記憶 / 人物檔案」那一通也會改走主模型（那列另外指定了通道的照它）。\n每輪多花一通模型的錢；開著狀態欄的話，導演稿會搭狀態那一通一起寫，不多打。' },
+            ds_focus: { title: '導演多留意什麼', body: '選這個故事偏哪一種，導演整理時就多留意那方面：戀愛會多記人物之間的距離和沒說出口的心意，懸疑會多記誰握著哪條線索，冒險會多記傷勢、資源和下一步的代價。\n選了之後下面會顯示交給導演的那段話；直接在框裡改，就變成「自己寫」。\n每個故事各存一份。只改導演留意什麼、往哪個方向挑可以推的點，不改導演稿的格式。' },
+            ds_push: { title: '推劇情的力道', body: '導演每輪會列幾個「可以推的點」給寫正文的 AI 參考。\n輕：多留白，最多一個；沒有適合的時機就只寫「留白」。\n平常：照導演自己判斷。\n積極：除非剛打完、受傷或累壞了，每輪至少給一個能讓劇情往前走的點。\n都只是建議，不會逼角色硬撐。' },
+        });
+    }
+    function mountDirector(box) {
+        const D = win.OS_STATE_RUNTIME && win.OS_STATE_RUNTIME.director;
+        if (!D || !D.getFocus) { box.innerHTML = '<div class="asw-note">劇情狀態那支還沒載好，關掉窗口等幾秒再打開。</div>'; return; }
+        _dirHelp();
+        const A = win.AUI || window.AUI;
+        const H = (k) => (A && A.helpBtn) ? A.helpBtn(k) : '';
+        const toast = (m, t) => { try { A && A.toast && A.toast(m, { type: t || 'info' }); } catch (e) {} };
+        const cid = (D.chatId && D.chatId()) || '';
+        const title = cid ? (win.OS_AVS_ADAPTER?.getStoryTitle?.() || localStorage.getItem('vn_current_story_title') || '') : '';
+        let f = D.getFocus(cid);
+        const presetText = (id) => { const x = D.FOCUS.find(o => o.id === id); return x ? x.text : ''; };
+        const group = (t, rows, late) => '<section class="asw-group' + (late ? ' asw-late' : '') + '"><h3 class="asw-group-title">' + t + '</h3>' + rows + '</section>';
+        const noStory = '<div class="asw-hint">先打開一個故事，才能幫它設。</div>';
+
+        const storyRows = cid
+            ? '<div class="asw-hint">' + (title ? '現在這個故事：' + esc(title) : '現在這個故事') + '（每個故事各存一份）</div>'
+              + '<div class="asw-chiprow"><span class="asw-chiprow-tx">導演多留意什麼' + H('ds_focus') + '</span>'
+              + '<div class="asw-chips">' + D.FOCUS.map(x => '<button type="button" class="asw-chip' + (f.pick === x.id ? ' is-on' : '') + '" data-dfocus="' + x.id + '">' + esc(x.name) + '</button>').join('') + '</div>'
+              + '<textarea class="asw-text" id="asw-dfocus-text" rows="5"></textarea></div>'
+              + '<div class="asw-row"><span class="asw-row-tx">推劇情的力道' + H('ds_push') + '</span><span class="asw-seg">'
+              + [['soft', '輕'], ['normal', '平常'], ['bold', '積極']].map(o => '<button type="button" class="asw-seg-btn' + (f.push === o[0] ? ' is-on' : '') + '" data-dpush="' + o[0] + '">' + o[1] + '</button>').join('')
+              + '</span></div>'
+            : noStory;
+        const draftRows = cid
+            ? '<div class="asw-row asw-row-end"><button type="button" class="asw-btn" id="asw-ddraft-view">查看／改導演稿</button><button type="button" class="asw-btn" id="asw-ddraft-now">立刻產一份</button></div>'
+              + '<div class="asw-ddraft" id="asw-ddraft" hidden><textarea class="asw-text asw-text-tall" id="asw-ddraft-text"></textarea>'
+              + '<div class="asw-row asw-row-end"><button type="button" class="asw-btn is-main" id="asw-ddraft-save">存起來（下一輪生效）</button></div></div>'
+            : noStory;
+        box.innerHTML = '<div class="asw-cols">'
+            + '<div class="asw-col">'
+            +   group('導演模式', '<label class="asw-row"><span class="asw-row-tx">每輪整理一份導演稿' + H('ds_on') + '</span><input type="checkbox" class="asw-check" id="asw-dir-on"' + (D.isOn() ? ' checked' : '') + '></label>')
+            +   group('這個故事的導演', storyRows)
+            + '</div>'
+            + '<div class="asw-col">'
+            +   group('導演稿', draftRows, true)
+            +   '<div class="asw-note"><b class="asw-note-title">這頁改了就生效</b>不用按保存。導演重點和力道從下一輪開始用。</div>'
+            + '</div>'
+            + '</div>';
+
+        const q = (s) => box.querySelector(s);
+        const on = q('#asw-dir-on');
+        if (on) on.addEventListener('change', () => { D.setOn(on.checked); toast(on.checked ? '導演模式開了，下一輪劇情寫完就整理第一份' : '導演模式關了', 'success'); });
+
+        const ta = q('#asw-dfocus-text');
+        const paint = () => {
+            box.querySelectorAll('[data-dfocus]').forEach(b => b.classList.toggle('is-on', b.dataset.dfocus === f.pick));
+            box.querySelectorAll('[data-dpush]').forEach(b => b.classList.toggle('is-on', b.dataset.dpush === f.push));
             if (!ta) return;
-            const t = await win.OS_STATE_RUNTIME?.director?.getText?.();
-            ta.value = t || '（還沒有導演稿——推進一輪劇情，或按「立刻產一份」）';
+            ta.value = f.pick === 'custom' ? f.custom : presetText(f.pick);
+            ta.placeholder = f.pick === 'custom' ? '寫你希望導演整理時特別留意什麼、可以推的點往哪個方向挑' : '不特別偏：導演照一般的方式整理。想要特別的方向，選上面一種，或直接在這裡寫';
         };
-        const dirViewBtn = q('#avs-st-director-view');
-        if (dirViewBtn) dirViewBtn.onclick = async () => {
-            const ed = q('#avs-st-director-editor');
-            if (!ed) return;
-            if (!ed.classList.contains('open')) { await _dirLoadText(); ed.classList.add('open'); }
-            else ed.classList.remove('open');
+        const save = (patch, quiet) => {
+            const ok = D.setFocus(patch, cid);
+            if (ok === false) { toast('沒存到，請再試一次', 'error'); return false; }
+            f = D.getFocus(cid);
+            if (!quiet) toast('這個故事的導演重點存好了，下一輪開始用', 'success');
+            return true;
         };
-        const dirSaveBtn = q('#avs-st-director-save');
-        if (dirSaveBtn) dirSaveBtn.onclick = async () => {
-            const ta = q('#avs-st-director-text');
-            if (!ta) return;
+        paint();
+        box.querySelectorAll('[data-dfocus]').forEach(b => b.addEventListener('click', () => {
+            const id = b.dataset.dfocus;
+            if (id === f.pick) return;
+            // 換到「自己寫」：框裡還沒寫過就拿剛才那段當起點
+            if (id === 'custom') { if (save({ pick: 'custom', text: f.custom || presetText(f.pick) })) paint(); return; }
+            if (save({ pick: id })) paint();
+        }));
+        let _t = null;
+        if (ta) ta.addEventListener('input', () => {
+            // 在預設的那段上直接改＝變成自己寫
+            if (f.pick !== 'custom') { f = { ...f, pick: 'custom' }; box.querySelectorAll('[data-dfocus]').forEach(b => b.classList.toggle('is-on', b.dataset.dfocus === 'custom')); }
+            clearTimeout(_t);
+            _t = setTimeout(() => save({ pick: 'custom', text: ta.value }, true), 400);
+        });
+        box.querySelectorAll('[data-dpush]').forEach(b => b.addEventListener('click', () => { if (save({ push: b.dataset.dpush })) paint(); }));
+
+        const ed = q('#asw-ddraft'), dt = q('#asw-ddraft-text');
+        const load = async () => { const t = await D.getText(); if (dt) dt.value = t || ''; if (dt) dt.placeholder = '還沒有導演稿：推進一輪劇情，或按「立刻產一份」'; };
+        const view = q('#asw-ddraft-view');
+        if (view) view.addEventListener('click', async () => {
+            if (ed.hidden) { await load(); ed.hidden = false; view.textContent = '收起導演稿'; }
+            else { ed.hidden = true; view.textContent = '查看／改導演稿'; }
+        });
+        const sv = q('#asw-ddraft-save');
+        if (sv) sv.addEventListener('click', async () => {
             let ok = false;
-            try { ok = await win.OS_STATE_RUNTIME?.director?.saveText?.(ta.value); } catch (e) {}
-            dirSaveBtn.textContent = ok ? '已儲存' : '存失敗';
-            setTimeout(() => { dirSaveBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> 儲存（下一輪生效）'; }, 1800);
-        };
-        const dirCloseBtn = q('#avs-st-director-close');
-        if (dirCloseBtn) dirCloseBtn.onclick = () => { const ed = q('#avs-st-director-editor'); if (ed) ed.classList.remove('open'); };
-        const dirNowBtn = q('#avs-st-director-now');
-        if (dirNowBtn) dirNowBtn.onclick = async () => {
-            dirNowBtn.textContent = '產稿中…'; dirNowBtn.classList.add('disabled');
-            try { await win.OS_STATE_RUNTIME?.director?.extractNow?.(); } catch (e) {}
-            dirNowBtn.innerHTML = '<i class="fa-solid fa-clapperboard"></i> 立刻產一份'; dirNowBtn.classList.remove('disabled');
-            const ed = q('#avs-st-director-editor');
-            if (ed && ed.classList.contains('open')) await _dirLoadText();
-        };
+            try { ok = await D.saveText(dt.value); } catch (e) {}
+            toast(ok ? '導演稿存好了，下一輪生效' : '沒存到：這個故事還沒有可以掛導演稿的那一輪', ok ? 'success' : 'error');
+        });
+        const now = q('#asw-ddraft-now');
+        if (now) now.addEventListener('click', async () => {
+            if (now.disabled) return;
+            now.disabled = true; now.textContent = '產稿中…';
+            try { await D.extractNow(); } catch (e) {}
+            now.disabled = false; now.textContent = '立刻產一份';
+            if (ed && !ed.hidden) await load();
+        });
     }
 
     // 「沿用其他故事的設定」：整套搬 追蹤欄位(變數包) + 條件規則 + UI 面板 到當前聊天。
@@ -1018,6 +1084,6 @@
         });
     })();
 
-    win.OS_AVS_STATE = { renderInto, refresh, isHost: function (el) { return !!el && _host === el && el.isConnected; }, openStateManagerModal, startEditField, startAddField, cancelEditField, saveFieldEdit, deleteFieldConfirm };
+    win.OS_AVS_STATE = { renderInto, refresh, mountDirector, isHost: function (el) { return !!el && _host === el && el.isConnected; }, openStateManagerModal, startEditField, startAddField, cancelEditField, saveFieldEdit, deleteFieldConfirm };
     window.OS_AVS_STATE = win.OS_AVS_STATE;
 })();

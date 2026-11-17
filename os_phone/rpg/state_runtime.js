@@ -1843,7 +1843,7 @@ ${numberedText}`;
     // 與 AVS/記憶(副模型 extractOnce)、獨立插圖(副模型 chatSecondary)三者各自獨立開關、互不搭車。
     // 六類區塊：公共劇情 / 各角色私人記憶 / 各角色行動摘要 / 本輪可用張力。
     // 存檔：stateData.director.patches=[{id,text}] 全文快照，id 錨在同輪 AVS patch（一起回朔）。
-    // 開關：localStorage sp_director_on==='1'（預設關；UI 在變數工坊系統區）。
+    // 開關：localStorage sp_director_on==='1'（預設關；UI 11-18 起在「設置 → 劇情 → 導演」，os_avs_state.js 的 mountDirector）。
     let _directorRunning = false;
     let _directorDebounce = null;
     let _lastDirectorUninject = null;
@@ -1853,6 +1853,58 @@ ${numberedText}`;
 
     function directorOn() { try { return localStorage.getItem('sp_director_on') === '1'; } catch (e) { return false; } }
     function setDirectorOn(v) { win.AUI.lsSet('sp_director_on', v ? '1' : '0', '導演模式開關'); if (!v) { try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch (e) {} } }
+
+    // 🧭 這個故事的導演重點（11-18 她：「自訂義思考prompt? 比如可以做不同權重，比如戀愛劇，思考方向，
+    //    或者不同劇本時，要求導演的思考得有所不同?」）。一個故事一份，存 sp_director_focus::<chatId> = { pick, text, push }。
+    //    只加在導演那份指令後面：改的是導演「留意什麼、張力往哪挑、推得多用力」，六格格式、條數、字數規範不動
+    //    （注入給寫正文那邊的導演稿格式、驗收【公共劇情】都靠那套格式）。
+    const DIRECTOR_FOCUS = [
+        { id: 'none', name: '不特別偏', text: '' },
+        { id: 'love', name: '戀愛', text: '這個故事以感情線為主。整理時特別留意：人物之間的距離怎麼變（誰靠近、誰退開）；說出口和沒說出口的心意各是什麼；彼此的誤會、顧慮還卡在哪裡；哪些小事對對方有意義。張力優先找能讓一段關係往前或往後挪一小步的機會；曖昧和試探本身就是戲，不急著讓人告白或確認關係。' },
+        { id: 'mystery', name: '懸疑推理', text: '這個故事以真相和線索為主。整理時特別留意：已經公開的線索、只有某個人掌握的線索、誰在說謊或隱瞞、還沒有人追問的疑點。私人記憶格要嚴守誰知道什麼。張力優先找能讓人物發現、對質或逼問的機會；你自己不替真相下結論。' },
+        { id: 'adventure', name: '冒險戰鬥', text: '這個故事以行動和處境為主。整理時特別留意：眼前的目標和阻礙、手上的資源、每個人的傷勢和體力、敵我的位置和威脅。張力優先找下一步可以做的選擇和各自的代價；連續打鬥或趕路之後照規範給喘息。' },
+        { id: 'daily', name: '日常', text: '這個故事以生活和人物相處為主。整理時特別留意：每個人最近在意的小事、習慣和喜好、彼此的默契和小摩擦、時間和季節的變化。張力以小插曲、小意外為主，不製造大危機。' },
+        { id: 'horror', name: '恐怖', text: '這個故事以氣氛和未知為主。整理時特別留意：已經出現了哪些異常、每個人各自察覺到多少、還剩哪些安全的地方和退路、恐懼怎麼一點一點累積。張力優先找逐步升高的異樣，不急著讓真相或威脅本體現身。' },
+        { id: 'custom', name: '自己寫', text: '' }
+    ];
+    const DIRECTOR_PUSH = {
+        soft: '【推進力道：輕】這個故事要多留白：【本輪可用張力】最多 1 條；沒有特別適合推進的時機，就只寫一條「留白：」。',
+        normal: '',
+        bold: '【推進力道：積極】這個故事節奏要緊湊：除非人物帶傷、力竭或剛經歷高壓場面，【本輪可用張力】至少列 1 個能讓劇情往前走的點；它仍然是選項，不是任務。'
+    };
+    const _focusKey = (cid) => 'sp_director_focus::' + cid;
+    function getDirectorFocus(cid) {
+        cid = cid || getChatId();
+        let r = {};
+        if (cid) { try { r = JSON.parse(localStorage.getItem(_focusKey(cid)) || '{}') || {}; } catch (e) { r = {}; } }
+        const pick = DIRECTOR_FOCUS.some(f => f.id === r.pick) ? r.pick : 'none';
+        const push = Object.prototype.hasOwnProperty.call(DIRECTOR_PUSH, r.push) ? r.push : 'normal';
+        const preset = DIRECTOR_FOCUS.find(f => f.id === pick);
+        const text = pick === 'custom' ? String(r.text || '') : preset.text;
+        return { chatId: cid || '', pick, push, text, custom: String(r.text || '') };
+    }
+    /** 改這個故事的導演重點：patch＝{ pick?, text?, push? }。回 false＝沒存到（或沒有開著的故事） */
+    function setDirectorFocus(patch, cid) {
+        cid = cid || getChatId();
+        if (!cid) return false;
+        const cur = getDirectorFocus(cid);
+        const next = { pick: cur.pick, push: cur.push, text: cur.custom, ...(patch || {}) };
+        if (next.pick === 'none' && next.push === 'normal' && !String(next.text || '').trim()) {
+            try { localStorage.removeItem(_focusKey(cid)); } catch (e) {}   // 全部是預設＝不留一把空鑰匙
+            return true;
+        }
+        return win.AUI.lsSet(_focusKey(cid), JSON.stringify({ pick: next.pick, push: next.push, text: String(next.text || '') }), '這個故事的導演重點');
+    }
+    // 接在導演指令最後的那一段；什麼都沒設回 ''
+    function _directorFocusBlock() {
+        const f = getDirectorFocus();
+        const parts = [];
+        const t = String(f.text || '').trim();
+        if (t) parts.push('【這個故事的導演重點（玩家指定）】\n' + t);
+        if (DIRECTOR_PUSH[f.push]) parts.push(DIRECTOR_PUSH[f.push]);
+        if (!parts.length) return '';
+        return '\n\n' + parts.join('\n') + '\n（以上只影響你留意什麼、張力往哪個方向挑；格式、條數和字數規範照舊。）';
+    }
 
     // 導演稿也走身分制：[{id, text}] 時序陣列，最新一份＝最後一筆（不再有樓號可比大小）
     function _latestDirectorText(director) {
@@ -1877,7 +1929,7 @@ ${numberedText}`;
 '- 全文上限 500 字；快超就先砍行動摘要裡的舊條目\n' +
 '- 張力是選項不是任務：不得製造「必須熬夜／帶傷硬撐／一刻不停」的壓迫感；角色的傷勢與疲勞是硬約束，優先於任何推進\n' +
 '- 玩家（USER）不開私人記憶區塊\n' +
-'- 只整理素材裡有的事實，不編造、不預告未來劇情';
+'- 只整理素材裡有的事實，不編造、不預告未來劇情' + _directorFocusBlock();
     }
     // 獨立呼叫版 system（備援路／手動「立刻產一份」用）
     function _buildDirectorInstruction(castNames) {
@@ -3165,6 +3217,10 @@ _directorSpec(castNames);
             getText: getDirectorText,
             saveText: saveDirectorText,
             extractNow: extractDirector,   // 手動立刻產一份（測試/救援）
+            FOCUS: DIRECTOR_FOCUS,         // 🧭 導演重點的選項（設置 → 劇情 → 導演）
+            getFocus: getDirectorFocus,
+            setFocus: setDirectorFocus,
+            chatId: getChatId,
         },
         CONFIG
     };

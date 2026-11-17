@@ -6,6 +6,7 @@
 // 這支只管殼：開關、左邊（手機是上面）那排分類、哪個分類畫哪一頁。每一頁的內容由原本管那些設定的檔案畫進來：
 //       大廳＝LobbyStage.mountSettings(box)（core/void/lobby_stage.js）。
 //       劇情→畫面與聲音＝VN_Settings.mountInto(box)（os_phone/vn_story/vn_panels.js；劇情右上「設定」鈕開的就是這頁）。
+//       劇情→導演＝OS_AVS_STATE.mountDirector(box)（os_phone/os/os_avs_state.js）。
 //       AI 模型／圖片／語音／備份與系統＋劇情底下的面板、素材資料夾、記得多少章、後台
 //         ＝原本的系統設置頁整頁掛進來（OS_SETTINGS.launchApp，一個窗只掛一次），它自己那排主分頁和標題列藏起來，
 //           由這裡的分類去按它對應的那一顆（.set-tab[data-tab]／.gen-subtab[data-gentab]）。
@@ -42,6 +43,8 @@
             { id: 'view', name: '畫面與聲音', mount: function (box) { const V = win.VN_Settings || window.VN_Settings; if (V && V.mountInto) return V.mountInto(box); box.textContent = '劇情還沒載入完整，請重新整理一次。'; } },
             { id: 'asset', name: '素材資料夾', sys: 'vn', gen: 'asset' },
             { id: 'ctx', name: '記得多少章', sys: 'vn', gen: 'ctx' },
+            // 🎬 導演（11-18 從變數工坊搬來：她「導演模式 是不是放到 設置好點啊?」）；fresh＝每次切到都重畫，換了故事才讀得到那個故事的導演重點
+            { id: 'director', name: '導演', fresh: true, mount: function (box) { const A = win.OS_AVS_STATE || window.OS_AVS_STATE; if (A && A.mountDirector) return A.mountDirector(box); box.textContent = '劇情狀態那支還沒載好，請重新整理一次。'; } },
             { id: 'panel', name: '面板', sys: 'vn', gen: 'panel', only: 'st' },
             { id: 'back', name: '後台', sys: 'vn', gen: 'back', only: 'pwa' },
         ] },

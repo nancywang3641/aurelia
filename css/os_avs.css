@@ -321,14 +321,8 @@
         .avs-st-field { padding: 10px 12px; }
         .avs-st-field-add { padding: 11px; }
 
-        /* 導演模式：開關 + 工具鈕併成同一張卡（avs-st-director-card），關閉時只剩開關列。 */
+        /* 導演模式：11-18 起只剩一張說明卡＋「去設置」（開關、導演稿都在設置 → 劇情 → 導演） */
         .avs-st-director-card .avs-st-toggle-row { padding: 0; min-height: 0; }
-        .avs-st-director-tools { display: none; }
-        .avs-st-director-tools.is-visible { display: block; margin-top: 14px; padding-top: 14px; border-top: 1px solid rgba(var(--os-ink-rgb), 0.10); }
-        .avs-st-director-editor { display: none; margin-top: 12px; }
-        .avs-st-director-editor.open { display: block; }
-        .avs-st-director-text { min-height: 220px; }
-        .avs-st-director-actions { margin-top: 8px; }
 
         @media (max-width: 460px) {
             .avs-st { gap: 14px; }
