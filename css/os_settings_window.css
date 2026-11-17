@@ -22,7 +22,7 @@
 }
 .asw-root *, .asw-root *::before, .asw-root *::after { box-sizing: border-box; }
 .asw-root [hidden] { display: none !important; }
-/* 開在奧瑞亞主窗口那一格裡：跟著那一格的大小。層級要高過裡面的相簿(50)、劇情(51)、劇情抽取窗(1001)，
+/* 開在奧瑞亞主窗口那一格上（掛在它的外框裡，兩個一樣大）：跟著那一格的大小。層級要高過裡面的相簿(50)、劇情(51)、劇情抽取窗(1001)，
    還有大廳舞台那些浮鈕、右邊那排入口（3000～9990，它們跟這個窗在同一層比大小） */
 .asw-root.asw-in-screen { position: absolute; z-index: 20001; }
 .asw-scrim { position: fixed; inset: 0; z-index: 2147481899; background: rgba(18, 26, 52, 0.48); display: none; }
@@ -75,6 +75,36 @@
 .asw-full .asw-nav-item.is-on::after { content: ''; position: absolute; left: 18%; right: 18%; bottom: 0; height: 3px; border-radius: 3px 3px 0 0; background: var(--asw-accent); }
 .asw-full .asw-nav-long, .asw-full .asw-nav-tag { display: none; }
 .asw-full .asw-page { padding: 16px 16px calc(24px + env(safe-area-inset-bottom, 0px)); }
+
+/* ── 分類底下的小分頁（劇情：素材資料夾／記得多少章／外語角色…）：標題下面一排，選到的底下一條線 ── */
+.asw-subtabs { flex: 0 0 auto; display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--asw-line); }
+.asw-subtabs::-webkit-scrollbar { display: none; }
+.asw-float .asw-subtabs { margin: 0 32px; }
+.asw-full .asw-subtabs { padding: 0 6px; }
+.asw-subtab {
+    position: relative; flex: 0 0 auto; margin: 0; padding: 10px 12px; border: none; background: none; cursor: pointer;
+    font: inherit; font-size: 13px; color: var(--asw-sub); white-space: nowrap; -webkit-tap-highlight-color: transparent;
+}
+.asw-subtab:hover { color: var(--asw-ink); }
+.asw-subtab.is-on { color: var(--asw-ink); font-weight: 800; }
+.asw-subtab.is-on::after { content: ''; position: absolute; left: 6px; right: 6px; bottom: 0; height: 2px; border-radius: 2px 2px 0 0; background: var(--asw-accent); }
+
+/* ── 搬進來的系統設置頁（os_settings.js 的 launchApp 整頁掛在 .asw-sys 裡）──
+   它自己的標題列、那排主分頁、「一般」裡那排小分頁都藏起來：由這個窗口的分類去按。
+   內容區自己捲、底部「保存所有設定」那條黏在最下面（照它原本的排法），左右邊對齊這個窗口其他頁。 */
+.asw-sys { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.asw-sys > .set-container { flex: 1; min-height: 0; height: auto; }
+/* 全站樣式（aurelia_core.css）給 .set-container 鋪了一層格子底，還帶 !important；在這個窗裡是白底，不要格子 */
+.asw-root .asw-sys > .set-container { background-image: none !important; }
+/* 圖片頁最上面那排（畫風／NAI／ComfyUI／自訂接口…）：手機是每列三格；浮窗夠寬，排成一列 */
+.asw-float .asw-sys .img-srctab-row.img-conn-tabs { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
+.asw-root .asw-sys .set-header.sysh, .asw-root .asw-sys .set-tabs { display: none; }
+.asw-sys .api-subtab-row:has(> .gen-subtab) { display: none; }
+.asw-float .asw-sys .set-content { padding: 16px 32px 24px; }
+.asw-full .asw-sys .set-content { padding: 16px 16px 20px; }
+.asw-sys .set-footer { background: var(--asw-card); box-shadow: none; border-top: 1px solid var(--asw-line); }
+.asw-float .asw-sys .set-footer { padding: 12px 32px 14px; }
+.asw-full .asw-sys .set-footer { padding-left: 16px; padding-right: 16px; }
 
 /* ── 頁面裡共用的零件（大廳頁、劇情頁、總覽頁都用這幾樣，各頁長一樣）── */
 .asw-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 44px; align-items: start; }

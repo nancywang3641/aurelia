@@ -36,7 +36,8 @@
         if (!mod) throw new Error(label + '：這個 app 的程式沒有登記進手機（它那支 js 沒載到）');
         return mod;
     }
-    // mode: 'inside' = 渲染進手機螢幕(吃容器 div)；'out' = 開它自己的全屏面板(從手機啟動)
+    // mode: 'inside' = 渲染進手機螢幕(吃容器 div)；'out' = 開它自己的全屏面板(從手機啟動)；
+    //       'over' = 它自己開一個窗蓋在手機上面，手機留在主畫面不動（設置）
     const APPS = [
         { id: 'wx',     name: '微信', icon: 'fa-comment',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['微信'], '微信')(c); } },
         { id: 'wb',     name: '微薄', icon: 'fa-eye',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['微博'], '微薄')(c); } },
@@ -630,7 +631,8 @@
     function _addWritingTools() {
         const standalone = !!document.getElementById('aurelia-standalone-root');
         const tools = [
-            { id: 'sysset', name: '設置', icon: 'fa-gear', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && (win.OS_SETTINGS.launchApp || win.OS_SETTINGS.launch), c); } },
+            // ⚙️ 設置（11-17）：不再在手機裡畫設置頁，點了開「設置」窗口（os_settings_window.js，蓋在手機上面），關掉就回到手機主畫面
+            { id: 'sysset', name: '設置', icon: 'fa-gear', mode: 'over', go: function () { var W = win.OS_SETTINGS_WINDOW; if (W && W.open) W.open('home'); else if (win.AUI && win.AUI.toast) win.AUI.toast('設置還沒載入完整，請重新整理一次', { type: 'warn' }); } },
             { id: 'album',  name: '相簿',   icon: 'fa-images', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
             // 🎭 角色中心（11-16）：每個角色的素材和裝扮。它自己開一個窗蓋在 app 區上，按它的返回＝回主畫面
             { id: 'chars',  name: '角色',   icon: 'fa-address-book', mode: 'inside', go: function (c) { var G = win.OS_CHAR_GALLERY; if (G && G.open) { G.open('', { from: c, onClose: function () { if (!_inLeave) _home(); } }); } else { c.innerHTML = '<div class="aps-fail">角色中心還沒載入</div>'; } } },
@@ -1208,6 +1210,11 @@
         }
         const app = APPS.find(function (a) { return a.id === id; });
         if (!app || !_el) return;
+        if (app.mode === 'over') {
+            // 自己開窗蓋在手機上面的（設置）：手機不動，關掉那個窗就回到這個主畫面
+            try { app.go(); } catch (e) { console.warn('[PhoneShell] 開啟失敗', id, e); }
+            return;
+        }
         if (app.mode === 'out') {
             // 大面板：關掉手機殼、開它自己的全屏面板（不演滑下去，馬上讓位）
             close(true);

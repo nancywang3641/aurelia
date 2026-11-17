@@ -862,6 +862,12 @@
     };
 
     AureliaControlCenter.showOsApp = function(appName) {
+        // ⚙️ 設置（11-17）：三個設置合成一個「設置」窗口（os_phone/os/os_settings_window.js），不再開這一整格的舊設置頁
+        if (appName === '設置' && window.OS_SETTINGS_WINDOW && window.OS_SETTINGS_WINDOW.open) {
+            if (!isVisible) AureliaControlCenter.show();
+            window.OS_SETTINGS_WINDOW.open('home');
+            return;
+        }
         if (!isVisible) AureliaControlCenter.show();
         const root = phoneFrame;
         if (!root) return;
