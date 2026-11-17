@@ -175,7 +175,7 @@
             const room = PT_CFG.cafeDailyCap - used;
             if (room <= 0) return { ok: false, msg: '今天的額度換完了，明天再來' };
             const spare = Math.floor((Number(f.coins) || 0) - keep);
-            if (spare < PT_CFG.cafeRate) return { ok: false, msg: '書咖帳戶要留 ' + keep + ' 備料，現在沒有多的可以換' };
+            if (spare < PT_CFG.cafeRate) return { ok: false, msg: '書咖帳戶要留 ' + keep + ' 元備料，現在沒有多的可以換' };
             let gain = Math.min(room, Math.floor(spare / PT_CFG.cafeRate));
             if (want != null) gain = Math.min(gain, Math.max(0, Math.floor(Number(want) || 0)));
             if (gain <= 0) return { ok: false, msg: '沒有可以換的' };
@@ -189,6 +189,45 @@
             await _pushLedger({ ts: _now(), delta: gain, reason: '書咖帳戶轉入', balanceAfter: next });
             return { ok: true, gain, balance: next, cafeLeft: nf.coins, roomLeft: room - gain };
         }));
+    }
+
+    // ── 🌱 後院金幣換 PT（11-18 她：「分開，但可以換成PT」）──
+    //   錢包跟書咖、PT 各自分開；換的那一下在後院出貨箱做（farm_ship_core 的 toPT）：田那邊扣金幣、在田的帳本寫換匯單（type 'pt'）。
+    //   這裡照單入帳，跟書咖收後院送料（OS_CAFE.collectFromFarm）同一套：
+    //   - 田開了雲端存檔就等存上伺服器才收（伺服器那份蓋回來時換匯單跟著不見，就不會金幣退回來、PT 又多了）
+    //   - 只收這台換的（dev）：手機拉到同一份田，帳本裡也有這張單，但 PT 錢包是各台各一份，不能兩邊都入帳
+    //   - 每張單的 id 走已付記號（'farm:'+id），重試幾次都只付一次
+    const K_FARM_DEV = 'farm_dev';
+    function today() { return _dayNum(_now()); }
+    function farmDev() {
+        return _serial(async () => {
+            const db = _db();
+            let d = null;
+            try { d = await db.getAppData(APP_ID, K_FARM_DEV); } catch (e) {}
+            if (d) return String(d);
+            d = 'pd_' + _now().toString(36) + Math.random().toString(36).slice(2, 8);
+            await db.saveAppData(APP_ID, K_FARM_DEV, d);
+            return d;
+        });
+    }
+    function _lsJson(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+    async function collectFromFarm(opts) {
+        const FC = win.FarmCloud || window.FarmCloud;
+        const cloudOn = () => { const c = _lsJson('aurelia_farm_cloud') || {}; return !!(c.on && String(c.url || '').trim() && String(c.token || '').trim()); };
+        if (opts && opts.flush && FC && FC.enabled && FC.enabled()) {   // 剛換：先把田送上伺服器
+            for (let i = 0; i < 6; i++) { try { await FC.flush(); } catch (e) {} if (!(FC.meta() || {}).dirty) break; await new Promise(r => setTimeout(r, 700)); }
+        }
+        if (cloudOn() && (_lsJson('aurelia_farm_cloud_meta') || {}).dirty) return { ok: false, pending: true };
+        const farm = _lsJson('aurelia_farm_v1');
+        const notes = ((farm && farm.ledger) || []).filter(e => e && e.type === 'pt' && e.id && e.amount < 0);
+        if (!notes.length) return { ok: true, gain: 0 };
+        let dev = '';
+        try { dev = String(await _db().getAppData(APP_ID, K_FARM_DEV) || ''); } catch (e) {}
+        const mine = notes.filter(e => dev && e.dev === dev);
+        if (!mine.length) return { ok: true, gain: 0 };
+        const before = await getPT();
+        const after = await addPT(0, { reason: '後院金幣轉入', tx: mine.map(e => ({ id: 'farm:' + e.id, n: -e.amount, note: '後院金幣轉入' })) });
+        return { ok: true, gain: Math.max(0, after - before), balance: after };
     }
 
     // ── 地塊 built 狀態 ──────────────────────────────────
@@ -642,13 +681,15 @@
         const lootBtn = lootN
             ? '<button class="osx-card-btn gold" id="os-pt-redeem-loot">估值 ' + lootN + ' 件</button>'
             : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
+        // 🌱 後院換好、當時田還沒存上伺服器的那幾張：打開交易所時補收（只付一次）
+        try { await collectFromFarm(); } catch (e) {}
         // ☕ 書咖帳戶換 PT
         const cx = await cafeXferInfo();
         const cafeBtn = cx.coins == null ? '<button class="osx-card-btn locked" disabled>書咖還沒開張</button>'
             : cx.can > 0 ? '<button class="osx-card-btn gold" id="os-pt-cafe-xfer">換 ' + cx.can + ' PT</button>'
             : '<button class="osx-card-btn locked" disabled>' + (cx.room <= 0 ? '今天換完了' : '店裡沒有多的') + '</button>';
         const cafeDesc = cx.coins == null ? '瀅瀅店裡賺的錢換成 PT'
-            : '店裡有 ' + cx.coins + '，留 ' + cx.keep + ' 備料；一比一，今天還能換 ' + cx.room;
+            : '店裡有 ' + cx.coins + ' 元，留 ' + cx.keep + ' 元備料；一比一，今天還能換 ' + cx.room + ' PT';
 
         // 一張卡＝圖示、名字、一句它是做什麼的、按鈕（插圖圖片退役，圖示用 FA）
         const card = (cls, icon, name, desc, btn) =>
@@ -746,6 +787,7 @@
         evaluateAchievementsPT,
         getLoot, addLoot, evaluateLootPT,
         cafeXferInfo, cafeToPT,
+        today, farmDev, collectFromFarm,   // 🌱 後院金幣換 PT（換的那一下在後院出貨箱）
         openExchange, closeExchange,
         _cfg: PT_CFG,
         _showSettleCard,   // 診斷用：不跑結算也能把卡叫出來看位置

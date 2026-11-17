@@ -246,7 +246,7 @@
             const plan = _batchPlan(m, n, pan ? pan.items : {});
             if (!plan.ok) return { ok: false, why: plan.why };
             const cost = plan.cost, unit = Math.round(cost / n);
-            if (fd.coins < cost) return { ok: false, why: '錢不夠（備 ' + n + ' 份要 ' + cost + '，帳戶剩 ' + fd.coins + '）' };
+            if (fd.coins < cost) return { ok: false, why: '錢不夠（備 ' + n + ' 份要 ' + cost + ' 元，帳戶剩 ' + fd.coins + ' 元）' };
             const stock = await _getStrict(K_STOCK, {});
             (stock[m.id] || (stock[m.id] = [])).push({ id: _mkId(), qty: n, day: at.day, t: at.t, unit });
             fd.coins -= cost; fd.stamina -= F.batchStamina;
@@ -266,7 +266,7 @@
             if (lab[key]) return { ok: false, why: '這個組合試過了' };
             if (await _getStrict(K_RD, null)) return { ok: false, why: '已經有一杯在研發了' };
             const fd = await _fundLoad();
-            if (fd.coins < F.rdCost) return { ok: false, why: '錢不夠（研發要 ' + F.rdCost + '，帳戶剩 ' + fd.coins + '）' };
+            if (fd.coins < F.rdCost) return { ok: false, why: '錢不夠（研發要 ' + F.rdCost + ' 元，帳戶剩 ' + fd.coins + ' 元）' };
             if (fd.stamina < F.rdStamina) return { ok: false, why: '體力不夠（剩 ' + fd.stamina + '，研發要 ' + F.rdStamina + '）' };
             const now = Date.now();
             const rd = { b, f, t, key, startAt: now, doneAt: now + F.rdHours * 3600000, cost: F.rdCost };
@@ -991,7 +991,7 @@
               '<div class="oc-brand"><span class="oc-brand-icon"><i class="fa-solid fa-mug-hot"></i></span>' +
                 '<span class="oc-brand-copy"><b>書咖櫃檯</b><small>PARALLAX CAFE</small></span></div>' +
               '<div class="oc-head-stats">' +
-                '<span class="oc-stat-pill"><i class="fa-solid fa-coins"></i> 帳戶 <b data-cafe-stat="coins">—</b></span>' +
+                '<span class="oc-stat-pill"><i class="fa-solid fa-coins"></i> 帳戶 <b data-cafe-stat="coins">—</b> 元</span>' +
                 '<span class="oc-stat-pill"><i class="fa-solid fa-bolt"></i> 體力 <b data-cafe-stat="sta">—</b></span>' +
                 '<span class="oc-stat-pill"><i class="fa-solid fa-heart"></i> 人氣 <b data-cafe-stat="pop">0</b></span>' +
               '</div>' +
@@ -1161,7 +1161,7 @@
         if (!fund) why = '讀不到書咖帳戶，等一下再試';
         else if (sta < F.batchStamina) why = '體力不夠（剩 ' + sta + '，備料一次要 ' + F.batchStamina + '），明天會回滿';
         else if (!plan1.ok) why = plan1.why + '：去後院出貨箱旁邊按「送去書咖」';
-        else if (coins < unit) why = '錢不夠（一份料要 ' + unit + '，帳戶剩 ' + coins + '）';
+        else if (coins < unit) why = '錢不夠（一份料要 ' + unit + ' 元，帳戶剩 ' + coins + ' 元）';
         const at = _nextOpen(Date.now());
         const when = at.day === _dayNum(Date.now()) ? '今天 9 點開店上架' : '明天 9 點開店上架';
         const homeText = (use) => Object.keys(use || {}).map(id => (FARM_NAME[id] || id) + ' ' + use[id]).join('、');

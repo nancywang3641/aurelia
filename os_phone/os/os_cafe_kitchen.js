@@ -1985,7 +1985,7 @@
     }
     async function _askBuy(id) {
         const A = _A(), E = EQUIP[id];
-        const yes = A && A.confirm ? await A.confirm('買一台' + E.name + '要 ' + E.price + ' 塊，從書咖帳戶扣，一次買斷、不收維修費。' + E.note + '。', { title: '買' + E.name }) : false;
+        const yes = A && A.confirm ? await A.confirm('買一台' + E.name + '要 ' + E.price + ' 元，從書咖帳戶扣，一次買斷、不收維修費。' + E.note + '。', { title: '買' + E.name }) : false;
         if (!yes) return false;
         const r = await _buyEquip(id);
         if (!r.ok) { if (A && A.toast) A.toast(r.why, { type: 'warn' }); return false; }
@@ -2127,8 +2127,8 @@
             const home = Object.keys(plan.use).map(g => FARM_NAME[g] + ' ' + plan.use[g]).join('、');
             $('cost').innerHTML = miss ? '' : tried ? '<i class="fa-solid fa-eye"></i> 這一盤試過了，再按不會扣錢'
                 : short ? '<span class="ock-poor">' + _esc(_shortText(plan.short)) + '</span>'
-                : '這一盤料錢 <b>' + cost + '</b> 塊' + (fund ? '・帳戶剩 ' + fund.coins : '') + (poor ? '<span class="ock-poor">錢不夠</span>' : '') +
-                  (home ? '<span class="ock-home"><i class="fa-solid fa-seedling"></i> 用自家的 ' + _esc(home) + (plan.save ? '（省 ' + plan.save + ' 塊）' : '') + '</span>' : '');
+                : '這一盤料錢 <b>' + cost + '</b> 元' + (fund ? '・帳戶剩 ' + fund.coins + ' 元' : '') + (poor ? '<span class="ock-poor">錢不夠</span>' : '') +
+                  (home ? '<span class="ock-home"><i class="fa-solid fa-seedling"></i> 用自家的 ' + _esc(home) + (plan.save ? '（省 ' + plan.save + ' 元）' : '') + '</span>' : '');
             if (go) { go.dataset.painted = '1'; go.classList.toggle('ock-dim', !!miss || !!poor || !!short); }
         };
         const api = {
@@ -2149,7 +2149,7 @@
                 const key = _hash(sum.key).toString(36), plan = _gardenPlan(sum, pan), cost = Math.max(0, _costOf(sum) - plan.save);
                 if (kit.tried[key]) return true;
                 if (plan.short.length) { W0.eng.hint(_shortText(plan.short) + '：去後院出貨箱旁邊按「送去書咖」'); return false; }
-                if (fund && fund.coins < cost) { W0.eng.hint('錢不夠：這一盤料要 ' + cost + ' 塊，帳戶剩 ' + fund.coins); return false; }
+                if (fund && fund.coins < cost) { W0.eng.hint('錢不夠：這一盤料要 ' + cost + ' 元，帳戶剩 ' + fund.coins + ' 元'); return false; }
                 return true;
             },
             pantry: () => { const o = {}; for (const g in pan.items) o[g] = pan.items[g].n || 0; return o; },
@@ -2180,7 +2180,7 @@
             res.innerHTML =
                 '<div class="ock-card">' +
                   '<div class="ock-card-head"><span class="oc-badge ' + tt.cls + '">' + _esc(tt.label) + '</span>' +
-                    '<span class="ock-card-cost">' + (r.again ? '試過了，這次沒扣錢' : '花了 ' + r.cost + ' 塊') +
+                    '<span class="ock-card-cost">' + (r.again ? '試過了，這次沒扣錢' : '花了 ' + r.cost + ' 元') +
                       (r.home && Object.keys(r.home).length ? '<br><i class="fa-solid fa-seedling"></i> 用了自家的 ' + Object.keys(r.home).map(g => FARM_NAME[g] + ' ' + r.home[g]).join('、') : '') + '</span></div>' +
                   (photo ? '<img class="ock-photo" alt="" src="' + photo + '">' : '') +
                   v.lines.map(l => '<div class="ock-line' + (l.good ? ' good' : '') + '"><b>' + l.judge + '</b><span>' + _esc(l.t) + '</span></div>').join('') +

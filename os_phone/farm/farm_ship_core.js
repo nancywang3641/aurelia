@@ -45,6 +45,7 @@
         if (Array.isArray(raw.history)) s.history = raw.history.filter(function (r) { return r && typeof r === 'object' && Number.isFinite(Number(r.day)); }).slice(0, HISTORY_KEEP);
         if (raw.totals) ['days', 'income', 'spent', 'stolen', 'earned'].forEach(function (k) { s.totals[k] = int(raw.totals[k]); });
         if (Number(raw.settledTo) > 0) s.settledTo = Number(raw.settledTo);
+        if (raw.pt && Number.isFinite(Number(raw.pt.d))) s.pt = { d: int(raw.pt.d), n: int(raw.pt.n) };   // 今天換了多少 PT（toPT）
         // 看板之前的舊存檔只有上一張：先放進歷史，總額從那張開始算
         if (!s.history.length && s.report) {
             s.history = [s.report];
@@ -132,6 +133,32 @@
         state.logs.unshift('第 ' + state.day + ' 日｜送去書咖：' + i.name + ' × ' + n);
         state.logs = state.logs.slice(0, libs.farm.LOG_KEEP || 300);
         return result(true, 'to_cafe', '送去書咖：' + i.name + ' × ' + n + '。', { qty: n, id: tid });
+    }
+
+    // 換成 PT（11-18 她：「分開，但可以換成PT」）：跟送去書咖同一套——田這邊先扣金幣、在帳本寫一張換匯單（type 'pt'，金額是負的，
+    //   結算單算進「花掉的」），PT 那邊照單入帳（OS_PT.collectFromFarm）：認 id 只付一次、只收這台換的（dev），田存上伺服器了才收。
+    //   一比一、一天最多 PT_DAY_CAP（跟書咖帳戶一樣），後院留 PT_KEEP 買種子。today＝呼叫的那邊算的「今天」（PT 錢包本地午夜換日那套）
+    var PT_DAY_CAP = 200, PT_KEEP = 100;
+    function ptRoom(state, today) {
+        var p = S(state).pt, used = (p && p.d === int(today)) ? int(p.n) : 0;
+        var spare = Math.max(0, int(state.coins) - PT_KEEP);
+        return { cap: PT_DAY_CAP, keep: PT_KEEP, used: used, coins: int(state.coins), can: Math.max(0, Math.min(PT_DAY_CAP - used, spare)) };
+    }
+    function toPT(state, qty, libs, dev, today) {
+        var r = ptRoom(state, today);
+        if (r.used >= PT_DAY_CAP) return result(false, 'pt_cap', '今天換滿 ' + PT_DAY_CAP + ' PT 了，明天再來。');
+        var n = qty == null ? r.can : Math.min(int(qty), r.can);
+        if (n <= 0) return result(false, 'pt_none', '金幣不夠換（後院要留 ' + PT_KEEP + 'G 買種子）。');
+        state.coins -= n;
+        S(state).pt = { d: int(today), n: r.used + n };
+        var tid = 'pt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+        state.ledger = Array.isArray(state.ledger) ? state.ledger : [];
+        state.ledger.unshift({ day: state.day, type: 'pt', amount: -n, note: '換成 PT', id: tid, dev: String(dev || '') });
+        state.ledger = state.ledger.slice(0, 40);
+        state.logs = Array.isArray(state.logs) ? state.logs : [];
+        state.logs.unshift('第 ' + state.day + ' 日｜' + n + 'G 換成 ' + n + ' PT');
+        state.logs = state.logs.slice(0, (libs && libs.farm && libs.farm.LOG_KEEP) || 300);
+        return result(true, 'to_pt', n + 'G 換成 ' + n + ' PT。', { n: n, id: tid });
     }
 
     // 當天還沒結算的，全部拿回來
@@ -265,7 +292,7 @@
         HISTORY_KEEP: HISTORY_KEEP, CATCH_MAX: CATCH_MAX,
         createShip: createShip, normalizeShip: normalizeShip, attach: attach,
         info: info, sellables: sellables, binList: binList, binTotal: binTotal,
-        ship: ship, unshipAll: unshipAll, endDay: endDay, toCafe: toCafe, cafeables: cafeables,
+        ship: ship, unshipAll: unshipAll, endDay: endDay, toCafe: toCafe, cafeables: cafeables, toPT: toPT, ptRoom: ptRoom,
         nextSettle: nextSettle, catchUp: catchUp, canEndEarly: canEndEarly, endEarly: endEarly, noonCheck: noonCheck, NOON_OWNER: NOON_OWNER
     };
 });

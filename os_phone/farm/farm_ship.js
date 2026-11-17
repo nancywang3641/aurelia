@@ -117,6 +117,39 @@
                 });
             }).catch(function (e) { console.warn('[Farm] 送去書咖', e); if (opts.toast) opts.toast('這次沒送成，等一下再試'); }).then(function () { sending = false; });
         }
+        // ── 「換成 PT」（11-18 她：「分開，但可以換成PT」）：金幣一比一換成交易所的 PT，一天有上限；跟送去書咖同一套，田存上去了 PT 才入帳 ──
+        function ptApi() { return (window.parent && window.parent.OS_PT) || window.OS_PT || null; }
+        function ptToday() { var P = ptApi(); return P && P.today ? P.today() : 0; }
+        function openPT() { mode = 'pt'; wrap.hidden = false; renderPT(); }
+        function renderPT() {
+            var r = ship.ptRoom(opts.state(), ptToday());
+            var why = r.used >= r.cap ? '今天換滿了，明天再來。' : (r.can <= 0 ? '金幣不夠換：後院要留 ' + r.keep + 'G 買種子。' : '');
+            wrap.innerHTML = '<section class="fs-card" role="dialog" aria-label="換成 PT">' +
+                '<header class="fs-head"><strong>' + fa('fa-coins') + '換成 PT</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fs-body"><p class="fs-empty">金幣一比一換成 PT，換好拿去白兔交易所用。一天最多 ' + r.cap + ' PT，後院留 ' + r.keep + 'G 買種子。</p>' +
+                '<div class="fs-list"><div class="fs-row"><span class="fs-ico">' + fa('fa-coins') + '</span><div class="fs-name"><strong>金幣 ' + r.coins + 'G</strong><small>今天換了 ' + r.used + '／' + r.cap + ' PT</small></div>' +
+                (r.can > 0 ? '<button type="button" class="fs-all" data-pt="' + r.can + '">換 ' + r.can + ' PT</button>' : '<button type="button" disabled>' + esc(why.split('：')[0].replace(/。$/, '')) + '</button>') +
+                '</div></div>' + (why ? '<p class="fs-empty">' + esc(why) + '</p>' : '') + '</div></section>';
+        }
+        var ptBusy = false;
+        function sendPT(n) {
+            var P = ptApi();
+            if (!P || !P.collectFromFarm || !P.farmDev) { if (opts.toast) opts.toast('交易所還沒準備好，等一下再換'); return; }
+            if (ptBusy) return;
+            ptBusy = true;
+            P.farmDev().then(function (dev) {
+                var out = WC.act(opts.state(), { type: 'pt', quantity: n, dev: dev, today: ptToday() }, libs);
+                if (opts.toast) opts.toast(out.message);
+                if (!out.ok) return null;
+                if (opts.onChange) opts.onChange();   // 先存田（換匯單寫在田的帳本裡），PT 照單入帳
+                if (mode === 'pt') renderPT();
+                return P.collectFromFarm({ flush: true }).then(function (r) {
+                    if (!opts.toast) return;
+                    if (r && r.pending) opts.toast('換好了，等田存上伺服器，PT 就會入帳');
+                    else if (r && r.gain > 0) opts.toast('PT 入帳了：+' + r.gain);
+                });
+            }).catch(function (e) { console.warn('[Farm] 換成 PT', e); if (opts.toast) opts.toast('這次沒換成，等一下再試'); }).then(function () { ptBusy = false; });
+        }
         function renderShip() {
             var st = opts.state();
             var have = ship.sellables(st, libs), inBin = ship.binList(st, libs), total = ship.binTotal(st, libs);
@@ -181,6 +214,8 @@
             if (e.target === wrap || e.target.closest('.fs-close') || e.target.closest('.fs-ok')) { close(); return; }
             var cf = e.target.closest('[data-cafe]');
             if (cf) { sendCafe(cf.getAttribute('data-cafe'), cf.getAttribute('data-n') ? Number(cf.getAttribute('data-n')) : null); return; }
+            var pt = e.target.closest('[data-pt]');
+            if (pt) { sendPT(Number(pt.getAttribute('data-pt'))); return; }
             var b = e.target.closest('[data-ship]');
             var out = null;
             if (b) out = WC.act(opts.state(), { type: 'ship', item: b.getAttribute('data-ship'), quantity: b.getAttribute('data-n') ? Number(b.getAttribute('data-n')) : null }, libs);
@@ -208,6 +243,7 @@
                     var list = [{ icon: 'fa-box-open', label: '放東西進去', cls: 'fav', sub: ship.sellables(st, libs).length ? null : '沒有能賣的', run: function () { openShip(); return null; } }];
                     if (ship.binList(st, libs).length) list.push({ icon: 'fa-rotate-left', label: '全部拿回來', run: function () { return WC.act(st, { type: 'unship' }, libs); } });
                     if (ship.cafeables && cafeApi()) list.push({ icon: 'fa-mug-hot', label: '送去書咖', sub: ship.cafeables(st, libs).length ? null : '沒有能送的', run: function () { openCafe(); return null; } });
+                    if (ship.toPT && ptApi()) list.push({ icon: 'fa-coins', label: '換成 PT', run: function () { openPT(); return null; } });
                     return list;
                 }
             };
@@ -225,7 +261,7 @@
 
         renderBin();
         return {
-            render: renderBin, target: target, openShip: openShip, openCafe: openCafe, openReport: openReport, endDay: endDay, close: close,
+            render: renderBin, target: target, openShip: openShip, openCafe: openCafe, openPT: openPT, openReport: openReport, endDay: endDay, close: close,
             isOpen: function () { return !wrap.hidden; },
             destroy: function () { window.removeEventListener('keydown', onKey); }
         };

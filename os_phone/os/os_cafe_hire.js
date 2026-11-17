@@ -297,7 +297,7 @@
         return _mut(async (s2, b) => {
             if (s2.ad) return [{ ok: false, why: '已經貼了一張，等應徵者來' }, false];
             const fd = await b.fundLoad();
-            if (fd.coins < AD_COST) return [{ ok: false, why: '錢不夠（貼啟事要 ' + AD_COST + '，帳戶剩 ' + fd.coins + '）' }, false];
+            if (fd.coins < AD_COST) return [{ ok: false, why: '錢不夠（貼啟事要 ' + AD_COST + ' 元，帳戶剩 ' + fd.coins + ' 元）' }, false];
             fd.coins -= AD_COST;
             await b.set('fund', fd);
             const now = Date.now();
