@@ -366,63 +366,6 @@
         return out;
     }
 
-    // 主入口：為某個 facility 生 sceneMap（走副模型，省主模型 token）
-    async function generateForFacility(zoneId, facKey, progressCb) {
-        if (!win.WORLD_RUNTIME || !win.OS_API || !win.OS_SETTINGS) {
-            if (progressCb) progressCb('error', '依賴未就緒');
-            return null;
-        }
-        if (typeof win.OS_API.chatSecondary !== 'function') {
-            if (progressCb) progressCb('error', '副模型未啟用，請至「設置 → AI 模型 → 副模型」配置');
-            return null;
-        }
-        const zone = win.WORLD_RUNTIME.getZone(zoneId);
-        if (!zone || !zone.facilities || !zone.facilities[facKey]) {
-            if (progressCb) progressCb('error', '找不到設施');
-            return null;
-        }
-        const facility = zone.facilities[facKey];
-
-        if (progressCb) progressCb('ai', '正在勘景...');
-
-        const prompt = buildPrompt(facility, zone);
-        let messages;
-        try {
-            messages = await win.OS_API.buildContext(prompt, 'map_scene_gen');
-        } catch (e) {
-            if (progressCb) progressCb('error', 'Context 構建失敗');
-            return null;
-        }
-
-        return new Promise((resolve) => {
-            let processed = false;
-            // 走 chatSecondary：簽名 (messages, onChunk, onFinish, onError)
-            win.OS_API.chatSecondary(messages, null, async (responseText) => {
-                if (processed) return;
-                if (!parseSceneMap(responseText)) {
-                    // 流式可能還沒完整，等收尾再判失敗
-                    if (responseText && responseText.length > 100 && /<\/scene-map>/i.test(responseText)) {
-                        processed = true;
-                        console.error('[SceneMap] 解析失敗，原始輸出:', responseText.substring(0, 500));
-                        if (progressCb) progressCb('error', '解析失敗');
-                        resolve(null);
-                    }
-                    return;
-                }
-                processed = true;
-                const sceneMap = await applySceneMapFromText(zoneId, facKey, responseText);
-                if (progressCb) progressCb(sceneMap ? 'done' : 'error', sceneMap ? '勘景完成' : '存檔失敗');
-                resolve(sceneMap);
-            }, (err) => {
-                if (processed) return;
-                processed = true;
-                console.error('[SceneMap] AI 失敗:', err);
-                if (progressCb) progressCb('error', 'AI 呼叫失敗');
-                resolve(null);
-            }, { task: 'map' });
-        });
-    }
-
     // 給「探索此地」合併呼叫用：拿某設施的 scene-map 生成 prompt（可拼進主模型的掃描 prompt，一次呼叫同時要小地圖+路人）
     function buildScenePrompt(zoneId, facKey) {
         const zone = win.WORLD_RUNTIME && win.WORLD_RUNTIME.getZone ? win.WORLD_RUNTIME.getZone(zoneId) : null;
@@ -481,7 +424,6 @@
         parseSceneMap,
         buildScenePrompt,
         applySceneMapFromText,
-        generateForFacility,
         isPaintedWorld,
         paintedStyle
     };

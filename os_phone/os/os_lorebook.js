@@ -13,7 +13,6 @@
 
     // --- 背景數據提供者 ---
     let CACHED_API_TEXT = "";
-    let CACHED_ENTRY_LIST = [];
     let CURRENT_TARGET_BOOK = null;
 
     async function updateApiCache() {
@@ -35,7 +34,6 @@
 
             if (!targetBook) {
                 CACHED_API_TEXT = "";
-                CACHED_ENTRY_LIST = [];
                 return;
             }
 
@@ -46,7 +44,6 @@
 
             // 抓取世界書內容
             let tempText = "";
-            let tempList = [];
 
             let entries = null;
             if (typeof helper.getWorldbook === 'function') {
@@ -66,13 +63,11 @@
                     if (isConstant && isEnabled && entry.content) {
                         const title = entry.name || entry.comment || `Entry #${entry.uid}`;
                         tempText += `[World Info: ${title}]\n${entry.content}\n\n`;
-                        tempList.push(`[#${entry.uid}] ${title}`);
                     }
                 });
             }
 
             CACHED_API_TEXT = tempText;
-            CACHED_ENTRY_LIST = tempList;
 
         } catch (e) {
             console.warn("[OS_LOREBOOK] Sync Error:", e);
@@ -88,9 +83,6 @@
         getPromptText: function() {
             if (!CACHED_API_TEXT) { updateApiCache(); }
             return CACHED_API_TEXT;
-        },
-        getActiveList: function() {
-            return CACHED_ENTRY_LIST || [];
         },
         refresh: updateApiCache,
     };

@@ -1,34 +1,6 @@
 /* VN_TTS_Panel — 顏色一律吃手機主題的格子（--os-*，定義在 css/aurelia_theme.css），跟系統設置同一套。
    以前寫死成淺色版（淺灰卡、深藍字），深色主題下嵌在語音頁裡變成白框、深字疊深底。
    刪除紅是意義色，不進主題。 */
-#vn-tts-overlay {
-    position: absolute; inset: 0; z-index: 9000;
-    background: var(--os-page-bg);
-    display: flex; flex-direction: column;
-    font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
-    color: var(--os-ink);
-    overflow: hidden;
-}
-#vn-tts-overlay.hidden { display: none !important; }
-
-.vtts-header {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 12px 18px;
-    border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.15);
-    background: rgba(var(--os-tint-rgb), 0.85);
-    flex-shrink: 0;
-}
-.vtts-header h2 {
-    margin: 0; font-size: 16px; color: var(--os-ink);
-    letter-spacing: 2px; font-weight: 800;
-}
-.vtts-close {
-    background: none; border: 1px solid rgba(var(--os-ink-rgb), 0.25); color: rgba(var(--os-ink-rgb), 0.72);
-    width: 28px; height: 28px; border-radius: 4px;
-    cursor: pointer; font-size: 16px; line-height: 1;
-    transition: all .2s;
-}
-.vtts-close:hover { border-color: var(--os-ink); color: var(--os-ink); }
 
 /* ── 分頁 ── */
 .vtts-tabs {
@@ -46,12 +18,6 @@
 .vtts-tab.active { color: var(--os-ink); border-bottom-color: rgba(var(--os-ink-rgb), 0.45); font-weight: 800; }
 
 /* ── 內容區 ── */
-.vtts-body {
-    flex: 1; overflow-y: auto; padding: 16px 18px;
-    scrollbar-width: thin; scrollbar-color: rgba(var(--os-ink-rgb), 0.15) transparent;
-}
-.vtts-body::-webkit-scrollbar { width: 4px; }
-.vtts-body::-webkit-scrollbar-thumb { background: rgba(var(--os-ink-rgb), 0.15); border-radius: 2px; }
 
 /* ── 通用表單元件 ── */
 .vtts-field { margin-bottom: 16px; }
@@ -282,10 +248,7 @@ select.vtts-input option { background: var(--os-surface); color: var(--os-ink); 
     opacity: 1; visibility: visible;
 }
 /* 獨立視窗版本身就是滿版固定高度，維持原本浮在底部的樣子 */
-#vn-tts-overlay > .vtts-toast {
-    position: absolute; top: auto; bottom: 20px; left: 50%;
-    transform: translateX(-50%); margin: 0;
-}
+
 .vtts-file-hidden { display: none; }
 
 /* 引擎二選一（顯存只夠一套，本來就該擇一）— 上面一行標題講明這是在選用哪一套 */

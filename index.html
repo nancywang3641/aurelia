@@ -45,7 +45,6 @@
     <link rel="stylesheet" href="css/os_persona.css" />
     <link rel="stylesheet" href="css/os_prompts.css" />
     <link rel="stylesheet" href="css/os_avs.css" />
-    <link rel="stylesheet" href="css/os_avs_rules.css" />
     <link rel="stylesheet" href="css/os_think.css" />
     <link rel="stylesheet" href="css/os_tarot.css" />
     <link rel="stylesheet" href="css/os_journal.css" />
@@ -71,7 +70,6 @@
     <link rel="stylesheet" href="css/wx_theme_pack.css" />
     <link rel="stylesheet" href="css/wx_moments.css" />
     <link rel="stylesheet" href="css/os_sims.css" />
-    <link rel="stylesheet" href="css/vn_ui_workshop.css" />
     <link rel="stylesheet" href="css/qb_core.css" />
     <link rel="stylesheet" href="css/qb_os_404_chaos.css" />
     <link rel="stylesheet" href="css/wx_chat_settings.css" />
@@ -109,7 +107,6 @@
 
     <script src="core/aurelia_dialog.js"></script>
     <script src="core/aurelia_tilefx.js"></script>
-    <script src="core/panel_manager.js"></script>
     <script src="core/ui_utilities.js"></script>
     <script src="core/void/frames.js"></script>
     <script src="core/void/panels.js"></script>
@@ -133,7 +130,6 @@
     <script src="core/void/lobby_decider.js"></script>
     <script src="core/void/npc_decide.js"></script>
     <script src="core/void/lobby_workshop.js"></script>
-    <script src="core/void/login.js"></script>
     <script src="core/void/phone_shell.js"></script>
     <script src="core/void/app_runtime.js"></script>
     <script src="core/void_terminal.js"></script>
@@ -283,7 +279,6 @@
     <script src="os_phone/vn_story/vn_browser.js"></script>
     <script src="os_phone/vn_story/vn_nav.js"></script>
     <script src="os_phone/vn_story/vn_moments.js"></script>
-    <script src="os_phone/vn_story/vn_ui_workshop.js"></script>
 
     <script src="os_phone/rpg/state_schema.js"></script>
     <script src="os_phone/rpg/npc_dossier.js"></script>
@@ -348,7 +343,6 @@
     <!-- 🎮 模擬市民模式：網址帶 ?sims=1 才動（遊戲外的 SimTalk 小程式開的小窗），平常什麼都不做 -->
     <script src="os_phone/os/os_sims.js"></script>
 
-    <script src="os_phone/wb/wb_user_profile.js"></script>
     <script src="os_phone/wb/wb_account.js"></script>
     <script src="os_phone/wb/wb_theme.js"></script>
     <script src="os_phone/wb/wb_view.js"></script>
@@ -411,7 +405,6 @@
             CHAT_CHANGED:     'chat_changed',
             CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
         };
-        window.PANEL_COMMUNICATION = { ready: true, processors: {}, modulesLoaded: {} };
 
         // ── 載入進度條 ──
         const bootBar   = document.getElementById('aurelia-boot-bar');
@@ -442,7 +435,6 @@
             const PS = window.PhoneSystem;
             if (!PS) return;
             if (window.OS_TAROT)     PS.install('賽博塔羅',  '🔮', '#9b59b6', window.OS_TAROT.launch);
-            if (window.VN_STORY)     PS.install('故事模式',  '📖', '#ff69b4', window.VN_STORY.launch);
             if (window.OS_WORLDBOOK) PS.install('世界書',    '📗', '#1a3a5c', c => window.OS_WORLDBOOK.launch(c));
             if (window.OS_AVS)       PS.install('變數工坊',  '🎲', '#e67e22', c => window.OS_AVS.launch(c));
         }

@@ -14,11 +14,6 @@
     function _avsSafe(h) { const A = win.AUI || window.AUI; return (A && A.safeHtml) ? A.safeHtml(h) : _avsEsc(h); }
     function _avsStyle(css) { return String(css == null ? '' : css).replace(/<\/style/gi, '<\\/style'); }
 
-    // --- 樣式定義 ---
-
-    if (!document.getElementById('avs-app-css')) {
-    }
-
     let currentPacks = [];
     let currentTemplates = [];
     let activeEditingPack = null;
@@ -2753,92 +2748,6 @@
         // 整個「目前狀態」分頁由 os_avs_state.js 統一渲染（亮色系 + 人性化狀態 + 進階摺疊）
         try { win.OS_AVS_STATE?.renderInto?.(el, { packs: currentPacks }); }
         catch (e) { console.warn('[AVS] OS_AVS_STATE.renderInto 失敗', e); el.innerHTML = '<div class="avs-st-err">狀態模組載入失敗，請重載一次。</div>'; }
-    }
-
-    // DEPRECATED：原獨立「展廳」tab 的渲染函數，現已內嵌到變數包卡片內。
-    // 保留簽名 alias 到 renderPackList，避免內部其他地方還有 ref 時崩潰。
-    function renderTemplateList(container) {
-        return renderPackList(container);
-    }
-    // === 以下舊邏輯保留為死代碼（不會被呼叫），下版本清理 ===
-    function _DEPRECATED_renderTemplateList_old(container) {
-        const list = container.querySelector('#avs-template-list');
-        if (!list) return;
-        list.innerHTML = '';
-        currentTemplates.forEach(tpl => {
-            // 🛡️ 只渲染真正屬於 AVS 變數包系統的模板（有 packId）
-            // VN 煉丹爐的標籤模板（有 tagId / isBlock / isVNTag）跟外部模板一律跳過
-            if (!tpl.packId) return;
-            if (tpl.isVNTag || tpl.isBlock || tpl.tagId) return;
-
-            const pack = currentPacks.find(p => p.id === tpl.packId);
-            const card = document.createElement('div');
-            card.className = 'avs-card';
-            card.style.borderColor = tpl.isActive ? 'rgba(26,28,40,0.40)' : 'rgba(26,28,40,0.15)';
-
-            // 用當前狀態（或假值）替換佔位符做預覽
-            // 用 OS_AVS_ADAPTER.formatVarValue 共用 formatter（list 顯示用頓號，避免 JSON 醜樣）
-            const previewState = win._AVS_ENGINE?.read?.() || {};
-            let previewCss  = tpl.cssContent  || '';
-            const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
-            // 渲染（支援 object 型 {{#each}} 迴圈）
-            let previewHtml = _avsRenderTemplate(tpl.htmlContent || '', previewState, pack ? (pack.variables || []) : [], fmt);
-
-            const scopeId = `tpl-preview-${tpl.id}`;
-            // 逐條 selector 前綴 #scopeId，避免 CSS nesting 問題
-            let scopedCssText = '';
-            if (previewCss) {
-                scopedCssText = previewCss.replace(/([^{}@][^{}]*)\{/g, (match, selector) => {
-                    const scoped = selector.trim().split(',')
-                        .map(s => `#${scopeId} ${s.trim()}`).join(', ');
-                    return `${scoped} {`;
-                });
-            }
-            const scopedCss = scopedCssText ? `<style>${scopedCssText}</style>` : '';
-
-            card.innerHTML = `
-                ${scopedCss}
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <strong style="font-size:13px;color:var(--os-ink);">${pack ? pack.name : (tpl.packName || '已刪除的檔案')} - 面板</strong>
-                    ${tpl.isActive ? '<span style="font-size:10px;color:var(--os-ink);border:1px solid rgba(var(--os-ink-rgb), 0.20);padding:2px 7px;border-radius:3px;">啟用中</span>' : ''}
-                </div>
-                <div id="${scopeId}" style="margin-bottom:12px;padding:10px;background:rgba(0,0,0,0.3);border-radius:6px;min-height:60px;overflow:hidden;">
-                    ${previewHtml || '<span style="color:rgba(var(--os-ink-rgb), 0.20);font-size:12px;">（無預覽內容）</span>'}
-                </div>
-                <div style="display:flex; gap:10px;">
-                    <div class="avs-btn avs-btn-primary btn-toggle" style="flex:1;">${tpl.isActive ? '取消啟用' : '設為啟用'}</div>
-                    <div class="avs-btn avs-btn-danger btn-del"><i class="fa-solid fa-xmark"></i></div>
-                </div>
-            `;
-            
-            card.querySelector('.btn-toggle').onclick = async () => {
-                // 如果是啟用操作，確保同一包的舊模板被取消
-                if (!tpl.isActive) {
-                    const samePackActive = currentTemplates.find(t => t.packId === tpl.packId && t.isActive && t.id !== tpl.id);
-                    if (samePackActive) {
-                        samePackActive.isActive = false;
-                        await win.OS_DB.saveUITemplate(samePackActive);
-                    }
-                }
-                
-                tpl.isActive = !tpl.isActive;
-                await win.OS_DB.saveUITemplate(tpl);
-                currentTemplates = await win.OS_DB.getAllUITemplates();
-                
-                updateActiveTemplatesCache();
-                renderTemplateList(container);
-            };
-
-            card.querySelector('.btn-del').onclick = async () => {
-                if (await AUI.confirm('確定要銷毀這個精美的 UI 模板嗎？')) {
-                    await win.OS_DB.deleteUITemplate(tpl.id); 
-                    currentTemplates = await win.OS_DB.getAllUITemplates();
-                    updateActiveTemplatesCache();
-                    renderTemplateList(container);
-                }
-            };
-            list.appendChild(card);
-        });
     }
 
     // 啟用中的面板鏡一份進 localStorage，給 vn_inspect 在拿不到 OS_DB 時當退路。

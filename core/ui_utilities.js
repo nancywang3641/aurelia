@@ -210,11 +210,6 @@
                 this.processExistingMessages();
                 this.startObserver();
             }, 1000);
-
-            // 暴露給外部重新初始化 (例如切換聊天室時)
-            window.reinitializeCollapseFeature = () => {
-                this.processExistingMessages();
-            };
         },
 
         processExistingMessages() {

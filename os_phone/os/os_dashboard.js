@@ -259,7 +259,9 @@
         const el = _root && _root.querySelector('#dsh-ver');
         if (!el) return;
         try {
-            const base = (win._AURELIA_EXT_BASE || (typeof _AURELIA_EXT_BASE !== 'undefined' ? _AURELIA_EXT_BASE : '')) || '.';
+            // 擴展放在哪由 index.js／index.html 掛在 AURELIA_EXT_BASE（沒有底線開頭）。以前這裡讀成 _AURELIA_EXT_BASE（index.js 自己的區域變數，外面看不到），
+            //   酒館端永遠退回 '.'＝去抓酒館網站根目錄的 sw.js（沒有這支）→ 版本號一直是空的。
+            const base = win.AURELIA_EXT_BASE || window.AURELIA_EXT_BASE || '.';
             const r = await fetch(base.replace(/\/$/, '') + '/sw.js?ver=' + Date.now(), { cache: 'no-store' });
             const m = /CACHE_VERSION\s*=\s*(\d+)/.exec(await r.text());
             el.textContent = m ? ('v' + m[1]) : '';

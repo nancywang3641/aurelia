@@ -439,13 +439,6 @@ ${materials.headMessages || '（無）'}
         }
     }
 
-    async function getCurrentSchema() {
-        const chatId = getChatId();
-        if (!chatId || !win.OS_DB?.getStateData) return null;
-        const data = await win.OS_DB.getStateData(chatId);
-        return data?.schema || null;
-    }
-
     // === 用戶手動編輯 schema（增 / 改 / 刪欄位）===
     async function addField(name, def) {
         const chatId = getChatId();
@@ -519,7 +512,6 @@ ${materials.headMessages || '（無）'}
 
     win.OS_STATE_SCHEMA = {
         generate,
-        getCurrentSchema,
         addField,
         updateField,
         deleteField,

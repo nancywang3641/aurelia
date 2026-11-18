@@ -200,10 +200,6 @@
             try { if (EL() && EL().isPlaying()) return true; } catch (e) {}
             return false;
         },
-        stopCloud() {
-            try { if (MM()) MM().stop(); } catch (e) {}
-            try { if (EL()) EL().stop(); } catch (e) {}
-        }
     };
 
     win.OS_VOICE_CAST = OS_VOICE_CAST;

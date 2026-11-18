@@ -103,39 +103,7 @@
             return 'char_' + (Math.floor(Math.random() * 90000) + 10000);
         },
 
-        // 7. 智能獲取或創建 (懶加載用)
-        getOrCreate: function(name, options = {}) {
-            let contact = this.getByRealName(name);
-
-            if (!contact) {
-                // 不存在則創建默認值
-                contact = this.upsert({
-                    realName: name,
-                    isNPC: options.isNPC || false,
-                    wx: options.wx || { nickname: name, bio: '這個人很懶，什麼都沒寫' },
-                    wb: options.wb || {
-                        nickname: name,
-                        bio: '這個人很懶，什麼都沒寫',
-                        followers: Math.floor(Math.random() * 5000) + 500,
-                        following: Math.floor(Math.random() * 200) + 50,
-                        posts: 0
-                    }
-                });
-                console.log(`[OS_CONTACTS] 自動創建聯繫人: ${name}`);
-            }
-            return contact;
-        },
-
         // --- 微信/微博 專用更新接口 ---
-
-        updateWxData: function(contactId, wxData) {
-            const contact = this.getById(contactId);
-            if (!contact) return false;
-            // 只更新 wx 字段，不動 wb
-            contact.wx = { ...(contact.wx || {}), ...wxData };
-            this.upsert(contact);
-            return true;
-        },
 
         updateWbData: function(contactId, wbData) {
             const contact = this.getById(contactId);
@@ -201,28 +169,6 @@
             } catch(e) {
                 console.error('[OS_CONTACTS] 遷移失敗:', e);
             }
-        },
-
-        // --- 關鍵接口：導出給微信使用 (wx_contacts.js 依賴此方法) ---
-        exportForWx: function() {
-            const all = this.getAll();
-            const wxFormat = [];
-
-            for (let id in all) {
-                const c = all[id];
-                // 這裡必須轉換回微信以前認識的格式
-                wxFormat.push({
-                    id: c.id,
-                    name: c.wx?.nickname || c.realName,
-                    desc: c.wx?.bio || '',
-                    bio: c.wx?.bio || '',
-                    avatarId: c.wx?.avatarId || null,
-                    avatar: c.wx?.avatar || null,
-                    isNPC: c.isNPC || false,
-                    isGroup: false 
-                });
-            }
-            return wxFormat;
         },
 
         // --- 初始化掛載 ---

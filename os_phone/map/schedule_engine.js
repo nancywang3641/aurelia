@@ -418,7 +418,6 @@ ${facilityText}
     }
 
     win.SCHEDULE_ENGINE = {
-        PERIODS,
         getTimePeriod,
         now: storyNow,
         getMainUserName,

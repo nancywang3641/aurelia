@@ -284,48 +284,6 @@
         },
 
         /**
-         * 为图片生成优化翻译（添加图片生成相关的关键词）
-         * @param {string} text - 要翻译的中文文本
-         * @param {object} options - 选项
-         * @param {string} options.style - 图片风格（如：'realistic', 'anime', 'illustration'）
-         * @returns {Promise<string>} - 优化后的英文提示词
-         */
-        async translateForImageGeneration(text, options = {}) {
-            try {
-                // 先翻译基本文本
-                let translatedText = await this.translate(text, 'zh', 'en');
-
-                // 如果翻译失败或返回原文，尝试添加一些通用的图片生成关键词
-                if (translatedText === text && this.isChinese(text)) {
-                    logger.warn('翻译失败，使用原文并添加通用关键词');
-                    translatedText = text;
-                }
-
-                // 添加图片生成相关的关键词（如果需要）
-                const style = options.style || 'realistic';
-                const styleKeywords = {
-                    'realistic': 'photorealistic, high quality, detailed',
-                    'anime': 'anime style, manga illustration, detailed',
-                    'illustration': 'illustration, artistic, detailed',
-                    'cinematic': 'cinematic lighting, dramatic, detailed'
-                };
-
-                const keywords = styleKeywords[style] || styleKeywords.realistic;
-                
-                // 如果翻译后的文本已经包含这些关键词，就不重复添加
-                if (!translatedText.toLowerCase().includes(keywords.split(',')[0].trim().toLowerCase())) {
-                    translatedText = `${translatedText}, ${keywords}`;
-                }
-
-                return translatedText;
-            } catch (error) {
-                logger.error('图片生成翻译失败:', error);
-                // 失败时返回原文，让图片生成服务自己处理
-                return text;
-            }
-        },
-
-        /**
          * 清除缓存
          */
         clearCache() {

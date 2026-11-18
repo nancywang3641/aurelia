@@ -100,10 +100,8 @@
 
         // ── 輸出 HTML 字串（供 os_settings launchApp 嵌入）──────
         //   設置 → 一般 拆成小分頁之後，素材目錄與上下文是兩頁，所以分兩支給。
-        //   getHTML() 保留＝兩段接起來，給任何還想要一整包的地方用。
         getAssetHTML(d) { return this._build(d).asset; },
         getCtxHTML(d)   { return this._build(d).ctx; },
-        getHTML(d)      { const b = this._build(d); return b.asset + b.ctx; },
         _build(d) {
             d = d || this.load();
 

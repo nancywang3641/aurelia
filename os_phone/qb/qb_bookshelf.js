@@ -1907,24 +1907,8 @@ status = "正常"`;
     }
 
     // ── 公開 API ─────────────────────────────────────────────────
-    // 🚪 從 dock 的「故事」直接進自由劇情：開書架 → 跳過封面那層，直接落在指令輸入。
-    //    合併前那顆開的是另一個「AI 生成劇情」面板，跟這裡做的是同一件事 ——
-    //    兩個長得不一樣、資料又各存各的入口，只會讓人每次都要想一下該按哪個。
-    //    書架照樣 render()：使用者按「返回書架」時要退得回去，不能退到空的。
-    function openFreeScript() {
-        try {
-            const overlay = document.getElementById('qb-bookshelf-overlay');
-            if (!overlay) return false;
-            overlay.style.display = 'flex';
-            render();
-            openCover(_FREE_WORLD);
-            const btn = document.querySelector('#qb-free-open-inner-btn');
-            if (btn) btn.click();   // 從 dock 進來就是要寫，不必再按一次「翻閱開場白」
-            return true;
-        } catch (e) { console.warn('[書架] 自由劇情開啟失敗', e); return false; }
-    }
 
-    window.QbBookshelf = { render, showShelf, openCover, openCreate, openFreeScript };
+    window.QbBookshelf = { render, showShelf, openCover, openCreate };
 
     console.log('✅ QbBookshelf 模組就緒 (v1.6 - 動態人設防汙染預覽版)');
 })();

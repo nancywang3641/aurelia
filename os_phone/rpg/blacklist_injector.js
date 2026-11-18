@@ -106,8 +106,5 @@
         console.log('🚫 [Blacklist Injector] Ready');
     }
 
-    // 對外：讓 panel 在加 / 刪黑名單後可以馬上 reinject（不必等下一輪 GENERATION_STARTED）
-    win.OS_BLACKLIST_INJECTOR = { injectBlacklist };
-
     init();
 })();

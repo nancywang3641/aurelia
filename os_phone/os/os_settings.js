@@ -36,7 +36,6 @@
             ss_img_style_ref: { title: '底圖', body: '給生圖參考畫風用的一張圖。只有自訂接口收得到參考圖，其他接口會略過。' },
             ss_img_test: { title: '試畫一張', body: '選一個地方，照那一列現在的設定畫一張。ComfyUI 的預設包要先存好才試得到。' },
             ss_cfd_edit: { title: '預設包', body: '下面這些欄位就是 ComfyUI「目前的設定」。按底部「保存所有設定」存的是它，不會動到任何預設包。\n\n選一個包，欄位就換成那個包的內容。下拉直接選，或按「看圖挑」看著預覽圖按「套用」，兩個是一樣的；匯入、匯出、拖圖建包也在看圖挑那個窗裡。改完按「存回這個包」才會改到那個包；按「另存新的包」存成新的一個。選了包再按底部保存，目前的設定就變成畫面上這一份。\n\n哪個地方用目前的設定、哪個地方用哪個包，在「畫風」頁選。' },
-            ss_room_style: { title: '房間畫風', body: '用自訂接口畫房間時用哪個畫風。\n\n按「新增」取個名字，再寫這個畫風長什麼樣子，存好就會選上它。「修改」「刪除」是對上面選著的那一個。\n\n選「照圖片設置的底詞」就跟以前一樣，用圖片設置裡填的那段。' },
             ss_room_route: { title: '房間用哪個接口畫', body: 'ComfyUI：原本那套。家具是畫在圖上的，小人走得過去。\n\n自訂接口・一次：只畫整間房，家具一樣走得過去。比兩次省一半。\n\n自訂接口・兩次：第一次畫整間房，第二次讓它把家具和能踩的地板各塗一個顏色，之後小人會被家具擋住、繞過去走，地板照它畫的範圍走。量家具那次要照著畫好的房間描，建議用官方的；畫房間那次可以用便宜的。\n\n選好就生效，下次配送或重新生成時用。已經畫好的房間不會自己重畫。' },
             ss_1616: { title: '世界門旅人畫風', body: '生一次就存著，之後進大廳直接是本人。單一個想重畫，右鍵那位→裝扮室。' },
             ss_dress_pack: { title: '大廳的小人', body: '角色中心「裝扮」那頁的「生成單張立姿圖」「生成走路圖」用哪個預設包來畫，在這裡各選一包，選一次就好。\n\n・單張立姿圖：選畫 Q版小人的那一包。\n・走路圖：要選會畫出 3×4 走路圖的那一包（例如掛了 RPG 角色走路圖 LoRA 的包）；一般的包只會畫出一張，用它生走路圖會切不開。\n\n預設包在上面 NAI、ComfyUI 那兩頁存。自己上傳圖片換小人不用選這個。\n\n「生成不倒翁小人」用哪組接口、要不要加畫風，在最上面「每個地方用什麼」的「不倒翁小人」那一列選；它自己一列，不會跟著立繪的畫風走。接自訂接口（GPT 那種）時照下面那格提示詞畫一張三隻（正面、側面、背面），並且每次都附上一張內建的小人樣張，讓它照樣張的畫法畫（不用開接口頁的「帶參考圖」，那個開關只管插圖）；接其他的照那組自己的底詞畫一隻。' },
@@ -109,7 +108,6 @@
         try { const v = JSON.parse(localStorage.getItem(CAPI_PACKS_KEY) || '[]'); return Array.isArray(v) ? v.filter(p => p && p.id) : []; }
         catch (e) { return []; }
     }
-    function _capiPacksSave(list) { return _lsSet(CAPI_PACKS_KEY, JSON.stringify(list || []), '底詞包'); }
     function _capiEsc(x) { return String(x == null ? '' : x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
     // 🔌 節點：同一種送法、不同的站（NovelAI 官方／公益站；GPT Image 官方／第三方）。[{ id, name, ...連線欄位 }]
     //    🚨 理由同底詞包，不放進 os_image_config：底部「儲存」會照畫面整份重組 novelai / customApi。
@@ -312,16 +310,6 @@
         return _lsSet(VISION_MODE_KEY, VISION_MODES.indexOf(v) >= 0 ? v : 'off', '看圖設定');
     }
 
-    // 給畫面用：這件事現在實際走誰（顯示名字）
-    function routeLabel(task) {
-        const routes = loadRoutes();
-        const pick = routes[task];
-        if (pick === 'main') return '主模型';
-        if (pick === 'sec') return '副模型';
-        const ch = loadChannels().find(c => c.id === pick);
-        return ch ? (ch.name || '未命名通道') : '（通道已刪，走預設）';
-    }
-
     // --- 讀取 Image 設置 ---
     // opts.defaults＝只要內建預設值、不讀存檔（插圖指令頁的「還原預設」用）
     function loadImageConfig(opts) {
@@ -359,41 +347,6 @@
             sceneGen: {
                 enabled: false,
                 size: '1024x1024',
-
-                sceneBasePrompt: '',
-                sceneNegPrompt: 'worst quality, low quality, blurry, watermark, text, signature',
-                specPrompt: `WHEN TO INSERT A SCENE
-- Location changes or a new environment is established
-- Significant emotional shift or dramatic turning point
-- New character introduced with notable appearance
-- Action, combat, or NSFW scene begins
-
-PROMPT RULES (Danbooru-style tags, comma-separated, single line)
-
-TAG ORDER:
-1. Subject count: 1girl / 2boys / 1boy 1girl / etc.
-   For 2+ characters: add one prose lock sentence describing spatial positions.
-   e.g.: 2girls, a silver-haired girl on the left faces a dark-haired girl on the right,
-2. Per character — use AND to separate multiple characters:
-   [(adult:1.5), position, skin_tone, physique, eye_color, hair_desc, clothing, pose, expression]
-3. Interaction / relationship tags (written outside character blocks)
-4. Environment + lighting + camera: location, time_of_day, shot_type, angle
-
-MULTI-CHARACTER RULES
-- AND blocks for up to 2 focal characters only.
-- 3+ characters: pick 2 focal, demote the rest to background_characters, depth_of_field.
-- Give each focal character equal tag detail — do not simplify one to save space.
-- Close contact or NSFW: remove left_side / right_side spatial tags.
-- Always write (adult:1.5) as the very first tag inside each character block.
-
-SHOT TYPES
-Calm / dialogue : bust_shot or medium_shot, from_side or from_front
-Action          : dynamic_angle, motion_blur, dutch_angle
-Intimate / NSFW : close-up, from_above or from_side — no spatial position tags
-
-EXAMPLE "prompt" value:
-"2girls, a pale-skinned girl on the left reaches toward a tanned girl on the right, [(adult:1.5), left_side, pale_skin, gentle_vibe, long_silver_hair, soft_bangs, white_dress, reaching_out, worried_expression] AND [(adult:1.5), right_side, tanned_skin, calm_vibe, short_dark_hair, no_bangs, casual_jacket, stepping_back, neutral_expression], tense_atmosphere, dramatic_moment, rainy_street, night, from_side, medium_shot, shallow_depth_of_field"`,
-                specTemplates: [],
                 standaloneEnabled: false,   // 🎯 獨立插圖副模型：scenes 拆成單獨一通 chatSecondary、只吃 standaloneSpec、不背 AVS/記憶（原搭便車路保留給沒開的人）
                 standaloneSpec: `把你的「完整插圖規範」整份貼進這裡（例如電影大師那份兩萬 token）。不用自己精簡——獨立通走免費副模型、token 不心疼，越完整越準。
 
@@ -592,7 +545,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         saveChannels: saveChannels,
         getRoutes: loadRoutes,
         saveRoutes: saveRoutes,
-        routeLabel: routeLabel,
         LLM_TASKS: LLM_TASKS,
         getVisionMode: getVisionMode,
         setVisionMode: setVisionMode,
@@ -2759,10 +2711,12 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             };
             const avSvc = M.legacyServiceOf('avatar');
             const avTav = (avSvc === 'tavern_sd' || avSvc === 'comfyui_direct');
+            // 物品以前的底詞存在 Pollinations 那份設定裡；11-17 拿掉 Pollinations 之後 loadImageConfig 會把那份從記憶體刪掉，所以這裡看存檔原文
+            const _rawPoll = (() => { try { return (JSON.parse(localStorage.getItem('os_image_config') || '{}').pollinations) || {}; } catch (e) { return {}; } })();
             const styleOf = {
                 avatar: mkStyle('頭像原本的底詞', avTav ? vnD.avatarBasePromptTavern : vnD.avatarBasePrompt, avTav ? vnD.avatarNegPromptTavern : vnD.avatarNegPrompt),
                 bg: mkStyle('背景原本的底詞', vnD.bgBasePrompt, vnD.bgNegPrompt),
-                item: mkStyle('物品原本的底詞', (imgConfig.pollinations || {}).itemBasePrompt, (imgConfig.pollinations || {}).itemNegPrompt),
+                item: mkStyle('物品原本的底詞', _rawPoll.itemBasePrompt, _rawPoll.itemNegPrompt),
             };
             // 房間自己的畫風併過來
             const _w = window.parent || window;
@@ -3087,8 +3041,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }),
                     sceneGen: {
                         size:             (() => { const _sz = container.querySelector('#img-scene-size'); if (_sz?.value === 'custom') { const _c = (container.querySelector('#img-scene-size-custom')?.value || '').trim().toLowerCase().replace(/\s+/g, '').replace(/[×*]/g, 'x'); return /^\d{2,5}x\d{2,5}$/.test(_c) ? _c : '1024x1024'; } return _sz?.value || '1024x1024'; })(),
-                        sceneBasePrompt: (container.querySelector('#img-scene-base-prompt')?.value || '').trim(),
-                        sceneNegPrompt:  (container.querySelector('#img-scene-neg-prompt')?.value  || '').trim(),
                         extractEnabled:   container.querySelector('#img-scene-extract-enabled')?.checked ?? false,
                         useNamePlaceholder: container.querySelector('#img-scene-name-placeholder')?.checked ?? true,   // 🏷️ 角色名佔位（預設開）
                         standaloneEnabled: container.querySelector('#img-scene-standalone-enabled')?.checked ?? false,   // 🎯 獨立插圖副模型
@@ -3905,83 +3857,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         };
         window._naiVibe._init();
 
-        // ── 場景插圖：規範提示詞模板 handlers ──────────────────────
-        let sceneSpecTemplates = [...(imgConfig.sceneGen?.specTemplates || [])];
-
-        function refreshSceneSpecDropdown() {
-            const sel = container.querySelector('#img-scene-spec-sel');
-            if (!sel) return;
-            const cur = sel.value;
-            sel.innerHTML = '<option value="">-- 選擇模板 --</option>' +
-                sceneSpecTemplates.map((t, i) => `<option value="${i}">${_capiEsc(t.name)}</option>`).join('');
-            if (cur !== '' && sceneSpecTemplates[parseInt(cur)]) sel.value = cur;
-        }
-
-        // 同步 NAI 預設包下拉（預設包存入後需刷新參考下拉）
-        function refreshScenePresetRef() {
-            const sel = container.querySelector('#img-scene-preset-ref');
-            if (!sel) return;
-            const cur = sel.value;
-            sel.innerHTML = '<option value="">-- 從 NAI 預設包複製底詞 --</option>' +
-                naiPresets.map((p, i) => `<option value="${i}">${_capiEsc(p.name)}</option>`).join('');
-            if (cur !== '' && naiPresets[parseInt(cur)]) sel.value = cur;
-        }
-
-        window._sceneSpec = {
-            apply() {
-                const sel = container.querySelector('#img-scene-spec-sel');
-                if (!sel || sel.value === '') { AUI.alert('請先選擇模板'); return; }
-                const t = sceneSpecTemplates[parseInt(sel.value)];
-                if (!t) return;
-                const ta = container.querySelector('#img-scene-spec-prompt');
-                if (ta) ta.value = t.prompt || '';
-            },
-            save() {
-                const row = container.querySelector('#img-scene-spec-name-row');
-                if (row) row.style.display = 'block';
-                container.querySelector('#img-scene-spec-name-input')?.focus({ preventScroll: true });
-            },
-            confirmSave() {
-                const nameInput = container.querySelector('#img-scene-spec-name-input');
-                const name = nameInput?.value.trim();
-                if (!name) { AUI.alert('請輸入模板名稱'); return; }
-                const ta = container.querySelector('#img-scene-spec-prompt');
-                sceneSpecTemplates.push({ name, prompt: ta?.value.trim() || '' });
-                refreshSceneSpecDropdown();
-                const sel = container.querySelector('#img-scene-spec-sel');
-                if (sel) sel.value = String(sceneSpecTemplates.length - 1);
-                const row = container.querySelector('#img-scene-spec-name-row');
-                if (row) row.style.display = 'none';
-                if (nameInput) nameInput.value = '';
-            },
-            cancelSave() {
-                const row = container.querySelector('#img-scene-spec-name-row');
-                if (row) row.style.display = 'none';
-                const nameInput = container.querySelector('#img-scene-spec-name-input');
-                if (nameInput) nameInput.value = '';
-            },
-            async del() {
-                const sel = container.querySelector('#img-scene-spec-sel');
-                if (!sel || sel.value === '') { AUI.alert('請先選擇要刪除的模板'); return; }
-                const idx = parseInt(sel.value);
-                const name = sceneSpecTemplates[idx]?.name || '';
-                if (!await AUI.confirm(`刪除模板「${name}」？`)) return;
-                sceneSpecTemplates.splice(idx, 1);
-                refreshSceneSpecDropdown();
-            },
-            // 從 NAI 預設包複製底詞到場景底詞框
-            applyPreset() {
-                const sel = container.querySelector('#img-scene-preset-ref');
-                if (!sel || sel.value === '') { AUI.alert('請先選擇 NAI 預設包'); return; }
-                const p = naiPresets[parseInt(sel.value)];
-                if (!p) return;
-                const base = container.querySelector('#img-scene-base-prompt');
-                const neg  = container.querySelector('#img-scene-neg-prompt');
-                if (base) base.value = p.charBasePrompt || '';
-                if (neg)  neg.value  = p.charNegPrompt  || '';
-            }
-        };
-
         // ===== 角色語音（總開關、角色配音名單、Minimax、ElevenLabs、本機小分頁）：在 os_settings_voice.js（參數注入 ctx＝閉包變數）=====
         //   保存時名單卡片由 OS_SETTINGS_VOICE.collectCast 收（見上面保存鈕）。
         // 🌐 外語角色 11-18 搬去角色中心（每個角色頁「講什麼話」），這頁不再有
@@ -4140,12 +4015,6 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         }
     }
 
-    // 🎨 房間畫風（自訂接口畫房間用）的下拉選項：組設定頁畫面時就要用，所以放在模組層、不放 wire 裡
-    window._roomStyleOpts = (r) => {
-        const _e = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
-        return '<option value=""' + (r.style ? '' : ' selected') + '>照圖片設置的底詞</option>'
-            + (r.styles || []).map(x => '<option value="' + _e(x.name) + '"' + (x.name === r.style ? ' selected' : '') + '>' + _e(x.name) + '</option>').join('');
-    };
     window.OS_SETTINGS.launchApp = launchApp;
     window.OS_SETTINGS.cleanApiUrl = _cleanApiUrl;
     window.OS_SETTINGS.API_SITES = API_SITES;

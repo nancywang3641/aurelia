@@ -23,11 +23,6 @@
         return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ''));
     }
 
-    // --- 樣式定義 (保持完整) ---
-
-    if (!doc.getElementById('ws-css')) {
-    }
-
     // --- 圖片處理 (DB) ---
     let pendingUploads = {}; 
 

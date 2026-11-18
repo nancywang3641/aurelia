@@ -445,18 +445,6 @@
         await _save(chatId, got.chat);
         return true;
     }
-    async function clearSummary(chatId) {
-        const got = await _load(chatId);
-        if (!got.chat) return false;
-        delete got.chat.wxSummary;
-        try {
-            const live = win.wxApp && win.wxApp.GLOBAL_CHATS && win.wxApp.GLOBAL_CHATS[chatId];
-            if (live) delete live.wxSummary;
-        } catch (e) {}
-        try { if (win.OS_DB && win.OS_DB.saveApiChat) await win.OS_DB.saveApiChat(chatId, got.chat); } catch (e) {}
-        try { if (win.wxApp && typeof win.wxApp.saveChats === 'function') win.wxApp.saveChats(); } catch (e) {}
-        return true;
-    }
 
     // ── 寫進故事主線（大總結）────────────────────────────
     // 收「還沒寫進故事」的節。回 { text, prompt, refs:[{chatId,nodeId}], chats, nodes }
@@ -514,7 +502,6 @@
         mergeNodes: mergeNodes,
         updateNode: updateNode,
         deleteNode: deleteNode,
-        clearSummary: clearSummary,
         collectForStory: collectForStory,
         markMerged: markMerged,
         KEEP_KEY: KEEP_KEY, MIN_KEY: MIN_KEY, ON_KEY: ON_KEY,

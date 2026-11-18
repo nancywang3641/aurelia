@@ -233,7 +233,6 @@
         return pack.scripts.length;
     }
 
-    async function listPacks() { const p = await _load(); return Object.keys(p).map(k => p[k]); }
     async function getPack(worldId) { const p = await _load(); return (worldId && p[worldId]) || null; }
 
     async function setEnabled(worldId, on) {
@@ -464,16 +463,10 @@
         } catch (e) { console.warn('[卡片正則] 停掉自帶 BGM 失敗', e); }
     }
 
-    // 有沒有東西可套（UI 決定要不要顯示「美化」開關用）
-    async function hasPack(worldId) {
-        const pack = await getPack(worldId || currentWorldId());
-        return !!(pack && Array.isArray(pack.scripts) && pack.scripts.length);
-    }
-
     async function refresh() { _packs = null; _loading = null; return await _load(); }
 
     win.OS_CARD_REGEX = window.OS_CARD_REGEX = {
-        saveFromCard, inspectCard, listPacks, getPack, setEnabled, removePack, hasPack, refresh,
+        saveFromCard, inspectCard, getPack, setEnabled, removePack, refresh,
         currentWorldId, scriptsFor, cardHtmlFor, cardsIn, applyText, renderRichHtml, stopMedia, fitCardFrames,
         setHost, getHost
     };

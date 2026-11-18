@@ -186,16 +186,6 @@
                 } catch (e) { reject(e); }
             });
         },
-        // 聚合某輪(cardName+chatId)全部結語成一段，當 guest NPC 的 L1 劇情底
-        getLobbySummaryBriefs: async function(cardName, chatId) {
-            try {
-                const stories = await this.getLobbySummaryForPrompt(8);
-                const st = (stories || []).find(s => s.cardName === cardName && (s.chatId || '') === (chatId || ''));
-                if (!st || !Array.isArray(st.briefs) || !st.briefs.length) return '';
-                // briefs 最新在前 → 反轉成時間順序，逐段串
-                return st.briefs.slice().reverse().map(b => (b && b.brief) || '').filter(Boolean).join('\n');
-            } catch (e) { return ''; }
-        },
 
         // --- 🎨 靈感創作室 (Studio) 對話快取 ---
         saveStudioChat: async function(modeId, messages) {
@@ -325,23 +315,6 @@
                 } catch (e) { reject(e); }
             });
         },
-        // 刪掉某個聊天在所有 app 底下的 app_data（id = appId::chat:<chatId>::key）。
-        deleteAppDataByChat: async function(chatId) {
-            const db = await this.init();
-            const want = 'chat:' + String(chatId || '');
-            if (!chatId) return 0;
-            return new Promise((resolve, reject) => {
-                try {
-                    let n = 0;
-                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
-                    const req = tx.objectStore(STORE_NAME_APP_DATA).openCursor();
-                    req.onsuccess = (e) => { const cur = e.target.result; if (cur) { const p = String(cur.key).split('::'); if (p.length >= 3 && p[1] === want) { cur.delete(); n++; } cur.continue(); } };
-                    tx.oncomplete = () => resolve(n);
-                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                    tx.onerror = (e) => reject(e.target.error);
-                } catch (e) { reject(e); }
-            });
-        },
         // 整批讀某 app 的 app_data（給「記憶回傳酒館」統一注入用）：回 [{key,scope,value}]，只收 global + 指定 chat。
         getAppDataByApp: async function(appId, chatId) {
             const db = await this.init();
@@ -421,37 +394,6 @@
                     const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).get(id);
                     req.onsuccess = () => { r(req.result ? URL.createObjectURL(req.result.data) : null); };
                     req.onerror = e => j(e.target.error);
-                } catch(e) { j(e); }
-            });
-        },
-        saveChildBg: async function(childId, base64) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
-                    tx.objectStore(STORE_NAME_IMAGES).put({ id: 'child_bg_' + childId, data: base64 });
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                } catch(e) { j(e); }
-            });
-        },
-        getChildBg: async function(childId) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).get('child_bg_' + childId);
-                    req.onsuccess = () => r(req.result ? req.result.data : null);
-                } catch(e) { j(e); }
-            });
-        },
-        deleteChildBg: async function(childId) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
-                    tx.objectStore(STORE_NAME_IMAGES).delete('child_bg_' + childId);
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -706,17 +648,6 @@
                 } catch(e) { j(e); }
             });
         },
-        clearWbPosts: async function() { 
-            const db = await this.init(); 
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_WB, 'readwrite');
-                    tx.objectStore(STORE_NAME_WB).clear();
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                } catch(e) { j(e); }
-            });
-        },
         saveMapFacilityData: async function(z, f, d) { 
             const db = await this.init(); 
             return new Promise((r, j) => {
@@ -734,17 +665,6 @@
                 try {
                     const req = db.transaction(STORE_NAME_MAP, 'readonly').objectStore(STORE_NAME_MAP).get(`${z}_${f}`);
                     req.onsuccess = () => r(req.result || null);
-                } catch(e) { j(e); }
-            });
-        },
-        clearAllMapData: async function() {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
-                    tx.objectStore(STORE_NAME_MAP).clear();
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },
@@ -924,18 +844,6 @@
                 } catch(e) { j(e); }
             });
         },
-        getWorldbookEntriesByCategory: async function(categoryName) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const req = db.transaction(STORE_NAME_WORLDBOOK, 'readonly').objectStore(STORE_NAME_WORLDBOOK).getAll();
-                    req.onsuccess = () => {
-                        const all = req.result || [];
-                        r(all.filter(e => e.category === categoryName));
-                    };
-                } catch(e) { j(e); }
-            });
-        },
         deleteWorldbookEntry: async function(id) {
             const db = await this.init();
             return new Promise((r, j) => {
@@ -953,66 +861,6 @@
                 try {
                     const tx = db.transaction(STORE_NAME_WORLDBOOK, 'readwrite');
                     tx.objectStore(STORE_NAME_WORLDBOOK).clear();
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                } catch(e) { j(e); }
-            });
-        }
-    });
-
-    // =========================================================
-    // 🔥 新增：純淨草稿庫接口 (與世界書徹底隔離)
-    // =========================================================
-    Object.assign(win.OS_DB, {
-        saveStudioDraft: async function(entry) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    if (!entry.id) entry.id = 'draft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
-                    entry.updatedAt = Date.now();
-                    const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
-                    tx.objectStore(STORE_NAME_STUDIO_DRAFTS).put(entry);
-                    tx.oncomplete = () => r(entry.id);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                } catch(e) { j(e); }
-            });
-        },
-        getAllStudioDrafts: async function() {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const req = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readonly').objectStore(STORE_NAME_STUDIO_DRAFTS).getAll();
-                    req.onsuccess = () => r(req.result || []);
-                } catch(e) { j(e); }
-            });
-        },
-        getStudioDraftsByCategory: async function(categoryName) {
-            const drafts = await this.getAllStudioDrafts();
-            return drafts.filter(e => e.category === categoryName);
-        },
-        deleteStudioDraftsByCategory: async function(categoryName) {
-            const drafts = await this.getAllStudioDrafts();
-            const targets = drafts.filter(e => e.category === categoryName);
-            for (const entry of targets) await this.deleteStudioDraft(entry.id);
-            return targets.length;
-        },
-        deleteStudioDraft: async function(id) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
-                    tx.objectStore(STORE_NAME_STUDIO_DRAFTS).delete(id);
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                } catch(e) { j(e); }
-            });
-        },
-        clearStudioDrafts: async function() {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_STUDIO_DRAFTS, 'readwrite');
-                    tx.objectStore(STORE_NAME_STUDIO_DRAFTS).clear();
                     tx.oncomplete = () => r(true);
                     tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
@@ -1098,17 +946,6 @@
                 } catch(e) { j(e); }
             });
         },
-        deleteGrandSummary: async function(id) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_VN_SUMMARIES, 'readwrite');
-                    tx.objectStore(STORE_NAME_VN_SUMMARIES).delete(id);
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
-                } catch(e) { j(e); }
-            });
-        },
 
         // ── lobby_summary_index：酒館大廳跨卡總結索引（V24）─────────
         //   給故事管理（os_story_tools.js）生成大總結後寫 brief + 角色名單，供瀅瀅/柴郡 sysPrompt 注入
@@ -1134,17 +971,6 @@
                     const req = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readonly').objectStore(STORE_NAME_LOBBY_SUM_IDX).getAll();
                     req.onsuccess = () => r((req.result || []).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
                     req.onerror = (e) => j(e.target.error);
-                } catch(e) { j(e); }
-            });
-        },
-        deleteLobbySummaryIndex: async function(id) {
-            const db = await this.init();
-            return new Promise((r, j) => {
-                try {
-                    const tx = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readwrite');
-                    tx.objectStore(STORE_NAME_LOBBY_SUM_IDX).delete(id);
-                    tx.oncomplete = () => r(true);
-                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
                 } catch(e) { j(e); }
             });
         },

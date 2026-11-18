@@ -106,13 +106,6 @@ window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
 const _AURELIA_VERSION = '2026.07.22.16'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
 const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
 
-// 🔥 1. 全局通訊狀態
-window.PANEL_COMMUNICATION = {
-    ready: false,
-    processors: {},
-    modulesLoaded: {}
-};
-
 // 🔥 2. 模組加載順序
 const MODULE_LOAD_ORDER = [
     { name: 'debug_console', path: _AURELIA_EXT_BASE + '/core/debug_console.js', key: 'debugConsole' }, // 🐛 螢幕 console（無 devtools 環境用）— 最先載才攔得到後續 log
@@ -120,8 +113,6 @@ const MODULE_LOAD_ORDER = [
     { name: 'aurelia_dialog', path: _AURELIA_EXT_BASE + '/core/aurelia_dialog.js', key: 'aureliaDialog' },   // 💬 全站提示條/對話窗 AUI（取代原生 alert/confirm/prompt；酒館會攔 confirm），排前面讓各模組都用得到
     { name: 'aurelia_tilefx', path: _AURELIA_EXT_BASE + '/core/aurelia_tilefx.js', key: 'aureliaTileFx' },   // 🧱 全螢幕窗口切塊進出場（control_center 開的窗口、故事日誌共用）
     { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
-    { name: 'tavern_bridge', path: _AURELIA_EXT_BASE + '/core/tavern_bridge.js', key: 'bridge' },
-    { name: 'panel_manager', path: _AURELIA_EXT_BASE + '/core/panel_manager.js', key: 'panelManager' },
     { name: 'void_frames', path: _AURELIA_EXT_BASE + '/core/void/frames.js', key: 'voidFrames' },   // 🖼 照窗大小畫的外框（小劇場、成就收藏冊；AURELIA_FRAMES）
     { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
     { name: 'void_worldview', path: _AURELIA_EXT_BASE + '/core/void/worldview.js', key: 'voidWorldview' },
@@ -143,7 +134,6 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_lobby_decider', path: _AURELIA_EXT_BASE + '/core/void/lobby_decider.js', key: 'voidLobbyDecider' },   // 🎲 自己決定下一步的 NPC（書咖的丹：找路走路／小劇場／設置三格）；靠 lobby_stage 的 _b 橋，必須排它後面；整支拿掉＝丹回到站著
     { name: 'void_npc_decide', path: _AURELIA_EXT_BASE + '/core/void/npc_decide.js', key: 'voidNpcDecide' },   // 🎲 NPC 決定下一步（Jev／副模型）；lobby_stage 用到時才讀 window.NPC_DECIDE
     { name: 'void_lobby_workshop', path: _AURELIA_EXT_BASE + '/core/void/lobby_workshop.js', key: 'voidLobbyWorkshop' },   // 🎩 造物工坊面板本體（帽匠工坊/立繪模式共用；只用 window 上的 OS_STUDIO 與 APP_STORE，無載入順序要求）
-    { name: 'void_login', path: _AURELIA_EXT_BASE + '/core/void/login.js', key: 'voidLogin' },
     { name: 'void_phone_shell', path: _AURELIA_EXT_BASE + '/core/void/phone_shell.js', key: 'voidPhoneShell' },
     { name: 'app_runtime', path: _AURELIA_EXT_BASE + '/core/void/app_runtime.js', key: 'appRuntime' },
     { name: 'void_terminal', path: _AURELIA_EXT_BASE + '/core/void_terminal.js', key: 'voidTerminal' },
@@ -154,7 +144,6 @@ const MODULE_LOAD_ORDER = [
     { name: 'vn_free_mode', path: _AURELIA_EXT_BASE + '/core/vn_free_mode.js', key: 'vnFreeMode' },   // 🎲 自由模式（總綱二選一+歷史表情格剝除，藏書切換）
 
     { name: 'regex_bridge', path: _AURELIA_EXT_BASE + '/core/aurelia_regex_bridge.js', key: 'regexBridge' },
-    { name: 'vn_dom_bridge', path: _AURELIA_EXT_BASE + '/core/vn_dom_bridge.js', key: 'vnDomBridge' }
 ];
 
 // 🔥 [配置] 手機系統檔案列表 (已移除寵物/不夜城/育兒/刑偵/WB/錢包，且移除酒館不需要的 AVS 與獨立世界書)
@@ -172,7 +161,6 @@ const PHONE_FILES = [
     'os/os_zh_fold.js',     // 簡繁折成同一把鑰匙（只比對不顯示）：記憶的人名、約定的標題
     'os/app_store.js',
     'os/os_widgets.js',
-    'os/os_sync.js',
     'os/os_wb_mount.js',    // 「關於我」的世界書分頁（只有酒館版）；排在 os_persona 前面，它建分頁時要看得到這支
     'os/os_persona.js',
     'os/os_prompts.js', // 提示詞底層需要保留，但 UI 按鈕已透過 isStandalone 隱藏
@@ -292,7 +280,6 @@ const PHONE_FILES = [
     'vn_story/vn_nav.js',
     'vn_story/vn_moments.js',          // 🫂 劇情手機的朋友圈（畫法借 wx/wx_moments.js）
     'vn_story/vn_reader.js',
-    'vn_story/vn_ui_workshop.js',
 
     // === 🛡️ RPG 狀態系統 ===
     'rpg/state_schema.js',         // Stage 1：主模型生 schema
@@ -335,7 +322,7 @@ const PHONE_FILES = [
 
 
     // === 🟣 微薄 (Weibo) — 搬回酒館（順序同 PWA index.html）===
-    'wb/wb_user_profile.js', 'wb/wb_account.js', 'wb/wb_theme.js',
+    'wb/wb_account.js', 'wb/wb_theme.js',
     'wb/wb_view.js', 'wb/wb_core.js',
     'os/os_calendar.js',         // 📅 日曆 app（讀 OS_MC_STATUS）
 ];
@@ -410,7 +397,7 @@ async function loadModule(conf) {
         const s = document.createElement('script');
         s.src = conf.path + _AURELIA_CACHE_BUST;
         s.async = false;
-        s.onload = () => { window.PANEL_COMMUNICATION.modulesLoaded[conf.key] = true; resolve(true); };
+        s.onload = () => resolve(true);
         s.onerror = () => { console.error(`載入失敗: ${conf.name}`); try { s.remove(); } catch (e) {} resolve(false); };
         document.head.appendChild(s);
     });
@@ -444,7 +431,7 @@ function _loadOne(item, attempt) {
         const src = _cdnRetryUrl(item.src, attempt);
         s.src = src;
         s.async = false;
-        s.onload = () => { if (item.key) window.PANEL_COMMUNICATION.modulesLoaded[item.key] = true; resolve(true); };
+        s.onload = () => resolve(true);
         s.onerror = () => {
             try { s.remove(); } catch (e) {}
             if (attempt < _CDN_RETRY_WAITS.length) {
@@ -553,7 +540,6 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_wb_mount.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_prompts.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs_rules.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_think.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
@@ -570,7 +556,6 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_battle.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_gallery.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_tts_panel.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_ui_workshop.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/qb_core.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/qb_os_404_chaos.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/wx_chat_settings.css');
@@ -615,11 +600,6 @@ async function initializeExtension() {
                 // 註冊地圖系統
                 if (window.OS_MAP) {
                     window.PhoneSystem.install('地圖', '🗺️', '#2f9544', window.OS_MAP.launchApp);
-                }
-
-                // 註冊 VN 視覺小說
-                if (window.VN_STORY) { 
-                    window.PhoneSystem.install('故事模式', '📖', '#ff69b4', window.VN_STORY.launch);
                 }
 
                 // 設置不再註冊成手機 app（11-17）：手機的「設置」圖示、大廳齒輪、劇情「設定」鈕都開「設置」窗口（os/os_settings_window.js）
@@ -683,54 +663,12 @@ function overrideToggleLogic() {
     };
 
     if (window.AureliaControlCenter) window.AureliaControlCenter.toggle = smartToggle;
-    window.toggleControlCenter = smartToggle;
 }
 
 function installAPI() {
-    window.toggleVnPanel = () => safeTogglePanel('VN');
     window.toggleHtmlExtractor = () => window.AureliaHtmlExtractor?.show();
     // ⛔ toggleSettingsPanel 已移除：AureliaSettingsManager(core/settings_manager.js) 早就退役，
     //    這行只是 `?.` 吞掉的空動作。設置＝手機的「⚙️ 設置」app(OS_SETTINGS.launchApp)。
-    window.togglePhoneSystem = () => {
-        if (window.PhoneSystem) window.PhoneSystem.show();
-        else console.warn('手機系統載入中...');
-    };
-
-    window.openPanel = function(type) {
-        const t = type.toUpperCase();
-        if (t === 'STORY' || t === 'VN') safeTogglePanel('VN');
-        else if (t === 'HTML_EXTRACTOR') window.AureliaHtmlExtractor?.show();
-        else if (t === 'PHONE') window.togglePhoneSystem();
-    };
-
-    window.AureliaLoader = {
-        toggleVnPanel: window.toggleVnPanel,
-        toggleHtmlExtractor: window.toggleHtmlExtractor,
-        togglePhoneSystem: window.togglePhoneSystem,
-        hidePhoneModal: () => window.AureliaControlCenter?.hide(),
-        openPhoneApp: function(targetAppName) {
-            if (!window.AureliaControlCenter) return;
-            if (typeof window.AureliaControlCenter.showOsApp === 'function') {
-                window.AureliaControlCenter.showOsApp(targetAppName);
-            }
-        }
-    };
-    
-    Object.defineProperty(window.AureliaLoader, 'isPhoneModalVisible', {
-        get: function() { return window.AureliaControlCenter && window.AureliaControlCenter.isVisible(); }
-    });
-}
-
-function safeTogglePanel(type) {
-    const pm = window.AureliaPanelManager;
-    if (pm) {
-        pm.togglePanel(type);
-        if (window.eventEmit && type === 'VN') {
-            console.log(`🔔 [Aurelia] 廣播事件: VN_PANEL_OPENED`);
-            window.eventEmit('VN_PANEL_OPENED');
-        }
-        if (window.AureliaControlCenter?.isVisible()) window.AureliaControlCenter.hide();
-    }
 }
 
 function setupEventBridge() {
@@ -819,12 +757,6 @@ function setupEventBridge() {
         window.addEventListener('click', () => setTimeout(updateControlCenterTitle, 200));
 
     }, 2000);
-    window.addEventListener('message', (e) => {
-        if (e.data?.type === 'REQUEST_OPEN_PANEL') {
-            const t = e.data.data?.panelType;
-            if (t) window.openPanel(t);
-        }
-    });
 }
 
 if (!_AURELIA_SKIP) {

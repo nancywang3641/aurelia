@@ -69,12 +69,6 @@
         });
         return out;
     }
-    // 舊 st.parse() 的形狀：{ 標籤名: [[欄…], …] }
-    function parseMap(lines) {
-        const map = {};
-        parseRecords(lines).forEach(function (r) { (map[r.tag] = map[r.tag] || []).push(r.fields); });
-        return map;
-    }
 
     // 從一樓正文裡撈出所有 <tagId>…</tagId>（或 [tagId]…[/tagId]）區塊的行
     function _blocksIn(text, tagId) {
@@ -403,7 +397,7 @@
 
     win.VN_PANEL_FEED = {
         feed: feed, add: add, update: update, remove: remove, clear: clear, user: user, userSync: userSync, contacts: contacts, wbSave: wbSave, wbLoad: wbLoad,
-        storyRecords: storyRecords, parseRecords: parseRecords, parseMap: parseMap,
+        storyRecords: storyRecords, parseRecords: parseRecords, 
         purgeTag: purgeTag, invalidate: invalidate, chatId: _chatId, appId: _appId
     };
 })();

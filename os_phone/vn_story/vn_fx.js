@@ -318,7 +318,6 @@
             return (window.parent || window).AUI.lsSet('os_fx_disabled', JSON.stringify(Array.from(s)), '特效的開關');
         },
         _groups: function () { try { return JSON.parse(localStorage.getItem('os_fx_groups') || '{}') || {}; } catch (e) { return {}; } },
-        getGroup: function (id) { return this._groups()[String(id || '').trim().toLowerCase()] || ''; },
         setGroup: function (id, group) {
             const g = this._groups();
             const key = String(id || '').trim().toLowerCase();

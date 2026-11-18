@@ -52,7 +52,7 @@
     const CLICK_RULES = [
         ['.chx-nav', 'slide'],   // 章節選擇（量子白廳）的左右翻頁：滑過音當翻卡聲
         ['[data-act="close"], #ach-close-btn, #hist-close-btn, #lca-close, #close-bookshelf-btn, .lsd-close, .lstage-win-close', 'close'],
-        ['[data-act="back"], .lb-back-btn', 'cancel'],
+        ['[data-act="back"]', 'cancel'],
         ['#iris-send-btn, #iris-retry-btn, [data-act="save"], .lep-done, .hist-edit-confirm-btn', 'confirm'],
         ['.danger, #hist-clear-btn, #ach-clear-btn, #hist-del-sel', 'error'],
         ['#lobby-bgm-toggle, #lstage-toggle, #aurelia-fullscreen-btn, .achv2-tab, .asw-nav-item, .asw-seg-btn, .asw-check, .hist-edit-cancel-btn', 'toggle'],

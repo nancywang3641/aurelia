@@ -169,7 +169,6 @@
 
     function renderAchievementList() {
         const listEl = document.getElementById('ach-list');
-        const achBtn = document.getElementById('achievement-hist-btn');
         if (!listEl) return;
 
         const all = (window.OS_ACHIEVEMENT && window.OS_ACHIEVEMENT.getAll)
@@ -245,7 +244,6 @@
         }
 
         // 入口紅點（全域 pending，不再按皮膚分）
-        if (achBtn) achBtn.classList.toggle('has-pending', pendingAll.length > 0);
         const dockAch = document.getElementById('lb-dock-ach');
         if (dockAch) dockAch.classList.toggle('has-pending', pendingAll.length > 0);
 
@@ -309,11 +307,9 @@
     function refreshAchievement() {
         const overlay = document.getElementById('achievement-panel-overlay');
         if (overlay && overlay.style.display !== 'none') renderAchievementList();
-        const achBtn = document.getElementById('achievement-hist-btn');
         const dockAch = document.getElementById('lb-dock-ach');
-        if ((achBtn || dockAch) && window.OS_ACHIEVEMENT) {
+        if (dockAch && window.OS_ACHIEVEMENT) {
             const hasPending = window.OS_ACHIEVEMENT.getPending().length > 0;
-            if (achBtn) achBtn.classList.toggle('has-pending', hasPending);
             if (dockAch) dockAch.classList.toggle('has-pending', hasPending);
         }
     }

@@ -590,7 +590,6 @@
             pos: function () { return { x: p.x, y: p.y }; },
             focusKey: function () { return focusKey; },
             busy: function () { return !!p.dest; },
-            teleport: function (x, y) { p.x = x; p.y = y; p.dest = null; p.cb = null; p.path = []; placePlayer(); camera(); },
             sync: sync,
             happy: cheer,
             doing: doing,

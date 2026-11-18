@@ -222,7 +222,7 @@
                 if (st) st.textContent = '查無此人';
                 _timer = setTimeout(_afterCall, 1600);
             } else {
-                // 響鈴：留在這個畫面問對方的第一句。它可以不接（見 _isRefusal），
+                // 響鈴：留在這個畫面問對方的第一句。它可以不接（見 _refusalOf），
                 // 所以接通與否要等回覆才知道 —— 先進通話畫面再被掛掉不像打電話。
                 const st = _root && _root.querySelector('#dlr-call-status');
                 if (st) st.innerHTML = '響鈴中<span class="dlr-dots">…</span>';
@@ -395,7 +395,6 @@
         const m = String(s == null ? '' : s).match(_REFUSE_RE);
         return m ? { note: String(m[1] == null ? '' : m[1]).trim() } : null;
     }
-    function _isRefusal(s) { return !!_refusalOf(s); }
 
     function _noAnswer(contact, note) { return _dialEnd(contact, '對方沒有接聽', true, note); }
     function _dialFailed(contact) { return _dialEnd(contact, '沒接通 —— 到「設置 → AI 模型 → 主模型」確認 API 有設好', false); }

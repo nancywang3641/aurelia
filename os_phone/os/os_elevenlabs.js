@@ -153,7 +153,6 @@
             if (!win.AUI.lsSet(STORAGE_KEY, JSON.stringify(next), '雲端語音設定')) return null;
             return next;
         },
-        hasKey() { return !!this.getConfig().apiKey; },
         /** 現在選的模型吃不吃 [laughs] 這種語氣標籤（v4／v3 吃，Multilingual v2、Flash 不吃） */
         tagsSupported() { return TAG_MODELS.has(this.getConfig().modelId || DEFAULT_CONFIG.modelId); },
         isPlaying() { return _isPlaying; },

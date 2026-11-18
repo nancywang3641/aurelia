@@ -358,9 +358,6 @@ const IRIS_IDLE = [
     VoidTerminal.cheshireSay = function(text, audioUrl) {
         playVoiceReaction({ vn: `[Char|柴郡|smirk|${text}]`, audio: audioUrl || null });
     };
-    VoidTerminal.irisSay = function(text, audioUrl) {
-        playVoiceReaction({ vn: `[Char|瀅瀅|normal|${text}]`, audio: audioUrl || null });
-    };
 
     // ===== 對話歷史持久化 =====
     function getChatId() {
@@ -1068,9 +1065,6 @@ const IRIS_IDLE = [
             });
             if (cheshireHistBtn) cheshireHistBtn.addEventListener('click', () => openHistoryPanel('cheshire'));
 
-            const achievementHistBtn = tab.querySelector('#achievement-hist-btn');
-            if (achievementHistBtn) achievementHistBtn.addEventListener('click', VoidPanels.openAchievement);
-
             // 右側新增的「成就」橫幅卡 → 開同一個成就面板
             const achievementCardBtn = tab.querySelector('#void-achievement-btn');
             if (achievementCardBtn) achievementCardBtn.addEventListener('click', VoidPanels.openAchievement);
@@ -1165,9 +1159,6 @@ const IRIS_IDLE = [
             const achCloseBtn = tab.querySelector('#ach-close-btn');
             if (achCloseBtn) achCloseBtn.addEventListener('click', VoidPanels.closeAchievement);
 
-            const storeShopBtn = tab.querySelector('#store-shop-btn');
-            if (storeShopBtn) storeShopBtn.addEventListener('click', VoidPanels.openStore);
-
             // （404 傳送鈕已退役：進出 404 併入快轉地圖，解鎖過才顯示）
 
             // 大廳畫布關閉按鈕
@@ -1208,12 +1199,6 @@ const IRIS_IDLE = [
                     _syncLstageBtn();
                 });
             }
-
-            // 📖 獨立閱讀器按鈕
-            const vnReaderBtn = tab.querySelector('#vn-reader-lobby-btn');
-            if (vnReaderBtn) vnReaderBtn.addEventListener('click', () => {
-                if (window.VN_READER) window.VN_READER.show();
-            });
 
             // 📚 章節選擇：兩版都開 VN 面板那一個（量子白廳）。
             //   以前這裡卡著一個大廳專屬的舊筆記本面板(lcp)，而且只有獨立版看得到 ——
@@ -1484,7 +1469,6 @@ const IRIS_IDLE = [
     }
 
     VoidTerminal.closePanel = () => {};
-    VoidTerminal.panelBack  = () => {};
 
     // ===== 世界頻道 =====
     const FEED_PALETTE_MAP = { SYS: { c:'rgba(26,28,40,0.25)', r:'251,223,162' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
@@ -2697,12 +2681,6 @@ ${sections}`;
     // 對話模式走進／離開 404 地點：跟舞台的 lstage-scene 同一件事（換皮＋對話紀錄換成柴郡那份），不放儀式
     VoidTerminal.sync404 = (on) => _sync404Chrome(on);
 
-    VoidTerminal.logout = function() {
-        // 登入頁已移除：重新依當前人設同步並刷新大廳
-        _autoEnterFromPersona();
-        _applyLoadedLobbyState();
-    };
-
     // 🔥 全局登入紀錄 API
     VoidTerminal.getUserName = function() { 
         return IRIS_STATE.userName || ''; 
@@ -2712,9 +2690,6 @@ ${sections}`;
             IRIS_STATE.userName = newName;
             debouncedSave(); // 確保改名後有存進資料庫
         }
-    };
-    VoidTerminal.isUserLoggedIn = function() {
-        return !!IRIS_STATE.userName;
     };
     VoidTerminal.getChatId = getChatId;
 
@@ -2731,11 +2706,6 @@ ${sections}`;
     VoidTerminal.play404Opening = _play404OpeningVideo;   // 測試用：不動 visit404Count 直接重播開場片
 
     // ===== 內部橋（給 core/void/ 子模組借用核心狀態與函式）=====
-    function resetActiveHistory() {
-        IRIS_STATE.history = [];
-        _irisHistoryBackup = [];
-        _cheshireHistoryBackup = [];
-    }
     VoidTerminal._bridge = {
         // canvas.js
         is404: () => is404Room,
@@ -2744,15 +2714,6 @@ ${sections}`;
         // ambient.js
         isActivitySuspended: () => _isActivitySuspended,
         isPanelOpen:         () => _isPanelOpen,
-        // login.js
-        loadLobbyHistory:      (id) => loadLobbyHistory(id),
-        saveLobbyHistory:      () => saveLobbyHistory(),
-        applyLoadedLobbyState: () => _applyLoadedLobbyState(),
-        getChatId:             () => getChatId(),
-        applyLayoutMode:       () => applyLayoutMode(),
-        setCurrentChatId:      (id) => { _currentChatId = id; },
-        setUserName:           (v) => { IRIS_STATE.userName = v; },
-        resetActiveHistory:    () => resetActiveHistory(),
     };
 
     console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (大廳書櫃整合版)');

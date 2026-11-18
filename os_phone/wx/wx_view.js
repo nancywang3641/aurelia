@@ -513,8 +513,6 @@
             return `<div class="wx-msg-row ${side} pbub-row ${sideCls} ${animClass}" style="${opacityStyle}" ${dataAttr}><div style="${avatarStyle}" ${avatarAttr}></div><div class="pbub-wrap wx-bubble-wrap">${nameHTML}<div class="wx-bubble-content${plainBubble ? ' pbub-bubble' : ' wx-bubble-bare'}" style="${bubbleStyle}">${html}${quoteHTML}</div></div>${failMark}</div>`;
         },
 
-        generateHash: function(str) { let hash = 0; const safeStr = String(str); for (let i = 0; i < safeStr.length; i++) { const char = safeStr.charCodeAt(i); hash = (hash << 5) - hash + char; hash |= 0; } return "wx_" + Math.abs(hash); },
-
         // --- 2. 模塊解析 ---
         processModules: function(html, chatId, isMe, msgIndex, msg, opts) {
             // 🎭 opts.static＝劇情裡的手機借這份畫卡片：長相一模一樣，但不碰任何帳本、不存紅包、點了也不開窗。

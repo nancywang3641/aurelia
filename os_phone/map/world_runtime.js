@@ -263,19 +263,6 @@
         return true;
     }
 
-    async function removePatch(msgId) {
-        if (!currentWorld || !currentWorld.statePatches) return false;
-        const id = String(msgId);
-        if (!(id in currentWorld.statePatches)) return false;
-        delete currentWorld.statePatches[id];
-        recomputeLiveStates();
-        try { await cleanOrphanDynamics(); } catch (e) {}
-        await persistFullWorld();
-        _notify();
-        console.log('[WorldRuntime] 🗑️ patch 移除 (msgId:', id, ')');
-        return true;
-    }
-
     function compactPatches() {
         if (!currentWorld || !currentWorld.statePatches) return;
         const ids = Object.keys(currentWorld.statePatches);
@@ -331,32 +318,6 @@
         currentWorld.liveStates = result;
     }
 
-    // 向下相容介面：把舊的 setLiveState/Batch 接到 patch 系統
-    // 沒給 msgId 就用 manual_<時間戳>
-    async function setLiveState(charName, state) {
-        const name = _normName(charName);
-        if (!name || !state) return false;
-        const moves = [{
-            character: name,
-            location_id: state.location_id,
-            action: state.action,
-            dialogue: state.dialogue,
-            until_period: state.until_period,
-            category: state.category
-        }];
-        return await setPatch(`manual_${Date.now()}`, moves, '');
-    }
-
-    async function setLiveStatesBatch(stateMap, msgId, mcName) {
-        if (!stateMap || typeof stateMap !== 'object') return false;
-        const moves = Object.keys(stateMap).map(name => ({
-            character: name,
-            ...stateMap[name]
-        }));
-        const id = msgId !== undefined && msgId !== null ? msgId : `manual_${Date.now()}`;
-        return await setPatch(id, moves, mcName || '');
-    }
-
     function getLiveState(charName, time) {
         if (!currentWorld || !currentWorld.liveStates) return null;
         const name = _normName(charName);
@@ -369,43 +330,6 @@
             return null;
         }
         return s;
-    }
-
-    async function clearLiveState(charName) {
-        if (!currentWorld || !currentWorld.liveStates) return;
-        const name = _normName(charName);
-        delete currentWorld.liveStates[name];
-        delete currentWorld.liveStates[charName]; // 雙保險：未 normalize 的 key 也清
-        await persistLiveStates();
-        _notify();
-    }
-
-    async function clearAllLiveStates() {
-        if (!currentWorld) return;
-        currentWorld.liveStates = {};
-        currentWorld.statePatches = {}; // 同步清空快照，否則重算會還原
-        try { await cleanOrphanDynamics(); } catch (e) {}
-        await persistFullWorld();
-        _notify();
-    }
-
-    async function cleanExpiredLiveStates() {
-        if (!currentWorld || !currentWorld.liveStates) return 0;
-        const now = new Date();
-        let cleaned = 0;
-        Object.keys(currentWorld.liveStates).forEach(name => {
-            if (_isExpired(currentWorld.liveStates[name], now)) {
-                delete currentWorld.liveStates[name];
-                cleaned++;
-            }
-        });
-        if (cleaned > 0) {
-            await persistLiveStates();
-            _notify();
-            // 順便清掉沒人用的動態地點
-            try { await cleanOrphanDynamics(); } catch (e) {}
-        }
-        return cleaned;
     }
 
     // === 動態地點 (Z_DYNAMIC) ──────────────────────────────────
@@ -662,21 +586,13 @@
         setWorld,
         setSchedules,
         saveFacilitySceneMap,
-        getSchedules: () => currentWorld ? currentWorld.schedules : null,
         hasSchedules: () => !!(currentWorld && currentWorld.schedules && Object.keys(currentWorld.schedules).length > 0),
         // 即時狀態 API
-        setLiveState,
-        setLiveStatesBatch,
         getLiveState,
         getAllLiveStates: () => (currentWorld && currentWorld.liveStates) ? { ...currentWorld.liveStates } : {},
-        clearLiveState,
-        clearAllLiveStates,
-        cleanExpiredLiveStates,
         // Patch 快照 API
         setPatch,
-        removePatch,
         recomputeLiveStates,
-        getAllPatches: () => (currentWorld && currentWorld.statePatches) ? { ...currentWorld.statePatches } : {},
         // 動態地點 API
         DYNAMIC_ZONE_ID,
         addDynamicFacility,

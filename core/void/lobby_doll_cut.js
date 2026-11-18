@@ -198,7 +198,6 @@
         });
         const chinDef = chins.front != null ? chins.front : (chins.side != null ? chins.side : views[0].neck - 100);
         views.forEach((V, k) => {
-            const inBox = x => x >= V.x && x < V.x + V.w;
             const chin = chins[V.view] != null ? chins[V.view] : chinDef;
             // 頭：脖子線上 175 以上
             for (let y = 0; y < Math.min(h, V.neck - 175); y++) for (let x = V.x; x < V.x + V.w; x++) { const i = y * w + x; if (char[i]) mk[i] = k * 3 + 1; }

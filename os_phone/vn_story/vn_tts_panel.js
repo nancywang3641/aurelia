@@ -4,22 +4,6 @@
 
 // ── 面板 CSS ────────────────────────────────────────────────────────────────
 
-// ── HTML 模板 ────────────────────────────────────────────────────────────────
-function buildPanelHTML() {
-    return `
-<div id="vn-tts-overlay" class="hidden">
-  <div class="vtts-header">
-    <h2><i class="fa-solid fa-microphone"></i> 語音配置</h2>
-    <button class="vtts-close" onclick="VN_TTS_Panel.close()">✕</button>
-  </div>
-
-  <div id="vtts-nav"></div>
-
-  <div class="vtts-body" id="vtts-body"></div>
-  <div class="vtts-toast" id="vtts-toast"></div>
-</div>`;
-}
-
 
 
 // 這一頁該看見哪些音色。兩個引擎的清單永遠不混在一起。
@@ -765,23 +749,6 @@ const VN_TTS_Panel = {
         });
     },
 
-    playNpcSelectedModel(catId) {
-        const tts = this._tts();
-        if (!tts) return;
-        const sel = document.getElementById(`vtts-chip-sel-${catId}`);
-        const mid = sel?.value;
-        
-        // 🌟 如果選回空白選項，就安靜地結束，不要破壞氣氛
-        if (!mid) return; 
-
-        const m = tts.config.models[mid];
-        if (!m || !m.refAudioPath) { 
-            this._toast('✗ 這聲音連靈魂（參考音頻）都沒有，你要我播什麼？'); 
-            return; 
-        }
-        this.playRefAudio(m.refAudioPath);
-    },
-
     switchTab(tab) {
         this._currentTab = tab;
         this._renderNav();
@@ -939,85 +906,6 @@ const VN_TTS_Panel = {
             const body = document.getElementById(this._bodyId);
             if (body) body.scrollTop = this._savedListScroll || 0;
         });
-    },
-
-    // ── 掃描選取的資料夾（<input webkitdirectory> 回調）─────────────────
-    onDirPicked(input) {
-        const tts = this._tts();
-        if (!tts || !input.files.length) return;
-
-        const stRoot   = tts.config.stRoot || '';
-        const EXT_REL  = 'public\\scripts\\extensions\\third-party\\' + (window.AURELIA_EXT_NAME || 'my-tavern-extension') + '\\models';
-        const basePath = stRoot ? `${stRoot}\\${EXT_REL}` : '';
-
-        // 把 FileList 按第一層子資料夾分組
-        // webkitRelativePath 格式：「選取的資料夾名/子資料夾/檔名」
-        const byFolder = {};
-        for (const file of input.files) {
-            const parts = file.webkitRelativePath.split('/');
-            if (parts.length < 2) continue;          // 根目錄檔案跳過
-            const sub = parts[parts.length - 2];     // 直屬父資料夾 = 模型名
-            if (!byFolder[sub]) byFolder[sub] = [];
-            byFolder[sub].push(file);
-        }
-
-        let imported = 0;
-        for (const [folderName, files] of Object.entries(byFolder)) {
-            if (tts.config.models[folderName]) continue; // 已存在跳過
-
-            let gptFile = '', sovitsFile = '', refFile = '', refText = '';
-            const emotions = {};
-
-            for (const file of files) {
-                const lower = file.name.toLowerCase();
-
-                if (lower.endsWith('.ckpt') && !gptFile)    gptFile    = file.name;
-                if (lower.endsWith('.pth')  && !sovitsFile) sovitsFile = file.name;
-
-                if (lower.endsWith('.wav') || lower.endsWith('.mp3')) {
-                    const base = file.name.replace(/\.[^.]+$/, '');
-                    const m    = base.match(/^([^_]+)_(.+)$/);
-                    const emo  = m ? m[1] : 'default';
-                    const txt  = m ? m[2] : base;
-                    const full = basePath ? `${basePath}\\${folderName}\\${file.name}` : file.name;
-
-                    if (emo === 'default' && !refFile) {
-                        refFile = file.name; refText = txt;
-                    } else {
-                        emotions[emo] = { refAudioPath: full, refText: txt, refLang: 'zh' };
-                        if (!refFile) { refFile = file.name; refText = txt; }
-                    }
-                }
-            }
-
-            if (!gptFile && !sovitsFile) continue;
-
-            const p = f => basePath ? `${basePath}\\${folderName}\\${f}` : f;
-
-            tts.config.models[folderName] = {
-                name:         folderName,
-                gptPath:      gptFile    ? p(gptFile)    : '',
-                sovitsPath:   sovitsFile ? p(sovitsFile) : '',
-                refAudioPath: refFile    ? p(refFile)    : '',
-                refText,
-                refLang:      'zh',
-                emotions
-            };
-            imported++;
-        }
-
-        input.value = ''; // 重置，允許再次選同一資料夾
-        if (!tts.save()) return;
-
-        if (!imported) {
-            this._toast('未找到模型（子資料夾需含 .ckpt 或 .pth）');
-        } else if (!basePath) {
-            this._toast(`✓ 已新增 ${imported} 個模型（請在基礎配置填根目錄以補全路徑）`);
-        } else {
-            this._toast(`✓ 已新增 ${imported} 個模型，路徑已自動補全`);
-        }
-        this._modelFormMode = null;
-        this._renderBody('models');
     },
 
     // ── 從 models/tts_models.json 批次載入（配合 scan_models.py 使用）──────

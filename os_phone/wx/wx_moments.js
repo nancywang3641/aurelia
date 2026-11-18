@@ -153,7 +153,6 @@
         _queue[sc] = next.catch(function (e) { console.warn('[朋友圈] 存不進去', e); });
         return next;
     }
-    function _flush() { const L = _lobbyScope(); return Promise.all([_queue[scope()] || Promise.resolve(), (L && _queue[L]) || Promise.resolve()]); }
     function onChange(fn) { if (typeof fn === 'function') _listeners.push(fn); }
     function _emit() {
         _listeners.forEach(function (fn) { try { fn(); } catch (e) {} });
@@ -411,11 +410,6 @@
         let rest = String(text == null ? '' : text).replace(PAIR_RE, function (_, verb, attrs, inner) { onTag(verb.toLowerCase(), attrs || '', inner || ''); return ''; });
         rest = rest.replace(SINGLE_RE, function (_, verb, attrs) { onTag(verb.toLowerCase(), attrs || '', ''); return ''; });
         return rest.replace(/\n{3,}/g, '\n\n').trim();
-    }
-    function parseTags(text) {
-        const out = [];
-        _scan(text, function (verb, attrs, inner) { const a = _toAction(verb, attrs, inner); if (a) out.push(a); });
-        return out;
     }
     function strip(text) { return _scan(text, function () {}); }
     // 它回覆「某某」：她的名字（或「我」）→ 她；那則底下留過言的人 → 那個人；其他角色 → 聊天室
@@ -1087,11 +1081,11 @@
         open: open, close: close, openLinks: openLinks,
         _avatarHTML: _avatarHTML, _hydrate: _hydrate, _nameOf: _nameOf, _postHTML: _postHTML,
         parseStory: parseStory, parseStoryLine: parseStoryLine, syncStory: syncStory, findStory: findStory, _storyPlan: _storyPlan, _storyReplyTo: _storyReplyTo, _photoHost: _photoHost, _eventsSince: _eventsSince,
-        scope: scope, load: load, onChange: onChange, _flush: _flush,
+        scope: scope, load: load, onChange: onChange, 
         addPost: addPost, toggleLike: toggleLike, addComment: addComment,
         removePost: removePost, removeComment: removeComment,
         setLink: setLink, linksOf: linksOf, visibleTo: visibleTo,
-        brief: brief, photoOnceMessage: photoOnceMessage, rememberPhoto: rememberPhoto, parseTags: parseTags, strip: strip, extract: extract, actedSince: actedSince,
+        brief: brief, photoOnceMessage: photoOnceMessage, rememberPhoto: rememberPhoto, strip: strip, extract: extract, actedSince: actedSince,
         unseen: unseen, markSeen: markSeen, paintBadges: paintBadges
     };
     if (win !== window) { try { window.WX_MOMENTS = win.WX_MOMENTS; } catch (e) {} }

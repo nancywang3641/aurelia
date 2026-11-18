@@ -845,81 +845,9 @@
     }
     async function loadAvatarManager(listId) { return _renderImgMgr({ store: 'avatar_cache', listId: listId || 'avatar-mgr-list', kind: 'avatar' }); }
     async function loadSpriteManager(listId) { return _renderImgMgr({ store: 'sprite_cache', listId: listId || 'sprite-list', kind: 'sprite', noRegen: true }); }
-    async function regenerateAvatarEntry(btn, name, textarea, previewImg) {
-        const prompt = textarea.value.trim(); if (!prompt) return;
-        const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
-        try {
-            // 同上：立繪模式時要生立繪，不是頭像
-            const _mk = (window.VN_Core || (window.parent || window).VN_Core);
-            const _img = _mk && _mk._makeCharImage ? await _mk._makeCharImage(prompt, 'Neutral', true) : null;
-            const raw = _img ? (_img.dataUrl || _img.objUrl) : await VN_Image.getAvatar(prompt, 'Neutral', true);
-            if (raw) {
-                // 統一轉 dataUrl 再存 IDB，確保重開後不破圖（NAI 回傳 blob URL 不持久）
-                try {
-                    const fetchRes = await fetch(raw);
-                    const blob = await fetchRes.blob();
-                    const dataUrl = await new Promise(r => {
-                        const reader = new FileReader();
-                        reader.onload = () => r(reader.result);
-                        reader.onerror = () => r('');
-                        reader.readAsDataURL(blob);
-                    });
-                    const saveUrl = dataUrl || raw;
-                    await VN_Cache.set('avatar_cache', name, { prompt, url: saveUrl, face: (_img && _img.face) || undefined, chibi: (_img && _img.chibi) || undefined, chibiSide: (_img && _img.chibiSide) || undefined, chibiBack: (_img && _img.chibiBack) || undefined });
-                    previewImg.src = saveUrl;
-                } catch(e) {
-                    // fetch 失敗（已是 data: URL 等）→ 直接存
-                    await VN_Cache.set('avatar_cache', name, { prompt, url: raw, face: (_img && _img.face) || undefined, chibi: (_img && _img.chibi) || undefined, chibiSide: (_img && _img.chibiSide) || undefined, chibiBack: (_img && _img.chibiBack) || undefined });
-                    previewImg.src = raw;
-                }
-                previewImg.style.opacity = '1';
-            }
-        } catch(e) { console.error('[VN] regenerateAvatarEntry 失敗', e); }
-        btn.textContent = orig; btn.disabled = false; btn.classList.remove('loading');
-    }
-    async function deleteAvatarEntry(name, itemEl, listEl) {
-        await VN_Cache.delete('avatar_cache', name); itemEl.style.transition = 'opacity 0.2s'; itemEl.style.opacity = '0';
-        const _empty = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（角色首次出現時自動建立）</div>';
-        setTimeout(() => { itemEl.remove(); const list = listEl || document.getElementById('avatar-mgr-list'); if (list && list.children.length === 0) list.innerHTML = _empty; }, 200);
-    }
 
     async function loadBgManager(listId) { return _renderImgMgr({ store: 'bg_cache', listId: listId || 'bg-mgr-list', kind: 'bg' }); }
     async function loadSceneManager(listId) { return _renderImgMgr({ store: 'scene_cache', listId: listId || 'scene-mgr-list', kind: 'scene' }); }
-    async function regenerateBgEntry(btn, key, textarea, previewImg) {
-        const prompt = textarea.value.trim(); if (!prompt) return;
-        const orig = btn.textContent; btn.textContent = '生成中...'; btn.disabled = true; btn.classList.add('loading');
-        try {
-            const meta = {};
-            const raw = await VN_Image.getBg(prompt, meta);
-            if (raw) {
-                const savedPrompt = meta.translatedPrompt || prompt;
-                try {
-                    const fetchRes = await fetch(raw);
-                    const blob = await fetchRes.blob();
-                    const dataUrl = await new Promise(r => {
-                        const reader = new FileReader();
-                        reader.onload = () => r(reader.result);
-                        reader.onerror = () => r('');
-                        reader.readAsDataURL(blob);
-                    });
-                    const saveUrl = dataUrl || raw;
-                    await VN_Cache.set('bg_cache', key, { prompt: savedPrompt, rawUrl: raw, url: saveUrl });
-                    previewImg.src = saveUrl; previewImg.style.opacity = '1';
-                    if (textarea && savedPrompt !== prompt) textarea.value = savedPrompt;
-                } catch(e) {
-                    await VN_Cache.set('bg_cache', key, { prompt: savedPrompt, rawUrl: raw, url: raw });
-                    previewImg.src = raw; previewImg.style.opacity = '1';
-                    if (textarea && savedPrompt !== prompt) textarea.value = savedPrompt;
-                }
-            }
-        } catch(e) { console.error('[VN] regenerateBgEntry 失敗', e); }
-        btn.textContent = orig; btn.disabled = false; btn.classList.remove('loading');
-    }
-    async function deleteBgEntry(key, itemEl, listEl) {
-        await VN_Cache.delete('bg_cache', key); itemEl.style.transition = 'opacity 0.2s'; itemEl.style.opacity = '0';
-        const _empty = '<div style="color:#666; font-size:0.85rem; padding:15px 0; text-align:center;">尚無快取紀錄（場景首次生成時自動建立）</div>';
-        setTimeout(() => { itemEl.remove(); const list = listEl || document.getElementById('bg-mgr-list'); if (list && list.children.length === 0) list.innerHTML = _empty; }, 200);
-    }
 
     // 章節縮圖：從 mem / IDB 取存過的場景圖，縮成小圖再塗上去（尺寸/裁切都在 CSS，這裡只換圖）
     //   🚨這裡以前是「每張卡都直接塞原圖」——原圖是場景背景(常是 1024px 以上的 dataURL)，
@@ -1472,8 +1400,8 @@
         openGameSettings, closeGameSettings,
         openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg, switchChatMoreTab,
         applyChatBgForRoom,
-        loadAvatarManager, regenerateAvatarEntry, deleteAvatarEntry,
-        loadBgManager, regenerateBgEntry, deleteBgEntry, loadSpriteManager,
+        loadAvatarManager, 
+        loadBgManager, loadSpriteManager,
         loadSceneManager,
         openChapterPanel, closeChapterPanel
     };

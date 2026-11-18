@@ -170,7 +170,6 @@ html, body {
 
 /* （寫作頁 404 模式樣式已移除 2026-06-12）*/
 
-
 /* ── 子面板 TAB 切換按鈕懸停效果 (拿鐵主題) ── */
 .set-tab, .pm-tab, .avs-tab, .wb-cat-tab { transition: all 0.2s ease; }
 .set-tab:hover, .pm-tab:hover, .avs-tab:hover { background: rgba(26,28,40,0.06) !important; color: #1A1C28 !important; }
@@ -290,10 +289,9 @@ html, body {
 /* ⚠️ 酒館內 ST 已處理 device 安全區(動態島/瀏海)，aurelia 面板/header 不該再加
    env(safe-area-inset-top)，否則 header 上方留一大塊白。本檔=酒館專用 → 安全區歸零(env→0)。
    PWA(走 aurelia_core.css)不受影響、照常套用 env。 */
-body { --safe-top: 0px; }   /* studio-header / vn-ws-header 走 var(--safe-top, env()) → 跟著歸零 */
+body { --safe-top: 0px; }   /* studio-header 走 var(--safe-top, env()) → 跟著歸零 */
 #achievement-panel-overlay { top: 10%; }
 #store-panel-overlay { top: 8%; }
-.void-login-overlay { padding-top: 0; }
 
 /* 各子面板 header — 酒館不加安全區(ST 已處理) */
 .wb-shell .wb-header   { padding-top: 12px !important; height: 44px !important; }
@@ -307,62 +305,12 @@ body.layout-pad-ios .void-bubble-layer { top: 102px !important; }
 body.layout-pad-ios .void-panel-overlay { top: 130px !important; }
 body.layout-pad-ios #achievement-panel-overlay { top: 15% !important; }
 body.layout-pad-ios #store-panel-overlay { top: 12% !important; }
-body.layout-pad-ios .void-login-overlay { padding-top: 44px !important; }
+
 body.layout-pad-ios .wb-shell .wb-header   { padding-top: 50px !important; height: 94px !important; }
 body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !important; }
 
 /* 登入介面外框 */
-.void-login-overlay {
-    position:absolute;inset:0;z-index:200;overflow:hidden;
-    font-family:'Noto Sans TC',sans-serif;
-    background: rgba(228,232,245,0.95); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-    display:flex;align-items:center;justify-content:center;
-    animation:vssIn 0.3s cubic-bezier(0.2,0.8,0.2,1);
-}
-.void-login-overlay::before {
-    content:'';position:absolute;inset:0;pointer-events:none;z-index:0;
-    background-image:
-        linear-gradient(rgba(26,28,40,0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(26,28,40,0.04) 1px, transparent 1px);
-    background-size: 30px 30px; opacity: 0.8;
-}
 
-.void-login-container { display:flex;flex-direction:column;align-items:center;width:100%;z-index:2;padding:20px;box-sizing:border-box; }
-.void-login-brand { font-size:12px;color:#1A1C28;text-transform:uppercase;letter-spacing:4px;font-weight:800;margin-bottom:15px; text-shadow: 0 0 10px rgba(26,28,40,0.20); }
-.void-login-box { 
-    width:100%;max-width:320px;background:rgba(228,232,245,0.97);
-    border:1px solid rgba(26,28,40,0.25);border-radius:12px;padding:30px 25px;
-    box-shadow:0 10px 40px rgba(0,0,0,0.5), inset 0 0 20px rgba(26,28,40,0.04); 
-}
-.void-login-title { font-size:18px;font-weight:900;color:#1A1C28;margin-bottom:8px; }
-.void-login-desc { font-size:11px;color:rgba(26,28,40,0.72);margin-bottom:20px;line-height:1.5; }
-
-.void-login-input-group { margin-bottom: 20px; }
-.void-login-input-group label { display:block;font-size:10px;font-weight:800;color:rgba(26,28,40,0.72);margin-bottom:6px;letter-spacing:1px; }
-.void-login-input-group input { 
-    width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid rgba(26,28,40,0.20);
-    border-radius:6px;background:rgba(228,232,245,0.90);color:#1A1C28;font-size:13px;
-    outline:none;transition:all 0.2s ease; 
-}
-.void-login-input-group input:focus { border-color:#1A1C28;box-shadow:0 0 0 3px rgba(26,28,40,0.10);background:#fff; }
-
-.void-login-btn { 
-    width:100%;padding:12px;background:#1A1C28;
-    color:#EEF0F6;border:none;border-radius:6px;font-size:12px;font-weight:900;
-    cursor:pointer;transition:all 0.2s ease;letter-spacing:2px;box-shadow:0 4px 15px rgba(26,28,40,0.15); 
-}
-.void-login-btn:hover { filter:brightness(1.1);transform:translateY(-2px);box-shadow:0 6px 20px rgba(26,28,40,0.30); }
-.void-login-btn:disabled { opacity:0.6;cursor:not-allowed;transform:none;box-shadow:none; }
-
-.void-login-alt-btn {
-    width:100%;margin-top:12px;padding:10px;background:transparent;
-    color:rgba(26,28,40,0.72);border:1px solid transparent;border-radius:6px;
-    font-size:11px;font-weight:800;cursor:pointer;transition:0.2s;
-}
-.void-login-alt-btn:hover { background:rgba(26,28,40,0.06);color:#1A1C28;border-color:rgba(26,28,40,0.15); }
-
-.void-login-name-row { display:flex;gap:6px;align-items:stretch; }
-.void-login-name-row input { flex:1;min-width:0; }
 .void-persona-pick-btn {
     flex-shrink:0;padding:0 11px;background:rgba(26,28,40,0.06);
     border:1px solid rgba(26,28,40,0.20);border-radius:6px;color:#1A1C28;
@@ -385,50 +333,6 @@ body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !
 .void-persona-item.is-selected { font-weight:800;color:#1A1C28; }
 .void-persona-item .vpick-badge { font-size:9px;background:rgba(26,28,40,0.10);color:#1A1C28;padding:1px 5px;border-radius:3px;font-weight:800; }
 .void-persona-empty { padding:14px;font-size:11px;color:rgba(26,28,40,0.72);text-align:center; }
-
-.void-session-manager-inner { 
-    width:100%;height:100%;display:flex;flex-direction:column;z-index:2;
-    background:rgba(228,232,245,0.92); 
-}
-.void-session-topbar {
-    flex-shrink:0;padding:20px 26px 15px;position:relative;z-index:2;
-    background: linear-gradient(to bottom, rgba(228,232,245,0.97) 0%, transparent 100%);
-    display: flex; justify-content: space-between; align-items: flex-start;
-}
-.void-session-brand { font-size:10px;color:rgba(26,28,40,0.72);text-transform:uppercase;letter-spacing:3px;font-weight:800;margin-bottom:6px; }
-.void-session-chatid { font-size:16px;font-weight:900;color:#1A1C28;font-family:'Courier New',monospace; }
-.void-session-back-btn {
-    padding:8px 16px;background:rgba(228,232,245,0.80);border:1px solid rgba(26,28,40,0.20);
-    color:#1A1C28;font-size:11px;font-weight:800;border-radius:4px;
-    cursor:pointer;transition:all 0.2s ease;
-}
-.void-session-back-btn:hover { background:rgba(26,28,40,0.08);color:#1A1C28; }
-
-.void-session-body { flex:1;overflow-y:auto;padding:0 26px 20px;display:flex;flex-direction:column;gap:10px;position:relative;z-index:2; }
-.void-session-body::-webkit-scrollbar { width:4px; }
-.void-session-body::-webkit-scrollbar-track { background:transparent; }
-.void-session-body::-webkit-scrollbar-thumb { background:rgba(26,28,40,0.20);border-radius:2px; }
-
-.void-session-card {
-    background:rgba(228,232,245,0.95);border:1px solid rgba(26,28,40,0.10);
-    border-left:3px solid rgba(26,28,40,0.40);border-radius:6px;padding:12px 16px;
-    display:flex;align-items:center;gap:15px;box-shadow:0 4px 15px rgba(0,0,0,0.3);
-    transition:all 0.2s ease;
-}
-.void-session-card:hover { background:rgba(210,215,235,0.95);border-color:#1A1C28;border-left-color:#1A1C28;transform:translateX(4px);box-shadow:0 6px 20px rgba(26,28,40,0.08); }
-.void-session-card.is-current { background:rgba(210,215,235,0.95);border-color:#1A1C28;border-left-color:#1A1C28;box-shadow:0 4px 15px rgba(26,28,40,0.12); }
-.void-session-card-info { flex:1;min-width:0; }
-.void-session-card-id { font-size:13px;font-family:'Courier New',monospace;font-weight:800;color:#1A1C28; white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-.void-session-card-preview { font-size:11px;color:rgba(26,28,40,0.72);margin-top:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
-.void-session-card-meta { font-size:10px;color:rgba(26,28,40,0.72);margin-top:6px;font-weight:500; }
-.void-session-card-cur-tag { margin-left:8px;font-size:9px;color:#EEF0F6;background:#1A1C28;padding:2px 6px;border-radius:4px;font-weight:800; }
-.void-session-card-actions { display:flex;gap:5px;flex-shrink:0; }
-.void-session-load-btn { background:rgba(26,28,40,0.06);color:#1A1C28;border:1px solid rgba(26,28,40,0.20);border-radius:4px;padding:6px 12px;font-size:10px;font-weight:800;cursor:pointer;transition:0.2s;letter-spacing:1px;text-transform:uppercase; }
-.void-session-load-btn:hover { background:rgba(26,28,40,0.10);color:#1A1C28;border-color:#1A1C28; }
-.void-session-load-btn:disabled { opacity:0.3;cursor:default; }
-.void-session-del-btn { background:transparent;color:#fc8181;border:1px solid transparent;border-radius:4px;padding:6px 10px;font-size:14px;cursor:pointer;transition:0.2s;line-height:1; }
-.void-session-del-btn:hover { background:rgba(252,129,129,0.1);border-color:#fc8181;color:#f56565; }
-.void-session-empty, .void-session-spinner { text-align:center;padding:40px 0;color:#1A1C28;font-size:11px;letter-spacing:2px;font-weight:bold; }
 
 /* =========================================================
    4. 手機應用與子面板 (APPS 選單、Quest 節點、成就、商店)
@@ -485,8 +389,6 @@ body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !
     animation:achPanelIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-#achievement-hist-btn { position:relative; }
-#achievement-hist-btn.has-pending::after { content:''; position:absolute; top:4px; right:4px; width:6px; height:6px; background:#1A1C28; border-radius:50%; box-shadow:0 0 6px rgba(26,28,40,0.40); animation:achDot 1.5s ease-in-out infinite; }
 @keyframes achDot { 0%,100%{opacity:1} 50%{opacity:0.4} }
 
 /* 404 商店面板 */
@@ -550,7 +452,6 @@ body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !
 .store-footer { padding:8px 16px; border-top:1px solid rgba(0,255,65,0.3); font-size:10px; color:#006600; text-align:center; flex-shrink:0; background:rgba(0,20,0,0.9); position:relative; z-index:2; text-transform:uppercase; letter-spacing:1px; }
 .store-msg { padding:6px 16px; font-size:12px; text-align:center; color:#00ff41; font-weight:bold; transition:opacity 0.3s; flex-shrink:0; text-shadow: 0 0 5px rgba(0,255,65,0.5); position:relative; z-index:2; }
 
-#store-shop-btn { display:none; }
 .portal-btn-img { width:20px; height:20px; object-fit:contain; display:block; border-radius:3px; }
 .void-portal-btn { padding:4px 6px !important; }
 
@@ -651,37 +552,7 @@ body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !
 .void-tab.mode-404 .void-persona-empty { color: rgba(0,255,65,0.4) !important; }
 /* persona dropdown section headers have inline style="background:rgba(228,232,245,0.96)" */
 .void-tab.mode-404 .void-persona-dropdown [style*="rgba(69,34,22"] { background: rgba(0,15,0,0.9) !important; color: rgba(0,255,65,0.45) !important; }
-.void-tab.mode-404 .void-login-overlay { background: rgba(0,10,0,0.95); }
-.void-tab.mode-404 .void-login-overlay::before { background-image: linear-gradient(rgba(0,255,65,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(0,255,65,0.1) 1px, transparent 1px); }
-.void-tab.mode-404 .void-login-brand { color: #00cc33; text-shadow: none; }
-.void-tab.mode-404 .void-login-box { background: rgba(0,15,0,0.9); border-color: #00ff41; box-shadow: 0 0 20px rgba(0,255,65,0.15); }
-.void-tab.mode-404 .void-login-title { color: #00ff41; }
-.void-tab.mode-404 .void-login-desc { color: rgba(0,255,65,0.6); }
-.void-tab.mode-404 .void-login-input-group label { color: #00cc33; }
-.void-tab.mode-404 .void-login-input-group input { background: #001a00; border-color: rgba(0,255,65,0.4); color: #00ff41; }
-.void-tab.mode-404 .void-login-input-group input:focus { border-color: #00ff41; box-shadow: 0 0 0 3px rgba(0,255,65,0.2); }
-.void-tab.mode-404 .void-login-btn { background: #004d00; color: #00ff41; border: 1px solid #00ff41; box-shadow: 0 0 10px rgba(0,255,65,0.2); }
-.void-tab.mode-404 .void-login-btn:hover { background: #006600; box-shadow: 0 0 15px rgba(0,255,65,0.4); filter:none; }
-.void-tab.mode-404 .void-login-alt-btn { color: #00cc33; border-color: transparent; }
-.void-tab.mode-404 .void-login-alt-btn:hover { background: rgba(0,255,65,0.1); border-color: rgba(0,255,65,0.3); }
-.void-tab.mode-404 .void-session-manager-inner { background: rgba(0,10,0,0.8); }
-.void-tab.mode-404 .void-session-topbar { background: linear-gradient(to bottom, rgba(0,15,0,0.95) 0%, transparent 100%); }
-.void-tab.mode-404 .void-session-brand { color: #00cc33; text-shadow: none; }
-.void-tab.mode-404 .void-session-chatid { color: #00ff41; }
-.void-tab.mode-404 .void-session-back-btn { background: #001a00; color: #00ff41; border-color: rgba(0,255,65,0.4); }
-.void-tab.mode-404 .void-session-back-btn:hover { background: #003300; box-shadow: 0 0 15px rgba(0,255,65,0.3); color:#00ff41; }
-.void-tab.mode-404 .void-session-card { background: rgba(0,15,0,0.8); border-color: rgba(0,255,65,0.3); border-left-color: rgba(0,255,65,0.5); box-shadow:none; }
-.void-tab.mode-404 .void-session-card:hover { background: rgba(0,25,0,0.9); border-left-color: #00ff41; box-shadow: 0 0 10px rgba(0,255,65,0.2); border-color: rgba(0,255,65,0.3); }
-.void-tab.mode-404 .void-session-card.is-current { background: rgba(0,20,0,0.9); border-color: #00cc33; border-left-color: #00ff41; }
-.void-tab.mode-404 .void-session-card-id { color: #b8ffcb; }
-.void-tab.mode-404 .void-session-card-preview { color: rgba(0,255,65,0.6); }
-.void-tab.mode-404 .void-session-card-meta { color: rgba(0,255,65,0.4); }
-.void-tab.mode-404 .void-session-card-cur-tag { background: rgba(0,255,65,0.1); color: #00ff41; border-color: rgba(0,255,65,0.3); }
-.void-tab.mode-404 .void-session-load-btn { background: rgba(0,20,0,0.8); color: #00cc33; border-color: rgba(0,255,65,0.3); }
-.void-tab.mode-404 .void-session-load-btn:hover { background: rgba(0,255,65,0.1); color: #00ff41; border-color: rgba(0,255,65,0.3); }
-.void-tab.mode-404 .void-session-del-btn { color: #ff3333; }
-.void-tab.mode-404 .void-session-empty, .void-tab.mode-404 .void-session-spinner { color: #00cc33; }
-.void-tab.mode-404 #store-shop-btn { display:inline-flex; }
+
 .void-tab.mode-404 .void-portal-btn { border-color:rgba(0,255,65,0.4) !important; background:rgba(0,20,0,0.6) !important; }
 .void-tab.mode-404 .void-portal-btn:hover { background:rgba(0,255,65,0.15) !important; border-color:#00ff41 !important; box-shadow:0 0 10px rgba(0,255,65,0.3) !important; }
 /* 全畫面格子已移至 lobby.css .lobby-left::before（只蓋左欄立繪）*/

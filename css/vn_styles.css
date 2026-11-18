@@ -141,8 +141,6 @@ h1 { font-family: var(--font-classic); font-size: 4.5rem; color: var(--gold); pa
         @keyframes spin { to { transform: rotate(360deg); } }
 
         /* === 選擇按鈕 (獨立模式) === */
-        #vn-choice-overlay { position: absolute; inset: 0; background: rgba(0,0,0,0.55); backdrop-filter: blur(2px); z-index: 80; display: none; flex-direction: column; justify-content: center; align-items: center; gap: 10px; padding: 24px 16px; box-sizing: border-box; }
-        #vn-choice-overlay.active { display: flex; }
         .vn-choice-btn { width: 92%; max-width: 400px; padding: 13px 20px; background: rgba(10,8,4,0.85); border: 1px solid rgba(212,175,55,0.35); color: #d4af37; font-family: var(--font-classic); font-size: 0.88rem; letter-spacing: 1.5px; cursor: pointer; border-radius: 2px; transition: all 0.22s; text-align: center; }
         .vn-choice-btn:hover { background: rgba(212,175,55,0.15); border-color: #d4af37; transform: translateY(-2px); box-shadow: 0 4px 16px rgba(212,175,55,0.15); }
         .vn-choice-btn:active { transform: translateY(0); }

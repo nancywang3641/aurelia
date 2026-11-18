@@ -208,9 +208,6 @@
             } catch(e) { return getCurrentChatId() || ''; }
         },
 
-        /** 取當前 cache snapshot（給 UI 顯示用，不要修改回傳值）*/
-        getCache() { return { ..._cache }; },
-
         /** 強制 refresh cache（酒館才有用；PWA 走 localStorage 不需要）*/
         async refreshCache() {
             if (!isStandalone()) await _refreshTavernCache();

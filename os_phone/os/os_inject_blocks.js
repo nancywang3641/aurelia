@@ -41,7 +41,7 @@
         aurelia_sims: '模擬市民'   // 模擬市民模式（os_sims.js）：這位市民的設定、記憶、遊戲現況，遊戲外小程式給的
     };
     // 自己包好、名字跟上面不同的那幾塊（面板認塊時也要認得）
-    const EXTRA_TAGS = ['人物檔案'];
+    const EXTRA_TAGS = ['人物檔案', 'aurelia_sims'];   // aurelia_sims：模擬市民那段是 os_api_engine 自己包的標籤，逐段看才認得出來
 
     function nameOf(id) {
         id = String(id || '');

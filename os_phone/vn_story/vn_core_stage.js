@@ -70,7 +70,6 @@
                 }
             }
         },
-        _stageDimAll: function() { this._applyStageLighting(-1); },
         // 旁白也算一個「場次」：推進 tick + 清滯留(連續在場 N 次沒說話就移除) + 全部變暗
         _stageNarr: function() { this._stageInit(); this._stageTick++; this._staleSweep(); this._applyStageLighting(-1); },
         _clearSlot: function(i) {

@@ -519,34 +519,6 @@
             }
         },
 
-        _mdToHtml(md) {
-            if (!md) return '';
-            const lines = md.split('\n');
-            let html = '', tableLines = [], inTable = false;
-            const flush = () => {
-                if (!tableLines.length) return;
-                const parse = l => l.split('|').filter((c,i,a)=>i>0&&i<a.length-1).map(c=>c.trim());
-                const heads = parse(tableLines[0]);
-                const body  = tableLines.slice(2);
-                html += `<table class="ue-md-table"><thead><tr>${heads.map(h=>`<th>${h}</th>`).join('')}</tr></thead>`;
-                html += `<tbody>${body.map(l=>`<tr>${parse(l).map(c=>`<td>${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
-                tableLines = []; inTable = false;
-            };
-            for (const line of lines) {
-                const t = line.trim();
-                if (t.startsWith('|')) { inTable = true; tableLines.push(t); }
-                else {
-                    if (inTable) flush();
-                    if      (t.startsWith('### ')) html += `<h4 style="color:#d4af37;margin:10px 0 4px;font-size:12px">${t.slice(4)}</h4>`;
-                    else if (t.startsWith('## '))  html += `<h3 style="color:#d4af37;margin:12px 0 6px;font-size:13px">${t.slice(3)}</h3>`;
-                    else if (t.startsWith('# '))   html += `<h2 style="color:#d4af37;margin:14px 0 8px;font-size:15px">${t.slice(2)}</h2>`;
-                    else if (t) html += `<p style="font-size:12px;color:#e8dfc8;margin:3px 0">${t}</p>`;
-                }
-            }
-            if (inTable) flush();
-            return html;
-        },
-
     };
     window.VN_StandaloneArchive = VN_StandaloneArchive;
 })();

@@ -27,23 +27,6 @@
     //    → 立繪模式開著卻偶爾生出頭像（帶背景大頭照）的真兇。之後 vn_core/設定存檔會再 load、無害。
     VN_Config.load();
 
-    // === Prompt 排列管理（讀取順序供 API 使用，UI 統一在 os_prompts.js） ===
-    const VN_PromptOrder = {
-        STORAGE_KEY: 'vn_prompt_order',
-
-        getOrder() {
-            // 返回 bundle ID 列表（全域順序），供 os_api_engine 排序用
-            try {
-                const saved = JSON.parse(localStorage.getItem(this.STORAGE_KEY) || '[]');
-                if (Array.isArray(saved) && saved.length) return saved;
-            } catch(e) {}
-            return (win.OS_PROMPTS?.getBundles?.() || []).map(b => b.id);
-        },
-
-        saveOrder(order) { return win.AUI.lsSet(this.STORAGE_KEY, JSON.stringify(order), '提示詞的排列順序'); },
-        reset()          { localStorage.removeItem(this.STORAGE_KEY); }
-    };
-
     // ─── BGM 模糊匹配 index ───────────────────────────────────────
     // AI 流口水寫錯 BGM 名時，從本地 bgm 目錄找最接近的檔名。找不到夠像的就靜音（避免氛圍違和）
     const VN_BgmIndex = {
@@ -409,7 +392,6 @@
 
     // === 暴露到全域 ===
     window.VN_Config = VN_Config;
-    window.VN_PromptOrder = VN_PromptOrder;
     win.VN_BgmIndex = VN_BgmIndex;
     window.VN_Image = VN_Image;
 })();

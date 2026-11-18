@@ -1038,7 +1038,6 @@
             return [...new Set(getGlobalPacks().concat(getStoryPacks()))];
         },
         getGlobalPacks,
-        isGlobalPack: function(name) { return getGlobalPacks().includes(String(name)); },
         setGlobalPack: function(name, on) {
             const n = String(name || ''); if (!n) return;
             const list = getGlobalPacks().filter(p => p !== n);
@@ -1125,41 +1124,6 @@
         // 🔥 新增：角色卡自動匯入專用 API
         // ====================================================================
         
-        /**
-         * 提供給 os_card_import.js 呼叫，直接將內建世界書建立為獨立書包
-         * @param {string} cardName - 角色名稱 (將作為書包名稱)
-         * @param {Array} entriesData - 從角色卡中解析出的條目陣列
-         */
-        importFromCard: async function(cardName, entriesData) {
-            if (!cardName || !entriesData || entriesData.length === 0) return;
-            
-            const books = getBooks();
-            if (!books.includes(cardName)) {
-                books.push(cardName);
-                saveBooks(books);
-            }
-            
-            for (let i = 0; i < entriesData.length; i++) {
-                const e = entriesData[i];
-                const base = _stEntryBase(e);
-                const entry = {
-                    id: 'wb_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2,6),
-                    book: cardName,
-                    title: (e.comment || e.name || `條目 ${i + 1}`).trim(),
-                    content: (e.content || '').trim(),
-                    category: '角色自帶設定', // 統一放在一個專屬分類裡
-                    keys: base.keys,
-                    enabled: base.enabled,
-                    order: base.order,
-                    depth: _stDepth(e),   // 同上：角色卡自帶的書也保留深度
-                    role: _stRole(e),
-                    createdAt: Date.now(),
-                    updatedAt: Date.now()
-                };
-                await win.OS_DB.saveWorldbookEntry(entry);
-            }
-            console.log(`[OS_WORLDBOOK] ✅ 已成功為角色卡「${cardName}」建立專屬書包並匯入 ${entriesData.length} 條設定。`);
-        }
     };
 
     // 開機補一次：不要等使用者打開面板才補 book（沒補＝那本書生成時整本讀不到）

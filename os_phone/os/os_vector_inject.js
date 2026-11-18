@@ -22,8 +22,6 @@
     let _pendingRecallEntries = [];    // 🎬 副模型(記憶導演)上一輪挑的記憶物件，待下一輪注入完整內文（主力）
     let _pendingRecallMainEntries = []; // 主模型 <recall>A5</recall> 挑碼 → 解析出的記憶物件（備援，用碼比關鍵詞可靠）
     let _lastCatalogMap = {};          // 上一輪注入主模型目錄的「碼→記憶物件」對照（給 _captureAndStripRecall 解析主模型挑的碼）
-    win.AURELIA_INJECT_LOG = win.AURELIA_INJECT_LOG || [];   // 每輪實際注入主模型的記憶塊（DEBUG 面板「注入」TAB 讀）
-    let _injSeq = 0;
     const _RECALL_RE = /<recall>([\s\S]*?)<\/recall>/gi;
 
     // 抽出 AI 回覆裡的 <recall>關鍵詞</recall> → 存給下一輪 injectMemories 補完整內文；並把標籤從顯示訊息清掉。
@@ -739,7 +737,6 @@
         get _lastRecall() { return _lastRecall; },
         // 結合觸發：state_runtime 取走待處理記憶內容(取走即清，避免重複)
         consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; if (p && p.storyId && p.storyId !== _storyId()) return null; return p; },   // 守衛：不同 chatId 的殘留待處理記憶不給吃(防跨聊天室洩漏)
-        hasPendingMemory() { return !!_pendingMemory; },
         getCatalogForPicking, setPendingRecall,    // 🎬 記憶導演：給 state_runtime 副模型挑用
         directorPlan, applyDirectorPicks,          // 🎬 AVS 關著時，記憶那一通順便當導演（os_vector_engine.ingest）
     };

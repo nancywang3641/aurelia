@@ -475,18 +475,6 @@
         // 大廳右上角的下拉窗只建一次、之後只是收起打開：打開時叫這支，停在世界書分頁就重讀一次（換過卡、換過聊天都要是現在的）
         onShow: function() { if (_rootContainer && _tab === 'wb') _showTab('wb'); },
         
-        openPersonaList: function(container) { 
-            if (container) {
-                API.launch(container);
-            } else {
-                if (win.AureliaControlCenter && typeof win.AureliaControlCenter.switchPage === 'function') {
-                    win.AureliaControlCenter.switchPage('nav-user');
-                } else if (win.AureliaControlCenter && typeof win.AureliaControlCenter.showOsApp === 'function') {
-                    win.AureliaControlCenter.showOsApp('使用者');
-                }
-            }
-        }, 
-        
         // 🔥 完全還原 V5.0 的切換邏輯
         switchPersona: function(personaId, personaName) {
             if (isStandalone()) {

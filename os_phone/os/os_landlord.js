@@ -388,17 +388,6 @@
         return { state: s, days: days, earned: earned, perUnit: perUnit };
     }
 
-    // ── 招租：候選名冊(沿用書咖的顧客名冊來源) ──
-    async function listCandidates() {
-        const roster = await _roster();
-        const out = [];
-        for (const r of roster) {
-            if (!r || !r.key) continue;
-            out.push({ key: r.key, name: r.name || '無名', persona: r.persona || '', tuned: _isValidTuning(await getTuning(r.key)) });
-        }
-        return out;
-    }
-
     // ── 🚨 名冊身分正規化（M-6）──
     // cafeRoster 的 key 帶 chatId＝「這一輪的他」，那是給對話歷史/裝扮用的。
     // 房東這邊要的是「這個人」：換一輪還是同一個房客，所以一律改用 stableKey。
@@ -806,7 +795,7 @@
 
     win.OS_LANDLORD = {
         _cfg: LL_CFG, _defaultState, getState, saveState, getTuning, saveTuning, getRoom, saveRoom, _dayNum, settleCore,
-        listCandidates, tuneTenant, moveIn, _fallbackTuning, _openAndSettle,   // _openAndSettle=手帳窗口的結算入口
+        tuneTenant, moveIn, _fallbackTuning, _openAndSettle,   // _openAndSettle=手帳窗口的結算入口
         addFloor, _makeFloorUnits, _unitId,   // 🏢 樓層制
         suggestRent, rentRange, getPricing, setListing,   // 💰 定價＋掛招租
         settleViewings, judgeFit, moveInFromViewing, dismissViewing, hearViewing,   // 🔔 看房訪客

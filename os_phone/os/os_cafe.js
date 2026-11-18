@@ -29,7 +29,7 @@
         hashARatio: 0.45,   // 非策劃組合落 A 的比例
         // 💰 書咖自己的帳（跟 PT 錢包分開）：備料、研發都從這裡扣，客人付的錢進這裡
         //   每份材料錢＝售價三分之一；10-13 起備料＝料等下一次 9 點開店才上架、能放兩天（那天＋隔天），第三天早上倒掉
-        fund: { start: 300, staminaMax: 12, batchStamina: 2, batchMax: 8, rdCost: 30, rdStamina: 3, rdHours: 4, shelfDays: 2 },
+        fund: { start: 300, staminaMax: 12, batchStamina: 2, batchMax: 8, shelfDays: 2 },
         socialBring: 0.35,  // 愛揪人的常客上門時，帶另一位常客一起來的機率
     };
     const TIER_TEXT = {
@@ -256,26 +256,6 @@
             return { ok: true, fund: fd, qty: n, cost, day: at.day, t: at.t, home: plan.use };
         });
     }
-    // 研發開工：花錢＋體力，等幾個小時才知道做出什麼；同時只能一杯
-    function startRd(b, f, t) {
-        return _locked(async () => {
-            const F = CAFE_CFG.fund;
-            if (!_ing('base', b) || !_ing('flavor', f) || !_ing('top', t)) return { ok: false, why: '三樣材料要選齊' };
-            const key = _comboKey(b, f, t);
-            const lab = await _getStrict(K_LAB, {});
-            if (lab[key]) return { ok: false, why: '這個組合試過了' };
-            if (await _getStrict(K_RD, null)) return { ok: false, why: '已經有一杯在研發了' };
-            const fd = await _fundLoad();
-            if (fd.coins < F.rdCost) return { ok: false, why: '錢不夠（研發要 ' + F.rdCost + ' 元，帳戶剩 ' + fd.coins + ' 元）' };
-            if (fd.stamina < F.rdStamina) return { ok: false, why: '體力不夠（剩 ' + fd.stamina + '，研發要 ' + F.rdStamina + '）' };
-            const now = Date.now();
-            const rd = { b, f, t, key, startAt: now, doneAt: now + F.rdHours * 3600000, cost: F.rdCost };
-            fd.coins -= F.rdCost; fd.stamina -= F.rdStamina;
-            await _set(K_RD, rd);
-            await _set(K_FUND, fd);
-            return { ok: true, rd, fund: fd };
-        });
-    }
     // 時間到了才揭曉：寫進配方圖鑑、清掉研發中；還沒到回 null
     function revealRd() {
         return _locked(async () => {
@@ -302,7 +282,6 @@
     }
 
     // ── 品質判定(寫死矩陣+雜湊,零 API=真解謎)──
-    function _comboKey(b, f, t) { return b + '+' + f + '+' + t; }
     function _hash(str) { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) >>> 0; return h; }
     function _tierOf(key) {
         if (CAFE_CFG.sCombos.includes(key)) return 'S';
@@ -912,7 +891,6 @@
     }
 
     let _winEl = null;
-    let _viewCleanup = null;
     async function _refreshHeaderStats() {
         if (!_winEl) return;
         const [shop, fund] = await Promise.all([getShop(), _fundOrNull()]);
@@ -973,7 +951,6 @@
     }
     function closeWorkshop() {
         if (_tickTimer) { clearInterval(_tickTimer); _tickTimer = null; }
-        if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         try { (win.OS_CAFE_HIRE || window.OS_CAFE_HIRE)?.leave?.(); } catch (e) {}   // 下次打開回員工頁列表，不卡在面試裡
         _winEl?.remove(); _winEl = null;
         try { win.document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
@@ -1038,7 +1015,6 @@
     }
 
     async function _renderTab(tab, body) {
-        if (_viewCleanup) { _viewCleanup(); _viewCleanup = null; }
         if (tab === 'menu') {
             const [menu, shop, fund, stock, logs] = await Promise.all([getMenu(), getShop(), _fundOrNull(), _get(K_STOCK, {}), _get(K_LOG, [])]);
             const nowTs = Date.now(), today = _dayNum(nowTs), nowMin = _minOf(nowTs);
@@ -1248,6 +1224,6 @@
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
         isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid,
         labResult: _labResult, finishRd: _finishRdNow, prices: CAFE_CFG.prices, tierText: TIER_TEXT, esc: _esc };   // 研發台（os_cafe_kitchen.js）用
-    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, withdrawFund, fundKeep: () => CAFE_CFG.fund.start, makeBatch, startRd, revealRd, cafeDev, collectFromFarm, getPantry, _settle, _b };   // _settle=console 診斷用
+    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, withdrawFund, fundKeep: () => CAFE_CFG.fund.start, makeBatch, revealRd, cafeDev, collectFromFarm, getPantry, _settle, _b };   // _settle=console 診斷用
     console.log('[Cafe] 書咖經營系統就緒');
 })();

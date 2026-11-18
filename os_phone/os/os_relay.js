@@ -180,7 +180,6 @@
         };
         _pollTimer = setTimeout(tick, POLL_STEPS[0]);
     }
-    function stopPolling() { if (_pollTimer) { clearTimeout(_pollTimer); _pollTimer = null; } }
 
     async function test() {
         const u = base();
@@ -200,7 +199,7 @@
     } catch (e) {}
     setTimeout(function () { if (enabled()) { collect(); if (_hasDue()) startPolling(); } }, 3000);
 
-    win.OS_RELAY = { cfg: cfg, setCfg: setCfg, enabled: enabled, base: base, submit: submit, collect: collect, onResult: onResult, test: test, pending: pending, dropWaiting: dropWaiting, startPolling: startPolling, stopPolling: stopPolling };
+    win.OS_RELAY = { cfg: cfg, setCfg: setCfg, enabled: enabled, base: base, submit: submit, collect: collect, onResult: onResult, test: test, pending: pending, dropWaiting: dropWaiting, startPolling: startPolling };
     if (win !== window) window.OS_RELAY = win.OS_RELAY;
     console.log('📡 [Relay] 請求托管已載入' + (enabled() ? '（開著）' : '（沒開）'));
 })();

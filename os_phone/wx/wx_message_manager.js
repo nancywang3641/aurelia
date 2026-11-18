@@ -169,37 +169,6 @@
         }
     }
 
-    async function clearCurrentChat() {
-        const targetWin = window.parent || window;
-        const wxApp = targetWin.wxApp || window.wxApp;
-        if (!isApiMode()) { AUI.alert('僅 API 模式支持清空'); return; }
-        
-        const activeId = wxApp.GLOBAL_ACTIVE_ID;
-        if (!activeId) return;
-        
-        if (!await AUI.confirm('高能預警\n\n確定要「清空」當前所有聊天記錄嗎？\n此操作絕對無法恢復！')) return;
-
-        const currentChat = wxApp.GLOBAL_CHATS?.[activeId];
-        if (currentChat) {
-            // 清空＝真的乾淨：舊鍵掃一遍，這一室的帳本整本丟掉
-            purgeProtocolState(activeId, currentChat.messages);
-            try {
-                const C = (targetWin.WX_CARDS || window.WX_CARDS);
-                if (C) C.clear(activeId);
-            } catch (e) {}
-            currentChat.messages = [];
-            currentChat.lastPreview = '';
-            currentChat.renderedCount = 0;
-            currentChat.pushedCount = 0;
-            
-            const WX_DB = targetWin.WX_DB || window.WX_DB;
-            if (WX_DB && typeof WX_DB.saveApiChat === 'function') {
-                await WX_DB.saveApiChat(activeId, currentChat);
-            }
-            wxApp.render();
-        }
-    }
-
     function updateUI() {
         const targetWin = window.parent || window;
         const wxApp = targetWin.wxApp || window.wxApp;
@@ -294,7 +263,6 @@
         exitMultiSelectMode,
         toggleSelect: toggleMessageSelection,
         deleteSelectedMessages,
-        clearCurrentChat,
         purgeProtocolState,
         _updateUI: updateUI
     };

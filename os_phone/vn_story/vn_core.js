@@ -13,7 +13,6 @@
     //     vn_sticker/vn_panels/vn_generator 必須在本檔之前載入） ===
     const VN_Cache       = window.VN_Cache;
     const VN_Config      = window.VN_Config;
-    const VN_PromptOrder = window.VN_PromptOrder;
     const VN_BgmIndex    = win.VN_BgmIndex;
     const VN_Image       = window.VN_Image;
     const VN_CtxMonitor  = window.VN_CtxMonitor;
@@ -374,10 +373,6 @@
             // 📜 上一章沒用掉的選項別留到這章（簡報卡的「繼續」看到有選項就開選項頁）
             try { if (window.VN_StandaloneArchive) { window.VN_StandaloneArchive._pendingChoices = null; } } catch (e) {}
             { const _cc = document.getElementById('vn-chapter-card'); if (_cc) _cc.classList.add('hidden'); }
-
-            // 關閉選項 overlay（載入新/舊章節時清除殘留）
-            const choiceOv = document.getElementById('vn-choice-overlay');
-            if (choiceOv) choiceOv.classList.remove('active');
 
             for (const url of Object.values(this._bgMemCache)) {
                 if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
@@ -1759,14 +1754,6 @@
                             resolve();   // 不當成 throw：橫幅已經接手，別再彈一次「API 生成失敗」
                             return;
                         }
-                        // <status> 交易解析
-                        if (win.OS_ECONOMY && typeof win.OS_ECONOMY.processAiTransaction === 'function') {
-                            const sm = fullText.match(/<status>([\s\S]*?)<\/status>/i);
-                            if (sm) sm[1].split('\n').map(l => l.trim()).filter(Boolean).forEach(l => {
-                                const p = l.split('|').map(s => s.trim());
-                                if (p.length >= 3 && /^T\d+$/i.test(p[0])) win.OS_ECONOMY.processAiTransaction(p[0], p[1], p[2]);
-                            });
-                        }
                         // 🎬 開頭設置補救（網頁版，10-20 補齊）：這章漏了 [Bg]／[BGM] 就從前面幾章帶過來，存檔和這次播放都是補好的版本
                         //   （酒館那支在生成結束後改寫最新一樓；網頁版在這裡改，免得先播一次沒背景的）。vn_fix_opening=0 關
                         if (win.OS_API?.isStandalone?.() && localStorage.getItem('vn_fix_opening') !== '0' && win.OS_STATE_RUNTIME?.repairOpeningText) {
@@ -1921,7 +1908,6 @@
             const j = this._imgJobs;
             return { done: j.done, total: j.total, pending: j.inflight + j.scanning };
         },
-        avatarPendingStatus: function() { return this.imgPendingStatus(); },   // 舊名相容
         // 快取不分頭像/立繪模式＝刻意設計（Rae 2026-07-07 拍板）：切拉桿不重生舊圖、不燒額度——
         // 舊頭像照用，要立繪她自己按 studio「一鍵生立繪」。真正的「開了拉桿還生頭像」bug 是
         // VN_Config.load 時序（vn_config.js 已自讀修掉），別再往快取加模式判定。
@@ -4617,7 +4603,6 @@
         openGameSettings, closeGameSettings, openChatBgPanel, closeChatBgPanel, handleChatBgFile,
         applyChatBgUrl, clearChatBg,
         generateStory, runCardDive, runFreeDive,
-        resetPromptOrder() { VN_PromptOrder.reset(); },
         loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
         async backupAvatarsToWorldbook(btn) {
             const tr = AUI.toastr;

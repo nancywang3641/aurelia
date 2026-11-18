@@ -187,7 +187,6 @@
         loadForChat,          // 向下相容
         getAll:           () => [..._achievements],
         getPending:       () => _achievements.filter(a => !a.redeemed),
-        getRedeemed:      () => _achievements.filter(a =>  a.redeemed),
         getCurrentChatId: () => _currentChatId,
         getChatId,
         markRedeemed

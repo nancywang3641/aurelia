@@ -1323,7 +1323,6 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
         // 根據 mode 動態切換 tab 顯示
         // vn_ui: preview | source | gallery
         const galleryTab = document.getElementById('studio-tab-gallery');
-        const sourceTab = document.getElementById('studio-tab-source');
         if (galleryTab) {
             // 同一個第二 tab 兩用：vn_ui=VN組件展廳、fx=特效庫（照 Rae 指定的雙 tab 版型）
             galleryTab.style.display = (modeId === 'vn_ui' || modeId === 'fx') ? '' : 'none';
@@ -1331,7 +1330,6 @@ demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明
                 ? '<i class="fa-solid fa-wand-magic-sparkles"></i> 特效庫'
                 : '<i class="fa-solid fa-puzzle-piece"></i> VN組件';
         }
-        if (sourceTab)  sourceTab.style.display  = modeId === 'vn_ui' ? '' : 'none';
         // 設定列、已選要求、格式與說明分頁：只有「製作互動面板」(vn_ui) 有這些東西
         { const sbar = document.getElementById('studio-set-bar'); if (sbar) sbar.hidden = modeId !== 'vn_ui'; }
         { const pk = document.getElementById('studio-picked'); if (pk) pk.hidden = modeId !== 'vn_ui'; }
@@ -2351,26 +2349,6 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
         return (A && A.safeHtml) ? A.safeHtml(html) : _sgcEsc(html);
     }
 
-    function safeStreamHtml(raw) {
-        if (!raw) return '';
-        let s = raw.replace(/<(script|iframe)[^>]*>[\s\S]*?<\/\1>/gi, '');
-        
-        // ── 優化：遇到 <json> 開頭直接截斷後方文字，換成炫酷 Loading ──
-        // 🚨 模型不一定用 <json>：有時改用 ```json 圍欄、有時整包裸奔。串流時一樣要切，
-        //    不然她會看著一整片面板原始碼跑過去（跟最終畫面漏碼是同一個病）。
-        const _cut = s.search(/<json>|```[ \t]*json|(?:^|\n)\s*[\[\{]\s*(?:\{\s*)?"(?:category|tagId|id)"\s*:/i);
-        if (_cut !== -1) {
-            s = s.slice(0, _cut) + `
-                <div style="margin-top:10px; padding:10px 15px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.15); border-radius:8px; display:flex; align-items:center; gap:10px; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-                    <div class="os-studio-spinner"></div>
-                    <span style="color:#1A1C28; font-weight:bold; font-size:13px; letter-spacing:0.5px;">The Mirage 正在為您鑄造頂級 JSON 面板中... <i class="fa-solid fa-palette"></i></span>
-                </div>
-            `;
-        }
-        
-        return s.replace(/\n/g, '<br>');
-    }
-
     // ── 多泡泡解析器 ─────────────────────────────────────────────────
     // 將 AI 回應切成 segments：text / render / genimg
     function parseSegments(text) {
@@ -3372,11 +3350,11 @@ body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:
             }
         } catch(e) { console.warn('[Studio] syncActiveTagsToLocal 失敗', e); }
     }
-    // 暴露成全域，讓 vn_ui_workshop 的舊版同名函式委派過來（統一走這份「常駐/關鍵字」拆分邏輯）
+    // 暴露成全域，（統一走這份「常駐/關鍵字」拆分邏輯）
     try { win.__AURELIA_SYNC_VN_TAGS = syncActiveTagsToLocal; } catch (e) {}
 
     // ============================================================
-    // === 注入酒館正則 + 主世界書（從 vn_ui_workshop.js 搬過來整合）===
+    // === 注入酒館正則 + 主世界書（從舊的 VN 標籤煉丹爐搬過來整合；那支檔 11-19 已刪）===
     // 把展廳中的 VN UI 面板一鍵寫入酒館全局正則 + 折疊進主世界書當綠燈觸發
     // ============================================================
     function generateRegexReplacement(data) {

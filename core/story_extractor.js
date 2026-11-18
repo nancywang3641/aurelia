@@ -347,13 +347,6 @@
                 }
             }
 
-            const backBtn = rootWrapper.querySelector('#se-btn-back');
-            if (backBtn && !isVnTabMode) {
-                backBtn.onclick = () => {
-                    panelContainer.style.transform = 'translateX(100%)';
-                };
-            }
-
             const closeBtn = rootWrapper.querySelector('#se-btn-close');
             if (closeBtn) {
                 closeBtn.onclick = () => {

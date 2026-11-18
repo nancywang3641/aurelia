@@ -112,10 +112,6 @@
     function saveItemsState(state) {
         return win.AUI.lsSet(KEY_ITEMS, JSON.stringify(state), '黑市道具');
     }
-    function getItemState(id) {
-        const s = getItemsState();
-        return s[id] || { owned: false, active: false };
-    }
 
     // ================================================================
     // 核心：購買道具
@@ -516,7 +512,6 @@ ${ _xjRow(shards) }
         getActiveKeywords,
         buyItem,
         toggleItem,
-        getCatalog:           () => [...SHOP_CATALOG],
         renderStorePanel
     };
 

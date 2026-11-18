@@ -738,10 +738,6 @@
         if (window.VoidTerminal && window.VoidTerminal.onHide) window.VoidTerminal.onHide();
     };
 
-    AureliaControlCenter.setSyncTarget = function(selector) {
-        if (selector) syncTargetSelector = selector;
-    };
-
     AureliaControlCenter.toggle = () => isVisible ? AureliaControlCenter.hide() : AureliaControlCenter.show();
     AureliaControlCenter.isVisible = () => isVisible;
     // 設定頁改了高度時當場重套：只改窗的高，不重跑 mountEmbedded——
@@ -770,8 +766,6 @@
     };
 
     AureliaControlCenter.setChatTitle = function(title) {
-        const el = document.getElementById('aurelia-current-chat-title');
-        if (el) { el.textContent = title; el.title = title; }
         const homeEl = document.getElementById('home-chat-title');
         if (homeEl) { homeEl.textContent = `[Session] ${title}`; homeEl.title = title; }
     };
@@ -819,7 +813,6 @@
         const p = document.getElementById('aurelia-panel-container');
         return (p && p.style.display !== 'none' && p.dataset.tileOut !== '1' && p.getClientRects().length) ? p : null;
     }
-    AureliaControlCenter.panelOpen = function () { return !!_openPanel(); };
     AureliaControlCenter.closePanel = function () {
         const p = _openPanel();
         if (!p) return false;
@@ -913,10 +906,9 @@
                 '變數工坊': window.OS_AVS,
                 '地圖': window.OS_MAP,
                 'map': window.OS_MAP,
-                // wx/wb/錢包 (phone_system shim 已將它們存入 __PHONE_APPS)
+                // wx/wb (phone_system shim 已將它們存入 __PHONE_APPS)
                 '微信':    { launch: (c) => window.__PHONE_APPS?.['微信']?.(c) },
                 '微博':    { launch: (c) => window.__PHONE_APPS?.['微博']?.(c) },
-                '電子錢包':{ launch: (c) => window.__PHONE_APPS?.['電子錢包']?.(c) },
             };
 
             const _panelClose = () => _panelClosing(panel, false);
@@ -926,7 +918,7 @@
             if (originalLaunchApp) {
                 originalLaunchApp(div);
                 setTimeout(() => {
-                    const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.lb-back-btn', '.qb-back-btn', '.mon-back-btn', '.pm-back-btn', '.rpg-back-btn', '.am-btn-icon', '#avs-nav-home', '[onclick*=\"goHome\"]'];
+                    const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.mon-back-btn', '.pm-back-btn', '.am-btn-icon', '#avs-nav-home', '[onclick*=\"goHome\"]'];
                     selectors.forEach(selector => {
                         div.querySelectorAll(selector).forEach(btn => {
                             const onclickAttr = btn.getAttribute('onclick');

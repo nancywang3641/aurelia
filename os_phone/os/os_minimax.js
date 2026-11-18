@@ -156,12 +156,6 @@
         return new Blob([buffer], { type: 'audio/mpeg' });
     }
 
-    // --- 工具：Hex 字符串 → Blob URL（舊接口保留）---
-    function hexToBlobUrl(hex) {
-        const b = hexToBlob(hex);
-        return b ? URL.createObjectURL(b) : null;
-    }
-
     // 支援語氣詞的模型白名單（僅 speech-2.8-hd / speech-2.8-turbo）
     const VOCAL_SUPPORT_MODELS = new Set(['speech-2.8-hd', 'speech-2.8-turbo']);
 
@@ -376,17 +370,6 @@
             }
         },
 
-        /**
-         * 預取下一句 TTS（背景靜默呼叫，不播放）
-         * 供 vn_core 在當前句顯示後立刻呼叫
-         */
-        prefetchForChar(charName, text, options = {}) {
-            const cfg = this.getConfig();
-            if (!cfg.enabled) return;
-            const voiceId = this.findVoiceId(charName);
-            if (voiceId) this.prefetchVoice(voiceId, text, options);
-        },
-
         // 🔇 含 Sex/NSFW 標記的表情一律不念（VN 那邊的慣例）
         _skipExpression(expression) {
             const SKIP_EXPRESSIONS = ['sex', 'nsfw', 'r18', 'erotic', 'lewd'];
@@ -458,18 +441,6 @@
             const voiceId = this.findVoiceId(charName);
             if (!voiceId) return false;
             return this.speakVoice(voiceId, text, options);
-        },
-
-        /**
-         * 重播最近一句 TTS（從記憶體 Blob 快取，不呼叫 API）
-         * 命中 → 播放並回傳 true；未命中 → 回傳 false（呼叫方應 fallback 到 playForChar）
-         */
-        async replayLast(charName, text, options = {}) {
-            const cfg = this.getConfig();
-            if (!cfg.enabled) return false;
-            const voiceId = this.findVoiceId(charName);
-            if (!voiceId) return false;
-            return this.replayVoice(voiceId, text, options);
         },
 
         /** 指定音色重播上一句（同一句才算，不打 API） */

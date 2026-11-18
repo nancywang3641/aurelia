@@ -220,62 +220,6 @@
             return;
         }
 
-        // ── 角色卡開場白直通：跳過 API，直接用 first_mes ──────
-        const _pendingFirstMes = localStorage.getItem('vn_pending_first_mes');
-        if (_pendingFirstMes) {
-            localStorage.removeItem('vn_pending_first_mes');
-            submitBtn.disabled = true;
-            statusEl.innerHTML = '<span class="gen-spinner"></span>載入角色開場白…';
-            statusEl.className = '';
-            try {
-                const fullText = _pendingFirstMes.includes('<content>')
-                    ? _pendingFirstMes
-                    : `<content>\n${_pendingFirstMes}\n</content>`;
-                const now        = Date.now();
-                const storyTitle = window.VN_Core._extractStoryTitle(fullText)
-                    || presetTitle
-                    || localStorage.getItem('vn_current_story_title')
-                    || '角色開場';
-                // id 已在書架踏入時生好（runCardDive 那條路也是），這裡只換標題
-                if (!window.VN_Core._currentStoryId || window.VN_Core._currentStoryId === '__new_story__') {
-                    window.VN_Core.newStoryId(storyTitle, '');
-                } else {
-                    window.VN_Core.renameStory(storyTitle);
-                }
-                const storyId = window.VN_Core._currentStoryId;
-
-                // 🌟 【重構】直接使用手上的 targetPackId
-                if (win.dispatchEvent) {
-                    win.dispatchEvent(new CustomEvent('VN_STORY_STARTED', {
-                        detail: { entityId: storyId, title: storyTitle, packId: targetPackId }
-                    }));
-                }
-
-                const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
-                await win.OS_DB.saveVnChapter({
-                    title:    '第一章：相遇',
-                    storyId,
-                    storyTitle,
-                    content:  fullText,
-                    request:  request || '角色卡開場白',
-                    thinking: '',
-                    createdAt: now,
-                    avsStateBefore,
-                });
-                window.VN_Core._lastRawText = fullText;
-                if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
-                try { window.VN_Core.earlybirdFromText(fullText); } catch (e) {}  // 頭像早鳥：先開生
-                window.VN_Core._startWithLoader(fullText, null);   // 載入→loading 等全部圖片→開播
-                console.log('[VN_Gen] ✅ 角色卡開場白直通成功，變數已透過參數直接初始化');
-            } catch(e) {
-                console.error('[VN_Gen] 開場白載入失敗:', e);
-                statusEl.textContent = `載入失敗：${e.message}`;
-                statusEl.className = 'err';
-                submitBtn.disabled = false;
-            }
-            return;
-        }
-
         const config = (win.OS_SETTINGS?.getConfig?.()) || {};
         if (!config.url && !config.useSystemApi) {
             statusEl.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> 尚未設定 API。請先到 <b>設置 → AI 模型 → 主模型</b> 填入 API URL 與 Key。';
@@ -364,19 +308,6 @@
                             console.warn('[VN_Gen] 存檔失敗（不影響播放）:', e);
                         }
                         try { await win.OS_PHONE_EVENTS?.commit?.(); } catch (e) {}   // 章節回來了：手機上剛發生的那批記成送過
-
-                        if (win.OS_ECONOMY && typeof win.OS_ECONOMY.processAiTransaction === 'function') {
-                            const statusMatch = fullText.match(/<status>([\s\S]*?)<\/status>/i);
-                            if (statusMatch) {
-                                const txLines = statusMatch[1].split('\n').map(l => l.trim()).filter(Boolean);
-                                for (const line of txLines) {
-                                    const parts = line.split('|').map(s => s.trim());
-                                    if (parts.length >= 3 && /^T\d+$/i.test(parts[0])) {
-                                        win.OS_ECONOMY.processAiTransaction(parts[0], parts[1], parts[2]);
-                                    }
-                                }
-                            }
-                        }
 
                         // 生成面板拆掉後遺留的兩行呼叫(_saveGenPreset / closeGeneratePanel)已移除：
                         // 定義早就沒了，走到就 ReferenceError 把後面的開播整條打斷。

@@ -24,7 +24,7 @@
         try { return localStorage.getItem('vn_current_story_id') || ''; } catch (e) { return ''; }
     }
     // 一次性遷移(Rae 選「遷移到當前卡」)：把舊全域聯絡人歸到「第一次帶 storyId 開啟」的那張卡；
-    //   其他卡空白開始；舊全域 key 保留當備份(不刪)，os_sync/os_contacts 仍讀得到。
+    //   其他卡空白開始；舊全域 key 保留當備份(不刪)，os_contacts 仍讀得到。
     function _migrateGlobalOnce(sid) {
         let globalRaw = null, scopedRaw = null;
         try {
@@ -90,10 +90,6 @@
         },
         saveTags: function (obj) {
             return win.AUI.lsSet(_tagsKey(), JSON.stringify(obj || {}), '通訊錄標籤');
-        },
-        tagsOf: function (id) {
-            const all = this.getTags();
-            return Object.keys(all).filter(function (t) { return (all[t] || []).indexOf(id) >= 0; });
         },
         addTag: function (name) {
             name = String(name || '').trim();
@@ -413,7 +409,6 @@
             _writeAll(list);
             return true;
         },
-        isLobby: function(id) { const c = _readAll().find(x => x.id === id); return !!(c && c.lobby); },
         openInviteWindow: function(chatId, currentMemberIds, callback) {
             const allContacts = this.getAllCustomContacts().filter(c => !c.isGroup);
             const candidates = allContacts.filter(c => !currentMemberIds.includes(c.id));

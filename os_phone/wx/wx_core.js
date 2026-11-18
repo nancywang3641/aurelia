@@ -68,22 +68,6 @@
     // 一載入就掛一次：劇情裡的手機也吃這組顏色，她這一輪還沒打開聊天 app 的話，以前要等聊天 app 畫過才有
     _applyWxSkinClass();
 
-    // --- HTML 轉純文字核心 ---
-    function cleanHtmlToText(htmlContent) {
-        let temp = htmlContent;
-        temp = temp.replace(/<br\s*\/?>/gi, '\n');
-        temp = temp.replace(/<\/p>/gi, '\n');
-        temp = temp.replace(/<p.*?>/gi, '');
-        temp = temp.replace(/<div>/gi, '\n');
-        temp = temp.replace(/<\/div>/gi, '');
-        temp = temp.replace(/<[^>]+>/g, '');
-        const textarea = doc.createElement('textarea');
-        textarea.innerHTML = temp;
-        let decoded = textarea.value;
-        decoded = decoded.replace(/^[""]\s*/gm, '');
-        return decoded;
-    }
-
     // --- 紅包數據管理 ---
     // 🚨改走「這個聊天室的帳本」（wx_cards.js）。以前是拿模型寫的單號當 localStorage 的全域鍵，
     //   結果不同聊天室共用同一份、清空聊天也清不掉、程式自己補的三位數 ID 還會撞到別人的紅包
@@ -3307,8 +3291,6 @@
         get APP_CONTAINER() { return APP_CONTAINER; },
         get GLOBAL_CHATS() { return GLOBAL_CHATS; },
         
-        revealRecall: function(el, encodedContent) { const content = decodeURIComponent(encodedContent); if (el.dataset.revealed === 'true') { el.innerHTML = el.dataset.original; el.dataset.revealed = 'false'; el.style.color = ''; el.style.fontStyle = ''; } else { el.dataset.original = el.innerHTML; el.innerHTML = `[已撤回]: ${_escAttr(content)}`; el.dataset.revealed = 'true'; el.style.color = '#fa5151'; el.style.fontStyle = 'italic'; } },
-        
         openRedPacketById: function(packetId) {
             const data = getRedPacketData(packetId);
             if (!data) {
@@ -3526,13 +3508,6 @@
                 else AUI.toastr.success('下次換頭像時它會看一眼', '微信');
             } catch (e) {}
         },
-        // 忘掉「這一間」記住的樣子，下次進來會重看一次。頭像是一間一個，記憶當然也是。
-        forgetMyAvatar: function (chatId) {
-            const A = win.WX_AVATAR_AI;
-            if (A && A.clearSeeMemory) A.clearSeeMemory(chatId || GLOBAL_ACTIVE_ID);
-            this.render();
-            try { AUI.toastr && AUI.toastr.info('忘掉了，下次會重看一次', '微信'); } catch (e) {}
-        },
         // 📞 微信的通話鍵：直接接通，不是留記錄。用的是電話 app 那套通話畫面——
         //    頭像、名字、計時、掛斷、逐字稿都在，而且對話讀寫同一份聊天記錄，跟微信共用記憶。
         //    差別只有兩件：微信不顯示號碼，掛斷回這個聊天室而不是電話 app 的通話紀錄。
@@ -3568,7 +3543,6 @@
         },
 
         // ── 跑團同步（正文 <chat> 區塊 → 聊天列表 + 通訊錄）；整理入口在右上「＋」選單 ──
-        storySync: function() { _storySyncDebounced(0); },
         // 🎮 模擬市民模式（os_sims.js）：遊戲裡的市民＝聯絡人。沒有就開一間，有就只補 extra 帶來的欄位、跟著遊戲改名。
         //   🚨 記憶體裡沒有的先讀存檔：聊天 app 是打開時才把聊天室讀進來，直接新開一間會把舊紀錄蓋掉
         ensureContactChat: async function (id, name, extra) {
@@ -3786,8 +3760,6 @@
             try { _markRemoved(GLOBAL_CHATS[chatId]); } catch (e) {}
             delete GLOBAL_CHATS[chatId]; if (GLOBAL_ACTIVE_ID === chatId) { GLOBAL_ACTIVE_ID = null; } this.render(); } },
         
-        reloadApiChats: async function() { /* ... */ },
-        
         render: function() {
             if (!APP_CONTAINER) return;
             // 儲存滾動位置，避免重建後閃回頂部
@@ -3821,8 +3793,6 @@
             if (win.WX_MESSAGE_MANAGER && typeof win.WX_MESSAGE_MANAGER._updateUI === 'function') { setTimeout(() => win.WX_MESSAGE_MANAGER._updateUI(), 100); }
         },
         
-        bigImg: function(src) { const V = win.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER; if (V) V.open([{ src: src }], 0); else win.open(src, '_blank'); },
-
         // 圖片生完寫回訊息：[图片:描述] → [图片:網址]，下次開這段對話直接顯示、不再重生
         setImageUrl: async function(chatId, msgIdx, desc, url) {
             const chat = GLOBAL_CHATS[chatId];

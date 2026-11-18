@@ -672,7 +672,6 @@
         `,
         inject: function(fallbackDoc) {
             const targetDoc = (window.parent && window.parent.document) ? window.parent.document : (fallbackDoc || document);
-            const oldFA = targetDoc.getElementById('wx-font-awesome'); if (oldFA) oldFA.remove();
             const STYLE_ID = 'wx-style-modular';
             const oldStyle = targetDoc.getElementById(STYLE_ID); if (oldStyle) oldStyle.remove();
             const style = targetDoc.createElement('style');

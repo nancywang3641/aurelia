@@ -29,20 +29,6 @@
             voiceEnd:   function() { this._voiceBusy = Math.max(0, this._voiceBusy - 1); },
             imgStart:   function() { this._imgBusy++; },
             imgEnd:     function() { this._imgBusy = Math.max(0, this._imgBusy - 1); },
-            waitVoiceIdle: async function(maxMs) {
-                const cap = maxMs || 8000;
-                const t0 = Date.now();
-                while (this._voiceBusy > 0 && (Date.now() - t0) < cap) {
-                    await new Promise(r => setTimeout(r, 250));
-                }
-            },
-            waitImagesIdle: async function(maxMs) {
-                const cap = maxMs || 120000;
-                const t0 = Date.now();
-                while (this._imgBusy > 0 && (Date.now() - t0) < cap) {
-                    await new Promise(r => setTimeout(r, 400));
-                }
-            }
         };
     }
 
@@ -635,8 +621,6 @@
             s = s.replace(/\s*,\s*(?:,\s*)+/g, ', ').replace(/^[\s,]+|[\s,]+$/g, '').replace(/[ \t]{2,}/g, ' ');
             return say ? (s + '\n\n' + say) : s;
         },
-        // 這條線路背後是不是「讀句子」的模型（官方 GPT Image／DALL·E）
-        _isNaturalModel: function (model) { return /^(gpt-?image|dall-?e)/i.test(String(model || '')); },
 
         // 自訂接口回錯 → 給她看的一句話＋站方原話。生圖（_genCustomApi）和帶圖編輯（capiEdit）共用。
         // 🚨 image_generation_user_error 是 OpenAI 圖片錯誤的「大類」：額度用完（billing_hard_limit_reached）、

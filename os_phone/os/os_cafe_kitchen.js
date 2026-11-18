@@ -985,10 +985,6 @@
           col = kLerp(col, [168, 118, 70], Math.min(.6, KF.water * .9));
           return kLerp(col, [208, 164, 118], Math.min(.72, KF.milk * 1.5));
         }
-        function kSummary() {
-          const p = KF.shot / 1.3, f = KF.foam / 1.3;
-          return '咖啡：' + (p <= 0 ? '沒萃' : p < .55 ? '偏淡' : p <= .75 ? '剛剛好' : '偏苦') + '　奶泡：' + (f <= 0 ? '沒打' : f < .55 ? '還很粗' : f <= .75 ? '綿密' : '打過頭');
-        }
         function kPush(u, v, k, skip) {      // 奶泡落下的地方會把旁邊先畫好的白往外推（所以來回搖會一層一層）
           KF.art.forEach(s => { const n = s === skip ? (s.dots ? 0 : s.pts.length - 8) : s.pts.length; for (let i = 0; i < n; i++) { const q = s.pts[i], du = q.u - u, dv = q.v - v, d = Math.hypot(du, dv); if (d < .5 && d > .001) { const f = (.5 - d) * k / d; q.u += du * f; q.v += dv * f; const r = Math.hypot(q.u, q.v); if (r > .97) { q.u *= .97 / r; q.v *= .97 / r; } } } });
         }

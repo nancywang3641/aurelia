@@ -502,14 +502,7 @@ type:"relationship" 的 text 也一律寫到「現在」：兩人現在怎麼看
     // ================================================================
 
     win.OS_VECTOR_ENGINE = { embed, embedLocal: (text, model) => _embedLocal(text, model), _setTF: (T) => { _tfModP = Promise.resolve(T); }, ingest, ingestEntries, backfillVectors, search, vectorReady,
-        placeNow, placeResolver, placeKeep, /* 🚪 世界門：記憶記在哪、自動召回只挑這裡的（os_vector_inject、記憶整理用） */ isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT, cleanForExtract: function(raw) {
-        // 把章節原文清成「要餵給抽取的內容」(跟 ingest 同邏輯：summary 或 <content>)，給結合觸發共用
-        const src = _cfg().extractSource || 'content';
-        let c = '';
-        if (src === 'summary') { c = win.VN_READER?.sumExtract?.(String(raw || '')) || ''; }
-        if (!c.trim()) { const _noCot = String(raw||'').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''); const cm = _noCot.match(/<content>([\s\S]*?)<\/content>/i); c = cm ? cm[1] : _noCot; }
-        return c.trim();
-    } };
+        placeNow, placeResolver, placeKeep, /* 🚪 世界門：記憶記在哪、自動召回只挑這裡的（os_vector_inject、記憶整理用） */ isEnabled: _isEnabled, hasEmbedConfig: _hasEmbedConfig, testLocal, curModelId: _curModelId, isLocal: _isLocal, EXTRACTION_PROMPT };
 
     console.log('[VecEngine] ✅ os_vector_engine.js V1.0 就緒');
 })();

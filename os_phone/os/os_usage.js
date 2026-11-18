@@ -71,18 +71,6 @@
         return _opening;
     }
 
-    // ── token 估算：優先用酒館 tokenizer，PWA/取不到就粗估（CJK≈1 字 1 token、其餘≈4 字 1 token）──
-    async function estTok(text) {
-        const s = String(text || '');
-        if (!s) return 0;
-        try {
-            const ST = win.SillyTavern || (win.parent && win.parent.SillyTavern);
-            if (ST && typeof ST.getTokenCountAsync === 'function') return await ST.getTokenCountAsync(s);
-        } catch (e) {}
-        const cjk = (s.match(/[㐀-鿿豈-﫿぀-ヿ]/g) || []).length;
-        return cjk + Math.ceil((s.length - cjk) / 4);
-    }
-
     // ── 空的一天 / 空的一格 ──
     function blankDay(id) {
         return { id: id, n: 0, ok: 0, fail: 0, inTok: 0, outTok: 0, ms: 0, img: 0, imgFail: 0, voice: 0, voiceFail: 0, voiceChars: 0,
@@ -336,7 +324,7 @@
         start: start, end: end, note: note,
         days: days, today: today, recent: recent, totals: totals,
         clearAll: clearAll, exportAll: exportAll, flush: flush, prune: prune,
-        estTok: estTok, dayKey: dayKey, shiftDay: shiftDay,
+        dayKey: dayKey, shiftDay: shiftDay,
         RAW_KEEP_DAYS: RAW_KEEP_DAYS
     };
     if (win !== window) window.OS_USAGE = win.OS_USAGE;
