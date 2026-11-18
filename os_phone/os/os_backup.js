@@ -79,7 +79,7 @@
         'os_vn_rules_on', 'os_vn_rules_book_off_v1', 'os_vn_rules_phone_auto_off',
         'os_fx_disabled', 'os_fx_groups',                           // VN 特效
         'vn_game_settings', 'vn_ctx_limit', 'vn_reader_sum_open', 'vn_reader_sum_close',   // 遊戲內設定、摘要標籤
-        'sp_autosum_on', 'sp_autosum_every', 'sp_memtidy_on', 'sp_memtidy_every', 'sp_director_on',
+        'sp_autosum_on', 'sp_autosum_every', 'sp_memtidy_on', 'sp_memtidy_every', 'sp_director_on', 'sp_endcheck_on', 'aurelia_scene_log',
         'sp_story_threads', 'sp_summary_autohide', 'sp_summary_keep_recent',
         'aurelia_state_runtime_enabled', 'aurelia_scene_backdrop_auto', 'aurelia_reveal_fx', 'os_app_mem_inject_enabled',
         'aurelia_app_wake', 'aurelia_app_prompt_bundle',            // 手機 app 自己動、吃哪個提示詞包

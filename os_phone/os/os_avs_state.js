@@ -611,6 +611,7 @@
             ds_on: { title: '導演模式（其他故事用）', body: '給「不是白板企劃世界」的故事用：角色卡、奧瑞亞本篇、自己許願建的世界。白板企劃展開的世界有上面的場記表在管，那裡建議關掉這個，省一通錢。\n開著時，每輪劇情寫完會另外整理一份「導演稿」：大家都知道的事、每個人自己才知道的事、誰做了什麼、這一輪可以推的點。下一輪寫劇情時一起交給寫正文的 AI，角色才不會讀心、旁白不會洩底。\n用哪個模型：設置 → AI 模型 →「哪件事走哪個模型」的「導演模式」那列（預設主模型）。開著的時候，「狀態抽取 / 記憶 / 人物檔案」那一通也會改走主模型（那列另外指定了通道的照它）。\n每輪多花一通模型的錢；開著狀態欄的話，導演稿會搭狀態那一通一起寫，不多打。' },
             ds_focus: { title: '導演多留意什麼', body: '選這個故事偏哪一種，導演整理時就多留意那方面：戀愛會多記人物之間的距離和沒說出口的心意，懸疑會多記誰握著哪條線索，冒險會多記傷勢、資源和下一步的代價。\n選了之後下面會顯示交給導演的那段話；直接在框裡改，就變成「自己寫」。\n每個故事各存一份。只改導演留意什麼、往哪個方向挑可以推的點，不改導演稿的格式。\n世界門場記表請大模型想下一步時也會看這段。' },
             ds_push: { title: '推劇情的力道', body: '導演每輪會列幾個「可以推的點」給寫正文的 AI 參考。\n輕：多留白，最多一個；沒有適合的時機就只寫「留白」。\n平常：照導演自己判斷。\n積極：除非剛打完、受傷或累壞了，每輪至少給一個能讓劇情往前走的點。\n都只是建議，不會逼角色硬撐。\n世界門場記表：輕＝連 5 章、平常＝3 章、積極＝2 章沒有新局面，才請大模型想下一步。' },
+            ec_on: { title: '末尾檢查（試用）', body: '每章寫完，記狀態那一通順便檢查這一章有沒有跟前面對不上的地方：不在場的人知道了、受傷的人在跑跳、時間地點對不上、性格突然變了。列出「原句 → 建議改成」，整章歪掉也會說；這裡看得到。\n試用中只標不改：正文一個字都不動，不會自動重新生成，也不會多叫一次模型。\n看幾章覺得它抓得準，之後再做「直接改」；一點用也沒有，就把一般版導演模式拿掉。所有故事都適用。' },
             ds_log: { title: '世界門場記表', body: '白板企劃展開的世界裡，寫劇情的 AI 不再拿整份企劃（岔路、結局），只拿「已經發生過的局面、祕密、這一幕不能提、下一幕可以往哪走」，比較不會劇透、不會為了走到某個結局硬推。\n每輪記狀態那一通會順便判你走到哪個岔路：碰到那個情況先記在場記表，做了選擇岔路圖才亮。結局會先請大模型確認才算。\n大模型（「哪件事走哪個模型」的「導演模式」那列）只在進門第一章、換地點、連兩章做的事都跟岔路無關、連著好幾章沒有新局面時，出來想一下下一步；一個世界大概幾次。\n關掉就回到以前：整份企劃交給寫劇情的 AI，岔路由它自己標。' },
         });
     }
@@ -642,6 +643,7 @@
               + '<div class="asw-ddraft" id="asw-ddraft" hidden><textarea class="asw-text asw-text-tall" id="asw-ddraft-text"></textarea>'
               + '<div class="asw-row asw-row-end"><button type="button" class="asw-btn is-main" id="asw-ddraft-save">存起來（下一輪生效）</button></div></div>'
             : noStory;
+        const R0 = win.OS_STATE_RUNTIME && win.OS_STATE_RUNTIME.endCheck;   // 🔎 末尾檢查（試用）
         const W = win.OS_WORLDGATE || window.OS_WORLDGATE;
         const logRows = (W && W.logOn)
             ? '<label class="asw-row"><span class="asw-row-tx">白板企劃的世界用場記表' + H('ds_log') + '</span><input type="checkbox" class="asw-check" id="asw-log-on"' + (W.logOn() ? ' checked' : '') + '></label>'
@@ -656,6 +658,8 @@
             +   group('這個故事的導演', storyRows)
             + '</div>'
             + '<div class="asw-col">'
+            +   group('末尾檢查・試用', '<label class="asw-row"><span class="asw-row-tx">每章寫完檢查一次(只標不改)' + H('ec_on') + '</span><input type="checkbox" class="asw-check" id="asw-echk-on"' + (R0 && R0.isOn() ? ' checked' : '') + '></label>'
+                  + (cid ? '<div class="asw-dlog" id="asw-echk"><div class="asw-hint">讀取中…</div></div>' : noStory), true)
             +   group('導演稿', draftRows, true)
             +   '<div class="asw-note"><b class="asw-note-title">這頁改了就生效</b>不用按保存。導演重點和力道從下一輪開始用。</div>'
             + '</div>'
@@ -698,6 +702,29 @@
                 + '</div>';
             const btn = logBox.querySelector('#asw-dlog-author'), more = logBox.querySelector('#asw-dlog-more');
             if (btn && more) btn.addEventListener('click', () => { more.hidden = !more.hidden; btn.textContent = more.hidden ? '我要當作者（會劇透）' : '收起來'; });
+        })();
+        // 🔎 末尾檢查：開關＋最近 5 章找到的（原句 → 建議改成、整章歪了、下一章可能會歪）
+        const ecOn = q('#asw-echk-on');
+        if (ecOn) ecOn.addEventListener('change', () => {
+            const ok = R0 && R0.setOn(ecOn.checked);
+            if (ok === false) { ecOn.checked = !ecOn.checked; toast('沒存到，請再試一次', 'error'); return; }
+            toast(ecOn.checked ? '末尾檢查開了：下一章寫完就檢查（只標不改）' : '末尾檢查關了', 'success');
+        });
+        const ecBox = q('#asw-echk');
+        if (ecBox && R0) (async () => {
+            let list = [];
+            try { list = await R0.list(); } catch (e) {}
+            if (!ecBox.isConnected) return;
+            if (!list.length) { ecBox.innerHTML = '<div class="asw-hint">還沒有檢查紀錄：打開之後寫完一章就有。</div>'; return; }
+            const when = (t) => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+            const line = (k, val) => '<div class="asw-dlog-line"><span class="asw-dlog-k">' + k + '</span><span class="asw-dlog-v">' + val + '</span></div>';
+            ecBox.innerHTML = list.slice(0, 5).map(r => {
+                const head = '<div class="asw-hint">' + esc(when(r.at)) + (r.broken ? '・<b>可能整章歪了</b>' : '') + (!r.fixes.length && !r.broken && !r.warn.length ? '・沒找到對不上的' : '') + '</div>';
+                return head
+                    + (r.broken ? line('為什麼', esc(r.brokenWhy || '沒寫原因')) : '')
+                    + r.fixes.map(f => line(f.found ? '原句' : '原句(找不到)', esc(f.find)) + line('建議改成', esc(f.replace)) + line('因為', esc(f.why))).join('')
+                    + r.warn.map(w => line('下一章小心', esc(w))).join('');
+            }).join('');
         })();
         const on = q('#asw-dir-on');
         if (on) on.addEventListener('change', () => { D.setOn(on.checked); toast(on.checked ? '導演模式開了，下一輪劇情寫完就整理第一份' : '導演模式關了', 'success'); });

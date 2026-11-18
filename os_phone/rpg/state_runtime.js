@@ -461,7 +461,7 @@
                 // 結合觸發後：updates(狀態) / memories(記憶) / scenes(插圖) 任一存在即算成功
                 //   🖼️ scenes 也要認：「只有插圖」那一路(沒有變數包、記憶走自己的路)回的就是純 scenes，
                 //      以前不認 → 被判定失敗、重試兩次後整通拋掉，插圖永遠不會派發。
-                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories) || Array.isArray(json.scenes) || (json.plan_log && typeof json.plan_log === 'object'))) return json;
+                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories) || Array.isArray(json.scenes) || (json.plan_log && typeof json.plan_log === 'object') || (json.check && typeof json.check === 'object'))) return json;
                 lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates/memories/scenes/plan_log`);
                 console.warn('[State Runtime]', lastErr.message, 'raw head:', String(raw).slice(0, 300));
             } catch(e) {
@@ -1332,7 +1332,8 @@ ${numberedText}`;
             //   建檔／套預設的初始填充（skipScenes）不是劇情推進，不判
             let wantLog = false;
             try { wantLog = !(opts && opts.skipScenes) && !!(win.OS_WORLDGATE?.logWanted && await win.OS_WORLDGATE.logWanted()); } catch (e) {}
-            if (!hasState && !wantMemory && !wantScenes && !wantLog) return;   // 四件事都沒得做
+            const wantCheck = !(opts && opts.skipScenes) && endCheckOn();   // 🔎 末尾檢查（試用）：建檔初始填充不是一章，不查
+            if (!hasState && !wantMemory && !wantScenes && !wantLog && !wantCheck) return;   // 五件事都沒得做
 
             const currentState = win._AVS_ENGINE?.read?.() || {};
             const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
@@ -1357,7 +1358,7 @@ ${numberedText}`;
             const stateAlreadyDone = !_force && hasState && _hasId(lastId) && _doneIds.some(id => _known.has(id));
             const doState = hasState && !stateAlreadyDone && !!recentText && _hasId(lastId);
 
-            if (!doState && !wantMemory && !wantScenes && !wantLog) return;
+            if (!doState && !wantMemory && !wantScenes && !wantLog && !wantCheck) return;
 
             // 組 prompt：狀態部分用原本 buildExtractPrompt(不動，保品質)；要記憶就附加 memories 區段共用同一通
             let prompt;
@@ -1398,7 +1399,8 @@ ${numberedText}`;
                 // 只有插圖：不抽狀態也不抽記憶，這通就純粹是「挑段落 + 寫插圖提示詞」。
                 // 指令本體由下面的 _sceneAddendum 附上（跟搭便車模式同一份規範，不另寫一套）。
                 prompt = wantScenes ? '你是插圖分鏡助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。'
-                                    : '你是互動小說的記帳助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。';   // 只有場記表要判
+                       : wantLog ? '你是互動小說的記帳助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。'   // 只有場記表要判
+                       : '你是互動小說的校對。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。';   // 只有末尾檢查
             }
             // 📇 NPC 檔案搭便車：登場記帳(0 API) + 回頭客建檔候選附進同一通（sp_npc_dossier=0 可關）
             let _npc = null;
@@ -1441,6 +1443,22 @@ ${numberedText}`;
                     const _lp = _sceneParas.length ? _sceneParas : _segmentStory(_lastFull || lastContent || '');
                     _logH = await win.OS_WORLDGATE.logAddendum(_lp, { numbered: _sceneParas.length > 0 });
                     if (_logH && _logH.block) prompt += _logH.block;
+                }
+            } catch (e) {}
+
+            // 🔎 末尾檢查搭便車：沒抽狀態也沒抽記憶的話，上面沒有前情和狀態，這裡自己補
+            let _chkOn = false;
+            try {
+                if (wantCheck && recentText) {
+                    const _cp = _sceneParas.length ? _sceneParas : _segmentStory(_lastFull || lastContent || '');
+                    if (_cp.length) {
+                        const _printed = _sceneParas.length > 0 || !!(_logH && _logH.block);
+                        const _ctx = (!doState && !wantMemory)
+                            ? '\n【前情】\n' + String(recentText).slice(-6000) + '\n【目前狀態】\n' + JSON.stringify(currentState || {}).slice(0, 2000)
+                            : '';
+                        prompt += _checkAddendum(_cp, _printed, _ctx);
+                        _chkOn = true;
+                    }
                 }
             } catch (e) {}
 
@@ -1629,6 +1647,12 @@ ${numberedText}`;
             if (_logH && _logH.handle) {
                 try { await win.OS_WORLDGATE.logCommit(_logH.handle, json.plan_log, { lastId, floorMoved: _floorMoved, text: _lastFull || lastContent || '' }); }
                 catch (e) { console.warn('[State Runtime] 場記表收帳失敗:', e?.message || e); }
+            }
+
+            // 🔎 末尾檢查收帳（試用：只記不改）
+            if (_chkOn) {
+                try { await _checkCommit(chatId, lastId, json.check, _lastFull || lastContent || ''); }
+                catch (e) { console.warn('[State Runtime] 末尾檢查收帳失敗:', e?.message || e); }
             }
 
             // 🎬 便車稿落地：從同一通原始輸出抓《導演稿開始/結束》（容繁簡）；缺失/不合格 → 降級獨立補一通
@@ -1925,6 +1949,64 @@ ${numberedText}`;
         if (DIRECTOR_PUSH[f.push]) parts.push(DIRECTOR_PUSH[f.push]);
         if (!parts.length) return '';
         return '\n\n' + parts.join('\n') + '\n（以上只影響你留意什麼、張力往哪個方向挑；格式、條數和字數規範照舊。）';
+    }
+
+    // ═══ 🔎 末尾檢查（試用，11-18）═══
+    // 她：「一般版的導演模式確實有點雞肋，或許可以直接變成末尾檢查模式」「不能說直接fix嗎?…先beta，如果測了幾次，一點用也沒有，那一般版確實可以拿掉」。
+    //   每章寫完，記狀態那一通順便找「這一章跟已經發生的事實對不上的地方」，給「原句 → 建議改成」、整章歪掉沒、下一章可能會歪的。
+    //   🚨 試用＝只標不改：正文一個字都不動、不跳重新生成、不送提醒給寫劇情的 AI；只記下來給她看（設置 → 劇情 → 導演），寫完一章跳一句有幾處。
+    //   看幾章覺得準，再做「直接改」。存在 app_data 'endcheck'／'log'（每個聊天室一份，最近 20 章）。
+    const ENDCHECK_KEY = 'sp_endcheck_on';
+    const ENDCHECK_MAX = 20;
+    function endCheckOn() { try { return localStorage.getItem(ENDCHECK_KEY) === '1'; } catch (e) { return false; } }
+    function setEndCheckOn(v) { return win.AUI.lsSet(ENDCHECK_KEY, v ? '1' : '0', '末尾檢查（試用）的開關'); }
+    function _checkAddendum(paras, printed, ctxBlock) {
+        return '\n\n═══ 額外任務:末尾檢查(跟上面要求的一起輸出,放在同一個 JSON 的 "check" 欄) ═══\n' +
+            '讀完「這一章」,對照前情和目前狀態,找出這一章裡跟已經發生的事實對不上的地方。只找事實錯誤:\n' +
+            '- 人物知道了他不在場、也沒有人告訴他的事\n' +
+            '- 傷勢、體力、物品、位置、時間跟前面對不上\n' +
+            '- 人物的性格、說話方式跟前面明顯不一樣\n' +
+            '- 同一章裡前後自己打架\n' +
+            '不算錯誤:文筆、節奏、用詞、劇情走向的好壞、你覺得可以寫得更好的地方。\n' +
+            '每一處給 find(這一章裡要改的那一句,一字不差照抄,只抄那一句)、replace(改成什麼,只改有錯的那幾個字,其他照原文)、why(一句話說對不上什麼)。最多 5 處。\n' +
+            '錯得太多、整章建立在錯的事實上、改幾句圓不回來:broken 填 true,broken_why 寫一句原因。\n' +
+            '還不到要改、但下一章可能會歪的,寫進 warn,一句一條。沒有問題就全給空的。\n' +
+            '格式:"check":{"fixes":[{"find":"原句","replace":"改成","why":"原因"}],"broken":false,"broken_why":"","warn":["一句"]}' +
+            (ctxBlock || '') +
+            (printed ? '\n【這一章】段落跟上面 [P1]、[P2]… 那份一樣。'
+                     : '\n【這一章(編號段落)】\n' + paras.map((t, i) => '[P' + (i + 1) + '] ' + t).join('\n'));
+    }
+    // 比對原句：去空白標點、簡繁折成同一種，模型抄得不完全一樣也認得
+    function _chkNorm(t) {
+        let x = String(t || '');
+        try { const Z = win.OS_ZH; if (Z && Z.toSimp) x = Z.toSimp(x); } catch (e) {}
+        try { return x.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ''); } catch (e) { return x.replace(/\s+/g, ''); }
+    }
+    async function _checkCommit(chatId, lastId, chk, fullText) {
+        if (!chatId || !win.OS_DB?.saveAppData) return null;
+        const c = (chk && typeof chk === 'object') ? chk : {};
+        const body = _chkNorm(_segmentStory(fullText).join(' '));   // 跟給模型看的同一份段落（標籤剝掉的字），不拿原文的 [Nar|…] 格式比
+        const fixes = (Array.isArray(c.fixes) ? c.fixes : []).slice(0, 5).map(f => ({
+            find: String((f && f.find) || '').trim().slice(0, 400), replace: String((f && f.replace) || '').trim().slice(0, 400), why: String((f && f.why) || '').trim().slice(0, 200),
+        })).filter(f => f.find && f.replace && f.find !== f.replace).map(f => Object.assign(f, { found: !!(_chkNorm(f.find) && body.indexOf(_chkNorm(f.find)) >= 0) }));
+        const warn = (Array.isArray(c.warn) ? c.warn : []).map(x => String(x || '').trim().slice(0, 200)).filter(Boolean).slice(0, 5);
+        const rec = { msgId: String(lastId), at: Date.now(), fixes, broken: c.broken === true, brokenWhy: String(c.broken_why || '').trim().slice(0, 200), warn };
+        let list = [];
+        try { list = (await win.OS_DB.getAppData('endcheck', 'log', chatId)) || []; } catch (e) {}
+        if (!Array.isArray(list)) list = [];
+        list = list.filter(r => r && String(r.msgId) !== rec.msgId);   // 同一樓重判：換成新的
+        list.unshift(rec);
+        await win.OS_DB.saveAppData('endcheck', 'log', list.slice(0, ENDCHECK_MAX), chatId);
+        if (rec.fixes.length || rec.broken) {
+            try { win.AUI?.toast?.('末尾檢查：這章' + (rec.broken ? '可能整章歪了' : '有 ' + rec.fixes.length + ' 處對不上') + '（設置 → 劇情 → 導演 看，試用中不會改）', { type: 'info' }); } catch (e) {}
+        }
+        console.log('🔎 [末尾檢查] msg#' + rec.msgId + '：' + rec.fixes.length + ' 處' + (rec.broken ? '、整章歪了' : '') + (rec.warn.length ? '、提醒 ' + rec.warn.length + ' 條' : ''));
+        return rec;
+    }
+    async function endCheckList() {
+        const cid = getChatId();
+        if (!cid || !win.OS_DB?.getAppData) return [];
+        try { const l = await win.OS_DB.getAppData('endcheck', 'log', cid); return Array.isArray(l) ? l : []; } catch (e) { return []; }
     }
 
     // 導演稿也走身分制：[{id, text}] 時序陣列，最新一份＝最後一筆（不再有樓號可比大小）
@@ -3242,6 +3324,11 @@ _directorSpec(castNames);
             getFocus: getDirectorFocus,
             setFocus: setDirectorFocus,
             chatId: getChatId,
+        },
+        endCheck: {                         // 🔎 末尾檢查（試用，11-18；設置 → 劇情 → 導演）
+            isOn: endCheckOn,
+            setOn: setEndCheckOn,
+            list: endCheckList,
         },
         CONFIG
     };
