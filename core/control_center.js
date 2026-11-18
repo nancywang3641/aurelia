@@ -813,6 +813,7 @@
         const p = document.getElementById('aurelia-panel-container');
         return (p && p.style.display !== 'none' && p.dataset.tileOut !== '1' && p.getClientRects().length) ? p : null;
     }
+    AureliaControlCenter.panelOpen = function () { return !!_openPanel(); };   // 測試用：現在有沒有開著的窗口
     AureliaControlCenter.closePanel = function () {
         const p = _openPanel();
         if (!p) return false;
