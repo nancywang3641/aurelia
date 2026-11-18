@@ -415,17 +415,22 @@ label.asw-row { cursor: pointer; }
 .asw-row > :not(.asw-row-tx) { margin-left: auto; }
 .asw-row-tx > .aui-help, .asw-chiprow-tx > .aui-help { margin-left: 4px; vertical-align: middle; color: var(--asw-sub); }
 /* 開關：藥丸形（本體還是一個勾選框，change、checked 照舊；樣子整個自己畫） */
-.asw-check {
-    position: relative; flex: 0 0 auto; width: var(--asw-tog-w); height: var(--asw-tog-h); margin: 0; padding: 0; border: none; border-radius: var(--asw-r-pill);
-    background: var(--asw-tog-off); cursor: pointer; -webkit-appearance: none; appearance: none; outline-offset: 2px; transition: background 0.18s;
+/* 🚨 選擇器寫成 .asw-root input.asw-check：酒館自己的 style.css 有一條 input[type='checkbox']（寬高、框線、底色、打勾的 ::before），
+     分量比單一個 class 重，以前在酒館裡整排開關都變成小勾選框（11-18 她截圖的導演頁）。網頁版沒有那條才一直看不出來 */
+.asw-root input.asw-check {
+    position: relative; display: inline-block; flex: 0 0 auto; width: var(--asw-tog-w); height: var(--asw-tog-h); margin: 0; padding: 0; border: none; border-radius: var(--asw-r-pill);
+    background: var(--asw-tog-off); cursor: pointer; -webkit-appearance: none; appearance: none; outline: none; outline-offset: 2px; transition: background 0.18s;
+    overflow: visible; box-shadow: none; filter: none; transform: none;
 }
-.asw-check::after {
+.asw-root input.asw-check::before { content: none; display: none; }
+.asw-root input.asw-check:focus-visible { outline: 2px solid var(--asw-accent); }
+.asw-root input.asw-check::after {
     content: ''; position: absolute; top: var(--asw-tog-knob-gap); left: var(--asw-tog-knob-gap);
     width: calc(var(--asw-tog-h) - 2 * var(--asw-tog-knob-gap)); height: calc(var(--asw-tog-h) - 2 * var(--asw-tog-knob-gap));
     border-radius: 50%; background: var(--asw-tog-knob); transition: transform 0.18s, background 0.18s;
 }
-.asw-check:checked { background: var(--asw-tog-on); }
-.asw-check:checked::after { transform: translateX(calc(var(--asw-tog-w) - var(--asw-tog-h))); background: var(--asw-tog-knob-on); }
+.asw-root input.asw-check:checked { background: var(--asw-tog-on); }
+.asw-root input.asw-check:checked::after { transform: translateX(calc(var(--asw-tog-w) - var(--asw-tog-h))); background: var(--asw-tog-knob-on); }
 /* 幾選一：一排藥丸鈕（小／中／大、自動／晴／雨／雪） */
 .asw-seg { flex: 0 1 auto; max-width: 100%; display: inline-flex; gap: var(--asw-seg-gap); padding: var(--asw-seg-pad); border-radius: var(--asw-r-pill); background: var(--asw-seg-bg); }
 .asw-seg.is-off { opacity: 0.4; pointer-events: none; }
