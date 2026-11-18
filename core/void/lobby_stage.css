@@ -831,3 +831,29 @@
 @media (prefers-reduced-motion: reduce) {
   .lstage-orb-scr img, .lstage-orb-scr::after, .lstage-orb-hd i { animation:none; }
 }
+
+/* ✂ 不倒翁「切頭和身體」窗（lobby_doll_cut.js；版面照 參考資料/CUT_FIX_LAB.html）＋大廳站著呼吸那張畫布 */
+.ldc-live { position:absolute; left:0; top:0; pointer-events:none; will-change:transform; }
+.ldc-box { width:min(980px, 94%); max-width:94%; max-height:94%; }
+.ldc-box > * { flex-shrink:0; }
+.ldc-box .lgp-title { display:flex; align-items:center; justify-content:center; gap:6px; }
+.ldc-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ldc-bar .lep-btn { flex:0 0 auto; padding:7px 12px; }
+.ldc-seg { display:inline-flex; border:1px solid rgba(60,80,130,.28); border-radius:10px; overflow:hidden; }
+.ldc-seg button { border:0; background:#fff; color:#23315e; padding:7px 14px; font-size:12px; cursor:pointer; min-height:34px; }
+.ldc-seg button + button { border-left:1px solid rgba(60,80,130,.18); }
+.ldc-seg button.is-on { background:#23315e; color:#fff; font-weight:bold; }
+.ldc-seg button.is-on.is-head { background:#4682ff; }
+.ldc-seg button.is-on.is-body { background:#ff9628; color:#2a1a08; }
+.ldc-legend { display:flex; gap:14px; color:#8a93ad; font-size:11px; }
+.ldc-legend i { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+.ldc-legend i.is-head { background:#4682ff; }
+.ldc-legend i.is-body { background:#ff9628; }
+.ldc-canvas { position:relative; border:1px solid rgba(60,80,130,.2); border-radius:8px; overflow:hidden; background:#fff; }
+.ldc-canvas canvas { display:block; width:auto; height:auto; max-width:100%; max-height:34vh; margin:0 auto; }
+.ldc-edit { touch-action:none; cursor:crosshair; }
+.ldc-loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#8a93ad; font-size:13px; background:rgba(255,255,255,.85); min-height:80px; }
+.ldc-polybar { display:flex; gap:8px; }
+.ldc-polybar[hidden], .ldc-loading[hidden] { display:none; }
+.ldc-polybar .lep-btn { flex:0 0 auto; padding:7px 12px; }
+.ldc-status { color:#b07a1e; font-size:12px; min-height:1.4em; }

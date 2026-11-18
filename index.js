@@ -135,6 +135,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_lobby_stage', path: _AURELIA_EXT_BASE + '/core/void/lobby_stage.js', key: 'voidLobbyStage' },
     { name: 'void_lobby_theater', path: _AURELIA_EXT_BASE + '/core/void/lobby_theater.js', key: 'voidLobbyTheater' },   // 🎭 小劇場（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_dress', path: _AURELIA_EXT_BASE + '/core/void/lobby_dress.js', key: 'voidLobbyDress' },   // 👗 裝扮室/右鍵選單/對話紀錄窗（拆自 lobby_stage，靠 _b 橋，必須排它後面）
+    { name: 'void_lobby_doll_cut', path: _AURELIA_EXT_BASE + '/core/void/lobby_doll_cut.js', key: 'voidLobbyDollCut' },   // ✂ GPT 不倒翁切頭身（切圖小修搬來）、站著照衣櫥呼吸；靠 lobby_dress 的 dollKit
     { name: 'void_lobby_editor', path: _AURELIA_EXT_BASE + '/core/void/lobby_editor.js', key: 'voidLobbyEditor' },   // 🖊 擺設模式編輯器（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_npcs', path: _AURELIA_EXT_BASE + '/core/void/lobby_npcs.js', key: 'voidLobbyNpcs' },   // 🧑‍🤝‍🧑 NPC 生成/名冊（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_cafe_regulars', path: _AURELIA_EXT_BASE + '/core/void/lobby_cafe_regulars.js', key: 'voidLobbyCafeRegulars' },   // ☕ 書咖常客在書咖場景進出（三視圖拼走路圖、跳著走）；靠 lobby_stage 的 _b 橋，必須排它後面

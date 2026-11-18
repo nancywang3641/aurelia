@@ -1262,7 +1262,7 @@
             if (up) {
                 const s2 = await resolveRef(up.ref);
                 if (!a.el || !S.active) return;
-                if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); return; }
+                if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); _dollLive(a, key, up); return; }
             }
             let side = '', back = '';
             try { side = (await resolveRef(skin.side)) || ''; back = (await resolveRef(skin.back)) || ''; } catch (e) {}
@@ -1281,6 +1281,12 @@
             }
         }
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src, { smooth: !!skin.doll });
+        _dollLive(a, key, skin);
+    }
+    // ✂ 不倒翁有沒手沒腳的原圖＋切好的頭身：站著時照衣櫥的呼吸動（lobby_doll_cut.js；走路照舊這張走路圖）
+    function _dollLive(a, key, skin) {
+        if (!skin || !skin.doll || !skin.raw || !skin.cut) return;
+        try { const C = window.LobbyDollCut; if (C && C.bindLive) C.bindLive(a, key, skin); } catch (e) {}
     }
 
     // 👗 右鍵角色選單/裝扮室/對話紀錄窗/內建生成 → 拆到 lobby_dress.js（走 _b 橋；2026-07-16）
