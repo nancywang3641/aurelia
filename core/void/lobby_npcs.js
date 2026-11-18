@@ -189,6 +189,8 @@
                     npc = _b.addNpc({ key: 'cafe_crew', name: on.m.name, subTitle: '書咖' + on.label + ' · 上班中', x, y, h: 200, src: on.src, portrait: on.src,
                         noWander: true, homeRect: { x, y, w: 0, h: 0 }, onInteract: say });
                     npc._sid = on.m.sid;
+                    // 🫧 拿得到衣櫥就換成衣櫥的店員（會呼吸、眨眼）；拿不到照舊那張制服圖（lobby_ember.js）
+                    if (window.LobbyEmber) window.LobbyEmber.bind(npc, on.m.gender === 'm' ? 'staff-male' : 'staff-female', { box: 'img' });
                 } catch (e) { console.warn('[LobbyNpcs] 書咖員工班表沒看成', e); }
                 finally { busy = false; }
             };

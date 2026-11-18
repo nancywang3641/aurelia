@@ -191,6 +191,8 @@
             });
             n.wanderT = Infinity;   // 不亂晃：只照進門、出門走
             n._entry = e;
+            // 🫧 停下來、坐下時換成衣櫥活的那套（會呼吸、眨眼，點了東西會吃）；拿不到衣櫥就照舊這張走路圖（lobby_ember.js）
+            if (window.LobbyEmber) window.LobbyEmber.bind(n, p.look, { entry: () => n._entry });
             n._look = p.look;
             n._standH = n.h;
             n._seatWant = seat;     // 走到椅子前面（poll 看到走到了）就坐下；本來就在店裡的直接坐好
@@ -218,7 +220,7 @@
                 const consider = (e, until) => {
                     if (e.t > nowMin || until <= nowMin) return;
                     const c = inn.get(e.key);
-                    if (!c || e.t >= c.t) inn.set(e.key, { t: e.t, line: e.line || '', until });
+                    if (!c || e.t >= c.t) inn.set(e.key, { t: e.t, line: e.line || '', item: e.price ? (e.item || '') : '', until });   // item：有買到東西才有（坐著會吃它）
                 };
                 (logs || []).forEach(l => { if (l && l.day === today && !l.ev && /^g_/.test(l.key || '')) consider(l, l.t + _stay(l)); });
                 (pend || []).forEach(p => { if (p && p.day === today && /^g_/.test(p.key || '')) consider(p, p.t + STAY_PEND); });
