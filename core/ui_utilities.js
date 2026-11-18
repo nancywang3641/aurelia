@@ -8,7 +8,7 @@
 (function() {
     'use strict';
 
-    // 🔧 擴展設定（掛載點、訊息收合、面板高度…）只有這一份讀法：index.js、控制中心、兩個抽取器、loader_core 都叫這支
+    // 🔧 擴展設定（掛載點、訊息收合、面板高度…）只有這一份讀法：index.js、控制中心、兩個抽取器都叫這支
     //    （對外是 AureliaUIUtils.getExtensionSettings）。跟設置頁 os_settings 的 loadTavernExtSettings 同一套：
     //    酒館沒把 extension_settings 掛在 window 上，設置頁存檔時退回寫本機的 'extension_settings'；
     //    所以記憶體有就用，沒有就讀本機那份、讀到順手放回記憶體。以前有幾份只看記憶體，重整後就判斷錯掛載點。
