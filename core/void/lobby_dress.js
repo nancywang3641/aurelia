@@ -691,11 +691,14 @@
     //   🚨 沒手沒腳要明講（11-16 她：「你有沒有告知他不准有手和腳? 因為你的 api image 會跑出手」）：
     //     原本只正面講「只有兩個形狀：頭＋蛋形身體」、不寫 no arms／no legs（那是吃標籤的模型看不懂否定句的教訓），
     //     但這段只送給讀句子的自訂接口，它看得懂否定；長相裡寫著袖子、手套、鞋，它就照著長出手來。下面 DOLL_TPL 和樣張那段說法（DOLL_REF_LEAD）都寫了。
+    //   👀 眼睛照角色走、不抄樣張（11-19 她：「GPT生成的眼睛都依樣……他現在就是照著抄參考圖的眼睛，但不是每個角色都是可愛角色阿」）：
+    //     以前 DOLL_TPL 寫死 large round eyes＋腮紅、樣張那段叫它「眼睛和臉的畫法照原圖」只准換眼睛顏色 → 每個人都是樣張那雙圓眼。
+    //     現在眼睛、眉毛、嘴、腮紅都算「要換的」，照長相描述寫的（沒寫就照年紀、氣質）；照原圖留的只剩頭身輪廓、耳朵、線條和平塗。
     const DOLL_LOOK = '【角色外觀】';
     const DOLL_TPL_KEY = 'os_doll_tpl';
     const DOLL_TPL = 'a turnaround sheet of one small round-bottomed tumbler toy doll, drawn in a flat, simple mascot style; the doll is this character: 【角色外觀】;\n\n'
         + 'the same doll appears three times side by side in one row, all three the same size and resting on the same ground line, on one continuous plain white background: on the left seen from the front, in the middle in full profile with its face pointing to the right, on the right seen from behind;\n\n'
-        + 'each doll is made of only two solid shapes, an oversized round head resting directly on a small smooth egg-shaped body with a rounded bottom; the doll has no arms, no hands, no legs and no feet, and nothing sticks out of the egg-shaped body; the head keeps the character\'s hairstyle, hair color and eye color, with large round eyes, a tiny mouth and round blush on the cheeks; the character\'s outfit is painted flat onto the surface of the egg-shaped body, and the doll seen from behind shows the back of the hair and the back of the outfit;\n\n'
+        + 'each doll is made of only two solid shapes, an oversized round head resting directly on a small smooth egg-shaped body with a rounded bottom; the doll has no arms, no hands, no legs and no feet, and nothing sticks out of the egg-shaped body; the head keeps the character\'s hairstyle, hair color and eye color; the eyes, eyebrows and mouth show this particular character\'s own look and temperament, not a generic cute face: take the eye shape, eye size, gaze and expression from the description (for example narrow sharp eyes, sleepy half-closed eyes, a stern frown, a calm faint smile, a cold stare), and when the description says nothing about them, choose ones that fit the character\'s age, mood and style; add blush on the cheeks only if it suits the character; the character\'s outfit is painted flat onto the surface of the egg-shaped body, and the doll seen from behind shows the back of the hair and the back of the outfit;\n\n'
         + 'flat colors, thin clean outlines; the image contains only these three dolls, evenly spaced with clear white gaps between them and clear white margin around them;';
     function _dollTpl() {
         let t = null;
@@ -713,9 +716,13 @@
     //   說法照「直接改這張」寫、把「只改什麼」和「照原圖留著什麼」分開（11-16 她轉來阿洛試出來的：參考圖只帶得動外觀，鎖不住「沒有手」的結構；
     //     當成樣張叫它照著畫，它換衣服時會順手補出普通小人的身體。直接改這隻、固定外輪廓、衣服只畫在原本身體裡，才留得住）。
     const DOLL_REF_LEAD = 'Edit the doll sheet in image {n} directly: keep its three dolls and turn them into the character described below.\n'
-        + 'Change only: the hairstyle and hair color, anything worn on the head or face, the eye color, and the colors and patterns painted on the body, so that they match that character.\n'
+        + 'Change only: the hairstyle and hair color, anything worn on the head or face, the eyes, the eyebrows, the mouth and the blush, and the colors and patterns painted on the body, so that they match that character.\n'
+        + 'The eyes in image {n} are only a placeholder; do not copy them. Give this character their own eyes and expression: '
+        + 'take the eye shape, eye size, eye color, gaze, eyebrows and mouth from the description (for example narrow sharp eyes, sleepy half-closed eyes, a stern frown, a calm faint smile, a cold stare), '
+        + 'and when the description says nothing about them, choose ones that fit the character\'s age, mood and style. Not every character is cute; a serious, cold, tired or fierce character gets a face that shows it. '
+        + 'Keep the blush only if it suits the character.\n'
         + 'Keep exactly as in image {n}: the proportion between head and body, the outline of the head and the outline of the body, the chin sitting directly on the body, '
-        + 'the way the eyes, face and ears are drawn, the thin outlines and flat coloring, the plain white background, '
+        + 'the way the ears are drawn, the thin outlines and flat coloring, the plain white background, '
         + 'the size and position of the three dolls on the canvas with the same empty white space above and below them, '
         + 'and the three views: front view on the left, side view with the face pointing to the right in the middle, back view on the right.\n'
         + 'The body stays one complete, short, round egg shape whose left and right outlines are smooth and unbroken. '
