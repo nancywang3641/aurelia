@@ -1432,10 +1432,6 @@
                         const w = window.parent || window;
                         if (!await AUI.confirm('確定清空全部通訊錄？\\n（聊天記錄保留，但聯繫人及隱形成員全部刪除）')) return;
                         localStorage.removeItem((w.WX_CONTACTS && w.WX_CONTACTS._key && w.WX_CONTACTS._key()) || 'wx_custom_contacts_v1');
-                        if (w.OS_CONTACTS && w.OS_CONTACTS.getAllContacts) {
-                            const all = w.OS_CONTACTS.getAllContacts();
-                            all.forEach(c => { if (w.OS_CONTACTS.deleteContact) w.OS_CONTACTS.deleteContact(c.id); });
-                        }
                         if (w.wxApp && w.wxApp.GLOBAL_CHATS) {
                             Object.keys(w.wxApp.GLOBAL_CHATS).forEach(id => { delete w.wxApp.GLOBAL_CHATS[id]; });
                             if (w.wxApp.render) w.wxApp.render();
@@ -1450,10 +1446,6 @@
                         const w = window.parent || window;
                         if (!await AUI.confirm('確定清空所有微信數據？\\n（通訊錄 + 全部聊天記錄將永久刪除）')) return;
                         localStorage.removeItem((w.WX_CONTACTS && w.WX_CONTACTS._key && w.WX_CONTACTS._key()) || 'wx_custom_contacts_v1');
-                        if (w.OS_CONTACTS && w.OS_CONTACTS.getAllContacts) {
-                            const all = w.OS_CONTACTS.getAllContacts();
-                            all.forEach(c => { if (w.OS_CONTACTS.deleteContact) w.OS_CONTACTS.deleteContact(c.id); });
-                        }
                         const ids = w.wxApp && w.wxApp.GLOBAL_CHATS ? Object.keys(w.wxApp.GLOBAL_CHATS) : [];
                         if (w.wxApp && w.wxApp.GLOBAL_CHATS) {
                             ids.forEach(id => { delete w.wxApp.GLOBAL_CHATS[id]; });

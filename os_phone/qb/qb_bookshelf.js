@@ -203,6 +203,8 @@
                     const filtered = allRules.filter(r => r.worldId !== w.id);
                     if (_lsSet(rulesKey, JSON.stringify(filtered), '刪掉這本書的條件規則這一步')) console.log(`[DelWorld] 已刪條件規則 ${allRules.length - filtered.length} 條`);
                 } catch(e) { console.warn('[DelWorld] 條件規則讀不出來，沒動', e); }
+                // 5. 這本書的卡片自帶美化規則（匯入角色卡時收的那一包）
+                try { const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX); if (_CR && _CR.removePack) await _CR.removePack(w.id); } catch(e) { console.warn('[DelWorld] 美化規則沒清掉', e); }
             }
 
             if (typeof afterDelete === 'function') afterDelete();

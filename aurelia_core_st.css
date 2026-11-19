@@ -22,41 +22,7 @@ html, body {
     /* height 由 JS 控制，不在此設 !important 以免覆蓋 */
 }
 
-#phone-frame-hardware {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
-    width: 100% !important;
-    height: 100% !important;
-    transform: none !important;
-    border-radius: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    margin: 0 !important;
-    max-height: none !important;
-}
-
 #aurelia-phone-screen { padding-bottom: 0 !important; height: 100%; }
-
-@media (max-width: 768px) {
-    #phone-frame-hardware {
-        height: 100% !important;
-        top: 0 !important;
-        transform: none !important;
-        border-bottom-left-radius: 0 !important;
-        border-bottom-right-radius: 0 !important;
-    }
-}
-
-@media (max-width: 768px) {
-    #phone-frame-hardware {
-        height: 100dvh !important;
-        top: 0 !important;
-        transform: none !important;
-        border-bottom-left-radius: 0 !important;
-        border-bottom-right-radius: 0 !important;
-    }
-}
 
 /* ── 啟動載入畫面 ── */
 #aurelia-boot {

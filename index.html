@@ -45,13 +45,11 @@
     <link rel="stylesheet" href="css/os_persona.css" />
     <link rel="stylesheet" href="css/os_prompts.css" />
     <link rel="stylesheet" href="css/os_avs.css" />
-    <link rel="stylesheet" href="css/os_think.css" />
     <link rel="stylesheet" href="css/os_tarot.css" />
     <link rel="stylesheet" href="css/os_journal.css" />
     <link rel="stylesheet" href="css/os_story_tools.css" />
     <link rel="stylesheet" href="css/os_exchange.css" />
     <link rel="stylesheet" href="css/os_wg_pack.css" />
-    <link rel="stylesheet" href="css/os_monitor.css" />
 
     <!-- vn_story / qb / wx / map / rpg 模組 CSS -->
     <link rel="stylesheet" href="css/vn_styles.css" />
@@ -184,7 +182,6 @@
     <script src="os_phone/os/os_usage.js"></script>
     <script src="os_phone/os/os_api_engine.js"></script>
     <script src="os_phone/os/phone_system.js"></script>
-    <script src="os_phone/os/os_monitor.js"></script>
 
     <script src="os_phone/os/os_minimax.js"></script>
     <script src="os_phone/os/os_elevenlabs.js"></script>
@@ -389,13 +386,11 @@
         (function () {
             try {
                 const wxCfg  = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}');
-                const mainCfg = JSON.parse(localStorage.getItem('os_global_config')    || '{}');
                 wxCfg.directMode    = true;
                 wxCfg.disableTyping = true;
-                if (!wxCfg.url   && mainCfg.url)   wxCfg.url   = mainCfg.url;
-                if (!wxCfg.key   && mainCfg.key)   wxCfg.key   = mainCfg.key;
-                if (!wxCfg.model && mainCfg.model) wxCfg.model = mainCfg.model;
-                if (!wxCfg.maxTokens && mainCfg.maxTokens) wxCfg.maxTokens = mainCfg.maxTokens;
+                // 以前第一次開機會把主模型的網址／金鑰／模型抄一份進來，之後不再更新；手機聊天拿設定時這份舊的又蓋在設置上面，
+                //   換了主模型手機聊天還在用舊的那組。跟酒館版一樣：這裡只留開關，接口一律照設置（哪件事走哪個模型）。舊抄本拿掉。
+                delete wxCfg.url; delete wxCfg.key; delete wxCfg.model; delete wxCfg.maxTokens;
                 localStorage.setItem('wx_phone_api_config', JSON.stringify(wxCfg));
             } catch(e) {}
         })();

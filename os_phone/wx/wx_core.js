@@ -3322,17 +3322,6 @@
                         // 發送系統消息，通知用戶已領取（包含金額信息）
                         if (GLOBAL_ACTIVE_ID && GLOBAL_CHATS[GLOBAL_ACTIVE_ID]) {
                             const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
-                            const chatName = currentChat.name;
-                            const chatId = currentChat.id;
-                            const safeMembers = currentChat.members || [];
-                            const memberNames = convertMemberIdsToNames(safeMembers);
-                            const memberStr = memberNames.length > 0 ? memberNames.join(', ') : (chatName || "User");
-                            
-                            // 用戶領取後，發送系統消息給API（包含金額，讓AI知道剩餘金額）
-                            // 格式：[系統: XXX領取了紅包97.42元|紅包ID]
-                            const protocolContent = `[系統: ${currentUserName}領取了紅包${grabAmount.toFixed(2)}元|${packetId}]`;
-                            const fullProtocolMessage = `\n[Chat: ${chatName}|${chatId}]\n[With: ${memberStr}]\n[System: ${protocolContent}]`;
-                            
                             // 存入消息歷史的格式（包含金額，供下一輪AI查看）
                             const historyContent = `[系統: ${currentUserName}領取了紅包${grabAmount.toFixed(2)}元|${packetId}]`;
                             currentChat.messages.push({ type: 'system', content: historyContent, isMe: false });
@@ -3344,8 +3333,6 @@
                                 if (conf.directMode && win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') {
                                     win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat);
                                 }
-                            } else if (window.TavernHelper) {
-                                window.TavernHelper.createChatMessages([{ role:'user', message: fullProtocolMessage }]);
                             }
                         }
                         
@@ -4293,20 +4280,12 @@
                 const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
                 currentChat.messages.push({ type: 'system', content: content, isMe: false, _mine: 1 });   // _mine：她按的（畫成「你收下了」，不是「對方」）
                 this.render();
-                const chatName = currentChat.name;
-                const chatId = currentChat.id;
-                const safeMembers = currentChat.members || [];
-                const memberNames = convertMemberIdsToNames(safeMembers);
-                const memberStr = memberNames.length > 0 ? memberNames.join(', ') : (chatName || "User");
-                const fullProtocolMessage = `\n[Chat: ${chatName}|${chatId}]\n[With: ${memberStr}]\n[System: ${content}]`;
                 const configStr = localStorage.getItem('wx_phone_api_config');
                 if (configStr) {
                     const conf = JSON.parse(configStr);
                     if (conf.directMode && win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') {
                         win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat);
                     }
-                } else if (window.TavernHelper) {
-                    window.TavernHelper.createChatMessages([{ role:'user', message: fullProtocolMessage }]);
                 }
             }
         },
@@ -4416,20 +4395,12 @@
                 const currentChat = GLOBAL_CHATS[GLOBAL_ACTIVE_ID];
                 currentChat.messages.push({ type: 'system', content: content, isMe: false, _mine: 1 });   // _mine：她按的（畫成「你已收款」，不是「對方已接收」）
                 this.render();
-                const chatName = currentChat.name;
-                const chatId = currentChat.id;
-                const safeMembers = currentChat.members || [];
-                const memberNames = convertMemberIdsToNames(safeMembers);
-                const memberStr = memberNames.length > 0 ? memberNames.join(', ') : (chatName || "User");
-                const fullProtocolMessage = `\n[Chat: ${chatName}|${chatId}]\n[With: ${memberStr}]\n[System: ${content}]`;
                 const configStr = localStorage.getItem('wx_phone_api_config');
                 if (configStr) {
                     const conf = JSON.parse(configStr);
                     if (conf.directMode && win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') {
                         win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat);
                     }
-                } else if (window.TavernHelper) {
-                    window.TavernHelper.createChatMessages([{ role:'user', message: fullProtocolMessage }]);
                 }
             }
         },
@@ -4496,8 +4467,6 @@
             if (configStr) {
                 const conf = JSON.parse(configStr);
                 if (conf.directMode && win.WX_DB && typeof win.WX_DB.saveApiChat === 'function') { await win.WX_DB.saveApiChat(GLOBAL_ACTIVE_ID, currentChat); }
-            } else if (window.TavernHelper) {
-                await window.TavernHelper.createChatMessages([{ role:'user', message: fullProtocolMessage }]);
             }
         },
 
@@ -4759,16 +4728,6 @@
                     IS_STREAMING_REPLY = false;
                     _rebuildRoomContent(currentChat);
                 }
-            } else if (window.TavernHelper) {
-                console.warn('[WX] 走酒館轉發路徑（isApiMode=' + isApiMode + ' / WX_API=' + (!!win.WX_API) + '）→ 沒走 OS API');
-                const loadingMsgIndex = currentChat.messages.findIndex(m => !m.isMe && m.isLoading);
-                if (loadingMsgIndex !== -1) { currentChat.messages.splice(loadingMsgIndex, 1); }
-                this.render(); 
-                IS_STREAMING_REPLY = false;
-                setTimeout(() => {
-                   const sendBtn = doc.querySelector('#send_but');
-                   if (sendBtn) { sendBtn.click(); } else { window.TavernHelper.generate({}); }
-                }, 100);
             }
         },
 

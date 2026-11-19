@@ -198,7 +198,6 @@ const PHONE_FILES = [
     'os/os_app_memory_inject.js', // app→酒館 記憶反向注入器（在場角色的手機近況，唯讀注入不貼回 chat）
     'os/os_summary_inject.js', // 酒館版大總結程式注入器（OS_DB tavern_summary → 壓縮 → injectPrompts；搬出世界書）
     'os/phone_system.js',
-    'os/os_monitor.js',
     'os/os_minimax.js',
     'os/os_elevenlabs.js',       // 🔊 ElevenLabs 語音（瀏覽器直連，不需要伺服器）
     'os/os_voice_cast.js',       // 🔊 角色配音名單：輪到誰講話用哪個聲音（雲端／本機／不念）的唯一入口
@@ -540,13 +539,11 @@ async function initializeExtension() {
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_wb_mount.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_prompts.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_think.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_tarot.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_exchange.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_wg_pack.css');
         await loadCSS(_AURELIA_EXT_BASE + '/css/os_story_tools.css');
-        await loadCSS(_AURELIA_EXT_BASE + '/css/os_monitor.css');
 
         // vn_story / qb / wx / map / rpg 模組 CSS
         await loadCSS(_AURELIA_EXT_BASE + '/css/vn_styles.css');

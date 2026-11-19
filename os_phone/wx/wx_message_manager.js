@@ -14,21 +14,8 @@
     let selectedMessages = new Set();   
 
     // ============ 工具函數 ============
-    function isApiMode() {
-        try {
-            const config = localStorage.getItem('wx_phone_api_config');
-            if (!config) return false;
-            const parsed = JSON.parse(config);
-            return parsed.directMode === true;
-        } catch (e) { return false; }
-    }
-
     // preIdx：從長按小窗的「刪除」進來時，那一則先勾好
     function enterMultiSelectMode(preIdx) {
-        if (!isApiMode()) {
-            AUI.alert('刪除功能僅支持 API 模式\n\n酒館模式請在酒館編輯器中刪除消息');
-            return false;
-        }
         isMultiSelectMode = true;
         selectedMessages.clear();
         const _p = parseInt(preIdx, 10);

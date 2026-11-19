@@ -446,43 +446,6 @@
                 this.updateContactInfo(chatId, { members: finalMembers });
                 if (win.WX_DB && win.WX_DB.saveApiChat && win.wxApp.GLOBAL_CHATS[chatId]) { win.WX_DB.saveApiChat(chatId, win.wxApp.GLOBAL_CHATS[chatId]); }
                 
-                // 如果有 API 配置，發送系統消息到 API
-                if (win.wxApp && win.wxApp.GLOBAL_CHATS[chatId]) {
-                    const chat = win.wxApp.GLOBAL_CHATS[chatId];
-                    const configStr = localStorage.getItem('wx_phone_api_config');
-                    if (configStr) {
-                        const conf = JSON.parse(configStr);
-                        if (!conf.directMode && window.TavernHelper) {
-                            // 獲取所有成員名稱（使用更新後的成員列表）
-                            const allContactsForNames = this.getAllCustomContacts();
-                            const memberNames = (finalMembers || []).map(id => {
-                                if (id === "User" || id === "user") {
-                                    try { return win.WX_ME.name(); } catch (e) {}
-                                    return "User";
-                                }
-                                const c = allContactsForNames.find(contact => contact.id === id);
-                                return c ? c.name : id;
-                            }).filter(name => name);
-                            
-                            const chatName = chat.name || chatId;
-                            const memberStr = memberNames.length > 0 ? memberNames.join(', ') : chatName;
-                            
-                            // 為每個新成員發送系統消息到 API
-                            newIds.forEach(memberId => {
-                                let memberName = memberId;
-                                const contact = allContacts.find(c => c.id === memberId);
-                                if (contact && contact.name) {
-                                    memberName = contact.name;
-                                }
-                                
-                                const content = `${memberName}加入了群聊`;
-                                const fullProtocolMessage = `\n[Chat: ${chatName}|${chatId}]\n[With: ${memberStr}]\n[System: ${content}]`;
-                                window.TavernHelper.createChatMessages([{ role:'user', message: fullProtocolMessage }]);
-                            });
-                        }
-                    }
-                }
-                
                 AUI.alert(`成功邀請 ${newIds.length} 位成員！`); targetDoc.getElementById('wxActionModal').classList.remove('show'); if (callback) callback(finalMembers);
             };
         },

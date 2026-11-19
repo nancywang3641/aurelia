@@ -900,9 +900,6 @@
                 '世界書': window.OS_WORLDBOOK || window.OS_LOREBOOK,
                 'worldbook': window.OS_WORLDBOOK || window.OS_LOREBOOK,
                 '提示詞': window.OS_PROMPTS,
-                '思考記錄': window.OS_THINK,
-                'think': window.OS_THINK,
-                '系統診斷': window.OS_MONITOR,
                 'avs': window.OS_AVS,
                 '變數工坊': window.OS_AVS,
                 '地圖': window.OS_MAP,
@@ -919,7 +916,7 @@
             if (originalLaunchApp) {
                 originalLaunchApp(div);
                 setTimeout(() => {
-                    const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.mon-back-btn', '.pm-back-btn', '.am-btn-icon', '#avs-nav-home', '[onclick*=\"goHome\"]'];
+                    const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.pm-back-btn', '.am-btn-icon', '#avs-nav-home', '[onclick*=\"goHome\"]'];
                     selectors.forEach(selector => {
                         div.querySelectorAll(selector).forEach(btn => {
                             const onclickAttr = btn.getAttribute('onclick');
