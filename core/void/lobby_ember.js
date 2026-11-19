@@ -11,6 +11,8 @@
 //     這裡照同一套量衣櫥畫出來的身體，算出 viewBox，疊上去跟原本那張同一個位置、同一個大小。
 //   衣櫥畫的格子裡有自己的桌子、椅子、地上的影子：大廳有自己的桌椅，這幾樣拿掉（同 tmp/doll_bake/bake.cjs 的做法）。
 //   一個角色一個藏起來的 iframe（衣櫥的限制）；第一次做角色包約 20 秒，之後存在 IndexedDB（ember-runtime）0.2 秒。
+//   11-19 她選「整套接」點餐送餐：送餐的店員（n._emberWalk）走路也畫衣櫥的（walk、端盤走 trayWalk／tray），停下來照 n._emberPose（記點餐 writing、端盤 tray）；
+//     常客 opts.served() 送到了才吃，杯盤在吃的空檔留在桌上（從吃那一口的頭尾那格拿下來），吃 BITES 口就吃完。流程在 lobby_cafe_regulars.js。
 // 依賴：window.LobbyStage（_b、_S）；呼叫端：lobby_cafe_regulars.js（常客）、lobby_npcs.js（雇來的員工）。
 // ----------------------------------------------------------------
 (function () {
@@ -185,14 +187,56 @@
             const n = b.n;
             if (!S || !S.active || S.npcs.indexOf(n) < 0 || !n.el || !n.el.isConnected) { unbind(b); continue; }
             if (!b.ready) continue;
-            const moving = !!(n.walking || n.dest || n._sitting || n._leaving);
+            // _route：送餐的店員還有下一段路（轉角那一下別變回站著）；被小劇場凍住的不算在走（不然原地踏步）
+            const walking = !n._theaterFrozen && !!(n.walking || n.dest || (n._route && n._route.length));
+            const moving = !!(walking || n._sitting || n._leaving);
             const seat = n._seat || null;
-            if (moving) { _show(b, false); b.mode = ''; continue; }
-            try { _draw(b, S, seat, now); } catch (e) { console.warn('[LobbyEmber] 畫不出來，這位改回拍好的圖', b.id, e); unbind(b); }
+            // 送餐的店員（n._emberWalk，lobby_cafe_regulars.js 的送餐那段開）走路也用衣櫥畫；其他人走路照舊用拍好的走路圖
+            if (moving && !(n._emberWalk && !n._sitting && !n._leaving)) { _show(b, false); b.mode = ''; continue; }
+            try { _draw(b, S, seat, now, walking); } catch (e) { console.warn('[LobbyEmber] 畫不出來，這位改回拍好的圖', b.id, e); unbind(b); }
         }
     }
+    // 走路的人每一幀跟著挪（衣櫥那層一秒只重畫 10 次，位置不跟會一頓一頓的）
+    let _rafOn = false;
+    function _follow() {
+        _rafOn = false;
+        let any = false;
+        for (const b of _binds) {
+            if (!b.walkOn || !b.el || !b.on) continue;
+            any = true;
+            _place(b);
+        }
+        if (any) { _rafOn = true; requestAnimationFrame(_follow); }
+    }
+    function _place(b) {
+        const n = b.n, w = b.w, h = b.h;
+        const tf = 'translate3d(' + (n.x - w / 2).toFixed(1) + 'px,' + (n.y - h).toFixed(1) + 'px,0)' + (b.mirror ? ' scaleX(-1)' : '');
+        if (b._tf !== tf) { b.el.style.transform = tf; b._tf = tf; }
+        const z = n.el.style.zIndex || '';
+        if (b.el.style.zIndex !== z) b.el.style.zIndex = z;
+    }
 
-    function _draw(b, S, seat, now) {
+    // ---------- 桌上的餐點：吃的空檔也留在桌上（衣櫥只在吃那一口的動作裡畫杯盤，這裡從那個動作的頭／尾那格拿下來放進坐著那格） ----------
+    const ITEM_SEL = '[data-mochi="saucer"],[data-mochi="cup-down"],[data-mochi="plate"],[data-mochi="snack-plate"],[data-mochi="snack-down"]';
+    const BITES = 5;                    // 吃幾口就吃完（之後盤子留著、不再吃）
+    function _itemsOf(ready, motion, state) {
+        const k = motion + '|' + state;
+        ready.items = ready.items || {};
+        if (ready.items[k] != null) return ready.items[k];
+        const c = ready.c, len = c.length({ motion, view: 'side' });
+        const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        sv.innerHTML = c.inner({ motion, view: 'side', t: state === 'whole' ? 0 : len - 0.01, blink: 0 });
+        const out = {};
+        sv.querySelectorAll(ITEM_SEL).forEach(e => {
+            if (e.parentElement && e.parentElement.closest && e.parentElement.closest(ITEM_SEL)) return;
+            const tag = e.getAttribute('data-mochi');
+            if (state === 'done' && tag === 'snack-down') return;   // 可頌吃完：只剩空盤子
+            out[tag] = (out[tag] || '') + e.outerHTML;
+        });
+        return (ready.items[k] = out);
+    }
+
+    function _draw(b, S, seat, now, walking) {
         const n = b.n, c = b.ready.c, G = b.ready.geo;
         // 他在舞台上那一格的位置大小（同 lobby_stage 的 placeSheetActor／placeActor）
         let w, h = n.h;
@@ -202,22 +246,45 @@
         const left = n.x - w / 2, top = n.y - h;
         const el = _layer(b, S.world);
         // 現在演什麼
-        const mode = seat ? 'seat' : 'stand';
+        let view = 'front', mirror = false, motion = seat ? 'sitTable' : 'idle', react = null;
+        let items = null, eatKind = null;
+        if (!seat && n._emberWalk) {
+            // 送餐的店員：走路照這一格往哪挪換面；端著盤子走＝側面「送餐走路」、上下走＝端盤（衣櫥的送餐走路只有側面）；停下來照送餐那段給的姿勢
+            const dx = n.x - (b.px == null ? n.x : b.px), dy = n.y - (b.py == null ? n.y : b.py);
+            b.px = n.x; b.py = n.y;
+            if (walking && Math.abs(dx) + Math.abs(dy) > 0.01) b.dir = Math.abs(dx) >= Math.abs(dy) ? (dx < 0 ? 1 : 2) : (dy < 0 ? 3 : 0);
+            const P = !walking && n._emberPose;
+            if (P) { motion = P.motion; view = P.view || 'front'; mirror = !!P.mirror; }
+            else {
+                const d = walking ? (b.dir || 0) : 0;
+                view = d === 3 ? 'back' : (d === 1 || d === 2) ? 'side' : 'front';
+                mirror = d === 2;
+                motion = walking ? (n._tray ? (view === 'side' ? 'trayWalk' : 'tray') : 'walk') : (n._tray ? 'tray' : 'idle');
+            }
+        }
+        const mode = seat ? 'seat' : (walking ? 'walk:' : 'stand:') + motion + view;
         if (b.mode !== mode) { b.mode = mode; b.t0 = now; b.act = null; b.nextEat = now + 4 + Math.random() * 10; }
-        let view = 'front', mirror = false, motion = seat ? 'sitTable' : 'idle', react = null, t = now - b.t0;
+        let t = now - b.t0;
         if (seat) {
             view = 'side'; mirror = !!seat.right;   // 衣櫥的側面臉朝左；椅子朝右坐的要翻過來
             const e = b.opts.entry ? b.opts.entry() : null;
+            // 送來了才吃（opts.served 沒給＝一坐下就有）；剛送到的過幾秒吃第一口
+            const served = !b.opts.served || b.opts.served();
+            if (served && !b.wasServed) { b.wasServed = true; b.nextEat = now + 2 + Math.random() * 3; }
+            eatKind = served && e && e.item ? _eatOf(e.item) : null;
             if (b.act) {
                 const len = c.length({ motion: b.act.motion, view, react: b.act.react });
-                if (now - b.act.t0 >= len) { b.act = null; b.t0 = now; b.nextEat = now + 18 + Math.random() * 25; }
-            } else if (e && e.item && now >= b.nextEat) {
-                const m = _eatOf(e.item);
-                if (m) b.act = { motion: m, react: _reactOf(e.line, _hash(n.key + ':' + Math.floor(now / 60))), t0: now };
-                else b.nextEat = now + 30;
+                if (now - b.act.t0 >= len) { b.act = null; b.t0 = now; b.bites = (b.bites || 0) + 1; b.nextEat = now + 18 + Math.random() * 25; }
+            } else if (eatKind && now >= b.nextEat && (b.bites || 0) < BITES) {
+                b.act = { motion: eatKind, react: _reactOf(e.line, _hash(n.key + ':' + Math.floor(now / 60))), t0: now };
             }
             if (b.act) { motion = b.act.motion; react = b.act.react; t = now - b.act.t0; }
-        } else {
+            if (eatKind) {
+                const bites = b.bites || 0;
+                items = b.act ? (bites ? _itemsOf(b.ready, eatKind, 'bitten') : null)   // 吃的那一口：衣櫥自己畫杯盤；咬過的別在下一口開頭又變回完整的
+                    : _itemsOf(b.ready, eatKind, bites >= BITES ? 'done' : bites ? 'bitten' : 'whole');
+            }
+        } else if (!n._emberWalk) {
             const d = n.dir || 0;
             view = d === 3 ? 'back' : (d === 1 || d === 2) ? 'side' : 'front';
             mirror = d === 2;
@@ -234,14 +301,23 @@
         const sv = el.firstChild;
         sv.setAttribute('viewBox', vb.map(v => v.toFixed(2)).join(' '));
         _fill(sv, c.inner({ motion, view, t, react, clock: now + b.clock }));
-        const tf = 'translate3d(' + left.toFixed(1) + 'px,' + top.toFixed(1) + 'px,0)' + (mirror ? ' scaleX(-1)' : '');
-        if (b._tf !== tf) { el.style.transform = tf; b._tf = tf; }
+        if (items) {
+            if (b.act) {   // 吃的那一口裡：盤子／可頌換成咬過的
+                sv.querySelectorAll('[data-mochi="plate"],[data-mochi="snack-down"]').forEach(x => { const r = items[x.getAttribute('data-mochi')]; if (r) x.outerHTML = r; });
+            } else {       // 坐著的空檔：杯盤放在桌上、手底下
+                const html = Object.values(items).join('');
+                const fist = sv.querySelector('[data-mochi^="fist"]');
+                if (html) { if (fist) fist.insertAdjacentHTML('beforebegin', html); else sv.insertAdjacentHTML('beforeend', html); }
+            }
+        }
+        b.w = w; b.h = h; b.mirror = mirror;
+        _place(b);
         const ws = w.toFixed(1) + 'px', hs = h.toFixed(1) + 'px';
         if (el.style.width !== ws) el.style.width = ws;
         if (el.style.height !== hs) el.style.height = hs;
-        const z = n.el.style.zIndex || '';
-        if (el.style.zIndex !== z) el.style.zIndex = z;
         _show(b, true);
+        b.walkOn = !!walking;
+        if (walking && !_rafOn) { _rafOn = true; requestAnimationFrame(_follow); }
     }
 
     window.LobbyEmber = {
