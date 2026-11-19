@@ -1081,7 +1081,7 @@
         const s = _actorScale();
         const all = S.player ? [S.player].concat(S.npcs) : S.npcs;
         all.forEach(a => {
-            a.h = Math.round(a.baseH * s);
+            a.h = Math.round(a.baseH * s * (a._hk || 1));   // _hk＝內建不倒翁的高度倍率（帽匠的高帽），一起乘才不會按一下就變回小的
             a.el.style.height = a.h + 'px';
             placeActor(a);
             if (a.tag) placeNpcExtras(a);
@@ -1296,8 +1296,9 @@
                 if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); return; }
             }
         }
-        if (a._baseH == null) a._baseH = a.h;
-        a.h = Math.round(a._baseH * (skin.hk || 1));   // 頭上有高帽、長耳朵的放大一點，身體才跟大家一樣大（內建的六位才有 hk）
+        // 頭上有高帽、長耳朵的放大一點，身體才跟大家一樣大（內建的六位才有 hk）；擺設模式「人物−/＋」的 applyActorScale 也乘它
+        a._hk = skin.hk || null;
+        if (a._hk && a.baseH) a.h = Math.round(a.baseH * _actorScale() * a._hk);
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src, { smooth: !!skin.doll });
         _dollLive(a, key, skin);
     }
