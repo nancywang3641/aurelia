@@ -15,7 +15,10 @@
 // ----------------------------------------------------------------
 (function () {
     'use strict';
-    const BASE = '/ember-wardrobe/';
+    // 衣櫥資料夾掛在哪：原版酒館＝public\ember-wardrobe（/ember-wardrobe/）；TauriTavern 只認擴展資料夾，
+    //   掛在 data\default-user\extensions\ember-wardrobe（/scripts/extensions/third-party/ember-wardrobe/）。11-19 她用 TauriTavern，店員一直是舊圖才發現
+    const BASES = ['/ember-wardrobe/', '/scripts/extensions/third-party/ember-wardrobe/'];
+    let BASE = BASES[0];
     const FPS = 10;
     const PX = 1.2;                     // 拍走路圖時衣櫥一單位畫成幾 px（tmp/doll_bake/bake.cjs 的 PX）
     const CELL_W = 423 / PX;            // 走路圖一格（cafe_dolls_v1 的 pack.json：cell 423×487）換回衣櫥單位
@@ -29,8 +32,16 @@
         if (_rtP) return _rtP;
         _rtP = (async () => {
             try {
-                const r = await fetch(BASE + 'ember-runtime.js', { method: 'HEAD', cache: 'no-store' });
-                if (!r.ok || !/javascript/i.test(r.headers.get('content-type') || '')) return null;
+                // 一個一個試（用 GET：TauriTavern 那種自訂協定不一定吃 HEAD）；要真的是 JS，網頁版的站可能把沒有的路徑回成首頁
+                let found = null;
+                for (const b of BASES) {
+                    try {
+                        const r = await fetch(b + 'ember-runtime.js', { cache: 'no-store' });
+                        if (r.ok && /EmberRuntime/.test(await r.text())) { found = b; break; }
+                    } catch (e) {}
+                }
+                if (!found) return null;
+                BASE = found;
                 if (!window.EmberRuntime) {
                     await new Promise((ok, no) => { const s = document.createElement('script'); s.src = BASE + 'ember-runtime.js'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
                 }
