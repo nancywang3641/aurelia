@@ -919,11 +919,42 @@
         let s = '';
         if (wish) s += '【這一趟想找的人】' + wish + '——在不違反下面配額的前提下盡量照這個方向找。\n';
         if (lo || hi) {
-            const a = lo || 1, b = hi || 120;
-            s += '【年齡硬性範圍】四位旅人的 age 都必須落在 ' + a + '~' + b + ' 歲之間(含兩端)。' +
+            // 只填一邊就只講那一邊：寫成「1~50 歲」它會把 1 當成可以用的下限，為了「拉開差距」塞小孩進來
+            s += '【年齡硬性範圍】四位旅人的 age ' +
+                 ((lo && hi) ? ('都必須落在 ' + lo + '~' + hi + ' 歲之間(含兩端)') : hi ? ('都不可以超過 ' + hi + ' 歲') : ('都不可以低於 ' + lo + ' 歲')) + '。' +
                  '這條優先於「年齡層拉開」那項配額:範圍內還是要有差距,但不准有人超出這個範圍。\n';
         }
         return s;
+    }
+    // 年齡範圍記一次、每個世界每一批都照用（她 11-19：「不要超過50都還行，除非有人好這口」）：
+    //   沒設過＝最高 50；兩格都清空＝不限（存 0/0，跟「沒設過」分得開）。
+    //   以前只存在各世界的 travPref 裡，而且只有「再召集一批」會帶：開新世界自動來的第一批完全沒管年齡，每個世界還要重填一次。
+    const K_TRAV_AGE = 'trav_age';   // { ageMin, ageMax }，0＝那一邊不限（跨聊天室，跟 K_WORLDS 同層）
+    const TRAV_AGE_DEF = { ageMin: 0, ageMax: 50 };
+    function _ageNum(v) { const n = parseInt(v, 10); return (isFinite(n) && n > 0 && n < 130) ? n : 0; }
+    async function _travAge() {
+        const v = await _get(K_TRAV_AGE, null);
+        if (!v || typeof v !== 'object') return { ageMin: TRAV_AGE_DEF.ageMin, ageMax: TRAV_AGE_DEF.ageMax, unset: true };
+        return { ageMin: _ageNum(v.ageMin), ageMax: _ageNum(v.ageMax) };
+    }
+    // 白板企劃點名的同行旅人：幾歲是企劃寫的，年齡把關不擋他們
+    function _planTravNames(plan) {
+        return new Set(((plan && Array.isArray(plan.travelers)) ? plan.travelers : []).map(t => String((t && t.name) || '').trim()).filter(Boolean));
+    }
+    // 年齡把關：規則寫了它還是可能超線 → 程式再擋一次（第一批、再召集都走這裡）。
+    //   🚨但不能擋到一個都不剩(那趟 API 就白燒了)：整批都超線時全部收下，dropped 回 -1 讓呼叫端講一聲。
+    //   age=0(它沒填)不擋。
+    function _ageGate(list, pref, keep) {
+        list = Array.isArray(list) ? list : [];
+        const lo = _ageNum(pref && pref.ageMin), hi = _ageNum(pref && pref.ageMax);
+        if (!lo && !hi) return { list, dropped: 0 };
+        const a = lo || 1, b = hi || 120;
+        const fit = list.filter(t => {
+            const n = _ageNum(t && t.age);
+            return !n || (n >= a && n <= b) || !!(keep && keep.has(String((t && t.name) || '').trim()));
+        });
+        if (!fit.length) return { list, dropped: list.length ? -1 : 0 };
+        return { list: fit, dropped: list.length - fit.length };
     }
     // 🧑‍💼 白板企劃寫了同行旅人：照它召集（名字、本行、為人、動機照寫），跟岔路或結局的牽連寫進 hook，入隊後進條目給主持AI。
     //   企劃寫不滿四位的其餘自己補（hook 留空）。只給這個世界的第一批：再召集一批還照企劃，只會召回同一批人
@@ -4289,6 +4320,7 @@
             '.wgh-x:hover{color:#b3402f;}' +
 
             '.wgt-rec-hint{font-size:10.5px;color:#46639b;letter-spacing:.08em;}' +
+            '.wgt-rec-hint.age{margin-top:6px;}' +
             '.wgt-recruit .wg-btn{margin-top:2px;}' +
             '.wg-win.wgbp .wg-card{border-radius:0;border:1.2px solid rgba(42,74,128,.45);background:#fff;box-shadow:none;}' +
             '.wg-win.wgbp .wg-card-title{color:#1f3a68;}' +
@@ -4904,13 +4936,16 @@
         //   她 10-29：世界門＝當下許願當場生、SN＝慢慢做可以審，兩條要各自完整才比得出哪條好，不能做一半丟給世界門生。
         //   收尾前就送來的舊企劃（沒有 built）照舊由愛麗絲展開。
         const B = plan && plan.built;
+        // 第一批也照記住的年齡範圍找、找來再擋一次（以前只有「再召集一批」會管年齡）
+        const age = await _travAge();
+        const keep = _planTravNames(plan);
         if (B && B.world && B.world.text) {
             // 旅人不在收尾做（她 10-29：旅人本來就是每次隨機召集的）：開門時照企劃室寫的旅人提示召集第一批——開門唯一叫模型的一通
             _loading('正在召集前往「' + _esc(seed.name) + '」的旅人…');
-            const trav = await _expandTravelers(seed, B.world.text, '', null, plan, B.travHint || '').catch(e => { console.warn('[Worldgate③] 旅人召集失敗', e); return []; });
+            const g = _ageGate(await _expandTravelers(seed, B.world.text, '', age, plan, B.travHint || '').catch(e => { console.warn('[Worldgate③] 旅人召集失敗', e); return []; }), age, keep);
             _busy = false;
             if (B.panel && B.art) { try { const S = win.OS_UI_STYLE || window.OS_UI_STYLE; if (S && S.remember) S.remember(B.art.styleId, B.art.layoutId); } catch (e) {} }
-            return _saveNewWorld(seed, note, plan, B.world, trav, { panel: B.panel || null, theme: B.theme || null }, B.achv || null, onFail);
+            return _saveNewWorld(seed, note, plan, B.world, g.list, { panel: B.panel || null, theme: B.theme || null }, B.achv || null, onFail, g.dropped);
         }
         _loading('正在建構「' + _esc(seed.name) + '」的世界檔案…');
         const r = await _expandWorldText(seed, note, plan);
@@ -4920,15 +4955,16 @@
         // 連接設定是逐次隨請求帶的(不是切全域),兩支同時在跑不會互相踩。
         // 面板或成就掛了就當這個世界沒有那一項,不能連累旅人與世界存檔。
         const [trav, pt, achv] = await Promise.all([
-            _expandTravelers(seed, r.text, note, null, plan),
+            _expandTravelers(seed, r.text, note, age, plan),
             _expandPanel(seed, r.text).catch(e => { console.warn('[Worldgate③] 面板生成失敗', e); return { panel: null, theme: null }; }),
             _expandAchv(seed, r.text).catch(e => { console.warn('[Worldgate③] 成就生成失敗', e); return null; }),
         ]);
         _busy = false;
-        return _saveNewWorld(seed, note, plan, r, trav, pt, achv, onFail);
+        const g = _ageGate(trav, age, keep);
+        return _saveNewWorld(seed, note, plan, r, g.list, pt, achv, onFail, g.dropped);
     }
     // 世界檔案、旅人、結束畫面＋主題、成就到齊 → 存進檔案庫、寫條目、背景畫圖（愛麗絲當場生的、SN 收尾做好的都走這裡）
-    async function _saveNewWorld(seed, note, plan, r, trav, pt, achv, onFail) {
+    async function _saveNewWorld(seed, note, plan, r, trav, pt, achv, onFail, ageDropped) {
         const w = {
             id: _mkId(), name: seed.name, concept: seed.concept, twist: seed.twist || '', style: seed.style,
             genre: seed.genre || '', type: seed.type || '',   // 基調要留著:重新召集旅人時得跟著帶,不然新旅人會跟世界不同調
@@ -4963,7 +4999,9 @@
         await _set(K_WORLDS, worlds);
         if (plan) await _set(K_PLANS, (await _get(K_PLANS, [])).filter(x => x && x.id !== plan.id));
         else _seeds = [];   // 抽的種子用掉了；展開白板企劃的話，上次抽的種子還留著
-        _toast('「' + w.name + '」已存入檔案庫');
+        _toast('「' + w.name + '」已存入檔案庫' +
+            (ageDropped > 0 ? '（' + ageDropped + ' 位旅人年齡不合已略過）' : '') +
+            (ageDropped < 0 ? '（這批旅人年齡都不在範圍內,還是先收下了）' : ''));
         _renderDetail(w);
         _fillArt(w);   // 不 await:兩張圖在背景慢慢生,好了會自己寫回檔案庫並重繪
     }
@@ -5445,6 +5483,9 @@
         //   上一輪用 50 找到的人，下一輪把範圍調成 30 就被標成超齡等著被刪，這不合理。
         //   要刪誰，用名冊上他自己的 ✕。
         const figs = (st === 2) ? await _slotFigures(w, team.map(x => x.i)) : {};   // 照隊友真正的編號撈立姿
+        // 召集小窗裡年齡那兩格先填什麼：記住的那份；還沒記過、而這個世界以前填過，就先帶這個世界上次填的
+        let age0 = (st === 2) ? await _travAge() : null;
+        if (age0 && age0.unset && w.travPref && (w.travPref.ageMin || w.travPref.ageMax)) age0 = { ageMin: _ageNum(w.travPref.ageMin), ageMax: _ageNum(w.travPref.ageMax) };
         // 🚪 「通知主角」只在人在奧瑞亞、這段故事已經開始（有聊天室／故事 id）時才給：在世界裡按沒有意義
         const canInvite = (st === 3) && !!_cid() && !(await _getCurrentId());
         const invited = canInvite ? (((await inviteNow()) || {}).id === w.id) : false;
@@ -5626,26 +5667,27 @@
                 '<div class="wgt-rec-hint">加人，不會換掉現有的</div>' +
                 '<input class="wg-input" data-wg-travnote maxlength="80" placeholder="想找什麼樣的旅人（可留空）" value="' + _esc((w.travPref && w.travPref.note) || '') + '">' +
                 '<div class="wg-age-row"><span>年齡</span>' +
-                  '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((w.travPref && w.travPref.ageMin) || '') + '">' +
+                  '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemin placeholder="不限" value="' + ((age0 && age0.ageMin) || '') + '">' +
                   '<span>～</span>' +
-                  '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((w.travPref && w.travPref.ageMax) || '') + '">' +
-                  '<span>歲</span></div>',
+                  '<input class="wg-input age" type="number" min="1" max="120" data-wg-agemax placeholder="不限" value="' + ((age0 && age0.ageMax) || '') + '">' +
+                  '<span>歲</span></div>' +
+                '<div class="wgt-rec-hint age">年齡記一次，每個世界都照這個找；清空就是不限</div>',
                 '<i class="fa-solid fa-wand-magic-sparkles"></i> 請愛麗絲找人',
                 async (m, closeModal) => {
                 if (_busy) return;
                 closeModal();   // 召集要跑兩百多秒，窗留著只會擋住底下的載入動畫
                 // 偏好在按下去這刻收（她可能填完直接按，沒有離開輸入框的動作）＋存起來，下次打開還在
-                const _clampAge = (v) => { const n = parseInt(v, 10); return (isFinite(n) && n > 0 && n < 130) ? n : 0; };
                 let pref = {
                     note: (m.querySelector('[data-wg-travnote]')?.value || '').trim().slice(0, 80),
-                    ageMin: _clampAge(m.querySelector('[data-wg-agemin]')?.value),
-                    ageMax: _clampAge(m.querySelector('[data-wg-agemax]')?.value),
+                    ageMin: _ageNum(m.querySelector('[data-wg-agemin]')?.value),
+                    ageMax: _ageNum(m.querySelector('[data-wg-agemax]')?.value),
                 };
                 if (pref.ageMin && pref.ageMax && pref.ageMin > pref.ageMax) {   // 填反了就自己轉回來
                     const t0 = pref.ageMin; pref.ageMin = pref.ageMax; pref.ageMax = t0;
                 }
                 w.travPref = pref;
                 await _saveWorld(w);
+                await _set(K_TRAV_AGE, { ageMin: pref.ageMin, ageMax: pref.ageMax });   // 年齡記一次：之後開新世界的第一批、別的世界再召集都照這個
                 _busy = true;
                 _loading('正在召集前往「' + _esc(w.name) + '」的旅人…');
                 // 🧑‍💼 白板企劃的同行旅人只給第一批：名單上還一個人都沒有（展開時那次沒召集到）才照企劃召，已經有人了再照企劃只會召回同一批
@@ -5662,15 +5704,10 @@
                 // 同名的不重複收（它偶爾會再抽到上一批的人）
                 const had = new Set((w.travelers || []).filter(t => t && !t.gone).map(t => String(t.name || '').trim()));
                 let add = _normTravelers(trav).filter(t => t && t.name && !had.has(String(t.name).trim()));
-                // 年齡把關：規則寫了它還是可能超線 → 程式再擋一次。
-                //   🚨但不能擋到一個都不剩(那趟 API 就白燒了)：整批都超線時全部收下並講一聲。
-                let dropped = 0;
-                if (pref.ageMin || pref.ageMax) {
-                    const lo = pref.ageMin || 1, hi = pref.ageMax || 120;
-                    const fit = add.filter(t => !t.age || (t.age >= lo && t.age <= hi));   // age=0(它沒填)不擋
-                    if (fit.length) { dropped = add.length - fit.length; add = fit; }
-                    else dropped = -1;   // 整批都超線
-                }
+                // 年齡把關（_ageGate）：超線的略過；整批都超線時全部收下並講一聲。企劃點名的那幾位不擋。
+                const gate = _ageGate(add, pref, _planTravNames(firstBatch ? w.plan : null));
+                add = gate.list;
+                const dropped = gate.dropped;
                 if (!add.length) { _toast('這批召來的都是已經在的人,再試一次'); _renderDetail(w, 2); return; }
                 // 召集要跑兩百多秒：這段時間可能有人入隊／離隊 → 接在最新那份名單後面
                 w.travelers = (((await _worldById(w.id)) || w).travelers || []).concat(add);
