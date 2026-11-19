@@ -218,11 +218,13 @@
 
     // ---------- 桌上的餐點：吃的空檔也留在桌上（衣櫥只在吃那一口的動作裡畫杯盤，這裡從那個動作的頭／尾那格拿下來放進坐著那格） ----------
     const ITEM_SEL = '[data-mochi="saucer"],[data-mochi="cup-down"],[data-mochi="plate"],[data-mochi="snack-plate"],[data-mochi="snack-down"]';
-    const BITES = 5;                    // 吃幾口就吃完（之後盤子留著、不再吃）
+    const BITES = 6;                    // 吃幾口就吃完（之後只剩空盤子／杯子、不再吃）
     function _itemsOf(ready, motion, state) {
         const k = motion + '|' + state;
         ready.items = ready.items || {};
         if (ready.items[k] != null) return ready.items[k];
+        // 蛋糕、布丁吃完：衣櫥沒有空的蛋糕盤，用可頌那個空盤子（同一個位置、同一把尺）；不然吃完還剩一大塊，看起來像卡住（11-19 她：「這是卡了嗎」）
+        if (state === 'done' && (motion === 'biteFork' || motion === 'biteSpoon')) return (ready.items[k] = _itemsOf(ready, 'snackBite', 'done'));
         const c = ready.c, len = c.length({ motion, view: 'side' });
         const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
         sv.innerHTML = c.inner({ motion, view: 'side', t: state === 'whole' ? 0 : len - 0.01, blink: 0 });
@@ -274,7 +276,7 @@
             eatKind = served && e && e.item ? _eatOf(e.item) : null;
             if (b.act) {
                 const len = c.length({ motion: b.act.motion, view, react: b.act.react });
-                if (now - b.act.t0 >= len) { b.act = null; b.t0 = now; b.bites = (b.bites || 0) + 1; b.nextEat = now + 18 + Math.random() * 25; }
+                if (now - b.act.t0 >= len) { b.act = null; b.t0 = now; b.bites = (b.bites || 0) + 1; b.nextEat = now + 7 + Math.random() * 8; }   // 兩口之間 7～15 秒（以前 18～43 秒，看起來像吃一口就不動了）
             } else if (eatKind && now >= b.nextEat && (b.bites || 0) < BITES) {
                 b.act = { motion: eatKind, react: _reactOf(e.line, _hash(n.key + ':' + Math.floor(now / 60))), t0: now };
             }
