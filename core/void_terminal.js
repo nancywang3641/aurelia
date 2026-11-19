@@ -861,23 +861,6 @@ const IRIS_IDLE = [
             </div>
 
 
-            <div id="iris-history-overlay" style="display:none; background:rgba(228,232,245,0.97);">
-                <div class="hist-header" style="border-bottom: 1px solid rgba(26,28,40,0.15);">
-                    <div style="display:flex;align-items:center;">
-                        <span class="hist-title" id="hist-title" style="color:#1A1C28;">對話紀錄</span>
-                        <span class="hist-char-badge iris" id="hist-char-badge" style="background:rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25);">瀅瀅</span>
-                    </div>
-                    <button class="hist-close" id="hist-close-btn" style="color:#1A1C28;">✕</button>
-                </div>
-                <div class="hist-toolbar" style="background:rgba(0,0,0,0.5); border-bottom: 1px solid rgba(26,28,40,0.06);">
-                    <label class="hist-check-all-label" style="color:#1A1C28;"><input type="checkbox" id="hist-check-all"> 全選</label>
-                    <button class="hist-action-btn danger" id="hist-del-sel" disabled style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">刪除選中</button>
-                    <button class="hist-action-btn danger" id="hist-clear-btn" style="background:rgba(252,129,129,0.1); color:#fc8181; border:1px solid #fc8181;">清空全部</button>
-                    <span class="hist-count" id="hist-count" style="color:rgba(26,28,40,0.72);"></span>
-                </div>
-                <div class="hist-list" id="hist-list"></div>
-            </div>
-
             <div id="achievement-panel-overlay" style="display:none;">
                 <button class="achv2-close" id="ach-close-btn" title="關閉"><i class="fa-solid fa-xmark"></i></button>
                 <div class="achv2-title">成 就 收 藏 冊</div>
@@ -1052,6 +1035,17 @@ const IRIS_IDLE = [
 
             const irisHistBtn = tab.querySelector('#iris-hist-btn');
             const cheshireHistBtn = tab.querySelector('#cheshire-hist-btn');
+            // 瀅瀅、柴郡的紀錄跟其他管理員開同一個紀錄窗（LobbyDress.openHistory）；她們的紀錄不在 NPC 那份裡，資料由這裡遞過去。
+            //   柴郡那份走 404 的黑底綠字。11-19 以前她們兩個開的是另一個舊窗口，已經拿掉。
+            const _openStaffLog = (who) => {
+                const D = window.LobbyDress;
+                if (!D || !D.openHistory) return;
+                const isC = who === 'cheshire';
+                D.openHistory({
+                    key: isC ? 'cheshire' : 'ying', name: isC ? '柴郡' : '瀅瀅', skin: isC ? '404' : '', me: IRIS_STATE.userName || '',
+                    hist: { get: () => getCharHistory(isC ? 'cheshire' : 'iris'), set: (arr) => setCharHistory(isC ? 'cheshire' : 'iris', Array.isArray(arr) ? arr : []) }
+                });
+            };
             if (irisHistBtn) irisHistBtn.addEventListener('click', () => {
                 // 站在誰面前就開誰的紀錄（愛麗絲／白兔／紫薇／帽匠／丹／書裡的客人…）；瀅瀅、柴郡開她們那份。
                 // 🚨 10-13 她：在舞台跟愛麗絲打招呼，按這顆卻是空的瀅瀅紀錄——以前只認對話模式（地點視圖）的對象，
@@ -1059,11 +1053,11 @@ const IRIS_IDLE = [
                 const onStage = !!window.LobbyStage?.isActive?.();
                 const sp = window.LobbyPlaces?.speaker?.();
                 const t = (onStage || sp) ? (window.LobbyStage?.getTalkTarget?.() || (onStage ? window.LobbyStage?.getDefaultTarget?.() : null) || null) : null;
-                if (t && t.key === 'cheshire') { openHistoryPanel('cheshire'); return; }
+                if (t && t.key === 'cheshire') { _openStaffLog('cheshire'); return; }
                 if (t && t.key !== 'ying' && window.LobbyDress?.openHistory) { window.LobbyDress.openHistory(t); return; }
-                openHistoryPanel(is404Room ? 'cheshire' : 'iris');
+                _openStaffLog(is404Room ? 'cheshire' : 'iris');
             });
-            if (cheshireHistBtn) cheshireHistBtn.addEventListener('click', () => openHistoryPanel('cheshire'));
+            if (cheshireHistBtn) cheshireHistBtn.addEventListener('click', () => _openStaffLog('cheshire'));
 
             // 右側新增的「成就」橫幅卡 → 開同一個成就面板
             const achievementCardBtn = tab.querySelector('#void-achievement-btn');
@@ -1211,42 +1205,6 @@ const IRIS_IDLE = [
             const storeCloseBtn = tab.querySelector('#store-close-btn');
             if (storeCloseBtn) storeCloseBtn.addEventListener('click', VoidPanels.closeStore);
 
-            const histCloseBtn = tab.querySelector('#hist-close-btn');
-            const histCheckAll = tab.querySelector('#hist-check-all');
-            const histDelSel   = tab.querySelector('#hist-del-sel');
-            const histClearBtn = tab.querySelector('#hist-clear-btn');
-
-            if (histCloseBtn) histCloseBtn.addEventListener('click', closeHistoryPanel);
-            if (histCheckAll) histCheckAll.addEventListener('change', function() {
-                const listEl = document.getElementById('hist-list');
-                if (!listEl) return;
-                listEl.querySelectorAll('.hist-item-check').forEach(c => {
-                    c.checked = this.checked;
-                    c.closest('.hist-item').classList.toggle('selected', this.checked);
-                });
-                updateHistoryToolbar();
-            });
-
-            if (histDelSel) histDelSel.addEventListener('click', () => {
-                const listEl = document.getElementById('hist-list');
-                if (!listEl) return;
-                const selectedIndices = [...listEl.querySelectorAll('.hist-item-check:checked')].map(c => parseInt(c.closest('.hist-item').dataset.index));
-                if (selectedIndices.length === 0) return;
-                showHistoryConfirm(`確定刪除選中的 ${selectedIndices.length} 條記錄？`, 'danger', () => {
-                    const h = getCharHistory(_historyPanel.char);
-                    setCharHistory(_historyPanel.char, h.filter((_, i) => !selectedIndices.includes(i)));
-                    renderHistoryList();
-                });
-            });
-
-            if (histClearBtn) histClearBtn.addEventListener('click', () => {
-                const h = getCharHistory(_historyPanel.char);
-                if (h.length === 0) return;
-                const charName = _historyPanel.char === 'iris' ? '瀅瀅' : '柴郡';
-                showHistoryConfirm(`將清除 ${charName} 的全部 ${h.length} 條紀錄。此操作不可復原。`, 'danger', () => { setCharHistory(_historyPanel.char, []); renderHistoryList(); });
-            });
-
-
             // 🔥 啟動時檢查資料庫，實現真正的自動登入與跳過登入畫面
             const currentId = getChatId();
             let autoLoaded = false;
@@ -1282,9 +1240,7 @@ const IRIS_IDLE = [
         return tab;
     };
 
-    // ===== 歷史對話面板 =====
-    const _historyPanel = { char: null };
-
+    // ===== 瀅瀅／柴郡的對話紀錄（資料；畫面在 lobby_dress.js 的紀錄窗）=====
     function getCharHistory(char) {
         if (char === 'iris') {
             return is404Room ? _irisHistoryBackup : IRIS_STATE.history;
@@ -1302,170 +1258,6 @@ const IRIS_IDLE = [
             else              _cheshireHistoryBackup = newHistory;
         }
         debouncedSave();
-    }
-
-    function openHistoryPanel(char) {
-        _historyPanel.char = char;
-        const overlay = document.getElementById('iris-history-overlay');
-        if (!overlay) return;
-        const badgeEl = document.getElementById('hist-char-badge');
-        // 選擇/清空 toolbar 三件套（只在訊息列表模式顯示；conv 列表模式隱藏）
-        const delBtn = document.getElementById('hist-del-sel');
-        const clearBtn = document.getElementById('hist-clear-btn');
-        const checkAll = document.getElementById('hist-check-all');
-        const checkAllLabel = checkAll && checkAll.closest('label');
-        const titleEl = document.getElementById('hist-title');
-        if (char === 'iris') {
-            if (badgeEl) { badgeEl.className = 'hist-char-badge iris'; badgeEl.textContent = '瀅瀅'; badgeEl.style.color = 'rgba(26,28,40,0.25)'; badgeEl.style.borderColor = 'rgba(26,28,40,0.25)'; badgeEl.style.background = 'rgba(26,28,40,0.10)'; }
-            if (titleEl) titleEl.textContent = '對話紀錄';   // 10-13 以前叫「故事素材紀錄」，她看不出是什麼；誰的看旁邊名牌
-            if (delBtn) delBtn.style.display = '';
-            if (clearBtn) clearBtn.style.display = '';
-            if (checkAllLabel) checkAllLabel.style.display = '';
-        } else {
-            if (badgeEl) { badgeEl.className = 'hist-char-badge cheshire'; badgeEl.textContent = '柴郡 · 404'; badgeEl.style.color = '#00ff41'; badgeEl.style.borderColor = '#00ff41'; badgeEl.style.background = 'rgba(0,255,65,0.2)'; }
-            if (titleEl) titleEl.textContent = '對話紀錄';
-            if (delBtn) delBtn.style.display = '';
-            if (clearBtn) clearBtn.style.display = '';
-            if (checkAllLabel) checkAllLabel.style.display = '';
-        }
-        overlay.style.display = 'flex';
-        renderHistoryList();
-    }
-
-    function closeHistoryPanel() {
-        const overlay = document.getElementById('iris-history-overlay');
-        if (overlay) overlay.style.display = 'none';
-        const banner = document.getElementById('hist-confirm-banner');
-        if (banner) banner.remove();
-    }
-
-    function renderHistoryList() {
-        const listEl  = document.getElementById('hist-list');
-        const countEl = document.getElementById('hist-count');
-        if (!listEl) return;
-        const history = getCharHistory(_historyPanel.char);
-        if (countEl) countEl.textContent = `${history.length} 條記錄`;
-        if (history.length === 0) {
-            listEl.innerHTML = `<div class="hist-empty" style="color:rgba(26,28,40,0.72); text-align:center; padding: 20px;">── 尚無紀錄 ──</div>`;
-            updateHistoryToolbar();
-            return;
-        }
-        listEl.innerHTML = '';
-        const isCheshire = _historyPanel.char === 'cheshire';
-        history.forEach((msg, index) => {
-            const isUser        = msg.role === 'user';
-            const aiName        = isCheshire ? '柴郡' : '瀅瀅';
-            const roleLabel     = isUser ? (IRIS_STATE.userName || 'USER') : aiName;
-            const safeText      = msg.content.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-
-            const item = document.createElement('div');
-            item.className = 'hist-item';
-            item.dataset.index = index;
-            // 替換顏色：USER 走拿鐵金，AI 依角色配色
-            let badgeStyle = isUser ? `background: rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25);` :
-                             isCheshire ? `background: rgba(0,255,65,0.2); color:#00ff41; border:1px solid #00ff41;` :
-                             `background: rgba(226,232,240,0.1); color:#1A1C28; border:1px solid #1A1C28;`;
-
-            item.innerHTML = `
-                <input type="checkbox" class="hist-item-check">
-                <span class="hist-role-badge" style="${badgeStyle}">${_aiEsc(roleLabel)}</span>
-                <div class="hist-item-body"><div class="hist-item-text" style="color:#3A3F5C;">${safeText}</div></div>
-                <div class="hist-item-actions">
-                    <button class="hist-icon-btn edit" title="編輯此條" style="color:rgba(26,28,40,0.72);"><i class="fa-solid fa-pen"></i></button>
-                    <button class="hist-icon-btn rollback" title="回退到此點" style="color:rgba(26,28,40,0.72);"><i class="fa-solid fa-rotate-left"></i></button>
-                </div>`;
-
-            const textEl = item.querySelector('.hist-item-text');
-            textEl.addEventListener('click', () => textEl.classList.toggle('expanded'));
-
-            const checkbox = item.querySelector('.hist-item-check');
-            checkbox.addEventListener('change', () => { item.classList.toggle('selected', checkbox.checked); updateHistoryToolbar(); });
-
-            item.querySelector('.hist-icon-btn.edit').addEventListener('click', () => editHistoryItem(index));
-
-            const removeCount = history.length - index - 1;
-            item.querySelector('.hist-icon-btn.rollback').addEventListener('click', () => {
-                if (removeCount === 0) return; 
-                showHistoryConfirm(`保留前 ${index + 1} 條，刪除後續 ${removeCount} 條記錄。此操作不可復原。`, 'warning', () => { 
-                    setCharHistory(_historyPanel.char, getCharHistory(_historyPanel.char).slice(0, index + 1)); 
-                    renderHistoryList(); 
-                });
-            });
-            listEl.appendChild(item);
-        });
-        updateHistoryToolbar();
-    }
-
-
-    function updateHistoryToolbar() {
-        const listEl = document.getElementById('hist-list');
-        const delBtn = document.getElementById('hist-del-sel');
-        if (!listEl || !delBtn) return;
-        const checked = listEl.querySelectorAll('.hist-item-check:checked').length;
-        const total   = listEl.querySelectorAll('.hist-item-check').length;
-        delBtn.disabled  = checked === 0;
-        delBtn.textContent = checked > 0 ? `刪除選中 (${checked})` : '刪除選中';
-        const checkAll = document.getElementById('hist-check-all');
-        if (checkAll) { checkAll.checked = total > 0 && checked === total; checkAll.indeterminate = checked > 0 && checked < total; }
-    }
-
-    function showHistoryConfirm(message, type, onConfirm) {
-        const existing = document.getElementById('hist-confirm-banner');
-        if (existing) existing.remove();
-        const isWarn = type === 'warning';
-        const borderClr = isWarn ? 'rgba(255,200,0,0.4)' : 'rgba(255,80,80,0.4)';
-        const textClr = isWarn ? '#ffc800' : '#f08080';
-        const btnBg = isWarn ? 'rgba(255,200,0,0.12)' : 'rgba(255,60,60,0.14)';
-
-        const banner = document.createElement('div');
-        banner.id = 'hist-confirm-banner';
-        banner.style.cssText = `position:absolute;bottom:0;left:0;right:0;background:rgba(6,6,14,0.97);border-top:1px solid ${borderClr};padding:10px 14px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;z-index:52;flex-shrink:0;`;
-
-        const msgSpan = document.createElement('span');
-        msgSpan.style.cssText = `font-size:11px;color:${textClr};flex:1;`;
-        msgSpan.textContent = String(message);
-
-        const confirmBtn = document.createElement('button');
-        confirmBtn.textContent = '確認';
-        confirmBtn.style.cssText = `background:${btnBg};border:1px solid ${borderClr};color:${textClr};border-radius:5px;padding:5px 14px;cursor:pointer;font-size:11px;`;
-        confirmBtn.addEventListener('click', () => { banner.remove(); onConfirm(); });
-
-        const cancelBtn = document.createElement('button');
-        cancelBtn.textContent = '取消';
-        cancelBtn.style.cssText = `background:none;border:1px solid rgba(255,255,255,0.1);color:#3A3F5C;border-radius:5px;padding:5px 12px;cursor:pointer;font-size:11px;`;
-        cancelBtn.addEventListener('click', () => banner.remove());
-
-        banner.appendChild(msgSpan);
-        banner.appendChild(confirmBtn);
-        banner.appendChild(cancelBtn);
-        const overlay = document.getElementById('iris-history-overlay');
-        if (overlay) overlay.appendChild(banner);
-    }
-
-    function editHistoryItem(index) {
-        const listEl = document.getElementById('hist-list');
-        if (!listEl) return;
-        const item = listEl.querySelector(`.hist-item[data-index="${index}"]`);
-        if (!item) return;
-        const textEl = item.querySelector('.hist-item-text');
-        if (!textEl || textEl.querySelector('textarea')) return;
-
-        const history = getCharHistory(_historyPanel.char);
-        const currentText = history[index].content;
-
-        textEl.innerHTML = `
-            <textarea class="hist-item-edit-area" style="background:rgba(228,232,245,0.95); color:#1A1C28; border:1px solid rgba(26,28,40,0.20);"></textarea>
-            <div class="hist-edit-confirm-row">
-                <button class="hist-edit-confirm-btn" style="background:#1A1C28; color:#EEF0F6;">保存</button>
-                <button class="hist-edit-cancel-btn" style="background:rgba(26,28,40,0.08); color:#1A1C28;">取消</button>
-            </div>`;
-
-        const ta = textEl.querySelector('textarea');
-        if (ta) ta.value = currentText;   // 直接給值，不經 HTML 轉義（原文裡的 & 才不會變樣）
-        if (ta) { ta.style.height = Math.max(60, ta.scrollHeight) + 'px'; ta.focus({ preventScroll: true }); }   // 不讓 focus 把歷史清單外層捲走
-
-        textEl.querySelector('.hist-edit-confirm-btn').addEventListener('click', () => { history[index].content = ta.value; renderHistoryList(); debouncedSave(); });
-        textEl.querySelector('.hist-edit-cancel-btn').addEventListener('click', () => renderHistoryList());
     }
 
     VoidTerminal.closePanel = () => {};
@@ -2290,7 +2082,8 @@ ${sections}`;
             const recentHistory = npcTarget
                 ? window.LobbyStage.getNpcHistory(npcTarget.key).slice(-11, -1)
                 : IRIS_STATE.history.slice(-11, -1);
-            messages = messages.concat(recentHistory);
+            // 紀錄上附的 think（AI 當時的思考，只給她看）不送回模型
+            messages = messages.concat(recentHistory.map(m => { if (!m || !m.think) return m; const c = Object.assign({}, m); delete c.think; return c; }));
             if (lastMsg) messages.push(lastMsg);
             messages.unshift({ role: "system", content: sysPrompt });
             _justReturnedFrom404 = false;
@@ -2306,6 +2099,7 @@ ${sections}`;
             // 直連 API 才能用 SSE streaming，ST system API 走原有非串流路徑
             const canStream = !config.useSystemApi && !!config.url && !!config.key;
 
+            const _thinkT0 = Date.now();   // 💭 這一通回來之後，從這個時間點起抓到的 AI 思考就是這則回覆的
             const response = await new Promise((resolve, reject) => {
                 window.OS_API.chat(
                     messages, config,
@@ -2433,8 +2227,11 @@ ${sections}`;
             }
             reply = reply.replace(/\[LaunchApp\|[^\]]+\]/gi, '').trim();
 
-            if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'assistant', content: reply, ts: Date.now() });
-            else IRIS_STATE.history.push({ role: 'assistant', content: reply, ts: Date.now() });
+            // 💭 這則回覆的思考跟著紀錄存（對話紀錄窗裡可以點開看）。只留前 4000 字；送回模型的那份會拿掉（見上面 recentHistory）
+            const _replyRec = { role: 'assistant', content: reply, ts: Date.now() };
+            try { const _tk = (window.OS_API && window.OS_API.lastThink) ? window.OS_API.lastThink(_thinkT0) : ''; if (_tk) _replyRec.think = _tk.slice(0, 4000); } catch (e) {}
+            if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, _replyRec);
+            else IRIS_STATE.history.push(_replyRec);
             debouncedSave();
 
             // 🎮 大廳 NPC 一對一記憶：到量背景壓縮（不 await，不阻塞打字機）

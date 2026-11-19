@@ -379,8 +379,11 @@
 
     // ── 💬 NPC 對話紀錄小面板（舞台上，仿裝扮室：查看/逐條刪/清空徹底遺忘）──
     function _closeNpcHistory() { S.histEl?.remove(); S.histEl = null; }
+    // 紀錄放哪：一般 NPC 在 lstage_hist_<key>；瀅瀅、柴郡的在大廳總管那裡，由 a.hist（get／set）遞進來
+    function _hGet(a) { try { return (a && a.hist ? a.hist.get() : _b.getNpcHistory(a.key)) || []; } catch (e) { return []; } }
+    function _hSet(a, arr) { if (a && a.hist) a.hist.set(arr); else _b.setNpcHistory(a.key, arr); }
     function _renderNpcHistoryBody(box, a) {
-        const hist = _b.getNpcHistory(a.key);
+        const hist = _hGet(a);
         const cnt = box.querySelector('.lsh-count');
         if (cnt) cnt.textContent = hist.length + ' 條';
         const list = box.querySelector('.lsh-list');
@@ -394,12 +397,17 @@
             const plain = (qs ? qs.map(q => q.slice(1, -1).trim()).filter(Boolean).join('\n') : String(m.content || '').replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
             const row = document.createElement('div');
             row.className = 'lsh-row' + (isMe ? ' me' : '');
-            row.innerHTML = '<span class="lsh-who"></span><div class="lsh-text"></div>'
+            // 💭 這則回覆當時的思考（有才有）：收在泡泡底下，點開看。只給她檢查用，不會送回模型
+            const think = (!isMe && m.think) ? String(m.think) : '';
+            row.innerHTML = '<span class="lsh-who"></span>'
+                + (think ? '<div class="lsh-body"><div class="lsh-text"></div><details class="lsh-think"><summary><i class="fa-solid fa-brain"></i>思考</summary><div class="lsh-think-text"></div></details></div>'
+                         : '<div class="lsh-text"></div>')
                 + '<button class="lsh-del" title="刪除這條"><i class="fa-solid fa-xmark"></i></button>';
-            row.querySelector('.lsh-who').textContent = isMe ? '訪客' : (a.name || '角色');
+            row.querySelector('.lsh-who').textContent = isMe ? (a.me || '訪客') : (a.name || '角色');
             row.querySelector('.lsh-text').textContent = plain || '（無內容）';
+            if (think) row.querySelector('.lsh-think-text').textContent = think;
             row.querySelector('.lsh-del').addEventListener('click', () => {
-                const arr = _b.getNpcHistory(a.key); arr.splice(i, 1); _b.setNpcHistory(a.key, arr); _renderNpcHistoryBody(box, a);
+                const arr = _hGet(a).slice(); arr.splice(i, 1); _hSet(a, arr); _renderNpcHistoryBody(box, a);
             });
             list.appendChild(row);
         });
@@ -443,6 +451,7 @@
                 '<button class="lep-btn lep-danger" data-act="clear"><i class="fa-solid fa-trash"></i> 清空（徹底遺忘）</button>' +
                 '<button class="lep-btn lep-done" data-act="close"><i class="fa-solid fa-check"></i> 關閉</button>';
         }
+        if (a.skin === '404') root.classList.add('lsh-404');   // 柴郡那份：404 的黑底綠字
         host.appendChild(root);
         S.histEl = root;
         _renderNpcHistoryBody(box, a);
@@ -451,7 +460,7 @@
             if (act === 'close') { _closeNpcHistory(); return; }
             if (act === 'clear') {
                 if (!(await AUI.confirm('清空跟' + (a.name || '這位') + '的紀錄？\n連長期記憶一起清空，不可復原。', { okText: '清空' }))) return;
-                _b.setNpcHistory(a.key, []);
+                _hSet(a, []);
                 try { (window.OS_DB || (window.parent || window).OS_DB)?.saveNpcMemory?.(a.key, { name: a.name || '', summary: '', lastCompactAt: 0 }); } catch (e) {}
                 _renderNpcHistoryBody(box, a);
             }

@@ -1730,6 +1730,28 @@
 .lsh-pv-clear { border:1px solid rgba(208,86,111,.35); background:transparent; color:#c0475f; cursor:pointer; font-family:inherit;
   padding:7px 14px; border-radius:10px; font-size:13px; }
 .lsh-pv-clear:hover { background:rgba(208,86,111,.08); }
+/* 💭 思考那一格（對話模式的大卡） */
+.lsh-pv .lsh-think > summary { font-size:12px; color:#8a8ea8; padding:0 4px; }
+.lsh-pv .lsh-think[open] > summary { color:#5d61a0; }
+.lsh-pv .lsh-think-text { font-size:12.5px; line-height:1.75; color:#5b6080; background:rgba(86,92,145,.07); border-left:2px solid rgba(86,92,145,.3); max-height:280px; padding:10px 14px; }
+/* 柴郡那份：404 的黑底綠字（跟黑市同一組綠） */
+.lsh-pv.lsh-404 { background:rgba(0,8,0,.62); }
+.lsh-pv.lsh-404 .lsh-pv-card { background:#030a03; border:1px solid rgba(0,255,65,.35); box-shadow:0 0 30px rgba(0,255,65,.14); color:#b8ffc9; }
+.lsh-pv.lsh-404 .lsh-pv-hd, .lsh-pv.lsh-404 .lsh-pv-ft { border-color:rgba(0,255,65,.22); }
+.lsh-pv.lsh-404 .lsh-pv-title { color:#00ff41; }
+.lsh-pv.lsh-404 .lsh-pv-title i { color:#00cc33; }
+.lsh-pv.lsh-404 .lsh-count, .lsh-pv.lsh-404 .lsh-who, .lsh-pv.lsh-404 .lsh-empty { color:rgba(0,255,65,.55); }
+.lsh-pv.lsh-404 .lsh-pv-x { background:rgba(0,255,65,.08); color:#00cc33; }
+.lsh-pv.lsh-404 .lsh-pv-x:hover { background:rgba(0,255,65,.18); color:#00ff41; }
+.lsh-pv.lsh-404 .lsh-text { background:rgba(0,255,65,.06); border-color:rgba(0,255,65,.22); color:#b8ffc9; }
+.lsh-pv.lsh-404 .lsh-row.me .lsh-text { background:#00361a; border-color:#00cc33; color:#eafff0; }
+.lsh-pv.lsh-404 .lsh-del { color:rgba(0,255,65,.55); }
+.lsh-pv.lsh-404 .lsh-del:hover { color:#ff7b7b; background:rgba(255,90,90,.1); }
+.lsh-pv.lsh-404 .lsh-pv-clear { border-color:rgba(255,90,90,.45); color:#ff7b7b; }
+.lsh-pv.lsh-404 .lsh-pv-clear:hover { background:rgba(255,90,90,.1); }
+.lsh-pv.lsh-404 .lsh-think > summary { color:rgba(0,255,65,.6); }
+.lsh-pv.lsh-404 .lsh-think[open] > summary { color:#00ff41; }
+.lsh-pv.lsh-404 .lsh-think-text { color:#9be8ae; background:rgba(0,255,65,.05); border-left-color:rgba(0,255,65,.4); }
 @media (max-width:760px) {
   .lsh-pv { padding:14px; }
   .lsh-pv-card { height:86%; }

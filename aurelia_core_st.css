@@ -195,50 +195,10 @@ html, body {
 .void-panel-detail-body { font-size:12px; color:#3A3F5C; line-height:1.75; font-weight:500; }
 
 /* 歷史對話面板 */
-#iris-history-overlay { position:absolute; inset:0; z-index:20; background:rgba(228,232,245,0.97); display:flex; flex-direction:column; animation:histIn 0.22s ease; }
+
 /* 🔝 header 全域化(z60,52px)後，全螢幕工具窗口讓出頂部 header 高度，免返回鍵被遮（VN 劇情頁自己隱藏 header 不在此列）*/
-#iris-history-overlay, #aurelia-panel-container { top: 52px !important; }
+#aurelia-panel-container { top: 52px !important; }
 @keyframes histIn { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-.hist-header { display:flex; align-items:center; justify-content:space-between; padding:11px 14px 9px; border-bottom:1px solid rgba(26,28,40,0.15); flex-shrink:0; }
-.hist-title { font-size:12px; font-weight:700; color:#1A1C28; letter-spacing:1.5px; text-transform:uppercase; }
-.hist-char-badge { font-size:9px; padding:2px 7px; border-radius:10px; margin-left:8px; font-weight:600; letter-spacing:0.3px; }
-.hist-char-badge.iris { background:rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25); }
-.hist-char-badge.cheshire { background:rgba(0,255,65,0.12); color:#00cc33; border:1px solid rgba(0,255,65,0.28); }
-.hist-close { background:none; border:none; color:#1A1C28; font-size:15px; cursor:pointer; padding:2px 6px; transition:color 0.18s; line-height:1; }
-.hist-close:hover { color:#1A1C28; }
-.hist-toolbar { display:flex; align-items:center; gap:6px; padding:7px 12px; border-bottom:1px solid rgba(26,28,40,0.06); background:rgba(0,0,0,0.5); flex-shrink:0; flex-wrap:wrap; }
-.hist-check-all-label { display:flex; align-items:center; gap:4px; font-size:10px; color:#1A1C28; cursor:pointer; user-select:none; margin-right:2px; }
-.hist-check-all-label input { accent-color:rgba(26,28,40,0.72); cursor:pointer; width:13px; height:13px; }
-.hist-count { font-size:10px; color:rgba(26,28,40,0.72); margin-left:auto; font-family:monospace; }
-.hist-action-btn { background:rgba(228,232,245,0.60); border:1px solid rgba(26,28,40,0.10); border-radius:5px; padding:4px 9px; font-size:10px; color:#1A1C28; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
-.hist-action-btn:hover:not(:disabled) { background:rgba(26,28,40,0.06); color:#1A1C28; }
-.hist-action-btn:disabled { opacity:0.28; cursor:default; }
-.hist-action-btn.danger { color:#fc8181; border-color:#fc8181; background:rgba(252,129,129,0.1); }
-.hist-action-btn.danger:hover:not(:disabled) { background:rgba(252,129,129,0.2); color:#ff7070; }
-.hist-list { flex:1; overflow-y:auto; padding:6px 8px; }
-.hist-list::-webkit-scrollbar { width:3px; }
-.hist-list::-webkit-scrollbar-thumb { background:rgba(26,28,40,0.15); border-radius:2px; }
-.hist-empty { text-align:center; color:rgba(26,28,40,0.72); font-size:12px; padding:40px 20px; letter-spacing:1px; }
-.hist-item { display:flex; align-items:flex-start; gap:7px; padding:7px 9px; border-radius:5px; margin-bottom:3px; border:1px solid transparent; transition:background 0.15s; }
-.hist-item:hover { background:rgba(26,28,40,0.04); }
-.hist-item.selected { background:rgba(26,28,40,0.06); border-color:rgba(26,28,40,0.10); }
-.hist-item-check { flex-shrink:0; margin-top:3px; cursor:pointer; accent-color:rgba(26,28,40,0.72); width:13px; height:13px; }
-.hist-role-badge { flex-shrink:0; font-size:8px; font-weight:700; padding:2px 5px; border-radius:3px; margin-top:2px; text-transform:uppercase; letter-spacing:0.5px; white-space:nowrap; }
-.hist-role-badge.user { background:rgba(26,28,40,0.10); color:#1A1C28; border:1px solid rgba(26,28,40,0.25); }
-.hist-role-badge.ai { background:rgba(226,232,240,0.1); color:#1A1C28; border:1px solid rgba(26,28,40,0.12); }
-.hist-role-badge.ai.cheshire { background:rgba(0,255,65,0.10); color:#00cc33; border:1px solid rgba(0,255,65,0.3); }
-.hist-item-body { flex:1; min-width:0; }
-.hist-item-text { font-size:11px; color:#3A3F5C; line-height:1.55; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; white-space:pre-wrap; cursor:pointer; transition:color 0.15s; }
-.hist-item-text.expanded { display:block; -webkit-line-clamp:unset; }
-.hist-item-text:hover { color:#1A1C28; }
-.hist-item-actions { display:flex; gap:3px; flex-shrink:0; margin-top:1px; }
-.hist-icon-btn { background:none; border:none; color:rgba(26,28,40,0.72); font-size:12px; cursor:pointer; padding:2px 4px; border-radius:3px; line-height:1; transition:all 0.15s; }
-.hist-icon-btn:hover { background:rgba(26,28,40,0.06); color:#1A1C28; }
-.hist-icon-btn.edit:hover, .hist-icon-btn.rollback:hover { color:#1A1C28; }
-.hist-item-edit-area { width:100%; background:rgba(228,232,245,0.95); border:1px solid rgba(26,28,40,0.25); border-radius:4px; color:#1A1C28; font-size:11px; padding:5px 7px; font-family:monospace; line-height:1.5; resize:vertical; min-height:56px; box-sizing:border-box; }
-.hist-edit-confirm-row { display:flex; gap:5px; margin-top:5px; }
-.hist-edit-confirm-btn { background:#1A1C28; border:none; border-radius:4px; color:#EEF0F6; font-size:10px; padding:3px 9px; cursor:pointer; }
-.hist-edit-cancel-btn { background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:4px; color:#1A1C28; font-size:10px; padding:3px 9px; cursor:pointer; }
 
 /* =========================================================
    3. 登入介面與歷史素材管理器
@@ -466,25 +426,7 @@ body.layout-pad-ios .ps-header   { height: 100px !important; padding-top: 44px !
 /* 大廳 header NEXUS PARALLAX 副標題 (void-top-sub-label) */
 .void-tab.mode-404 .void-top-sub-label { color: rgba(0,255,65,0.45) !important; }
 /* 故事素材紀錄窗 iris-history-overlay */
-.void-tab.mode-404 #iris-history-overlay { background:rgba(0,6,0,0.97) !important; }
-.void-tab.mode-404 .hist-header { background: rgba(0,12,0,0.95) !important; border-bottom-color: rgba(0,255,65,0.25) !important; }
-.void-tab.mode-404 .hist-title { color:#a8ffca !important; }
-.void-tab.mode-404 .hist-close { color: #00cc33 !important; }
-.void-tab.mode-404 .hist-close:hover { color: #00ff41 !important; }
-.void-tab.mode-404 .hist-check-all-label { color: #b8ffcb !important; }
-.void-tab.mode-404 .hist-action-btn { background: rgba(0,15,0,0.7) !important; border-color: rgba(0,255,65,0.25) !important; color: #00cc33 !important; }
-.void-tab.mode-404 .hist-action-btn:hover:not(:disabled) { background: rgba(0,255,65,0.1) !important; color: #00ff41 !important; }
-.void-tab.mode-404 .hist-list::-webkit-scrollbar-thumb { background: rgba(0,255,65,0.25) !important; }
-.void-tab.mode-404 .hist-item:hover { background: rgba(0,255,65,0.05) !important; }
-.void-tab.mode-404 .hist-item.selected { background: rgba(0,255,65,0.08) !important; border-color: rgba(0,255,65,0.2) !important; }
-.void-tab.mode-404 .hist-item-check { accent-color:#00cc33; }
-.void-tab.mode-404 .hist-check-all-label input { accent-color:#00cc33; }
-.void-tab.mode-404 .hist-role-badge.user { background:rgba(0,255,65,0.08) !important; color:rgba(0,200,50,0.9) !important; border-color: rgba(0,255,65,0.3) !important; }
-.void-tab.mode-404 .hist-item-text { color: rgba(0,255,65,0.7) !important; }
-.void-tab.mode-404 .hist-item-text:hover { color: #b8ffcb !important; }
-.void-tab.mode-404 .hist-item-edit-area { background: rgba(0,10,0,0.85) !important; border-color: rgba(0,255,65,0.4) !important; color: #b8ffcb !important; }
-.void-tab.mode-404 .hist-icon-btn.edit:hover { color:#00cc33; }
-.void-tab.mode-404 .hist-edit-confirm-btn { background:rgba(0,255,65,0.1); border-color:rgba(0,255,65,0.3); color:#00cc33; }
+
 /* 成就收藏冊：單本白冊共用兩皮膚（黑卡在冊內自帶柴郡皮），mode-404 不再覆寫 */
 .void-tab.mode-404 .void-panel-overlay { background:rgba(0,10,0,0.88) !important; border-color:rgba(0,255,65,0.35) !important; box-shadow:0 8px 32px rgba(0,255,65,0.08) !important; }
 .void-tab.mode-404 .void-panel-header { background:rgba(0,15,0,0.6) !important; border-bottom-color:rgba(0,255,65,0.2) !important; }

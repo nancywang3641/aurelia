@@ -426,6 +426,14 @@
     // keepFences=true：跳過「吃 markdown 三反引號圍欄」那步。
     //   劇情顯示要砍圍欄（不想 ``` 字面跑進對話框），但創作室生成 JSON 程式碼時，
     //   AI 寫的 /```/g 之類三反引號是「資料」不是「顯示圍欄」，砍掉會把 /```/g 削成 //g（=註解）整段壞掉。
+    // 最近一次回覆裡抓到的 AI 思考（<think>、原生推理欄位）。OS_THINK 只有網頁版有載；
+    //   大廳聊天要把「這則回覆是怎麼想的」跟著紀錄存起來、兩邊都看得到，就靠這一份（OS_API.lastThink(從幾點起)）。
+    let _lastThink = null;
+    function _noteThink(t, raw) {
+        t = String(t || '').trim(); if (!t) return;
+        _lastThink = { t: Date.now(), text: t };
+        if (win.OS_THINK) win.OS_THINK.push(t, raw);
+    }
     function cleanRawOutput(text, keepFences) {
         if (!text || typeof text !== 'string') return text;
         let cleaned = text;
@@ -440,16 +448,14 @@
         // 原生推理模型/酒館常把思考包成 <details type="reasoning">…</details> → 一併剝掉，別漏進聊天
         cleaned = cleaned.replace(/<details\b[^>]*reasoning[^>]*>[\s\S]*?<\/details>/gi, '');
         
-        if (thinkBlocks.length > 0 && win.OS_THINK) {
-            win.OS_THINK.push(thinkBlocks.join('\n\n──────\n\n'), text);
-        }
+        if (thinkBlocks.length > 0) _noteThink(thinkBlocks.join('\n\n──────\n\n'), text);
 
         if (thinkBlocks.length === 0) {
             const wxStart = cleaned.search(/<chat\b|\[wx_os\]|\[Chat:/i);
             if (wxStart > 20) {
                 const preamble = cleaned.substring(0, wxStart).trim();
                 if (preamble.length > 10 && win.OS_THINK) {
-                    win.OS_THINK.push('[前置推理]\n' + preamble, text);
+                    _noteThink('[前置推理]\n' + preamble, text);
                     cleaned = cleaned.substring(wxStart);
                 }
             }
@@ -977,16 +983,13 @@
             const parts = data.candidates[0].content.parts;
             const thoughtParts = parts.filter(p => p.thought === true);
             const textParts    = parts.filter(p => p.thought !== true);
-            if (thoughtParts.length > 0 && win.OS_THINK) {
-                const t = thoughtParts.map(p => p.text || '').join('\n\n').trim();
-                if (t) win.OS_THINK.push(t);
-            }
+            if (thoughtParts.length > 0) _noteThink(thoughtParts.map(p => p.text || '').join('\n\n'));
             rawContent = textParts.map(p => p.text || '').join('');
         }
         else if (data.choices?.[0]?.message) {
             const msg = data.choices[0].message;
             const thinkText = msg.reasoning_content || msg.reasoning || msg.thinking || '';
-            if (thinkText && win.OS_THINK) win.OS_THINK.push(String(thinkText).trim());
+            if (thinkText) _noteThink(thinkText);
             rawContent = msg.content || '';
         }
         else if (typeof data === 'string') rawContent = data;
@@ -1106,6 +1109,7 @@
     // --- 3. OS API 主對象 ---
     win.OS_API = {
 
+        lastThink: function (since) { return (_lastThink && _lastThink.t >= (since || 0)) ? _lastThink.text : ''; },   // 從 since 這個時間點起抓到的最新一段 AI 思考（沒有就空字串）
         nativeBase: _nativeBase,   // 原生格式的根網址（見 _nativeBase）：設置頁測試、拉清單跟送生成同一套剝法
         geminiGenUrl: _geminiGenUrl, geminiModelList: _geminiModelList, isVertexUrl: _isVertexUrl, vertexHint: _vertexHint, tavernModelList: _tavernModelList,   // Gemini 原生／Vertex 的網址（設置頁測試、拉模型清單跟送生成同一套）
 

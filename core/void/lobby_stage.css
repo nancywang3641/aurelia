@@ -116,6 +116,31 @@
 .lsh-text { flex:1; font-size:12px; line-height:1.5; color:#23315e; word-break:break-word; white-space:pre-wrap; }
 .lsh-del { flex:0 0 auto; border:none; background:transparent; color:rgba(35,49,94,.35); cursor:pointer; font-size:12px; padding:0 2px; }
 .lsh-del:hover { color:#c0504a; }
+/* 💭 這則回覆當時的思考：收在泡泡底下、點開看（有思考的那一列才多包一層 .lsh-body） */
+.lsh-body { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+.lsh-body .lsh-text { flex:0 0 auto; }
+.lsh-think { max-width:100%; }
+.lsh-think > summary { cursor:pointer; list-style:none; user-select:none; font-size:11px; color:#8a93ad; padding:1px 2px; }
+.lsh-think > summary::-webkit-details-marker { display:none; }
+.lsh-think > summary i { margin-right:4px; }
+.lsh-think[open] > summary { color:#5b6aa0; }
+.lsh-think-text { margin-top:4px; max-height:240px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.65;
+  color:#4a5478; background:rgba(35,49,94,.06); border-left:2px solid rgba(35,49,94,.25); border-radius:0 8px 8px 0; padding:8px 10px; }
+/* 柴郡那份（舞台上的小窗）：404 的黑底綠字 */
+.lstage-history.lsh-404 { background:#030a03; border:1px solid rgba(0,255,65,.35); box-shadow:0 0 24px rgba(0,255,65,.14); color:#b8ffc9; }
+.lstage-history.lsh-404 .lsd-title { color:#00ff41; }
+.lstage-history.lsh-404 .lsd-title i { color:#00cc33; }
+.lstage-history.lsh-404 .lep-btn { background:rgba(0,255,65,.08); border-color:rgba(0,255,65,.4); color:#00ff41; }
+.lstage-history.lsh-404 .lep-btn:hover { background:rgba(0,255,65,.18); border-color:#00ff41; }
+.lstage-history.lsh-404 .lep-danger { background:transparent; border-color:rgba(255,90,90,.45); color:#ff7b7b; }
+.lstage-history.lsh-404 .lep-danger:hover { background:rgba(255,90,90,.1); border-color:#ff7b7b; }
+.lstage-history.lsh-404 .lsh-count, .lstage-history.lsh-404 .lsh-who, .lstage-history.lsh-404 .lsh-empty { color:rgba(0,255,65,.55); }
+.lstage-history.lsh-404 .lsh-row { background:rgba(0,255,65,.06); }
+.lstage-history.lsh-404 .lsh-row.me { background:rgba(0,255,65,.14); }
+.lstage-history.lsh-404 .lsh-text { color:#b8ffc9; }
+.lstage-history.lsh-404 .lsh-del { color:rgba(0,255,65,.5); }
+.lstage-history.lsh-404 .lsh-think > summary { color:rgba(0,255,65,.6); }
+.lstage-history.lsh-404 .lsh-think-text { color:#9be8ae; background:rgba(0,255,65,.05); border-left-color:rgba(0,255,65,.4); }
 /* 🎬 小劇場窗口 v2：票券檔案館（阿洛設計；票券／播放鈕＝sound-files aseets/theater_ui/ 的圖）
    10-06 外框不再是一張撐滿的圖：core/void/frames.js 照窗的大小畫一層 svg（.aurelia-vframe）墊在最底下，
    角、拱、花飾固定大小，所以內容區也用固定距離（上 46＝上緣＋花飾、左右 24、下 40＝下緣＋花飾） */
