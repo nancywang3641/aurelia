@@ -1182,6 +1182,22 @@
     function _skins() {
         try { return JSON.parse(localStorage.getItem(SKIN_KEY) || '{}'); } catch (e) { return {}; }
     }
+    // 🧸 六位管理員的內建不倒翁（11-19 阿洛畫三視圖＋閉眼貼片，她：「放進去」）。她在裝扮頁自己換過的照她的（_skins 優先）。
+    //   素材在 sound-files 的 doll_mgr_v1（去背、切三面、閉眼兩面、接好手腳的走路圖、自動切好的頭身：本機 tmp/manager_dolls/prep.py＋D:\run_ember\mgr_bake.cjs）。
+    //   shut＝閉眼的兩面（阿洛的貼片照座標貼回原圖、跟睜眼同一個去背和裁切，逐像素對齊）：眨眼直接換這張，不用猜眼睛在哪（lobby_doll_cut.js）。
+    //   hk＝站在大廳的高度倍率：大小原本照整格高度算，帽匠的高帽、白兔的耳朵會把身體擠小（11-19 她：「帽匠有點小，因為他有高帽」）→ 照正面身體寬換算，六位身體一樣大
+    const MGR_DOLL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@86d20c2366195e664f495994a37145b244f0f9e8/doll_mgr_v1/';
+    function _mgrDoll(k, hk) {
+        const u = (f) => ({ url: MGR_DOLL + k + '/' + f });
+        return { kind: 'sheet', doll: 2, builtin: true, hk, ref: u('sheet.webp'),
+            raw: { front: u('front.webp'), side: u('side.webp'), back: u('back.webp') },
+            shut: { front: u('front_shut.webp'), side: u('side_shut.webp') }, cut: u('cut.json') };
+    }
+    const BUILTIN_SKINS = {   // hk＝160／正面身體在走路圖那格裡的寬（mgr_measure.cjs 量的）
+        alice: _mgrDoll('alice', 0.877), ying: _mgrDoll('ying', 0.979), rabbit: _mgrDoll('rabbit', 1.07),
+        cheshire: _mgrDoll('cheshire', 1), hatter: _mgrDoll('hatter', 1.159), zhiwei: _mgrDoll('zhiwei', 1.121),
+    };
+    function _skinOf(key) { return _skins()[key] || BUILTIN_SKINS[key] || null; }
     // 🚨回傳成不成功，別再靜靜吞掉。localStorage 有 5MB 上限，滿了以後這裡會拋 QuotaExceeded——
     //   以前空 catch 掉了，於是：圖生好了→存不進去→下次進大廳查「生過沒」查不到→再生一次→
     //   再存不進去。ComfyUI 白燒一輪又一輪，畫面上永遠是剪影，而且一句話都不會說。
@@ -1243,7 +1259,7 @@
         placeActor(a);
     }
     async function _applySkin(a, key) {
-        const skin = _skins()[key];
+        const skin = _skinOf(key);
         if (!skin) return;
         const src = await resolveRef(skin.ref);
         if (!src || !a.el || !S.active) {   // 皮膚換不成→把先藏起來的預設圖還原顯示，別讓角色隱形
@@ -1280,6 +1296,8 @@
                 if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); return; }
             }
         }
+        if (a._baseH == null) a._baseH = a.h;
+        a.h = Math.round(a._baseH * (skin.hk || 1));   // 頭上有高帽、長耳朵的放大一點，身體才跟大家一樣大（內建的六位才有 hk）
         _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src, { smooth: !!skin.doll });
         _dollLive(a, key, skin);
     }
@@ -1611,7 +1629,7 @@
         const keepH = a.h;   // spawnActor 已套 actorScale，別讓 cfg.h(未縮放) 蓋回去
         const npc = Object.assign(a, cfg, { h: keepH, wanderT: 1500 + Math.random() * 3000, dest: null, defaultSrc: cfg.src });
         if (cfg.smooth) npc.el.classList.add('lstage-smooth');   // 不是像素圖的小人（衣櫥拍的常客）：縮小時平滑，不要鋸齒
-        if (_skins()[cfg.key]) npc._skinPending = true;   // 有自訂皮膚→預設圖先藏著，等 _applySkin 換好才顯示(免閃)
+        if (_skinOf(cfg.key)) npc._skinPending = true;   // 有自訂皮膚→預設圖先藏著，等 _applySkin 換好才顯示(免閃)
         _applySkin(npc, cfg.key);
         const tag = document.createElement('div');
         tag.className = 'lstage-tag'; tag.textContent = cfg.name;

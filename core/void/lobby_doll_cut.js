@@ -28,12 +28,30 @@
     const kit = () => (window.LobbyDress && window.LobbyDress.dollKit) || null;
     const loadImg = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('圖讀不進來')); i.src = src; });
 
+    // 讀圖：網址的（內建六位管理員在素材庫）要帶跨網域，不然畫布讀不了像素；素材庫偶爾 403 就換 GitHub raw 再拿一次（lobby_stage 的 sfMirror）
+    async function _imgOf(K, src) {
+        const net = !/^(data:|blob:)/.test(String(src));
+        try { return await K.loadImg(src, net); }
+        catch (e) {
+            const B = window.LobbyStage && window.LobbyStage._b, alt = net && B && B.sfMirror ? B.sfMirror(src) : null;
+            if (alt) return await K.loadImg(alt, true);
+            throw e;
+        }
+    }
+    async function _textOf(ref) {   // 切好的頭身：本機存的是字串；內建的是素材庫的 json 檔
+        const B = window.LobbyStage._b;
+        if (!ref || !ref.url) return await B.resolveRef(ref);
+        try { const r = await fetch(ref.url); if (r.ok) return await r.text(); } catch (e) {}
+        const alt = B.sfMirror ? B.sfMirror(ref.url) : null;
+        if (alt) { try { const r = await fetch(alt); if (r.ok) return await r.text(); } catch (e) {} }
+        return null;
+    }
     // ================= 三面原圖 → 並排一張（單位＝正面身體寬 278） =================
     async function buildSheet(raw) {
         const K = kit();
         if (!K) throw new Error('大廳的小人那支還沒載入');
         const M = {};
-        for (const v of VIEWS) { M[v] = K.measure(await K.loadImg(raw[v])); if (!M[v]) throw new Error('量不到小人的位置'); }
+        for (const v of VIEWS) { M[v] = K.measure(await _imgOf(K, raw[v])); if (!M[v]) throw new Error('量不到小人的位置'); }
         const Lo = K.layout(M), s = Lo.s;   // s＝原圖 px／單位
         let half = 0, up = 0;
         for (const v of VIEWS) { const m = M[v]; half = Math.max(half, (m.cx - m.left) / s, (m.right - m.cx) / s); up = Math.max(up, (m.bot - m.top) / s); }
@@ -559,16 +577,32 @@
         return raw;
     }
     function partsOf(skin) {
-        const id = (skin.cut && skin.cut.idb) || '';
+        const id = (skin.cut && (skin.cut.idb || skin.cut.url)) || '';
         if (_parts.has(id)) return _parts.get(id);
         const p = (async () => {
-            const b = window.LobbyStage._b, K = kit();
-            const S = await buildSheet(await _rawOf(skin));
-            let lab = decode(await b.resolveRef(skin.cut), S.w, S.h);
+            const K = kit();
+            const raw = await _rawOf(skin);
+            const S = await buildSheet(raw);
+            let lab = decode(await _textOf(skin.cut), S.w, S.h);
             if (!lab) lab = autoSeg(S, prep(S));
-            const R = buildRig(S, lab, await K.shoes());
-            const fits = fitEyes(S, await eyesOf(skin));
-            buildBlink(S, R, fits);
+            const shoes = await K.shoes();
+            const R = buildRig(S, lab, shoes);
+            let fits = null;
+            if (skin.shut && skin.shut.front) {
+                // 👁 閉眼現成的兩面（內建六位：阿洛的貼片貼回原圖，跟睜眼逐像素對齊）→ 同一套切法切出閉眼的頭，眨眼直接換
+                try {
+                    const b = window.LobbyStage._b;
+                    const shut = { front: await b.resolveRef(skin.shut.front), side: await b.resolveRef(skin.shut.side), back: raw.back };
+                    const S2 = await buildSheet(shut);
+                    if (S2.w === S.w && S2.h === S.h) {
+                        const R2 = buildRig(S2, lab, shoes);
+                        R.shut = [R2.layers[0], R2.layers[3]];   // 正面、側面的頭（背面看不到眼睛）
+                    } else console.warn('[DollCut] 閉眼那張跟睜眼對不齊，不眨眼', skin.cut);
+                } catch (e) { console.warn('[DollCut] 閉眼那兩面讀不到，不眨眼', e); }
+            } else {
+                fits = fitEyes(S, await eyesOf(skin));
+                buildBlink(S, R, fits);
+            }
             return { S, R, fist: fistPainter(S), fits };
         })();
         _parts.set(id, p);
