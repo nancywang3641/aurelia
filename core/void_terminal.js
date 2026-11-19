@@ -1590,6 +1590,21 @@ const IRIS_IDLE = [
         _playEphemeral({ title: saved.title || '小劇場', storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: String(saved.content), createdAt: Date.now() });
         return true;
     };
+    // 這位 NPC 認得的「她」是誰：書裡的角色＝那一輪大總結記下的人設（認得古風輪的妳，不靠現在用的）；
+    //   管理員或沒紀錄＝現在用的人設。回 { name, desc } 或 null。大廳一對一聊天、送餐觸發的小劇場（lobby_cafe_regulars.js）共用
+    function _userPersonaFor(npcTarget) {
+        try {
+            if (npcTarget && (npcTarget.personaId || npcTarget.personaName)) {
+                const rec = (npcTarget.personaId && window.OS_PERSONA?.getById?.(npcTarget.personaId)) || null;
+                return rec ? { name: rec.name, desc: rec.desc || '' }
+                           : { name: npcTarget.personaName || '訪客', desc: npcTarget.personaDesc || '' };
+            }
+            const p = window.OS_PERSONA?.getCurrent?.();
+            if (p && p.name) return { name: p.name, desc: p.desc || '' };
+        } catch (e) {}
+        return null;
+    }
+    VoidTerminal.userPersonaFor = _userPersonaFor;
     VoidTerminal.playDuoScene = async function (npcA, npcB, extra) {
         const _prevSum = window.__AURELIA_SUMMARIZING;
         try {
@@ -2021,17 +2036,7 @@ ${sections}`;
             const worldCtx   = _wv ? _wv.getWorldview(_worldTier) : '';
             // USER 身分：guest NPC 用「那輪大總結紀錄的 persona」(認得古風輪的你，不靠當前 USER)；
             //   固定 NPC(瀅瀅/柴郡/愛麗絲)或沒紀錄 → 退當前 persona
-            let userPersona = null;
-            try {
-                if (npcTarget && (npcTarget.personaId || npcTarget.personaName)) {
-                    const rec = (npcTarget.personaId && window.OS_PERSONA?.getById?.(npcTarget.personaId)) || null;
-                    userPersona = rec ? { name: rec.name, desc: rec.desc || '' }
-                                      : { name: npcTarget.personaName || '訪客', desc: npcTarget.personaDesc || '' };
-                } else {
-                    const p = window.OS_PERSONA?.getCurrent?.();
-                    if (p && p.name) userPersona = { name: p.name, desc: p.desc || '' };
-                }
-            } catch (e) {}
+            const userPersona = _userPersonaFor(npcTarget);
             // L2 一對一長期記憶：npcTarget 取 guest key；瀅瀅/柴郡取固定 key
             let npcMemSummary = '', fixedMemSummary = '';
             const _onStage = window.LobbyStage?.isActive?.();
