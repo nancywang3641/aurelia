@@ -381,7 +381,135 @@
         }
     }
     // 一面一格：k＝第幾面；拳頭（衣櫥的）跟著身體那個高度動；回傳畫好了沒
-    function drawView(g, R, k, motion, t, S, fist) {
+    // ================= 👁 眨眼：GPT 畫的睜眼零件對準臉上那雙，閉眼時把睜眼補成膚色、貼上閉眼零件 =================
+    //   11-19 她：「GPT那個眼睛拆分弄了嗎?」→「好，做」。照阿洛那張「眨眼拆件參考圖」說的：每個角色、每一面對準一次，以後眨眼都用同一套；
+    //   零件常比臉上那雙大一點（他看出來的），所以找位置時連大小一起找（0.55～1.25 倍）。
+    //   找法：灰階正規化互相關（只算零件不透明那些點），先縮三分之一粗找、再原尺寸在附近細找。正面左右眼各找各的（左零件找左半臉），側面一隻。
+    //   閉眼：睜眼那塊（外擴 4）塗成臉的膚色（lobby_dress.js 量的那個顏色，同拳頭），閉眼零件水平對齊睜眼中心、高度放在睜眼六成那條（眼皮蓋下來的位置）。
+    async function eyesOf(skin) {
+        if (!skin || !skin.eyes) return null;
+        try {
+            const o = JSON.parse(await window.LobbyStage._b.resolveRef(skin.eyes));
+            if (!o || !o.fo || !o.fc || !o.so || !o.sc) return null;
+            const L = async (p) => Object.assign({}, p, { img: await loadImg(p.src) });
+            return { fo: await Promise.all(o.fo.map(L)), fc: await Promise.all(o.fc.map(L)), so: await L(o.so), sc: await L(o.sc) };
+        } catch (e) { console.warn('[DollCut] 眼睛零件讀不到（不眨眼）', e); return null; }
+    }
+    function _grayAt(S) {
+        const n = S.w * S.h, d = S.data.data, gr = new Float32Array(n), al = new Uint8Array(n);
+        for (let i = 0; i < n; i++) { gr[i] = (d[i * 4] + d[i * 4 + 1] + d[i * 4 + 2]) / 3; al[i] = d[i * 4 + 3] >= 128 ? 1 : 0; }
+        return { gr, al };
+    }
+    // 零件 → 縮放 f、再縮 q 倍的灰階＋遮罩
+    function _tpl(part, unitK, f, q) {
+        const w = Math.max(3, Math.round(part.w * unitK * f / q)), h = Math.max(3, Math.round(part.h * unitK * f / q));
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(part.img, 0, 0, w, h);
+        const d = g.getImageData(0, 0, w, h).data, pts = [];
+        let sum = 0;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) { const i = (y * w + x) * 4; if (d[i + 3] < 128) continue; const v = (d[i] + d[i + 1] + d[i + 2]) / 3; pts.push(x, y, v); sum += v; }
+        const m = pts.length / 3; if (m < 8) return null;
+        const mean = sum / m; let ss = 0;
+        for (let i = 2; i < pts.length; i += 3) { pts[i] -= mean; ss += pts[i] * pts[i]; }
+        return { w, h, pts, ss };
+    }
+    // 在 [x0,x1)×[y0,y1)（單位座標）裡找零件最像的位置和大小；回 { x, y, w, h, f, score }（左上角、單位）
+    function _match(G, S, part, unitK, box) {
+        const W = S.w;
+        const score = (T, ox, oy, q) => {   // 縮 q 倍的取樣：原圖第 (ox + x)*q 那點
+            let si = 0, sii = 0, sti = 0; const m = T.pts.length / 3;
+            for (let i = 0; i < T.pts.length; i += 3) {
+                const X = (ox + T.pts[i]) * q, Y = (oy + T.pts[i + 1]) * q;
+                if (X < 0 || Y < 0 || X >= W || Y >= S.h) return -1;
+                const j = Y * W + X; if (!G.al[j]) return -1;
+                const v = G.gr[j]; si += v; sii += v * v; sti += T.pts[i + 2] * v;
+            }
+            const vi = sii - si * si / m; if (vi <= 1e-3) return -1;
+            return sti / Math.sqrt(vi * T.ss);
+        };
+        let best = { score: -2 };
+        const q = 3;
+        for (let f = 0.55; f <= 1.2501; f += 0.05) {
+            const T = _tpl(part, unitK, f, q); if (!T) continue;
+            for (let oy = Math.floor(box[1] / q); oy + T.h <= Math.ceil(box[3] / q); oy++) for (let ox = Math.floor(box[0] / q); ox + T.w <= Math.ceil(box[2] / q); ox++) {
+                const sc = score(T, ox, oy, q); if (sc > best.score) best = { score: sc, f, x: ox * q, y: oy * q };
+            }
+        }
+        if (best.score < -1) return null;
+        let fine = { score: -2 };
+        for (let f = best.f - 0.04; f <= best.f + 0.0401; f += 0.01) {
+            const T = _tpl(part, unitK, f, 1); if (!T) continue;
+            for (let oy = best.y - 4; oy <= best.y + 4; oy++) for (let ox = best.x - 4; ox <= best.x + 4; ox++) {
+                const sc = score(T, ox, oy, 1); if (sc > fine.score) fine = { score: sc, f, x: ox, y: oy };
+            }
+        }
+        if (fine.score < -1) fine = best;
+        return { x: fine.x, y: fine.y, w: part.w * unitK * fine.f, h: part.h * unitK * fine.f, f: fine.f, score: fine.score };
+    }
+    // 每一面：[{ open, closed, place:{x,y,w,h}, shut:{x,y,w,h} }]；找不到（像不到 0.35）就那一面不眨
+    function fitEyes(S, E) {
+        if (!E) return null;
+        const G = _grayAt(S), unitK = 1 / S.Lo.s, out = [[], [], []];
+        const go = (k, open, closed, box) => {
+            const m = _match(G, S, open, unitK, box);
+            if (!m || m.score < 0.35) return;
+            const cw = closed.w * unitK * m.f, ch = closed.h * unitK * m.f, cx = m.x + m.w / 2, cy = m.y + m.h * 0.6;
+            out[k].push({ open, closed, place: m, shut: { x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch } });
+        };
+        const F = S.views[0], D = S.views[1];
+        go(0, E.fo[0], E.fc[0], [F.px - 190, F.neck - 270, F.px + 10, F.neck - 10]);
+        go(0, E.fo[1], E.fc[1], [F.px - 10, F.neck - 270, F.px + 190, F.neck - 10]);
+        go(1, E.so, E.sc, [D.px - 120, D.neck - 270, D.px + 260, D.neck - 10]);
+        return out;
+    }
+    // 閉眼的頭：頭那層複製一份，睜眼那塊塗膚色、貼閉眼
+    function buildBlink(S, R, fits) {
+        R.shut = [];
+        if (!fits) return;
+        const skin = (S.Lo.skin && S.Lo.skin.fill) || 'rgb(250,222,198)';
+        fits.forEach((list, k) => {
+            if (!list.length) return;
+            const c = document.createElement('canvas'); c.width = S.w; c.height = S.h;
+            const g = c.getContext('2d'); g.drawImage(R.layers[k * 3], 0, 0);
+            const sk = (S.Lo.skin && S.Lo.skin.rgb) || [250, 222, 198];
+            list.forEach(e => {
+                const p = e.place;
+                // 睜眼那塊的形狀：零件的不透明處放到臉上那個位置再外擴（畫好幾次錯開＝簡單的膨脹）；近的（4）一律補，遠一點的（12）只補剩下的眼白和下睫毛
+                const maskOf = (pad, step) => {
+                    const m = document.createElement('canvas'); m.width = S.w; m.height = S.h;
+                    const mg = m.getContext('2d', { willReadFrequently: true });
+                    for (let dy = -pad; dy <= pad; dy += step) for (let dx = -pad; dx <= pad; dx += step) mg.drawImage(e.open.img, p.x + dx, p.y + dy, p.w, p.h);
+                    return mg;
+                };
+                const near = maskOf(4, 2), far = maskOf(12, 3);
+                const x0 = Math.max(0, Math.floor(p.x - 16)), x1 = Math.min(S.w, Math.ceil(p.x + p.w + 16));
+                const y0 = Math.max(0, Math.floor(p.y - 16)), y1 = Math.min(S.h, Math.ceil(p.y + p.h + 16));
+                if (x1 <= x0 || y1 <= y0) return;
+                const bw = x1 - x0, bh = y1 - y0;
+                const mn4 = near.getImageData(x0, y0, bw, bh).data, mf = far.getImageData(x0, y0, bw, bh).data, im = g.getImageData(x0, y0, bw, bh), d = im.data;
+                // 補的顏色：這隻眼睛旁邊（遠的那圈外面）的皮膚平均，不是整張臉一個色（眼睛旁邊常比較暗或比較粉，用一個色會補出一塊）
+                let sr = 0, sg = 0, sb = 0, sn = 0;
+                for (let i = 0; i < bw * bh; i++) {
+                    const j = i * 4; if (d[j + 3] < 250 || mf[j + 3] > 10) continue;
+                    if (Math.abs(d[j] - sk[0]) + Math.abs(d[j + 1] - sk[1]) + Math.abs(d[j + 2] - sk[2]) > 60) continue;
+                    sr += d[j]; sg += d[j + 1]; sb += d[j + 2]; sn++;
+                }
+                const fill = sn > 20 ? [sr / sn, sg / sn, sb / sn] : sk;
+                for (let i = 0; i < bw * bh; i++) {
+                    const j = i * 4; if (d[j + 3] < 8) continue;
+                    const r = d[j], gg = d[j + 1], b2 = d[j + 2], mx = Math.max(r, gg, b2), mn = Math.min(r, gg, b2);
+                    const white = mn > 222 && mx - mn < 26;
+                    const lash = (r + gg + b2) / 3 < 150 && (mx - mn) < 60;
+                    const blush = r > 200 && r - gg > 35;   // 腮紅、嘴：遠的那圈不碰
+                    if (mn4[j + 3] > 40 || (mf[j + 3] > 40 && !blush && (white || lash))) { d[j] = fill[0]; d[j + 1] = fill[1]; d[j + 2] = fill[2]; }
+                }
+                g.putImageData(im, x0, y0);
+                g.drawImage(e.closed.img, e.shut.x, e.shut.y, e.shut.w, e.shut.h);
+            });
+            R.shut[k] = c;
+        });
+    }
+    function drawView(g, R, k, motion, t, S, fist, closed) {
         const r = R.rig[k]; if (!r || r.baseY < 0) return;
         const L = MOTION_LEN[motion] || 2.4, tq = ((t - LAG) % L + L) % L;
         const P = pose(motion, k, t), Q = pose(motion, k, tq), nn = neckOf(P, r), nq = neckOf(Q, r), c = x => Math.max(-LAG_MAX * r.s, Math.min(LAG_MAX * r.s, x * LAG_K));
@@ -404,7 +532,7 @@
         g.save();
         g.translate(nn.x + lag.x, nn.y + lag.y);
         g.translate(r.cx, neck0); g.rotate((P.rot + P.head) * Math.PI / 180); g.translate(-r.cx, -neck0);
-        g.drawImage(R.layers[k * 3], 0, 0);
+        g.drawImage((closed && R.shut && R.shut[k]) || R.layers[k * 3], 0, 0);
         g.restore();
     }
     // 衣櫥的拳頭（跟走路圖同一個位置、同一個顏色；正背面兩顆、側面一顆）：front＝畫在身體前面那一批
@@ -439,7 +567,9 @@
             let lab = decode(await b.resolveRef(skin.cut), S.w, S.h);
             if (!lab) lab = autoSeg(S, prep(S));
             const R = buildRig(S, lab, await K.shoes());
-            return { S, R, fist: fistPainter(S) };
+            const fits = fitEyes(S, await eyesOf(skin));
+            buildBlink(S, R, fits);
+            return { S, R, fist: fistPainter(S), fits };
         })();
         _parts.set(id, p);
         p.catch(() => _parts.delete(id));
@@ -500,7 +630,11 @@
         g.translate(cw / 2, ch - 1); g.scale(Lo.k0, Lo.k0); g.translate(0, -L.below * Lo.s); g.scale(Lo.s, Lo.s);
         const V = SH.views[k];
         g.translate(-V.px, -V.feet);
-        drawView(g, R, k, 'idle', now + B.clock, SH, fist);
+        // 眨眼：每人自己的節奏 2.5～4.5 秒一次、閉 0.14 秒（同衣櫥）
+        if (!B.nextBlink) B.nextBlink = now + 1 + Math.random() * 3;
+        if (now >= B.nextBlink + 0.14) B.nextBlink = now + 2.5 + Math.random() * 2;
+        const closed = now >= B.nextBlink && now < B.nextBlink + 0.14;
+        drawView(g, R, k, 'idle', now + B.clock, SH, fist, closed);
         const w = a.h * a.frameW / a.frameH, left = a.x - w / 2, top = a.y - a.h;
         const st = B.cv.style, tf = 'translate3d(' + left.toFixed(1) + 'px,' + top.toFixed(1) + 'px,0)';
         if (B._tf !== tf) { st.transform = tf; B._tf = tf; }
@@ -592,7 +726,8 @@
                 for (let i = 0; i < lab.length; i++) if (lab[i] >= 0 && a[i * 4 + 3] > 127) lab[i] = set(lab[i]);
             }
         }
-        function rebuild() { cur.R = buildRig(S, cur.lab, shoesImg); }
+        const fits = fitEyes(S, await eyesOf(skin));
+        function rebuild() { cur.R = buildRig(S, cur.lab, shoesImg); buildBlink(S, cur.R, fits); }
         function recompute() { cur.lab = Int8Array.from(cur.start); cur.ops.forEach(op => applyOp(op, cur.lab)); redraw(); rebuild(); $('.ldc-undo').disabled = !cur.ops.length; }
         function pushOp(op, msg) { cur.ops.push(op); applyOp(op, cur.lab); redraw(); rebuild(); $('.ldc-undo').disabled = false; status.textContent = msg; }
         function redraw(hoverId) {
@@ -621,7 +756,8 @@
                 pctx.setTransform(1, 0, 0, 1, 0, 0);
                 pctx.fillStyle = '#fff'; pctx.fillRect(0, 0, prev.width, prev.height);
                 pctx.save(); pctx.translate(0, PADT);
-                S.views.forEach((V, k) => drawView(pctx, cur.R, k, 'idle', t, S, fist));
+                const closed = (t % 3.2) < 0.14;   // 預覽也眨（三秒多一次）
+                S.views.forEach((V, k) => drawView(pctx, cur.R, k, 'idle', t, S, fist, closed));
                 pctx.restore();
             }
             raf = requestAnimationFrame(tick);
@@ -710,13 +846,13 @@
             } catch (e) { status.textContent = '沒存到：' + ((e && e.message) || e); btn.disabled = false; }
         });
         // 測試用
-        wrap.__ldc = { get cur() { return cur; }, S, ids, seg0 };
+        wrap.__ldc = { get cur() { return cur; }, S, ids, seg0, fits };
     }
 
     window.LobbyDollCut = {
         autoCut,            // 三面原圖 → 自動切好的 JSON（生完不倒翁時存）
         openPanel,          // 裝扮頁「切頭和身體」
         bindLive, unbindLive, refresh,
-        _parts: partsOf, _buildSheet: buildSheet, _prep: prep, _autoSeg: autoSeg, _pieces: makePieces, _encode: encode, _decode: decode, _live: () => _live,
+        _parts: partsOf, _eyesOf: eyesOf, _fitEyes: fitEyes, _buildSheet: buildSheet, _prep: prep, _autoSeg: autoSeg, _pieces: makePieces, _encode: encode, _decode: decode, _live: () => _live,
     };
 })();

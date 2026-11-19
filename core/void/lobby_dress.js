@@ -708,7 +708,11 @@
     const DOLL_TPL = 'a turnaround sheet of one small round-bottomed tumbler toy doll, drawn in a flat, simple mascot style; the doll is this character: 【角色外觀】;\n\n'
         + 'the same doll appears three times side by side in one row, all three the same size and resting on the same ground line, on one continuous plain white background: on the left seen from the front, in the middle in full profile with its face pointing to the right, on the right seen from behind;\n\n'
         + 'each doll is made of only two solid shapes, an oversized round head resting directly on a small smooth egg-shaped body with a rounded bottom; the doll has no arms, no hands, no legs and no feet, and nothing sticks out of the egg-shaped body; the head keeps the character\'s hairstyle, hair color and eye color; the eyes, eyebrows and mouth show this particular character\'s own look and temperament, not a generic cute face: take the eye shape, eye size, gaze and expression from the description (for example narrow sharp eyes, sleepy half-closed eyes, a stern frown, a calm faint smile, a cold stare), and when the description says nothing about them, choose ones that fit the character\'s age, mood and style; add blush on the cheeks only if it suits the character; the character\'s outfit is painted flat onto the surface of the egg-shaped body, and the doll seen from behind shows the back of the hair and the back of the outfit;\n\n'
-        + 'flat colors, thin clean outlines; the image contains only these three dolls, evenly spaced with clear white gaps between them and clear white margin around them;';
+        + 'flat colors, thin clean outlines; the three dolls fill the upper part of the image, evenly spaced with clear white gaps between them and clear white margin around them;\n\n'
+        + 'in the lower part of the image, below the dolls and separated from them by plain white space, one row of four eye parts drawn separately on the white background, evenly spaced from left to right: '
+        + 'the front view\'s two eyes open, the same two eyes closed, the side view\'s single eye open, the same side eye closed; '
+        + 'they are this doll\'s own eyes, exactly the same shape, size, color and drawing style as the eyes on the dolls\' faces, with no eyebrows, no skin and nothing else around them; '
+        + 'the image contains only the three dolls and this row of eye parts;';
     function _dollTpl() {
         let t = null;
         try { t = localStorage.getItem(DOLL_TPL_KEY); } catch (e) {}
@@ -721,7 +725,10 @@
     //   🚨 樣張要跟出圖同一個比例（3:2，1536×1024）：她第一次生出來「感覺有被故意拉長了，可能尺寸不對???」——
     //     那時樣張是原圖的扁長條（2010×782），出圖是 3:2，它照樣張的排法填滿畫面就把小人往上拉。現在這張是原圖縮到 1536 寬、上下補白到 1024。
     //   抓不到樣張就不畫（丟錯），不退成只送文字：只送文字畫出來就是她說畫風不對的那種，白花一張。
-    const DOLL_REF_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@00c3d185eeff0787fc05ee2a7ebdc04b1878bf9c/doll_ref_v1/tumbler_sheet_3x2.webp';
+    //   👁 11-19 起樣張多一排眼睛零件（她：「GPT那個眼睛拆分弄了嗎?」→「好，做」，照阿洛那張「眨眼拆件參考圖」的做法）：
+    //     三隻小人往上挪，底下一排四組＝正面睜眼兩隻、正面閉眼兩隻、側面睜眼、側面閉眼。生完先把那一排切下來（_dollEyeStrip），
+    //     再拿上面那段去背、切三面；眼睛零件給 lobby_doll_cut.js 對準臉上那雙、眨眼時貼閉眼。舊樣張 tumbler_sheet_3x2.webp 還在素材庫。
+    const DOLL_REF_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@725e6b0cd544735e3b9bd1432bd26b845c5d7523/doll_ref_v1/tumbler_sheet_eyes_3x2.webp';
     //   說法照「直接改這張」寫、把「只改什麼」和「照原圖留著什麼」分開（11-16 她轉來阿洛試出來的：參考圖只帶得動外觀，鎖不住「沒有手」的結構；
     //     當成樣張叫它照著畫，它換衣服時會順手補出普通小人的身體。直接改這隻、固定外輪廓、衣服只畫在原本身體裡，才留得住）。
     const DOLL_REF_LEAD = 'Edit the doll sheet in image {n} directly: keep its three dolls and turn them into the character described below.\n'
@@ -732,13 +739,15 @@
         + 'Keep the blush only if it suits the character.\n'
         + 'Keep exactly as in image {n}: the proportion between head and body, the outline of the head and the outline of the body, the chin sitting directly on the body, '
         + 'the way the ears are drawn, the thin outlines and flat coloring, the plain white background, '
-        + 'the size and position of the three dolls on the canvas with the same empty white space above and below them, '
+        + 'the size and position of the three dolls on the canvas, the row of four eye parts below them in the same positions, '
         + 'and the three views: front view on the left, side view with the face pointing to the right in the middle, back view on the right.\n'
         + 'The body stays one complete, short, round egg shape whose left and right outlines are smooth and unbroken. '
         + 'Every detail of the outfit, such as a collar, buttons, pockets or an apron, is painted flat inside that egg outline. '
         + 'The doll has no shoulders, no arms, no sleeves, no cuffs, no hands, no fingers, no legs and no feet; '
         + 'where the description mentions them, or gloves, shoes or something held in the hand, leave them out. '
-        + 'It stays this tumbler doll and does not turn into an ordinary chibi figure wearing clothes.';
+        + 'It stays this tumbler doll and does not turn into an ordinary chibi figure wearing clothes.\n'
+        + 'The row of eye parts below the dolls is redrawn too: from left to right, the front view\'s two eyes open, the same two eyes closed, the side view\'s single eye open, the same side eye closed. '
+        + 'They are this character\'s own new eyes, drawn exactly like the eyes on the dolls\' faces (same shape, size, color and style), each part alone on the white background with no eyebrows, no skin and no outline around it.';
     let _dollRefBlob = null;
     async function _dollRef() {
         if (!_dollRefBlob) {
@@ -1181,6 +1190,9 @@
         if (!url) throw new Error('接口沒回圖（到 設置 → 圖片 → 畫風 看「不倒翁小人」那列用的是哪組）');
         let blob = null;
         try { blob = await (await fetch(url)).blob(); } catch (e) { throw new Error('圖拿到了但讀不進來'); }
+        // 👁 眼睛零件那一排先切下來（去背會把小塊當碎片丟掉）；上面只剩三隻小人照舊去背、切三面
+        let eyes = null;
+        try { const es = await _dollEyeStrip(blob); if (es) { blob = es.top; eyes = es.eyes; } } catch (e) { console.warn('[LobbyDress] 眼睛零件沒切出來（照舊不眨眼）', e); }
         // 去背：跟一次生三種同一套（AI 認人形，白色的衣服、眼白不會被當成背景挖掉）；劇情那支沒載到才退成掃白底
         const V = window.VN_Core || (window.parent || window).VN_Core;
         let cut = null;
@@ -1197,7 +1209,7 @@
         if (V && typeof V._chibiViews === 'function') { try { views = await V._chibiViews(cut); } catch (e) {} }
         if (views) {
             const v3 = { front: await _blobToData(views[0]), side: await _blobToData(views[1]), back: await _blobToData(views[2]) };
-            try { const lim = await _dollAttach(v3); return { views: lim.views, sheet: lim.sheet, raw: v3 }; }
+            try { const lim = await _dollAttach(v3); return { views: lim.views, sheet: lim.sheet, raw: v3, eyes }; }
             catch (e) {
                 console.warn('[LobbyDress] 鞋和手沒接上', e);
                 try { AUI.toastr && AUI.toastr.warning('鞋子圖抓不到（多半是網路），這張先沒接手和腳；套用後下次進大廳會再補接一次。', '不倒翁小人', { timeOut: 8000 }); } catch (e2) {}
@@ -1205,6 +1217,93 @@
             }
         }
         return { img: await _blobToData(cut) };
+    }
+    // 👁 生出來那張（白底）→ { top: 只剩三隻小人的那張（眼睛那一排塗白）, eyes: 四組眼睛零件的 JSON }；沒畫那一排回 null
+    //   找法：從畫面中間往下，三隻小人底下會有一段整排都是白的空隙，空隙下面還有東西＝眼睛那一排（樣張排在下面那四成）。
+    //   背景：從那一排的四邊把白的連起來挖掉（眼白被眼線圍住，不會被挖）；碎的睫毛照距離併成一組；照左右位置分四格：
+    //   第一格＝正面睜眼兩隻、第二格＝正面閉眼兩隻、第三格＝側面睜眼、第四格＝側面閉眼。缺哪一組就整份不要（不眨也比貼錯好）。
+    async function _dollEyeStrip(blob) {
+        const bmp = await createImageBitmap(blob);
+        const W = bmp.width, H = bmp.height;
+        const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+        const g = cv.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+        try { bmp.close(); } catch (e) {}
+        const d = g.getImageData(0, 0, W, H).data;
+        const ink = (x, y) => { const i = (y * W + x) * 4; return Math.min(d[i], d[i + 1], d[i + 2]) < 225; };
+        const rowInk = (y) => { let n = 0; for (let x = 0; x < W; x += 2) if (ink(x, y) && ++n > 2) return true; return false; };
+        // 三隻小人的底：從 45% 往下找第一段夠長的空白
+        let y = Math.round(H * 0.45), gap0 = -1, gap1 = -1;
+        for (; y < H; y++) { if (!rowInk(y)) { let e = y; while (e < H && !rowInk(e)) e++; if (e - y >= H * 0.03) { gap0 = y; gap1 = e; break; } y = e; } }
+        if (gap0 < 0 || gap1 >= H - 4) return null;
+        let bot = gap1; while (bot < H && rowInk(bot)) bot++;
+        if (bot - gap1 < H * 0.02) return null;
+        const cut = Math.round((gap0 + gap1) / 2), sy0 = Math.max(cut, gap1 - 8), sy1 = Math.min(H, bot + 8), SH = sy1 - sy0;
+        // 那一排：白底挖掉
+        const n = W * SH, bg = new Uint8Array(n), st = new Int32Array(n); let sp = 0;
+        const white = (i) => { const j = ((sy0 + ((i / W) | 0)) * W + (i % W)) * 4; return Math.min(d[j], d[j + 1], d[j + 2]) > 232; };
+        const seed = (i) => { if (!bg[i] && white(i)) { bg[i] = 1; st[sp++] = i; } };
+        for (let x = 0; x < W; x++) { seed(x); seed((SH - 1) * W + x); }
+        for (let r = 0; r < SH; r++) { seed(r * W); seed(r * W + W - 1); }
+        while (sp) { const c = st[--sp], x = c % W; if (x > 0) seed(c - 1); if (x < W - 1) seed(c + 1); if (c >= W) seed(c - W); if (c < n - W) seed(c + W); }
+        // 一塊一塊（8 鄰），再把靠得近（12px）的併成一組
+        const lab = new Int32Array(n), boxes = [];
+        for (let i = 0; i < n; i++) {
+            if (bg[i] || lab[i]) continue;
+            const id = boxes.length + 1; let x0 = W, y0 = SH, x1 = -1, y1 = -1, cnt = 0; sp = 0; st[sp++] = i; lab[i] = id;
+            while (sp) {
+                const c = st[--sp], x = c % W, yy = (c / W) | 0; cnt++;
+                if (x < x0) x0 = x; if (x > x1) x1 = x; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy;
+                for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+                    const xx = x + dx, y2 = yy + dy; if (xx < 0 || xx >= W || y2 < 0 || y2 >= SH) continue;
+                    const j = y2 * W + xx; if (!bg[j] && !lab[j]) { lab[j] = id; st[sp++] = j; }
+                }
+            }
+            boxes.push({ x0, y0, x1, y1, cnt });
+        }
+        let groups = boxes.filter(b => b.cnt >= 6).map(b => Object.assign({}, b));
+        for (let merged = true; merged;) {
+            merged = false;
+            for (let a = 0; a < groups.length && !merged; a++) for (let b = a + 1; b < groups.length && !merged; b++) {
+                const A = groups[a], B = groups[b];
+                if (A.x0 - 12 <= B.x1 && B.x0 - 12 <= A.x1 && A.y0 - 12 <= B.y1 && B.y0 - 12 <= A.y1) {
+                    groups[a] = { x0: Math.min(A.x0, B.x0), y0: Math.min(A.y0, B.y0), x1: Math.max(A.x1, B.x1), y1: Math.max(A.y1, B.y1), cnt: A.cnt + B.cnt };
+                    groups.splice(b, 1); merged = true;
+                }
+            }
+        }
+        groups = groups.filter(gp => gp.cnt >= 80);
+        const slot = [[], [], [], []];
+        groups.forEach(gp => { const k = Math.min(3, Math.floor(((gp.x0 + gp.x1) / 2) / (W / 4))); slot[k].push(gp); });
+        const one = (list) => list.length ? list.reduce((A, B) => ({ x0: Math.min(A.x0, B.x0), y0: Math.min(A.y0, B.y0), x1: Math.max(A.x1, B.x1), y1: Math.max(A.y1, B.y1), cnt: A.cnt + B.cnt })) : null;
+        // 一對：照左右最大的空隙分兩邊
+        const pair = (list) => {
+            if (list.length < 2) return null;
+            const s2 = list.slice().sort((A, B) => A.x0 - B.x0);
+            let best = -1, at = 0; for (let i = 1; i < s2.length; i++) { const gx = s2[i].x0 - Math.max(...s2.slice(0, i).map(q => q.x1)); if (gx > best) { best = gx; at = i; } }
+            return best > 4 ? [one(s2.slice(0, at)), one(s2.slice(at))] : null;
+        };
+        const fo = pair(slot[0]), fc = pair(slot[1]), so = one(slot[2]), sc = one(slot[3]);
+        if (!fo || !fc || !so || !sc) return null;
+        const part = (b) => {
+            const pw = b.x1 - b.x0 + 5, ph = b.y1 - b.y0 + 5, o = document.createElement('canvas'); o.width = pw; o.height = ph;
+            const og = o.getContext('2d'), im = og.createImageData(pw, ph);
+            for (let yy = 0; yy < ph; yy++) for (let xx = 0; xx < pw; xx++) {
+                const sx = b.x0 - 2 + xx, syy = b.y0 - 2 + yy; if (sx < 0 || sx >= W || syy < 0 || syy >= SH) continue;
+                const i = syy * W + sx; if (bg[i]) continue;
+                const j = ((sy0 + syy) * W + sx) * 4, k = (yy * pw + xx) * 4;
+                im.data[k] = d[j]; im.data[k + 1] = d[j + 1]; im.data[k + 2] = d[j + 2];
+                // 貼著背景的那圈照多白給半透明（抗鋸齒的白邊不要變成一圈白線）
+                const edge = (sx > 0 && bg[i - 1]) || (sx < W - 1 && bg[i + 1]) || (syy > 0 && bg[i - W]) || (syy < SH - 1 && bg[i + W]);
+                im.data[k + 3] = edge ? Math.max(0, Math.min(255, Math.round((255 - Math.min(d[j], d[j + 1], d[j + 2])) / 60 * 255))) : 255;
+            }
+            og.putImageData(im, 0, 0);
+            return { src: o.toDataURL('image/png'), w: pw, h: ph };
+        };
+        const eyes = JSON.stringify({ v: 1, fo: fo.map(part), fc: fc.map(part), so: part(so), sc: part(sc) });
+        // 上面那張：眼睛那一排塗白，交給原本的去背、切三面
+        g.fillStyle = '#fff'; g.fillRect(0, cut, W, H - cut);
+        const top = await new Promise(r => cv.toBlob(r, 'image/png'));
+        return top ? { top, eyes } : null;
     }
     // 存成這個小人的造型：三面＝三張各自落地，鑰匙那筆記 kind:'views'；一張＝跟「生成單張立姿圖」同一種
     async function _saveDollSkin(key, r) {
@@ -1225,6 +1324,10 @@
                     rec.raw = raw;
                     const cutId = await _dollAutoCut(r.raw);
                     if (cutId) { extra.push(cutId); rec.cut = { idb: cutId }; }
+                    if (r.eyes) {   // 👁 GPT 畫的睜眼／閉眼零件（眨眼用，lobby_doll_cut.js 對準臉上那雙）
+                        const eid = 'eye_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                        await _b.idbPut(eid, r.eyes); extra.push(eid); rec.eyes = { idb: eid };
+                    }
                 } catch (e) { console.warn('[LobbyDress] 不倒翁的原圖沒存成（照舊只有走路圖）', e); delete rec.raw; delete rec.cut; }
             }
             const ok = _b.saveSkin(key, rec);
@@ -1385,6 +1488,7 @@
         dollRefistSheet: _dollRefistSheet, dollAttach: _dollAttach,   // 本機測試用
         dollUpgrade: _dollUpgrade,                    // 🦶 舊的三面不倒翁補接手腳（lobby_stage.js 套造型時叫）
         // ✂ 給 lobby_dress 以外的人畫不倒翁（lobby_doll_cut.js：切頭身、站著呼吸）：跟走路圖同一套量法、版面、鞋和拳頭
+        dollEyeStrip: _dollEyeStrip,   // 本機測試用
         dollKit: { LIMB: DOLL_LIMB, measure: _dollMeasure, layout: _dollLayout, cell: _dollCell, shoes: _dollShoes, fist: _dollFist, loadImg: _loadImg },
         DOLL_TPL, DOLL_TPL_KEY, dollTpl: _dollTpl,   // 🧸 不倒翁小人的提示詞（接自訂接口時用）：設置頁那格讀寫
         setPack: _dressSetPack,         // 設置頁選了就存
