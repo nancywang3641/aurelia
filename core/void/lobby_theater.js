@@ -272,6 +272,18 @@
             a = pool[i]; b = pool[j]; sig = _sig(a, b);
         }
         recent.push(sig); while (recent.length > maxRecent) recent.shift();
+        _pairUp(a, b, null);
+    }
+    // 🎁 指定兩個人湊一場（她點餐送人，送到時有機率觸發；lobby_cafe_regulars.js）：extra＝這一場的由來，查看時交給 playDuoScene
+    //   配對本身不叫模型，她點泡泡「查看」才生成；已經有一場在等、或正在播就不湊
+    function _startTheaterWith(a, b, extra) {
+        if (!S.active || !S.world || !a || !b || a === b) return false;
+        if (S.theater || S.talkTarget || S.transitioning || S._theaterPresenting) return false;
+        if (S.npcs.indexOf(a) < 0 || S.npcs.indexOf(b) < 0) return false;
+        _pairUp(a, b, extra || null);
+        return true;
+    }
+    function _pairUp(a, b, extra) {
         // 🎬 呈現與內容分離：配對＝純資料事件＋兩人中間一顆「聊天中」泡泡，不動任何 NPC 座標與朝向。
         //   過場/播放交給 _presentTheater 的 overlay 分身演出；未來 world 模式（尋路集合）也從那裡分流。
         a.dest = null; b.dest = null;
@@ -287,7 +299,7 @@
         icon.style.top  = anc0.y + 'px';
         icon.addEventListener('click', (e) => { e.stopPropagation(); _openTheaterWin('live'); });
         S.world.appendChild(icon);
-        S.theater = { a, b, icon, playing: false };
+        S.theater = { a, b, icon, playing: false, extra };
         _updateTheaterBadge();
         if (S.twEl) _twRender();   // 列表窗開著→「正在對話」即時亮起
     }
@@ -295,12 +307,12 @@
     async function _presentTheater(mode) {
         const t = S.theater; if (!t || t.playing) return;
         t.playing = true;
-        const a = t.a, b = t.b;
+        const a = t.a, b = t.b, extra = t.extra;
         _endTheater();   // 配對事件收場（清泡泡+解凍），地圖 NPC 照常過日子；演出全在 overlay 分身上
         const ov = _theaterOverlayShow(a, b);
         S._theaterPresenting = true;
         let ok = false;
-        try { ok = !!(await (window.VoidTerminal && window.VoidTerminal.playDuoScene && window.VoidTerminal.playDuoScene(a, b))); } catch (e) {}
+        try { ok = !!(await (window.VoidTerminal && window.VoidTerminal.playDuoScene && window.VoidTerminal.playDuoScene(a, b, extra || undefined))); } catch (e) {}
         S._theaterPresenting = false;
         _theaterOverlayHide(ov);
         if (!ok) { try { AUI.toastr?.warning?.('偷聽失敗了，他們先散場，稍後再試'); } catch (e) {} }
@@ -419,5 +431,7 @@
         closeWin: _closeTheaterWin,
         updateBadge: _updateTheaterBadge,
         present: _presentTheater,    // 呈現分流入口（未來 world 模式從這擴充）
+        startWith: _startTheaterWith,   // 指定兩人湊一場（書咖點餐送人）
+        eligible: _theaterEligible,     // 誰能被湊進小劇場
     };
 })();

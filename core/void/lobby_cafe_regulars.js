@@ -195,7 +195,8 @@
             n.wanderT = Infinity;   // 不亂晃：只照進門、出門走
             n._entry = e;
             // 🫧 停下來、坐下時換成衣櫥活的那套（會呼吸、眨眼，點了東西會吃）；拿不到衣櫥就照舊這張走路圖（lobby_ember.js）
-            if (window.LobbyEmber) window.LobbyEmber.bind(n, p.look, { entry: () => n._entry, served: () => n._svc === 'served' });
+            // entry：她點來送他的（n._gift）蓋過他自己點的
+            if (window.LobbyEmber) window.LobbyEmber.bind(n, p.look, { entry: () => n._gift ? Object.assign({}, n._entry, n._gift) : n._entry, served: () => n._svc === 'served' });
             n._look = p.look;
             n._walkedIn = !!walkIn;
             n._standH = n.h;
@@ -261,14 +262,94 @@
             return Object.assign(p, { mirror: g.x > p.x });   // 衣櫥側面臉朝左；他在右邊要翻過來
         };
         const goHome = (c) => { c._tray = false; routeTo(c, c._home); };
+
+        // ---------- 🎁 她點餐送人（os_cafe 菜單頁「點一份」）：排在常客的單前面，店員備好就端過去 ----------
+        //   送到：常客坐著的就吃她送的那份；其他人（書裡的角色、瀅瀅…）頭上冒一下「收到了」。
+        //   有機率湊一場小劇場（收到的人＋旁邊最近的一位，這一場的由來寫進去）；只配對、不叫模型，她點泡泡「查看」才生成
+        const GIFT_THEATER = 0.5;
+        const gifts = [];   // { key, item, note, at }
+        const deliver = (o) => {
+            if (!o || !o.key || !alive()) return false;
+            if (!S.npcs.some(n => n && n.key === o.key)) return false;
+            gifts.push({ key: o.key, item: String(o.item || ''), note: String(o.note || '').slice(0, 40), at: Date.now() });
+            return true;
+        };
+        const toast = (s) => { try { (W.AUI || window.AUI).toast(s); } catch (e) {} };
+        const giftPop = (r, item) => {
+            const el = document.createElement('div');
+            el.className = 'lstage-gift-pop';
+            el.innerHTML = '<i class="fa-solid fa-gift"></i><span></span>';
+            el.lastChild.textContent = item;
+            el.style.left = Math.round(r.x) + 'px';
+            el.style.top = Math.round(r.y - (r.h || 120) - 78) + 'px';   // 比小劇場泡泡（頭頂上 40）再高一層，兩個一起出現才不疊
+            S.world.appendChild(el);
+            setTimeout(() => el.remove(), 6200);
+        };
+        const receive = (gf) => {
+            const r = S.npcs.find(n => n && n.key === gf.key && n.el && n.el.isConnected);
+            const name = r ? r.name : '對方';
+            if (!r || !alive()) { toast(name + '已經走了，「' + gf.item + '」先放在櫃檯'); return; }
+            if ([...mine.values()].includes(r) && r._seat) {   // 常客：吃她送的這份
+                r._gift = { item: gf.item, line: '' };
+                r._svc = 'served';
+                const b = r._ember;
+                if (b) { b.bites = 0; b.act = null; b.nextEat = 0; b.wasServed = true; }
+                if (job && job.g === r) job.cancel = true;
+            }
+            giftPop(r, gf.item);
+            toast('「' + gf.item + '」送到' + r.name + '面前了');
+            // 🎬 有機率湊一場小劇場
+            const T = window.LobbyTheater;
+            if (!T || !T.startWith || !T.eligible || Math.random() >= GIFT_THEATER) return;
+            const pool = T.eligible();
+            if (pool.indexOf(r) < 0) return;   // 常客照腳本跑、沒人設，不湊
+            const b = pool.filter(n => n !== r).sort((x, y) => Math.hypot(x.x - r.x, x.y - r.y) - Math.hypot(y.x - r.x, y.y - r.y))[0];
+            if (!b) return;
+            const extra = '委託人（玩家）在視差書咖點了一份「' + gf.item + '」，請店員端給' + r.name + (gf.note ? '，還附了一句話：「' + gf.note + '」' : '') +
+                '。委託人不在這一幕裡（別寫她出場），' + r.name + '剛收到這份東西，' + b.name + '就在旁邊。這一場從這裡聊起。';
+            if (T.startWith(r, b, extra)) toast(r.name + '和' + b.name + '好像聊起來了，點他們頭上的泡泡可以偷聽');
+        };
+        // 送到誰旁邊：坐著的常客照桌子那套；其他人站他旁邊（靠櫃檯出口那側），臉朝他
+        const giftSpot = (r) => {
+            if ([...mine.values()].includes(r) && r._seat) return spotOf(r);
+            const R = lanes(), ex = R ? R.exitX : r.x;
+            const p = { x: r.x + (r.x > ex ? -72 : 72), y: r.y + 4 };
+            return Object.assign(p, { mirror: r.x > p.x });
+        };
+        const giftStep = (crew, now) => {
+            const gf = job.gift, r = S.npcs.find(n => n && n.key === gf.key);
+            const pose = (motion) => { crew._emberPose = { motion, view: 'side', mirror: job.spot.mirror }; };
+            if (job.stage !== 'back' && (!r || S.npcs.indexOf(r) < 0 || r._leaving)) { receive(gf); goHome(crew); job.stage = 'back'; return; }
+            switch (job.stage) {
+                case 'gprep':
+                    if (!arrived(crew) || now - job.at < SV.prep * 1000) break;
+                    if (r === crew) { receive(gf); job = null; break; }   // 送給店員自己：做好就是他的
+                    crew._tray = true;
+                    job.spot = giftSpot(r);
+                    routeTo(crew, job.spot);
+                    job.stage = 'gto';
+                    break;
+                case 'gto':
+                    if (arrived(crew)) { pose('tray'); job.stage = 'gplace'; job.at = now; }
+                    break;
+                case 'gplace':
+                    if (now - job.at > SV.place * 1000) { receive(gf); goHome(crew); job.stage = 'back'; }
+                    break;
+                case 'back':
+                    if (arrived(crew)) { crew._emberPose = null; job = null; }
+                    break;
+            }
+        };
+
         const serve = () => {
             const now = Date.now();
             const guests = [...mine.values()].filter(g => g && !g._leaving && S.npcs.indexOf(g) >= 0);
             guests.forEach(g => { if (g._svc === 'none' && g._entry && g._entry.item) { g._svc = 'wait'; g._svcAt = now; } });
             const crew = crewOf();
-            if (job && (job.crew !== crew)) job = null;   // 下班、換人了
-            if (!crew) {   // 沒店員：自己去櫃檯拿
+            if (job && (job.crew !== crew)) { if (job.gift && job.stage !== 'back') gifts.unshift(job.gift); job = null; }   // 下班、換人了（她的那份還沒送到：排回去）
+            if (!crew) {   // 沒店員：自己去櫃檯拿；她點的過幾秒直接送到
                 guests.forEach(g => { if ((g._svc === 'wait' || g._svc === 'ordered') && now - g._svcAt > SV.self * 1000) g._svc = 'served'; });
+                while (gifts.length && now - gifts[0].at > 4000) receive(gifts.shift());
                 return;
             }
             if (!crew._home) { crew._home = { x: crew.x, y: crew.y }; crew._emberWalk = true; crew.noWander = false; crew.wanderT = Infinity; }
@@ -279,6 +360,7 @@
                 crew.scriptOnly = false;      // 在櫃檯閒著：可以被小劇場拉去聊天
                 if (crew._theaterFrozen) return;   // 正在小劇場裡聊：聊完再去
                 crew.scriptOnly = true;       // 接下來要送餐：送完之前別被拉去聊天（被凍住會停在半路）
+                if (gifts.length) { job = { gift: gifts.shift(), crew, stage: 'gprep', at: now }; return; }   // 她點的先送
                 const g = guests.filter(g => g._seat && (g._svc === 'wait' || g._svc === 'ordered')).sort((a, b) => a._svcAt - b._svcAt)[0];
                 if (!g) { crew.scriptOnly = false; return; }
                 if (g._svc === 'ordered') { job = { g, crew, stage: 'prep', at: now }; return; }   // 點過了（上一位店員點的）：直接備餐
@@ -286,8 +368,9 @@
                 routeTo(crew, job.spot);
                 return;
             }
+            if (job.gift) { giftStep(crew, now); return; }
             const g = job.g;
-            if (gone(g) && job.stage !== 'back') { goHome(crew); job.stage = 'back'; return; }
+            if ((gone(g) || job.cancel) && job.stage !== 'back') { goHome(crew); job.stage = 'back'; return; }
             const pose = (motion) => { crew._emberPose = { motion, view: 'side', mirror: job.spot.mirror }; };
             switch (job.stage) {
                 case 'toOrder':
@@ -374,13 +457,24 @@
         tickT = setInterval(tick, TICK_MS);
         pollT = setInterval(poll, 400);
         serveT = setInterval(serveTick, 100);
-        _live = { world, stop, tick, poll, serveTick, mine, seats: () => _seatsOf(_b.CFG), job: () => job, bind:(p, e, sheet) => { const n = spawn(p, e, sheet, true); mine.set(p.key, n); return n; } };   // seats／job／bind：console 診斷、測試用
+        _live = { world, stop, tick, poll, serveTick, mine, deliver, gifts: () => gifts, seats: () => _seatsOf(_b.CFG), job: () => job, bind:(p, e, sheet) => { const n = spawn(p, e, sheet, true); mine.set(p.key, n); return n; } };   // seats／job／bind：console 診斷、測試用
         tick();
         return true;
     }
 
+    // 🎁 點一份送人：現在書咖裡能送給誰（她自己、正要走的不算）；大廳不在書咖＝空的
+    function targets() {
+        const LS = window.LobbyStage, S = LS && LS._S;
+        if (!_live || !S || !S.active || S.scene !== 'cafe' || S.world !== _live.world) return [];
+        const seen = new Set();
+        return (S.npcs || []).filter(n => n && n !== S.player && n.name && n.key && n.el && n.el.isConnected && !n._leaving && !seen.has(n.key) && seen.add(n.key))
+            .map(n => ({ key: n.key, name: n.name }));
+    }
+
     window.LobbyCafeRegulars = {
         mount,
+        targets,
+        deliver: (o) => !!(_live && _live.deliver(o)),   // { key, item, note } → 店員端過去；不在書咖回 false
         sheetOf: _sheetOf,          // 測試用：拿某個長相拼好的走路圖
         _live: () => _live,         // console 診斷用：現在舞台上有誰
     };

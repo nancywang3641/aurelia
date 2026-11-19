@@ -256,6 +256,33 @@
             return { ok: true, fund: fd, qty: n, cost, day: at.day, t: at.t, home: plan.use };
         });
     }
+    // 🎁 她自己點一份（11-19 她：「那是不是我也能花錢點餐送給某些書籍的角色?」→「好啊，這很酷」）：
+    //   扣她的 PT、用掉一份現在有的料（先用舊的）、錢進書咖帳戶、算賣出一杯。送給誰、店員端過去在大廳那邊（lobby_cafe_regulars.js 的 deliver）
+    function playerOrder(menuId) {
+        return _locked(async () => {
+            const menu = await _getStrict(K_MENU, []);
+            const m = menu.find(x => x.id === menuId);
+            if (!m) return { ok: false, why: '這道已經不在菜單上了' };
+            const now = Date.now(), day = _dayNum(now), t = _minOf(now);
+            const stock = await _getStrict(K_STOCK, {});
+            const b = (stock[m.id] || []).filter(x => _usable(x, day, t) && x.qty > 0).sort((x, y) => (x.day - y.day) || (x.t - y.t))[0];
+            if (!b) return { ok: false, why: '「' + m.name + '」現在沒料了，先備料' };
+            const PT = win.OS_PT || window.OS_PT;
+            if (!PT || !PT.spendPT) return { ok: false, why: '讀不到妳的 PT，等一下再試' };
+            const pay = await PT.spendPT(m.price, '書咖點餐：' + m.name);
+            if (!pay || !pay.ok) return { ok: false, why: 'PT 不夠（要 ' + m.price + '，妳有 ' + Math.floor((pay && pay.balance) || 0) + '）' };
+            b.qty -= 1;
+            if (b.qty <= 0) { stock[m.id] = stock[m.id].filter(x => x !== b); if (!stock[m.id].length) delete stock[m.id]; }
+            const fd = await _fundLoad();
+            fd.coins += m.price;
+            const shop = await _getStrict(K_SHOP, { popularity: 0, revenue: 0, cups: 0, lastDay: 0 });
+            shop.revenue = (shop.revenue || 0) + m.price;
+            shop.cups = (shop.cups || 0) + 1;
+            m.sold = (m.sold || 0) + 1;
+            await _set(K_STOCK, stock); await _set(K_FUND, fd); await _set(K_SHOP, shop); await _set(K_MENU, menu);
+            return { ok: true, item: m.name, price: m.price, balance: pay.balance };
+        });
+    }
     // 時間到了才揭曉：寫進配方圖鑑、清掉研發中；還沒到回 null
     function revealRd() {
         return _locked(async () => {
@@ -863,7 +890,7 @@
             '.oc-free-input{width:100%;box-sizing:border-box;margin-top:10px;background:rgba(255,255,255,.75);border:1px solid #d3bf9f;border-radius:9px;color:#4a3a2a;padding:8px 10px;font-size:11px;}.oc-free-input::placeholder{color:#a3906f;}' +
             /* 💰 經營：今天的數字、庫存與備料、研發倒數、賣完沒點到 */
             '.oc-today{display:flex;flex-wrap:wrap;gap:4px 12px;margin:0 1px 9px;padding:7px 10px;border-radius:9px;background:rgba(186,134,79,.1);color:#7a5a3c;font-size:11px;}.oc-today b{color:#5e4028;font-size:12px;}' +
-            '.oc-menu-ops{grid-column:1/-1;display:flex;align-items:center;gap:8px;padding-top:7px;border-top:1px dashed rgba(160,120,80,.25);}' +
+            '.oc-menu-ops{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding-top:7px;border-top:1px dashed rgba(160,120,80,.25);}' +
             '.oc-stock{color:#7a5a3c;font-size:11px;}.oc-stock b{color:#4f3520;font-size:13px;}.oc-stock.zero b{color:#b65050;}.oc-stock-next{color:#a18465;}.oc-stock-next b{color:#7a5a3c;}' +
             '.oc-make{margin-left:auto;background:rgba(122,79,45,.08);border:1px solid #c9a476;color:#6d4425;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700;}.oc-make.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;}' +
             '.oc-mini-tag.oc-home-tag{color:#3f7448;background:#e6f3e0;}.oc-home-line{display:block;margin-top:6px;font-size:11px;color:#3f7448;line-height:1.5;}' +
@@ -873,6 +900,10 @@
             '.oc-num{min-width:0;background:rgba(255,255,255,.72);border:1px solid #d8c3a1;border-radius:7px;padding:6px 0;cursor:pointer;color:#5a4634;font-size:12px;font-weight:700;}.oc-num.on{background:#f2dfc6;border-color:#b77b42;color:#674224;}.oc-num:disabled{opacity:.35;cursor:default;}' +
             '.oc-batch-row{display:flex;align-items:center;gap:8px;}.oc-batch-cost{flex:1;color:#7a5a3c;font-size:11px;line-height:1.4;}' +
             '.oc-batch-go{background:#7a4f2d;border:1px solid #6d4425;color:#fff8ed;border-radius:8px;padding:6px 16px;cursor:pointer;font-size:12px;font-weight:800;}.oc-batch-go:disabled{opacity:.42;cursor:default;}' +
+            '.oc-order{background:rgba(122,79,45,.08);border:1px solid #c9a476;color:#6d4425;border-radius:8px;padding:5px 10px;cursor:pointer;font-size:11px;font-weight:700;}.oc-order.on{background:#7a4f2d;border-color:#6d4425;color:#fff8ed;}.oc-order:disabled{opacity:.4;cursor:default;}' +
+            '.oc-who-list{display:flex;flex-wrap:wrap;gap:5px;}' +
+            '.oc-who{background:rgba(255,255,255,.72);border:1px solid #d8c3a1;border-radius:14px;padding:5px 11px;cursor:pointer;color:#5a4634;font-size:12px;font-weight:700;}.oc-who.on{background:#f2dfc6;border-color:#b77b42;color:#674224;}' +
+            '.oc-order-note{box-sizing:border-box;width:100%;min-width:0;background:rgba(255,255,255,.72);border:1px solid #d8c3a1;border-radius:8px;padding:6px 9px;color:#5a4634;font-size:12px;}' +
             '.oc-why{color:#b65050;font-size:11px;line-height:1.5;margin-top:6px;}' +
             '.oc-rd{margin:2px 0 6px;padding:10px 12px;border:1px dashed #c9a476;border-radius:11px;background:rgba(255,248,236,.85);}' +
             '.oc-rd-title{display:flex;align-items:center;gap:6px;font-weight:800;color:#6d4425;}.oc-rd-left{display:block;margin-top:4px;color:#9d6638;font-weight:700;font-size:12px;}' +
@@ -1036,6 +1067,7 @@
                     '<span class="oc-menu-ops"><span class="oc-stock' + (left ? '' : ' zero') + '">現在有料 <b>' + left + '</b> 份</span>' +
                     (next ? '<span class="oc-stock oc-stock-next">等開店 <b>' + next + '</b> 份</span>' : '') +
                     '<button class="oc-make" data-id="' + _esc(m.id) + '"><i class="fa-solid fa-basket-shopping"></i> 備料</button>' +
+                    '<button class="oc-order" data-id="' + _esc(m.id) + '"' + (left ? '' : ' disabled') + '><i class="fa-solid fa-gift"></i> 點一份</button>' +
                     '<button class="oc-unlist" data-id="' + _esc(m.id) + '"><i class="fa-solid fa-box-archive"></i> 下架</button></span></div>';
                 }).join('')
                 : '<div class="oc-empty"><i class="fa-solid fa-mug-hot"></i>菜單還是空的。<br>去「研發」進後廚做一道，再上架吧。</div>');
@@ -1053,18 +1085,20 @@
                 if (A && A.toast) A.toast('「' + m.name + '」下架了', { type: 'success' });
                 _renderTab('menu', body);
             }));
-            // 🧺 備料：點了展開 1～8 份，選好看花多少，按「備」才扣
-            body.querySelectorAll('.oc-make').forEach(btn => btn.addEventListener('click', () => {
+            // 🧺 備料：點了展開 1～8 份，選好看花多少，按「備」才扣；🎁 點一份：展開挑送給誰（同一個位置，一次只開一個）
+            const toggle = (btn, kind, open) => {
                 const card = btn.closest('.oc-menu-card');
-                const open = card.querySelector('.oc-batch');
+                const was = card.querySelector('.oc-batch[data-kind="' + kind + '"]');
                 body.querySelectorAll('.oc-batch').forEach(x => x.remove());
-                body.querySelectorAll('.oc-make.on').forEach(x => x.classList.remove('on'));
-                if (open) return;   // 再按一次＝收起來
+                body.querySelectorAll('.oc-make.on, .oc-order.on').forEach(x => x.classList.remove('on'));
+                if (was) return;   // 再按一次＝收起來
                 const m = menu.find(x => x.id === btn.dataset.id);
                 if (!m) return;
                 btn.classList.add('on');
-                _openBatch(card, m);
-            }));
+                open(card, m);
+            };
+            body.querySelectorAll('.oc-make').forEach(btn => btn.addEventListener('click', () => toggle(btn, 'make', _openBatch)));
+            body.querySelectorAll('.oc-order').forEach(btn => btn.addEventListener('click', () => toggle(btn, 'order', _openOrder)));
         } else if (tab === 'log') {
             let logs = await _get(K_LOG, []);
             if (logs.some(l => !l.id)) { logs.forEach(l => { if (!l.id) l.id = _mkId(); }); await _set(K_LOG, logs); }   // 舊紀錄補id
@@ -1146,7 +1180,7 @@
         const gLine = m.garden ? '<span class="oc-home-line"><i class="fa-solid fa-seedling"></i> 每份用後院的 ' + Object.keys(m.garden).map(id => (FARM_NAME[id] || id) + ' ' + m.garden[id].u + (m.garden[id].c ? '（沒有就用買的）' : '')).join('、') +
             '；倉庫 ' + (Object.keys(m.garden).map(id => (FARM_NAME[id] || id) + ' ' + (items[id] ? items[id].n : 0)).join('、')) + '</span>' : '';
         card.insertAdjacentHTML('beforeend',
-            '<span class="oc-batch">' +
+            '<span class="oc-batch" data-kind="make">' +
               '<span class="oc-batch-nums">' + nums.join('') + '</span>' +
               '<span class="oc-batch-row"><span class="oc-batch-cost">' + (why ? '' : '要備幾份？一份料 ' + unit + '，備一次花 ' + F.batchStamina + ' 體力；' + when) + '</span>' +
               '<button class="oc-batch-go" disabled>備</button></span>' +
@@ -1174,6 +1208,52 @@
                 box.insertAdjacentHTML('beforeend', '<span class="oc-why">' + r.why + '</span>');
                 return;
             }
+            _refreshHeaderStats();
+            if (_winEl) _renderTab('menu', _winEl.querySelector('.oc-body'));
+        });
+    }
+    // 🎁 點一份送人：挑大廳書咖裡現在有誰、可以附一句話，按「點餐」扣 PT、店員端過去（lobby_cafe_regulars.js）
+    async function _openOrder(card, m) {
+        const LCR = window.LobbyCafeRegulars || (win.LobbyCafeRegulars);
+        const who = LCR && LCR.targets ? LCR.targets() : [];
+        const PT = win.OS_PT || window.OS_PT;
+        let bal = null;
+        try { bal = PT && PT.getPT ? Math.floor(await PT.getPT()) : null; } catch (e) {}
+        let why = '';
+        if (!who.length) why = '要人在大廳的書咖裡，才看得到能送給誰';
+        else if (bal != null && bal < m.price) why = 'PT 不夠（要 ' + m.price + '，妳有 ' + bal + '）';
+        card.insertAdjacentHTML('beforeend',
+            '<span class="oc-batch" data-kind="order">' +
+              (who.length ? '<span class="oc-who-list">' + who.map(w => '<button class="oc-who" data-key="' + _esc(w.key) + '">' + _esc(w.name) + '</button>').join('') + '</span>' +
+                '<input class="oc-order-note" type="text" maxlength="40" placeholder="想說的話（可以不寫）">' : '') +
+              '<span class="oc-batch-row"><span class="oc-batch-cost">' + (why ? '' : '送給誰？一份 ' + m.price + ' PT' + (bal != null ? '，妳有 ' + bal + ' PT' : '')) + '</span>' +
+              '<button class="oc-batch-go" disabled>點餐</button></span>' +
+              (why ? '<span class="oc-why">' + why + '</span>' : '') +
+            '</span>');
+        const box = card.querySelector('.oc-batch[data-kind="order"]');
+        const go = box.querySelector('.oc-batch-go');
+        let pick = null;
+        box.querySelector('.oc-who-list')?.addEventListener('click', (e) => {
+            const b = e.target.closest('.oc-who');
+            if (!b || why) return;
+            pick = who.find(w => w.key === b.dataset.key) || null;
+            box.querySelectorAll('.oc-who').forEach(x => x.classList.toggle('on', x === b));
+            go.disabled = !pick;
+        });
+        go.addEventListener('click', async () => {
+            if (!pick) return;
+            go.disabled = true;
+            const note = (box.querySelector('.oc-order-note')?.value || '').trim();
+            const r = await playerOrder(m.id);
+            if (!r.ok) {
+                box.querySelector('.oc-why')?.remove();
+                box.insertAdjacentHTML('beforeend', '<span class="oc-why">' + _esc(r.why) + '</span>');
+                go.disabled = false;
+                return;
+            }
+            const sent = LCR && LCR.deliver ? LCR.deliver({ key: pick.key, item: r.item, note }) : false;
+            const A = win.AUI || window.AUI;
+            if (A && A.toast) A.toast(sent ? '點好了：「' + r.item + '」，店員會端去給' + pick.name : '點好了「' + r.item + '」，可是' + pick.name + '剛好不在，先放在櫃檯', { type: 'success' });
             _refreshHeaderStats();
             if (_winEl) _renderTab('menu', _winEl.querySelector('.oc-body'));
         });
@@ -1224,6 +1304,6 @@
         menu: getMenu, shop: getShop, roster: () => Promise.resolve(win.LobbyNpcs?.cafeRoster?.() || []), refresh: _refresh,
         isOpen: () => !!_winEl, openTab: _openTab, saveSaid: _saveSaid,
         labResult: _labResult, finishRd: _finishRdNow, prices: CAFE_CFG.prices, tierText: TIER_TEXT, esc: _esc };   // 研發台（os_cafe_kitchen.js）用
-    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, withdrawFund, fundKeep: () => CAFE_CFG.fund.start, makeBatch, revealRd, cafeDev, collectFromFarm, getPantry, _settle, _b };   // _settle=console 診斷用
+    win.OS_CAFE = window.OS_CAFE = { openWorkshop, closeWorkshop, getMenu, getBooks, getShop, addBook, getFund, withdrawFund, fundKeep: () => CAFE_CFG.fund.start, makeBatch, playerOrder, revealRd, cafeDev, collectFromFarm, getPantry, _settle, _b };   // _settle=console 診斷用
     console.log('[Cafe] 書咖經營系統就緒');
 })();
