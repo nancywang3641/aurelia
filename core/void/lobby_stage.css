@@ -802,6 +802,9 @@
    🚨 邊要用青銅色：書咖整間跟這幾件家具都是奶油白，淺金的邊壓在奶油白上幾乎看不見
       （三個顏色試過：奶金糊掉、深褐像影子、青銅才看得出是「被點亮」）。 */
 .lstage-actor.lstage-obj { transition:filter .16s ease; }
+/* 家具的動態層（404 工作台的螢幕）：疊在家具上，點擊、拖曳都穿過去給家具本身（lobby_stage.js 的 _objFx） */
+.lstage-obj-fx { pointer-events:none; }
+.lstage-editing .lstage-obj-fx { opacity:.5; }
 .lstage-obj.lstage-obj-lit {
   filter:drop-shadow(2px 0 0 #a86a24) drop-shadow(-2px 0 0 #a86a24)
          drop-shadow(0 2px 0 #a86a24) drop-shadow(0 -2px 0 #a86a24)

@@ -19,20 +19,30 @@
         const m = String(url || '').match(SF_RE);
         return m ? 'https://raw.githubusercontent.com/nancywang3641/sound-files/' + m[1] + '/' + m[2] : null;
     }
+    // 🖋 SVG 不能直接改抓 raw：GitHub raw 給 SVG 的類型是 text/plain，<img> 顯示不出來（11-20 帽匠工坊、404 房換成 SVG 時 Vproject 的丹提醒的）
+    //   → 讀成文字、包成 image/svg+xml 的 blob 網址再塞回去。同一張只讀一次
+    const _svgBlobs = new Map();
+    function _sfAltSrc(url, alt) {
+        if (!/\.svg(\?|$)/i.test(String(url))) return Promise.resolve(alt);
+        if (!_svgBlobs.has(alt)) _svgBlobs.set(alt, fetch(alt).then(r => r.ok ? r.text() : Promise.reject(r.status))
+            .then(t => URL.createObjectURL(new Blob([t], { type: 'image/svg+xml' }))).catch(() => { _svgBlobs.delete(alt); return null; }));
+        return _svgBlobs.get(alt);
+    }
+    function _sfSwap(img, onFail) {
+        const alt = !img._sfAlt && _sfMirror(img.src);
+        if (!alt) { if (onFail) onFail(); return; }
+        img._sfAlt = true;
+        _sfAltSrc(img.src, alt).then(s => { if (s) img.src = s; else if (onFail) onFail(); });
+    }
     function _sfRetry(img, onFail) {
-        img.onerror = () => {
-            const alt = !img._sfAlt && _sfMirror(img.src);
-            if (alt) { img._sfAlt = true; img.src = alt; return; }
-            if (onFail) onFail();
-        };
+        img.onerror = () => _sfSwap(img, onFail);
     }
     if (!window.__AURELIA_SF_MIRROR__) {
         window.__AURELIA_SF_MIRROR__ = true;
         document.addEventListener('error', (e) => {   // error 不冒泡，掛捕獲階段才接得到每一張 <img>
             const el = e.target;
             if (!el || el.tagName !== 'IMG' || el._sfAlt) return;
-            const alt = _sfMirror(el.src);
-            if (alt) { el._sfAlt = true; el.src = alt; }
+            _sfSwap(el);
         }, true);
     }
     const ASSET = {
@@ -210,27 +220,44 @@
             ],
         },
         room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
-            base: 'lobby_404_base_v1.png',
-            mask: 'lobby_404_mask_v1.png',
-            cfgKey: 'lobby_stage_layout_404_v1',
+            // 🖋 v2（11-20）＝整間照阿洛的示意圖重畫成 SVG（Vproject 畫的）：房間形狀、家具、門、站位、可走遮罩全換。
+            //   cfgKey 升 v2：家具整組換掉，舊存檔排的是舊房間，套到新底圖上沒有意義（大廳、工坊那種只換圖的才不升）。
+            //   footH、actorScale 0.58 是 Vproject 估的，她進擺設模式走一次再調。
+            base: 'lobby_404_base_v2.svg',
+            mask: 'lobby_404_mask_v2.png',   // 白＝可走，只畫地板；家具碰撞交給 footH
+            lower: 'lobby_404_fx_v2.svg',    // 窗外雨夜城市（雨、飛車、窗燈、閃電；SVG 自己的 CSS 動畫）：底圖正上方、家具下面
+            upper: 'lobby_404_front_v2.svg', // 前景矮牆＋門口：蓋在家具和人物上面
+            cfgKey: 'lobby_stage_layout_404_v2',
             layout: [
-                // 圓桌(筆電)：疊在底圖同位置做深度遮擋，人繞到桌後會被擋住
-                { file: 'lobby_404_obj_table.png', x: 468, y: 500, w: 243, h: 239, footH: 120, footW: 200, s: 0.72 },
+                { file: 'lobby_404_obj_banner_v2.svg',   x: 284,  y: 217, w: 773,  h: 1315, s: 0.0961, footH: 0,   layer: 'back', noCollide: true },   // 牆上的笑貓旗
+                { file: 'lobby_404_obj_mat_v2.svg',      x: 498,  y: 676, w: 942,  h: 1214, s: 0.0916, footH: 0,   layer: 'floor', noCollide: true },  // 地墊
+                { file: 'lobby_404_obj_desk_v2.svg',     x: 788,  y: 300, w: 1496, h: 885,  s: 0.2888, footH: 398,
+                  fx: 'lobby_404_obj_desk_fx_v2.svg' },   // 弧形駭客工作台；fx＝五面螢幕捲程式碼那層，跟著桌子走（_spawnObjEl）
+                { file: 'lobby_404_obj_chair_v2.svg',    x: 894,  y: 408, w: 786,  h: 991,  s: 0.172,  footH: 297 },   // 電競椅
+                { file: 'lobby_404_obj_servers_v2.svg',  x: 1131, y: 523, w: 715,  h: 977,  s: 0.2768, footH: 352 },   // 伺服器堆
+                { file: 'lobby_404_obj_bedside_v2.svg',  x: 285,  y: 540, w: 973,  h: 960,  s: 0.1791, footH: 403 },   // 床頭櫃
+                { file: 'lobby_404_obj_bed_v2.svg',      x: 223,  y: 546, w: 1061, h: 993,  s: 0.2722, footH: 655 },   // 床
+                { file: 'lobby_404_obj_floorbox_v2.svg', x: 180,  y: 732, w: 922,  h: 945,  s: 0.1002, footH: 454 },   // 地上的箱子
+                { file: 'lobby_404_obj_spool_v2.svg',    x: 527,  y: 553, w: 953,  h: 932,  s: 0.1353, footH: 401 },   // 線軸圓桌（黑市攤位）
+                { file: 'lobby_404_obj_sign_v2.svg',     x: 528,  y: 460, w: 1140, h: 784,  s: 0.0692, footH: 157 },   // 招牌螢幕
+                { file: 'lobby_404_obj_handheld_v2.svg', x: 694,  y: 451, w: 713,  h: 876,  s: 0.0487, footH: 219 },   // 手持終端
+                // 404 大箱：示意圖裡它蓋過前景矮牆 → zb 把它推到前景層（4000）上面；它在房間最前緣，沒有人能站到它前面
+                { file: 'lobby_404_obj_crate_v2.svg',    x: 1214, y: 728, w: 1097, h: 996,  s: 0.1505, footH: 498, zb: 3300 },
             ],
             points: {
-                player: { x: 760, y: 760 },
-                arrive: { x: 600, y: 820 },
-                cheshirePos: { x: 900, y: 620 },   // 柴郡站位（可在擺設模式拖）
-                boundary: [ { x: 176, y: 470 }, { x: 1390, y: 470 }, { x: 1390, y: 930 }, { x: 176, y: 930 } ],  // 遮罩沒載時的粗略退路
-                actorScale: 0.7,
+                player: { x: 706, y: 780 },
+                arrive: { x: 706, y: 800 },
+                cheshirePos: { x: 840, y: 600 },   // 柴郡站位（可在擺設模式拖）
+                boundary: [ { x: 300, y: 540 }, { x: 1240, y: 454 }, { x: 1350, y: 850 }, { x: 206, y: 852 } ],  // 遮罩沒載時的粗略退路
+                actorScale: 0.58,
             },
             walls: [],
-            doors: [ { x: 520, y: 850, w: 180, h: 60, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
-            cheshire: { x: 900, y: 620 },   // 柴郡：癱在螢幕牆前，懶得動
-            // 🏪 圓桌＝黑市攤位（點桌子開黑市面板）。obj 讓熱點跟著桌子走：擺設模式挪桌子，
-            //    熱點自己跟上，不用回來改座標。混沌片場則掛在柴郡身上（走近他→岔路，見 PANEL_OF）。
+            doors: [ { x: 620, y: 836, w: 170, h: 46, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
+            cheshire: { x: 840, y: 600 },
+            // 🏪 線軸圓桌＝黑市攤位（點了開黑市面板）。obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上。
+            //    混沌片場則掛在柴郡身上（走近他→岔路，見 PANEL_OF）。
             hotspots: [
-                { obj: 'lobby_404_obj_table', label: '黑市', icon: 'fa-store', open: 'store', cls: 'hs-404' },
+                { obj: 'lobby_404_obj_spool_v2', label: '黑市', icon: 'fa-store', open: 'store', cls: 'hs-404' },
             ],
         },
         exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
@@ -321,24 +348,24 @@
         },
         workshop: {   // 🎩 帽匠的奇想工坊：廣場右側那間店的室內。帽匠站在造物儀旁邊，點造物儀開造物工坊面板。
             //   同占卜小屋：沒有手繪遮罩素材＝碰撞吃 boundary 鋼索，四個牆角在擺設模式可以直接拖。
-            base: 'lobby_workshop_base_v1.png',
+            base: 'lobby_workshop_base_svg_v1.svg',   // 🖋 11-20 整間換 SVG（Vproject 畫的，畫布跟 PNG 一樣大→座標一格沒動；她排過的照 LOBBY_SVG 換檔名）
             cfgKey: 'lobby_stage_layout_workshop_v1',
             // 🚨 家具素材已經緊裁到物件本身（佔地寬＝w*s，圖邊留白會讓碰撞框比看到的東西寬一大截）。
             layout: [   // ⚠️ 照阿洛的擺設稿目測擺位；Rae 進擺設模式拖完複製數據回來換掉這份
-                { file: 'lobby_workshop_obj_workbench_v1.png', x: 118, y: 115, w: 900, h: 578, footH: 300, s: 0.42 },   // 靠後牆的大工作桌
-                { file: 'lobby_workshop_obj_chair_v1.png',     x: 245, y: 227, w: 574, h: 900, footH: 260, s: 0.226 },  // 工作椅(桌子前面)
-                { file: 'lobby_workshop_obj_rack_v1.png',      x: 490, y: 286, w: 776, h: 900, footH: 400, s: 0.110 },  // 稿件架(桌子右邊)
-                { file: 'lobby_workshop_obj_cabinet_v1.png',   x: 30,  y: 394, w: 471, h: 900, footH: 300, s: 0.340 },  // 零件抽屜櫃(左牆)
-                { file: 'lobby_workshop_obj_beanbag_v1.png',   x: 120, y: 652, w: 900, h: 846, footH: 620, s: 0.211 },  // 懶骨頭(左下)
-                { file: 'lobby_workshop_obj_crate_v1.png',     x: 320, y: 701, w: 767, h: 900, footH: 520, s: 0.143 },  // 糖果箱(懶骨頭旁)
-                { file: 'lobby_workshop_obj_loom_v1.png',      x: 600, y: 279, w: 801, h: 900, footH: 280, s: 0.412 },  // 🎯 造物儀(正中央,互動點)
-                { file: 'lobby_workshop_obj_console_v1.png',   x: 1035, y: 164, w: 415, h: 900, footH: 320, s: 0.140 }, // 全息控制台(投影台左邊)
-                { file: 'lobby_workshop_obj_rig_v1.png',       x: 1105, y: 100, w: 482, h: 900, footH: 260, s: 0.300 }, // 全息試裝台(後牆右)
-                { file: 'lobby_workshop_obj_shelf_v1.png',     x: 1280, y: 117, w: 445, h: 900, footH: 180, s: 0.315 }, // 展示層架(右牆)
-                { file: 'lobby_workshop_obj_cart_v1.png',      x: 1240, y: 448, w: 710, h: 900, footH: 340, s: 0.280 }, // 工具推車(右側)
-                { file: 'lobby_workshop_obj_kiosk_v1.png',     x: 1080, y: 675, w: 524, h: 900, footH: 420, s: 0.172 }, // 安裝終端(右下)
-                { file: 'lobby_workshop_obj_coil_v1.png',      x: 1215, y: 709, w: 510, h: 344, footH: 200, s: 0.147 }, // 線材捲(地上)
-                { file: 'lobby_workshop_obj_case_v1.png',      x: 1290, y: 743, w: 801, h: 638, footH: 400, s: 0.137 }, // 樣品箱(右下角)
+                { file: 'lobby_workshop_obj_workbench_svg_v1.svg', x: 118, y: 115, w: 900, h: 578, footH: 300, s: 0.42 },   // 靠後牆的大工作桌
+                { file: 'lobby_workshop_obj_chair_svg_v1.svg',     x: 245, y: 227, w: 574, h: 900, footH: 260, s: 0.226 },  // 工作椅(桌子前面)
+                { file: 'lobby_workshop_obj_rack_svg_v1.svg',      x: 490, y: 286, w: 776, h: 900, footH: 400, s: 0.110 },  // 稿件架(桌子右邊)
+                { file: 'lobby_workshop_obj_cabinet_svg_v1.svg',   x: 30,  y: 394, w: 471, h: 900, footH: 300, s: 0.340 },  // 零件抽屜櫃(左牆)
+                { file: 'lobby_workshop_obj_beanbag_svg_v1.svg',   x: 120, y: 652, w: 900, h: 846, footH: 620, s: 0.211 },  // 懶骨頭(左下)
+                { file: 'lobby_workshop_obj_crate_svg_v1.svg',     x: 320, y: 701, w: 767, h: 900, footH: 520, s: 0.143 },  // 糖果箱(懶骨頭旁)
+                { file: 'lobby_workshop_obj_loom_svg_v1.svg',      x: 600, y: 279, w: 801, h: 900, footH: 280, s: 0.412 },  // 🎯 造物儀(正中央,互動點)
+                { file: 'lobby_workshop_obj_console_svg_v1.svg',   x: 1035, y: 164, w: 415, h: 900, footH: 320, s: 0.140 }, // 全息控制台(投影台左邊)
+                { file: 'lobby_workshop_obj_rig_svg_v1.svg',       x: 1105, y: 100, w: 482, h: 900, footH: 260, s: 0.300 }, // 全息試裝台(後牆右)
+                { file: 'lobby_workshop_obj_shelf_svg_v1.svg',     x: 1280, y: 117, w: 445, h: 900, footH: 180, s: 0.315 }, // 展示層架(右牆)
+                { file: 'lobby_workshop_obj_cart_svg_v1.svg',      x: 1240, y: 448, w: 710, h: 900, footH: 340, s: 0.280 }, // 工具推車(右側)
+                { file: 'lobby_workshop_obj_kiosk_svg_v1.svg',     x: 1080, y: 675, w: 524, h: 900, footH: 420, s: 0.172 }, // 安裝終端(右下)
+                { file: 'lobby_workshop_obj_coil_svg_v1.svg',      x: 1215, y: 709, w: 510, h: 344, footH: 200, s: 0.147 }, // 線材捲(地上)
+                { file: 'lobby_workshop_obj_case_svg_v1.svg',      x: 1290, y: 743, w: 801, h: 638, footH: 400, s: 0.137 }, // 樣品箱(右下角)
             ],
             points: {
                 player: { x: 768, y: 790 },
@@ -510,6 +537,21 @@
     // 🖋 10-26 大廳、書咖，10-27 交易所換 SVG（見 SCENES.hall／cafe／exchange）：她存過的擺設（layoutFull／舊版 layout）記的是舊檔名 → _loadCfg 載入時就地換新，她調過的位置照留；
     //   新畫布跟舊圖一樣大，w/h 不用改。她下次在擺設模式按「完成」就存成新檔名。不升 cfgKey：升了她排好的大廳、書咖、交易所就作廢了
     const LOBBY_SVG = {
+        // 🎩 帽匠工坊（11-20）
+        'lobby_workshop_obj_workbench_v1.png': 'lobby_workshop_obj_workbench_svg_v1.svg',
+        'lobby_workshop_obj_chair_v1.png': 'lobby_workshop_obj_chair_svg_v1.svg',
+        'lobby_workshop_obj_rack_v1.png': 'lobby_workshop_obj_rack_svg_v1.svg',
+        'lobby_workshop_obj_cabinet_v1.png': 'lobby_workshop_obj_cabinet_svg_v1.svg',
+        'lobby_workshop_obj_beanbag_v1.png': 'lobby_workshop_obj_beanbag_svg_v1.svg',
+        'lobby_workshop_obj_crate_v1.png': 'lobby_workshop_obj_crate_svg_v1.svg',
+        'lobby_workshop_obj_loom_v1.png': 'lobby_workshop_obj_loom_svg_v1.svg',
+        'lobby_workshop_obj_console_v1.png': 'lobby_workshop_obj_console_svg_v1.svg',
+        'lobby_workshop_obj_rig_v1.png': 'lobby_workshop_obj_rig_svg_v1.svg',
+        'lobby_workshop_obj_shelf_v1.png': 'lobby_workshop_obj_shelf_svg_v1.svg',
+        'lobby_workshop_obj_cart_v1.png': 'lobby_workshop_obj_cart_svg_v1.svg',
+        'lobby_workshop_obj_kiosk_v1.png': 'lobby_workshop_obj_kiosk_svg_v1.svg',
+        'lobby_workshop_obj_coil_v1.png': 'lobby_workshop_obj_coil_svg_v1.svg',
+        'lobby_workshop_obj_case_v1.png': 'lobby_workshop_obj_case_svg_v1.svg',
         'lobby_cafe_obj_mat_v3.png': 'lobby_cafe_obj_mat_v5.svg',
         'lobby_cafe_obj_bar_v3.png': 'lobby_cafe_obj_bar_v5.svg',
         'lobby_cafe_obj_counter_v3.png': 'lobby_cafe_obj_counter_v5.svg',
@@ -3012,7 +3054,23 @@
         placeObj(img, o);
         _applyPlotVis(o, img);   // 🏘 地塊：這件是「沒入住的房」或「已蓋房的空地框」→藏起來(擺設模式半透明可調)
         S.world.appendChild(img);
+        if (img._fx) S.world.appendChild(img._fx);
         return img;
+    }
+    // ✨ 家具的動態層（o.fx：404 工作台的螢幕）：同一個位置、大小，疊在家具正上方、不擋點擊；
+    //   跟著 placeObj 走（擺設模式拖家具它一起動），家具被拿掉時一起拿掉
+    function _objFx(img, o) {
+        if (!o.fx) { if (img._fx) { img._fx.remove(); img._fx = null; } return null; }
+        if (!img._fx) {
+            const fx = document.createElement('img');
+            fx.className = 'lstage-actor lstage-obj lstage-obj-fx';
+            resolveRef({ file: o.fx }).then(src => { if (src) fx.src = src; });
+            img._fx = fx;
+            const rm = img.remove.bind(img);
+            img.remove = () => { if (img._fx) img._fx.remove(); rm(); };
+            if (img.parentNode) img.parentNode.insertBefore(fx, img.nextSibling);
+        }
+        return img._fx;
     }
     function placeObj(img, o) {
         const d = effDims(o);
@@ -3026,6 +3084,8 @@
         else z = 2 + Math.round(o.y + d.eh + (o.zb || 0));   // zb=疊層微調(±px)：小物件立在大物件前緣(看板在屋前)時,底邊比不過→手動往前擠
         img.style.zIndex = String(z);
         img.style.transform = o.flipX ? 'scaleX(-1)' : '';   // 水平翻轉（一張素材當左右兩用）
+        const fx = _objFx(img, o);
+        if (fx) { fx.style.left = img.style.left; fx.style.top = img.style.top; fx.style.width = img.style.width; fx.style.zIndex = img.style.zIndex; fx.style.transform = img.style.transform; }
     }
     function unmount() {
         if (!S.active) return;
