@@ -323,7 +323,7 @@
                 { file: 'lobby_memory_bar_obj_stool_svg_v1.svg',        x: 825, y: 400, w: 129, h: 127, s: 1, footH: 30 },
                 { file: 'lobby_memory_bar_obj_curio_cabinet_svg_v1.svg', x: 1230, y: 271, w: 228, h: 311, s: 1, footH: 60 },  // 古董櫃（右）
                 { file: 'lobby_memory_bar_obj_rug_svg_v1.svg',          x: 100, y: 540, w: 505, h: 208, s: 1, footH: 0, layer: 'floor', noCollide: true },   // 地毯
-                { file: 'lobby_memory_bar_obj_chair_left_svg_v1.svg',   x: 139, y: 486, w: 175, h: 183, s: 1, footH: 55 },    // 扶手椅（左）
+                { file: 'lobby_memory_bar_obj_chair_left_svg_v2.svg',   x: 139, y: 486, w: 175, h: 183, s: 1, footH: 55 },    // 扶手椅（左）
                 { file: 'lobby_memory_bar_obj_chair_right_svg_v1.svg',  x: 405, y: 501, w: 165, h: 174, s: 1, footH: 55 },    // 扶手椅（右）
                 { file: 'lobby_memory_bar_obj_cocktail_table_svg_v1.svg', x: 270, y: 516, w: 181, h: 166, s: 1, footH: 45 },  // 雞尾酒小圓桌
                 { file: 'lobby_memory_bar_obj_sofa_svg_v1.svg',         x: 1120, y: 600, w: 386, h: 253, s: 1, footH: 120 },  // 弧形沙發（右下）
@@ -547,6 +547,8 @@
     // 🖋 10-26 大廳、書咖，10-27 交易所換 SVG（見 SCENES.hall／cafe／exchange）：她存過的擺設（layoutFull／舊版 layout）記的是舊檔名 → _loadCfg 載入時就地換新，她調過的位置照留；
     //   新畫布跟舊圖一樣大，w/h 不用改。她下次在擺設模式按「完成」就存成新檔名。不升 cfgKey：升了她排好的大廳、書咖、交易所就作廢了
     const LOBBY_SVG = {
+        // 🍸 記憶吧檯（11-20）：左邊扶手椅的枕頭原本畫在最上層、蓋過扶手（她：「枕頭的層級錯誤，他跑到把手前面了」）→ v2 照右邊那張的順序排
+        'lobby_memory_bar_obj_chair_left_svg_v1.svg': 'lobby_memory_bar_obj_chair_left_svg_v2.svg',
         // 🎩 帽匠工坊（11-20）
         'lobby_workshop_obj_workbench_v1.png': 'lobby_workshop_obj_workbench_svg_v1.svg',
         'lobby_workshop_obj_chair_v1.png': 'lobby_workshop_obj_chair_svg_v1.svg',
@@ -2036,7 +2038,7 @@
         room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
         city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
         exchange:{ name: '白兔先生', badge: '交易所', ph: '走近白兔先生，兌換屬於你的一席之地...' },
-        tarot:   { name: '紫薇老師', badge: '占卜小屋', ph: '和紫薇老師聊聊，或點占卜桌入座占卜...' },
+        tarot:   { name: '紫薇老師', badge: '記憶吧檯', ph: '和紫薇老師聊聊，或點吧檯入座占卜...' },
         workshop:{ name: '帽匠',   badge: '奇想工坊', ph: '和帽匠聊聊，或點中央的造物儀開始做東西...' },
     };
     function _applySceneHeader() {

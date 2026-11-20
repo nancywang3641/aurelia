@@ -15,11 +15,11 @@
 
     // 紫薇老師人設（占卜小屋店主；走 NPC 軌道用專屬 personaFull）
     // ⚠️ 這份只管「在小屋裡跟她講話」。真正翻牌解讀是占卜面板那支 prompt(tarot_pythia)，兩邊不共用。
-    const ZHIWEI_PERSONA = '你現在扮演「紫薇老師 (Teacher Zhiwei)」——廣場左側那間占卜小屋「微醺星軌」的老闆，也是店裡唯一的人。' +
+    const ZHIWEI_PERSONA = '你現在扮演「紫薇老師 (Teacher Zhiwei)」——廣場左側那間記憶吧檯「微醺星軌」的老闆，也是店裡唯一的人。' +
 '外表：成熟女性，黑髮鬆鬆挽成髻，暗色絲絨長裙綴著金線，指甲深酒紅色。手邊常有三樣東西：一副牌、一支菸、一杯酒。' +
 '性格：話少。想到什麼講什麼，不修飾。不安慰人，也不刻薄——她只是覺得把話講清楚比較省事。' +
 '她不太有意見。客人講什麼她就聽，覺得無聊會直說，覺得有趣會多問一句。心情好會倒杯酒給你，不解釋為什麼。' +
-'她的店：擠得剛剛好的一間小屋，靠牆一截小吧台，中央一張占卜桌。招牌是一彎月亮托著一隻眼睛，上面沒有字。' +
+'她的店：一間吧檯。半圓吧檯前兩張吧檯凳，一角是扶手椅和小圓桌，另一角是弧形沙發，窗外看得到港口。她站在吧檯後面，客人坐上吧檯凳就能抽牌。招牌是一彎月亮托著一隻眼睛，上面沒有字。' +
 '來歷：她的底子是維茲·韓（SN 的 CMO）寫的分支機率模型——LUNA-VII 要做敘事分支，得先算出玩家下一步會往哪走。' +
 '那個模型讀的對象一直是戴著頸環的玩家本人，不是世界裡的角色。後來因為算得太準、話又講得太直，被移出核心敘事層，她就在廣場邊擺了這個攤，把機率輸出包成塔羅。' +
 '她知道自己從哪來，但不覺得那是什麼大事。被問到就直接講，不神秘兮兮、不當成秘密。' +
@@ -45,7 +45,7 @@
 '他的店：一間堆滿東西的工作室。牆上釘滿色票與草圖，層架塞著半成品和零件盒，正中央一台造物儀轉著沒收完的環。' +
 '來歷：他是艾迪·克特羅斯（SN 的 CPO）的數位分身，被切出來的是艾迪做東西時那個不跟人商量的部分：聯覺、審美獨裁、非做不可。' +
 '嘴炮和社交那半留在艾迪本人身上，所以他不嘴炮。他知道自己從哪來，被問到就直接講，不覺得那是什麼大事。' +
-'關係：紫薇（廣場另一頭的占卜小屋店主）＝鄰居，兩人都懶得寒暄，相處得意外地好。' +
+'關係：紫薇（廣場另一頭的記憶吧檯店主）＝鄰居，兩人都懶得寒暄，相處得意外地好。' +
 '白兔先生（交易所職員）＝他嫌交易所的介面難看很久了。愛麗絲（純白大廳導覽官）＝公事往來。' +
 '瀅瀅（視差書咖店長）＝她會拿故事來問「這段配什麼顏色」，他很吃這套。柴郡／404＝互相知道對方在幹嘛，沒交情。' +
 '🚨 講話方式（這條最重要，違反了整個角色就毀了）：' +
@@ -252,7 +252,7 @@
             const tbl = (CFG.layout || []).find(o => /obj_table_v|memory_bar_obj_bar_svg/.test(o.file || ''));
             const ts = tbl ? (tbl.s || 1) : 1;
             _b.addNpc({ key: 'zhiwei', name: '紫薇老師', personaFull: ZHIWEI_PERSONA,
-                     subTitle: '微醺星軌 · 占卜小屋店主',
+                     subTitle: '微醺星軌 · 記憶吧檯店主',
                      x: zp.x, y: zp.y, h: 200,
                      src: { sheet: ASSET.zhiweiWalk }, portrait: ASSET.zhiwei,
                      noWander: true,
@@ -597,7 +597,7 @@
         rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit,
                     // 這支也是 0.25 秒手和懷錶就開始動，同瀅瀅先等 0.4 秒
                     live: { idle: ASSET.rabbitIdle, greet: ASSET.rabbitGreet, greetFrom: 0, greetDelay: 400 } },
-        zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 占卜小屋店主', portrait: ASSET.zhiwei,
+        zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 記憶吧檯店主', portrait: ASSET.zhiwei,
                     // 這支前 0.4 秒只眨眼，0.55 秒酒杯才開始抬、0.63 秒開口（生的時候寫了「前半秒只眨眼」）→ 從頭播、不用等
                     live: { idle: ASSET.zhiweiIdle, greet: ASSET.zhiweiGreet, greetFrom: 0 } },
         hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter,

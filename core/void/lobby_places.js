@@ -66,7 +66,7 @@
             openIn: (c) => _mountFloating(c, () => win.OS_PT.openExchange(), '#os-pt-shop-dock', () => win.OS_PT.closeExchange && win.OS_PT.closeExchange()),
         },
         {
-            id: 'tarot', name: '占卜小屋', flatName: '占卜', icon: 'fa-moon', npc: 'zhiwei', bg: 'lobby_pv_bg_tarot_v1.jpg',
+            id: 'tarot', name: '記憶吧檯', flatName: '占卜', icon: 'fa-moon', npc: 'zhiwei', bg: 'lobby_pv_bg_tarot_v1.jpg',
             obj: 'tarot_hut', scene: 'tarot',
             ready: () => !!(_stage()?.openTarotPanel || win.OS_TAROT?.launch),
             open: () => _stage().openTarotPanel(),
