@@ -3214,9 +3214,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                 lines.push('偷塞前置內容：看起來沒有（站算妳送了 ' + inTok + ' token，跟這句話本身差不多）');
             }
             const want = String(modelVal || '').trim();
-            const norm = (x) => x.toLowerCase().replace(/^.*\//, '');
+            // 中轉站的模型名常加自己的標記：「[按次]gemini-…」「【限時】…」「…(free)」、「models/…」，比之前先剝掉，互相包含就算同一個
+            const norm = (x) => x.toLowerCase().replace(/\[[^\]]*\]|【[^】]*】|\([^)]*\)|（[^）]*）/g, '').replace(/^.*\//, '').trim();
             if (!said) lines.push('站說自己是：沒講（回覆裡沒有模型名）');
-            else if (want && norm(said).indexOf(norm(want)) !== 0 && norm(want).indexOf(norm(said)) !== 0) {
+            else if (want && norm(want) && norm(said).indexOf(norm(want)) < 0 && norm(want).indexOf(norm(said)) < 0) {
                 lines.push('站說自己是：' + said + '（妳選的是 ' + want + '，不一樣）');
                 bad = true;
             } else lines.push('站說自己是：' + said);
@@ -3269,27 +3270,31 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             try { clip = await _probeAudioClip(); } catch (e) { return { line: '聽聲音：沒驗到（音檔載不下來：' + ((e && e.message) || e) + '）', bad: false }; }
             const win = window.parent || window;
             let res, data = null, text = '';
+            // 帶聲音的那通有的站會一直不回（卡在轉接）：90 秒沒回就停，不讓結果框一直「驗證中」
+            const _au = new AbortController();
+            const _auT = setTimeout(() => _au.abort(), 90000);
             try {
                 if (cfg.apiFormat === 'gemini') {
                     // image_url 帶 data:audio/… 會被 OS_TO_GEMINI_BODY 轉成 inline_data，Vertex 那些差別照它的
                     const msgs = [{ role: 'user', content: [{ type: 'text', text: AUDIO_ASK }, { type: 'image_url', image_url: { url: 'data:audio/wav;base64,' + clip.b64 } }] }];
                     res = await fetch(win.OS_API.geminiGenUrl(cfg.url, modelVal, cfg.key), {
-                        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(cfg.key || '') },
+                        method: 'POST', signal: _au.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(cfg.key || '') },
                         body: JSON.stringify(win.OS_TO_GEMINI_BODY(msgs, { maxTokens: 2048, vertex: win.OS_API.isVertexUrl(cfg.url) }))
                     });
                     text = await res.text().catch(() => ''); try { data = JSON.parse(text); } catch (_) {}
                     if (res.ok) text = ((data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || []).filter(p => p && !p.thought).map(p => p.text || '').join('');
                 } else {
                     res = await fetch(okTarget, {
-                        method: 'POST', headers: win.OS_API.authHeaders(okTarget, cfg.key, { json: true }),
+                        method: 'POST', signal: _au.signal, headers: win.OS_API.authHeaders(okTarget, cfg.key, { json: true }),
                         body: JSON.stringify({ model: modelVal, max_tokens: 2048, stream: false, messages: [{ role: 'user', content: [{ type: 'text', text: AUDIO_ASK }, { type: 'input_audio', input_audio: { data: clip.b64, format: 'wav' } }] }] })
                     });
                     text = await res.text().catch(() => ''); try { data = JSON.parse(text); } catch (_) {}
                     if (res.ok) text = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
                 }
             } catch (e) {
+                if (_au.signal.aborted) return { line: '聽聲音：等了 90 秒站都沒回，這關沒驗到' + (isGem ? '（真的 Gemini 幾秒就聽完了，這個站轉聲音有問題）' : ''), bad: false };
                 return { line: '聽聲音：送不出去（' + ((e && e.message) || e) + '）', bad: false };
-            }
+            } finally { clearTimeout(_auT); }
             if (!res.ok) {
                 const why = String(_apiSiteMsg(data, text) || '').slice(0, 120);
                 return isGem
