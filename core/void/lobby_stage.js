@@ -302,6 +302,10 @@
             ],
             doorsV: 1,
             rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
+            // 🏦 交易所櫃檯＝可點的互動點（11-20：白兔走近只剩對話，交易所改點他面前的櫃檯；同書咖的菜單立牌、大廳的核心）。光用大廳那組淡藍
+            hotspots: [
+                { obj: 'lobby_exchange_obj_counter', label: '交易所', icon: 'fa-house', open: 'exchange', cls: 'hs-core', lit: true, litCls: 'lstage-obj-lit-cyan' },
+            ],
         },
         tarot: {   // 🔮 紫薇的店（微醺星軌）：廣場左側那間小屋的室內。紫薇老師站在吧檯後面，點吧檯「入座占卜」開占卜面板。
             // 🍸 11-20 換成「記憶吧檯」（她：「換掉占卜小屋」）：Vproject 畫的 SVG，整間換掉（原本的占卜桌、高背椅、燭台不用了）。
@@ -1886,9 +1890,11 @@
     // win＝這個面板的浮窗選擇器。有寫的是右側停靠窗（左邊空著），面板態把立繪留下來，
     //   跟占卜／造物工坊同一套長相。
     const PANEL_OF = {
-        alice:  { label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.(), close: () => window.OS_WORLDGATE?.closeGate?.() },
-        rabbit: { label: '交易所',   icon: 'fa-house',   win: '.os-pt-dock', open: () => window.OS_PT?.openExchange?.() },
-        ying:   { label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), close: () => window.OS_CAFE?.closeWorkshop?.(), when: () => S.scene === 'cafe' },
+        // 11-20 她：「瀅瀅不需要開那個面板了，以後他也是對話和劇場，面板已經移到菜單開；愛麗絲也是同理，其他人也一樣。除了柴郡」
+        //   → pick:false＝走近他只剩對話（在小劇場裡多一顆偷聽）；面板改從家具開（愛麗絲＝大廳核心、瀅瀅＝菜單立牌、白兔＝交易所櫃檯），那幾個入口照樣讀這張表
+        alice:  { pick: false, label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.(), close: () => window.OS_WORLDGATE?.closeGate?.() },
+        rabbit: { pick: false, label: '交易所',   icon: 'fa-house',   win: '.os-pt-dock', open: () => window.OS_PT?.openExchange?.() },
+        ying:   { pick: false, label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), close: () => window.OS_CAFE?.closeWorkshop?.(), when: () => S.scene === 'cafe' },
         // 🎬 柴郡＝混沌片場（他是那台導演機的主人）。窗位與規矩照世界門那扇：右側停靠、左邊留立繪。
         //    他身上原本掛的是黑市，2026-09-02 黑市改點 404 房的圓桌，這個位置讓給片場。
         cheshire: { label: '混沌片場', icon: 'fa-clapperboard', win: '#chaos-modal-root.chaos-dock',
@@ -2018,7 +2024,7 @@
         //    桌機原本是「對話框與面板同時浮出來」——同一個人一邊在面板裡辦事、一邊在底下對話框
         //    講話，跟占卜／造物工坊當初被否掉的是同一種割裂（Rae 2026-09-01：桌機跟隨手機）。
         //    要邊看面板邊講話仍然按 💬 浮鈕，跟手機一樣。
-        const panel = _panelFor(npc);
+        const panel0 = _panelFor(npc), panel = panel0 && panel0.pick !== false ? panel0 : null;   // 面板搬去家具的管理員：走近不再問
         if (panel || inTheater) { _showTalkPick(npc, panel, inTheater); return; }
         _enterTalk(npc);
     }
@@ -2913,7 +2919,8 @@
         persona:   () => _openCafeStudio('persona',   '我的角色'),
         worldbook: () => _openCafeStudio('worldbook', '整理世界書'),
         worldgate:   () => _openPanelFromObject('alice'),   // 純白大廳中央的核心
-        cafeCounter: () => _openPanelFromObject('ying'),    // 書咖櫃檯上的菜單立牌（櫃檯窗本來就開在「菜單」那頁）
+        cafeCounter: () => _openPanelFromObject('ying'),
+        exchange:    () => _openPanelFromObject('rabbit'),  // 交易所櫃檯（11-20 白兔走近只剩對話，交易所改點櫃檯）    // 書咖櫃檯上的菜單立牌（櫃檯窗本來就開在「菜單」那頁）
     };
     // 🎯 點家具開某位管理員的面板（大廳核心＝愛麗絲的世界門、書咖菜單＝瀅瀅的櫃檯）：
     //   跟走近他選面板那條同一個面板（PANEL_OF），人一樣留著（桌機把他留在面板旁邊；手機的窗吃滿寬，不放）。
