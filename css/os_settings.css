@@ -401,6 +401,8 @@
 .set-channel-row { display: flex; gap: 6px; align-items: center; }
 .set-channel-row .set-input { flex: 1; }
 .set-channel-row .btn-test { flex: 0 0 auto; padding: 8px 14px; margin: 0; }
+.set-channel > .ch-probe { margin-top: 0; padding: 8px; }
+.set-channel > .api-test-result { margin-top: 0; }
 /* 🎲 設置→API→決策模型 */
 .jev-field + .jev-field { margin-top: 10px; }
 .jev-test-result { margin: 10px 0 0; }

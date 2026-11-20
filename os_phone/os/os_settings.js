@@ -1507,7 +1507,10 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                             +   '<input class="set-input ch-max" type="number" min="256" step="256" placeholder="最大輸出" value="' + esc(c.maxTokens || '') + '">'
                             +   '<input class="set-input ch-temp" type="number" min="0" max="2" step="0.05" placeholder="溫度" value="' + esc(c.temperature == null ? '' : c.temperature) + '">'
                             +   '<div class="btn-test ch-del">刪掉</div>'
-                            + '</div></div>';
+                            + '</div>'
+                            + '<div class="btn-test ch-probe"><i class="fa-solid fa-magnifying-glass"></i> 驗這條通道</div>'
+                            + '<div class="api-test-result" hidden></div>'
+                            + '</div>';
                     }).join('');
                 }
                 listBox.querySelectorAll('.set-channel').forEach(function (box) {
@@ -1529,6 +1532,18 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     };
                     box.querySelectorAll('input, select').forEach(function (el) { if (!el.classList.contains('ch-site')) el.onchange = save; });
                     _wireApiSite(box.querySelector('.ch-site'), box.querySelector('.ch-url'), box.querySelector('.ch-fmt'), save);   // 選了一家＝填好就存
+                    // 🔍 驗這條通道：跟主模型那顆同一支（runApiTest 的 probe），照格子上現在的字驗，不用先存
+                    const pb = box.querySelector('.ch-probe');
+                    pb.onclick = async function () {
+                        if (pb.classList.contains('is-busy')) return;
+                        const _cu = box.querySelector('.ch-url'), _ck = box.querySelector('.ch-key');
+                        _cu.value = _cleanApiUrl(_cu.value); _ck.value = _cleanApiKey(_ck.value);
+                        pb.classList.add('is-busy');
+                        try {
+                            await runApiTest({ useSystemApi: false, url: _cu.value, key: _ck.value, urlEl: _cu, apiFormat: box.querySelector('.ch-fmt').value },
+                                box.querySelector('.ch-model').value.trim(), box.querySelector('.api-test-result'), true);
+                        } finally { pb.classList.remove('is-busy'); }
+                    };
                     box.querySelector('.ch-del').onclick = async function () {
                         const list = loadChannels();
                         const gone = list[idx];
