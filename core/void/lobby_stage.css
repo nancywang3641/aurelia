@@ -526,6 +526,10 @@
   transform:translateX(-50%) rotate(45deg); background:rgba(255,255,255,.92);
   border-right:1px solid rgba(60,80,130,.3); border-bottom:1px solid rgba(60,80,130,.3); }
 .lstage-theater-pair:hover { background:#fff; box-shadow:0 6px 18px rgba(40,60,110,.32); }
+/* 飄的動畫要帶著置中一起寫：通用那組 lstage-hover 只寫 translateY，會把上面的 translateX(-50%) 整個蓋掉，
+   泡泡就往右偏半個身寬（11-20 她：「小劇場泡泡都是歪的，這真的很醜」——原來是這個） */
+.lstage-theater-pair.lstage-float { animation-name:lstage-hover-pair; }
+@keyframes lstage-hover-pair { 0%,100% { transform:translateX(-50%) translateY(0); } 50% { transform:translateX(-50%) translateY(-6px); } }
 /* 🎁 書咖點餐送到了：收到的人頭上冒一下（lobby_cafe_regulars.js 的 _giftPop；同小劇場泡泡的長相，幾秒後淡掉） */
 .lstage-gift-pop { position:absolute; transform:translateX(-50%); z-index:3150; pointer-events:none; white-space:nowrap;
   padding:6px 11px; border:1px solid rgba(160,110,60,.35); border-radius:999px; font-size:13px; font-weight:700; color:#6d4425;

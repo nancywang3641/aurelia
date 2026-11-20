@@ -297,7 +297,8 @@
         const anc0 = _pairAnchor(a, b);   // 近=兩人中間,遠=發起人頭頂(同 _theaterFollow)
         icon.style.left = anc0.x + 'px';   // CSS translateX(-50%) 置中
         icon.style.top  = anc0.y + 'px';
-        icon.addEventListener('click', (e) => { e.stopPropagation(); _openTheaterWin('live'); });
+        // 點泡泡＝在他頭上開那張「對話／偷聽」卡（同走近管理員那張，lobby_stage.js 的 _showTalkPick）；小劇場清單窗照舊在右上角那顆
+        icon.addEventListener('click', (e) => { e.stopPropagation(); if (_b.startTalk) _b.startTalk(a); else _openTheaterWin('live'); });
         S.world.appendChild(icon);
         S.theater = { a, b, icon, playing: false, extra, at: Date.now() };
         _updateTheaterBadge();
@@ -375,10 +376,10 @@
     //      或配對早就結束只剩 DOM 沒清），泡泡就孤零零釘在空地上。
     // 泡泡錨點:兩人靠得近=頭頂中間;離得遠(書咖值班的釘在櫃檯、對象坐老遠)
     // 中點會落在水槽這種無人區看起來像亂飄 → 遠距時直接掛在 a(發起人)頭頂
+    // 11-20 她：「為了不擋聊天黃泡泡，小劇場泡泡都是歪的，這真的很醜」——掛在兩人中間時泡泡底下沒有人、看起來是歪的
+    //   → 一律掛在發起人（送餐那種＝收到的人）頭頂正中；他的黃色聊天鈕在小劇場進行時收起來（lobby_stage.js 的 _npcNearCheck），兩個不疊
     function _pairAnchor(a, b) {
-        const far = Math.abs(a.x - b.x) > 200 || Math.abs(a.y - b.y) > 140;
-        if (far) return { x: Math.round(a.x), y: Math.round(a.y - a.h - 40) };
-        return { x: Math.round((a.x + b.x) / 2), y: Math.round(Math.min(a.y - a.h, b.y - b.h) - 40) };
+        return { x: Math.round(a.x), y: Math.round(a.y - a.h - 40) };
     }
     function _theaterFollow() {
         const t = S.theater;

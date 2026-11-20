@@ -1780,7 +1780,9 @@
     }
     function _npcNearCheck(n) {
         const near = _npcInReach(n);
-        n.hint.style.display = (near && !S.talkTarget) ? '' : 'none';
+        // 小劇場的泡泡掛在發起人頭頂正中（lobby_theater.js 的 _pairAnchor）：他的黃色聊天鈕先收起來，兩個才不疊、泡泡不用歪到旁邊
+        const inBubble = !!(S.theater && S.theater.a === n && !S.theater.playing);
+        n.hint.style.display = (near && !S.talkTarget && !inBubble) ? '' : 'none';
     }
 
     // ── NPC 各自的輕量對話歷史（localStorage，上限 40 條）──
@@ -1910,7 +1912,9 @@
     // 10-13 她：「每個管理員的對話選項總在底部，感覺好醜」「點空白處應該就取消才對，而不是必須點開吧?」
     //   → 卡片改成浮在那位頭上（兩顆小鈕＋指向他的小尖角），底下鋪一層看不見的墊子：點畫面上其他任何地方＝取消（等於走開）。
     //     以前靠「點地板」那層取消，但書咖地板擺滿桌椅，點下去其實點到家具，什麼都沒發生。
-    function _showTalkPick(npc, panel) {
+    // 🎭 11-20 她：小劇場泡泡跟黃色聊天鈕分開兩顆、泡泡歪到旁邊「很醜」，指著這張卡說「這不行嗎?」
+    //   → 正在小劇場裡的人也走這張卡：多一顆「偷聽」（panel 可以沒有；有面板的管理員就是三顆）
+    function _showTalkPick(npc, panel, peek) {
         _closeTalkPick();
         const left = document.querySelector('.lobby-left');
         if (!left) return;
@@ -1929,13 +1933,18 @@
         box.innerHTML =
             '<div class="lstage-pick-row">' +
               '<button class="lstage-pick-btn" data-go="talk"><i class="fa-solid fa-comment-dots"></i><span>對話</span></button>' +
-              '<button class="lstage-pick-btn" data-go="panel"><i class="fa-solid ' + panel.icon + '"></i><span>' + panel.label + '</span></button>' +
+              (panel ? '<button class="lstage-pick-btn" data-go="panel"><i class="fa-solid ' + panel.icon + '"></i><span>' + panel.label + '</span></button>' : '') +
+              (peek ? '<button class="lstage-pick-btn" data-go="peek"><i class="fa-solid fa-ear-listen"></i><span>偷聽</span></button>' : '') +
             '</div>';
         // 岔路掛在 .lobby-left 底下、跟 S.root 是兄弟 → 點它不會冒泡到 .lstage-click(那層會判成點空地→結束對話)
         box.addEventListener('click', (e) => {
             const b = e.target.closest('.lstage-pick-btn');
             if (!b) return;
             _closeTalkPick();
+            // 偷聽：不找他講話了（收掉這次開聊），演他們那場（會叫模型，跟以前點泡泡偷聽一樣）
+            if (b.dataset.go === 'peek') { endTalk(); window.LobbyTheater?.present?.(); return; }
+            // 跟小劇場裡的人講話＝打斷他們那場（收泡泡、解凍）
+            if (S.theater && (npc === S.theater.a || npc === S.theater.b)) window.LobbyTheater?.end();
             if (b.dataset.go === 'talk') { _enterTalk(npc); return; }
             // 🧍 桌機的面板態把人留著：右側停靠窗只佔右半，左邊空著本來就是給立繪站的
             //    （同占卜／造物工坊）。手機的窗吃滿寬，留了整張臉會蓋住面板 → 維持沒有人。
@@ -1995,7 +2004,8 @@
         if (S.edit) return;
         _closeTarotPanel();   // 🔮 開聊＝收掉占卜面板：同一個人不能一邊在面板裡解牌、一邊在底下對話框講話
         _closeWorkshopPanel();   // 🎩 同上：開聊＝收掉造物工坊面板
-        if (S.theater && (npc === S.theater.a || npc === S.theater.b)) window.LobbyTheater?.end();   // 🎭 跟配對當事人開聊→收掉配對（清泡泡+解凍）免凍結卡死；跟旁人聊不打斷等待中的小劇場
+        // 🎭 找的是小劇場裡的人：先問「對話／偷聽」（同管理員那張卡），選了對話才收掉配對（清泡泡＋解凍）；跟旁人聊不打斷等待中的小劇場
+        const inTheater = !!(S.theater && !S.theater.playing && (npc === S.theater.a || npc === S.theater.b));
         _closeStorePanel();   // 🏪 同上：開聊＝收掉黑市（黑市改掛在圓桌上，不再跟著柴郡走）
         S.talkTarget = npc;
         S.npcs.forEach(n => { n.hint.style.display = 'none'; });
@@ -2009,7 +2019,7 @@
         //    講話，跟占卜／造物工坊當初被否掉的是同一種割裂（Rae 2026-09-01：桌機跟隨手機）。
         //    要邊看面板邊講話仍然按 💬 浮鈕，跟手機一樣。
         const panel = _panelFor(npc);
-        if (panel) { _showTalkPick(npc, panel); return; }
+        if (panel || inTheater) { _showTalkPick(npc, panel, inTheater); return; }
         _enterTalk(npc);
     }
     function endTalk() {
