@@ -299,7 +299,7 @@
         icon.style.top  = anc0.y + 'px';
         icon.addEventListener('click', (e) => { e.stopPropagation(); _openTheaterWin('live'); });
         S.world.appendChild(icon);
-        S.theater = { a, b, icon, playing: false, extra };
+        S.theater = { a, b, icon, playing: false, extra, at: Date.now() };
         _updateTheaterBadge();
         if (S.twEl) _twRender();   // 列表窗開著→「正在對話」即時亮起
     }
@@ -414,8 +414,13 @@
         _updateTheaterBadge();
         if (S.twEl) _twRender();
     }
+    // ⏳ 她沒點泡泡偷聽：聊一陣子就散場（解凍、收泡泡），不然兩個人一直凍在那裡，路過的、要找他們的人都卡在旁邊
+    //   （11-20 她：「如果我不聊，那個劇場會一直卡在那，不會消失，會導致很多人在那排」）。送餐觸發的那種是她點的，多等一下
+    const THEATER_TTL = 60000, THEATER_TTL_GIFT = 120000;
     function _theaterTick() {
         if (!S.active || !_theaterOn()) return;
+        const t = S.theater;
+        if (t && !t.playing && !S._theaterPresenting && Date.now() - (t.at || 0) > (t.extra ? THEATER_TTL_GIFT : THEATER_TTL)) { _endTheater(); return; }
         if (S.theater || S.talkTarget || S.transitioning || S._theaterPresenting) return;
         if (Date.now() - (S._theaterCd || 0) < 90000) return;   // cooldown 90 秒
         if (_theaterEligible().length < 2) return;
