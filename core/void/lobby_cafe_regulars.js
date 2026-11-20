@@ -217,7 +217,11 @@
         //   動作全照衣櫥原樣（記點餐 writing、端盤 tray、送餐走路 trayWalk、走路 walk），lobby_ember.js 畫。
         const SV = { write: 6.4, prep: 5, place: 1.2, self: 8 };   // 秒：記點餐（衣櫥那段 3.2 秒播兩遍）、備餐、放下、沒店員時自己拿
         let job = null;   // { g: 常客, crew, stage, at }
-        const crewOf = () => S.npcs.find(n => n && n.key === 'cafe_crew' && n._ember && n._ember.ready && n.el && n.el.isConnected) || null;
+        // 誰送：雇來的員工（衣櫥那套還沒載好也算：照舊那張圖走過去，載好了才有端盤、記點餐的動作）；
+        //   這一班沒有員工，她點的那份改由瀅瀅端過去（11-20 她：「店員也會卡在原地，並且說送到了」——以前沒員工、或衣櫥還沒載好，就直接算送到）
+        const onStage = n => n && n.el && n.el.isConnected && S.npcs.indexOf(n) >= 0;
+        const crewOf = () => S.npcs.find(n => n && n.key === 'cafe_crew' && onStage(n)) || null;
+        const yingOf = () => S.npcs.find(n => n && n.key === 'ying' && onStage(n)) || null;
         // 櫃檯在哪（她的擺設）：從櫃檯後面出來要繞過右邊那頭
         const lanes = () => {
             const o = (_b.CFG.layout || []).find(o => /_counter_/.test(o.file || '') && !o._plotOff);
@@ -262,6 +266,14 @@
             return Object.assign(p, { mirror: g.x > p.x });   // 衣櫥側面臉朝左；他在右邊要翻過來
         };
         const goHome = (c) => { c._tray = false; routeTo(c, c._home); };
+        // 送完了：瀅瀅放回去照常在櫃檯那條晃、可以被拉去小劇場（員工照舊站著等下一單）
+        const _release = (c) => {
+            if (!c) return;
+            c._tray = false; c._emberPose = null;
+            if (c.key === 'cafe_crew') return;
+            c.scriptOnly = false; c._emberWalk = false; c._home = null; c._route = null;
+            c.wanderT = c._wanderKeep != null && isFinite(c._wanderKeep) ? c._wanderKeep : 2000; c._wanderKeep = null;
+        };
 
         // ---------- 🎁 她點餐送人（os_cafe 菜單頁「點一份」）：排在常客的單前面，店員備好就端過去 ----------
         //   送到：常客坐著的就吃她送的那份；其他人（書裡的角色、瀅瀅…）頭上冒一下「收到了」。
@@ -337,7 +349,7 @@
             switch (job.stage) {
                 case 'gprep':
                     if (!arrived(crew) || now - job.at < SV.prep * 1000) break;
-                    if (r === crew) { receive(gf); job = null; break; }   // 送給店員自己：做好就是他的
+                    if (r === crew) { receive(gf); _release(crew); job = null; break; }   // 送給店員（或瀅瀅）自己：做好就是他的
                     crew._tray = true;
                     job.spot = giftSpot(r);
                     routeTo(crew, job.spot);
@@ -350,7 +362,7 @@
                     if (now - job.at > SV.place * 1000) { receive(gf); goHome(crew); job.stage = 'back'; }
                     break;
                 case 'back':
-                    if (arrived(crew)) { crew._emberPose = null; job = null; }
+                    if (arrived(crew)) { _release(crew); job = null; }
                     break;
             }
         };
@@ -359,14 +371,25 @@
             const now = Date.now();
             const guests = [...mine.values()].filter(g => g && !g._leaving && S.npcs.indexOf(g) >= 0);
             guests.forEach(g => { if (g._svc === 'none' && g._entry && g._entry.item) { g._svc = 'wait'; g._svcAt = now; } });
-            const crew = crewOf();
-            if (job && (job.crew !== crew)) { if (job.gift && job.stage !== 'back') gifts.unshift(job.gift); job = null; }   // 下班、換人了（她的那份還沒送到：排回去）
-            if (!crew) {   // 沒店員：自己去櫃檯拿；她點的過幾秒直接送到
+            const crew0 = crewOf();
+            // 正在送的那位不在了（下班、換人、離開舞台）：她的那份還沒送到就排回去
+            if (job && (!onStage(job.crew) || (crew0 && job.crew !== crew0 && job.crew.key === 'cafe_crew'))) { if (job.gift && job.stage !== 'back') gifts.unshift(job.gift); _release(job.crew); job = null; }
+            const ying = !crew0 ? yingOf() : null;
+            const crew = job ? job.crew : (crew0 || (gifts.length && ying && S.talkTarget !== ying && !ying._theaterFrozen ? ying : null));
+            if (!crew || crew.key !== 'cafe_crew') {   // 沒員工：常客自己去櫃檯拿
                 guests.forEach(g => { if ((g._svc === 'wait' || g._svc === 'ordered') && now - g._svcAt > SV.self * 1000) g._svc = 'served'; });
-                while (gifts.length && now - gifts[0].at > 4000) receive(gifts.shift());
+            }
+            if (!crew) {   // 連瀅瀅都不在（或正在跟妳聊、在小劇場裡）：她點的等一下，太久就直接送到
+                while (gifts.length && now - gifts[0].at > (ying ? 60000 : 4000)) receive(gifts.shift());
                 return;
             }
-            if (!crew._home) { crew._home = { x: crew.x, y: crew.y }; crew._emberWalk = true; crew.noWander = false; crew.wanderT = Infinity; }
+            if (crew.key !== 'cafe_crew' && !job && !gifts.length) return;   // 瀅瀅只幫忙送她點的，常客的單不歸她
+            if (!crew._home || crew.key !== 'cafe_crew' && !job) {
+                // 員工：櫃檯後面那個站位就是家；瀅瀅會在櫃檯那條晃，從她現在站的地方出發、送完回這裡（漫步先停，送完放回去）
+                crew._home = { x: crew.x, y: crew.y }; crew._emberWalk = true; crew.noWander = false;
+                if (crew.key !== 'cafe_crew' && crew._wanderKeep == null) crew._wanderKeep = crew.wanderT;
+                crew.wanderT = Infinity;
+            }
             const gone = g => !g || g._leaving || S.npcs.indexOf(g) < 0 || !g._seat;
             if (!job) {
                 if (!arrived(crew)) return;   // 還在走回櫃檯
