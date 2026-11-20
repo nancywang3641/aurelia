@@ -255,9 +255,11 @@
             doors: [ { x: 620, y: 836, w: 170, h: 46, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
             cheshire: { x: 840, y: 600 },
             // 🏪 線軸圓桌＝黑市攤位（點了開黑市面板）。obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上。
-            //    混沌片場則掛在柴郡身上（走近他→岔路，見 PANEL_OF）。
+            //    混沌片場 11-20 起改點右上的大電腦（工作台），走近柴郡只剩對話。
             hotspots: [
                 { obj: 'lobby_404_obj_spool_v2', label: '黑市', icon: 'fa-store', open: 'store', cls: 'hs-404' },
+                // 🎬 混沌片場＝右上的弧形工作台（大電腦）：柴郡是那台導演機的主人（11-20 從他身上搬來）。滑過亮的是工作台本身（綠光）
+                { obj: 'lobby_404_obj_desk_v2', label: '混沌片場', icon: 'fa-clapperboard', open: 'chaos', cls: 'hs-404 hs-404-lit', lit: true, litCls: 'lstage-obj-lit-green' },
             ],
         },
         exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
@@ -1897,7 +1899,8 @@
         ying:   { pick: false, label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), close: () => window.OS_CAFE?.closeWorkshop?.(), when: () => S.scene === 'cafe' },
         // 🎬 柴郡＝混沌片場（他是那台導演機的主人）。窗位與規矩照世界門那扇：右側停靠、左邊留立繪。
         //    他身上原本掛的是黑市，2026-09-02 黑市改點 404 房的圓桌，這個位置讓給片場。
-        cheshire: { label: '混沌片場', icon: 'fa-clapperboard', win: '#chaos-modal-root.chaos-dock',
+        //    11-20 她：「搬到大電腦」→ pick:false，走近柴郡只剩對話；片場改點 404 房右上那台弧形工作台（大電腦）
+        cheshire: { pick: false, label: '混沌片場', icon: 'fa-clapperboard', win: '#chaos-modal-root.chaos-dock',
                     open: () => window.OS_CHAOS?.openModal?.() },
         // 🔮 紫薇沒有面板鈕：走近她＝純聊天，占卜要點桌子（Rae 2026-08-21 定案）。
         //    兩件事分開才不會「面板裡在解牌、底下對話框也在講話」。
@@ -2920,7 +2923,8 @@
         worldbook: () => _openCafeStudio('worldbook', '整理世界書'),
         worldgate:   () => _openPanelFromObject('alice'),   // 純白大廳中央的核心
         cafeCounter: () => _openPanelFromObject('ying'),
-        exchange:    () => _openPanelFromObject('rabbit'),  // 交易所櫃檯（11-20 白兔走近只剩對話，交易所改點櫃檯）    // 書咖櫃檯上的菜單立牌（櫃檯窗本來就開在「菜單」那頁）
+        exchange:    () => _openPanelFromObject('rabbit'),
+        chaos:       () => _openPanelFromObject('cheshire'),   // 404 房的大電腦＝混沌片場（11-20 從柴郡身上搬來）  // 交易所櫃檯（11-20 白兔走近只剩對話，交易所改點櫃檯）    // 書咖櫃檯上的菜單立牌（櫃檯窗本來就開在「菜單」那頁）
     };
     // 🎯 點家具開某位管理員的面板（大廳核心＝愛麗絲的世界門、書咖菜單＝瀅瀅的櫃檯）：
     //   跟走近他選面板那條同一個面板（PANEL_OF），人一樣留著（桌機把他留在面板旁邊；手機的窗吃滿寬，不放）。

@@ -627,6 +627,12 @@
   opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
 .lstage-hotspot.hs-404:hover .lstage-hotspot-chip, .lstage-hotspot.hs-404.is-near .lstage-hotspot-chip, .lstage-hotspot.hs-404.is-flash .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
 .lstage-hotspot.hs-404 .lstage-hotspot-chip i { color:#00cc33; font-size:11px; }
+/* 🎬 大電腦＝混沌片場（11-20）：亮的是工作台本身（lit＋綠光），熱點框自己不畫綠框（同書咖、帽匠那幾組） */
+.lstage-hotspot.hs-404-lit:hover, .lstage-hotspot.hs-404-lit.is-near, .lstage-hotspot.hs-404-lit.is-flash { background:none; box-shadow:none; }
+.lstage-obj.lstage-obj-lit.lstage-obj-lit-green {
+  filter:drop-shadow(1.5px 0 0 #b6ffcf) drop-shadow(-1.5px 0 0 #b6ffcf)
+         drop-shadow(0 1.5px 0 #b6ffcf) drop-shadow(0 -1.5px 0 #b6ffcf)
+         drop-shadow(0 0 14px rgba(0,255,120,.75)); }
 
 .lstage-wswin { position:absolute; right:max(78px,calc(50% - 660px)); top:50%; transform:translateY(-50%);
   z-index:3350; width:min(920px,72%); height:min(680px,calc(100% - 130px)); }
