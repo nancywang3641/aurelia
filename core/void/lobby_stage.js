@@ -2238,7 +2238,16 @@
             if (dx || dy) p.dest = null;
             else if (p.dest) {
                 const vx = p.dest.x - p.x, vy = p.dest.y - p.y, d = Math.hypot(vx, vy);
-                if (d < 6) p.dest = null; else { dx = vx / d; dy = vy / d; }
+                if (d < 6) p.dest = null;
+                else {
+                    // 🌀 點到走不到的地方（家具腳邊、牆角）：沿著擋路的東西左滑右滑、一直沒更靠近，面向就跟著轉個不停
+                    //   （11-20 她：「點到一個地方，小人就一直在轉」）→ 0.6 秒內沒有再靠近 3px 以上就當作走到了、停下來
+                    const now = performance.now();
+                    if (p._destRef !== p.dest) { p._destRef = p.dest; p._destBest = d; p._destT = now; }
+                    else if (d < p._destBest - 3) { p._destBest = d; p._destT = now; }
+                    if (now - p._destT > 600) p.dest = null;
+                    else { dx = vx / d; dy = vy / d; }
+                }
             }
             const len = Math.hypot(dx, dy);
             if (len > 0) {
