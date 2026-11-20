@@ -3055,6 +3055,13 @@
         _applyPlotVis(o, img);   // 🏘 地塊：這件是「沒入住的房」或「已蓋房的空地框」→藏起來(擺設模式半透明可調)
         S.world.appendChild(img);
         if (img._fx) S.world.appendChild(img._fx);
+        // 🎩 造物儀會動（11-20，lobby_loom.js）：家具那張換成底座、上面疊會轉的環和繞圈的小卡；她排過的照樣是這件（看檔名，不看存檔有沒有欄位）
+        if (/lobby_workshop_obj_loom_svg/.test(o.file || '') && window.LobbyLoom) {
+            try {
+                img._live = window.LobbyLoom.attach(img, o);
+                if (img._live) { const rm = img.remove.bind(img); img.remove = () => { window.LobbyLoom.detach(img._live); rm(); }; }
+            } catch (e) { console.warn('[LobbyStage] 造物儀動不起來，照舊靜止那張', e); }
+        }
         return img;
     }
     // ✨ 家具的動態層（o.fx：404 工作台的螢幕）：同一個位置、大小，疊在家具正上方、不擋點擊；
@@ -3086,6 +3093,7 @@
         img.style.transform = o.flipX ? 'scaleX(-1)' : '';   // 水平翻轉（一張素材當左右兩用）
         const fx = _objFx(img, o);
         if (fx) { fx.style.left = img.style.left; fx.style.top = img.style.top; fx.style.width = img.style.width; fx.style.zIndex = img.style.zIndex; fx.style.transform = img.style.transform; }
+        if (img._live) img._live.place();   // 造物儀那層跟著走（lobby_loom.js）
     }
     function unmount() {
         if (!S.active) return;

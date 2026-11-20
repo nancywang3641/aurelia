@@ -804,6 +804,12 @@
 .lstage-actor.lstage-obj { transition:filter .16s ease; }
 /* 家具的動態層（404 工作台的螢幕）：疊在家具上，點擊、拖曳都穿過去給家具本身（lobby_stage.js 的 _objFx） */
 .lstage-obj-fx { pointer-events:none; }
+/* 🎩 造物儀會動的那層（lobby_loom.js）：疊在家具（底座）上、跟它同一個前後，點擊穿過去給造物儀本身；底座換好才淡入 */
+.lstage-loom { position:absolute; pointer-events:none; opacity:0; transition:opacity .3s ease; }
+.lstage-loom.on { opacity:1; }
+.lstage-loom-stage { position:absolute; left:0; top:0; width:801px; height:900px; transform-origin:0 0; }
+.lstage-loom-full { position:absolute; left:0; top:0; width:801px; height:900px; display:block; overflow:visible; }
+.lstage-loom-card { position:absolute; left:0; top:0; transform-origin:0 0; display:block; will-change:transform,opacity; }
 .lstage-editing .lstage-obj-fx { opacity:.5; }
 .lstage-obj.lstage-obj-lit {
   filter:drop-shadow(2px 0 0 #a86a24) drop-shadow(-2px 0 0 #a86a24)

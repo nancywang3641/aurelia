@@ -123,6 +123,7 @@ const MODULE_LOAD_ORDER = [
     { name: 'void_ui_sfx', path: _AURELIA_EXT_BASE + '/core/void/ui_sfx.js', key: 'voidUiSfx' },   // 🔊 大廳介面音效（點擊/滑過/開關/面板開合）
     { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
     { name: 'void_lobby_stage', path: _AURELIA_EXT_BASE + '/core/void/lobby_stage.js', key: 'voidLobbyStage' },
+    { name: 'void_lobby_loom', path: _AURELIA_EXT_BASE + '/core/void/lobby_loom.js', key: 'voidLobbyLoom' },   // 🎩 帽匠工坊的造物儀會動（環轉、小卡繞圈；lobby_stage 掛造物儀時叫它）
     { name: 'void_lobby_theater', path: _AURELIA_EXT_BASE + '/core/void/lobby_theater.js', key: 'voidLobbyTheater' },   // 🎭 小劇場（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_dress', path: _AURELIA_EXT_BASE + '/core/void/lobby_dress.js', key: 'voidLobbyDress' },   // 👗 裝扮室/右鍵選單/對話紀錄窗（拆自 lobby_stage，靠 _b 橋，必須排它後面）
     { name: 'void_lobby_doll_cut', path: _AURELIA_EXT_BASE + '/core/void/lobby_doll_cut.js', key: 'voidLobbyDollCut' },   // ✂ GPT 不倒翁切頭身（切圖小修搬來）、站著照衣櫥呼吸；靠 lobby_dress 的 dollKit
