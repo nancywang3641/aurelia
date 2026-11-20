@@ -144,6 +144,8 @@
                         <div class="set-group">
                             <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="os-test-btn">發送測試訊息</div>
+                            <div class="btn-test" id="os-probe-btn"><i class="fa-solid fa-magnifying-glass"></i> 驗這個接口</div>
+                            <div class="set-desc">看這個站有沒有在妳的話前面偷塞東西、說自己是什麼模型。會叫一次模型。</div>
                             <div id="os-test-result" class="api-test-result" hidden></div>
                         </div>
                     </div>
@@ -251,6 +253,8 @@
                         <div class="set-group">
                             <div class="set-label"><i class="fa-solid fa-plug"></i> 測試 API 連線</div>
                             <div class="btn-test" id="sec-test-btn">發送測試訊息</div>
+                            <div class="btn-test" id="sec-probe-btn"><i class="fa-solid fa-magnifying-glass"></i> 驗這個接口</div>
+                            <div class="set-desc">看這個站有沒有在妳的話前面偷塞東西、說自己是什麼模型。會叫一次模型。</div>
                             <div id="sec-test-result" class="api-test-result" hidden></div>
                         </div>
                     </div>
