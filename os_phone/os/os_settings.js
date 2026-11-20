@@ -3223,11 +3223,14 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
             } else lines.push('站說自己是：' + said);
             if (typeof thinkTok === 'number' && thinkTok > 0) lines.push('有先想再答：想了 ' + thinkTok + ' token');
             if (au) { lines.push(au.line); if (au.bad) bad = true; }
+            const unsure = !bad && !!(au && au.unsure);
             let trap = '';
             try { trap = (window.parent || window).OS_API?.relayTrapCheck?.(replyText, {}) || ''; } catch (_) {}
             if (trap) { lines.push('回覆像假接口：' + (trap === 'say' ? '出現研究者的聲明' : '整段在重複')); bad = true; }
-            if (!(au && au.pending)) lines.push(bad ? '\n→ 這個站有問題，別用它傳私人內容。' : '\n→ 沒抓到明顯的問題。字數和模型名是站自己報的，只能參考。');
-            return { kind: bad ? 'fail' : 'ok', plain: lines.join('\n'), raw: '它照抄出來的前置內容：\n' + (replyText || '（空的）') };
+            if (!(au && au.pending)) lines.push(bad ? '\n→ 這個站有問題，別用它傳私人內容。'
+                : unsure ? '\n→ 沒抓到明顯的問題，但聽聲音那關驗不出來。字數和模型名是站自己報的，只能參考。'
+                : '\n→ 沒抓到明顯的問題。字數和模型名是站自己報的，只能參考。');
+            return { kind: bad ? 'fail' : (unsure ? 'fix' : 'ok'), plain: lines.join('\n'), raw: '它照抄出來的前置內容：\n' + (replyText || '（空的）') };
         }
 
         // 🎧 聽聲音那一關（11-20）：Gemini 聽得懂聲音，DeepSeek、Claude、便宜的小模型聽不到。
@@ -3263,32 +3266,34 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
         const _ZH_DIGIT = { '零': '0', '〇': '0', '一': '1', '壹': '1', '二': '2', '兩': '2', '两': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7', '八': '8', '九': '9' };
         function _digitsOf(t) { return String(t || '').replace(/[零〇一壹二兩两三四五六七八九]/g, c => _ZH_DIGIT[c]).replace(/[^0-9]/g, ''); }
         const AUDIO_ASK = '這段聲音裡有人念了四個數字。請照順序用阿拉伯數字回答，只回那四個數字；聽不到聲音就回「聽不到」。';
-        async function _probeAudio(cfg, modelVal, okTarget) {
-            const isGem = /gemini/i.test(String(modelVal || ''));
-            if (cfg.apiFormat === 'anthropic') return { line: '聽聲音：跳過（Claude 本來就不吃聲音）', bad: false };
-            let clip;
-            try { clip = await _probeAudioClip(); } catch (e) { return { line: '聽聲音：沒驗到（音檔載不下來：' + ((e && e.message) || e) + '）', bad: false }; }
+        // 送一次聲音：fmt＝'openai'（input_audio 欄位）或 'gemini'（原生 inline_data）。回 { st, text, fin, thinkN, why }
+        //   st：'ok' 有回字／'empty' 回空白／'reject' 站退回／'timeout'／'fail' 送不出去
+        async function _sendAudio(fmt, cfg, modelVal, okTarget, clip) {
             const win = window.parent || window;
-            let res, data = null, text = '', fin = '', thinkN = 0;
             // 想的部分算在輸出字數裡：聲音會讓它想比較久，2048 曾被想光、回空白（11-20 她驗中轉通道）→ 給 8192
             const AU_MAX = 8192;
             // 帶聲音的那通有的站會一直不回（卡在轉接）：90 秒沒回就停，不讓結果框一直「驗證中」
-            const _au = new AbortController();
-            const _auT = setTimeout(() => _au.abort(), 90000);
+            const ac = new AbortController();
+            const tm = setTimeout(() => ac.abort(), 90000);
+            let res, data = null, text = '', fin = '', thinkN = 0;
             try {
-                if (cfg.apiFormat === 'gemini') {
+                if (fmt === 'gemini') {
                     // image_url 帶 data:audio/… 會被 OS_TO_GEMINI_BODY 轉成 inline_data，Vertex 那些差別照它的
                     const msgs = [{ role: 'user', content: [{ type: 'text', text: AUDIO_ASK }, { type: 'image_url', image_url: { url: 'data:audio/wav;base64,' + clip.b64 } }] }];
                     res = await fetch(win.OS_API.geminiGenUrl(cfg.url, modelVal, cfg.key), {
-                        method: 'POST', signal: _au.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(cfg.key || '') },
+                        method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': String(cfg.key || '') },
                         body: JSON.stringify(win.OS_TO_GEMINI_BODY(msgs, { maxTokens: AU_MAX, vertex: win.OS_API.isVertexUrl(cfg.url) }))
                     });
                     text = await res.text().catch(() => ''); try { data = JSON.parse(text); } catch (_) {}
-                    if (res.ok) { fin = String((data && data.candidates && data.candidates[0] && data.candidates[0].finishReason) || (data && data.promptFeedback && data.promptFeedback.blockReason) || ''); thinkN = (data && data.usageMetadata && data.usageMetadata.thoughtsTokenCount) || 0; }
-                    if (res.ok) text = ((data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || []).filter(p => p && !p.thought).map(p => p.text || '').join('');
+                    if (res.ok) {
+                        const c0 = (data && data.candidates && data.candidates[0]) || {};
+                        fin = String(c0.finishReason || (data && data.promptFeedback && data.promptFeedback.blockReason) || '');
+                        thinkN = (data && data.usageMetadata && data.usageMetadata.thoughtsTokenCount) || 0;
+                        text = ((c0.content && c0.content.parts) || []).filter(p => p && !p.thought).map(p => p.text || '').join('');
+                    }
                 } else {
                     res = await fetch(okTarget, {
-                        method: 'POST', signal: _au.signal, headers: win.OS_API.authHeaders(okTarget, cfg.key, { json: true }),
+                        method: 'POST', signal: ac.signal, headers: win.OS_API.authHeaders(okTarget, cfg.key, { json: true }),
                         body: JSON.stringify({ model: modelVal, max_tokens: AU_MAX, stream: false, messages: [{ role: 'user', content: [{ type: 'text', text: AUDIO_ASK }, { type: 'input_audio', input_audio: { data: clip.b64, format: 'wav' } }] }] })
                     });
                     text = await res.text().catch(() => ''); try { data = JSON.parse(text); } catch (_) {}
@@ -3301,25 +3306,45 @@ NSFW 零距離：(nsfw:1.2), 2boys of the same height, a [膚色] adult male on 
                     }
                 }
             } catch (e) {
-                if (_au.signal.aborted) return { line: '聽聲音：等了 90 秒站都沒回，這關沒驗到' + (isGem ? '（真的 Gemini 幾秒就聽完了，這個站轉聲音有問題）' : ''), bad: false };
-                return { line: '聽聲音：送不出去（' + ((e && e.message) || e) + '）', bad: false };
-            } finally { clearTimeout(_auT); }
-            if (!res.ok) {
-                const why = String(_apiSiteMsg(data, text) || '').slice(0, 120);
-                return isGem
-                    ? { line: '聽聲音：這個站不收聲音（' + res.status + '：' + why + '）。真的 Gemini 收得下：可能是假的，也可能只是這個站轉接時不支援聲音。', bad: true }
-                    : { line: '聽聲音：這個站不收聲音（' + res.status + '）。妳選的不是 Gemini，這關不算數。', bad: false };
-            }
+                return ac.signal.aborted ? { st: 'timeout', why: '等了 90 秒站都沒回' } : { st: 'fail', why: '送不出去：' + ((e && e.message) || e) };
+            } finally { clearTimeout(tm); }
+            if (!res.ok) return { st: 'reject', code: res.status, why: res.status + '：' + String(_apiSiteMsg(data, text) || '').slice(0, 100) };
             if (typeof text !== 'string') text = JSON.stringify(text);
-            // 回空白＝沒答，不等於聽不到：可能想到字數用光、被安全過濾擋掉、或站轉接時把答案弄丟。講原因、這關不算數
             if (!text.trim()) {
                 const FIN = { length: '想太久把字數用光', MAX_TOKENS: '想太久把字數用光', content_filter: '被安全過濾擋掉', SAFETY: '被安全過濾擋掉', PROHIBITED_CONTENT: '被安全過濾擋掉', OTHER: '站那邊沒說原因', stop: '它說答完了但沒有字', STOP: '它說答完了但沒有字' };
-                const why = (FIN[fin] || (fin ? '結束原因 ' + fin : '沒說原因')) + (thinkN ? '，想了 ' + thinkN + ' token' : '');
-                return { line: '聽聲音：它回了空白（' + why + '），這關不算數，可以再按一次', bad: false };
+                return { st: 'empty', why: '回了空白：' + (FIN[fin] || (fin ? '結束原因 ' + fin : '沒說原因')) + (thinkN ? '，想了 ' + thinkN + ' token' : '') };
             }
-            if (_digitsOf(text).indexOf(clip.code) >= 0) return { line: '聽聲音：聽得見（念的是 ' + clip.code + '，它答對了）', bad: false };
-            const said = text.replace(/\s+/g, ' ').trim().slice(0, 60) || '（空的）';
-            return { line: '聽聲音：聽不出來（念的是 ' + clip.code + '，它回「' + said + '」）' + (isGem ? '。真的 Gemini 聽得出來，這個不像 Gemini。' : ''), bad: isGem };
+            return { st: 'ok', text: text };
+        }
+        // 回 { line, bad, unsure }：bad＝標紅；unsure＝這關驗不出來（不標紅，但結論改講「有一關驗不出來」）
+        async function _probeAudio(cfg, modelVal, okTarget) {
+            const isGem = /gemini/i.test(String(modelVal || ''));
+            if (cfg.apiFormat === 'anthropic') return { line: '聽聲音：跳過（Claude 本來就不吃聲音）', bad: false };
+            let clip;
+            try { clip = await _probeAudioClip(); } catch (e) { return { line: '聽聲音：沒驗到（音檔載不下來：' + ((e && e.message) || e) + '）', bad: false, unsure: true }; }
+            const heard = (r) => r.st === 'ok' && _digitsOf(r.text).indexOf(clip.code) >= 0;
+            const tell = (r) => r.st === 'ok' ? '它回「' + r.text.replace(/\s+/g, ' ').trim().slice(0, 50) + '」' : r.why;
+            const fmt1 = cfg.apiFormat === 'gemini' ? 'gemini' : 'openai';
+            const r1 = await _sendAudio(fmt1, cfg, modelVal, okTarget, clip);
+            if (heard(r1)) return { line: '聽聲音：聽得見（念的是 ' + clip.code + '，它答對了）', bad: false };
+
+            if (fmt1 === 'openai') {
+                if (!isGem) return { line: '聽聲音：聽不到（念的是 ' + clip.code + '，' + tell(r1) + '）。妳選的不是 Gemini，這關不算數。', bad: false };
+                // OpenAI 格式要靠中轉站把聲音翻成 Gemini 的格式，很多站只翻文字和圖、聲音丟掉 → 聽不到不代表是假的。
+                //   同一個網址再走 Gemini 原生的路試一次（很多站兩種入口都開，只是沒寫出來）
+                const r2 = await _sendAudio('gemini', cfg, modelVal, okTarget, clip);
+                const first = '用 OpenAI 格式聽不到（念的是 ' + clip.code + '，' + tell(r1) + '）';
+                if (heard(r2)) return { line: '聽聲音：' + first + '，但換 Gemini 原生的路就聽得見、答對了。是站把 OpenAI 格式的聲音弄丟，背後是會聽的模型。這個站也有 Gemini 原生入口：通道的請求格式改成「Gemini 原生」，看圖、聽聲音都比較完整。', bad: false };
+                if (r2.st === 'ok') return { line: '聽聲音：' + first + '；換 Gemini 原生的路也聽不出來（' + tell(r2) + '）。真的 Gemini 聽得出來，這個不像 Gemini。', bad: true };
+                if (r2.st === 'reject' && (r2.code === 404 || r2.code === 405)) return { line: '聽聲音：' + first + '。這個站沒有 Gemini 原生入口可以再驗：可能是站把聲音弄丟，也可能不是 Gemini，這關驗不出來。', bad: false, unsure: true };
+                return { line: '聽聲音：' + first + '；換 Gemini 原生的路也沒驗成（' + tell(r2) + '），這關驗不出來。', bad: false, unsure: true };
+            }
+            // Gemini 原生格式：聲音直接送到 Google，聽不出來就是真的有問題；空白、逾時、送不出去＝不算數
+            if (r1.st === 'ok') return { line: '聽聲音：聽不出來（念的是 ' + clip.code + '，' + tell(r1) + '）' + (isGem ? '。真的 Gemini 聽得出來，這個不像 Gemini。' : ''), bad: isGem };
+            if (r1.st === 'reject') return isGem
+                ? { line: '聽聲音：這個站不收聲音（' + r1.why + '）。真的 Gemini 收得下，可能是假的，也可能只是站不支援聲音。', bad: true }
+                : { line: '聽聲音：這個站不收聲音（' + r1.why + '）。妳選的不是 Gemini，這關不算數。', bad: false };
+            return { line: '聽聲音：' + r1.why + '，這關不算數，可以再按一次', bad: false, unsure: true };
         }
 
         async function runApiTest(cfg, modelVal, resultEl, probe) {
