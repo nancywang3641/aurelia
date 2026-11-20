@@ -1106,8 +1106,64 @@
         return mergedList;
     }
 
+    // ── 🪤 假接口警報（11-20）──
+    //   中轉站很多拿的是偷來的 key；有研究者故意在網路上放假接口給它們偷，偷到的人送來的對話研究者全看得到，
+    //   回覆是一段聲明（「學術安全研究…不運行你選擇的模型」）或一大串重複的罵人話。妳的字送出去就收不回來，
+    //   這裡只能「收到時發現」：認得那段聲明、或整則大半是同一句在重複，就跳警告。只看收到的字，不多叫模型。
+    const _TRAP_SAYS = [
+        /academic security (study|research)/i,
+        /does not run the model you selected/i,
+        /(relay|api reseller)[^.\n]{0,80}not genuine/i,
+        /学术安全研究|學術安全研究/,
+        /不运行你选择的模型|不運行你選擇的模型/,
+        /中转站或\s*API\s*转售商|中轉站或\s*API\s*轉售商/i
+    ];
+    function _trapWhy(text) {
+        const s = String(text || '');
+        if (s.length < 40) return '';
+        if (_TRAP_SAYS.some(re => re.test(s))) return 'say';
+        // 重複：空白壓成一格後找「同一段 8～80 字連續出現 12 次以上」，而且這種段落要佔整則一半以上。
+        //   分隔線（═════）不算：那一段至少要有 4 種不同的字。
+        const flat = s.replace(/\s+/g, ' ').trim();
+        if (flat.length < 200) return '';
+        const sample = flat.length > 20000 ? flat.slice(0, 20000) : flat;
+        let covered = 0;
+        for (const m of sample.matchAll(/(.{8,80}?)\1{11,}/g)) {
+            if (new Set(m[1]).size >= 4) covered += m[0].length;
+        }
+        return covered >= sample.length * 0.5 ? 'loop' : '';
+    }
+    const _trapSeen = {};
+    function relayTrapCheck(text, info) {
+        try {
+            const why = _trapWhy(text);
+            if (!why) return '';
+            info = info || {};
+            let host = '';
+            try { if (info.url) host = new URL(String(info.url).trim()).host; } catch (e) {}
+            const key = why + '|' + (host || info.where || '?');
+            if (_trapSeen[key]) return why;   // 同一個接口同一種情況，這次開著只講一次
+            _trapSeen[key] = 1;
+            console.warn('[OS_API] 🪤 回覆像假接口：', why, host || info.where || '');
+            const at = host ? ('\n\n接口：' + host) : (info.where ? ('\n\n在：' + info.where) : '');
+            const title = why === 'say' ? '這個接口不是真的模型' : '這則回覆整段都在重複';
+            const body = why === 'say'
+                ? '剛才收到的回覆裡，有一段「這台伺服器是學術研究用的假接口」的聲明。\n\n'
+                  + '這代表妳用的中轉站拿的是偷來的 key，剛好偷到研究者故意放的假接口：妳送出去的對話，研究者和中轉站都看得到，回覆也不是妳選的模型寫的。\n\n'
+                  + '• 先別再用這個接口傳私人內容\n• 換回官方接口，或妳知道 key 從哪來的站' + at
+                : '剛才收到的回覆，大半都是同一句話一直重複。\n\n'
+                  + '偶爾是模型自己卡住，重生一次就好；但如果妳用的是中轉站、又一直這樣，可能是它拿偷來的 key 接到了假接口，妳的對話會被別人看到。\n\n'
+                  + '• 先重生一次看看\n• 還是一樣，就別再用這個接口傳私人內容' + at;
+            setTimeout(() => {
+                try { if (win.AUI && win.AUI.alert) win.AUI.alert(body, { title: title, type: 'warn', modal: true, left: true }); } catch (e) {}
+            }, 0);
+            return why;
+        } catch (e) { return ''; }
+    }
+
     // --- 3. OS API 主對象 ---
     win.OS_API = {
+        relayTrapCheck: relayTrapCheck,
 
         lastThink: function (since) { return (_lastThink && _lastThink.t >= (since || 0)) ? _lastThink.text : ''; },   // 從 since 這個時間點起抓到的最新一段 AI 思考（沒有就空字串）
         nativeBase: _nativeBase,   // 原生格式的根網址（見 _nativeBase）：設置頁測試、拉清單跟送生成同一套剝法
@@ -1384,6 +1440,8 @@
                         _secLogEnd(_rec, true, text);
                         const _outP = _estTok(text).then(n => { _rec.outTok = n; _apiLogFire('tok', _rec); return n; }).catch(() => 0);
                         if (_use) Promise.all([_inP, _outP]).then(v => win.OS_USAGE.end(_use, { ok: true, inTok: v[0], outTok: v[1], ms: _rec.ms })).catch(() => {});
+                        const _trapUrl = config && !config.useSystemApi ? config.url : '';
+                        setTimeout(() => relayTrapCheck(text, { url: _trapUrl, where: _trapUrl ? '' : '酒館目前的接口' }), 0);   // 🪤 不擋路
                     } catch (e) {}
                     if (_of) _of(text);
                 };
@@ -3071,6 +3129,26 @@
     };
 
     win.WX_API = win.OS_API;
+
+    // 🪤 酒館的劇情正文不經過 OS_API.chat（酒館自己生），訊息落地時也看一眼
+    (function _trapTavernHook(n) {
+        if (win.__AURELIA_TRAP_HOOKED) return;
+        if (!win.eventOn || !win.tavern_events) {
+            if (n < 40 && !win.OS_API.isStandalone()) setTimeout(() => _trapTavernHook(n + 1), 1500);
+            return;
+        }
+        const ev = win.tavern_events;
+        if (!ev.MESSAGE_RECEIVED) return;
+        win.__AURELIA_TRAP_HOOKED = true;
+        win.eventOn(ev.MESSAGE_RECEIVED, async function (messageId) {
+            try {
+                const msgs = await win.TavernHelper?.getChatMessages?.(messageId);
+                const m = msgs && msgs[0];
+                if (!m || m.is_user) return;
+                relayTrapCheck(m.message || m.mes || '', { where: '劇情（酒館目前的接口）' });
+            } catch (e) {}
+        });
+    })(0);
 
     // --- 4. OS_API_ENGINE 獨立應用暴露介面 ---
     win.OS_API_ENGINE = {
