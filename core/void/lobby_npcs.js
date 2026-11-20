@@ -248,7 +248,8 @@
             //    靠 INTERACT_R 那顆圓永遠搆不到——坐在對面得繞到她正面才點得到。
             //    改成「站在桌子這塊範圍旁邊就算搆得到」＝坐下來就能點，也涵蓋桌子左右前角。
             //    直接讀 layout 的桌子矩形 → 之後在擺設模式挪桌子，互動區自己跟著走。
-            const tbl = (CFG.layout || []).find(o => /obj_table/.test(o.file || ''));
+            //    11-20 店換成記憶吧檯：她站在吧檯後面，同一個道理 → 吧檯前面就算搆得到（舊房間的占卜桌照舊認得）
+            const tbl = (CFG.layout || []).find(o => /obj_table_v|memory_bar_obj_bar_svg/.test(o.file || ''));
             const ts = tbl ? (tbl.s || 1) : 1;
             _b.addNpc({ key: 'zhiwei', name: '紫薇老師', personaFull: ZHIWEI_PERSONA,
                      subTitle: '微醺星軌 · 占卜小屋店主',

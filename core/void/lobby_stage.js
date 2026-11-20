@@ -303,47 +303,57 @@
             doorsV: 1,
             rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
         },
-        tarot: {   // 🔮 占卜小屋：廣場左側那間小屋的室內。紫薇老師坐占卜桌後面，點她開占卜面板。
-            //   碰撞不走手繪遮罩（這間沒有 mask 素材）＝吃 boundary 鋼索，四個牆角在擺設模式可以直接拖。
-            base: 'lobby_tarot_base_v1.png',
-            cfgKey: 'lobby_stage_layout_tarot_v2',   // v2=家具換緊裁版(尺寸全變)；存檔的 layoutFull 是整份覆蓋，不升版會蓋掉新佈局
-            // 🚨 家具素材必須「緊裁到物件本身」：佔地寬是拿 w*s 算的，圖邊留白會讓碰撞框比看到的物件寬一大截
-            //    （2026-08-21 Rae 抓到：櫃子/椅子/燭台被空氣擋住，實際虛胖 28~43%）。v2＝重裁版。
-            layout: [   // ⚠️ 目測擺位；Rae 進擺設模式拖完複製數據回來換掉這份
-                { file: 'lobby_tarot_obj_curtain_v1.png', x: 636, y: 60,  w: 900, h: 606, footH: 0,   s: 0.30,   layer: 'back', noCollide: true },   // 星圖掛簾(牆上)
-                { file: 'lobby_tarot_obj_bar_v2.png',     x: 198, y: 152, w: 900, h: 747, footH: 149, s: 0.3429 },   // 靠牆小吧台
-                { file: 'lobby_tarot_obj_shelf_v2.png',   x: 1135, y: 114, w: 648, h: 900, footH: 162, s: 0.3002 },  // 牌櫃／酒櫃
-                { file: 'lobby_tarot_obj_rug_v2.png',     x: 372, y: 400, w: 900, h: 613, footH: 0,   s: 0.889,  layer: 'floor', noCollide: true },  // 地毯(平貼地板)
-                { file: 'lobby_tarot_obj_chair_zhiwei_v2.png', x: 712, y: 227, w: 461, h: 900, footH: 126, s: 0.2353 },   // 紫薇的高背椅(桌子後方)
-                { file: 'lobby_tarot_obj_table_v2.png',   x: 517, y: 441, w: 900, h: 429, footH: 103, s: 0.5549 },   // 占卜桌
-                { file: 'lobby_tarot_obj_chair_guest_v2.png',  x: 728, y: 601, w: 626, h: 900, footH: 144, s: 0.1526 },   // 客人椅(桌子前方)
-                { file: 'lobby_tarot_obj_candle_v2.png',  x: 101, y: 638, w: 228, h: 900, footH: 81,  s: 0.1755 },   // 落地燭台(左)
-                { file: 'lobby_tarot_obj_candle_v2.png',  x: 1357, y: 468, w: 228, h: 900, footH: 81,  s: 0.1755 },  // 落地燭台(右)
+        tarot: {   // 🔮 紫薇的店（微醺星軌）：廣場左側那間小屋的室內。紫薇老師站在吧檯後面，點吧檯「入座占卜」開占卜面板。
+            // 🍸 11-20 換成「記憶吧檯」（她：「換掉占卜小屋」）：Vproject 畫的 SVG，整間換掉（原本的占卜桌、高背椅、燭台不用了）。
+            //   cfgKey 升 v3：家具整組換了，舊的擺設套到新房間沒有意義。
+            //   碰撞不走手繪遮罩（沒有 mask）＝吃 boundary 鋼索：地板約 y322～893，牆腳線 x＝112－0.175×(y－360)，以 x765 左右對稱（交接說明給的）。
+            //   擺位照 Vproject 的 layout.json（width／height 就是畫面上的大小，所以 w／h 照抄、s＝1）；
+            //   那份說「照陣列順序疊、別用底邊 y 排」：會打架的兩件（邊桌要蓋在沙發上、沙發旁的盆栽也蓋在沙發上）用 zb 推到前面。
+            //   footH 是我估的（交接沒附），她進擺設模式走一次再調。
+            base: 'lobby_memory_bar_base_svg_v1.svg',
+            lower: 'lobby_memory_bar_fx_window_svg_v1.svg',   // 窗外港口（雲、窗燈、紅燈、渡輪、飛機；SVG 自己的 CSS 動畫）：底圖之上、家具之下
+            upper: 'lobby_memory_bar_front_svg_v1.svg',       // 前景矮牆＋門：蓋在家具和人物上面
+            cfgKey: 'lobby_stage_layout_tarot_v3',
+            layout: [
+                { file: 'lobby_memory_bar_obj_wall_picture_svg_v1.svg', x: 70,  y: 204, w: 44,  h: 188, s: 1, footH: 0, layer: 'back', noCollide: true },   // 左牆的畫
+                { file: 'lobby_memory_bar_obj_plant_tall_svg_v1.svg',   x: 133, y: 173, w: 135, h: 205, s: 1, footH: 35 },    // 高盆栽（左後）
+                // 🎯 吧檯（點了入座占卜；紫薇站在它後面）。fx＝燈條那層，跟著吧檯走
+                { file: 'lobby_memory_bar_obj_bar_svg_v1.svg',          x: 309, y: 172, w: 914, h: 320, s: 1, footH: 110, fx: 'lobby_memory_bar_obj_bar_fx_svg_v1.svg' },
+                { file: 'lobby_memory_bar_obj_stool_svg_v1.svg',        x: 579, y: 400, w: 129, h: 127, s: 1, footH: 30 },    // 吧檯凳
+                { file: 'lobby_memory_bar_obj_stool_svg_v1.svg',        x: 825, y: 400, w: 129, h: 127, s: 1, footH: 30 },
+                { file: 'lobby_memory_bar_obj_curio_cabinet_svg_v1.svg', x: 1230, y: 271, w: 228, h: 311, s: 1, footH: 60 },  // 古董櫃（右）
+                { file: 'lobby_memory_bar_obj_rug_svg_v1.svg',          x: 100, y: 540, w: 505, h: 208, s: 1, footH: 0, layer: 'floor', noCollide: true },   // 地毯
+                { file: 'lobby_memory_bar_obj_chair_left_svg_v1.svg',   x: 139, y: 486, w: 175, h: 183, s: 1, footH: 55 },    // 扶手椅（左）
+                { file: 'lobby_memory_bar_obj_chair_right_svg_v1.svg',  x: 405, y: 501, w: 165, h: 174, s: 1, footH: 55 },    // 扶手椅（右）
+                { file: 'lobby_memory_bar_obj_cocktail_table_svg_v1.svg', x: 270, y: 516, w: 181, h: 166, s: 1, footH: 45 },  // 雞尾酒小圓桌
+                { file: 'lobby_memory_bar_obj_sofa_svg_v1.svg',         x: 1120, y: 600, w: 386, h: 253, s: 1, footH: 120 },  // 弧形沙發（右下）
+                { file: 'lobby_memory_bar_obj_side_table_svg_v1.svg',   x: 1197, y: 679, w: 105, h: 129, s: 1, footH: 35, zb: 55 },   // 邊桌：蓋在沙發上
+                { file: 'lobby_memory_bar_obj_plant_sofa_svg_v1.svg',   x: 989, y: 516, w: 196, h: 263, s: 1, footH: 40, zb: 80 },    // 沙發旁的盆栽：也蓋在沙發上
+                { file: 'lobby_memory_bar_obj_lamp_planter_svg_v1.svg', x: 49,  y: 666, w: 148, h: 201, s: 1, footH: 40 },    // 燈籠花盆（左下）
             ],
             points: {
-                player: { x: 768, y: 790 },
-                arrive: { x: 768, y: 800 },   // 從門口進來的落點(小屋門在下緣中央)
-                zhiweiPos: { x: 768, y: 446 },   // 紫薇站在高背椅前、桌子後面(擺設模式可拖；腳要在椅子底邊 y439 前面，不然被椅子蓋住)
-                // 可走範圍：地板那塊梯形(牆往前是外八)。角點在擺設模式可拖。
+                player: { x: 768, y: 800 },
+                arrive: { x: 768, y: 820 },   // 從門口進來的落點(門在前牆正中)
+                zhiweiPos: { x: 766, y: 350 },   // 紫薇站在吧檯後面（腳在吧檯底邊前面就會被擋住下半身，像調酒師；擺設模式可拖）
+                // 可走範圍：地板那塊梯形（牆往前是外八）。角點在擺設模式可拖。
                 boundary: [
-                    { x: 160, y: 330 }, { x: 1385, y: 330 },
-                    { x: 1465, y: 860 }, { x: 80, y: 860 },
+                    { x: 119, y: 322 }, { x: 1411, y: 322 },
+                    { x: 1505, y: 885 }, { x: 25, y: 885 },
                 ],
                 actorScale: 0.7,
             },
             walls: [],
             doors: [
-                // 小屋大門→廣場(落在小屋門口下方)。🔒 廣場鎖上時改回「進門前待的場景」，見過門判定。
-                // 🚨 觸發區必須整個落在 boundary 裡面，不然玩家走不到門＝被關在小屋（tmp/tarot_hut_test.cjs 有守）
-                { x: 700, y: 818, w: 136, h: 44, to: 'city', spawn: { x: 329, y: 600 } },
+                // 前牆的門→廣場。🔒 廣場鎖上時改回「進門前待的場景」，見過門判定。
+                // 🚨 觸發區必須整個落在 boundary 裡面，不然玩家走不到門＝被關在店裡
+                { x: 700, y: 836, w: 136, h: 44, to: 'city', spawn: { x: 329, y: 600 } },
             ],
             doorsV: 1,
-            zhiwei: { x: 768, y: 446 },   // 觸發 lobby_npcs 的 if(SC.zhiwei)：紫薇老師坐鎮
-            // 🔮 占卜桌＝可點的互動點（點了開占卜面板；走近紫薇則是純聊天，兩件事分開）。
-            //    obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上，不用回來改座標。
+            zhiwei: { x: 766, y: 350 },   // 觸發 lobby_npcs 的 if(SC.zhiwei)：紫薇老師在店裡
+            // 🔮 吧檯＝可點的互動點（點了開占卜面板；走近紫薇則是純聊天，兩件事分開）。
+            //    obj 讓熱點跟著吧檯走；lit＝滑過時吧檯自己鑲一圈暖光（預設那組琥珀色，跟吧檯燈條同一個調）
             hotspots: [
-                { obj: 'obj_table', label: '入座占卜', icon: 'fa-wand-sparkles', open: 'tarot', cls: 'hs-tarot',
-                  hoverImg: 'lobby_tarot_obj_table_glow_v1.png' },   // 描邊沿桌子真實輪廓(含桌腳)，比 CSS 橢圓準
+                { obj: 'memory_bar_obj_bar_svg', label: '入座占卜', icon: 'fa-wand-sparkles', open: 'tarot', cls: 'hs-tarot', lit: true },
             ],
         },
         workshop: {   // 🎩 帽匠的奇想工坊：廣場右側那間店的室內。帽匠站在造物儀旁邊，點造物儀開造物工坊面板。
