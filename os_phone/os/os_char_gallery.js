@@ -419,7 +419,7 @@
           +       '<input class="acg-search" type="text" placeholder="找角色">'
           +       '<button class="acg-tool" type="button" data-act="add-char" title="新增角色"><i class="fa-solid fa-user-plus"></i></button>'
           +       '<button class="acg-tool acg-wb-only" type="button" data-act="import" title="匯入清單"><i class="fa-solid fa-file-import"></i></button>'
-          +       '<button class="acg-tool" type="button" data-act="dl-chibi" title="下載全部 Q 版"><i class="fa-solid fa-file-zipper"></i></button>'
+          +       '<button class="acg-tool" type="button" data-act="dl-chibi" title="下載全部立繪（含頭像、表情、Q 版）"><i class="fa-solid fa-file-zipper"></i></button>'
           +     '</div>'
           +     '<div class="acg-list"></div>'
           +   '</aside>'
@@ -883,13 +883,15 @@
         }
     }
 
-    // 📦 下載全部 Q 版（11-07 加，給阿洛當頭髮參考）：奧瑞亞裡的 Q 版人物打成一個壓縮檔，存到「下載」資料夾。
-    //   兩個來源：生立繪「三合一生成」切出來的那張（圖片快取每個角色那筆的 chibi）→ 角色/；
-    //   大廳裝扮室給角色換的小人（LobbyStage 的皮膚，圖在 lobby_stage_assets 或網址）→ 大廳/。
-    //   🚨 不整庫一次讀：清單走 getAllMeta、圖一張一張讀（同 VN_Cache 的規矩）。不壓縮（圖本來就壓過），只是包成一個檔。
+    // 📦 下載全部立繪（11-07 原本只包 Q 版，11-27 改成整個角色中心的圖一起包）：打成一個壓縮檔，存到「下載」資料夾。
+    //   每個角色一個資料夾：立繪（圖片快取 avatar_cache 的 url）、頭像（三合一切出的 face）、Q版（chibi＋三面）、
+    //   立繪_去背（sprite_cache）、本地上傳和生表情做的（OS_DB 的角色圖，照表情分檔）、世界書裡登記的立繪網址；
+    //   大廳裝扮室給角色換的小人放「大廳小人」。動嘴、閉眼是貼在臉上的小塊，不是整張圖，不包。
+    //   🚨 不整庫一次讀：清單走 getAllMeta、圖一張一張讀（同 VN_Cache 的規矩）；每張讀完就轉成 Blob、放掉位元組，
+    //   幾百張的時候記憶體才不會整個堆著（iPhone 會被系統關掉）。不壓縮（圖本來就壓過），只是包成一個檔。
     const _CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; } return t; })();
     function _crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = _CRC_T[(c ^ u8[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
-    // files：[{ name, data: Uint8Array }] → zip 的 Blob（不壓縮、檔名 UTF-8）
+    // files：[{ name, blob, crc, size }] → zip 的 Blob（不壓縮、檔名 UTF-8）
     function _zipBlob(files) {
         const enc = new TextEncoder(), parts = [], central = [];
         const d = new Date();
@@ -897,12 +899,12 @@
         const dd = (((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate()) & 0xFFFF;
         let off = 0;
         for (const f of files) {
-            const nm = enc.encode(f.name), crc = _crc32(f.data), sz = f.data.length;
+            const nm = enc.encode(f.name), crc = f.crc, sz = f.size;
             const h = new DataView(new ArrayBuffer(30));
             h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
             h.setUint16(10, dt, true); h.setUint16(12, dd, true); h.setUint32(14, crc, true); h.setUint32(18, sz, true); h.setUint32(22, sz, true);
             h.setUint16(26, nm.length, true); h.setUint16(28, 0, true);
-            parts.push(h.buffer, nm, f.data);
+            parts.push(h.buffer, nm, f.blob);
             const c = new DataView(new ArrayBuffer(46));
             c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
             c.setUint16(12, dt, true); c.setUint16(14, dd, true); c.setUint32(16, crc, true); c.setUint32(20, sz, true); c.setUint32(24, sz, true);
@@ -933,54 +935,70 @@
             return { data: new Uint8Array(await r.arrayBuffer()), ext: extOf(r.headers.get('content-type') || s.split('?')[0].split('.').pop()) };
         } catch (e) { return null; }
     }
-    async function dlChibi() {
+    async function dlAll() {
         const VC = win.VN_Cache || window.VN_Cache;
-        const files = [], used = new Set();
+        const files = [], used = new Set(), seen = new Set();
+        let miss = 0;
         const clean = (s) => String(s || '').replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').trim().slice(0, 60) || '未命名';
         const nameOf = (dir, base, ext) => { let n = dir + '/' + base + '.' + ext, i = 2; while (used.has(n)) n = dir + '/' + base + '_' + (i++) + '.' + ext; used.add(n); return n; };
-        toast('正在收集 Q 版…');
+        const tick = () => { if (files.length % 20 === 0) toast('正在收集圖…（' + files.length + ' 張）'); };
+        // 同一個資料夾裡一模一樣的圖只放一張（立繪和頭像常常是同一張）
+        const add = async (dir, base, src) => {
+            if (!src) return;
+            const img = await _imgBytes(src);
+            if (!img) { miss++; return; }
+            const crc = _crc32(img.data), sig = dir + '|' + crc + '|' + img.data.length;
+            if (seen.has(sig)) return;
+            seen.add(sig);
+            files.push({ name: nameOf(dir, base, img.ext), blob: new Blob([img.data]), crc, size: img.data.length });
+            tick();
+        };
+        toast('正在收集圖…');
         if (VC && VC.getAllMeta && VC.getRaw) {
-            const list = await VC.getAllMeta('avatar_cache', { partial: true });
-            for (const e of list) {
+            for (const e of await VC.getAllMeta('avatar_cache', { partial: true })) {
                 const rec = await VC.getRaw('avatar_cache', e.key);
-                if (!rec || !rec.chibi) continue;
-                const base = clean(VC.bareKeyOf ? VC.bareKeyOf(e) : e.key);
-                const img = await _imgBytes(rec.chibi);
-                if (img) files.push({ name: nameOf('角色', base, img.ext), data: img.data });
-                // Q版畫成三面的：側面、背面跟著一起包
-                for (const [f, tag] of [['chibiSide', '_側面'], ['chibiBack', '_背面']]) {
-                    const im = rec[f] && await _imgBytes(rec[f]);
-                    if (im) files.push({ name: nameOf('角色', base + tag, im.ext), data: im.data });
-                }
+                if (!rec) continue;
+                const dir = clean(VC.bareKeyOf ? VC.bareKeyOf(e) : e.key);
+                await add(dir, '立繪', rec.url);
+                await add(dir, '頭像', rec.face);
+                await add(dir, 'Q版', rec.chibi);
+                await add(dir, 'Q版_側面', rec.chibiSide);
+                await add(dir, 'Q版_背面', rec.chibiBack);
+            }
+            for (const e of await VC.getAllMeta('sprite_cache', { partial: true })) {
+                const rec = await VC.getRaw('sprite_cache', e.key);
+                if (rec) await add(clean(VC.bareKeyOf ? VC.bareKeyOf(e) : e.key), '立繪_去背', rec.url);
             }
         }
+        for (const r of await localAll()) {
+            if (r && r.data) await add(clean(r.name), r.exp === DEFAULT_EXP ? '預設' : '表情_' + clean(expLabel(r.exp)), r.data);
+        }
+        try {
+            const wb = await wbLoad();
+            for (const E of wb.preset) for (const l of E.lines) if (l.parsed) await add(clean(l.name), '世界書_預設', l.url);
+            for (const E of wb.exp) for (const l of E.lines) if (l.parsed) await add(clean(l.name), '世界書_表情_' + clean(expLabel(l.exp)), l.url);
+        } catch (e) {}
         const LB = (win.LobbyStage || window.LobbyStage || {})._b;
         if (LB && LB.skins && LB.resolveRef) {
             const sk = LB.skins() || {};
             for (const k of Object.keys(sk)) {
                 const one = sk[k];
-                const src = one && await LB.resolveRef(one.ref);
-                const img = src && await _imgBytes(src);
-                if (img) files.push({ name: nameOf('大廳', clean(k) + (one.kind === 'sheet' ? '_走路圖' : ''), img.ext), data: img.data });
-                if (one.kind === 'views') {   // 裝扮頁生的不倒翁小人三面：側面、背面跟著包
-                    for (const [f, tag] of [['side', '_側面'], ['back', '_背面']]) {
-                        const s2 = one[f] && await LB.resolveRef(one[f]);
-                        const im = s2 && await _imgBytes(s2);
-                        if (im) files.push({ name: nameOf('大廳', clean(k) + tag, im.ext), data: im.data });
-                    }
+                await add('大廳小人', clean(k) + (one && one.kind === 'sheet' ? '_走路圖' : ''), one && await LB.resolveRef(one.ref));
+                if (one && one.kind === 'views') {   // 裝扮頁生的不倒翁小人三面：側面、背面跟著包
+                    for (const [f, tag] of [['side', '_側面'], ['back', '_背面']]) await add('大廳小人', clean(k) + tag, one[f] && await LB.resolveRef(one[f]));
                 }
             }
         }
-        if (!files.length) { toast('還沒有 Q 版可以下載：角色要用「三合一生成」生過立繪，或在大廳裝扮室換過小人', 'warning'); return; }
+        if (!files.length) { toast('還沒有圖可以下載：先在角色中心上傳或生一張立繪', 'warning'); return; }
         const d = new Date(), p2 = (n) => String(n).padStart(2, '0');
-        const fname = '奧瑞亞Q版人物_' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.zip';
+        const fname = '奧瑞亞立繪_' + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + '.zip';
         const a = doc.createElement('a');
         a.href = URL.createObjectURL(_zipBlob(files));
         a.download = fname;
         (doc.body || doc.documentElement).appendChild(a);
         a.click();
         setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} a.remove(); }, 3000);
-        toast('已下載 ' + files.length + ' 張 Q 版：' + fname + '（在「下載」資料夾）', 'success');
+        toast('已下載 ' + files.length + ' 張圖：' + fname + '（在「下載」資料夾）' + (miss ? '；有 ' + miss + ' 張是別的網站的圖、拿不到，沒包進去' : ''), 'success');
     }
 
     async function onClick(ev) {
@@ -1139,7 +1157,7 @@
             if (act === 'dl-chibi') {
                 if (b.disabled) return;
                 b.disabled = true;
-                try { await dlChibi(); } finally { b.disabled = false; }
+                try { await dlAll(); } finally { b.disabled = false; }
                 return;
             }
             if (act === 'import') {
