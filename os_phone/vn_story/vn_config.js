@@ -209,7 +209,8 @@
             // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面(extraNegative)。空＝不送。
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: _use });
+            // opts.noChibi：要正常身材（小時候立繪）——底詞包裡 Q版身材的詞由 OS_IMAGE_MANAGER 拿掉
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: _use, noChibi: !!(opts && opts.noChibi) });
         },
         // 🎯 幾個角色擠一張寬圖一次生完（只在官方那顆開；見設置 → 圖片 → 頭像 → 每次生成角色數）。
         //    回傳整張寬圖，切開的事交給呼叫端（vn_core 的 _sliceSheet）。

@@ -609,7 +609,8 @@
     }
     function youngPrompt(look, age, era) {
         const a = (age > 0 && age < 18) ? Math.round(age) : 10;
-        const head = a <= 12 ? ['child', '(younger self:1.2)', 'about ' + a + ' years old', 'small child proportions']
+        // 身材寫「正常比例、四肢細長」：以前寫 small child proportions，動漫模型常讀成大頭短手腳的 Q版
+        const head = a <= 12 ? ['child', '(younger self:1.2)', 'about ' + a + ' years old', 'natural child body proportions', 'slender limbs']
                              : ['teenager', '(younger self:1.2)', 'about ' + a + ' years old', 'youthful face'];
         const eraLook = String((era && era.look) || '').trim(), role = String((era && era.role) || '').trim();
         const then = eraLook ? [eraLook] : [];
@@ -628,7 +629,8 @@
             const VI = win.VN_Image || window.VN_Image;   // vn_config 只把 VN_Image 掛在 window
             if (!look || !VI || !VI.getSprite) return '';
             const M = win.OS_IMAGE_MANAGER;
-            const url = await VI.getSprite(youngPrompt(look, age, era), true, { use: (M && M.youngUse) ? M.youngUse() : 'sprite' });
+            // noChibi：沒選包時這列拿 char 桶，跟 Q版小人共用；桶裡是 Q版包時小孩會被畫成 Q版
+            const url = await VI.getSprite(youngPrompt(look, age, era), true, { use: (M && M.youngUse) ? M.youngUse() : 'sprite', noChibi: true });
             if (!url) return '';   // 沒接接口：OS_IMAGE_MANAGER 已經跳過提示
             let data = url;
             try {
