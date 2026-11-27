@@ -597,16 +597,24 @@
     async function youngUrl(name) { return localUrl(name, YOUNG_EXP); }
     // 他的長相描述（裝扮頁「他的長相」那一份）；沒有＝畫不出他小時候
     async function lookPrompt(name) { try { return String((await dressLookOf(name)).prompt || '').trim(); } catch (e) { return ''; } }
-    // 長相描述 → 小時候版：拿掉只屬於大人的詞，前面接年紀、那時候的外表（era.look：寫回憶那通給的英文標籤；沒有才帶身分 era.role）。
-    //   age 不知道＝當十歲上下
+    // 長相描述 → 小時候版。長相描述是照大人畫的：只留天生的特徵（髮型髮色、眼睛、膚色、雀斑痣、性別、種族的耳角尾翅），
+    //   衣服、裝備、配件、疤、身形、鬍子一律不帶——用黑名單會漏（長相描述的衣服寫法太多），所以是白名單：認得是天生的才留，
+    //   同一段同時寫到穿戴的整段不留。衣服改照回憶那時候的身分：era.look（寫回憶那通給的英文外表）；
+    //   它沒寫到穿著，或根本沒有，就帶 era.role（那時候的身分）＋素色便服。age 不知道＝當十歲上下
+    const INNATE = /\b(?:1girl|1boy|girl|boy|solo|hair|haired|bangs|ahoge|sidelocks?|ponytail|twintails?|braids?|braided|hair\s+bun|bob\s+cut|eyes|eyed|eye\s+color|pupils?|heterochromia|eyelashes|eyebrows|skin|skinned|freckles|mole|beauty\s+mark|pale|tan|tanned|ears?|horns?|tail|wings?|fangs?|elf|kemonomimi)\b|髮|瀏海|劉海|馬尾|辮|眼睛|眼眸|瞳|膚|雀斑|痣|耳朵|獸耳|角|尾巴|翅膀|獠牙|男孩|女孩/i;
+    const WEAR = /\b(?:wear(?:s|ing)?|dressed|dress|shirt|blouse|coat|jacket|vest|uniform|armou?r|suit|necktie|tie|skirt|pants|trousers|shorts|jeans|boots?|shoes?|sneakers|socks|stockings|thighhighs|gloves?|hat|cap|beret|hood|hoodie|scarf|cape|cloak|belt|holster|gun|rifle|pistol|weapon|sword|knife|blade|bag|backpack|glasses|eyewear|goggles|eyepatch|earrings?|piercing|necklace|pendant|jewelry|ribbon|hairclip|hair\s+ornament|headband|choker|mask|tattoo|scars?|bandages?|tactical|robe|sweater|cardigan|apron|sleeves?|collar|harness|straps?|pouch|outfit|clothes|clothing|attire|gear|equipment|accessor(?:y|ies)|beard|stubble|mustache|moustache|goatee|muscular|abs|breasts|cleavage|mature|adult|wrinkles?|tall)\b|穿|戴|衣|服|裝|背心|外套|風衣|夾克|褲|裙|鞋|靴|襪|帽|手套|圍巾|披風|斗篷|眼鏡|眼罩|項鍊|耳環|耳釘|髮飾|髮夾|髮帶|緞帶|領|袖|槍|刀|劍|包|疤|刺青|紋身|繃帶|鬍|肌肉|胸/i;
+    function innateOf(look) {
+        return String(look || '').split(/[,，、。；;\n]|\s+(?:and|with)\s+/i).map(t => t.trim())
+            .filter(t => t && INNATE.test(t) && !WEAR.test(t.replace(/[()\[\]{}:\d.]/g, ' ')));
+    }
     function youngPrompt(look, age, era) {
         const a = (age > 0 && age < 18) ? Math.round(age) : 10;
-        const adult = /\b(?:mature(?:\s+(?:male|female|man|woman))?|adult|milf|dilf|old\s+man|elderly|middle[-\s]aged|beard(?:ed)?|stubble|mustache|moustache|goatee|facial\s+hair|muscular|muscle|abs|large\s+breasts|huge\s+breasts|medium\s+breasts|breasts|cleavage|sexy|seductive|wrinkles?|tall)\b/i;
-        const kept = String(look || '').split(/[,，]/).map(t => t.trim()).filter(t => t && !adult.test(t.replace(/[()\[\]{}:\d.]/g, ' ')));
         const head = a <= 12 ? ['child', '(younger self:1.2)', 'about ' + a + ' years old', 'small child proportions']
                              : ['teenager', '(younger self:1.2)', 'about ' + a + ' years old', 'youthful face'];
-        const then = (era && era.look) ? [String(era.look).trim()] : ((era && era.role) ? [String(era.role).trim()] : []);
-        return head.concat(then, kept).filter(Boolean).join(', ');
+        const eraLook = String((era && era.look) || '').trim(), role = String((era && era.role) || '').trim();
+        const then = eraLook ? [eraLook] : [];
+        if (!WEAR.test(eraLook)) { if (role) then.push(role); then.push('plain simple everyday clothes'); }   // 那時候的外表沒寫穿著：照身分、素色便服
+        return head.concat(then, innateOf(look)).filter(Boolean).join(', ');
     }
     // 照長相畫一張小時候的立繪（用途「小時候立繪」）→ 去背 → 存進「小時候」那格。已經有就直接回那張，同一個人同時只畫一張
     const _youngJobs = new Map();
