@@ -1582,23 +1582,31 @@
             const pick = (t, card) => { t = String(t || '').trim(); if (!t || sent) return; sent = true; o.onPick(t, card); };
             const inp = el.querySelector('input');
             // 三張牌背朝上發下來，選項寫在牌下面；點一張＝那張才翻開露出是哪張塔羅、另外兩張淡掉，
-            //   翻完鏡頭朝那張牌推進去、暗掉，接下一幕的幕布。翻牌、推進的時間和曲線照吧檯開頭那張真牌（.lmem-card.flipped、.lmem.zoom）
+            //   翻的同時那張牌移到畫面正中間、放大，翻完鏡頭從正中間推進去、暗掉，接下一幕的幕布。
+            //   鏡頭不跟著跑去旁邊那張：牌自己走到中間，推進才是正對著它。翻牌、推進的曲線照吧檯開頭那張真牌（.lmem-card.flipped、.lmem.zoom）
             el.addEventListener('click', (e) => {
                 const b = e.target.closest('.lmem-tc');
                 if (b && !sent && !el.classList.contains('chosen')) {
                     const i = +b.dataset.i;
+                    // 量好再動：牌（不含底下那行字）的中心移到整層的中心，放大到約六成畫面高
+                    const box = el.querySelector('.lmem-acts-box'), c = b.querySelector('.lmem-tc-in');
+                    const re = el.getBoundingClientRect(), rc = c.getBoundingClientRect(), rb = box.getBoundingClientRect();
+                    const cx = re.left + re.width / 2, cy = re.top + re.height / 2;
+                    const s = Math.max(1, Math.min(2.4, re.height * 0.62 / (rc.height || 1), re.width * 0.5 / (rc.width || 1)));
+                    // 縮放中心定在牌的正中間，移動量就是兩個中心的差
+                    const ox = rc.left + rc.width / 2, oy = rc.top + rc.height / 2;
+                    const tb = b.getBoundingClientRect();
+                    b.style.transformOrigin = (ox - tb.left).toFixed(1) + 'px ' + (oy - tb.top).toFixed(1) + 'px';
                     el.classList.add('chosen'); b.classList.add('pick', 'up');
+                    b.style.transform = 'translate(' + (cx - ox).toFixed(1) + 'px,' + (cy - oy).toFixed(1) + 'px) scale(' + s.toFixed(3) + ')';
+                    // 鏡頭的中心＝畫面正中間（牌已經走到那裡）
+                    if (rb.width && rb.height) box.style.transformOrigin = ((cx - rb.left) / rb.width * 100).toFixed(2) + '% ' + ((cy - rb.top) / rb.height * 100).toFixed(2) + '%';
                     try { if (R && R.flip) _sfx(R.flip); } catch (x) {}   // 吧檯已經收了（演到幕間時 R＝null）就沒有翻牌聲
                     setTimeout(() => {
                         if (_actsEl !== el) return;
-                        const box = el.querySelector('.lmem-acts-box'), c = b.querySelector('.lmem-tc-in');
-                        if (box && c) {
-                            const rb = box.getBoundingClientRect(), rc = c.getBoundingClientRect();
-                            if (rb.width && rb.height) box.style.transformOrigin = ((rc.left + rc.width / 2 - rb.left) / rb.width * 100).toFixed(2) + '% ' + ((rc.top + rc.height / 2 - rb.top) / rb.height * 100).toFixed(2) + '%';
-                        }
                         el.classList.add('zoom');
                         setTimeout(() => { if (_actsEl === el) pick(o.choices[i], (o.cards || [])[i]); }, 1150);
-                    }, 950);
+                    }, 1150);
                     return;
                 }
                 if (e.target.closest('.lmem-acts-go')) { pick(inp.value); return; }
