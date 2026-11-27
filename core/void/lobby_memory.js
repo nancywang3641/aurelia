@@ -599,20 +599,43 @@
     }
     const _SETUP_CUT = /<memory_setup>[\s\S]*?(?:<\/memory_setup>|(?=<content>)|(?=<\/content>)|$)/gi;
     function _stripSetup(s) { return String(s || '').replace(_SETUP_CUT, ''); }
-    // 樣子跟現在差多少那欄：只有「很大」這一類才算（一點、幾乎沒變、不大都不算）
-    function _bigChange(s) { s = String(s || ''); return /很大|差很多|完全(?:不同|不一樣|認不出)/.test(s) && !/不大|沒有很大|不算大/.test(s); }
+    // 樣子跟現在差多少那欄：只有「很大」這一類才算（一點、幾乎沒變、不大都不算）；模型常寫簡體，繁簡都認
+    function _bigChange(s) { s = String(s || ''); return /很大|差很多|完全(?:不同|不一樣|不一样|認不出|认不出)/.test(s) && !/不大|沒有很大|没有很大|不算大/.test(s); }
+    // 同一種標籤出現好幾組時挑哪組：思考裡常提到標籤字樣（「接著寫 <content>...</content>」），第一組常是那種字樣。
+    //   只看收好尾的整組，內容只有點點、空的不算，挑內容最長的那組；沒有就回 null（呼叫的人再看沒收尾的）
+    const _TRIVIAL = /^[\s.…。·・\-_]*$/;
+    function _best(text, tag) {
+        const re = new RegExp('<' + tag + '>([\\s\\S]*?)<\\/' + tag + '>', 'gi');
+        let best = null, m;
+        while ((m = re.exec(String(text || '')))) {
+            const inner = m[1].trim();
+            if (_TRIVIAL.test(inner)) continue;
+            if (best == null || inner.length > best.length) best = inner;
+        }
+        return best;
+    }
+    // 沒收尾的那組：從最後一個開頭標籤起算（理由同上）；stop＝從哪裡以後不算
+    function _lastOpen(text, tag, stop) {
+        const t = String(text || ''), i = t.toLowerCase().lastIndexOf('<' + tag + '>');
+        if (i < 0) return null;
+        let body = t.slice(i + tag.length + 2);
+        if (stop) body = body.replace(stop, '');
+        body = body.trim();
+        return _TRIVIAL.test(body) ? null : body;
+    }
     // 模型回的整段 → { when, focus, cast: { 名字鑰匙: { name, age, call, role, change, big, look } }, text }；沒有那塊回 null
     function _setupOf(raw) {
-        const m = String(raw || '').match(/<memory_setup>([\s\S]*?)(?:<\/memory_setup>|(?=<content>)|$)/i);
-        if (!m) return null;
-        const out = { when: '', focus: '', cast: {}, text: m[1].trim().slice(0, 1500) };
+        const body = _best(raw, 'memory_setup') || _lastOpen(raw, 'memory_setup', /<content>[\s\S]*$/i);
+        if (!body) return null;
+        const m = [null, body];
+        const out = { when: '', focus: '', cast: {}, text: body.slice(0, 1500) };
         const row = (L) => {
             const c = L.split(/\s*[｜|]\s*/).map(x => x.replace(/^[\u4e00-\u9fff]{1,6}[:：]\s*/, '').trim());   // 欄位前面自己加了中文欄名的拿掉
             if (c.length < 3) return;
             const name = c[0].replace(/^[【\[「（(]+|[】\]」）)]+$/g, '').trim();
             if (!name || name.length > 20) return;
             const a = _ageOf(c[1] || '', false);
-            const ci = c.findIndex((x, n) => n >= 2 && x.length <= 12 && /很大|差很多|一點|幾乎沒變|沒變|差不多|不大|完全/.test(x));
+            const ci = c.findIndex((x, n) => n >= 2 && x.length <= 12 && /很大|差很多|一點|一点|幾乎沒變|几乎没变|沒變|没变|差不多|不大|完全/.test(x));
             const change = ci >= 0 ? c[ci] : '';
             const tags = ci >= 0 ? c.slice(ci + 1).filter(Boolean).join(', ') : '';
             out.cast[_nameKey(name)] = { name, age: a ? a.age : null, call: c[2] || '', role: c[3] && c[3] !== change ? c[3] : '', change, big: _bigChange(change), look: /[a-z]/i.test(tags) ? tags.slice(0, 400) : '' };
@@ -752,13 +775,14 @@
         ].filter(s => s !== '').join('\n');
         const out = await _ask([{ role: 'system', content: sys }, { role: 'user', content: user }], 'memory', false, true);
         const raw = _stripSetup(out);   // 設定那塊先拿掉，下面照舊找劇本和選項
-        let content = (raw.match(/<content>[\s\S]*?<\/content>/i) || [])[0] || '';
-        if (!content) { const open = raw.match(/<content>[\s\S]*?(?=<choices>|$)/i); if (open) content = open[0].trim() + '\n</content>'; }   // 收尾被截掉
+        // 劇本、選項：同一種標籤好幾組時挑內容最長的那組（_best），不拿第一組
+        const _cb = _best(raw, 'content') || _lastOpen(raw, 'content', /<choices>[\s\S]*$/i);   // 後者＝收尾被截掉
+        let content = _cb ? '<content>\n' + _cb + '\n</content>' : '';
         if (!content && /\[(Char|Nar|Bg)\|/i.test(raw)) content = '<content>\n' + raw.replace(/<choices>[\s\S]*$/i, '') + '\n</content>';   // 忘了包 <content>
         if (!content) throw new Error('沒寫出劇本');
         let choices = [], cards = [];
         if (!last) {
-            const cb = (raw.match(/<choices>([\s\S]*?)(<\/choices>|$)/i) || [])[1] || '';
+            const cb = _best(raw, 'choices') || _lastOpen(raw, 'choices') || '';
             cb.split('\n').map(s => s.replace(/<[^>]+>/g, '').replace(/^\s*(?:[-*・•]|\d+[.、)）]|[A-Ca-c][.、)）])\s*/, '').trim()).forEach(s => {
                 if (!s || choices.length >= 3) return;
                 const c = _cardOf(s);

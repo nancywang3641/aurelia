@@ -439,17 +439,30 @@
         let cleaned = text;
 
         const thinkBlocks = [];
-        // 酒館端先照酒館「推理」設定的前綴／後綴切（主線就是酒館用這支切的；預設的思考標籤不一定在下面那串裡）：
-        //   getContext() 的 powerUserSettings.reasoning（auto_parse／prefix／suffix）＋ parseReasoningFromString。
-        //   沒開自動解析、拿不到（網頁版、舊酒館）就只靠下面那串常見標籤
-        try {
-            const _stx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
-            const _rs = _stx && _stx.powerUserSettings && _stx.powerUserSettings.reasoning;
-            if (_rs && _rs.auto_parse && _rs.prefix && _rs.suffix && typeof _stx.parseReasoningFromString === 'function') {
-                const _r = _stx.parseReasoningFromString(cleaned, { strict: false });
-                if (_r && String(_r.reasoning || '').trim()) { thinkBlocks.push(String(_r.reasoning).trim()); cleaned = String(_r.content || ''); }
-            }
-        } catch (e) {}
+        // 開頭那段思考：界線＝回覆裡「最後一個」思考結尾標籤，它前面全是思考（開頭有沒有開頭標籤都一樣）。
+        //   ① 預設最後一段預填了開頭標籤時，回覆一開頭就在思考裡、前面沒有開頭標籤，配對式的切法找不到它；
+        //   ② 思考內文常提到標籤字樣（「<thinking>… 放最前面」「接著 <content>…</content>」），照第一組配對切會切在那些字樣上，
+        //      正文剩半截、後面解析抓到的是字樣裡的那組。酒館用的 parseReasoningFromString 也是第一組配對，所以不借它，只借它的前後綴：
+        //   標籤認常見那幾種，酒館「推理」設定開了自動解析就再加它的前綴／後綴（getContext().powerUserSettings.reasoning）。
+        //   結尾標籤後面要還有東西才切（不然整段都會被當思考）；keepFences（創作室寫程式）不走這條：程式碼裡可能寫著這些字樣
+        if (!keepFences) {
+            try {
+                const _pairs = [['<thinking>', '</thinking>'], ['<think>', '</think>'], ['<thoughts>', '</thoughts>'], ['<thought>', '</thought>'], ['<reasoning>', '</reasoning>'], ['<thinking_process>', '</thinking_process>']];
+                const _stx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
+                const _rs = _stx && _stx.powerUserSettings && _stx.powerUserSettings.reasoning;
+                if (_rs && _rs.auto_parse && _rs.prefix && _rs.suffix) _pairs.unshift([String(_rs.prefix).trim(), String(_rs.suffix).trim()]);
+                const _low = cleaned.toLowerCase();
+                let _at = -1, _pair = null;
+                _pairs.forEach(p => { const i = p[1] ? _low.lastIndexOf(p[1].toLowerCase()) : -1; if (i > _at) { _at = i; _pair = p; } });
+                if (_pair && _at > 0 && cleaned.slice(_at + _pair[1].length).trim()) {
+                    let head = cleaned.slice(0, _at).trim();
+                    if (head.toLowerCase().indexOf(_pair[0].toLowerCase()) === 0) head = head.slice(_pair[0].length).trim();
+                    const _tag = (_pair[1].match(/^<\/([a-z_]+)>$/i) || [])[1];
+                    if (head) thinkBlocks.push(_tag ? '[' + _tag.toUpperCase() + ']\n' + head : head);
+                    cleaned = cleaned.slice(_at + _pair[1].length);
+                }
+            } catch (e) {}
+        }
         // 🔥 思考鏈剝離：CoT 用哪種標籤包都收（<think>/<thinking>/<thought(s)>/<reasoning>/<thinking_process>/<vars_analyze>），送入思考面板、不顯示進聊天
         cleaned = cleaned.replace(/<(think(?:ing)?|thoughts?|reasoning|thinking_process|vars_analyze)>([\s\S]*?)<\/\1>/gi, (_, tag, inner) => {
             const trimmed = inner.trim();
