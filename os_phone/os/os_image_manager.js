@@ -910,14 +910,6 @@
         _SCENE_SIGNALS: /(?:\b\d+\s*(?:boys?|girls?|males?|females?|others?|people)\b|\bon the (?:left|right)\b|##\s*C?\d+[^#]*##|\b(?:standing|sitting|kneeling|lying|walking|running|holding|pointing|licking|kissing|hugging)\b|\b(?:cave|forest|beach|castle|tower|dome|temple|street|bedroom|kitchen|classroom|dungeon|mine)\b)/i,
 
         // 組最終正向詞：底詞 + 本輪動態詞。三段分開印出來，出事時一眼看得出污染來自哪一段。
-        // Q版身材的詞（底詞包常見寫法）：一個逗號段裡有這些字就整段拿掉，括號權重一起
-        CHIBI_NEG: 'chibi, super deformed, big head, oversized head, short stubby limbs',
-        _CHIBI_SEG: /chibi|super[\s_-]*deformed|\bsd\s*style\b|\d+(\.\d+)?\s*heads?\s*tall|big\s*head|oversized\s*head|stubby|q版|ｑ版|二頭身|三頭身/i,
-        _stripChibi: function(text) {
-            return String(text || '').split(',')
-                .filter(seg => !this._CHIBI_SEG.test(seg))
-                .join(',').replace(/,\s*,+/g, ',').replace(/^\s*,\s*|\s*,\s*$/g, '').trim();
-        },
         _composePos: function(cfg, prompt, tag) {
             const base = String((cfg && cfg.basePrompt) || '').trim();
             const dyn  = String(prompt || '').trim();
@@ -994,12 +986,6 @@
             let negText = options.negativePrompt || cfg.negPrompt || '';
             // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，保留 comfy 面板負詞
             if (options.extraNegative) negText = [negText, options.extraNegative].filter(Boolean).join(', ');
-            // options.noChibi：這張要正常身材（記憶迴廊的小時候立繪）。沒選包時拿的是 char 桶，跟不倒翁小人那類 Q版共用，
-            //   桶裡剛好是 Q版包的話底詞帶「chibi、2 heads tall、big head」，小孩就被畫成 Q版 → 拿掉那幾個詞、放進負詞
-            if (options.noChibi) {
-                posText = this._stripChibi(posText);
-                negText = [negText, this.CHIBI_NEG].filter(Boolean).join(', ');
-            }
             let wf;
             if (cfg.workflowMode === 'custom' && (cfg.customWorkflow || '').trim()) {
                 // 自帶工作流模式（進階）：用使用者貼的 ComfyUI 工作流，只注入 %prompt%/%negative%/%seed%/%width%/%height%
@@ -1781,10 +1767,6 @@
                         : (cfg.itemNegPrompt || 'person, human, body, face, hands, worst quality, low quality, blurry, watermark, text')));
             // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，raw 也生效且保留 NAI 品質負詞
             if (options.extraNegative) negativePrompt = [negativePrompt, options.extraNegative].filter(Boolean).join(', ');
-            if (options.noChibi) {   // 同 ComfyUI 那條：要正常身材的這張，底詞裡 Q版身材的詞拿掉、放進負詞
-                finalPrompt = this._stripChibi(finalPrompt);
-                negativePrompt = [negativePrompt, this.CHIBI_NEG].filter(Boolean).join(', ');
-            }
 
             const model   = cfg.model    || 'nai-diffusion-3';
             const isV4    = model.includes('nai-diffusion-4');
