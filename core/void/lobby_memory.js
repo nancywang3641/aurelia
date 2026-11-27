@@ -561,6 +561,121 @@
         const s = parts.join('\n\n');
         return s.length > 9000 ? '……（前面省略）\n' + s.slice(-9000) : s;
     }
+
+    // ── 小時候的立繪 ──
+    //   立繪只有現在的樣子：回憶演到他十幾歲，舞台不能放大人的臉。寫每一幕那通順便多寫一塊 <ages>（「名字｜幾歲」一行一個），
+    //   不多叫一通。未滿 18 歲＝小時候：舞台換成角色中心「小時候」那格（OS_CHAR_GALLERY 的 young），沒有那張就不放立繪。
+    //   年紀寫法容錯：阿拉伯數字、中文數字（十二、十幾）、只寫「小時候／國中／少年」這種詞都認；沒寫那塊＝照舊（大人的立繪）。
+    const YOUNG_USE = 'sprite_young';   // 生圖用途名冊那一列（os_image_manager.js 的 USES）
+    function _cnAge(s) {
+        const D = { 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
+        const m = s.match(/([一二兩三四五六七八九])?十([一二三四五六七八九幾])?/);
+        if (m) return (m[1] ? D[m[1]] : 1) * 10 + (m[2] === '幾' ? 5 : (m[2] ? D[m[2]] : 0));
+        const one = s.match(/[一二兩三四五六七八九]/);
+        return one ? D[one[0]] : null;
+    }
+    // 一段寫年紀的字 → { age, young }；看不出來回 null。strict＝這段字不是專門寫年紀的（記憶牌「那時候的他」），數字後面要有「歲」才算
+    function _ageOf(s, strict) {
+        s = String(s || '');
+        let age = null;
+        const d = strict ? s.match(/(\d{1,2})\s*(?:歲|岁)/) : (s.match(/(\d{1,2})\s*(?:歲|岁)/) || s.match(/(?:^|[^\d])(\d{1,2})(?![\d年月日])/));
+        if (d) age = +d[1];
+        if (age == null) {
+            const c = s.match(/([一二兩三四五六七八九十幾]{1,3})\s*(?:歲|岁)/) || (strict ? null : s.match(/^\s*([一二兩三四五六七八九十幾]{1,3})\s*$/));
+            if (c) age = _cnAge(c[1]);
+        }
+        if (age != null && age > 0 && age < 120) return { age, young: age < 18 };
+        if (/小時候|童年|幼年|兒時|幼時|小孩|孩子|孩童|小學|國小|國中|初中|高中|少年|少女|十幾/.test(s)) return { age: null, young: true };
+        if (/成年|大人|青年|中年|老年|大學|二十|三十|四十/.test(s)) return { age: null, young: false };
+        return null;
+    }
+    // 模型回的整段 → { 名字鑰匙: { name, age, young } }
+    function _agesOf(raw) {
+        const out = {};
+        const b = (String(raw || '').match(/<ages?>([\s\S]*?)(<\/ages?>|<\/?(?:content|choices)>|$)/i) || [])[1] || '';
+        b.split('\n').forEach(line => {
+            const L = line.replace(/<[^>]+>/g, '').replace(/^\s*(?:[-*・•]|\d+[.、)）])\s+/, '').trim();
+            const m = L.match(/^([^｜|:：]{1,20}?)\s*[｜|:：]\s*(.+)$/);
+            if (!m) return;
+            const name = m[1].replace(/^[【\[「（(]|[】\]」）)]$/g, '').trim();
+            const a = name ? _ageOf(m[2], false) : null;
+            if (a) out[_nameKey(name)] = { name, age: a.age, young: a.young };
+        });
+        return out;
+    }
+    // 演到第 k 幕時誰是小時候：前面幾幕標過的照最近那幕；這張牌的主角沒被標到，看記憶牌上「那時候的他」（舊牌也靠這個）
+    function _youngList(rec, k) {
+        const all = {};
+        for (let j = 0; j <= k; j++) { const a = rec.acts && rec.acts[j]; if (a && a.ages) Object.assign(all, a.ages); }
+        const p = rec.name || (rec._person && rec._person.name) || '';
+        if (p && !Object.keys(all).some(x => _sameKey(x, _nameKey(p)))) {
+            const w = _ageOf(rec.when, true);
+            if (w) all[_nameKey(p)] = { name: p, age: w.age, young: w.young };
+        }
+        return Object.keys(all).map(x => all[x]).filter(y => y.young);
+    }
+    // 同一個人：名字折過一樣，或一個是另一個前面那截（只寫名、沒寫姓），跟 _fold 同一套
+    function _sameKey(a, b) { return a === b || (a.length >= 2 && b.length >= 2 && (a.startsWith(b) || b.startsWith(a))); }
+    // 正在演的那一幕：{ 名字鑰匙: 小時候那張網址（''＝不放立繪）}；沒在演記憶迴廊＝null
+    let _youngNow = null;
+    // 舞台問（vn_core_stage.js 的 _youngSprite）：undefined＝不是小時候、照舊；''＝小時候但沒有那張，不放；網址＝放這張
+    function youngSprite(name) {
+        if (!_youngNow) return undefined;
+        const k = _nameKey(name);
+        const hit = Object.keys(_youngNow).find(x => _sameKey(x, k));
+        return hit === undefined ? undefined : _youngNow[hit];
+    }
+    // 開演前：小時候的人有沒有那張；沒有、畫得出來（有長相描述、接了生圖）、這張牌還沒說過不畫的 → 問一次（一個按鈕，畫幾張講清楚）
+    async function _youngAsk(rec, k, sid) {
+        const plan = { map: {}, paint: [] };
+        const list = _youngList(rec, k);
+        if (!list.length) return plan;
+        const G = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
+        const M = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+        const no = Array.isArray(rec.noYoung) ? rec.noYoung : [];
+        let svc = '';
+        try { svc = M && M.serviceForUse ? M.serviceForUse(M.youngUse ? M.youngUse() : YOUNG_USE) : ''; } catch (e) {}
+        const ask = [];
+        for (const y of list) {
+            const key = _nameKey(y.name);
+            let url = '';
+            try { url = (G && G.youngUrl) ? await G.youngUrl(y.name) : ''; } catch (e) {}
+            plan.map[key] = url || '';
+            if (url || !svc || no.indexOf(key) >= 0 || !(G && G.youngMake)) continue;
+            let look = '';
+            try { look = G.lookPrompt ? await G.lookPrompt(y.name) : ''; } catch (e) {}
+            if (look) ask.push(y);   // 沒有長相描述：畫不出他小時候，這段不放立繪
+        }
+        if (!ask.length) return plan;
+        const A = win.AUI || window.AUI;
+        const names = ask.map(y => '「' + y.name + '」').join('、');
+        const ok = !!(A && A.confirm && await A.confirm(
+            '這段回憶裡，' + names + '還是小時候的樣子。\n\n要照' + (ask.length > 1 ? '他們' : '他') + '的長相，畫' + (ask.length > 1 ? '各一張' : '一張') + '小時候的立繪嗎？'
+            + '（' + ask.length + ' 張，會花 ' + ask.length + ' 次生圖的錢。畫好存在角色中心「小時候」那格，之後的回憶都用這張。）\n\n不畫的話，這段回憶裡小時候的' + (ask.length > 1 ? '他們' : '他') + '不放立繪。'));
+        if (ok) plan.paint = ask;
+        else { rec.noYoung = no.concat(ask.map(y => _nameKey(y.name))); _saveDraw(sid, rec); }
+        return plan;
+    }
+    // 照 _youngAsk 的決定畫：一個人一張；畫不出來（接口出錯、去背失敗也照存原圖）就這段不放，這張牌不再問
+    async function _youngPaint(plan, rec, sid, onLabel) {
+        const G = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
+        const failed = [];
+        for (const y of plan.paint) {
+            const key = _nameKey(y.name);
+            if (onLabel) onLabel('正在畫' + y.name + '小時候的樣子…');
+            let url = '';
+            try { url = await G.youngMake(y.name, y.age); } catch (e) { console.warn('[LobbyMemory] 小時候的立繪沒畫出來', e); }
+            plan.map[key] = url || '';
+            if (!url) failed.push(key);
+        }
+        plan.paint = [];
+        if (failed.length) {
+            rec.noYoung = (Array.isArray(rec.noYoung) ? rec.noYoung : []).concat(failed);
+            _saveDraw(sid, rec);
+            try { (win.AUI || window.AUI).toast('小時候的立繪沒畫出來，這段回憶裡先不放他的立繪'); } catch (e) {}
+        }
+        return plan;
+    }
     async function _writeAct(person, rec, i) {
         const w = rec._w || await _worldFor(person);
         const last = i >= ACT_MAX - 1;
@@ -584,11 +699,12 @@
             '- 這是一段私人的回憶，只用得到台詞、旁白、內心話、換背景、音樂和音效這幾種標籤；VN 指令裡其他的玩法這裡都用不上（不要寫選項標籤）。',
             '- 前面若有一份寫作預設：文風、筆法、描寫、對白怎麼寫照那份；但這次要輸出什麼照這裡——那份要求的摘要、狀態欄、選項、小劇場、其他區塊這次都不寫。',
             '',
-            last ? '只輸出劇本這一塊：' : '輸出兩塊：',
+            last ? '輸出兩塊：' : '輸出三塊：',
             '<content>',
             '（VN 劇本，格式照下面的 VN 指令）',
             '</content>',
             last ? '' : '<choices>\n兩到三行，一行一個他接下來可能怎麼做，寫成「牌名｜做法」：\n- 做法從他的角度寫、一句話、十八個字以內；各自會走出不一樣的過程，但都還走得到牌上的「收」。\n- 牌名從這二十二張大阿爾克那挑一張寓意對得上這條路的（例：豁出去＝愚者、躲起來＝隱士、選了某個人＝戀人、硬撐＝力量、一切崩掉＝高塔），同一幕的牌不重複，照寫牌名、不加說明：' + ARCANA.join('、') + '\n</choices>',
+            '<ages>\n這一幕出場的每個角色一行，寫成「名字｜那時候幾歲」：名字照劇本裡 [Char|名字] 寫的，歲數寫阿拉伯數字（不確定就寫大約的，例：某某｜12）。\n</ages>',
             protocol ? '\n' + protocol : '\n台詞寫成 [Char|名字|表情|「台詞」]，旁白寫成 [Nar|旁白]，換場景寫 [Bg|季節|時段_地點|英文場景描述|]。',
         ].filter(s => s !== '').join('\n');
         const before = _actsSoFar(rec, i);
@@ -607,19 +723,20 @@
         ].filter(s => s !== '').join('\n');
         const raw = await _ask([{ role: 'system', content: sys }, { role: 'user', content: user }], 'memory', false, true);
         let content = (raw.match(/<content>[\s\S]*?<\/content>/i) || [])[0] || '';
-        if (!content) { const open = raw.match(/<content>[\s\S]*?(?=<choices>|$)/i); if (open) content = open[0].trim() + '\n</content>'; }   // 收尾被截掉
-        if (!content && /\[(Char|Nar|Bg)\|/i.test(raw)) content = '<content>\n' + raw.replace(/<choices>[\s\S]*$/i, '') + '\n</content>';   // 忘了包 <content>
+        if (!content) { const open = raw.match(/<content>[\s\S]*?(?=<choices>|<ages?>|$)/i); if (open) content = open[0].trim() + '\n</content>'; }   // 收尾被截掉
+        if (!content && /\[(Char|Nar|Bg)\|/i.test(raw)) content = '<content>\n' + raw.replace(/<(?:choices|ages?)>[\s\S]*$/i, '') + '\n</content>';   // 忘了包 <content>
+        content = content.replace(/<ages?>[\s\S]*?(<\/ages?>|(?=<\/content>))/gi, '');   // 年紀那塊寫進劇本裡了：拿出來，別演出來
         if (!content) throw new Error('沒寫出劇本');
         let choices = [], cards = [];
         if (!last) {
-            const cb = (raw.match(/<choices>([\s\S]*?)(<\/choices>|$)/i) || [])[1] || '';
+            const cb = (raw.match(/<choices>([\s\S]*?)(<\/choices>|<ages?>|$)/i) || [])[1] || '';
             cb.split('\n').map(s => s.replace(/<[^>]+>/g, '').replace(/^\s*(?:[-*・•]|\d+[.、)）]|[A-Ca-c][.、)）])\s*/, '').trim()).forEach(s => {
                 if (!s || choices.length >= 3) return;
                 const c = _cardOf(s);
                 if (c.text && c.text.length <= 40) { choices.push(c.text); cards.push(cards.includes(c.n) ? -1 : c.n); }
             });
         }
-        return { content: _stripMainline(content), choices, cards, pick: '' };
+        return { content: _stripMainline(content), choices, cards, pick: '', ages: _agesOf(raw) };
     }
 
     // ── 畫面 ──
@@ -1242,8 +1359,17 @@
     // 三幕一幕一幕播：每幕演完 vn_core.js 交回來（__AURELIA_SIDE_STORY_END）→
     //   後面那幕已經寫好（選過、或是在展示櫃重看）＝直接接著播；還沒寫＝跳選項，選了才寫；三幕演完＝回吧檯收尾。
     //   from＝從第幾幕開始播；replay＝展示櫃重看（幕和幕之間先亮一下「那時候，他選了」）
+    // 先問小時候的立繪再進劇情：要演的那一幕已經寫好的話，大廳還開著時就問（畫的時候在劇情的幕布下等）
     function _play(rec, from, replay) {
         const sid = (R && R.sid) || _storyId();
+        if (R && R._busy) return;
+        if (!rec.acts[from]) { _playVn(rec, from, replay, sid, null); return; }
+        if (R) R._busy = true;
+        const r0 = R;
+        _youngAsk(rec, from, sid).catch(e => { console.warn('[LobbyMemory] 小時候的立繪沒問成', e); return { map: {}, paint: [] }; })
+            .then(plan => { if (r0) r0._busy = false; _playVn(rec, from, replay, sid, plan); });
+    }
+    function _playVn(rec, from, replay, sid, plan0) {
         close({ toVn: true });
         const V = window.VN_Core || win.VN_Core;
         const CC = win.AureliaControlCenter || window.AureliaControlCenter;
@@ -1256,7 +1382,7 @@
         // 收場一律走劇情自己「退出」那顆（VN_PLAYER.stopGame）：背景音樂停、演完的這段清掉、面板收起、故事編號換回原本那個。
         //   🚨 只叫 hideVnPanel 的話音樂還在播，之後開章節窗口再關會掉回這段外傳空掉的結束畫面（11-26 踩到）
         const leave = () => {
-            dead = true; _actsUi(null);
+            dead = true; _actsUi(null); _youngNow = null;
             if (mine()) win.__AURELIA_SIDE_STORY_END = null;
             try { V._hideWriterCurtain(); } catch (e) {}
             const p = P();
@@ -1269,7 +1395,15 @@
         // 幕和幕之間（選項開著、在寫下一幕）：劇情停在末尾，這時按到空白鍵也只會叫到這個，不會掉進主線章末那排
         const idle = () => { if (!dead) win.__AURELIA_SIDE_STORY_END = idle; };
         const mine = () => win.__AURELIA_SIDE_STORY_END === hook || win.__AURELIA_SIDE_STORY_END === idle;
+        // 每一幕開演前：誰是小時候、有沒有那張（沒有就問、畫），舞台照 _youngNow 換圖或不放
         const playAct = (k) => {
+            if (dead) return;
+            _youngAsk(rec, k, sid)
+                .then(plan => plan.paint.length ? (curtain('正在畫小時候的樣子…'), _youngPaint(plan, rec, sid, curtainLabel)) : plan)
+                .catch(e => { console.warn('[LobbyMemory] 小時候的立繪沒問成', e); return { map: {} }; })
+                .then(plan => { if (!dead) { _youngNow = plan.map; startAct(k); } });
+        };
+        const startAct = (k) => {
             if (dead) return;
             at = k;
             win.__AURELIA_SIDE_STORY_END = hook;
@@ -1289,11 +1423,11 @@
                 }
                 p.switchPage('page-game');
                 V._showWriterCurtain();
-                const lb = document.getElementById('vn-start-loader-label');
-                if (lb) lb.textContent = label || '回憶正在浮現…';
+                curtainLabel(label || '回憶正在浮現…');
             };
             go();
         };
+        const curtainLabel = (t) => { const lb = document.getElementById('vn-start-loader-label'); if (lb) lb.textContent = t; };
         const finish = () => {
             rec.done = true; _saveDraw(sid, rec);
             leave();
@@ -1338,12 +1472,19 @@
         };
         try {
             if (V && V._enterTheater) V._enterTheater(THEATER, title);
-            if (rec.acts[from]) {
+            if (rec.acts[from] && plan0 && !plan0.paint.length) {
                 at = from;
+                _youngNow = plan0.map;
                 win.__AURELIA_SIDE_STORY_END = hook;
                 window._lobbyPendingChapter = { title, storyId: THEATER, storyTitle: '記憶迴廊', content: rec.acts[from].content, createdAt: Date.now() };
                 if (CC && CC.showVnPanel) CC.showVnPanel('autoload');
-                else playAct(from);
+                else startAct(from);
+            } else if (rec.acts[from]) {
+                // 問過、要畫小時候的立繪：先開劇情頁、蓋上幕布畫，畫好才演
+                window._lobbyPendingChapter = null;
+                if (CC && CC.showVnPanel) CC.showVnPanel();
+                curtain('正在畫小時候的樣子…');
+                _youngPaint(plan0, rec, sid, curtainLabel).catch(() => plan0).then(plan => { if (!dead && shown()) { _youngNow = plan.map; startAct(from); } });
             } else {
                 // 第一幕還在寫（或剛才寫壞了、在展示櫃按接著走）：先開劇情頁、蓋上 loading 等它
                 window._lobbyPendingChapter = null;
@@ -1365,7 +1506,7 @@
             if (p) {
                 const ob = new MutationObserver(() => {
                     if (p.style.display !== 'none') return;
-                    ob.disconnect(); dead = true; _actsUi(null);
+                    ob.disconnect(); dead = true; _actsUi(null); _youngNow = null;
                     if (mine()) win.__AURELIA_SIDE_STORY_END = null;
                 });
                 setTimeout(() => { if (!dead) ob.observe(p, { attributes: true, attributeFilter: ['style'] }); }, 1500);
@@ -1516,7 +1657,7 @@
         if (r.lobbyBgm && !(opt && opt.toVn)) try { r.lobbyBgm.play().catch(() => {}); } catch (e) {}
     }
 
-    const api = { open, close, isOpen: () => !!R, epilogue: _epilogue };   // epilogue(抽過的那筆)：之後回憶清單重看收尾也走這支
+    const api = { open, close, isOpen: () => !!R, epilogue: _epilogue, youngSprite };   // youngSprite(名字)：舞台問這個人現在是不是小時候、放哪張   // epilogue(抽過的那筆)：之後回憶清單重看收尾也走這支
     window.LobbyMemory = api;
     try { if (win !== window) win.LobbyMemory = api; } catch (e) {}
 })();

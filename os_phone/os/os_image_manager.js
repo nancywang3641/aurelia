@@ -347,7 +347,8 @@
             { id: 'expr',   name: '立繪表情',   type: 'char'  },   // 角色圖鑑「生一組表情」：只重畫臉；ComfyUI（comfyInpaint）或自訂接口 GPT 九宮格（capiEdit＋OS_EXPR_GRID），看 exprEngine
             { id: 'doll',   name: '不倒翁小人', type: 'char'  },   // 角色中心「裝扮」頁的「生成不倒翁小人」（lobby_dress.js 的 _genDoll）：單獨一張，不跟立繪共用畫風；接自訂接口時一張三隻（正面／側面／背面）
             { id: 'pv',     name: '世界宣傳片', type: 'bg'    },   // SN 收尾做的新世界宣傳片：一句旁白一張畫面（OS_WORLDGATE.pvDraw；阿洛值班時他自己畫，沒畫成才走這列）
-            { id: 'memory_card', name: '記憶牌面', type: 'scene' },   // 紫薇的記憶迴廊：抽到的那張牌正面畫回憶裡最關鍵的一刻（lobby_memory.js 的 _paintCard），一張牌一張
+            { id: 'memory_card', name: '記憶牌面', type: 'scene' },
+            { id: 'sprite_young', name: '小時候立繪', type: 'char' },   // 記憶迴廊演到角色小時候：照他的長相加年紀畫一張（OS_CHAR_GALLERY.youngMake），存角色中心「小時候」那格，一個人一張一直重用；沒改過跟「立繪」那列（youngUse）   // 紫薇的記憶迴廊：抽到的那張牌正面畫回憶裡最關鍵的一刻（lobby_memory.js 的 _paintCard），一張牌一張
         ],
         useOf: function(id) { return this.USES.find(u => u.id === id) || null; },
         _ROUTES_KEY: 'os_img_routes',
@@ -1109,6 +1110,8 @@
         // ════════════════════════════════════════════════════════════════
         // 「立繪表情」那列沒改過＝跟「立繪」那列走同一組：同一個包畫的臉才接得上原圖
         exprUse: function() { return this.getRoutes().expr ? 'expr' : 'sprite'; },
+        // 「小時候立繪」那列也一樣：沒改過＝跟「立繪」那列同一組，小時候那張跟大人那張才同一個畫風
+        youngUse: function() { return this.getRoutes().sprite_young ? 'sprite_young' : 'sprite'; },
         // 這一列實際用的 ComfyUI 參數；不是 ComfyUI、自帶工作流的包、沒網址沒模型就丟錯（字是給她看的）
         _comfyCfgForInpaint: async function(prompt, options) {
             const opts = Object.assign({}, options);

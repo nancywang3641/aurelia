@@ -236,6 +236,16 @@
             tryNext();
         },
 
+        // 記憶迴廊演到他小時候：null＝照舊（主線、別種小劇場、不是小時候）；''＝不放立繪；網址＝放小時候那張。
+        //   誰是小時候由 lobby_memory.js 每一幕開演前定好（LobbyMemory.youngSprite），這裡只問，大人的立繪一律不准出來
+        _youngSprite: function(name) {
+            const sp = this.sidePlay ? this.sidePlay() : null;
+            if (!sp || sp.id !== 'memory_theater') return null;
+            const M = win.LobbyMemory || window.LobbyMemory;
+            const u = (M && M.youngSprite) ? M.youngSprite(name) : undefined;
+            return u === undefined ? null : (u || '');
+        },
+
         // 公開入口（[Char]/[Inner] 呼叫）：把說話角色放上舞台、渲染、打燈、清滯留
         updateSprite: function(name, exp) {
             this._stageInit();
@@ -286,6 +296,14 @@
                 if (target.dataset.slideIn === '1') { target.classList.add('sprite-slide-in-right'); delete target.dataset.slideIn; }
                 else { if (exp === 'Surprised') target.classList.add('sprite-shake'); if (exp === 'JumpScare') target.classList.add('sprite-jumpscare'); }
             };
+            // 記憶迴廊裡的他還小：只放小時候那張，沒有（或載不到）就不放，不往下找大人的
+            const _yg = this._youngSprite(name);
+            if (_yg !== null) {
+                img.classList.remove('vn-avatar');
+                if (_yg) this._tryLoad(img, [_yg], () => { if (!_stale()) this._hideEl(img); }, triggerAnim, _stale);
+                else this._hideEl(img);
+                return;
+            }
             // 世界書【素材-角色表情立繪】(名字_表情→URL) → spriteBase 拼檔名；全走探測制，掛一個自動下一個
             if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; if (_stale()) return; }
             const urls = [];
@@ -328,6 +346,7 @@
             const lockedName = isCall ? this.currentName : (this._stage[target] && this._stage[target].name);
             const lockedExp  = isCall ? this.currentExp  : (this._stage[target] && this._stage[target].exp);
             if (!lockedName) { this._hideEl(img); return; }
+            if (!isCall && this._youngSprite(lockedName) !== null) { this._hideEl(img); return; }   // 記憶迴廊裡的他還小：不往下找大人的
             const _stale = isCall ? (() => this.currentName !== lockedName)
                                   : (() => !this._stage[target] || this._stage[target].name !== lockedName);
             const base = VN_Config.data.charDefaultBase;
@@ -379,6 +398,7 @@
             this._stageInit();
             const _stale = isCall ? (() => this.currentName !== name)
                                   : (() => !this._stage[target] || this._stage[target].name !== name);
+            if (!isCall && this._youngSprite(name) !== null) { this._hideEl(img); return; }   // 記憶迴廊裡的他還小：不放大人的頭像、也不生
             const showAvatar = (url) => {   // 頭像(世界書/AI生成/persona) → 浮起金框
                 if (_stale()) return;
                 if (isCall) { img.src = url; }
@@ -806,6 +826,7 @@
         //   exp＝劇情寫的表情：這張圖自己沒有時，圖鑑借同一個人同一類表情的（講話就要動嘴，跟表情無關）
         //   講話時、眨眼時同一張圖同時來問，只疊一次
         _mouthFramesFor: async function(name, img, base, exp) {
+            if (this._youngSprite(name) !== null) return null;   // 小時候那張沒有自己的嘴和眼睛：不借大人那幾張貼上去
             const cache = this._mouthFrameCache || (this._mouthFrameCache = new Map());
             const pend = this._mouthFramePend || (this._mouthFramePend = new Map());
             const fb = this._frameBase || (this._frameBase = new Map());

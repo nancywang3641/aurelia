@@ -19,6 +19,7 @@
 
     const KEY_PRE = 'char_img::';
     const DEFAULT_EXP = 'default';
+    const YOUNG_EXP = 'young';   // 小時候那張：記憶迴廊演到他小時候時舞台用（lobby_memory.js 問、vn_core_stage.js 的 _youngSprite 放）；不是表情，劇情裡的表情不會換到這張
     const WB_EXP = '【素材-角色表情立繪】';
     const WB_PRESET = '【素材-角色預設立繪素材】';
     const WB_NEW_KEYS = ['立繪素材_倉庫_請勿觸發_DO_NOT_TRIGGER'];
@@ -48,7 +49,7 @@
         return !!(Z && Z.key && a && b && Z.key(a) === Z.key(b));
     }
     // 「生一組表情」那幾種寫中文（劇情裡照樣寫英文，對照在 EXPR_SET），其他照她取的名字
-    const expLabel = (exp) => (exp === DEFAULT_EXP ? '預設' : ((EXPR_SET.find(x => x.exp === exp) || {}).zh || exp));
+    const expLabel = (exp) => (exp === DEFAULT_EXP ? '預設' : exp === YOUNG_EXP ? '小時候' : ((EXPR_SET.find(x => x.exp === exp) || {}).zh || exp));
 
     // 🔒 奧瑞亞官方立繪（管理員＋丹、雷伊在大廳那張）：名冊在 LobbyNpcs.official，名單最後一區，只能看、不能換。
     //   跟上面那套找圖順序無關：官方那張只在小劇場的舞台用（VN_Core._officialSprite），她故事裡同名的別人照舊。
@@ -284,7 +285,7 @@
         const cfg = Cfg();
         const locals = (await localAll()).filter(r => r && sameChar(r.name, ch));
         const exps = [];
-        const addExp = (e) => { if (e && e !== DEFAULT_EXP && exps.indexOf(e) < 0) exps.push(e); };
+        const addExp = (e) => { if (e && e !== DEFAULT_EXP && e !== YOUNG_EXP && exps.indexOf(e) < 0) exps.push(e); };
         locals.forEach(r => addExp(r.exp));
         wbRowsFor(wb, 'exp', ch).forEach(r => addExp(r.exp));
 
@@ -300,7 +301,7 @@
             const w = lastWb(exp === DEFAULT_EXP ? 'preset' : 'exp', exp);
             if (w) cands.push({ source: 'wb', label: '世界書', url: w.url });
             const dirBase = exp === DEFAULT_EXP ? cfg.charDefaultBase : cfg.spriteBase;
-            if (dirBase) variants(ch).forEach(v => cands.push({ source: 'dir', label: '網址庫', url: dirBase + v + (exp === DEFAULT_EXP ? '_presets.png' : '_' + exp + '.png'), quiet: true }));
+            if (dirBase && exp !== YOUNG_EXP) variants(ch).forEach(v => cands.push({ source: 'dir', label: '網址庫', url: dirBase + v + (exp === DEFAULT_EXP ? '_presets.png' : '_' + exp + '.png'), quiet: true }));
             if (exp === DEFAULT_EXP) {
                 const sp = await worldEntries('sprite_cache', ch);
                 const C = Cache();
@@ -314,7 +315,7 @@
             }
             return { exp, used, broken };
         }
-        const slots = [await slot(DEFAULT_EXP)];
+        const slots = [await slot(DEFAULT_EXP), await slot(YOUNG_EXP)];   // 小時候那格一直在：空著也看得到、能自己上傳
         for (const e of exps) slots.push(await slot(e));
 
         // 生成過的圖（這個故事的頭像快取＋立繪庫），滿意的可以收進圖鑑
@@ -592,6 +593,50 @@
     //   🏷 同一天那張表從 設置 → 圖片 搬到這一頁最下面的「他的長相」（畫的是 lobby_dress.js 的 _wireDressLook）：
     //     dressCtx 多回一個 lookKey＝他那一筆的鑰匙。認得出是哪一筆才給：這個故事的角色、你自己（照這個故事存）、
     //     別的故事來的客人但大廳撈得到他那一輪的那一筆。管理員、撈不到的別輪客人、店員＝空的，那一格不出來。
+    // ── 小時候那張（記憶迴廊用）──
+    async function youngUrl(name) { return localUrl(name, YOUNG_EXP); }
+    // 他的長相描述（裝扮頁「他的長相」那一份）；沒有＝畫不出他小時候
+    async function lookPrompt(name) { try { return String((await dressLookOf(name)).prompt || '').trim(); } catch (e) { return ''; } }
+    // 長相描述 → 小時候版：拿掉只屬於大人的詞，前面接年紀。age 不知道＝當十歲上下
+    function youngPrompt(look, age) {
+        const a = (age > 0 && age < 18) ? Math.round(age) : 10;
+        const adult = /\b(?:mature(?:\s+(?:male|female|man|woman))?|adult|milf|dilf|old\s+man|elderly|middle[-\s]aged|beard(?:ed)?|stubble|mustache|moustache|goatee|facial\s+hair|muscular|muscle|abs|large\s+breasts|huge\s+breasts|medium\s+breasts|breasts|cleavage|sexy|seductive|wrinkles?|tall)\b/i;
+        const kept = String(look || '').split(/[,，]/).map(t => t.trim()).filter(t => t && !adult.test(t.replace(/[()\[\]{}:\d.]/g, ' ')));
+        const head = a <= 12 ? ['child', '(younger self:1.2)', 'about ' + a + ' years old', 'small child proportions']
+                             : ['teenager', '(younger self:1.2)', 'about ' + a + ' years old', 'youthful face'];
+        return head.concat(kept).join(', ');
+    }
+    // 照長相畫一張小時候的立繪（用途「小時候立繪」）→ 去背 → 存進「小時候」那格。已經有就直接回那張，同一個人同時只畫一張
+    const _youngJobs = new Map();
+    function youngMake(name, age) {
+        const k = String(name || '');
+        if (_youngJobs.has(k)) return _youngJobs.get(k);
+        const job = (async () => {
+            const have = await youngUrl(name);
+            if (have) return have;
+            const look = await lookPrompt(name);
+            const VI = win.VN_Image || window.VN_Image;   // vn_config 只把 VN_Image 掛在 window
+            if (!look || !VI || !VI.getSprite) return '';
+            const M = win.OS_IMAGE_MANAGER;
+            const url = await VI.getSprite(youngPrompt(look, age), true, { use: (M && M.youngUse) ? M.youngUse() : 'sprite' });
+            if (!url) return '';   // 沒接接口：OS_IMAGE_MANAGER 已經跳過提示
+            let data = url;
+            try {
+                const blob = await (await fetch(url)).blob();
+                const V = VN();
+                let cut = null;
+                try { cut = (V && V._stripSpriteBgAI) ? await V._stripSpriteBgAI(blob) : null; } catch (e) {}
+                data = await fileToDataUrl(cut || blob);   // 去背失敗也存原圖：錢已經花了
+            } catch (e) {}
+            data = await shrink(data, SHRINK_SIDE);
+            await localSave(name, YOUNG_EXP, data, 'file');
+            return data;
+        })();
+        _youngJobs.set(k, job);
+        const done = () => { _youngJobs.delete(k); };
+        job.then(done, done);
+        return job;
+    }
     async function dressLookOf(ch) {
         const C = Cache();
         if (!C) return { key: ch, prompt: '' };
@@ -827,7 +872,7 @@
         const cls = 'acg-slot' + (u ? '' : ' is-empty') + (s.broken.length ? ' is-bad' : '');
         let state = '';
         if (s.broken.length) state = '<div class="acg-slot-state acg-state-bad"><i class="fa-solid fa-link-slash"></i> ' + esc(s.broken.map(b => b.label).join('、')) + '的網址打不開</div>';
-        else if (!u) state = '<div class="acg-slot-state">' + (s.exp === DEFAULT_EXP ? '沒有圖' : '沒有圖，會用預設') + '</div>';
+        else if (!u) state = '<div class="acg-slot-state">' + (s.exp === DEFAULT_EXP ? '沒有圖' : s.exp === YOUNG_EXP ? '沒有圖：記憶迴廊演到他小時候時會問要不要畫' : '沒有圖，會用預設') + '</div>';
         const localUsed = u && u.source === 'local';
         return '<div class="' + cls + '" data-exp="' + esc(s.exp) + '">'
           + '<div class="acg-slot-img"' + (u ? ' data-act="view" data-exp="' + esc(s.exp) + '"' : '') + '>'
@@ -2369,6 +2414,6 @@
         return await first(neu);
     }
 
-    win.OS_CHAR_GALLERY = { dressOk: true, open, close, localUrl, userRefUrl, nearExp, exprHave, mouthFor, faceFor, mouthRev, srcKey, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, eyeOvals, eyesOn, mouthGeom, sigDiff, ovalDist, layFix, lookFromText, lookTags, viewTags, exprMask, DIFF } };
+    win.OS_CHAR_GALLERY = { dressOk: true, open, close, localUrl, userRefUrl, youngUrl, youngMake, lookPrompt, YOUNG_EXP, nearExp, exprHave, mouthFor, faceFor, mouthRev, srcKey, _test: { parseLine, parseImport, wbSaveMany, wbRowsFor, fmtLine, sameChar, cropOf, mouthOval, eyeOvals, eyesOn, mouthGeom, sigDiff, ovalDist, layFix, lookFromText, lookTags, viewTags, exprMask, DIFF, youngPrompt } };
     if (win !== window) window.OS_CHAR_GALLERY = win.OS_CHAR_GALLERY;
 })();

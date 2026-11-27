@@ -176,9 +176,11 @@
         },
         // 立繪模式專用：直接從角色描述生「全身站姿立繪」(跟 studio 頭像轉立繪同套邏輯)。
         // 清掉跟立繪衝突的構圖/背景/視角 tag → 套全身模板 → 512×896 直立 → 非 NAI 走 raw(純模板)，NAI 套頭像同畫風底詞避免太裸。
-        getSprite: async function(prompt, force) {
+        // opts.use：用途名冊（OS_IMAGE_MANAGER.USES）哪一列，沒給＝「立繪」；記憶迴廊的小時候立繪走 sprite_young
+        getSprite: async function(prompt, force, opts) {
             if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return "";
-            const _svc = _svcOf('sprite', 'char');
+            const _use = (opts && opts.use) || 'sprite';
+            const _svc = _svcOf(_use, 'char');
             const _useNAI = (_svc === 'novelai');
             // ⭐ 跟「角色立繪 studio / 一鍵生立繪」一字不差：用使用者在 studio 調好的前綴/後綴(localStorage os_sprite_tpl_prefix/suffix)，
             //   別再自己硬編模板。沒設過才退預設(cowboy shot + brown background 那組，避免 full body 打架被切、純色底好去背)。
@@ -207,7 +209,7 @@
             // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面(extraNegative)。空＝不送。
             let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
             _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
-            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' });
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: _use });
         },
         // 🎯 幾個角色擠一張寬圖一次生完（只在官方那顆開；見設置 → 圖片 → 頭像 → 每次生成角色數）。
         //    回傳整張寬圖，切開的事交給呼叫端（vn_core 的 _sliceSheet）。
