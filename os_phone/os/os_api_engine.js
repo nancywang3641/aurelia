@@ -439,6 +439,17 @@
         let cleaned = text;
 
         const thinkBlocks = [];
+        // 酒館端先照酒館「推理」設定的前綴／後綴切（主線就是酒館用這支切的；預設的思考標籤不一定在下面那串裡）：
+        //   getContext() 的 powerUserSettings.reasoning（auto_parse／prefix／suffix）＋ parseReasoningFromString。
+        //   沒開自動解析、拿不到（網頁版、舊酒館）就只靠下面那串常見標籤
+        try {
+            const _stx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
+            const _rs = _stx && _stx.powerUserSettings && _stx.powerUserSettings.reasoning;
+            if (_rs && _rs.auto_parse && _rs.prefix && _rs.suffix && typeof _stx.parseReasoningFromString === 'function') {
+                const _r = _stx.parseReasoningFromString(cleaned, { strict: false });
+                if (_r && String(_r.reasoning || '').trim()) { thinkBlocks.push(String(_r.reasoning).trim()); cleaned = String(_r.content || ''); }
+            }
+        } catch (e) {}
         // 🔥 思考鏈剝離：CoT 用哪種標籤包都收（<think>/<thinking>/<thought(s)>/<reasoning>/<thinking_process>/<vars_analyze>），送入思考面板、不顯示進聊天
         cleaned = cleaned.replace(/<(think(?:ing)?|thoughts?|reasoning|thinking_process|vars_analyze)>([\s\S]*?)<\/\1>/gi, (_, tag, inner) => {
             const trimmed = inner.trim();
