@@ -1,0 +1,25 @@
+/* 借接口給電腦上的 AI（os_keyrun.js）：系統設置「系統/備份」那一格。
+   開關那排用設置頁共用的 .set-label／.toggle-switch，按鈕用 .set-btn、通行碼用 .set-input，跟旁邊幾格長一樣。
+   顏色跟著設置頁的 --os-ink 系列走；成功／失敗兩色跟「手機通知」那格的 .push-state 同一組。 */
+.keyrun-group:empty { display: none; }
+.keyrun-live { display: flex; flex-direction: column; gap: 8px; background: rgba(var(--os-ink-rgb), 0.05); border-radius: 6px; padding: 10px 11px; }
+.keyrun-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.keyrun-left { flex: 1; min-width: 0; font-size: 15px; font-weight: 800; letter-spacing: 1px; font-variant-numeric: tabular-nums; color: var(--os-ink); }
+.keyrun-row .set-btn { flex: none; white-space: nowrap; }
+.keyrun-cap { font-size: 11px; font-weight: 700; color: var(--os-ink-soft); margin-bottom: -4px; }
+.keyrun-row .keyrun-code { flex: 1; min-width: 0; width: auto; padding: 9px 10px; font-family: ui-monospace, Consolas, 'Courier New', monospace; font-size: 14px; font-weight: 800; letter-spacing: 2px; }
+.keyrun-state, .keyrun-sum { font-size: 11px; line-height: 1.6; color: var(--os-ink-soft); }
+.keyrun-state.is-busy { color: var(--os-ink); font-weight: 700; }
+
+.keyrun-log { display: flex; flex-direction: column; }
+.keyrun-log-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 800; color: var(--os-ink); padding-bottom: 4px; }
+.keyrun-clear { font: inherit; font-size: 11px; font-weight: 600; background: none; border: none; color: #c0392b; cursor: pointer; padding: 2px 4px; }
+.keyrun-clear:hover { color: #962d22; }
+.keyrun-line { display: grid; grid-template-columns: 14px auto minmax(0, 1fr) auto; column-gap: 7px; align-items: baseline; font-size: 11px; line-height: 1.55; color: var(--os-ink); padding: 5px 0; border-top: 1px solid rgba(var(--os-ink-rgb), 0.08); }
+.keyrun-line > i { font-size: 10px; text-align: center; }
+.keyrun-line.is-ok > i { color: #2f6b3a; }
+.keyrun-line.is-fail > i, .keyrun-line.is-block > i { color: #a33d18; }
+.keyrun-when { color: var(--os-ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.keyrun-what { min-width: 0; word-break: break-word; }
+.keyrun-cost { color: var(--os-ink-soft); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.keyrun-note { grid-column: 3 / 5; color: #a33d18; word-break: break-word; }

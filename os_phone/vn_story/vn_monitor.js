@@ -1,0 +1,1102 @@
+// ----------------------------------------------------------------
+// [檔案] vn_monitor.js
+// 路徑：os_phone/vn_story/vn_monitor.js
+// 職責：VN 視覺小說播放器 - 上下文 Token 監控器
+// 自 vn_core.js V8.6 拆分出獨立模組
+// 依賴：(運行期) OS_API, extension_settings.variables.global
+// 暴露：window.VN_CtxMonitor
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    console.log('[PhoneOS] 載入 VN 上下文監控模組 (vn_monitor.js)...');
+    const win = window.parent || window;
+
+    const VN_CtxMonitor = {
+        sendTokens: null, sendChars: null,
+        recvTokens: null, recvChars: null,
+        msgs: null, lastUpdate: null,
+        breakdown: null,
+
+        // 讀取用戶設定的警戒 token 上限（localStorage 持久化）
+        getLimit: function() {
+            return parseInt(localStorage.getItem('vn_ctx_limit') || '50000') || 50000;
+        },
+        saveLimit: function(val) {
+            const n = Math.max(1000, parseInt(val) || 50000);
+            win.AUI.lsSet('vn_ctx_limit', String(n), '上下文警戒上限');
+            this._refreshDisplay();
+        },
+
+        // 📜 章末簡報卡 CTX 那圈：上一次送出去的量佔警戒上限幾 %（只讀數字、不碰 CTX 浮窗的畫面）；讀不到回 null
+        quickPct: async function() {
+            // 小劇場：章末那圈也看寫這場戲的那一通
+            try {
+                const V = win.VN_Core || window.VN_Core;
+                if (V && V.sidePlay && V.sidePlay()) {
+                    const r = V._sideRec ? V._sideRec() : null;
+                    const n = r && r.inTok;
+                    return (n && isFinite(n) && n > 0) ? Math.min(100, Math.round((n / this.getLimit()) * 100)) : null;
+                }
+            } catch (e) {}
+            const isStandalone = win.OS_API?.isStandalone?.() ?? false;
+            // 每章重讀一次（上一章的數字會留在這裡）；跟打開 CTX 浮窗時讀的是同一份
+            if (isStandalone) this._readFromStandalone();
+            else { try { if (!(await this._readFromItemized())) this._readFromPlugin(); } catch (e) { this._readFromPlugin(); } }
+            const t = this.sendTokens;
+            if (t == null || !isFinite(t) || t <= 0) return null;
+            return Math.min(100, Math.round((t / this.getLimit()) * 100));
+        },
+
+        // 獨立模式：從 OS_API._lastCtx 讀取
+        _readFromStandalone: function() {
+            try {
+                const ctx = win.OS_API?._lastCtx;
+                if (!ctx) return false;
+                this.sendTokens = ctx.sendTokens;
+                this.sendChars  = ctx.sendChars;
+                this.recvTokens = ctx.recvTokens;
+                this.recvChars  = ctx.recvChars;
+                this.msgs       = ctx.msgCount;
+                this.lastUpdate = new Date(ctx.updatedAt).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return true;
+            } catch(e) { return false; }
+        },
+
+        // ST 模式：優先讀插件全域變數
+        _readFromPlugin: function() {
+            try {
+                const g = win.extension_settings?.variables?.global;
+                if (!g) return false;
+                const sT = parseInt(g.LAST_SEND_TOKENS);
+                const sC = parseInt(g.LAST_SEND_CHARS);
+                const rT = parseInt(g.LAST_RECEIVE_TOKENS);
+                const rC = parseInt(g.LAST_RECEIVE_CHARS);
+                if (!isNaN(sT)) this.sendTokens = sT;
+                if (!isNaN(sC)) this.sendChars  = sC;
+                if (!isNaN(rT)) this.recvTokens = rT;
+                if (!isNaN(rC)) this.recvChars  = rC;
+                return !isNaN(sT);
+            } catch(e) { return false; }
+        },
+
+        // 動態 import 酒館原生 itemized-prompts 模組（同源、同一實例、live 陣列）。
+        // 注意：itemizedPrompts/itemizedParams「不在」getContext() 上，是該模組的匯出，
+        //       只能 import 拿；且 token 數字沒存在 entry，要呼叫 itemizedParams() 現算。
+        _itemizedMod: null,
+        _getItemizedMod: function() {
+            if (!this._itemizedMod) {
+                try {
+                    // 動態 import 酒館的 itemized-prompts.js。難點：CDN(助手)版這支從 jsdelivr 載入，
+                    // 裸 '/scripts/...' 會解析到 jsdelivr origin → 404；而 TauriTavern 等改後端的環境，
+                    // 前端路徑也可能不是 origin+/scripts/。最耐的做法：找酒館主腳本 script.js 實際在哪，
+                    // 據此組 itemized-prompts.js 的絕對網址（跟著酒館自己的路徑走）。
+                    let url = '';
+                    try {
+                        const doc = (win && win.document) || document;
+                        const tags = doc.querySelectorAll('script[src]');
+                        for (let i = 0; i < tags.length; i++) {
+                            const mm = (tags[i].src || '').match(/^(.*)\/script\.js(?:\?|$)/);
+                            if (mm) { url = mm[1] + '/scripts/itemized-prompts.js'; break; }
+                        }
+                    } catch (e) {}
+                    if (!url) {
+                        const _org = (win && win.location && win.location.origin) || (window.location && window.location.origin) || '';
+                        url = _org + '/scripts/itemized-prompts.js';
+                    }
+                    this._itemizedModUrl = url;
+                    this._itemizedMod = import(url);
+                }
+                catch (e) { this._itemizedMod = Promise.reject(e); }
+            }
+            return this._itemizedMod;
+        },
+
+        // ST 模式優先：讀酒館原生 itemized 資料，準確且有細項拆解
+        _readFromItemized: async function() {
+            try {
+                // TauriTavern：import 模組會炸/不穩，且 live 索引會挑到高 mesId 的小幻影紀錄 →
+                //   一律改走存檔讀取（讀所有 record、挑總和最大的真上下文）。
+                if (this._isTauri()) return await this._readFromTauriStorage();
+                let mod;
+                try { mod = await this._getItemizedMod(); }
+                catch (e) { return await this._readFromTauriStorage(); }   // 萬一非 Tauri 但 import 仍失敗，也退存檔
+                if (!mod || typeof mod.itemizedParams !== 'function') return await this._readFromTauriStorage();
+                // 取 live 陣列。原版酒館(非 bundle)＝同一實例，已有資料、直接用。
+                // TauriTavern：itemized 已改成「持久化」(tt_prompts_index / tt_prompts_record)，但這個 import
+                //   實例的陣列可能是空的（沒被載進來）。只有「空」時才呼叫 loadItemizedPrompts(chatId) 從存檔載出來
+                //   —— 空的不會蓋掉任何 live 資料；有資料時絕不呼叫（避免覆寫酒館剛生成未存檔的記憶體陣列）。
+                let items = mod.itemizedPrompts;
+                if ((!Array.isArray(items) || items.length === 0) && typeof mod.loadItemizedPrompts === 'function') {
+                    try {
+                        const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
+                                 || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext());
+                        const chatId = ctx && ctx.chatId;
+                        if (chatId) { await mod.loadItemizedPrompts(chatId); items = mod.itemizedPrompts; }
+                    } catch (e) {}
+                }
+                if (!Array.isArray(items) || items.length === 0) return false;
+                // 挑「最大的一筆」= 真正的主對話上下文。
+                // （不能只挑最新 mesId：TauriTavern 等環境會多出高 mesId 的小型/幻影紀錄，
+                //   會把真正的大上下文蓋掉 → CTX 顯示成那筆小的。改用 token 量挑最大最穩。）
+                const _score = function (it) {
+                    if (!it) return -1;
+                    let s = Number(it.oaiTotalTokens);
+                    if (!s || isNaN(s)) {
+                        s = (Number(it.oaiConversationTokens) || 0)
+                          + (Number(it.oaiMainTokens) || 0)
+                          + (typeof it.worldInfoString === 'string' ? Math.ceil(it.worldInfoString.length / 4) : 0)
+                          + (typeof it.finalPrompt === 'string' ? Math.ceil(it.finalPrompt.length / 4) : 0);
+                    }
+                    return isNaN(s) ? 0 : s;
+                };
+                let idx = -1, best = -1;
+                for (let i = 0; i < items.length; i++) {
+                    const sc = _score(items[i]);
+                    if (sc > best) { best = sc; idx = i; }
+                }
+                // TauriTavern 的 itemizedPrompts 是精簡索引 {mesId, recordId}，沒有 inline token 欄位
+                //   → 上面 score 全 0。改挑「最新 mesId」(= 當前這輪生成的上下文)，token 交給 itemizedParams 從 record 現拉。
+                if (best <= 0) {
+                    let maxMes = -Infinity;
+                    for (let i = 0; i < items.length; i++) {
+                        const m = Number(items[i].mesId);
+                        if (!isNaN(m) && m > maxMes) { maxMes = m; idx = i; }
+                    }
+                }
+                if (idx < 0) return false;
+                const p = await mod.itemizedParams(items, idx, Number(items[idx].mesId));
+                if (!p) return false;
+                try { this.breakdownContent = this._recordToContent(items[idx]); } catch(e) { this.breakdownContent = null; }
+                const n = (v) => { const x = Number(v); return isNaN(x) ? 0 : x; };
+                const isOai = p.this_main_api === 'openai';
+                const total = n(p.finalPromptTokens) || n(p.totalTokensInPrompt);
+                if (!total) return false;
+                const world    = n(p.worldInfoStringTokens);
+                const chat     = n(p.ActualChatHistoryTokens);
+                const examples = n(p.examplesStringTokens);
+                const inject   = n(p.chatInjects) + n(p.summarizeStringTokens) + n(p.smartContextStringTokens) + n(p.chatVectorsStringTokens) + n(p.dataBankVectorsStringTokens);
+                let system, character, persona, note, bias;
+                if (isOai) {
+                    system    = n(p.oaiSystemTokens);
+                    character = n(p.charDescriptionTokens) + n(p.charPersonalityTokens) + n(p.scenarioTextTokens);
+                    persona   = n(p.userPersonaStringTokens);
+                    note      = n(p.authorsNoteStringTokens);
+                    bias      = n(p.oaiBiasTokens);
+                } else {
+                    system    = 0;
+                    character = n(p.storyStringTokens);   // 文字補全：角色卡（已扣世界書）
+                    persona   = 0;
+                    note      = n(p.allAnchorsTokens);
+                    bias      = n(p.promptBiasTokens);
+                }
+                this.sendTokens = total;
+                this.sendChars  = null;
+                this.breakdown  = { system, character, world, examples, chat, persona, note, inject, bias, total };
+                this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return true;
+            } catch (e) { return false; }
+        },
+
+        // ── TauriTavern 專用：直接讀它持久化的 itemized 存檔（import 模組會因 window.SillyTavern 唯讀而炸）──
+        //   localForage db 'SillyTavern_Prompts' / store 'keyvaluepairs'
+        //   key: tt_prompts_index:<chatId>（[{mesId,recordId}]）、tt_prompts_record:<chatId>:<recordId>（完整 record）
+        _idbGet: function(dbName, storeName, key) {
+            return new Promise(function(res){
+                try {
+                    const req = indexedDB.open(dbName);
+                    req.onsuccess = function(){
+                        const db = req.result;
+                        try {
+                            if (!db.objectStoreNames.contains(storeName)) { db.close(); return res(undefined); }
+                            const g = db.transaction(storeName, 'readonly').objectStore(storeName).get(key);
+                            g.onsuccess = function(){ res(g.result); db.close(); };
+                            g.onerror = function(){ res(undefined); db.close(); };
+                        } catch(e){ res(undefined); try{ db.close(); }catch(_){} }
+                    };
+                    req.onerror = function(){ res(undefined); };
+                } catch(e){ res(undefined); }
+            });
+        },
+        _promptStoreGet: async function(key) {
+            const lf = (win.localforage || window.localforage);
+            if (lf && lf.createInstance) {
+                try {
+                    if (!this._lfInst) this._lfInst = lf.createInstance({ name: 'SillyTavern_Prompts' });
+                    const v = await this._lfInst.getItem(key);
+                    if (v !== undefined && v !== null) return v;
+                } catch (e) {}
+            }
+            return await this._idbGet('SillyTavern_Prompts', 'keyvaluepairs', key);
+        },
+        _isTauri: function() {
+            try {
+                if (win.__TAURI__ || window.__TAURI__ || win.__TAURI_INTERNALS__ || window.__TAURI_INTERNALS__) return true;
+                const h = (win.location && win.location.host) || (window.location && window.location.host) || '';
+                return /tauri/i.test(h);
+            } catch (e) { return false; }
+        },
+        // 真分詞器 token 計數（getContext().getTokenCountAsync，對齊原生面板）；拿不到才退 len/4 估
+        _tokAsync: async function(str) {
+            if (!str || typeof str !== 'string') return 0;
+            try {
+                if (this._ctxTok === undefined) {
+                    const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
+                             || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext());
+                    this._ctxTok = (ctx && typeof ctx.getTokenCountAsync === 'function') ? ctx.getTokenCountAsync : null;
+                }
+                if (this._ctxTok) { const t = await this._ctxTok(str); if (typeof t === 'number' && !isNaN(t)) return t; }
+            } catch (e) {}
+            return Math.ceil(str.length / 4);
+        },
+        // 快速排序分數（同步、不分詞）—— 只為從所有 record 挑出「最大那筆」真上下文，避免每筆都跑分詞器
+        _pickScore: function(rec) {
+            if (!rec) return -1;
+            const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
+            const l4 = function(s){ return (typeof s === 'string') ? Math.ceil(s.length / 4) : 0; };
+            if (rec.main_api === 'openai') return n(rec.oaiConversationTokens) + n(rec.oaiMainTokens) + n(rec.oaiPromptTokens) + l4(rec.worldInfoString);
+            return l4(rec.mesSendString) + l4(rec.storyString);
+        },
+        // 把選中的 record 換算成 { total, breakdown }：OAI 數字用存好的（精確），字串分項用真分詞器（對齊原生）
+        _recordToBreakdown: async function(rec) {
+            if (!rec) return null;
+            try { this.breakdownContent = this._recordToContent(rec); } catch(e) { this.breakdownContent = null; }
+            const n = function(v){ const x = Number(v); return isNaN(x) ? 0 : x; };
+            const isOai = rec.main_api === 'openai';
+            const world  = await this._tokAsync(rec.worldInfoString);
+            const inject = (await this._tokAsync(rec.chatInjects)) + (await this._tokAsync(rec.summarizeString)) + (await this._tokAsync(rec.smartContextString)) + (await this._tokAsync(rec.chatVectorsString)) + (await this._tokAsync(rec.dataBankVectorsString));
+            let system, character, persona, note, bias, chat, examples, total;
+            if (isOai) {
+                chat      = n(rec.oaiConversationTokens);
+                system    = n(rec.oaiStartTokens) + n(rec.oaiNsfwTokens) + n(rec.oaiMainTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens) + n(rec.oaiNudgeTokens);
+                character = (await this._tokAsync(rec.charDescription)) + (await this._tokAsync(rec.charPersonality)) + (await this._tokAsync(rec.scenarioText));
+                persona   = await this._tokAsync(rec.userPersona);
+                note      = await this._tokAsync(rec.authorsNoteString);
+                bias      = n(rec.oaiBiasTokens);
+                examples  = n(rec.oaiExamplesTokens);
+                // 對齊 itemizedParams OAI 公式（前後錨點相消）：各 oai 數字加總 + 真實世界書 tokens
+                total = n(rec.oaiStartTokens) + n(rec.oaiPromptTokens) + n(rec.oaiExamplesTokens) + n(rec.oaiMainTokens)
+                      + n(rec.oaiNsfwTokens) + n(rec.oaiBiasTokens) + n(rec.oaiImpersonateTokens) + n(rec.oaiJailbreakTokens)
+                      + n(rec.oaiNudgeTokens) + n(rec.oaiConversationTokens) + world;
+            } else {
+                examples  = await this._tokAsync(rec.examplesString);
+                const story = Math.max(0, (await this._tokAsync(rec.storyString)) - world);
+                chat      = await this._tokAsync(rec.mesSendString);
+                system    = 0;
+                character = story;
+                persona   = 0;
+                note      = await this._tokAsync(rec.allAnchors);
+                bias      = await this._tokAsync(rec.promptBias);
+                total     = story + world + examples + chat + note + bias;
+            }
+            return { total: total, breakdown: { system: system||0, character: character||0, world: world||0, examples: examples||0, chat: chat||0, persona: persona||0, note: note||0, inject: inject||0, bias: bias||0, total: total } };
+        },
+
+        // 🔧 用「真送出訊息」重算 breakdown（_liveChat = CHAT_COMPLETION_PROMPT_READY 抓的，=模型真收到的、對齊平台）。
+        //   itemized 帳本在自訂連線(如 Gemini)常算少/把重預設拆走→系統提示變 260、合計對不上平台；這條治本。
+        //   世界書/角色卡無法從「一大包 system」裡乾淨拆出(本來就一起當 system 送)→ 併進「系統提示」如實顯示。
+        _breakdownFromLive: async function() {
+            const lc = this._liveChat;
+            if (!Array.isArray(lc) || !lc.length) return null;
+            const s = function(m){ return (m && m.content != null) ? String(m.content) : ''; };
+            const sysText  = lc.filter(function(m){ return m && m.role === 'system'; }).map(s).join('\n\n');
+            const chatText = lc.filter(function(m){ return m && m.role !== 'system'; }).map(s).join('\n\n');
+            const sysTok  = await this._tokAsync(sysText);
+            const chatTok = await this._tokAsync(chatText);
+            const total = sysTok + chatTok;
+            this.breakdownContent = { system: sysText, chat: chatText };
+            return {
+                total: total,
+                chars: (sysText.length + chatText.length),
+                breakdown: { system: sysTok, character: 0, world: 0, examples: 0, chat: chatTok, persona: 0, note: 0, inject: 0, bias: 0, total: total }
+            };
+        },
+
+        // ── 逐項內容檢視：點 breakdown 列 → 看實際送出去的原文（OAI/文字補全共用，欄位缺就空）──
+        _KEY_LABELS: { system:'系統提示', character:'角色卡', world:'世界資訊', examples:'對話範例', chat:'聊天記錄', persona:'使用者角色', note:'作者備註', inject:'注入/擴充', recall:'記憶召回', gsummary:'大總結注入' },
+
+        _recordToContent: function(rec) {
+            if (!rec) return {};
+            const s = function(v){ return (typeof v === 'string') ? v : (v == null ? '' : String(v)); };
+            const join = function(){ return Array.prototype.slice.call(arguments).map(s).filter(function(t){ return t && t.trim(); }).join('\n\n'); };
+            // OAI/chat completion：實際送出的是 rawPrompt(=[{role,content}] 訊息陣列)，沒有 mesSendString。
+            // 取 user/assistant 訊息 = 對話歷史；system 訊息 = 系統段；rpAll = 全部(備援)。
+            const rp = rec.rawPrompt;
+            const rpArr = Array.isArray(rp) ? rp : null;
+            if (rpArr && rpArr.length > 1) this._recRaw = rpArr;   // 逐段看：重新整理後沒有即時那包，就切存檔裡這包
+            const rpByRole = function(roles){ return rpArr ? rpArr.filter(function(m){ return m && roles.indexOf(m.role) >= 0; }).map(function(m){ return '['+(m.role||'?')+']\n'+s(m.content); }).join('\n\n') : ''; };
+            const rpAll = rpArr ? rpArr.map(function(m){ return '['+(m.role||'?')+']\n'+s(m.content); }).join('\n\n') : s(rp);
+            return {
+                system:    join(rec.systemPromptString, rec.main, rec.oaiMainString) || rpByRole(['system']),
+                character: join(rec.charDescription, rec.charPersonality, rec.scenarioText) || s(rec.storyString),
+                world:     s(rec.worldInfoString),
+                examples:  s(rec.examplesString) || s(rec.mesExamplesString),
+                chat:      s(rec.mesSendString) || rpByRole(['user', 'assistant']) || rpAll,
+                persona:   s(rec.userPersona),
+                note:      s(rec.authorsNoteString) || s(rec.allAnchors),
+                inject:    join(rec.chatInjects, rec.summarizeString, rec.smartContextString, rec.chatVectorsString, rec.dataBankVectorsString),
+            };
+        },
+
+        _bindContentClicks: function() {
+            if (this._contentBound) return;
+            const bd = document.getElementById('ctx-breakdown');
+            if (!bd) return;
+            const self = this;
+            bd.addEventListener('click', function(e){
+                const item = e.target.closest && e.target.closest('.ctx-bd-item');
+                if (!item || !item.id) return;
+                e.stopPropagation();
+                self.showContent(item.id.replace('ctx-bd-i-', ''));
+            });
+            this._contentBound = true;
+        },
+
+        showContent: function(key) {
+            let text;
+            if (key === 'recall') {
+                text = this.recallText || '';
+            } else if (key === 'gsummary') {
+                text = (win.OS_SUMMARY_INJECT && win.OS_SUMMARY_INJECT._lastInjected && win.OS_SUMMARY_INJECT._lastInjected.text) || '';
+            } else if ((key === 'chat' || key === 'system') && Array.isArray(this._liveChat) && this._liveChat.length) {
+                // 即時捕捉到的真實送出訊息優先（chat=對話、system=系統段）
+                const roles = (key === 'chat') ? ['user', 'assistant'] : ['system'];
+                text = this._liveChat.filter(function(m){ return m && roles.indexOf(m.role) >= 0; })
+                                     .map(function(m){ return '[' + (m.role || '?') + ']\n' + (m.content == null ? '' : m.content); })
+                                     .join('\n\n');
+                if (!text) text = (this.breakdownContent && this.breakdownContent[key]) || '';
+            } else {
+                text = (this.breakdownContent && this.breakdownContent[key]) || '';
+            }
+            const label = this._KEY_LABELS[key] || key;
+            const esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+            const old = document.getElementById('ctx-cv-overlay');
+            if (old) old.remove();
+            const ov = document.createElement('div');
+            ov.id = 'ctx-cv-overlay';
+            ov.className = 'ctx-cv-overlay';
+            const meta = text ? (text.length.toLocaleString() + ' 字元（非 token，上方數字才是 token）') : '此項酒館未保留原文 / 本輪為空';
+            ov.innerHTML = '<div class="ctx-cv-box">'
+                + '<div class="ctx-cv-head"><span class="ctx-cv-title">' + esc(label) + '</span><span class="ctx-cv-meta">' + meta + '</span><button class="ctx-cv-close" type="button">✕</button></div>'
+                + '<pre class="ctx-cv-body">' + (text ? esc(text) : '（無內容）') + '</pre>'
+                + '</div>';
+            document.body.appendChild(ov);
+            const close = function(){ ov.remove(); };
+            ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+            const cb = ov.querySelector('.ctx-cv-close');
+            if (cb) cb.addEventListener('click', close);
+        },
+        // ── 逐段看：把「真送出去的那包」切回一段一段，認出每段是誰放的 ──
+        //   做法：送出那一刻把手上知道原文的東西都記下來（奧瑞亞與其他擴充注入的、這輪觸發的世界書條目、
+        //   預設條目、角色卡、使用者角色），再到送出的每則訊息裡找它們的原文。找到的標名字，
+        //   剩下的：你／角色說的話＝聊天記錄，系統那邊沒人認領的＝沒認出來。
+        _TAVERN_NAMES: {
+            '1_memory': ['tavern', '摘要'], '2_floating_prompt': ['tavern', '作者備註'],
+            '3_vectors': ['tavern', '向量記憶'], '4_vectors_data_bank': ['tavern', '資料庫'],
+            'DEPTH_PROMPT': ['card', '角色備註'], 'PERSONA_DESCRIPTION': ['persona', '使用者角色']
+        },
+        _KIND_TAGS: { aurelia: '奧瑞亞', wi: '世界書', preset: '預設', card: '角色卡', persona: '使用者', tavern: '酒館', ext: '其他擴充', chat: '聊天記錄', now: '你這輪', unknown: '沒認出' },
+
+        _ctx: function() {
+            try { return (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext()) || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext()) || null; }
+            catch (e) { return null; }
+        },
+
+        // 送出那一刻呼叫：手上知道原文的東西先抄一份（用完即清的注入，生成完就不見了）
+        _snapKnown: function() {
+            const ctx = this._ctx();
+            const exts = [];
+            try {
+                const ep = (ctx && ctx.extensionPrompts) || win.extension_prompts || {};
+                Object.keys(ep).forEach(function(k){
+                    const v = ep[k] && ep[k].value;
+                    if (typeof v === 'string' && v.trim()) exts.push({ key: k, value: v });
+                });
+            } catch (e) {}
+            this._liveKnown = { exts: exts, wi: (this._wiActive || []).slice(), at: Date.now() };
+        },
+
+        _knownPieces: function() {
+            const ctx = this._ctx() || {};
+            const sub = function(t){ try { return ctx.substituteParams ? ctx.substituteParams(t) : t; } catch (e) { return t; } };
+            const out = [];
+            const add = function(kind, name, text, sub2) {
+                const t = String(text == null ? '' : text).trim();
+                if (t.length < 12) return;
+                out.push({ kind: kind, name: name, sub: sub2 || '', text: t });
+                const s = String(sub(t) || '').trim();
+                if (s && s !== t && s.length >= 12) out.push({ kind: kind, name: name, sub: sub2 || '', text: s });
+            };
+            const self = this;
+            const known = this._liveKnown || { exts: [], wi: [] };
+            known.exts.forEach(function(e){
+                const k = e.key;
+                if (/^customDepthWI|^customWIOutlet/i.test(k)) return;          // 世界書的整包，底下一條一條認
+                if (/^aurelia_/i.test(k)) {
+                    const B = win.AURELIA_BLOCK || window.AURELIA_BLOCK;
+                    return add('aurelia', (B && B.nameOf(k)) || k.replace(/^aurelia_/i, ''), e.value);
+                }
+                if (self._TAVERN_NAMES[k]) return add(self._TAVERN_NAMES[k][0], self._TAVERN_NAMES[k][1], e.value);
+                add('ext', k, e.value);
+            });
+            known.wi.forEach(function(w){
+                if (!w) return;
+                const name = String(w.comment || (Array.isArray(w.key) ? w.key.join('、') : w.key) || ('條目 ' + (w.uid != null ? w.uid : ''))).trim();
+                add('wi', name, w.content, w.world || '');
+            });
+            try { this._presetPieces(ctx).forEach(function(x){ out.push(x); }); } catch (e) { console.warn('[CTX] 預設條目展開失敗', e); }
+            try {
+                const ch = ctx.characters && ctx.characters[ctx.characterId];
+                if (ch) {
+                    add('card', '描述', ch.description);
+                    add('card', '個性', ch.personality);
+                    add('card', '情境', ch.scenario);
+                    add('card', '對話範例', ch.mes_example);
+                    const d = ch.data || {};
+                    add('card', '角色卡的主提示', d.system_prompt);
+                    add('card', '角色卡的後置指令', d.post_history_instructions);
+                }
+            } catch (e) {}
+            try { const pu = ctx.powerUserSettings; if (pu) add('persona', '使用者角色', pu.persona_description); } catch (e) {}
+            out.sort(function(a, b){ return b.text.length - a.text.length; });   // 長的先認，免得短的咬掉長的中間
+            return out;
+        },
+
+        // ── 預設條目：照預設排的順序一條一條展開，跟酒館組 prompt 時一樣 ──
+        //   10-07：逐段看常有「沒認出」，點開明明是預設作者的。原因是 Ako 這類預設用 {{setvar}}／{{getvar}}
+        //   在條目之間傳東西（「别动·注入变量」先全部設空，後面勾的條目再設值，COT 條目 getvar 拿），原文對不上送出的字。
+        //   以前補救是拿 substituteParams 再展開，但那是照條目「定義」的順序、不是預設排的順序，拿到的值不一樣；
+        //   而且 setvar 會真的寫進她的聊天變數。現在變數自己記一份（起點＝聊天裡現在存的，也就是上一輪組完的樣子），只讀不寫。
+        //   {{random}}／{{roll}} 每次抽的不一樣，對不上的交給 _alignPreset 照順序對。
+        _presetPieces: function(ctx) {
+            const cs = (ctx && ctx.chatCompletionSettings) || {};
+            const ps = Array.isArray(cs.prompts) ? cs.prompts : [];
+            const byId = {};
+            ps.forEach(function(p){ if (p && p.identifier) byId[p.identifier] = p; });
+            const orders = Array.isArray(cs.prompt_order) ? cs.prompt_order : [];
+            const ord = orders.find(function(o){ return o && String(o.character_id) === '100001'; }) || orders[0];
+            const list = (ord && Array.isArray(ord.order))
+                ? ord.order.filter(function(o){ return o && o.enabled !== false; }).map(function(o){ return byId[o.identifier]; })
+                : ps;
+            const local = Object.assign({}, (ctx.chatMetadata && ctx.chatMetadata.variables) || {});
+            const global = Object.assign({}, (ctx.extensionSettings && ctx.extensionSettings.variables && ctx.extensionSettings.variables.global) || {});
+            const name1 = String(ctx.name1 || ''), name2 = String(ctx.name2 || '');
+            const sub = function(t){ try { return ctx.substituteParams ? ctx.substituteParams(t) : t; } catch (e) { return t; } };
+            const self = this, out = [];
+            list.forEach(function(p, order){
+                if (!p || p.marker || !p.content) return;
+                let t = self._expandVars(p.content, local, global);
+                // {{user}}／<user> 自己先換：酒館的 substituteParams 萬一沒有也認得到；變數巨集已經換掉了，剩下的交給它不會改到任何東西
+                if (name1) t = t.replace(/\{\{user\}\}|<user>/gi, name1);
+                if (name2) t = t.replace(/\{\{char\}\}|<char>|<bot>/gi, name2);
+                t = String(sub(t) || '').trim();
+                if (!t) return;   // 只有 setvar 的條目展開是空的，酒館不送
+                out.push({ kind: 'preset', name: p.name || p.identifier || '預設條目', sub: '', text: t, order: order,
+                    inChat: p.injection_position === 1,          // 插在聊天記錄裡某個深度的，不照順序排
+                    line: t.length < 12 });                      // 很短的（單獨一個 <char_info>）只認整行，免得咬到別人中間
+            });
+            return out;
+        },
+        // 變數巨集由左到右照順序算（同一條裡先設後拿）；只動傳進來的兩份副本。本體在 OS_API.expandVars（帶預設送出那段也用它）
+        _expandVars: function(s, local, global) {
+            return win.OS_API.expandVars(s, local, global);
+        },
+        // 展開了還是對不上的預設條目（裡面有 {{random}}、{{roll}}，或變數跟送出那刻不一樣）：
+        //   兩條認出來的預設條目中間夾著幾段「沒認出」，預設裡這兩條中間又剛好有同樣多條沒被認領的 → 照順序一對一對上。數目不一樣就不猜。
+        _alignPreset: function(segs, pieces) {
+            const seen = {};
+            segs.forEach(function(s){ if (s.kind === 'preset' && s.order != null) seen[s.order] = 1; });
+            const left = [];
+            pieces.forEach(function(p){ if (p.kind === 'preset' && p.order != null && !p.inChat && !seen[p.order]) { seen[p.order] = 1; left.push(p); } });
+            if (!left.length) return;
+            left.sort(function(a, b){ return a.order - b.order; });
+            let lastOrder = -1, run = [];
+            const flush = function(nextOrder){
+                if (!run.length) return;
+                const cand = left.filter(function(p){ return p.order > lastOrder && p.order < nextOrder; });
+                if (cand.length === run.length) run.forEach(function(s, i){ s.kind = 'preset'; s.name = cand[i].name; s.sub = '照順序對上'; s.order = cand[i].order; });
+                run = [];
+            };
+            segs.forEach(function(s){
+                if (s.kind === 'preset' && s.order != null && s.sub !== '照順序對上') { flush(s.order); lastOrder = s.order; }
+                else if (s.kind === 'unknown') run.push(s);
+            });
+            flush(Infinity);
+        },
+
+        _msgText: function(m) {
+            if (!m) return '';
+            const c = m.content;
+            if (typeof c === 'string') return c;
+            if (Array.isArray(c)) return c.map(function(p){ return (p && (p.text || (typeof p === 'string' ? p : ''))) || ''; }).join('\n');
+            return c == null ? '' : String(c);
+        },
+
+        // 奧瑞亞的注入每一塊都包成 <名字>…</名字>（os_inject_blocks.js），直接照名字切
+        _blockRe: function() {
+            const B = win.AURELIA_BLOCK || window.AURELIA_BLOCK;
+            const names = (B && B.tagNames) ? B.tagNames() : ['劇情總結', '劇情記憶', '手機記憶', '人物名冊', '人物檔案'];
+            const alt = names.map(function(n){ return n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|');
+            return new RegExp('<(' + alt + ')(?:\\s[^>]*)?>[\\s\\S]*?<\\/\\1>', 'g');
+        },
+
+        _buildSegments: function(lc) {
+            if (!Array.isArray(lc) || !lc.length) return null;
+            const pieces = this._knownPieces();
+            const blockRe = this._blockRe();
+            const segs = [];
+            const self = this;
+            lc.forEach(function(m, mi){
+                const text = self._msgText(m);
+                const role = (m && m.role) || 'system';
+                const claimed = [];
+                let bm;
+                blockRe.lastIndex = 0;
+                while ((bm = blockRe.exec(text)) !== null) {
+                    claimed.push({ start: bm.index, end: bm.index + bm[0].length, p: { kind: 'aurelia', name: bm[1], sub: '' } });
+                }
+                pieces.forEach(function(p){
+                    let from = 0, i;
+                    while ((i = text.indexOf(p.text, from)) >= 0) {
+                        const end = i + p.text.length;
+                        from = end;
+                        if (p.line && !((i === 0 || text[i - 1] === '\n') && (end === text.length || text[end] === '\n'))) continue;
+                        const hit = claimed.some(function(c){ return i < c.end && end > c.start; });
+                        if (!hit) claimed.push({ start: i, end: end, p: p });
+                    }
+                });
+                claimed.sort(function(a, b){ return a.start - b.start; });
+                let pos = 0;
+                const gap = function(s) {
+                    const t = s.trim();
+                    if (t.replace(/[\s\-=*#_.,，。:：|>]/g, '').length < 2) return;   // 只剩分隔線、空行的不算一段
+                    if (role === 'user' || role === 'assistant') segs.push({ kind: 'chat', role: role, text: t, mi: mi });
+                    else segs.push({ kind: 'unknown', name: '系統那邊，沒認出是誰放的', text: t, mi: mi });
+                };
+                claimed.forEach(function(c){
+                    gap(text.slice(pos, c.start));
+                    segs.push({ kind: c.p.kind, name: c.p.name, sub: c.p.sub, text: text.slice(c.start, c.end), mi: mi, order: c.p.order });
+                    pos = c.end;
+                });
+                gap(text.slice(pos));
+            });
+            this._alignPreset(segs, pieces);
+            // 最後一則你說的話單獨拿出來（模型最看重最後那段）
+            for (let i = segs.length - 1; i >= 0; i--) {
+                if (segs[i].kind === 'chat') { if (segs[i].role === 'user') segs[i].kind = 'now'; break; }
+            }
+            // 連在一起的聊天記錄併成一格
+            const merged = [];
+            segs.forEach(function(s){
+                const last = merged[merged.length - 1];
+                if (s.kind === 'chat' && last && last.kind === 'chat') {
+                    last.parts.push(s); return;
+                }
+                if (s.kind === 'chat') merged.push({ kind: 'chat', parts: [s] });
+                else merged.push(s);
+            });
+            merged.forEach(function(s){
+                if (s.kind === 'chat') {
+                    s.name = '聊天記錄 · ' + s.parts.length + ' 則';
+                    s.text = s.parts.map(function(p){ return '【' + (p.role === 'user' ? '你' : '角色') + '】\n' + p.text; }).join('\n\n');
+                } else if (s.kind === 'now') {
+                    s.name = '你這一輪說的話';
+                }
+            });
+            return merged;
+        },
+
+        _latestStoredRaw: async function() {
+            try {
+                const ctx = this._ctx();
+                const chatId = ctx && ctx.chatId;
+                if (!chatId) return null;
+                const index = await this._promptStoreGet('tt_prompts_index:' + chatId);
+                if (!Array.isArray(index) || !index.length) return null;
+                const sorted = index.slice().sort(function(a, b){ return Number(b.mesId) - Number(a.mesId); });
+                for (let i = 0; i < sorted.length && i < 6; i++) {
+                    const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + sorted[i].recordId);
+                    if (rec && Array.isArray(rec.rawPrompt) && rec.rawPrompt.length > 1) return rec.rawPrompt;
+                }
+            } catch (e) {}
+            return null;
+        },
+
+        showSegments: async function() {
+            const esc = function(x){ return String(x==null?'':x).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+            const old = document.getElementById('ctx-cv-overlay');
+            if (old) old.remove();
+            const ov = document.createElement('div');
+            ov.id = 'ctx-cv-overlay';
+            ov.className = 'ctx-cv-overlay';
+            ov.innerHTML = '<div class="ctx-cv-box"><div class="ctx-cv-head"><span class="ctx-cv-title">送出去的每一段</span><span class="ctx-cv-meta">整理中…</span><button class="ctx-cv-close" type="button">✕</button></div><div class="ctx-seg-list"></div></div>';
+            document.body.appendChild(ov);
+            const close = function(){ ov.remove(); };
+            ov.addEventListener('click', function(e){ if (e.target === ov) close(); });
+            ov.querySelector('.ctx-cv-close').addEventListener('click', close);
+            const box = ov.querySelector('.ctx-cv-box');
+
+            let chat = Array.isArray(this._liveChat) && this._liveChat.length ? this._liveChat : this._recRaw;
+            if (!chat) chat = await this._latestStoredRaw();
+            let segs = this._buildSegments(chat);
+            let note = '';
+            if (!segs) {
+                // 重新整理後手上沒有「真送出去那包」，只剩存檔裡的大類
+                const bc = this.breakdownContent || {};
+                const self = this;
+                segs = Object.keys(this._KEY_LABELS).filter(function(k){ return bc[k] && String(bc[k]).trim(); })
+                    .map(function(k){ return { kind: k === 'chat' ? 'chat' : 'unknown', name: self._KEY_LABELS[k], text: String(bc[k]) }; });
+                note = '找不到這個聊天送出去的記錄，只分得出大類。';
+            }
+            for (let i = 0; i < segs.length; i++) segs[i].tok = await this._tokAsync(segs[i].text);
+            const total = segs.reduce(function(a, s){ return a + (s.tok || 0); }, 0);
+
+            const self = this;
+            const renderList = function() {
+                box.innerHTML = '<div class="ctx-cv-head"><span class="ctx-cv-title">送出去的每一段</span><span class="ctx-cv-meta">照送出去的順序 · ' + segs.length + ' 段 · 約 ' + total.toLocaleString() + ' tokens</span><button class="ctx-cv-close" type="button">✕</button></div>'
+                    + (note ? '<div class="ctx-seg-note">' + esc(note) + '</div>' : '')
+                    + '<div class="ctx-seg-list">' + (segs.length ? segs.map(function(s, i){
+                        return '<button class="ctx-seg-row" type="button" data-i="' + i + '">'
+                            + '<span class="ctx-seg-tag k-' + s.kind + '">' + esc(self._KIND_TAGS[s.kind] || '') + '</span>'
+                            + '<span class="ctx-seg-name">' + esc(s.name) + (s.sub ? '<small>' + esc(s.sub) + '</small>' : '') + '</span>'
+                            + '<span class="ctx-seg-tok">' + (s.tok || 0).toLocaleString() + '</span></button>';
+                    }).join('') : '<div class="ctx-seg-note">還沒有送出過。</div>') + '</div>';
+                box.querySelector('.ctx-cv-close').addEventListener('click', close);
+                box.querySelectorAll('.ctx-seg-row').forEach(function(b){
+                    b.addEventListener('click', function(){ renderOne(segs[+b.dataset.i]); });
+                });
+            };
+            const renderOne = function(s) {
+                box.innerHTML = '<div class="ctx-cv-head"><button class="ctx-seg-back" type="button"><i class="fa-solid fa-chevron-left"></i></button>'
+                    + '<span class="ctx-cv-title">' + esc(s.name) + '</span><span class="ctx-cv-meta">' + esc(self._KIND_TAGS[s.kind] || '') + (s.sub ? ' · ' + esc(s.sub) : '') + ' · 約 ' + (s.tok || 0).toLocaleString() + ' tokens</span>'
+                    + '<button class="ctx-cv-close" type="button">✕</button></div>'
+                    + '<pre class="ctx-cv-body">' + esc(s.text) + '</pre>';
+                box.querySelector('.ctx-cv-close').addEventListener('click', close);
+                box.querySelector('.ctx-seg-back').addEventListener('click', renderList);
+            };
+            renderList();
+        },
+
+        _readFromTauriStorage: async function() {
+            try {
+                const ctx = (win.SillyTavern && win.SillyTavern.getContext && win.SillyTavern.getContext())
+                         || (window.SillyTavern && window.SillyTavern.getContext && window.SillyTavern.getContext());
+                const chatId = ctx && ctx.chatId;
+                if (!chatId) return false;
+                const index = await this._promptStoreGet('tt_prompts_index:' + chatId);
+                if (!Array.isArray(index) || !index.length) return false;
+                // 讀全部 record，過濾掉「小幻影紀錄」(score 極小，如 64)，在真紀錄裡挑「最新 mesId」=
+                //   當前實際送出的上下文。這樣總結+隱藏正文後再生成一次，CTX 會反映縮小；
+                //   不像挑「最大那筆」會永遠卡在歷史峰值、降不下來。
+                const cands = [];
+                for (let i = 0; i < index.length; i++) {
+                    const rec = await this._promptStoreGet('tt_prompts_record:' + chatId + ':' + index[i].recordId);
+                    if (!rec) continue;
+                    cands.push({ mesId: Number(index[i].mesId), score: this._pickScore(rec), rec: rec });
+                }
+                if (!cands.length) return false;
+                const real = cands.filter(function(c){ return c.score > 500; }); // 幻影通常 <100；真紀錄遠大於此
+                const pool = real.length ? real : cands;
+                let pick = pool[0];
+                for (let i = 1; i < pool.length; i++) { if (pool[i].mesId > pick.mesId) pick = pool[i]; }
+                const b = await this._recordToBreakdown(pick.rec);   // 只對選中那筆跑真分詞器
+                if (!b || !b.total) return false;
+                this.sendTokens = b.total;
+                this.sendChars  = null;
+                this.breakdown  = b.breakdown;
+                this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                return true;
+            } catch (e) { return false; }
+        },
+
+        // 從 console 攔截更新（ST 模式插件未安裝時備援）
+        updateSend: function(tokens, chars) {
+            this.sendTokens = tokens; this.sendChars = chars;
+            this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            this._refreshDisplay();
+        },
+        updateRecv: function(tokens, chars) {
+            this.recvTokens = tokens; this.recvChars = chars;
+            this._refreshDisplay();
+        },
+        updateMsgs: function(count) {
+            this.msgs = count;
+            this._refreshDisplay();
+        },
+
+        // 🔁 自動總結 UI：開關存 sp_autosum_on、門檻存 sp_autosum_every（背景觸發在 os_story_tools.autoSummarizeCheck）
+        _setAutoSum: function(key, val) {
+            try {
+                if (key === 'on') {
+                    win.AUI.lsSet('sp_autosum_on', val ? '1' : '0', '自動總結的開關');
+                    const row = document.getElementById('ctx-autosum-row');
+                    if (row) row.classList.toggle('off', !val);
+                } else if (key === 'every') {
+                    let n = parseInt(val); if (isNaN(n) || n < 2) n = 20; if (n > 200) n = 200;
+                    win.AUI.lsSet('sp_autosum_every', String(n), '自動總結的輪數');
+                    const inp = document.getElementById('ctx-autosum-every'); if (inp) inp.value = n;
+                }
+            } catch (e) {}
+        },
+        _initAutoSumUI: function() {
+            try {
+                const on = localStorage.getItem('sp_autosum_on') === '1';
+                let every = parseInt(localStorage.getItem('sp_autosum_every')); if (isNaN(every) || every < 2) every = 20;
+                const cb = document.getElementById('ctx-autosum-on'); if (cb) cb.checked = on;
+                const inp = document.getElementById('ctx-autosum-every'); if (inp && document.activeElement !== inp) inp.value = every;
+                const row = document.getElementById('ctx-autosum-row'); if (row) row.classList.toggle('off', !on);
+            } catch (e) {}
+        },
+
+        // 🗜 自動整理記憶那一行：開關 sp_memtidy_on、輪次 sp_memtidy_every（觸發在 os_story_tools.autoMemTidyTick）
+        _setMemTidy: function(key, val) {
+            try {
+                if (key === 'on') win.AUI.lsSet('sp_memtidy_on', val ? '1' : '0', '自動整理記憶的開關');
+                else if (key === 'every') {
+                    let n = parseInt(val); if (isNaN(n) || n < 5) n = 30; if (n > 500) n = 500;
+                    win.AUI.lsSet('sp_memtidy_every', String(n), '自動整理記憶的輪數');
+                }
+            } catch (e) {}
+            this._initMemTidyUI();
+        },
+        _initMemTidyUI: function() {
+            try {
+                const T = win.OS_STORY_TOOLS;
+                const on = localStorage.getItem('sp_memtidy_on') === '1';
+                const every = T?.memTidyEvery ? T.memTidyEvery() : 30;
+                const cb = document.getElementById('ctx-memtidy-on'); if (cb) cb.checked = on;
+                const inp = document.getElementById('ctx-memtidy-every'); if (inp && document.activeElement !== inp) inp.value = every;
+                const row = document.getElementById('ctx-memtidy-row'); if (row) row.classList.toggle('off', !on);
+                const left = document.getElementById('ctx-memtidy-left');
+                if (left) left.textContent = on && T?.memTidyCount ? '（還 ' + Math.max(0, every - T.memTidyCount()) + ' 輪）' : '';
+            } catch (e) {}
+        },
+
+        // 🎭 表情交給誰那一行（11-04）：三選一按這張卡記，跟藏書開頭那排同一份（VN_FREE_MODE.exprMode）；劇情中途改，下一章生效。
+        //   視差世界裡只鎖主模型那顆：副模型／不寫照樣能切，存世界那一把，撤離回來主世界的不變
+        _setExpr: async function(mode) {
+            try {
+                const FM = win.VN_FREE_MODE || window.VN_FREE_MODE;
+                if (!FM || !FM.setExprMode || FM.exprModeNow() === mode) return;
+                if (FM.inParallax?.() && mode === 'main') return;
+                await FM.setExprMode(mode);
+            } catch (e) {}
+            this._initExprUI();
+        },
+        _initExprUI: function() {
+            try {
+                const row = document.getElementById('ctx-expr-row');
+                const FM = win.VN_FREE_MODE || window.VN_FREE_MODE;
+                if (!row) return;
+                if (!FM || !FM.exprModeNow || !FM.storyId()) { row.classList.add('ctx-expr-none'); return; }
+                row.classList.remove('ctx-expr-none');
+                const locked = !!FM.inParallax?.();
+                const now = FM.exprModeNow();
+                row.querySelectorAll('.ctx-expr-btn').forEach(b => {
+                    const lockThis = locked && b.dataset.mode === 'main';
+                    b.classList.toggle('on', b.dataset.mode === now);
+                    b.disabled = lockThis;
+                    b.title = lockThis ? '在視差世界裡主模型固定不寫表情，撤離回主世界才能選這個'
+                        : (locked ? '只管視差世界，撤離回來照主世界選的' : '');
+                });
+            } catch (e) {}
+        },
+
+        // 點開 Ctx 時呼叫（async：原生算 token 是非同步的）
+        // 📋 小劇場（VN_Core.sidePlay）：數字換成寫這場戲的那一通（控制台記錄那筆），不讀酒館主聊天。
+        //   主線才有的那幾行（未總結樓層、自動總結、整理記憶、表情、上下文組成、故事管理）先收起來（CSS 看 .ctx-side）。回 true＝這次是小劇場
+        _pollSide: function() {
+            const V = win.VN_Core || window.VN_Core;
+            const sp = V && V.sidePlay ? V.sidePlay() : null;
+            const popup = document.getElementById('vn-ctx-popup');
+            if (popup) popup.classList.toggle('ctx-side', !!sp);
+            let box = document.getElementById('ctx-side-box');
+            if (!sp) { if (box) box.remove(); return false; }
+            const rec = V._sideRec ? V._sideRec() : null;
+            this.sendTokens = rec && rec.inTok != null ? rec.inTok : null;
+            this.sendChars  = rec ? String(rec.prompt || '').length : null;
+            this.recvTokens = rec && rec.outTok != null ? rec.outTok : null;
+            this.recvChars  = rec ? String(rec.raw || '').length : null;
+            this.msgs       = rec ? ((String(rec.prompt || '').match(/^【[a-z?]+】$/gim) || []).length || null) : null;   // 控制台記錄每則開頭一行【role】
+            this.lastUpdate = rec ? new Date(rec.t).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : null;
+            this.breakdown = null; this.unsum = null; this.recallTokens = 0; this.recallCount = 0;
+            if (!box && popup) {
+                box = document.createElement('div');
+                box.id = 'ctx-side-box';
+                const t = popup.querySelector('.ctx-title');
+                if (t) t.insertAdjacentElement('afterend', box); else popup.prepend(box);
+            }
+            if (box) {
+                const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+                box.innerHTML = '<div class="ctx-side-k">這場是' + esc(sp.name) + '：數字是寫這場戲的那一通，不是主線</div>'
+                    + (rec ? V._sideLogLinkHtml(rec) : '<div class="ctx-side-none">找不到寫這場戲的那一通（控制台只記這次開起來以後的呼叫）</div>');
+            }
+            const limitInput = document.getElementById('ctx-limit-input');
+            if (limitInput) limitInput.value = this.getLimit();
+            this._refreshDisplay();
+            // token 還在算（控制台那筆是背景估的）：等一下再補一次
+            if (rec && (rec.inTok == null || rec.outTok == null)) setTimeout(() => { if (popup && popup.isConnected && popup.classList.contains('ctx-side')) this._pollSide(); }, 800);
+            return true;
+        },
+
+        poll: async function() {
+            if (this._pollSide()) return;
+            this.breakdown = null;
+            this._bindContentClicks();
+            this._initAutoSumUI();
+            this._initExprUI();
+            this._initMemTidyUI();
+            const isStandalone = win.OS_API?.isStandalone?.() ?? false;
+            if (isStandalone) {
+                this._readFromStandalone();
+            } else {
+                // 同步 input + 先 refresh 一次（避免等算 token 時面板空白），再非同步補上細項
+                const limitInputEarly = document.getElementById('ctx-limit-input');
+                if (limitInputEarly) limitInputEarly.value = this.getLimit();
+                this._refreshDisplay();
+                // 優先讀酒館原生 itemizedPrompts（準+有細項）；拿不到再退回插件全域
+                if (!(await this._readFromItemized())) {
+                    this._readFromPlugin();
+                    this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+            }
+            // 記憶召回（向量記憶）獨立計數：用我們實際注入的那段文字算 token（酒館把它併進「注入/擴充」桶，這裡單獨拆出來看）
+            try {
+                const lr = win.OS_VECTOR_INJECT?._lastRecall;
+                this.recallCount  = (lr && lr.count) || 0;
+                this.recallTokens = (lr && lr.text) ? await this._tokAsync(lr.text) : 0;
+                this.recallText   = (lr && lr.text) || '';
+            } catch (e) { this.recallTokens = 0; this.recallCount = 0; this.recallText = ''; }
+            // 未總結樓層（酒館）：目前最後樓 − 上次大總結記的 Last
+            try {
+                if (!(win.OS_API?.isStandalone?.() ?? false) && win.OS_STORY_TOOLS?.getUnsummarizedInfo) {
+                    this.unsum = await win.OS_STORY_TOOLS.getUnsummarizedInfo();
+                } else { this.unsum = null; }
+            } catch (e) { this.unsum = null; }
+            // 🔧 有「真送出訊息」就用它重算 breakdown＋合計（蓋掉 itemized 帳本——自訂連線常算少/把重預設拆成 260）。
+            //   _liveChat = 模型真收到的那包 → 合計貼近平台、系統提示顯示真實重預設。記憶召回(下面)仍照原本算當 system 子項。
+            try {
+                const live = await this._breakdownFromLive();
+                if (live) {
+                    this.breakdown  = live.breakdown;
+                    this.sendTokens = live.total;
+                    this.sendChars  = live.chars;
+                    if (!this.lastUpdate) this.lastUpdate = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+            } catch (e) {}
+
+            // 同步 input 顯示值
+            const limitInput = document.getElementById('ctx-limit-input');
+            if (limitInput) limitInput.value = this.getLimit();
+            this._refreshDisplay();
+        },
+
+        _refreshDisplay: function() {
+            try {
+                const eT    = document.getElementById('ctx-tokens');
+                const eC    = document.getElementById('ctx-chars');
+                const eRT   = document.getElementById('ctx-recv-tokens');
+                const eRC   = document.getElementById('ctx-recv-chars');
+                const eM    = document.getElementById('ctx-msgs');
+                const eTime = document.getElementById('ctx-time');
+                if (eT)  eT.textContent  = this.sendTokens != null ? this.sendTokens.toLocaleString() : '—';
+                if (eC)  eC.textContent  = this.sendChars  != null ? this.sendChars.toLocaleString()  : '—';
+                if (eRT) eRT.textContent = this.recvTokens != null ? this.recvTokens.toLocaleString() : '—';
+                if (eRC) eRC.textContent = this.recvChars  != null ? this.recvChars.toLocaleString()  : '—';
+                if (eM)  eM.textContent  = this.msgs       != null ? this.msgs.toLocaleString()       : '—';
+                if (eTime) eTime.textContent = this.lastUpdate ? `更新 ${this.lastUpdate}` : '尚未偵測到數據';
+
+                // 未總結樓層（酒館）：直觀看到還有多少對話沒總結
+                const usRow = document.getElementById('ctx-unsum-row');
+                const usVal = document.getElementById('ctx-unsum');
+                if (usRow) usRow.style.display = this.unsum ? '' : 'none';
+                if (usVal && this.unsum) {
+                    const _u = this.unsum;
+                    if (_u.uncounted > 0 && _u.start <= _u.end) usVal.textContent = `${_u.uncounted} 樓（第 ${_u.start}–${_u.end}）`;
+                    else if (_u.lastSummarized > _u.currentLast) usVal.textContent = `已總結到 #${_u.lastSummarized}、目前剩 #${_u.currentLast}（刪過訊息）`;
+                    else usVal.textContent = `0（已最新）`;
+                }
+
+                // 總結次數（已做過第幾次大總結，來自世界書總結 entry 的「第N次」最大值）
+                const scRow = document.getElementById('ctx-sumcount-row');
+                const scVal = document.getElementById('ctx-sumcount');
+                if (scRow) scRow.style.display = this.unsum ? '' : 'none';
+                if (scVal && this.unsum) {
+                    const _c = this.unsum.summaryCount || 0;
+                    scVal.textContent = _c > 0 ? `第 ${_c} 次` : '尚未總結';
+                }
+
+                // 本輪用量：文字 API 次數 + 生圖次數（追蹤一輪劇情觸發幾次 API / 生圖）
+                const uVal = document.getElementById('ctx-usage-cnt');
+                if (uVal) {
+                    const u = win.AURELIA_USAGE;
+                    uVal.textContent = u ? `${u.tText} 次 · 生圖 ${u.tImg}　（累計 ${u.text} / ${u.img}）` : '—';
+                }
+
+                // 細項拆解（來自酒館原生 itemizedPrompts；沒資料就隱藏）
+                const bd = this.breakdown;
+                const bdWrap = document.getElementById('ctx-breakdown');
+                if (bdWrap) bdWrap.style.display = bd ? 'block' : 'none';
+                if (bd) {
+                    const total = bd.total || this.sendTokens || 0;
+                    const ROWS = [
+                        ['system',    bd.system],
+                        ['character', bd.character],
+                        ['world',     bd.world],
+                        ['examples',  bd.examples],
+                        ['chat',      bd.chat],
+                        ['persona',   bd.persona],
+                        ['note',      bd.note],
+                        ['inject',    bd.inject],
+                    ];
+                    ROWS.forEach(function(row) {
+                        const key = row[0];
+                        const v = Number(row[1]) || 0;
+                        const item = document.getElementById('ctx-bd-i-' + key);
+                        const eVal = document.getElementById('ctx-bd-' + key);
+                        const eBar = document.getElementById('ctx-bd-bar-' + key);
+                        if (item) item.style.display = v > 0 ? 'flex' : 'none';
+                        if (eVal) eVal.textContent = v.toLocaleString();
+                        if (eBar) eBar.style.width = (total > 0 ? Math.min(100, Math.round(v / total * 100)) : 0) + '%';
+                    });
+                    // 記憶召回獨立行（值來自 this.recallTokens，是「注入/擴充」的子項、不另計入合計）
+                    const recallV = Number(this.recallTokens) || 0;
+                    const rItem = document.getElementById('ctx-bd-i-recall');
+                    const rVal  = document.getElementById('ctx-bd-recall');
+                    const rBar  = document.getElementById('ctx-bd-bar-recall');
+                    if (rItem) rItem.style.display = recallV > 0 ? 'flex' : 'none';
+                    if (rVal)  rVal.textContent = recallV.toLocaleString() + (this.recallCount ? ` · ${this.recallCount}條` : '');
+                    if (rBar)  rBar.style.width = (total > 0 ? Math.min(100, Math.round(recallV / total * 100)) : 0) + '%';
+                    // 大總結注入獨立行（來自 os_summary_inject 本輪實際注入的字元數；點行可看全文）——
+                    // 直接在 CTX 看注入多肥、到重壓門檻變色，不用開 debug 面板。bar=對 4000 字門檻的比例(滿格=該重壓)。
+                    try {
+                        const gi = (win.OS_SUMMARY_INJECT && win.OS_SUMMARY_INJECT._lastInjected) || null;
+                        const gLen = gi ? (Number(gi.len) || (gi.text ? gi.text.length : 0)) : 0;
+                        const gItem = document.getElementById('ctx-bd-i-gsummary');
+                        const gVal  = document.getElementById('ctx-bd-gsummary');
+                        const gBar  = document.getElementById('ctx-bd-bar-gsummary');
+                        if (gItem) {
+                            gItem.style.display = gLen > 0 ? 'flex' : 'none';
+                            gItem.title = gLen >= 2500 ? '大總結注入偏肥了——到「故事管理」按「重壓目前大總結」濃縮' : '';
+                        }
+                        if (gVal && gLen > 0) {
+                            gVal.textContent = gLen.toLocaleString() + ' 字';
+                            gVal.style.color = gLen >= 4000 ? '#ff6b6b' : gLen >= 2500 ? '#f6ad55' : '';
+                        }
+                        if (gBar) gBar.style.width = (gLen > 0 ? Math.min(100, Math.round(gLen / 4000 * 100)) : 0) + '%';
+                    } catch (e) {}
+
+                    const eTot = document.getElementById('ctx-bd-total-val');
+                    if (eTot) eTot.textContent = total.toLocaleString();
+                }
+
+                // 進度條
+                const barFill   = document.getElementById('ctx-bar-fill');
+                const usageText = document.getElementById('ctx-usage-text');
+                if (barFill && usageText && this.sendTokens != null) {
+                    const limit = this.getLimit();
+                    const pct   = Math.min(100, Math.round((this.sendTokens / limit) * 100));
+                    const level = pct >= 100 ? 'danger' : pct >= 70 ? 'warn' : '';
+                    barFill.style.width = pct + '%';
+                    barFill.className   = 'ctx-bar-fill' + (level ? ' ' + level : '');
+                    usageText.textContent = `${this.sendTokens.toLocaleString()} / ${limit.toLocaleString()} (${pct}%)`;
+                    usageText.className   = 'ctx-usage-text' + (level ? ' ' + level : '');
+                    // 超過警戒：讓 Ctx 按鈕閃爍提示
+                    const ctxBtn = document.getElementById('vn-btn-ctx');
+                    if (ctxBtn) {
+                        if (level === 'danger') {
+                            ctxBtn.style.color  = '#ff6b6b';
+                            ctxBtn.title        = '已超過警戒 Token！建議立即總結';
+                        } else if (level === 'warn') {
+                            ctxBtn.style.color  = '#f6ad55';
+                            ctxBtn.title        = '注意：Token 用量已達 70%';
+                        } else {
+                            ctxBtn.style.color  = '';
+                            ctxBtn.title        = '';
+                        }
+                    }
+                    // 顯示/隱藏大總結按鈕
+                    const sumWrap = document.getElementById('ctx-summary-wrap');
+                    const sumBtn  = document.getElementById('ctx-summary-btn');
+                    if (sumWrap) sumWrap.style.display = (level === 'warn' || level === 'danger') ? 'block' : 'none';
+                    if (sumBtn) {
+                        if (level === 'danger') {
+                            sumBtn.style.borderColor = 'rgba(255,107,107,0.5)';
+                            sumBtn.style.color = '#ff6b6b';
+                            sumBtn.style.background = 'rgba(255,107,107,0.08)';
+                        } else {
+                            sumBtn.style.borderColor = 'rgba(246,173,85,0.35)';
+                            sumBtn.style.color = '#f6ad55';
+                            sumBtn.style.background = 'rgba(246,173,85,0.08)';
+                        }
+                    }
+                }
+
+                const popup = document.getElementById('vn-ctx-popup');
+                if (popup && popup.classList.contains('show')) {
+                    popup.classList.remove('ctx-pulse');
+                    void popup.offsetWidth;
+                    popup.classList.add('ctx-pulse');
+                }
+            } catch(e) {}
+        }
+    };
+
+    window.VN_CtxMonitor = VN_CtxMonitor;
+
+    // 生成當下抓「實際要送出的訊息陣列」——OAI/chat completion 沒有 mesSendString，
+    // 對話歷史在 rawPrompt；這裡直接從 CHAT_COMPLETION_PROMPT_READY 事件拿，最可靠、不靠任何持久化。
+    (function bindPromptCapture(tries) {
+        try {
+            const te = win.tavern_events;
+            if (win.eventOn && te && te.CHAT_COMPLETION_PROMPT_READY) {
+                win.eventOn(te.CHAT_COMPLETION_PROMPT_READY, function(data) {
+                    try {
+                        if (!data || data.dryRun) return;   // dryRun = 純算 token、不是真送，跳過
+                        const msgs = data.chat || data.messages || data.prompt;
+                        if (Array.isArray(msgs)) { VN_CtxMonitor._liveChat = msgs; VN_CtxMonitor._snapKnown(); }
+                    } catch (e) {}
+                });
+                // 這一輪觸發了哪些世界書條目（逐段看要拿它們的原文去認）
+                if (te.WORLD_INFO_ACTIVATED) win.eventOn(te.WORLD_INFO_ACTIVATED, function(entries) {
+                    try { if (Array.isArray(entries)) VN_CtxMonitor._wiActive = entries.slice(); } catch (e) {}
+                });
+                if (te.GENERATION_STARTED) win.eventOn(te.GENERATION_STARTED, function(type, opts, dryRun) {
+                    if (!dryRun) VN_CtxMonitor._wiActive = [];
+                });
+                return;
+            }
+        } catch (e) {}
+        if (tries > 0) setTimeout(function(){ bindPromptCapture(tries - 1); }, 1500);
+    })(8);
+
+    // console.log 攔截：備援（插件未安裝）+ 捕捉訊息數（插件不寫全域變數）
+    (function() {
+        const _orig = console.log;
+        // 用第一個 arg 做快速前置過濾，避免每條 log 都做 join + regex
+        console.log = function(...args) {
+            _orig.apply(console, args);
+            try {
+                const first = typeof args[0] === 'string' ? args[0] : '';
+                // 只處理來自 Prompt Template 或 processing 的 log，其他全部跳過
+                if (!first.includes('processing') && !first.includes('[Prompt Template]')) return;
+                const msg = args.join(' ');
+                const hasPlugin = !!win.extension_settings?.variables?.global?.LAST_SEND_TOKENS;
+                if (!hasPlugin) {
+                    if (msg.includes('send result')) {
+                        const m1 = msg.match(/processing send result:\s*(\d+)\s*tokens and\s*(\d+)\s*chars/);
+                        if (m1) { VN_CtxMonitor.updateSend(parseInt(m1[1]), parseInt(m1[2])); return; }
+                    }
+                    if (msg.includes('receive result')) {
+                        const m3 = msg.match(/processing receive result:\s*(\d+)\s*tokens and\s*(\d+)\s*chars/);
+                        if (m3) { VN_CtxMonitor.updateRecv(parseInt(m3[1]), parseInt(m3[2])); return; }
+                    }
+                }
+                // 訊息數（插件不寫全域，只能從 log 取）
+                if (msg.includes('[Prompt Template]')) {
+                    const m2 = msg.match(/\[Prompt Template\] processing (\d+) messages in/);
+                    if (m2) VN_CtxMonitor.updateMsgs(parseInt(m2[1]));
+                }
+            } catch(e) {}
+        };
+    })();
+})();

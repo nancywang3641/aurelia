@@ -1,0 +1,522 @@
+// ----------------------------------------------------------------
+// [檔案] state_schema.js (V2 - Stage 1：主模型生 schema)
+// 路徑：os_phone/rpg/state_schema.js
+// 職責：
+// 1. 讀世界書 + 主角設定 + 開頭幾條 chat → 拼成 Stage 1 prompt
+// 2. 跑主模型 OS_API.chat 吐 JSON schema（這個世界要追蹤哪些狀態欄位）
+//    主模型用於 schema 是因為這是一次性「設計師工作」，要對世界觀深度理解，
+//    用主模型品質較高。Stage 2 高頻 patches 抽取仍用副模型（state_runtime.js）。
+// 3. 寫進 OS_DB.saveStateData（key = chatId）
+// 4. emit 'AURELIA_STATE_SCHEMA_GENERATED' 事件給 panel 重新渲染
+//
+// 對應 map 的 world_generator 的位置：一次性 / 可重生
+// ----------------------------------------------------------------
+(function() {
+    console.log('🧬 [State Schema] V1 載入');
+    const win = window.parent || window;
+
+    const CONFIG = {
+        headMessages: 6,    // 開頭幾條訊息餵給副模型參考
+        timeoutMs: 180000,  // schema 走「主模型」生成、量大(MaxTokens 上萬)；推理模型(gemini-3.x-pro/o系)常要 60~120s → 60s 太短會在它回來前就誤判超時、白等又重試。拉到 3 分鐘容納慢模型
+        retryCount: 2,
+        minFields: 4,
+        maxFields: 15
+    };
+
+    // --- 工具 ---
+    // 與 state_runtime.js 共用 normalize 邏輯（剝路徑、砍 .jsonl）
+    function normalizeChatId(raw) {
+        if (!raw) return '';
+        let s = String(raw).split(/[\\/]/).pop() || '';
+        s = s.replace(/\.jsonl?$/i, '');
+        return s.trim();
+    }
+
+    // PWA（獨立版）＝沒有酒館可問：id 走 adapter（那邊 standalone 回 storyId）。
+    //   以前這裡只認 SillyTavern.getContext().chatId → PWA 一律空字串 → 「沒有 chatId，無法生成 schema」。
+    function isStandalone() { return !!(win.OS_API?.isStandalone?.()); }
+
+    function getChatId() {
+        try {
+            const id = win.OS_AVS_ADAPTER?.getCurrentChatId?.();
+            if (id) return id;
+            const ctx = win.SillyTavern?.getContext?.();
+            return normalizeChatId(ctx?.chatId);
+        } catch(e) { return ''; }
+    }
+
+    // 當前這本藏書（PWA 的「角色卡」對應物：匯入角色卡時建的世界物件）
+    function _pwaWorld() {
+        try {
+            const wid = localStorage.getItem('vn_current_world_id') || '';
+            if (!wid) return null;
+            const list = win.AURELIA_CUSTOM_WORLDS || window.AURELIA_CUSTOM_WORLDS
+                || JSON.parse(localStorage.getItem('aurelia_custom_worlds') || '[]');
+            return (list || []).find(w => w && w.id === wid) || null;
+        } catch(e) { return null; }
+    }
+
+    function showToast(msg, type = 'info') {
+        if (AUI.toastr) AUI.toastr[type](msg);
+        else console.log('[State Schema Toast]', msg);
+    }
+
+    function extractJSON(text) {
+        if (!text) return null;
+        // 先試完整 parse
+        try { return JSON.parse(text); } catch(e) {}
+        // 抓 ```json ... ``` 區塊
+        const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fence) {
+            try { return JSON.parse(fence[1]); } catch(e) {}
+        }
+        // 抓最外層 { ... }
+        const brace = text.match(/\{[\s\S]*\}/);
+        if (brace) {
+            try { return JSON.parse(brace[0]); } catch(e) {}
+        }
+        return null;
+    }
+
+    // --- 蒐集素材 ---
+    async function gatherWorldbookText() {
+        // PWA：世界書在 OS_DB，範圍＝這本故事掛著的書包（常駐包 ∪ 這本自己的，同 os_api_engine 的取法）。
+        //   這裡要的是「整本設定」不是「這輪命中的條目」→ 不走關鍵字觸發那條，直接全撈已啟用的。
+        if (isStandalone()) {
+            try {
+                if (!win.OS_DB?.getAllWorldbookEntries) return '';
+                let packs = null;
+                try {
+                    packs = win.OS_WORLDBOOK?.getActivePacks?.()
+                        || JSON.parse(localStorage.getItem('vn_active_wb_packs') || 'null');
+                } catch(e) {}
+                const all = await win.OS_DB.getAllWorldbookEntries();
+                const pool = (all || []).filter(e => e && e.enabled !== false && e.content &&
+                    (!packs || !packs.length || packs.includes(e.book || '預設書包')));
+                if (!pool.length) return '';
+                return pool.slice(0, 25)
+                    .map(e => `[${e.category || e.title || '設定'}] ${e.title || ''}\n${String(e.content).slice(0, 800)}`)
+                    .join('\n\n');
+            } catch(e) {
+                console.warn('[State Schema] 讀世界書失敗(PWA):', e);
+                return '';
+            }
+        }
+        try {
+            if (!win.TavernHelper) return '';
+            const ctx = win.SillyTavern?.getContext?.();
+            const bookName = win.TavernHelper.getCurrentCharPrimaryLorebook?.()
+                || win.TavernHelper.getCharWorldbookNames?.('current')?.primary
+                || '';
+            if (!bookName) return '';
+            const entries = await win.TavernHelper.getLorebookEntries(bookName);
+            if (!entries || !entries.length) return '';
+            return entries
+                .filter(e => e && e.enabled !== false && e.content)
+                .slice(0, 25)   // 防爆
+                .map(e => `[${e.comment || (e.keys || []).join(',') || 'entry'}]\n${(e.content || '').slice(0, 800)}`)
+                .join('\n\n');
+        } catch(e) {
+            console.warn('[State Schema] 讀世界書失敗:', e);
+            return '';
+        }
+    }
+
+    async function gatherUserPersona() {
+        if (isStandalone()) {
+            try {
+                const name = win.OS_PERSONA?.getName?.() || '';
+                const desc = win.OS_PERSONA?.getDesc?.() || '';
+                return (name || desc) ? `主角：${name}\n${desc}`.trim() : '';
+            } catch(e) { return ''; }
+        }
+        try {
+            const ctx = win.SillyTavern?.getContext?.();
+            const name = ctx?.name1 || '';
+            const desc = ctx?.userPersona || ctx?.persona || '';
+            return name || desc ? `主角：${name}\n${desc}`.trim() : '';
+        } catch(e) { return ''; }
+    }
+
+    async function gatherCharCard() {
+        // PWA：「角色卡」＝這本藏書（匯入卡片時建的世界物件）：世界描述 + 第一則開場白
+        if (isStandalone()) {
+            try {
+                const w = _pwaWorld();
+                if (!w) return '';
+                const parts = [];
+                if (w.title) parts.push(`世界：${w.title}`);
+                if (w.desc)  parts.push(`描述：${String(w.desc).slice(0, 1500)}`);
+                const g = Array.isArray(w.greetings) ? w.greetings.find(s => s && s.trim()) : '';
+                if (g) parts.push(`開場：${String(g).slice(0, 800)}`);
+                return parts.join('\n');
+            } catch(e) { return ''; }
+        }
+        try {
+            const ctx = win.SillyTavern?.getContext?.();
+            const ch = ctx?.characters?.[ctx?.characterId];
+            if (!ch) return '';
+            const parts = [];
+            if (ch.description) parts.push(`描述：${String(ch.description).slice(0, 1500)}`);
+            if (ch.scenario)    parts.push(`場景：${String(ch.scenario).slice(0, 800)}`);
+            if (ch.first_mes)   parts.push(`開場：${String(ch.first_mes).slice(0, 800)}`);
+            return parts.join('\n');
+        } catch(e) { return ''; }
+    }
+
+    // 🧳 這一段從哪裡開始（11-07）：同一個聊天室會在視差世界和奧瑞亞之間來回（DIVE 進去、撤離回來接著玩）。
+    //   「開頭劇情」要的是現在這一段的開頭，不是整個聊天室的第一則——從某個視差世界撤離回奧瑞亞後按「開始追蹤狀態」，
+    //   照舊拿第一則會拿到那個世界的開場，生出來又是那個世界的欄位。
+    //   在世界裡＝最後一次進門那則起；回到奧瑞亞＝最後一次撤離回程那則起；回來了卻沒有回程那則（沒送出去）＝拿最近幾則。
+    //   認的是世界門開場／回程指令裡寫死的字（os_worldgate 的 _divePrompt／_returnPrompt）。沒進過世界門的照舊從第一則。
+    //   回 { from } 或 { tail:true }；list 照時間舊到新，textOf 取「她送出去的那段」（不是使用者那則就回空）
+    function _legRange(list, textOf) {
+        let lastIn = -1, lastOut = -1;
+        (list || []).forEach((x, i) => {
+            const t = String(textOf(x) || '');
+            if (!t) return;
+            if (/進入視差世界「[^」]+」/.test(t)) lastIn = i;
+            if (/從視差世界「[^」]+」撤離/.test(t)) lastOut = i;
+        });
+        if (lastIn < 0 && lastOut < 0) return { from: 0 };
+        let inPara = false;
+        try { const G = win.AURELIA_WORLDGATE || window.AURELIA_WORLDGATE; inPara = !!(G && G.isInParallax && G.isInParallax()); } catch (e) {}
+        if (inPara) return { from: Math.max(0, lastIn) };
+        if (lastOut > lastIn) return { from: lastOut };
+        return { tail: true };
+    }
+    function _legSlice(list, textOf) {
+        const r = _legRange(list, textOf);
+        return r.tail ? list.slice(-CONFIG.headMessages) : list.slice(r.from, r.from + CONFIG.headMessages);
+    }
+
+    async function gatherHeadMessages() {
+        // PWA：沒有酒館訊息樓層，對應物＝這本故事最早的幾章（request＝她輸入的，content＝AI 那一章）
+        if (isStandalone()) {
+            try {
+                if (!win.OS_DB?.getAllVnChapters) return '';
+                const sid = getChatId();
+                const all = await win.OS_DB.getAllVnChapters();
+                const sorted = (all || []).filter(c => c && (!sid || c.storyId === sid))
+                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+                const mine = _legSlice(sorted, c => c.request);
+                if (!mine.length) return '';
+                return mine.map(ch => {
+                    // 章節存的是整份劇本原文：剝掉思維鏈、只取 <content> 正文（同 os_api_engine 的取法）
+                    let text = String(ch.content || '').replace(/<(think(?:ing)?|vars_analyze)>[\s\S]*?<\/\1>/gi, '');
+                    const m = text.match(/<content>([\s\S]*?)<\/content>/i);
+                    if (m) text = m[1];
+                    const req = String(ch.request || '').trim();
+                    return (req ? `[USER] ${req.slice(0, 300)}\n\n` : '') + `[AI] ${text.trim().slice(0, 600)}`;
+                }).join('\n\n');
+            } catch(e) {
+                console.warn('[State Schema] 撈章節失敗(PWA):', e);
+                return '';
+            }
+        }
+        // 酒館：讀整個聊天檔（繞過懶載入）找這一段從哪則開始；讀不到才退回舊的「前幾樓」
+        try {
+            const full = await win.VN_READER?.fetchFullChat?.();
+            const msgs = Array.isArray(full) ? full.filter(m => m && (m.mes != null || m.message != null)) : [];   // 讀檔版第一筆是表頭（沒有內文）
+            if (msgs.length) {
+                const leg = _legSlice(msgs, m => m.is_user ? (m.mes || m.message || '') : '');
+                if (leg.length) return leg.map(m => {
+                    const role = m.is_user ? 'USER' : (m.name || 'AI');
+                    return `[${role}] ${String(m.message || m.mes || '').slice(0, 600)}`;
+                }).join('\n\n');
+            }
+        } catch (e) { console.warn('[State Schema] 讀整個聊天失敗，改用前幾樓:', e); }
+        try {
+            if (!win.TavernHelper?.getChatMessages) return '';
+            const last = await win.TavernHelper.getChatMessages(-1);
+            const lastId = (last && last[0] && (last[0].message_id ?? last[0].id)) ?? 0;
+            const headEnd = Math.min(CONFIG.headMessages - 1, lastId);
+            const msgs = await win.TavernHelper.getChatMessages(`0-${headEnd}`);
+            if (!msgs || !msgs.length) return '';
+            return msgs.map(m => {
+                const role = m.is_user ? 'USER' : (m.name || 'AI');
+                const text = (m.message || m.mes || '').slice(0, 600);
+                return `[${role}] ${text}`;
+            }).join('\n\n');
+        } catch(e) {
+            console.warn('[State Schema] 撈訊息失敗:', e);
+            return '';
+        }
+    }
+
+    // --- prompt ---
+    function buildPrompt(materials, userPrompt) {
+        const _userReq = (userPrompt && String(userPrompt).trim())
+            ? `\n⭐【使用者的追蹤取捨 · 最高優先】\n${String(userPrompt).trim()}\n（注意：下面詳細規範是預設模板；若上面有「只要追蹤這些維度」清單，就以清單為準——沒列到的維度別硬塞進 schema，列到的務必涵蓋。）\n`
+            : '';
+        return `你是劇情狀態追蹤系統的 schema 設計師。
+看下面這個跑團世界的世界書、角色設定、開頭劇情，決定接下來的劇情中**值得每輪追蹤**的狀態欄位。
+${_userReq}
+═══════════════════════════════════════
+⚠️【第一鐵律 · 違反直接整份重寫】
+這是群像劇，角色很多。**絕對禁止**生成「變數名裡帶具體角色名」的扁平變數。
+❌ 錯誤（一個角色一個變數）：「瑟琳理智值」「奧爾德信任度」「卡蜜拉HP」「小花好感度」
+✅ 正確（所有角色塞進一個 object 容器）：開「角色狀態」object 欄位，init = { "瑟琳":{...}, "奧爾德":{...} }
+判斷法：變數名裡**只要出現任何一個具體角色名**，就是錯的 → 必須改成 object 容器。
+通用化原則：你看到「奧爾德」「瑟琳」這些名字，不是叫你各開一個變數，是叫你把它們當「同一個容器裡的不同條目」。
+═══════════════════════════════════════
+
+【世界書】
+${materials.worldbook || '（無）'}
+
+【角色卡】
+${materials.charCard || '（無）'}
+
+【主角設定】
+${materials.userPersona || '（無）'}
+
+【開頭劇情】
+${materials.headMessages || '（無）'}
+
+---
+
+請輸出嚴格 JSON，格式如下（不要包 markdown 區塊，不要加註解）：
+
+{
+  "fields": {
+    "<欄位中文名>": {
+      "type": "<number | string | enum | list | object>",
+      "desc": "<這欄位記什麼，何時會變>",
+      "init": <初始值>
+    }
+  }
+}
+
+【⚠️ 同類多實體 → 必須用 object 型（最重要）】
+- 當世界有「多個同類角色 / NPC」且各自有屬性要追蹤時：
+  ❌ **絕不要**每個角色拆成獨立扁平變數（例「瑟琳理智值」「奧爾德信任度」分成兩個 number 欄位）
+  ✅ **要**歸納成一個 object 型欄位，init 是巢狀物件
+
+【⚠️ object 容器內：固定錨點 + 題材通用 + 角色特有（重要）】
+- 每個角色的屬性分三層，順序固定：
+  1.【固定錨點｜每個角色都必含、欄位名與順序完全一致、全部「平鋪」直接放角色名底下，不要再包「形象」這一層】：
+     髮色、眼色、體型、身分、好感度（0-100，對主角MC的好感，純數字不加符號；主角MC/{{user}} 本人填 null）。
+     ★ 這組等同「簡易預設」的底，**無論什麼題材都一律要帶**：髮色/眼色/體型/身分＝角色一致性與生圖的權威參照，好感度＝關係推進。值依各角色人設填真實內容，人設沒寫到的填 "待定"。
+  2.【題材通用】再依世界觀題材加一組「所有角色都有」的通用屬性（例：HP、信任度、理智值…），欄位名/順序同樣一致。
+  3.【角色特有】依該角色人設加 1~3 個專屬屬性（例：復仇者加「復仇執念」、騎士加「忠誠度」）。
+  4.【當前盤算｜每個角色都必含、平鋪放角色名底下】：「當前目標」(string，這角色眼下在謀劃／想做的事，貼其人設動機；沒有填"無")。讓 AI 記得每個 NPC 各自在忙什麼、會主動推進，不只被動反應主角。
+     ★ 這是**會過期的欄位**：達成／破局／被更急的事取代就整句換掉，無事可謀填"無"。desc 裡要寫明這點（例：「當前目標＝眼下正在謀劃的事，達成或作廢就換新的一句，沒有填無」），不然 AI 會讓同一句話掛到天荒地老。
+     ★ **不要加「時限／期限／倒數／剩餘回合」這類欄位**——跑團沒有真的時鐘在跑，這種欄位只會逼 AI 每輪編一個數字出來、還互相矛盾。要有期限就寫進「當前目標」那句話裡。
+- desc 裡**必須寫明完整基礎組（固定錨點＋題材通用各是哪幾個）**，跑團時新角色登場才知道要套同一組。
+- 正確範例（前五個固定錨點每角色完全一致，HP 是題材通用，最後一個才是各自特有；角色名與外觀值依實際世界填，這裡用佔位）：
+  {
+    "角色狀態": {
+      "type": "object",
+      "desc": "每個角色的即時狀態。固定錨點(每人都有、順序一致、平鋪)：髮色、眼色、體型、身分、好感度(0-100對主角)；題材通用：HP(0-100)；當前盤算：當前目標。之後可依人設加專屬屬性。新角色登場自動套這組。主角MC好感度填 null。",
+      "init": {
+        "<角色A名>": { "髮色": "<依設定填>", "眼色": "<依設定填>", "體型": "<依設定填>", "身分": "<依設定填>", "好感度": 0, "HP": 100, "<特有屬性>": 80, "當前目標": "<這角色眼下想做的事>" },
+        "<角色B名>": { "髮色": "<依設定填>", "眼色": "<依設定填>", "體型": "<依設定填>", "身分": "<依設定填>", "好感度": 0, "HP": 100, "<特有屬性>": 50, "當前目標": "<這角色眼下想做的事>" }
+      }
+    }
+  }
+- object 型的好處：劇情中臨時冒出的隨機 NPC，主模型可直接往這欄位裡加新角色（套基礎屬性組），不必預先定義
+- 判斷準則：「這個屬性是綁在某個角色 / 某個實體身上的嗎？」→ 是，就放進 object 型容器
+- 同理，多個地點、多個派系、多個任務…只要是「同類的一群」，都用 object 型歸納（一樣是基礎屬性統一 + 特有）
+
+【init 型別規則】
+- number 型 → 給數字，例 0 或 50（不要加引號）
+- string / enum 型 → 給字串，例 "未開始" 或 "" 表空
+- list 型 → 必須給陣列，例 [] 或 ["物品A", "物品B"]（**禁止給單獨的 "[" 或字串**）
+- object 型 → 給巢狀物件 { "實體名": { "屬性": 值, ... } }，至少放開頭劇情已登場的角色 / 實體
+
+【desc 必須明確邊界（防止 AI 後續無限累加）】
+- **number 型 desc 必須註明範圍**，例：「好感度 (0-100)：...」、「HP (0-200 上限)：...」、「金錢餘額 (0-99999 上限)：...」
+- **倒計時類**註明起始值與終止條件，例：「末日倒計時 (90 開始，可變負，-30 完全末日)」
+- **絕對禁止**寫沒上限的 desc，例「好感度，互動上升」← 這種寫法會讓 AI 累加到 999999
+- enum 型 desc 必須列出**完整可選值**，例：「狀態。可選值: 健康/受傷/重傷/死亡」
+
+【整體規則】
+- 欄位數 ${CONFIG.minFields}-${CONFIG.maxFields} 個（object 型容器算一個欄位，內含多角色不另計）
+- **只追蹤會隨劇情變化的事**（好感度、HP、當前任務、時間、地點、心情、攜帶物品、進度條、倒計時等）
+- **必含一個「劇情目標」object 欄位**，固定兩個子欄位（順序一致）：
+  · 「長期目標」(string)：整條主線、為什麼出發、最終要達成什麼。**穩定錨點**——開場確立後幾乎不動（跑團越深防 AI 忘記初衷）。init 依世界設定／開場填真正主線、不留空泛佔位。
+  · 「短期待辦」(string)：眼前這一步要做的事，每輪會變；開場沒有明確待辦就填「無」。
+  範例 init = { "長期目標": "<依開場主線填>", "短期待辦": "<開場眼前要做的事，或 無>" }
+- **絕不追蹤永久不變的事**（世界觀設定、背景設定、種族）。**唯一例外**：角色的髮色/眼色/體型/身分屬「固定錨點」，必須記在「角色狀態」object 裡（見上）——它們雖少變動，但要當插圖生成與角色一致性的權威參照（劇情久了舊章被摘要、副模型就查不到外觀，靠這組補），不算違反此條。
+- 名稱用中文簡潔，例：「角色狀態」、「當前地點」、「末日倒計時」
+- list 型用於物品/線索清單
+- 【⚠️ 物品只給主角一份，NPC 一律不給】物品／持有物／庫存／裝備這類欄位，**只能開一個 list 型給主角MC**。
+  **嚴禁**：在「角色狀態」object 內給每個角色加物品／持有物欄位、另開一個 object 容器裝各角色的物品、
+  或用「XX的物品」這種扁平變數。NPC 身上真有關鍵物品（信物／贓物／線索）→ 寫進他的「當前目標」那句話裡，不要開欄位。
+  理由：每個 NPC 一份背包＝每輪都得複述整份清單，token 直接翻倍，而且 AI 會開始替路人編身家。
+- **多角色屬性一律用 object 型容器**（見上方規則），不要散成一堆「XX的YY」扁平變數。
+  ⚠️ 物品類是這條的例外，見上一條。
+- 重視這個世界**特有**的元素（例：末日題材就要倒計時；推理題材就要線索清單；戀愛題材就要好感分數）
+
+═══════════════════════════════════════
+【⚠️ 輸出 JSON 前 · 強制自我檢查（必做，做完才能送出）】
+逐一掃過 fields 的每一個 key：
+1. 這個 key 裡有沒有出現任何「具體角色名」？（瑟琳 / 奧爾德 / 卡蜜拉 / 小花 …）
+   → 有 → 立刻刪掉這個欄位，把它的屬性併進一個 object 型容器（如「角色狀態」）的 init 裡
+2. 檢查完後，全世界角色的屬性應該只集中在 1~2 個 object 容器欄位裡，
+   不應該存在任何「角色名＋屬性」形式的扁平 key
+3. 同理檢查地點、派系、任務 —— 同類的一群都該收進 object 容器
+確認完全沒有「帶具體名字的扁平變數」，才能輸出。
+═══════════════════════════════════════`;
+    }
+
+    // --- 主模型呼叫（schema 是一次性設計工作，用主模型品質較好）---
+    function callPrimary(prompt) {
+        return new Promise((resolve, reject) => {
+            if (!win.OS_API?.chat) return reject(new Error('OS_API.chat 不可用'));
+            const config = win.OS_SETTINGS?.getConfig?.();
+            if (!config) return reject(new Error('讀不到主模型 config（OS_SETTINGS）'));
+            const messages = [
+                { role: 'system', content: 'You are a strict JSON schema designer. Output only valid JSON, no markdown, no comments.' },
+                { role: 'user', content: prompt }
+            ];
+            let done = false;
+            const timer = setTimeout(() => {
+                if (done) return; done = true;
+                reject(new Error('主模型超時'));
+            }, CONFIG.timeoutMs);
+            win.OS_API.chat(messages, config, null, (text) => {
+                if (done) return; done = true;
+                clearTimeout(timer);
+                resolve(text);
+            }, (err) => {
+                if (done) return; done = true;
+                clearTimeout(timer);
+                reject(err);
+            }, { task: 'avs_design' });
+        });
+    }
+
+    async function runWithRetry(prompt) {
+        let lastErr;
+        for (let i = 0; i < CONFIG.retryCount; i++) {
+            try {
+                const raw = await callPrimary(prompt);
+                const json = extractJSON(raw);
+                if (json && json.fields && typeof json.fields === 'object' && Object.keys(json.fields).length >= CONFIG.minFields) {
+                    return json;
+                }
+                lastErr = new Error(`第 ${i+1} 次：schema 不符（fields 太少或缺）`);
+                console.warn('[State Schema]', lastErr.message, 'raw head:', String(raw).slice(0, 300));
+            } catch(e) {
+                lastErr = e;
+                console.warn('[State Schema] 第', i+1, '次失敗:', e?.message || e);
+            }
+        }
+        throw lastErr || new Error('主模型重試耗盡');
+    }
+
+    // --- 對外 API ---
+    async function generate(opts = {}) {
+        const chatId = getChatId();
+        if (!chatId) { showToast('沒有 chatId，無法生成 schema', 'warning'); return null; }
+
+        showToast('主模型正在分析世界 → 生成 schema...', 'info');
+        try {
+            const [worldbook, userPersona, charCard, headMessages] = await Promise.all([
+                gatherWorldbookText(),
+                gatherUserPersona(),
+                gatherCharCard(),
+                gatherHeadMessages()
+            ]);
+            const prompt = buildPrompt({ worldbook, userPersona, charCard, headMessages }, opts.userPrompt);
+            const json = await runWithRetry(prompt);
+
+            // V2 之後：generate 不再寫 state_data.schema（schema 已搬到 AVS 變數包）
+            // 純生成並回傳；呼叫端（os_avs.js）負責寫 var_pack
+            // 🚨 這一通不生條件規則（10-07 拿掉）：規則只從檔案的「規則」窗口生（OS_AVS_RULES.generateRulesForWorld）。
+            //   這裡生的規則夾在「只准吐 JSON 的規格設計師」那份大任務裡，挑的全是敵意／算計這種一路往壞的梯子，
+            //   生出來的關係一片死氣沉沉；規則窗口那條帶整份世界書與目前數值，寫得出會變暖的關係。別再加回來。
+            const count = Object.keys(json.fields).length;
+            showToast(`Schema 生成完成（${count} 個欄位）`, 'success');
+            try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: json.fields }); } catch(e) {}
+
+            return { fields: json.fields };
+        } catch(e) {
+            console.error('[State Schema] 生成失敗:', e);
+            showToast(`Schema 生成失敗：${e.message || e}`, 'error');
+            return null;
+        }
+    }
+
+    // === 用戶手動編輯 schema（增 / 改 / 刪欄位）===
+    async function addField(name, def) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        if (!name || !name.trim()) { showToast('欄位名不能空', 'warning'); return false; }
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        const schema = { ...(data.schema || {}) };
+        if (schema[name]) { showToast(`欄位「${name}」已存在`, 'warning'); return false; }
+        schema[name] = {
+            type: (def && def.type) || 'string',
+            desc: (def && def.desc) || '',
+            init: (def && def.init) || ''
+        };
+        // ...data 不可省：只列欄位會把 base/director/npcLedger 一起抹掉（AVS 回溯失效的根因之一）
+        await win.OS_DB.saveStateData(chatId, {
+            ...data,
+            schema,
+            patches: data.patches || [],
+            current: data.current || {}
+        });
+        try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
+        showToast(`新增欄位「${name}」`, 'success');
+        return true;
+    }
+
+    async function updateField(name, def) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        const schema = { ...(data.schema || {}) };
+        if (!schema[name]) return false;
+        schema[name] = {
+            ...schema[name],
+            type: (def && def.type) || schema[name].type,
+            desc: def && def.desc !== undefined ? def.desc : schema[name].desc
+        };
+        await win.OS_DB.saveStateData(chatId, {
+            ...data,
+            schema,
+            patches: data.patches || [],
+            current: data.current || {}
+        });
+        try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
+        showToast(`已更新「${name}」`, 'success');
+        return true;
+    }
+
+    async function deleteField(name) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        const schema = { ...(data.schema || {}) };
+        if (!schema[name]) return false;
+        delete schema[name];
+        // 從 current 砍
+        const current = { ...(data.current || {}) };
+        delete current[name];
+        // 從每筆 patch 砍掉這欄位（patches 是身分制時序陣列 [{id, updates}]）
+        const patches = (Array.isArray(data.patches) ? data.patches : [])
+            .map(p => {
+                const np = { ...(p.updates || {}) };
+                delete np[name];
+                return { id: p.id, updates: np };
+            })
+            .filter(p => Object.keys(p.updates).length > 0);
+        await win.OS_DB.saveStateData(chatId, { ...data, schema, patches, current });
+        try { win.eventEmit?.('AURELIA_STATE_SCHEMA_GENERATED', { chatId, fields: schema }); } catch(e) {}
+        showToast(`已刪除欄位「${name}」`, 'info');
+        return true;
+    }
+
+    win.OS_STATE_SCHEMA = {
+        generate,
+        addField,
+        updateField,
+        deleteField,
+        CONFIG
+    };
+
+    console.log('🧬 [State Schema] Ready');
+})();

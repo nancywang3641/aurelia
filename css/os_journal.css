@@ -1,0 +1,1189 @@
+/* ============================================================
+   os_journal.css —— 瀅瀅的故事日誌（Story Journal）
+   讀 OS_DB.lobby_summary_index，顯示跨卡跨 chat 的故事線索引
+   配色：暖奶油底 + 粉粉強調 + 棕字
+   ============================================================ */
+.jrnl-root {
+    width: 100%; height: 100%; box-sizing: border-box;
+    display: flex; gap: 0; overflow: hidden; position: relative;
+    background:
+        radial-gradient(circle at 90% 10%, rgba(248,228,232,0.55) 0%, transparent 35%),
+        radial-gradient(circle at 8% 92%, rgba(252,236,222,0.6) 0%, transparent 38%),
+        linear-gradient(135deg, #fdf6e8 0%, #faf0e0 100%);
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+    color: #5a4836;
+}
+
+/* ── 左欄：標題 + 搜尋 + 故事卡列表 ─────────────────────── */
+.jrnl-left {
+    flex: 0 0 320px; min-width: 0; padding: 22px 18px 18px;
+    border-right: 1px dashed #d8c8b0;
+    display: flex; flex-direction: column; gap: 12px;
+    overflow: hidden; position: relative; z-index: 2;
+}
+.jrnl-brand { flex-shrink: 0; padding-left: 4px; }
+.jrnl-brand h1 {
+    font-size: 26px; font-weight: 900; margin: 0; line-height: 1.15;
+    color: #5a4836; letter-spacing: 1.5px;
+}
+.jrnl-brand h1 span { color: #c97a8e; }
+.jrnl-brand-sub {
+    font-style: italic; color: #c89aa3; font-size: 13px;
+    letter-spacing: 2px; margin-top: 2px;
+}
+.jrnl-brand-tagline {
+    font-size: 11px; color: #9a8678; margin-top: 8px;
+    letter-spacing: 1px;
+}
+
+.jrnl-search {
+    width: 100%; box-sizing: border-box;
+    padding: 9px 12px; font-size: 12px;
+    background: rgba(255,250,243,0.85);
+    border: 1px solid #e8d8c0; border-radius: 6px;
+    color: #5a4836; outline: none;
+    font-family: inherit;
+}
+.jrnl-search::placeholder { color: #b0a08e; }
+.jrnl-search:focus { border-color: #d4a3b3; background: #fff; }
+
+.jrnl-toolbar { display: flex; gap: 8px; align-items: center; }
+.jrnl-sort {
+    flex: 1; padding: 7px 10px; font-size: 12px;
+    /* !important 強制壓過 ST 原生 select 深色樣式 */
+    background: rgba(255,250,243,0.85) !important;
+    color: #5a4836 !important;
+    border: 1px solid #e8d8c0 !important;
+    border-radius: 6px;
+    outline: none; cursor: pointer;
+    font-family: inherit;
+    appearance: none; -webkit-appearance: none; -moz-appearance: none;
+    background-image: linear-gradient(45deg, transparent 50%, #9a8678 50%),
+                      linear-gradient(135deg, #9a8678 50%, transparent 50%) !important;
+    background-position: calc(100% - 16px) 14px, calc(100% - 11px) 14px;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 28px;
+}
+.jrnl-sort option { background: #fffaf3; color: #5a4836; }
+
+.jrnl-list {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 10px;
+    padding-right: 4px;
+}
+.jrnl-list::-webkit-scrollbar { width: 4px; }
+.jrnl-list::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+
+.jrnl-card {
+    background: rgba(255,250,243,0.92);
+    border: 1px solid #e8d8c0; border-radius: 10px;
+    padding: 10px 12px;
+    display: flex; gap: 10px;
+    cursor: pointer; transition: all 0.2s;
+    position: relative; flex-shrink: 0;
+}
+.jrnl-card:hover {
+    border-color: #d4a3b3;
+    background: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(212,163,179,0.18);
+}
+.jrnl-card.active {
+    border-color: #c97a8e; border-left: 3px solid #c97a8e;
+    background: linear-gradient(90deg, #fff0f0 0%, #fff 60%);
+}
+.jrnl-card-num {
+    position: absolute; top: 4px; left: 6px;
+    font-size: 10px; color: #c89aa3;
+    font-style: italic; font-weight: 700;
+    width: 18px; height: 18px; line-height: 18px;
+    text-align: center; background: rgba(255,255,255,0.7);
+    border-radius: 50%; z-index: 2;
+}
+.jrnl-card-img {
+    width: 56px; height: 56px; flex-shrink: 0;
+    border-radius: 6px;
+    background-size: cover; background-position: center;
+    background-color: #f4e8d8;
+    border: 1px solid #e8d8c0;
+}
+.jrnl-card-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.jrnl-card-head { display: flex; align-items: center; gap: 6px; }
+.jrnl-card-title {
+    font-size: 14px; font-weight: 700; color: #5a4836;
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    letter-spacing: 0.5px;
+}
+.jrnl-card-badge {
+    font-size: 9px; padding: 1px 6px; border-radius: 8px;
+    background: #fce4e7; color: #c97a8e; flex-shrink: 0;
+    border: 1px solid #f0c8d2;
+}
+.jrnl-card-sub {
+    font-size: 10px; color: #9a8678; line-height: 1.4;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jrnl-card-brief {
+    font-size: 10px; color: #7a6856; line-height: 1.5;
+    margin-top: 4px;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+.jrnl-card-meta {
+    display: flex; gap: 8px; align-items: center;
+    margin-top: 6px; font-size: 9px; color: #b0a08e;
+    flex-wrap: wrap;
+}
+.jrnl-card-meta span { white-space: nowrap; }
+
+/* ── 右欄：選中故事的詳情 ─────────────────────────────── */
+.jrnl-right {
+    flex: 1; min-width: 0; padding: 22px 24px;
+    overflow-y: auto; position: relative; z-index: 2;
+}
+.jrnl-right::-webkit-scrollbar { width: 4px; }
+.jrnl-right::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+
+.jrnl-empty {
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 12px;
+    color: #b0a08e; text-align: center;
+}
+.jrnl-empty-icon { font-size: 48px; opacity: 0.4; }
+.jrnl-empty-txt { font-size: 13px; line-height: 1.7; }
+
+.jrnl-d-head {
+    background: rgba(255,250,243,0.92);
+    border: 1px solid #e8d8c0; border-radius: 14px;
+    overflow: hidden; margin-bottom: 18px;
+    display: flex; gap: 18px; align-items: center;
+    padding: 18px 22px; position: relative;
+}
+.jrnl-d-img {
+    width: 110px; height: 110px; flex-shrink: 0;
+    border-radius: 10px;
+    background-size: cover; background-position: center;
+    background-color: #f4e8d8;
+    border: 1px solid #e8d8c0;
+}
+.jrnl-d-info { flex: 1; min-width: 0; }
+.jrnl-d-title {
+    margin: 0; font-size: 26px; font-weight: 900;
+    color: #5a4836; letter-spacing: 1.5px;
+}
+.jrnl-d-sub {
+    font-size: 13px; color: #9a8678; margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+.jrnl-d-tags {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-top: 10px; font-size: 11px;
+}
+.jrnl-d-tag-chat {
+    background: rgba(244,232,216,0.7); color: #7a6856;
+    padding: 3px 9px; border-radius: 4px;
+    font-family: 'Courier New', monospace; font-size: 10px;
+    border: 1px solid #e8d8c0;
+}
+.jrnl-d-tag-status {
+    background: #fce4e7; color: #c97a8e;
+    padding: 3px 9px; border-radius: 4px;
+    border: 1px solid #f0c8d2;
+}
+.jrnl-d-tag-date {
+    color: #9a8678; padding: 3px 0;
+}
+
+.jrnl-d-section {
+    background: rgba(255,250,243,0.7);
+    border: 1px solid #e8d8c0; border-radius: 12px;
+    padding: 16px 20px; margin-bottom: 14px;
+}
+.jrnl-d-section-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+}
+.jrnl-d-section h3 {
+    margin: 0; font-size: 15px; font-weight: 700;
+    color: #5a4836; letter-spacing: 1.5px;
+    display: flex; align-items: center; gap: 6px;
+}
+.jrnl-d-section h3::before { content: '✦'; color: #c97a8e; font-size: 12px; }
+.jrnl-d-count {
+    font-size: 11px; color: #9a8678; font-weight: 400;
+    background: rgba(255,255,255,0.7); padding: 3px 10px;
+    border-radius: 12px; border: 1px solid #e8d8c0;
+}
+
+/* 劇情時間軸 */
+.jrnl-timeline { list-style: none; margin: 0; padding: 0 0 0 18px; position: relative; }
+.jrnl-timeline::before {
+    content: ''; position: absolute; left: 6px; top: 8px; bottom: 8px;
+    width: 1px; background: #e8d8c0;
+}
+.jrnl-tl-item {
+    position: relative; padding: 6px 0 12px;
+    display: flex; gap: 12px; align-items: flex-start;
+}
+.jrnl-tl-num {
+    position: absolute; left: -18px; top: 6px;
+    width: 22px; height: 22px; line-height: 22px;
+    border-radius: 50%; text-align: center;
+    background: #fce4e7; color: #c97a8e;
+    font-size: 11px; font-weight: 700;
+    border: 1px solid #f0c8d2;
+}
+.jrnl-tl-body { flex: 1; min-width: 0; padding-left: 18px; }
+.jrnl-tl-head {
+    display: flex; gap: 12px; align-items: baseline;
+    font-size: 13px; color: #5a4836; font-weight: 700;
+    margin-bottom: 4px;
+}
+.jrnl-tl-head time { font-size: 10px; color: #b0a08e; font-weight: 400; }
+.jrnl-tl-brief {
+    font-size: 12px; color: #7a6856; line-height: 1.7;
+}
+
+/* 出場角色卡片網格 */
+.jrnl-chars-grid {
+    display: grid; gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+}
+.jrnl-char-card {
+    background: rgba(255,255,255,0.85);
+    border: 1px solid #e8d8c0; border-radius: 10px;
+    padding: 10px; display: flex; flex-direction: column; gap: 4px;
+    position: relative;
+    cursor: pointer; transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.jrnl-char-card:hover {
+    transform: translateY(-2px);
+    border-color: #f0c8d2;
+    box-shadow: 0 6px 16px rgba(201,122,142,0.18);
+}
+.jrnl-char-img {
+    width: 100%; aspect-ratio: 1 / 1; border-radius: 8px;
+    background: linear-gradient(135deg, #f4e8d8 0%, #faf0e0 100%);
+    border: 1px solid #e8d8c0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 36px; color: #d4a3b3;
+    margin-bottom: 4px;
+}
+.jrnl-char-name {
+    font-size: 13px; font-weight: 700; color: #5a4836;
+    letter-spacing: 0.5px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.jrnl-char-role { font-size: 10px; color: #9a8678; line-height: 1.4; }
+.jrnl-char-trait {
+    font-size: 10px; color: #7a6856; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; min-height: 28px;
+}
+.jrnl-char-tag {
+    margin-top: 4px; align-self: flex-start;
+    font-size: 9px; padding: 2px 8px; border-radius: 8px;
+    background: #fce4e7; color: #c97a8e;
+    border: 1px solid #f0c8d2;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+}
+
+/* 底部「查看完整總結」按鈕 */
+.jrnl-d-foot {
+    margin: 12px 0 20px;
+    display: flex; gap: 10px; flex-wrap: wrap;
+}
+.jrnl-view-full {
+    flex: 1; min-width: 150px;
+    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
+    border: 1px solid #f0c8d2; border-radius: 12px; cursor: pointer;
+    color: #c97a8e; font-size: 13px; font-weight: 700;
+    letter-spacing: 1.5px; font-family: inherit;
+    padding: 14px 16px; text-align: center;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s;
+}
+.jrnl-view-full:hover {
+    color: #b85f73; border-color: #e0a0b0;
+    transform: translateY(-1px); box-shadow: 0 4px 14px rgba(201,122,142,0.18);
+}
+.jrnl-view-full-sub {
+    display: block; font-size: 10px; color: #9a8678;
+    font-weight: 400; letter-spacing: 0; margin-top: 4px;
+}
+/* 詳情底部次要操作：編輯 / 清空 */
+.jrnl-foot-acts { display: flex; gap: 10px; width: 100%; }
+.jrnl-act-btn {
+    flex: 1; border-radius: 12px; cursor: pointer; font-family: inherit;
+    font-size: 12px; font-weight: 700; letter-spacing: 1px; padding: 11px 14px;
+    background: #fff8f0; border: 1px solid #e8d8c0; color: #9a7a6a;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s, color 0.15s, background 0.15s;
+}
+.jrnl-act-btn:hover { transform: translateY(-1px); border-color: #e0a0b0; color: #c97a8e; background: #fff0f2; }
+.jrnl-act-danger { color: #d05a5a; border-color: #e8b0b0; background: #fff5f5; }
+.jrnl-act-danger:hover { color: #fff; background: #d96a6a; border-color: #d05a5a; box-shadow: 0 4px 14px rgba(208,90,90,0.2); }
+/* ☕ 書咖常客 pin：選定輪次亮金 */
+.jrnl-pin-npc.active { color: #a8781e; border-color: #e0bc72; background: #fdf3dc; }
+.jrnl-pin-npc.active:hover { color: #8a6010; border-color: #d0a850; background: #fbeecb; }
+/* 編輯總結 */
+.jrnl-edit-area {
+    width: 100%; box-sizing: border-box; min-height: 320px; resize: vertical;
+    border: 1px solid #e8d8c0; border-radius: 10px; padding: 12px;
+    font-family: 'Songti TC','Microsoft JhengHei',serif; font-size: 13px; line-height: 1.7;
+    color: #5a4836; background: #fffdf8;
+}
+.jrnl-modal-foot { display: flex; gap: 10px; justify-content: flex-end; align-items: center; margin-top: 12px; }
+.jrnl-modal-status { font-size: 12px; color: #9a8678; flex: 1; min-height: 16px; }
+.jrnl-mbtn { border-radius: 10px; cursor: pointer; font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 1px; padding: 9px 16px; background: #fff8f0; border: 1px solid #e8d8c0; color: #9a7a6a; }
+.jrnl-mbtn:hover { border-color: #e0a0b0; color: #c97a8e; }
+.jrnl-mbtn-primary { background: linear-gradient(90deg,#fce4e7,#fff0e8); border-color: #f0c8d2; color: #c97a8e; }
+.jrnl-mbtn-danger { color: #d05a5a; border-color: #e8b0b0; background: #fff5f5; }
+.jrnl-mbtn-danger:hover { color: #fff; background: #d96a6a; border-color: #d05a5a; }
+/* 清空確認 */
+.jrnl-wipe-list { font-size: 12px; color: #7a6452; line-height: 1.7; background: #fff8f0; border: 1px solid #e8d8c0; border-radius: 10px; padding: 11px 13px; margin: 10px 0; }
+.jrnl-wipe-note { font-size: 11.5px; color: #b06a6a; line-height: 1.6; margin: 6px 0; }
+.jrnl-wipe-confirm { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #b06a6a; margin: 12px 0; cursor: pointer; }
+.jrnl-wipe-confirm input { accent-color: #d05a5a; }
+
+/* 關閉鈕 */
+.jrnl-close {
+    position: absolute; top: 14px; right: 14px; z-index: 10;
+    width: 30px; height: 30px; border-radius: 50%;
+    background: rgba(255,255,255,0.9); border: 1px solid #e8d8c0;
+    color: #9a8678; cursor: pointer; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s;
+}
+.jrnl-close:hover {
+    background: #fce4e7; color: #c97a8e; border-color: #f0c8d2;
+}
+
+/* ── 裝飾性 sprite（角落花飾）─────────────────────────── */
+.jrnl-deco {
+    position: absolute; pointer-events: none;
+    background-size: contain; background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.85; z-index: 1;
+}
+.jrnl-deco-tr { top: 8px; right: 14px; width: 90px; height: 90px;
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_022.png');
+    opacity: 0.95; transform: rotate(8deg); }
+/* 左下「日記標籤」—— SVG 紙條 + 迴紋針 + 文字 + 花飾 (sprite_006.png) 在前 */
+.jrnl-note-bl {
+    position: absolute; bottom: 12px; left: 14px;
+    width: 290px; height: 130px;
+    pointer-events: none; z-index: 1;
+    opacity: 0.92;
+}
+.jrnl-note-svg {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    z-index: 1;
+}
+.jrnl-note-flower {
+    position: absolute;
+    bottom: -10px; left: -28px;
+    width: 110px; height: 110px;
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_006.png');
+    background-size: contain; background-repeat: no-repeat; background-position: center;
+    z-index: 2;
+    transform: rotate(-6deg);
+}
+.jrnl-deco-br { bottom: 14px; right: 14px; width: 100px; height: 80px;
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_025.png');
+    transform: rotate(-4deg); }
+.jrnl-deco-petal1 { top: 30%; left: 22%; width: 24px; height: 24px;
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_030.png');
+    opacity: 0.5; }
+.jrnl-deco-petal2 { top: 70%; right: 28%; width: 20px; height: 20px;
+    background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_033.png');
+    opacity: 0.5; transform: rotate(45deg); }
+
+/* 完整總結 modal —— 取代 alert()，奶油信紙風 */
+.jrnl-modal {
+    position: absolute; inset: 0; z-index: 100;
+    background: rgba(60, 45, 30, 0.45);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; box-sizing: border-box;
+    animation: jrnlModalFadeIn 0.2s ease;
+}
+@keyframes jrnlModalFadeIn { from { opacity: 0; } to { opacity: 1; } }
+.jrnl-modal-card {
+    background: linear-gradient(180deg, #fffaf3 0%, #fdf6e8 100%);
+    border: 1px solid #e8d8c0;
+    border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(60,45,30,0.35), 0 0 0 8px rgba(255,255,255,0.4);
+    width: 100%; max-width: 720px; max-height: 84%;
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    animation: jrnlModalSlideIn 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes jrnlModalSlideIn {
+    from { opacity: 0; transform: translateY(20px) scale(0.96); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+.jrnl-modal-head {
+    flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 22px;
+    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
+    border-bottom: 1px solid #f0c8d2;
+}
+.jrnl-modal-title {
+    font-size: 16px; font-weight: 900;
+    color: #5a4836; letter-spacing: 1.5px;
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+.jrnl-modal-close {
+    background: rgba(255,255,255,0.7); border: 1px solid #f0c8d2;
+    color: #c97a8e; cursor: pointer; font-size: 14px;
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.2s; padding: 0;
+}
+.jrnl-modal-close:hover {
+    background: #c97a8e; color: #fff; border-color: #c97a8e;
+}
+.jrnl-modal-body {
+    flex: 1; min-height: 0; overflow-y: auto;
+    padding: 20px 26px;
+    color: #5a4836; font-size: 13px; line-height: 1.8;
+    font-family: 'Songti TC', 'Microsoft JhengHei', sans-serif;
+    word-break: break-word;
+}
+.jrnl-modal-body::-webkit-scrollbar { width: 5px; }
+.jrnl-modal-body::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+
+/* modal 內部 markdown 渲染樣式 */
+.jrnl-modal-body p { margin: 4px 0; }
+.jrnl-modal-body br { line-height: 0.5; }
+.jrnl-modal-body .jrnl-md-h {
+    margin: 16px 0 10px;
+    font-size: 14px; font-weight: 900;
+    color: #c97a8e; letter-spacing: 2px;
+    padding-bottom: 4px;
+    border-bottom: 1px dashed #f0c8d2;
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+.jrnl-modal-body .jrnl-md-h:first-child { margin-top: 0; }
+.jrnl-modal-body .jrnl-md-table {
+    width: 100%; border-collapse: collapse;
+    margin: 8px 0 14px;
+    font-size: 12px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid #e8d8c0; border-radius: 6px;
+    overflow: hidden;
+}
+.jrnl-modal-body .jrnl-md-table thead {
+    background: linear-gradient(90deg, #fce4e7 0%, #fff0e8 100%);
+}
+.jrnl-modal-body .jrnl-md-table th {
+    padding: 8px 10px; text-align: left;
+    font-weight: 700; color: #5a4836;
+    border-bottom: 1px solid #f0c8d2;
+    font-size: 11px; letter-spacing: 0.5px;
+}
+.jrnl-modal-body .jrnl-md-table td {
+    padding: 8px 10px; vertical-align: top;
+    color: #5a4836; line-height: 1.6;
+    border-top: 1px dashed #ecddc6;
+    word-break: break-word;
+}
+.jrnl-modal-body .jrnl-md-table tbody tr:nth-child(odd) td {
+    background: rgba(252,246,232,0.5);
+}
+.jrnl-modal-body .jrnl-md-table tbody tr:hover td {
+    background: rgba(252,228,231,0.4);
+}
+
+/* 角色詳情 modal — 模板 B：左大圖 + 右資料分欄（淺色） */
+.jrnl-modal-char {
+    max-width: 720px; max-height: 86%;
+    flex-direction: row; padding: 0; position: relative;
+}
+.jrnl-cm-close {
+    position: absolute; top: 14px; right: 14px; z-index: 5;
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer; padding: 0;
+    background: rgba(255,255,255,0.85); border: 1px solid #f0c8d2; color: #c97a8e;
+    display: flex; align-items: center; justify-content: center; font-size: 14px;
+    transition: all 0.2s;
+}
+.jrnl-cm-close:hover { background: #c97a8e; color: #fff; border-color: #c97a8e; }
+.jrnl-cm-photo {
+    flex: 0 0 42%; align-self: stretch; min-height: 340px;
+    background: linear-gradient(135deg, #f4e8d8 0%, #faf0e0 100%);
+    background-size: cover; background-position: center; background-repeat: no-repeat;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 60px; color: #d4a3b3;
+}
+.jrnl-cm-side {
+    flex: 1; min-width: 0; padding: 28px 26px; overflow-y: auto;
+    display: flex; flex-direction: column;
+}
+.jrnl-cm-side::-webkit-scrollbar { width: 5px; }
+.jrnl-cm-side::-webkit-scrollbar-thumb { background: #d8c8b0; border-radius: 2px; }
+.jrnl-cm-name {
+    font-size: 22px; font-weight: 900; color: #5a4836; letter-spacing: 1px;
+    font-family: 'Playfair Display', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+.jrnl-cm-sub { font-size: 12px; color: #9a8678; letter-spacing: 0.5px; margin: 4px 0 16px; }
+.jrnl-cm-fields { display: flex; flex-direction: column; gap: 13px; }
+.jrnl-cm-row { display: flex; flex-direction: column; gap: 3px; }
+.jrnl-cm-k {
+    font-size: 12px; font-weight: 700; color: #c97a8e; letter-spacing: 1px;
+}
+.jrnl-cm-v { font-size: 13px; color: #5a4836; line-height: 1.75; word-break: break-word; }
+.jrnl-cm-empty { text-align: center; color: #9a8678; font-size: 12px; padding: 16px 0; }
+/* 手機：上下堆疊（圖在上、資料在下） */
+@media (max-width: 600px) {
+    .jrnl-modal-char { flex-direction: column; max-height: 92%; }
+    .jrnl-cm-photo { flex: 0 0 220px; min-height: 220px; }
+    .jrnl-cm-side { padding: 18px 18px 22px; }
+    .jrnl-cm-name { font-size: 19px; }
+}
+
+/* 故事卡封面池 —— class 對應 sprite 索引（路徑相對 CSS 檔，會正確解析） */
+.jrnl-cover-0 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_004.png'); }
+.jrnl-cover-1 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_005.png'); }
+.jrnl-cover-2 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_010.png'); }
+.jrnl-cover-3 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_012.png'); }
+.jrnl-cover-4 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_015.png'); }
+.jrnl-cover-5 { background-image: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sprites_1779200785261/sprite_020.png'); }
+
+/* 詳情頁返回鍵（桌機隱藏、手機才出現） */
+.jrnl-back-mobile {
+    display: none;
+    align-items: center; gap: 4px;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid #e8d8c0;
+    color: #c97a8e; cursor: pointer;
+    padding: 6px 12px; border-radius: 18px;
+    font-size: 12px; font-weight: 700; letter-spacing: 0.5px;
+    font-family: inherit;
+    margin-bottom: 12px; flex-shrink: 0;
+    transition: all 0.2s;
+}
+.jrnl-back-mobile:hover {
+    background: #fce4e7; border-color: #f0c8d2;
+}
+
+/* 窄螢幕（手機）— master-detail 切換：預設只看列表，點卡片滑進詳情 */
+@media (max-width: 720px) {
+    .jrnl-root { flex-direction: column; }
+    /* 預設：左邊（列表）佔滿、右邊（詳情）隱藏 */
+    .jrnl-left {
+        flex: 1; max-height: none;
+        border-right: none; border-bottom: none;
+        padding: 18px 14px 14px;
+    }
+    .jrnl-right { display: none; }
+
+    /* 切到詳情狀態（JS 加 .show-detail-mobile）：左藏、右全屏 */
+    .jrnl-root.show-detail-mobile .jrnl-left { display: none; }
+    .jrnl-root.show-detail-mobile .jrnl-right {
+        display: block; flex: 1;
+        padding: 14px;
+        overflow-y: auto;
+    }
+
+    .jrnl-back-mobile { display: inline-flex; }
+    .jrnl-d-head {
+        flex-direction: column; align-items: flex-start; gap: 12px;
+        padding: 14px;
+    }
+    .jrnl-d-img { width: 100%; height: 160px; }
+    .jrnl-d-title { font-size: 20px; }
+    .jrnl-chars-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+    .jrnl-deco-tr, .jrnl-deco-br { opacity: 0.4; transform: scale(0.7); }
+    /* 手機窄屏不顯示日記標籤（會壓到卡片捲動區） */
+    .jrnl-note-bl { display: none; }
+
+    /* modal 在手機改成幾乎全屏 */
+    .jrnl-modal { padding: 8px; }
+    .jrnl-modal-card { max-width: 100%; max-height: 95%; }
+    .jrnl-modal-head { padding: 10px 14px; }
+    .jrnl-modal-title { font-size: 14px; }
+    .jrnl-modal-body { padding: 14px 16px; font-size: 12px; }
+}
+
+/* ============================================================
+   🕮 桌面書裝(.jrnl-desk,JS 依「容器」寬 ≥960 掛上)
+   視覺規格:阿洛 story-journal-html-panel mockup;素材 sound-files/aseets/story_journal/
+   窄屏/手機:以下全部不生效,維持上面的原版型
+   ============================================================ */
+.jrnl-stage { flex: 1; min-width: 0; display: flex; position: relative; container-type: inline-size; }
+.jrnl-book-art, .jrnl-topbar-desk, .jrnl-tabs, .jrnl-volume, .jrnl-sec-manage { display: none; }
+
+.jrnl-root.jrnl-desk {
+    container-type: size;
+    background: #eaf0f7 url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/bg.webp') center / cover no-repeat;
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+/* 原版型的暖色裝飾全下場 */
+.jrnl-desk .jrnl-deco, .jrnl-desk .jrnl-note-bl { display: none !important; }
+
+/* 頂列:品牌 + 細線;關閉鈕重新定位 */
+.jrnl-desk .jrnl-topbar-desk {
+    display: flex; align-items: baseline; gap: 1.1cqw;
+    position: absolute; z-index: 8;
+    left: 3.2%; right: 6%; top: 2.4%;
+    pointer-events: none;
+}
+.jrnl-desk .jrnl-topbar-brand {
+    color: #506789; font-size: max(24px, 1.72cqw); font-weight: 700; letter-spacing: 0.15cqw;
+    text-shadow: 0 0.08cqw 0.15cqw rgba(255,255,255,0.9);
+}
+.jrnl-desk .jrnl-topbar-en {
+    color: #8795aa; font-size: max(12.5px, 0.62cqw); letter-spacing: 0.23cqw; font-family: Georgia, serif;
+}
+.jrnl-desk .jrnl-topbar-desk::after {
+    content: ''; flex: 1; height: 1px; align-self: center;
+    background: linear-gradient(90deg, rgba(106,130,166,0.45), rgba(106,130,166,0.12));
+}
+.jrnl-desk .jrnl-close {
+    top: 1.8%; right: 1.8%;
+    background: transparent; border: none;
+    color: #536988; font-size: max(21px, 1.5cqw);
+}
+.jrnl-desk .jrnl-close:hover { color: #a8434f; }
+
+/* 舞台:置中 3:2,書殼攤在其中 */
+.jrnl-desk .jrnl-stage {
+    position: absolute; display: block;
+    left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: min(100cqw, 150cqh);
+    height: min(100cqh, 66.667cqw);
+}
+/* 書殼:紙頁與右上角的乾燥花紙籤都已經畫進圖裡(@v2 那張),不再另外疊花飾圖層 */
+.jrnl-desk .jrnl-book-art {
+    display: block; position: absolute; z-index: 2;
+    left: 3.8%; right: 4.8%; top: 7.2%; bottom: 5.2%;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v2/aseets/story_journal/book-paper.webp') center / 100% 100% no-repeat;
+    filter: drop-shadow(0 1cqw 1.6cqw rgba(48,38,33,0.24));
+    pointer-events: none;
+}
+
+/* ── 左頁:目錄 ── */
+.jrnl-desk .jrnl-left {
+    position: absolute; z-index: 4; flex: none;
+    left: 10.1%; top: 13.1%; width: 37.15%; height: 74.1%;
+    border: none; background: transparent;
+    padding: 1.3cqw 3.1cqw 1.2cqw 2.7cqw; box-sizing: border-box;
+    gap: 0.6cqw;
+}
+.jrnl-desk .jrnl-brand { display: none; }
+.jrnl-desk .jrnl-left::before {
+    content: '目 錄';
+    display: block; flex-shrink: 0;
+    text-align: center;
+    color: #936d5e; font-size: max(24px, 1.9cqw); font-weight: 600; letter-spacing: 0.32cqw;
+    padding: 0.4cqw 0 0.5cqw;
+}
+.jrnl-desk .jrnl-search {
+    width: 76%; margin: 0 auto;
+    background: rgba(255,253,247,0.56);
+    border: 1px solid rgba(205,171,138,0.31);
+    border-radius: 0.72cqw;
+    font-size: max(13px, 0.72cqw); padding: 0.5cqw 0.95cqw;
+    color: #6a6059;
+    box-shadow: inset 0 0.06cqw 0.16cqw rgba(133,97,65,0.08);
+}
+.jrnl-desk .jrnl-search:focus { border-color: rgba(185,104,117,0.58); background: rgba(255,255,255,0.8); }
+.jrnl-desk .jrnl-toolbar { justify-content: center; }
+.jrnl-desk .jrnl-sort {
+    flex: 0 0 auto; width: 40%;
+    font-size: max(12.5px, 0.66cqw); padding: 0.3cqw 1.6cqw 0.3cqw 0.7cqw;
+    background: rgba(255,253,247,0.5) !important;
+    border-color: rgba(205,171,138,0.31) !important;
+    color: #8a7362 !important;
+    border-radius: 0.6cqw;
+    background-position: calc(100% - 0.9cqw) 55%, calc(100% - 0.6cqw) 55%;
+    background-size: 0.28cqw 0.28cqw, 0.28cqw 0.28cqw;
+}
+/* 清單容器往左擴出書溝(照阿洛 mockup):緞帶書籤掛在條目左外側才有地方露出來,又不會被捲軸箱剪掉 */
+.jrnl-desk .jrnl-list {
+    gap: 0.55cqw;
+    width: calc(100% + 4.6cqw);
+    margin-left: -4.6cqw;
+    padding-left: 4.6cqw;
+    padding-right: 0.4cqw;
+}
+/* 目錄條目:紙上墨線風 */
+.jrnl-desk .jrnl-card {
+    background: transparent; border: none; border-radius: 0.5cqw;
+    border-bottom: 1px solid rgba(160,132,100,0.22);
+    padding: 0.7cqw 0.8cqw 0.7cqw 2.5cqw;
+    gap: 0.9cqw; align-items: center;
+    transform: none;
+}
+.jrnl-desk .jrnl-card:hover { background: rgba(255,251,243,0.7); box-shadow: none; transform: none; }
+.jrnl-desk .jrnl-card.active {
+    background: #fffaf4;
+    border-left: none;
+    border-color: rgba(208, 162, 140, 0.44);
+    box-shadow: 0 0.28cqw 0.8cqw rgba(131, 88, 68, 0.08);
+    z-index: 0;   /* 建立堆疊上下文,緞帶 z:-1 才會壓在卡片底下、只露出左側那截 */
+}
+/* 現役書籤緞帶:掛在條目「左外側」像夾在書頁裡的書籤
+   🚨left 的負值不能超過「清單外擴(4.6cqw) − 左頁 padding-left(2.7cqw)」,
+     再往左就伸出 .jrnl-left 的 overflow:hidden 之外 → 緞帶被切掉左半截 */
+.jrnl-desk .jrnl-card.active::before {
+    content: ''; position: absolute; z-index: -1;
+    left: -2.6cqw; top: 1cqw;
+    width: 4cqw; height: 3.4cqw;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/ribbon.webp') center / 100% 100% no-repeat;
+    filter: saturate(0.75);
+}
+.jrnl-desk .jrnl-card-num {
+    position: static; width: auto; height: auto; line-height: 1;
+    background: none; border-radius: 0;
+    font-size: max(21px, 1.5cqw); color: #7d6a58; font-style: normal;
+    font-family: Georgia, serif;
+}
+.jrnl-desk .jrnl-card.active .jrnl-card-num { color: #a8434f; }
+.jrnl-desk .jrnl-card-img { width: 3.2cqw; height: 3.2cqw; border-radius: 0.35cqw; border-color: rgba(205,171,138,0.4); }
+.jrnl-desk .jrnl-card-title { font-size: max(15px, 0.95cqw); color: #574a3e; letter-spacing: 0.06cqw; }
+.jrnl-desk .jrnl-card.active .jrnl-card-title { color: #a8434f; }
+.jrnl-desk .jrnl-card-badge { display: none; }
+.jrnl-desk .jrnl-card-sub { font-size: max(12px, 0.6cqw); color: #9a8678; }
+.jrnl-desk .jrnl-card-brief { display: none; }
+.jrnl-desk .jrnl-card-meta { font-size: max(12px, 0.58cqw); color: #a08d7a; gap: 0.8cqw; }
+.jrnl-desk .jrnl-empty-txt { font-size: max(14px, 0.8cqw); }
+
+/* ── 右頁:卷宗 ── */
+/* 🚨定位依據=直接量「原始書殼圖 open-book.png」的紙張範圍(1413x914):
+   左頁紙 = 圖寬 7.6%~49.3%、右頁紙 = 50.3%~94.1%。
+   書殼元素本身內縮 left3.8%/right4.8% → 換算成舞台座標:右頁紙 = 49.8%~89.8%。
+   ⚠️別再用「spread 算術半邊」也別用截圖掃描(底部列會被書溝陰影汙染,左緣會量偏 2.4%)。
+   內容框=紙張範圍,左右各 padding 2.4cqw → 文字在紙上真正置中。 */
+.jrnl-desk .jrnl-right {
+    position: absolute; z-index: 4;
+    left: 49.8%; top: 13.1%; width: 40%; height: 74.1%;
+    padding: 1.25cqw 2.4cqw 1.4cqw 2.4cqw; box-sizing: border-box;
+    overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: #d6b590 transparent;
+}
+.jrnl-desk .jrnl-back-mobile { display: none; }
+/* 右頁全走紙面:舊版的白卡片底/邊框全部洗掉 */
+.jrnl-desk .jrnl-d-head,
+.jrnl-desk .jrnl-d-section {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding-left: 0; padding-right: 0;
+    box-shadow: none;
+}
+/* 右頁右上角=書殼圖上畫好的乾燥花紙籤 → 抬頭與卷數框整組往左讓,別壓在紙籤上 */
+.jrnl-desk .jrnl-d-head { display: block; text-align: center; margin-bottom: 0.6cqw; padding-top: 0; padding-right: 18%; }
+.jrnl-desk .jrnl-d-img { display: none; }
+.jrnl-desk .jrnl-d-title::before {
+    content: 'STORY ARCHIVE';
+    display: block;
+    font-size: max(12px, 0.55cqw); letter-spacing: 0.3cqw; color: #b08e6a;
+    font-family: Georgia, serif; margin-bottom: 0.4cqw;
+}
+.jrnl-desk .jrnl-d-title { font-size: max(24px, 1.9cqw); color: #3f4c66; letter-spacing: 0.2cqw; margin: 0 0 0.3cqw; }
+.jrnl-desk .jrnl-d-sub { font-size: max(13px, 0.72cqw); color: #8a7362; }
+.jrnl-desk .jrnl-d-tags { justify-content: center; gap: 0.5cqw; margin-top: 0.5cqw; }
+.jrnl-desk .jrnl-d-tags > span { font-size: max(12px, 0.6cqw); padding: 0.15cqw 0.7cqw; border-radius: 0.5cqw; }
+.jrnl-desk .jrnl-volume {
+    display: block;
+    width: 62%; margin: 0.7cqw 26% 0.7cqw auto;
+    padding: 1.1cqw 1cqw 1.2cqw;
+    text-align: center;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/volume-frame.webp') center / 100% 100% no-repeat;
+    box-sizing: border-box;
+}
+.jrnl-desk .jrnl-volume-main { font-size: max(18px, 1.25cqw); font-weight: 700; color: #3f4c66; letter-spacing: 0.25cqw; }
+.jrnl-desk .jrnl-volume-sub { font-size: max(12.5px, 0.62cqw); color: #8a7362; margin-top: 0.25cqw; letter-spacing: 0.1cqw; }
+/* 桌面版的操作鈕全部收進「故事管理」書籤,每頁頂部不再重複掛一排 */
+.jrnl-desk .jrnl-d-foot { display: none; }
+.jrnl-desk .jrnl-tl-num { background: rgba(252,228,231,0.8); }
+.jrnl-desk .jrnl-tl-item { background: transparent; }
+.jrnl-desk .jrnl-d-section { margin-top: 0.9cqw; }
+.jrnl-desk .jrnl-d-section-head { border-bottom: none; position: relative; margin-bottom: 0.7cqw; justify-content: center; gap: 0.6cqw; }
+.jrnl-desk .jrnl-d-section-head::after {
+    content: ''; position: absolute; left: 0; right: 0; bottom: -0.3cqw; height: 0.5cqw;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/divider.webp') center / contain no-repeat;
+    opacity: 0.8;
+}
+.jrnl-desk .jrnl-d-section-head h3 { font-size: max(15px, 0.95cqw); color: #7c5a63; letter-spacing: 0.2cqw; }
+.jrnl-desk .jrnl-d-count { font-size: max(12px, 0.58cqw); color: #a08d7a; }
+.jrnl-desk .jrnl-tl-num { color: #c97a8e; }
+.jrnl-desk .jrnl-tl-head { font-size: max(13px, 0.78cqw); color: #574a3e; }
+.jrnl-desk .jrnl-tl-brief { font-size: max(13px, 0.72cqw); line-height: 1.85; color: #6a5c4e; }
+.jrnl-desk .jrnl-chars-grid { gap: 0.8cqw; }
+/* ── 故事管理頁:一行一件事(說明在左、動作在右),全文改到「查看」彈窗裡看 ── */
+.jrnl-desk .jrnl-mg-list { display: flex; flex-direction: column; gap: 0.1cqw; }
+.jrnl-desk .jrnl-mg-row {
+    display: flex; align-items: center; gap: 0.9cqw;
+    padding: 0.85cqw 0.2cqw;
+    border-bottom: 1px solid rgba(160, 132, 100, 0.2);
+}
+.jrnl-desk .jrnl-mg-row:last-child { border-bottom: none; }
+.jrnl-desk .jrnl-mg-txt { flex: 1; min-width: 0; }
+.jrnl-desk .jrnl-mg-k {
+    display: flex; align-items: center; gap: 0.5cqw;
+    color: #574a3e; font-size: max(14px, 0.85cqw); font-weight: 700; letter-spacing: 0.1cqw;
+}
+.jrnl-desk .jrnl-mg-k i { color: #b9924f; font-size: max(12.5px, 0.72cqw); }
+.jrnl-desk .jrnl-mg-d {
+    color: #9a8678; font-size: max(12px, 0.62cqw); line-height: 1.6;
+    margin-top: 0.25cqw;
+}
+.jrnl-desk .jrnl-mg-acts { flex: 0 0 auto; display: flex; gap: 0.5cqw; }
+.jrnl-desk .jrnl-mg-row-danger .jrnl-mg-k i { color: #b3616b; }
+/* ornate 鈕:阿洛同款(象牙金邊 / 玫紅主鈕) */
+.jrnl-desk .jrnl-ornate {
+    min-width: 5.2cqw; min-height: 2.1cqw;
+    padding: 0.36cqw 0.9cqw;
+    border: 0.08cqw solid #d1ad78;
+    border-radius: 0.35cqw;
+    background: linear-gradient(#fffdf7, #f5eadb);
+    color: #786052;
+    box-shadow: inset 0 0 0 0.13cqw rgba(255,255,255,0.65), 0 0.16cqw 0.35cqw rgba(75,50,35,0.1);
+    font-family: inherit; font-size: max(13px, 0.72cqw); font-weight: 700; letter-spacing: 0.08cqw;
+    cursor: pointer;
+    transition: transform 0.15s, filter 0.15s;
+}
+.jrnl-desk .jrnl-ornate:hover { transform: translateY(-0.12cqw); filter: brightness(1.03); }
+.jrnl-desk .jrnl-ornate.jrnl-ornate-primary {
+    color: #fffaf4; border-color: #a55b68;
+    background: linear-gradient(#c87985, #aa5866);
+}
+.jrnl-desk .jrnl-ornate.jrnl-ornate-danger {
+    color: #fffaf4; border-color: #9a4a4a;
+    background: linear-gradient(#bf6a6a, #a04848);
+}
+.jrnl-desk .jrnl-ornate.jrnl-pin-npc.active {
+    color: #fffaf4; border-color: #a08340;
+    background: linear-gradient(#d3b06a, #b7924b);
+}
+
+/* ── 書籤頁籤:照阿洛規格——貼著書右緣(right 3.85%,蓋上書皮)、高 51%、等分、縫 0.2cqw ── */
+.jrnl-desk .jrnl-tabs {
+    display: flex; flex-direction: column; align-items: stretch;
+    gap: 0.2cqw;
+    position: absolute; z-index: 7;
+    right: 3.85%; top: 25.8%;
+    width: 4.75%; height: 51%;
+}
+.jrnl-desk .jrnl-tab {
+    position: relative;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.5cqw;
+    padding: 0.4cqw 0.3cqw;
+    background: linear-gradient(105deg, #fbf5e8, #f1e5cf 78%, #e6d6ba);
+    border: 0.07cqw solid rgba(178,148,110,0.55);
+    border-left: none;
+    border-radius: 0 0.5cqw 0.5cqw 0;
+    filter: drop-shadow(0.12cqw 0.2cqw 0.2cqw rgba(64,48,38,0.12));
+    cursor: pointer;
+    color: #7a6553;
+    transition: transform 0.18s, filter 0.18s;
+    font-family: inherit;
+}
+.jrnl-desk .jrnl-tab span {
+    writing-mode: vertical-rl;
+    white-space: nowrap;   /* 🚨直書高度不夠時會自己往旁邊換欄(故/事 拆兩行)→ 鎖單欄 */
+    font-size: max(13px, 0.85cqw); letter-spacing: 0.16cqw; line-height: 1;
+}
+.jrnl-desk .jrnl-tab i { font-size: max(14px, 0.85cqw); }
+.jrnl-desk .jrnl-tab:hover {
+    transform: translateX(-0.2cqw);
+    filter: drop-shadow(0.18cqw 0.25cqw 0.28cqw rgba(64,48,38,0.18)) saturate(1.05);
+}
+.jrnl-desk .jrnl-tab.active {
+    background: linear-gradient(105deg, #bd5b68, #a2434f 70%, #8e3641);
+    border-color: #8a3542;
+    color: #f6ead9;
+}
+
+/* ── 書籤切換:右頁一次只亮一個區塊 ── */
+.jrnl-desk.jrnl-tab-story .jrnl-sec-chars,
+.jrnl-desk.jrnl-tab-story .jrnl-sec-manage,
+.jrnl-desk.jrnl-tab-chars .jrnl-sec-story,
+.jrnl-desk.jrnl-tab-chars .jrnl-sec-manage,
+.jrnl-desk.jrnl-tab-manage .jrnl-sec-story,
+.jrnl-desk.jrnl-tab-manage .jrnl-sec-chars { display: none; }
+.jrnl-desk.jrnl-tab-manage .jrnl-sec-manage { display: block; }
+
+/* ── 🕮 B段:書裝彈窗(jrnl-modal-desk 由 JS 依 desk 狀態掛)+ 角色紙卡 ── */
+.jrnl-modal.jrnl-modal-desk {
+    background: rgba(44, 40, 54, 0.45);
+    backdrop-filter: blur(2px);
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'Microsoft JhengHei', serif;
+}
+.jrnl-modal-desk .jrnl-modal-card {
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/modal-summary.webp') center / 100% 100% no-repeat;
+    border: none; border-radius: 0; box-shadow: 0 18px 60px rgba(30, 24, 20, 0.5);
+    width: min(720px, 88%);
+    max-height: 84%;
+    padding: 3.6% 4.6% 4%;
+    box-sizing: border-box;
+    display: flex; flex-direction: column;
+}
+.jrnl-modal-desk.jrnl-modal-kedit .jrnl-modal-card {
+    background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/modal-editor.webp');
+}
+.jrnl-modal-desk .jrnl-modal-head {
+    background: transparent; border-bottom: none;
+    justify-content: center; position: relative;
+    padding: 6px 34px 2px;
+}
+.jrnl-modal-desk .jrnl-modal-title {
+    color: #6b4f58; font-size: 17px; letter-spacing: 3px; font-weight: 700;
+    text-align: center;
+}
+.jrnl-modal-desk .jrnl-modal-close, .jrnl-modal-desk .jrnl-cm-close {
+    position: absolute; right: 2px; top: 0;
+    background: transparent; border: none;
+    color: #8a7362; font-size: 16px; cursor: pointer;
+}
+.jrnl-modal-desk .jrnl-modal-close:hover, .jrnl-modal-desk .jrnl-cm-close:hover { color: #a8434f; }
+.jrnl-modal-desk .jrnl-modal-body {
+    background: transparent;
+    color: #5c4f42; line-height: 1.9;
+    overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(160,132,100,0.4) transparent;
+    padding: 8px 14px 4px;
+}
+.jrnl-modal-desk .jrnl-md-h { color: #7c5a63; }
+.jrnl-modal-desk .jrnl-md-table th { background: rgba(190, 150, 120, 0.14); color: #6b5646; }
+.jrnl-modal-desk .jrnl-edit-area {
+    background: rgba(255, 253, 246, 0.65);
+    border: 1px solid rgba(178, 148, 110, 0.45);
+    border-radius: 6px;
+    color: #4f4437;
+    font-family: inherit;
+    min-height: 42vh;
+}
+.jrnl-modal-desk .jrnl-mbtn {
+    background: rgba(255,253,247,0.75); border: 1px solid rgba(178,148,110,0.5);
+    color: #6b5646; border-radius: 6px;
+}
+.jrnl-modal-desk .jrnl-mbtn-primary { background: #9c3d4b; border-color: #8a3542; color: #f6ead9; }
+.jrnl-modal-desk .jrnl-mbtn-danger { background: #a04848; border-color: #8a3535; color: #f6ead9; }
+
+/* 角色詳情彈窗:modal-character 底圖「自帶」左側相框,頭像直接鋪進畫好的框裡
+   🚨別再疊 portrait-window:那張圖的窗口是不透明象牙色,蓋上去=把頭像/占位全遮死 */
+.jrnl-modal.jrnl-modal-kchar { container-type: size; }
+.jrnl-modal-desk .jrnl-modal-card.jrnl-modal-char {
+    background-image: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_journal/modal-character.webp');
+    display: block; position: relative;
+    width: min(88cqw, 820px, 146cqh);
+    aspect-ratio: 1369 / 786;
+    max-height: none;
+    padding: 0;
+}
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-photo {
+    position: absolute;
+    left: 4.2%; top: 6.6%; width: 35.2%; height: 87%;
+    flex: none; min-height: 0;
+    border: none; border-radius: 6px;
+    background-color: transparent;
+    background-size: cover; background-position: center top;
+    box-shadow: none;
+}
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-photo .jrnl-char-img-fallback {
+    font-size: 56px; color: #d4a3b3; opacity: 0.7;
+}
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-side {
+    position: absolute;
+    left: 43.5%; right: 5.2%; top: 6.5%; bottom: 7%;
+    padding: 14px 10px 10px 0;
+    overflow-y: auto;
+    scrollbar-width: thin; scrollbar-color: rgba(160,132,100,0.4) transparent;
+}
+.jrnl-modal-desk .jrnl-modal-char .jrnl-cm-close {
+    top: 3.4%; right: 2.6%;
+}
+.jrnl-modal-desk .jrnl-cm-name { color: #513f47; letter-spacing: 2px; }
+.jrnl-modal-desk .jrnl-cm-sub { color: #9a8678; }
+.jrnl-modal-desk .jrnl-cm-k { color: #8a6856; }
+.jrnl-modal-desk .jrnl-cm-v { color: #55483b; }
+.jrnl-modal-desk .jrnl-cm-row { border-bottom: 1px dashed rgba(160,132,100,0.3); }
+
+/* 人物圖鑑書籤下的角色卡:紙質畫框 */
+.jrnl-desk .jrnl-char-card {
+    background: rgba(255, 251, 244, 0.85);
+    border: 1px solid rgba(178, 148, 110, 0.4);
+    border-radius: 0.35cqw;
+    box-shadow: 0 0.2cqw 0.7cqw rgba(120, 90, 60, 0.14);
+    padding: 0.7cqw 0.7cqw 0.8cqw;
+}
+.jrnl-desk .jrnl-char-card:hover { border-color: rgba(185, 104, 117, 0.55); }
+.jrnl-desk .jrnl-char-img {
+    border: 1px solid rgba(178, 148, 110, 0.45);
+    border-radius: 0.25cqw;
+    background-color: #f2e7d5;
+}
+.jrnl-desk .jrnl-char-name { color: #574a3e; font-size: max(14px, 0.85cqw); }
+.jrnl-desk .jrnl-char-role { color: #8a7362; font-size: max(12.5px, 0.62cqw); }
+.jrnl-desk .jrnl-char-trait { color: #9a8678; font-size: max(12px, 0.6cqw); }
+.jrnl-desk .jrnl-char-tag {
+    background: rgba(252, 228, 231, 0.8); color: #b25260;
+    font-size: max(12px, 0.55cqw); border-radius: 0.4cqw;
+}
+
+/* ============================================================
+   🕮 開書／翻頁動效(只在書裝 .jrnl-desk;2026-10-13 從 Vproject 的 JOURNAL_OPEN_LAB 搬進來,她看過選定)
+   - .jrnl-bk 跟 .jrnl-book-art 是同一塊(書殼範圍),裡面的百分比全是「佔書殼圖」的比例,照 LAB 原值:
+     書溝 49.61%、右頁紙 50.6~94.3% × 4.05~94.75%、左頁紙 6.9~50.6%
+   - 書本那幾層(.jrnl-bk-book:封面、右半書殼、書頁厚度、緞帶尾)只在開／闔的那一下露臉;
+     翻開後換回原本那張整頁的 .jrnl-book-art,平常攤開的樣子一點都不變
+   - 翻頁紙(.jrnl-bk-leaf)帶著頁面的複本翻,起落都剛好疊在真的那一頁上
+   ============================================================ */
+.jrnl-bk { display: none; }
+.jrnl-root.jrnl-desk {
+    --jrnl-bk-paper: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v2/aseets/story_journal/book-paper.webp');
+}
+.jrnl-desk .jrnl-bk {
+    display: block; position: absolute; z-index: 3;
+    left: 3.8%; right: 4.8%; top: 7.2%; bottom: 5.2%;
+    pointer-events: none;
+}
+/* 闔著:整本往左挪、縮一點,封面落在畫面正中;頁面、書籤、整頁書殼先藏起來 */
+.jrnl-desk.jrnl-bk-closed .jrnl-bk { transform: translateX(-24.2%) scale(0.94); }
+.jrnl-desk.jrnl-bk-closed .jrnl-book-art,
+.jrnl-desk.jrnl-bk-closed .jrnl-left,
+.jrnl-desk.jrnl-bk-closed .jrnl-right,
+.jrnl-desk.jrnl-bk-closed .jrnl-tabs { visibility: hidden; }
+/* 翻開了:書本那幾層收掉,只留翻頁紙那層,墊到書頁與書籤上面 */
+.jrnl-desk.jrnl-bk-open .jrnl-bk { z-index: 7; }
+.jrnl-desk.jrnl-bk-open .jrnl-bk-book { display: none; }
+/* 往前翻那一下:真的右頁先藏,換成舊內容的複本頂著,紙落下來才露出新的 */
+.jrnl-desk.jrnl-bk-holding .jrnl-stage > .jrnl-right { visibility: hidden; }
+
+.jrnl-bk-book { position: absolute; inset: 0; }
+.jrnl-bk-shadow {
+    position: absolute; z-index: 0;
+    left: 49.6%; right: 1.2%; top: 3%; bottom: -1.4%;
+    border-radius: 1.3cqw; background: rgba(38, 30, 26, 0.30); filter: blur(1.3cqw);
+}
+.jrnl-bk-thick {
+    position: absolute; z-index: 1;
+    left: 49.61%; right: 1.27%; top: 1.86%; bottom: 1.75%;
+    border-radius: 0.3cqw 1.3cqw 1.3cqw 0.3cqw;
+    transform: translate(0.24cqw, 0.28cqw);
+    background: linear-gradient(90deg, #efe6d9, #e6dccd);
+    box-shadow: 0.24cqw 0.3cqw 0 0 #23252a;
+}
+.jrnl-bk-base {
+    position: absolute; z-index: 1; inset: 0;
+    background: var(--jrnl-bk-paper) center / 100% 100% no-repeat;
+    clip-path: inset(0 0 0 49.61%);
+}
+.jrnl-bk-cast {
+    position: absolute; z-index: 2;
+    left: 49.61%; right: 5.5%; top: 4%; bottom: 5%;
+    opacity: 0; pointer-events: none;
+    background: linear-gradient(90deg, rgba(28,22,18,0.6), rgba(28,22,18,0.2) 40%, rgba(28,22,18,0) 85%);
+}
+/* 闔著時從書底下垂出來的那截緞帶 */
+.jrnl-bk-tail {
+    position: absolute; z-index: 2;
+    left: 83%; top: 96.6%; width: 1.7%; height: 9%;
+    transform-origin: 50% 0;
+    background: linear-gradient(90deg, #8e3641, #c16a76 45%, #a2434f 70%, #86333e);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 84%, 0 100%);
+    animation: jrnlBkSway 3.4s ease-in-out infinite;
+}
+@keyframes jrnlBkSway { 0%, 100% { transform: rotate(2.5deg); } 50% { transform: rotate(-2.5deg); } }
+
+/* 封面跟翻頁紙各自一個透視框,不跟頁面內容同一個 3D 環境,上下靠 z-index 排 */
+.jrnl-bk-coverwrap, .jrnl-bk-leafwrap {
+    position: absolute; inset: 0;
+    perspective: 220cqw; perspective-origin: 50% 42%;
+    pointer-events: none;
+}
+.jrnl-bk-coverwrap { z-index: 3; }
+.jrnl-bk-leafwrap { z-index: 6; }
+.jrnl-bk-cover {
+    position: absolute; left: 49.61%; top: 0; width: 50.39%; height: 100%;
+    transform-origin: 0 50%; transform-style: preserve-3d; transform: rotateY(0deg);
+    pointer-events: auto; cursor: pointer;
+}
+.jrnl-bk-face { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.jrnl-bk-face.jrnl-bk-back { transform: rotateY(180deg); overflow: hidden; }
+/* 封面內側 = 書殼圖的左半:翻到底剛好疊回原位 */
+.jrnl-bk-pimg {
+    position: absolute; top: 0; height: 100%; left: 1.55%; width: 198.45%;
+    background: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+}
+.jrnl-bk-pshade {
+    position: absolute; inset: 0; opacity: 0;
+    -webkit-mask: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+    mask: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+    background: linear-gradient(90deg, rgba(20,16,12,0.15), rgba(20,16,12,0.55) 50%, rgba(20,16,12,0.2));
+}
+
+/* 封面正面:皮革 + 燙金框 + 金字(闔著的封面從來沒有圖,整面用 CSS 畫,所以能翻、能打光) */
+.jrnl-bk-leather {
+    position: absolute; top: 1.86%; bottom: 1.75%; left: 0; right: 2.52%;
+    border-radius: 0.3cqw 1.3cqw 1.3cqw 0.3cqw; overflow: hidden;
+    background:
+        url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  .16 0 0 0 -.05'/></filter><rect width='220' height='220' filter='url(%23n)'/></svg>"),
+        url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.32' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  .5 0 0 0 -.18'/></filter><rect width='260' height='260' filter='url(%23n)'/></svg>"),
+        radial-gradient(90% 60% at 35% 16%, rgba(255,255,255,0.08), rgba(255,255,255,0) 60%),
+        radial-gradient(120% 90% at 70% 112%, rgba(0,0,0,0.32), rgba(0,0,0,0) 60%),
+        linear-gradient(90deg, #121316 0, #23252a 2.4%, #474a52 3.1%, #25272c 3.9%, #30333a 9%, #2c2f35 55%, #26292e 100%);
+    box-shadow: inset 0 0.07cqw 0 rgba(255,255,255,0.13), inset -0.08cqw 0 0 rgba(255,255,255,0.07), inset 0 -0.2cqw 0.4cqw rgba(0,0,0,0.35);
+}
+.jrnl-bk-lthshade { position: absolute; inset: 0; opacity: 0; background: linear-gradient(90deg, rgba(0,0,0,0.1), rgba(0,0,0,0.6)); }
+.jrnl-bk-frame {
+    position: absolute; left: 10%; right: 7%; top: 6%; bottom: 6%;
+    border: 0.07cqw solid rgba(205,170,118,0.55); border-radius: 0.25cqw; pointer-events: none;
+}
+.jrnl-bk-frame::before {
+    content: ''; position: absolute; inset: 0.42cqw;
+    border: 0.05cqw solid rgba(205,170,118,0.3); border-radius: 0.15cqw;
+}
+.jrnl-bk-corner { position: absolute; width: 2.8cqw; height: 2.8cqw; color: #caa56d; opacity: 0.85; }
+.jrnl-bk-corner.jrnl-bk-tl { left: -0.6cqw; top: -0.6cqw; }
+.jrnl-bk-corner.jrnl-bk-tr { right: -0.6cqw; top: -0.6cqw; transform: scaleX(-1); }
+.jrnl-bk-corner.jrnl-bk-bl { left: -0.6cqw; bottom: -0.6cqw; transform: scaleY(-1); }
+.jrnl-bk-corner.jrnl-bk-br { right: -0.6cqw; bottom: -0.6cqw; transform: scale(-1, -1); }
+.jrnl-bk-center {
+    position: absolute; left: 10%; right: 7%; top: 0; bottom: 4%;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1cqw; text-align: center;
+}
+.jrnl-bk-orn { width: 12cqw; height: 1.4cqw; color: #c9a46c; }
+.jrnl-bk-en { font-family: Georgia, serif; font-size: 0.8cqw; letter-spacing: 0.5cqw; padding-left: 0.5cqw; color: #c3a273; }
+.jrnl-bk-title {
+    font-size: 3.2cqw; font-weight: 700; letter-spacing: 0.6cqw; padding-left: 0.6cqw; line-height: 1.2;
+    background: linear-gradient(180deg, #f7e9c8 0%, #dcbb7e 36%, #a7814a 52%, #e6ca94 70%, #b38e57 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0.07cqw 0 rgba(0,0,0,0.6));
+}
+.jrnl-bk-name { font-size: 1.05cqw; letter-spacing: 0.9cqw; padding-left: 0.9cqw; color: #b89a72; }
+.jrnl-bk-emblem { width: 4.4cqw; height: 4.4cqw; color: #c9a46c; opacity: 0.8; margin-top: 1.4cqw; }
+
+/* ── 翻頁的那張紙(右頁紙那塊):正面＝右頁那塊圖＋舊內容的複本,背面＝左頁那塊圖＋目錄的複本 ── */
+.jrnl-bk-leaf {
+    position: absolute; left: 50.6%; top: 4.05%; width: 43.7%; height: 90.7%;
+    transform-origin: 0 50%; transform-style: preserve-3d;
+}
+.jrnl-bk-leaf .jrnl-bk-face { overflow: hidden; }
+.jrnl-bk-limg {
+    position: absolute; top: -4.465%; height: 110.25%; width: 228.83%;
+    background: var(--jrnl-bk-paper) 0 0 / 100% 100% no-repeat;
+}
+.jrnl-bk-front .jrnl-bk-limg { left: -115.79%; }
+.jrnl-bk-back .jrnl-bk-limg { left: -15.79%; }
+.jrnl-bk-lshade { position: absolute; inset: 0; opacity: 0; pointer-events: none; z-index: 9; }
+.jrnl-bk-front .jrnl-bk-lshade { background: linear-gradient(90deg, rgba(40,30,22,0.34), rgba(40,30,22,0.1) 45%, rgba(40,30,22,0.04) 80%, rgba(40,30,22,0.16)); }
+.jrnl-bk-back .jrnl-bk-lshade { background: linear-gradient(270deg, rgba(40,30,22,0.34), rgba(40,30,22,0.1) 45%, rgba(40,30,22,0.04) 80%, rgba(40,30,22,0.16)); }
+.jrnl-bk-lcast { position: absolute; top: 4.05%; height: 90.7%; width: 43.7%; opacity: 0; pointer-events: none; }
+.jrnl-bk-lcast.jrnl-bk-r { left: 50.6%; background: linear-gradient(90deg, rgba(30,22,16,0.4), rgba(30,22,16,0.12) 35%, rgba(30,22,16,0) 75%); }
+.jrnl-bk-lcast.jrnl-bk-l { left: 6.9%; background: linear-gradient(270deg, rgba(30,22,16,0.4), rgba(30,22,16,0.12) 35%, rgba(30,22,16,0) 75%); }
+/* 紙上帶著的頁面複本:對齊到紙上,跟真的那一頁同一個位置 */
+.jrnl-desk .jrnl-bk-leaf .jrnl-right { left: -0.618%; top: 2.966%; width: 100.137%; height: 93.264%; }
+.jrnl-desk .jrnl-bk-leaf .jrnl-left { left: 0; top: 2.966%; width: 92.906%; height: 93.264%; }
+/* 🚨 z-index 要壓回 0:真的右頁在書裝裡是 z-index 4,複本照抄的話會蓋在翻過來的紙上面,兩頁的字疊在一起 */
+.jrnl-desk .jrnl-bk .jrnl-right.jrnl-bk-hold { left: 50.33%; top: 6.74%; width: 43.76%; height: 84.59%; z-index: 0; }
+/* 複本定格在複製那一刻:換書籤是靠 root 上的 class 切區塊,不鎖住的話複本會跟著變成新的那頁 */
+.jrnl-desk .jrnl-bk .jrnl-d-section.jrnl-bk-keep { display: block; }

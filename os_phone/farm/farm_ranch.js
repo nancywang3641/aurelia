@@ -1,0 +1,727 @@
+// ============================================================
+// farm_ranch.js — 牧場場景（os_farm.js 開起來、在後院和牧場之間切換時掛上／拆下）
+// ------------------------------------------------------------
+// 規則在 ranch_core.js；位置、走路體力、手上工具在 farm_walk_core.js；存檔跟後院同一份（os_farm.js 管）。
+// 09-29：像大廳那樣自己走。點動物不會自己走去做完——走到牠旁邊，頭上才冒出能做的事。
+// 擠奶要先去棚屋拿桶子、剪毛要拿剪刀（一次只拿得動一樣）。
+// 走路、鏡頭、頭上那個小窗在 farm_walk_ui.js；這支管牧場有哪些東西、各自能做什麼、動物怎麼晃。
+// 座標一律用「佔底圖的百分比」，指的是腳底那一點。
+// ctx（os_farm.js 給的）：{ root, state(), libs, save(), act(a), toast(t), goScene(name), exit(), resync(), owner, look(), asset(name), guest }
+// 11-23 去丹／阿洛家做客也進得了牧場（以前進不去）：ctx.guest＝{ slot, name } 時是他的牧場、只能看——
+//   動物、飼料槽、水槽、狗屋、地上的蛋和糞照他的存檔畫，走近看得到狀態，但沒有任何按鈕；右上只留第幾日、他的金幣、乾草、水、肥料；
+//   玩家走路不扣體力；看板、結算單、雲端、住戶、雇人、結束今天、底下那排都不掛；「回後院」回他家的後院（os_farm.js 的 visitRanch）。
+// ============================================================
+(function () {
+    'use strict';
+
+    function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+    function template(ctx) {
+        var A = ctx.asset, G = ctx.guest;
+        return '<section class="farm-stage ranch-stage" data-farm="ranch-stage" aria-label="牧場">' +
+            '<img class="farm-bg" src="' + A('ranch_base_v2_svg.svg') + '" alt="">' +
+            '<button class="ranch-gate gate-barn" type="button" data-fw-key="barn" aria-label="棚屋" title="棚屋"></button>' +
+            '<img class="ranch-obj obj-barn" src="' + A('ranch_obj_barn_v1_svg.svg') + '" alt="">' +
+            '<button class="ranch-gate gate-trough" type="button" data-fw-key="trough" aria-label="飼料槽" title="飼料槽"></button>' +
+            '<img class="ranch-obj obj-trough" src="' + A('ranch_obj_trough_v1_svg.svg') + '" alt="">' +
+            '<div class="trough-hay" data-farm="trough-hay" aria-hidden="true"></div>' +
+            '<button class="ranch-gate gate-water" type="button" data-fw-key="water" aria-label="水槽" title="水槽"></button>' +
+            '<img class="ranch-obj obj-water" src="' + A('ranch_obj_water_empty_v1_svg.svg') + '" alt="">' +
+            '<div class="water-fill" data-farm="water-fill" aria-hidden="true"><img src="' + A('ranch_obj_water_surface_v1_svg.svg') + '" alt=""></div>' +
+            '<button class="ranch-gate gate-hay" type="button" data-fw-key="hay" aria-label="乾草堆" title="乾草堆"></button>' +
+            '<img class="ranch-obj obj-hay" src="' + A('ranch_obj_hay_v1_svg.svg') + '" alt="">' +
+            '<button class="ranch-gate gate-doghouse" type="button" data-fw-key="doghouse" aria-label="狗屋" title="狗屋"></button>' +
+            '<div class="ranch-obj obj-doghouse" data-farm="doghouse"></div>' +
+            '<div class="ranch-wolfsign" data-farm="wolfsign" aria-hidden="true"></div>' +
+            '<div class="ranch-drops" data-farm="ranch-drops"></div>' +
+            '<div class="ranch-animals" data-farm="ranch-animals"></div>' +
+            '<div class="farm-shade"></div>' +
+            '</section>' +
+            '<div class="ranch-lead">' +
+            '<button class="ranch-back" type="button" data-farm="exit" aria-label="離開" title="離開"><i class="fa-solid fa-xmark"></i></button>' +
+            '<button class="ranch-back" type="button" data-farm="ranch-back"><i class="fa-solid fa-arrow-left"></i><span>' + (G ? '回' + esc(G.name) + '的後院' : '回後院') + '</span></button>' +
+            '</div>' +
+            (G ? '<div class="ranch-hud">' +
+                '<span class="ranch-chip">' + esc(G.name) + '的牧場・只能看</span>' +
+                '<span class="ranch-chip" data-farm="ranch-day">第 1 日</span>' +
+                '<span class="ranch-chip coin" data-farm="ranch-coins"></span>' +
+                '<span class="ranch-chip" data-farm="ranch-hay"></span>' +
+                '<span class="ranch-chip" data-farm="ranch-water"></span>' +
+                '<span class="ranch-chip" data-farm="ranch-fert"></span>' +
+                '</div>' +
+                '<div class="farm-toast" data-farm="toast" role="status" aria-live="polite"></div>' : '') +
+            (G ? '' : '<div class="ranch-hud">' +
+            '<span class="ranch-chip" data-farm="ranch-day">第 1 日</span>' +
+            '<span class="ranch-chip coin" data-farm="ranch-coins"></span>' +
+            '<span class="ranch-chip" data-farm="ranch-stamina"></span>' +
+            '<span class="ranch-chip" data-farm="ranch-hay"></span>' +
+            '<span class="ranch-chip" data-farm="ranch-water"></span>' +
+            '<span class="ranch-chip" data-farm="ranch-fert"></span>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-board"><i class="fa-solid fa-chart-simple"></i> 看板</button>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-report"><i class="fa-solid fa-receipt"></i> 結算單</button>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-cloud" data-farm-cloud><i class="fa-solid fa-cloud"></i> 雲端</button>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-residents"><i class="fa-solid fa-user-clock"></i> 住戶</button>' +
+            '<button class="ranch-chip" type="button" data-farm="ranch-hire"><i class="fa-solid fa-handshake"></i> 雇人</button>' +
+            '<button class="ranch-chip ranch-btn" type="button" data-farm="ranch-next-day"><i class="fa-solid fa-moon"></i> 結束今天</button>' +
+            '</div>' +
+            '<div class="farm-toast" data-farm="toast" role="status" aria-live="polite"></div>');
+    }
+
+    function mount(ctx) {
+        var root = ctx.root;
+        root.innerHTML = template(ctx);
+        var $ = function (k) { return root.querySelector('[data-farm="' + k + '"]'); };
+    var core = ctx.libs.farm, ranch = ctx.libs.ranch, draw = window.FarmAnimalDraw, WC = ctx.libs.walk;
+    var stageEl = $('ranch-stage');
+    var layer = $('ranch-animals');
+    var itemsLayer = $('ranch-drops');
+
+    var state = ctx.state();
+    var G = ctx.guest || null;   // 做客：他的牧場、只能看
+    function saveState() { if (!G) ctx.save(); }
+    var act = ctx.act;
+    var toast = ctx.toast;
+    var stage = null;
+
+    // ── 動物走動 ─────────────────────────────────────
+    var RS = WC.SCENES.ranch;
+    var AREA = RS.area;
+    var KIND = {
+        cow: { w: 12, speed: 2.2, rest: [3000, 8000] },
+        sheep: { w: 8.5, speed: 2.8, rest: [2500, 7000] },
+        chicken: { w: 4.6, speed: 4.2, rest: [1200, 4500] },
+        chick: { w: 3.4 },                               // 小的雞換成小雞那張圖，寬度另算（其他小的照 BABY_SCALE 縮）
+        cat: { w: 5.4, speed: 5, rest: [2000, 9000] },
+        dog: { w: 6.2, speed: 6, rest: [1200, 5000] }   // 狗閒不下來：停得短、跑得快
+    };
+    var BABY_SCALE = 0.62;
+    var BARN_DOOR = { x: 74, y: 44 };
+    // 夜裡（台灣 20:00～06:00，os_farm 的 ctx.night）：動物原地趴著睡；貓狗回狗屋——狗睡門口、貓睡屋頂（z 要蓋過狗屋）
+    var night = ctx.night ? ctx.night() : false;
+    var PET_HOME = { dog: { x: 10.6, y: 48.6 }, cat: { x: 12, y: 33.6, z: 47 } };
+    function lookOf(kind, baby) { return kind === 'chicken' && baby ? 'chick' : kind; }
+    function widthOf(kind, baby) { return kind === 'chicken' && baby ? KIND.chick.w : KIND[kind].w * (baby ? BABY_SCALE : 1); }
+    // 動作一次只掛一個（ranch_draw.js 照這個 class 動）
+    var MOVES = ['ra-idle', 'ra-walk', 'ra-run', 'ra-eat', 'ra-happy', 'ra-sleep'];
+    function setMove(a, m) { MOVES.forEach(function (c) { a.el.classList.toggle(c, c === 'ra-' + m); }); }
+
+    function rand(a, b) { return a + Math.random() * (b - a); }
+    // 越下面越前面，跟 ranch_ui.css 裡物件的 z-index 同一把尺
+    function zOf(y) { return Math.round(y); }
+    // 位置寫在外面那層 ra-pos 的 transform（跟畫面一樣大，% ＝畫面的 %）：走路是 transform 的過場，不重排版面
+    function place(a, x, y) {
+        a.x = x; a.y = y;
+        a.pos.style.transform = 'translate(' + x.toFixed(3) + '%,' + y.toFixed(3) + '%)';
+        a.pos.style.zIndex = zOf(y);
+    }
+    function walkTo(a, x, y, speedMul, maxMs) {
+        var k = KIND[a.kind];
+        // 畫面是扁的：同樣的百分比，上下走起來比左右短，時間照實際距離算
+        var len = Math.hypot(x - a.x, (y - a.y) * WC.ASPECT);
+        var ms = Math.max(500, len / (k.speed * (speedMul || 1)) * 1000);
+        if (maxMs) ms = Math.min(ms, maxMs);
+        a.el.classList.toggle('to-left', x < a.x);
+        setMove(a, (speedMul || 1) >= 2.5 ? 'run' : 'walk');
+        a.pos.style.transitionDuration = ms + 'ms';
+        a.goal = { x: x, y: y };
+        place(a, x, y);
+        return ms;
+    }
+    function wander(a) {
+        if (a.held || a.gone) return;
+        if (night) { rest(a); return; }
+        var to = WC.pickSpot();
+        var dx = to.x - a.x, dy = to.y - a.y, dist = Math.hypot(dx, dy);
+        if (dist > 22) { to.x = a.x + dx / dist * 22; to.y = a.y + dy / dist * 22; }
+        if (WC.animalBlocked(to.x, to.y)) { rest(a); return; }
+        var ms = walkTo(a, to.x, to.y);
+        clearTimeout(a.timer);
+        a.timer = setTimeout(function () { rest(a); }, ms);
+    }
+    function rest(a) {
+        if (a.gone) return;
+        var k = KIND[a.kind];
+        // 停下來的地方記進規則：AI 看到的動物位置就是這裡
+        if (a.id) WC.setHerdPos(state, a.id, a.x, a.y);
+        clearTimeout(a.timer);
+        // 夜裡：被玩家站在旁邊（小窗開著）就原地繼續睡，走開了才照常（貓狗走回狗屋）
+        if (night) { if (a.held) setMove(a, 'sleep'); else sleep(a); return; }
+        setMove(a, 'idle');
+        if (a.held) return;
+        // 停下來偶爾低頭啃幾口草（寵物不吃）
+        if (a.id && Math.random() < .25) {
+            setMove(a, 'eat');
+            a.timer = setTimeout(function () { setMove(a, 'idle'); a.timer = setTimeout(function () { wander(a); }, rand(k.rest[0], k.rest[1])); }, rand(2400, 4000));
+            return;
+        }
+        a.timer = setTimeout(function () { wander(a); }, rand(k.rest[0], k.rest[1]));
+    }
+    // 睡覺：貓狗先走回狗屋；其他原地趴下
+    function sleep(a) {
+        clearTimeout(a.timer);
+        var home = !a.id && PET_HOME[a.kind];
+        if (home && (Math.abs(a.x - home.x) > .3 || Math.abs(a.y - home.y) > .3)) {
+            var ms = walkTo(a, home.x, home.y);
+            a.timer = setTimeout(function () { sleep(a); }, ms);
+            return;
+        }
+        if (home) { a.el.classList.remove('to-left'); if (home.z) a.pos.style.zIndex = home.z; }
+        setMove(a, 'sleep');
+    }
+    // 小人走到旁邊時站住（不然按鈕按下去牠已經走遠了）
+    // 夜裡已經睡著的不叫醒、也不重量位置（趴著的框比站著矮，量了會把牠往上挪）
+    // （10-12：動物睡覺就一直是睡覺動作，玩家靠近、打開狀態窗口也不變回站姿）
+    function hold(a) {
+        a.held = (a.held || 0) + 1;
+        clearTimeout(a.timer);
+        if (night && a.el.classList.contains('ra-sleep')) return;
+        // 走到一半就停：從畫面上量牠現在真正在哪。頁面縮到看不見時量到 0，就沿用目的地，不然會算出 NaN
+        var r = a.el.getBoundingClientRect(), s = stageEl.getBoundingClientRect();
+        a.pos.style.transitionDuration = '0ms';
+        if (s.width > 0 && s.height > 0) place(a, (r.left + r.width / 2 - s.left) / s.width * 100, (r.top + r.height * 0.92 - s.top) / s.height * 100);
+        setMove(a, 'idle');
+        if (a.id) WC.setHerdPos(state, a.id, a.x, a.y);
+    }
+    function release(a) {
+        if (!a || !a.el) return;
+        a.held = Math.max(0, (a.held || 0) - 1);
+        if (!a.held) rest(a);
+    }
+
+    // 跑掉：先衝到最近的圍欄邊，跳一下翻過去、變淡消失
+    function runAway(a) {
+        if (!a || a.gone) return;
+        a.gone = true;
+        clearTimeout(a.timer);
+        var sides = [
+            { x: a.x, y: 19, d: a.y - 19 }, { x: a.x, y: 86, d: 86 - a.y },
+            { x: 6, y: a.y, d: (a.x - 6) * 0.56 }, { x: 94, y: a.y, d: (94 - a.x) * 0.56 }
+        ].sort(function (p, q) { return p.d - q.d; });
+        var ms = walkTo(a, sides[0].x, sides[0].y, 3, 2000);   // 用衝的，最慢 2 秒到圍欄邊
+        setTimeout(function () {
+            a.el.classList.add('is-leaving');
+            setTimeout(function () { a.pos.remove(); }, 900);
+        }, ms);
+        herd = herd.filter(function (h) { return h !== a; });
+    }
+
+    var herd = [];
+    function spawn(kind, id, i, from) {
+        var an = id ? ranch.findAnimal(state, id) : null, baby = !!(an && an.baby > 0);
+        var el = document.createElement('div');
+        el.className = 'ranch-animal ra-idle ra-' + kind;
+        el.style.setProperty('--w', widthOf(kind, baby) + '%');
+        el.setAttribute('data-fw-key', id || 'pet:' + kind);
+        el.innerHTML = '<span class="ra-face">' + draw.svg({ kind: lookOf(kind, baby) }) + '</span>' + (id || kind === 'dog' ? '<span class="ra-bubble is-none"></span>' : '');
+        var pos = document.createElement('div');
+        pos.className = 'ra-pos';
+        pos.appendChild(el);
+        layer.appendChild(pos);
+        var a = { kind: kind, id: id, el: el, pos: pos, x: 0, y: 0, timer: 0, held: 0, gone: false, look: lookOf(kind, baby) };
+        var home = night && !from && !id && PET_HOME[kind];
+        var s = home || from || (id ? WC.herdPos(state, id) : WC.pickSpot());
+        pos.style.transitionDuration = '0ms';
+        place(a, s.x, s.y);
+        if (Math.random() < 0.5) el.classList.add('to-left');
+        if (night) sleep(a);
+        else a.timer = setTimeout(function () { wander(a); }, 400 + i * 600 + rand(0, 1500));
+        herd.push(a);
+        return a;
+    }
+    state.ranch.animals.forEach(function (an, i) { spawn(an.kind, an.id, i); });
+    // 狗離家出走的那天不在
+    state.ranch.pets.forEach(function (kind, i) { if (kind === 'dog' && state.ranch.dog.away) return; spawn(kind, null, state.ranch.animals.length + i); });
+
+    // 開心一下：餵完先低頭吃幾口再蹦；摸摸、剛買來的、剛出生的直接蹦。愛心是畫在動物身上的（ra-happy 才冒）
+    // 半夜被吵醒吃：低頭吃一下就趴回去睡（被吵醒不會開心）
+    function wakeEat(a) {
+        if (!a || a.gone) return;
+        clearTimeout(a.timer);
+        setMove(a, 'eat');
+        a.timer = setTimeout(function () { rest(a); }, 1500);
+    }
+    function heart(a, eat) {
+        if (!a || a.gone) return;
+        clearTimeout(a.timer);
+        var hop = function () { setMove(a, 'happy'); a.timer = setTimeout(function () { rest(a); }, 1300); };
+        if (eat) { setMove(a, 'eat'); a.timer = setTimeout(hop, 1500); } else hop();
+    }
+    function petAt(kind) { return herd.find(function (x) { return !x.id && x.kind === kind && !x.gone; }); }
+    // 狗的好感：一行講現況（數字跟規則同一份）
+    function dogInfo() {
+        var d = state.ranch.dog;
+        var mood = d.love <= 1 ? '牠很不開心，今晚再沒人理就要離家出走。' : d.love <= 2 ? '牠有點落寞。' : '';
+        return '好感 ' + d.love + '/' + ranch.DOG_LOVE_MAX + '（' + (d.pet ? '今天摸過了' : '今天還沒摸') + '、' + (d.bowl ? '飯碗裝過了' : '飯碗還空著') + '；整天沒人理會掉 1 顆）。' + mood;
+    }
+
+    // ── 走到動物旁邊能做的事 ─────────────────────────
+    function animalInfo(an) {
+        var r = state.ranch;
+        var info = ranch.ANIMALS[an.kind];
+        var favName = ranch.CROP_NAMES[info.fav];
+        var lines = [];
+        if (an.baby > 0) lines.push('還小，再吃飽 ' + an.baby + ' 天就長大，長大前不產東西。');
+        if (night) lines.push('在睡覺。');
+        if (an.sick) lines.push('生病了，不會產東西。打一針馬上好，或牧場乾淨兩天自己好。');
+        if (an.fedToday) lines.push('今天吃飽了（' + (an.fedWith === 'fav' ? favName : '乾草') + '）。');
+        else if (an.hungryDays >= ranch.RUNAWAY_DAYS - 1) lines.push('已經餓了 ' + an.hungryDays + ' 天，今天再不吃就要翻圍欄跑了！');
+        else lines.push('肚子餓了。');
+        if (an.ready) lines.push((info.collect === 'bucket' ? '奶好了' : '毛長好了') + (an.ready === 'good' ? '（上等）' : '') + '，今天沒收的話明天那份就浪費。');
+        else if (an.kind === 'sheep' && !(an.baby > 0)) lines.push('吃飽 3 天剪一次毛（' + an.fullDays + '/3）。');
+        if (r.water <= 0) lines.push('水槽沒水了，今天吃飽也不會產出。');
+        var wakes = ranch.wakesIn(an, state.day);
+        if (wakes) lines.push('最近 ' + ranch.WAKE_DAYS + ' 天半夜被吵醒吃東西 ' + wakes + ' 次' + (ranch.sleepsPoorly(an, state.day) ? '，睡不好，比較容易生病。' : '。'));
+        return lines.join('');
+    }
+    function animalActions(a) {
+        var an = ranch.findAnimal(state, a.id);
+        if (!an) return [];
+        var r = state.ranch, C = ranch.COST, w = state.walk;
+        var info = ranch.ANIMALS[an.kind];
+        var favName = ranch.CROP_NAMES[info.fav];
+        var portions = r.feed[info.fav], stock = state.inventory.harvest[info.fav] || 0;
+        var favLeft = portions ? '剩 ' + portions + ' 份' : (stock ? '倉庫 ' + stock + ' 份收成' : '倉庫沒有');
+        var done = function (out) { if (out && out.ok) { if (out.woke) wakeEat(a); else heart(a, out.code === 'fed'); } return out; };
+        // 夜裡在睡覺：要餵就得吵醒牠（吵醒那晚比較容易生病，常吵會睡不好；規則在 ranch_core）
+        var wake = night ? '吵醒牠' : '';
+        var list = [
+            { icon: 'fa-wheat-awn', label: wake + '餵乾草', sub: '剩 ' + r.hay + ' 捆', disabled: an.fedToday || !r.hay,
+                why: an.fedToday ? '今天吃飽了。' : '乾草用完了，去乾草堆買。', run: function () { return done(act({ type: 'feed', animal: a.id, food: 'hay', wake: night })); } },
+            { icon: 'fa-star', label: wake + '餵' + favName, sub: favLeft, cls: night ? '' : 'fav', disabled: an.fedToday || (!portions && !stock),
+                why: an.fedToday ? '今天吃飽了。' : '倉庫沒有' + favName + '，要在後院種。', run: function () { return done(act({ type: 'feed', animal: a.id, food: 'fav', wake: night })); } }
+        ];
+        if (info.collect !== 'drop' && an.ready) {
+            var tool = info.collect, t = WC.TOOLS[tool], milk = tool === 'bucket';
+            var why = !r.tools[tool] ? '還沒有' + t.name + '，在棚屋買。' : w.hand !== tool ? '手上要拿著' + t.name + '，去棚屋拿。' : null;
+            list.unshift({
+                icon: t.icon, label: milk ? '擠奶' : '剪毛', sub: why ? (r.tools[tool] ? '先拿' + t.name : '要先買' + t.name) : '體力 ' + (milk ? C.milk : C.shear),
+                cls: 'fav', disabled: !!why, why: why,
+                run: function () { return done(act({ type: milk ? 'milk' : 'shear', animal: a.id })); }
+            });
+        }
+        if (an.sick) list.push({ icon: 'fa-syringe', label: '打針', sub: '藥 ' + r.medicine + ' 份', disabled: !r.medicine, why: '沒有藥了，在棚屋買。',
+            run: function () { return done(act({ type: 'medicine', animal: a.id })); } });
+        return list;
+    }
+    function barnActions() {
+        var r = state.ranch, w = state.walk, list = [];
+        ['bucket', 'shears'].forEach(function (k) {
+            var t = WC.TOOLS[k], rt = ranch.TOOLS[k];
+            if (!r.tools[k]) {
+                list.push({ icon: t.icon, label: '買' + t.name, sub: rt.price + 'G · ' + rt.use, disabled: state.coins < rt.price, why: '金幣不夠。',
+                    run: function () { return act({ type: 'buy_tool', tool: k }); } });
+            } else if (w.hand === k) {
+                list.push({ icon: 'fa-hand', label: '放下' + t.name, run: function () { return act({ type: 'drop' }); } });
+            } else {
+                list.push({ icon: t.icon, label: '拿' + t.name, sub: rt.use, cls: 'fav', run: function () { return act({ type: 'take', tool: k }); } });
+            }
+        });
+        list.push({ icon: 'fa-syringe', label: '買藥', sub: ranch.MEDICINE_PRICE + 'G · 有 ' + r.medicine, disabled: state.coins < ranch.MEDICINE_PRICE, why: '金幣不夠。',
+            run: function () { return act({ type: 'buy_medicine', quantity: 1 }); } });
+        ranch.ANIMAL_IDS.forEach(function (k) {
+            var info = ranch.ANIMALS[k], cap = ranch.capOf(r, k);
+            var have = r.animals.filter(function (x) { return x.kind === k; }).length;
+            list.push({
+                icon: 'fa-plus', label: '買一隻' + info.name, sub: info.price + 'G · ' + have + '/' + cap,
+                disabled: have >= cap || state.coins < info.price, why: have >= cap ? info.name + '已經滿了，棚屋住不下' + (r.barn < ranch.BARN_TOP ? '（擴建棚屋就住得下）' : '') + '。' : '金幣不夠。',
+                run: function () {
+                    var o = act({ type: 'buy_animal', kind: k });
+                    if (o.ok) heart(spawn(k, o.animal.id, 0, BARN_DOOR));   // 從棚屋門口走出來
+                    return o;
+                }
+            });
+        });
+        // 大件（10-11）：擴建棚屋（商店的大件那段也買得到）
+        var nb = ranch.barnNext(r);
+        if (nb) list.push({ icon: 'fa-hammer', label: '擴建棚屋', sub: nb.price + 'G · 雞 ' + nb.max.chicken + '／羊 ' + nb.max.sheep + '／牛 ' + nb.max.cow,
+            disabled: state.coins < nb.price, why: '金幣不夠（要 ' + nb.price + 'G）。', run: function () { return act({ type: 'upgrade_barn' }); } });
+        return list;
+    }
+
+    // ── 地上的東西：蛋（撿）、雜草（拔）、糞便（清）──
+    // 位置照各自的編號算（WC.itemSpot），AI 看到的是同一個點
+    function itemList() {
+        var r = state.ranch;
+        return r.drops.map(function (d) { return { key: d.id, kind: 'drop', d: d }; })
+            .concat(r.weeds.map(function (w) { return { key: w.id, kind: 'weed' }; }))
+            .concat(r.poops.map(function (p) { return { key: p.id, kind: 'poop' }; }));
+    }
+    var ITEM = {
+        drop: { icon: 'fa-hand', label: '撿起來', type: 'collect' },
+        weed: { icon: 'fa-seedling', label: '拔草', type: 'pull', sub: '變 1 捆乾草' },
+        poop: { icon: 'fa-broom', label: '清掉', type: 'clean', sub: '變 1 份肥料' }
+    };
+    var ALL = {
+        drop: { icon: 'fa-basket-shopping', label: '全部撿完' },
+        weed: { icon: 'fa-seedling', label: '全部拔完' },
+        poop: { icon: 'fa-broom', label: '全部清完' }
+    };
+    function renderItems() {
+        var have = {};
+        itemsLayer.querySelectorAll('.ranch-item').forEach(function (n) { have[n.dataset.id] = n; });
+        itemList().forEach(function (it) {
+            if (have[it.key]) { delete have[it.key]; return; }
+            var spot = WC.itemSpot(it.key, it.kind);
+            var b = document.createElement('button');
+            b.type = 'button';
+            b.className = 'ranch-item ranch-drop is-' + it.kind;
+            b.dataset.id = it.key;
+            b.setAttribute('data-fw-key', it.key);
+            b.setAttribute('aria-label', it.kind === 'weed' ? '雜草' : it.kind === 'poop' ? '糞便' : ranch.PRODUCTS[it.d.product].name);
+            b.style.setProperty('--x', spot.x + '%');
+            b.style.setProperty('--y', spot.y + '%');
+            b.style.zIndex = zOf(spot.y);
+            b.innerHTML = it.kind === 'drop' ? draw.productSvg(it.d.product, it.d.quality) : draw.litterSvg(it.kind);
+            itemsLayer.appendChild(b);
+        });
+        Object.keys(have).forEach(function (k) {
+            var n = have[k];
+            n.classList.add('is-picked');
+            n.removeAttribute('data-fw-key');
+            setTimeout(function () { n.remove(); }, 360);
+        });
+    }
+
+    // ── 牧場裡搆得到的東西 ───────────────────────────
+    var SPOT = RS.spots;
+    function spotTarget(key, el, title, info, actions) {
+        var s = SPOT[key];
+        return { key: key, x: s.x, y: s.y, reach: s.reach, el: el, title: function () { return title; }, info: info, actions: actions };
+    }
+    function targets() {
+        var r = state.ranch, list = [];
+        herd.forEach(function (a) {
+            if (a.gone) return;
+            if (!a.id) {
+                list.push({
+                    key: 'pet:' + a.kind, x: a.x, y: a.y, reach: 7, el: a.el,
+                    stand: function () { return { x: a.x + (a.x > 50 ? -5 : 5), y: a.y + .5 }; },
+                    hold: function () { hold(a); }, release: function () { release(a); },
+                    title: function () { return ranch.PETS[a.kind].name; },
+                    info: function () { return a.kind === 'dog' ? dogInfo() : '牧場的貓，不吃飼料、也不產東西，摸摸牠會瞇眼睛。'; },
+                    actions: function () {
+                        var pet = function () { var o = act({ type: 'pet', pet: a.kind }); if (o.ok) heart(a); return o; };
+                        if (a.kind !== 'dog') return [{ icon: 'fa-hand', label: '摸摸', sub: '不花體力', run: pet }];
+                        var d = state.ranch.dog;
+                        return [{ icon: 'fa-hand', label: '摸摸', sub: d.pet ? '今天摸過了' : '不花體力 · 好感 +1', cls: d.pet ? '' : 'fav',
+                            disabled: d.pet, why: '今天已經摸過了，明天再來。', run: pet }];
+                    }
+                });
+                return;
+            }
+            var an = ranch.findAnimal(state, a.id);
+            if (!an) return;
+            var reach = WC.ANIMAL_REACH[a.kind] || 8;
+            list.push({
+                key: a.id, x: a.x, y: a.y, reach: reach, el: a.el,
+                stand: function () { return { x: a.x + (a.x > 50 ? -1 : 1) * (reach - 3), y: a.y + .5 }; },
+                hold: function () { hold(a); }, release: function () { release(a); },
+                title: function () { return ranch.label(an, r.animals); },
+                info: function () { return animalInfo(an); },
+                actions: function () { return animalActions(a); }
+            });
+        });
+        list.push(spotTarget('trough', root.querySelector('.obj-trough'), '飼料槽',
+            function () { var n = r.animals.filter(function (x) { return !x.fedToday; }).length; return (night ? '動物都在睡覺。' : '') + (n ? '還有 ' + n + ' 隻沒吃，乾草 ' + r.hay + ' 捆。' : '大家今天都吃飽了。'); },
+            function () {
+                var n = r.animals.filter(function (x) { return !x.fedToday; }).length;
+                return [{
+                    icon: 'fa-wheat-awn', label: night ? '吵醒大家倒乾草' : '倒乾草給大家', sub: n ? n + ' 隻 · 體力 ' + n * ranch.COST.feed : '都吃飽了', cls: night ? '' : 'fav',
+                    disabled: !n || !r.hay, why: !n ? '大家今天都吃飽了。' : '乾草用完了，去乾草堆買。',
+                    run: function () {
+                        var hungry = herd.filter(function (a) { var an = a.id && ranch.findAnimal(state, a.id); return an && !an.fedToday; });
+                        var woke = night;
+                        var out = act({ type: 'feed_all', wake: woke });
+                        hungry.forEach(function (a) { var an = ranch.findAnimal(state, a.id); if (an && an.fedToday) { if (woke) wakeEat(a); else heart(a, true); } });
+                        return out;
+                    }
+                }];
+            }));
+        list.push(spotTarget('water', root.querySelector('.obj-water'), '水槽',
+            function () { return '還夠喝 ' + r.water + ' 天（最多 ' + ranch.WATER_MAX + ' 天）。'; },
+            function () {
+                return [{ icon: 'fa-droplet', label: '加滿水', sub: r.water >= ranch.WATER_MAX ? '是滿的' : '體力 ' + ranch.COST.refill,
+                    disabled: r.water >= ranch.WATER_MAX, why: '水槽已經是滿的。', run: function () { return act({ type: 'refill' }); } }];
+            }));
+        list.push(spotTarget('hay', root.querySelector('.obj-hay'), '乾草堆',
+            function () { return '牧場裡有 ' + r.hay + ' 捆乾草。'; },
+            function () {
+                var cost = ranch.HAY_PRICE * 5;
+                return [{ icon: 'fa-coins', label: '買 5 捆乾草', sub: cost + 'G', disabled: state.coins < cost, why: '金幣不夠。',
+                    run: function () { return act({ type: 'buy_hay', quantity: 5 }); } }];
+            }));
+        list.push(spotTarget('barn', root.querySelector('.obj-barn'), '棚屋',
+            function () {
+                var w = state.walk;
+                return (w.hand ? '手上拿著' + WC.TOOLS[w.hand].name + '。' : '') + '桶子、剪刀放這裡，一次只拿得動一樣。';
+            }, barnActions));
+        list.push(spotTarget('doghouse', root.querySelector('.obj-doghouse'), '狗屋',
+            function () {
+                var d = r.dog;
+                if (d.away) return '狗屋是空的：狗離家出走了，明天清晨會自己回來。今晚沒人守夜。';
+                return '飯碗' + (d.bowl ? '今天裝過了' : '還空著') + '，狗的好感 ' + d.love + '/' + ranch.DOG_LOVE_MAX + '。';
+            },
+            function () {
+                var d = r.dog;
+                return [{ icon: 'fa-bowl-food', label: '裝滿飯碗', sub: d.bowl ? '今天裝過了' : '體力 ' + ranch.COST.bowl + ' · 好感 +1', cls: 'fav',
+                    disabled: d.away || d.bowl, why: d.away ? '狗不在家，明天清晨才回來。' : '今天裝過了，明天再來。',
+                    run: function () { var o = act({ type: 'bowl' }); if (o.ok) heart(petAt('dog'), true); return o; } }];
+            }));
+        itemList().forEach(function (it) {
+            var s = WC.itemSpot(it.key, it.kind), I = ITEM[it.kind];
+            var el = itemsLayer.querySelector('[data-id="' + it.key + '"]');
+            list.push({
+                key: it.key, x: s.x, y: s.y, reach: WC.ITEM_REACH, el: el,
+                stand: function () { return { x: s.x + 2.5, y: s.y + 1 }; },
+                title: function () {
+                    if (it.kind !== 'drop') return it.kind === 'weed' ? '雜草' : '糞便';
+                    var p = ranch.PRODUCTS[it.d.product];
+                    return p.name + (it.d.quality === 'good' ? '（上等）' : '');
+                },
+                info: function () { return ''; },
+                actions: function () {
+                    var unit = ranch.COST[I.type === 'collect' ? 'collect' : I.type === 'pull' ? 'pull' : 'clean'];
+                    var list = [{ icon: I.icon, label: I.label, sub: I.sub || '體力 ' + unit, run: function () { return act({ type: I.type, item: it.key }); } }];
+                    // 地上同一種還有別的：一次做完，每件體力減半（10-10：一次撿完蛋、一次清完糞）
+                    var R = state.ranch, n = (it.kind === 'drop' ? R.drops : it.kind === 'weed' ? R.weeds : R.poops).length;
+                    if (n > 1) list.push({ icon: ALL[it.kind].icon, label: ALL[it.kind].label + '（' + n + '）', sub: '體力 ' + Math.ceil(n * unit / 2), cls: 'fav',
+                        run: function () { return act({ type: I.type + '_all' }); } });
+                    return list;
+                }
+            });
+        });
+        // 下面圍欄的缺口＝回後院：點了走出去（走到缺口就換回後院）；不冒按鈕
+        if (shipUi) list.push(shipUi.target());
+        list.push({ key: 'gate:yard', x: 50, y: 95, reach: -1, stand: function () { return { x: 50, y: 95 }; } });
+        return list;
+    }
+
+    // 做客：他雇的小精靈在牧場做事的畫出來（11-23 畫進牧場）；
+    //   哪隻在牧場、什麼樣子跟後院那頁同一套（farm_elf_draw.js 的 view），一分鐘跟伺服器拿一次
+    var elfEls = [], elfT = 0, elvesDoc = null, elfDead = false;
+    var ELF_SPOTS = ['trough', 'water', 'hay', 'barn', 'doghouse'];
+    function renderRanchElves() {
+        elfEls.forEach(function (x) { x.pos.remove(); });
+        elfEls = [];
+        var o = elvesDoc && elvesDoc.owners && elvesDoc.owners[G.slot];
+        if (!o || elfDead) return;
+        var E = window.FarmElfDraw, n = 0;
+        (o.elves || []).forEach(function (e) {
+            var v = E.view(e, o.log || [], state.day, night, !!state.ranch.animals.length);
+            if (v.where !== 'ranch' || v.pose === 'away') return;
+            // 站在飼料槽、水槽、乾草堆、棚屋、狗屋其中一個旁邊（照名字和這個鐘頭挑，一個鐘頭內不亂跳）
+            var hour = new Date(Date.now() + 8 * 3600 * 1000).getUTCHours();
+            var sp = SPOT[ELF_SPOTS[(E.seedOf(e.id + ':' + hour) + n) % ELF_SPOTS.length]];
+            var at = { x: Math.max(4, Math.min(96, sp.x + (n % 2 ? 8 : -8))), y: Math.min(92, sp.y + 9) };
+            var nd = E.node(e, v.pose, at);
+            nd.pos.style.zIndex = zOf(at.y);
+            stageEl.appendChild(nd.pos);
+            elfEls.push({ pos: nd.pos, el: nd.el, e: e, v: v, at: at });
+            n++;
+        });
+        if (stage) stage.refresh();
+    }
+    function loadRanchElves() {
+        clearTimeout(elfT);
+        if (elfDead || !window.FarmCloud || !window.FarmCloud.elves) return;
+        window.FarmCloud.elves().then(function (d) { if (elfDead) return; elvesDoc = d; renderRanchElves(); }, function () {})
+            .then(function () { if (!elfDead) elfT = setTimeout(loadRanchElves, 60000); });
+    }
+    if (G) {
+        var allTargets = targets;
+        targets = function () {
+            return allTargets().map(function (t) { return t.actions ? Object.assign({}, t, { actions: function () { return []; } }) : t; })
+                .concat(elfEls.map(function (x) {
+                    return { key: 'elf:' + x.e.id, x: x.at.x, y: x.at.y, reach: 8, el: x.el,
+                        anchor: function () { return x.el.querySelector('svg'); },
+                        title: function () { return window.FarmElfDraw.title(x.e); },
+                        info: function () { return window.FarmElfDraw.say(x.e, x.v); },
+                        actions: function () { return []; } };
+                }));
+        };
+    }
+
+    // ── 結束今天（跟後院那顆同一件事）：出貨箱結算 → 農場、牧場、走路各過一天 → 跳結算單 ──
+    if (!G) $('ranch-next-day').addEventListener('click', function (ev) {
+        ev.stopPropagation();
+        var done = shipUi.endDay();
+        if (!done.ok || !done.report) return;   // 今天已經提早結束過，擋下來了
+        var out = done.report.ranch;
+        out.ran.forEach(function (id) { runAway(herd.find(function (a) { return a.id === id; })); });
+        // 過一天動物重新散開：走到規則排的新位置
+        herd.forEach(function (a) {
+            if (!a.id || a.gone || a.held) return;
+            var p = WC.herdPos(state, a.id);
+            clearTimeout(a.timer);
+            var ms = walkTo(a, p.x, p.y, 2.5, 2500);
+            a.timer = setTimeout(function () { rest(a); }, ms);
+        });
+        // 狗：沒人理到掉光＝用跑的翻出圍欄；離家那天過完＝從下面門口走回來
+        if (out.dog && out.dog.left) runAway(petAt('dog'));
+        if (out.dog && out.dog.back && !petAt('dog')) heart(spawn('dog', null, 0, { x: 50, y: 83 }));
+        // 狗不在那晚野狼叼走的那隻：原地淡掉
+        if (out.wolf && out.wolf.id) {
+            var prey = herd.find(function (a) { return a.id === out.wolf.id; });
+            if (prey) {
+                prey.gone = true;
+                clearTimeout(prey.timer);
+                prey.el.classList.add('is-leaving');
+                setTimeout(function () { prey.pos.remove(); }, 900);
+                herd = herd.filter(function (h) { return h !== prey; });
+            }
+        }
+        out.born.forEach(function (b, i) {
+            var baby = ranch.findAnimal(state, b.id);
+            var a = spawn(baby.kind, baby.id, i, BARN_DOOR);
+            setTimeout(function () { heart(a); }, 300);
+        });
+        render();
+    });
+
+    // 「回後院」：走到下面圍欄的缺口，走出去就換回後院
+    $('ranch-back').addEventListener('click', function (ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (stage) stage.approach('gate:yard');
+    });
+
+    function bubbleFor(an) {
+        if (!an.fedToday && an.hungryDays >= ranch.RUNAWAY_DAYS - 1) return { cls: 'b-starving', html: '<i class="fa-solid fa-wheat-awn"></i>' };
+        if (!an.fedToday) return { cls: 'b-hungry', html: '<i class="fa-solid fa-wheat-awn"></i>' };
+        if (an.sick) return { cls: 'b-sick', html: '<i class="fa-solid fa-face-dizzy"></i>' };
+        if (an.ready) return { cls: 'b-ready', html: draw.productSvg(ranch.ANIMALS[an.kind].product, an.ready) };
+        return null;
+    }
+    function renderStamina() {
+        var st = $('ranch-stamina');
+        if (G) { state.stamina = core.STAMINA_MAX; return; }   // 做客：玩家走路不扣體力（走路那支看這個決定累不累）
+        st.innerHTML = '<i class="fa-solid fa-bolt"></i> 體力 ' + state.stamina + '/' + core.STAMINA_MAX;
+        st.classList.toggle('is-low', state.stamina < 8);
+    }
+    function render() {
+        var r = state.ranch;
+        $('ranch-day').textContent = '第 ' + state.day + ' 日';
+        $('ranch-coins').textContent = state.coins + ' G';
+        renderStamina();
+        $('ranch-hay').innerHTML = '<i class="fa-solid fa-wheat-awn"></i> 乾草 ' + r.hay;
+        $('ranch-fert').innerHTML = '<i class="fa-solid fa-poop"></i> 肥料 ' + (state.inventory.fertilizer || 0);
+        var w = $('ranch-water');
+        w.innerHTML = '<i class="fa-solid fa-droplet"></i> 水 ' + r.water + '/' + ranch.WATER_MAX;
+        w.classList.toggle('is-low', r.water <= 1);
+        // 水槽的水：剩幾天就沉多少、透多少（滿＝阿洛原本畫的樣子）；喝乾＝空槽
+        var fill = $('water-fill');
+        var WATER_LOOK = { 3: [0, 1], 2: [.9, .9], 1: [1.8, .72] };   // [往下沉幾 %（768 的圖上 7px≈0.9%）, 不透明度]
+        var look = WATER_LOOK[Math.min(3, r.water)] || null;
+        fill.classList.toggle('is-dry', !look);
+        if (look) { fill.style.setProperty('--sink', look[0] + '%'); fill.style.setProperty('--clear', look[1]); }
+        // 飼料槽：今天從槽裡倒了幾隻份的乾草就堆多高（全部都倒＝滿），隔天大家吃完變空槽
+        var big = r.animals.length || 1;
+        var hayFed = r.animals.filter(function (x) { return x.fedToday && x.fedWith === 'hay'; }).length;
+        var hayAmt = hayFed ? Math.round((.2 + .8 * hayFed / big) * 10) / 10 : 0;
+        var hayEl = $('trough-hay');
+        if (hayEl.dataset.amt !== String(hayAmt)) { hayEl.dataset.amt = String(hayAmt); hayEl.innerHTML = draw.troughHaySvg(hayAmt); }
+        // 棚屋：擴建過換成阿洛畫的那張（變了才換圖）；點的範圍跟著往左長
+        var bl = r.barn || 1, bImg = root.querySelector('.obj-barn');
+        if (bImg.dataset.lv !== String(bl)) {
+            bImg.dataset.lv = String(bl);
+            bImg.src = ctx.asset('ranch_obj_barn_v' + bl + '_svg.svg');
+            bImg.classList.toggle('lv2', bl === 2);
+            bImg.classList.toggle('lv3', bl === 3);
+            root.querySelector('.gate-barn').classList.toggle('is-big', bl >= 2);
+        }
+        // 狗屋：飯碗滿不滿（變了才重畫）
+        var dh = $('doghouse'), dkey = r.dog.bowl ? 'full' : 'empty';
+        if (dh.dataset.k !== dkey) { dh.dataset.k = dkey; dh.innerHTML = draw.doghouseSvg({ bowl: r.dog.bowl }); }
+        // 昨晚狗不在、野狼叼走了雞：今天地上留一撮雞毛和一串腳印
+        var ws = $('wolfsign'), wolfOn = !!(r.wolf && r.wolf.took && r.wolf.day === state.day);
+        ws.classList.toggle('is-on', wolfOn);
+        if (wolfOn && !ws.firstChild) ws.innerHTML = draw.wolfSignSvg();
+        herd.forEach(function (a) {
+            if (!a.id) {
+                // 狗不開心（好感剩 2 以下）頭上冒一顆裂開的心
+                if (a.kind !== 'dog') return;
+                var db = a.el.querySelector('.ra-bubble'), sad = r.dog.love <= 2;
+                var dc = 'ra-bubble' + (sad ? ' b-sad' : ' is-none');
+                if (db && db.className !== dc) { db.className = dc; db.innerHTML = sad ? '<i class="fa-solid fa-heart-crack"></i>' : ''; }
+                return;
+            }
+            var an = ranch.findAnimal(state, a.id);
+            if (!an) return;
+            a.el.classList.toggle('is-baby', an.baby > 0);
+            // 小雞長大：換成大雞那張圖
+            var look = lookOf(a.kind, an.baby > 0);
+            if (a.look !== look) { a.look = look; a.el.querySelector('.ra-face').innerHTML = draw.svg({ kind: look }); }
+            a.el.style.setProperty('--w', widthOf(a.kind, an.baby > 0) + '%');
+            a.el.classList.toggle('is-sick', !!an.sick);
+            var bub = a.el.querySelector('.ra-bubble');
+            var b = bubbleFor(an);
+            bub.className = 'ra-bubble' + (b ? ' ' + b.cls : ' is-none');
+            bub.innerHTML = b ? b.html : '';
+        });
+        renderItems();
+        saveState();
+        if (bag) bag.render();
+        if (shipUi) shipUi.render();
+        if (board) board.render();
+        if (stage) stage.refresh();
+    }
+
+    // 底部快捷列＋背包（跟後院同一套 farm_bag.js）：牧場這邊放手上的、乾草、藥、動物愛吃的、撿到的產品
+    // 做客（只看）：出貨箱、看板、雲端、住戶、雇人、背包都不掛
+    var shipUi = null, board = null, cloud = null, people = null, workers = null, hire = null, bag = null;
+    if (!G) {
+    shipUi = window.FarmShip.create({ app: root, world: stageEl, scene: 'ranch', state: function () { return state; }, libs: ctx.libs, toast: toast, onChange: render });
+    $('ranch-report').addEventListener('click', function (ev) { ev.stopPropagation(); shipUi.openReport(); });
+    board = window.FarmBoard.create({ app: root, state: function () { return state; }, ship: shipUi, owner: ctx.owner, onVisit: ctx.visit });
+    $('ranch-board').addEventListener('click', function (ev) { ev.stopPropagation(); board.open(); });
+    cloud = window.FarmCloud.panel({ app: root, onConnected: ctx.resync });
+    $('ranch-cloud').addEventListener('click', function (ev) { ev.stopPropagation(); cloud.open(); });
+    people = window.FarmCloud.residentsPanel({ app: root, openCloud: function () { cloud.open(); } });
+    $('ranch-residents').addEventListener('click', function (ev) { ev.stopPropagation(); people.open(); });
+    // 雇來的人在牧場裡走（farm_worker.js）：雇人那支看著單子、把清單丟給它演
+    workers = window.FarmWorkers ? window.FarmWorkers.create({ world: stageEl, scene: 'ranch', state: function () { return state; } }) : null;
+    hire = window.FarmHire.create({ app: root, state: function () { return state; }, ctx: ctx, worker: workers, openCloud: function () { cloud.open(); } });
+    $('ranch-hire').addEventListener('click', function (ev) { ev.stopPropagation(); hire.open(); });
+    bag = window.FarmBag.create({ app: root, scene: 'ranch', state: function () { return state; }, toast: toast });
+    }
+    render();
+    stage = window.FarmWalkStage.create({
+        app: root,
+        world: stageEl,
+        scene: 'ranch',
+        state: function () { return state; },
+        targets: targets,
+        look: ctx.look,
+        toast: toast,
+        onChange: render,
+        onStamina: renderStamina,
+        onDoor: function (to) { if (to === 'yard') ctx.goScene('yard'); }
+    });
+    $('exit').addEventListener('click', function (ev) { ev.stopPropagation(); ctx.exit(); });
+    if (G) loadRanchElves();
+    // 天黑天亮（台灣 20:00、06:00）：大家停下來睡／醒來走動
+    var nightTimer = setInterval(function () {
+        var n = ctx.night ? ctx.night() : false;
+        if (n === night) return;
+        night = n;
+        herd.forEach(function (a) { if (!a.gone && !a.held) rest(a); });
+        if (G) renderRanchElves();   // 天黑了小精靈回工具棚睡
+    }, 30000);
+
+    return {
+        stage: stage,
+        render: render,
+        destroy: function () {
+            // 動物各自有停一下再走的計時器：全部停掉，不然換場景後還在背景亂跑
+            clearInterval(nightTimer);
+            elfDead = true;
+            clearTimeout(elfT);
+            herd.forEach(function (a) { clearTimeout(a.timer); a.gone = true; });
+            [stage, bag, shipUi, board, cloud, people, hire, workers].forEach(function (c) { if (c && c.destroy) c.destroy(); });
+            saveState();
+        }
+    };
+    }
+
+    window.FarmRanch = { mount: mount };
+})();

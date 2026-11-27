@@ -1,0 +1,2028 @@
+// ----------------------------------------------------------------
+// [檔案] os_image_manager.js (V3.0)
+// 路徑：scripts/os_phone/os/os_image_manager.js
+// 職責：統一管理圖片生成，並整合 TranslationManager 自動翻譯
+// V3.0：
+//   ① 實作 NovelAI 圖片生成（ZIP 解壓 → Blob URL）
+//   ② 路由：每個地方（USES）各自選接口；2026-11-17 起拿掉 Pollinations（免費額度沒了），沒接接口＝跳提示、這張不畫
+//   ③ 新增 V4 / V4 Full 模型選項
+// ----------------------------------------------------------------
+(function() {
+    console.log('[PhoneOS] 載入圖片生成管理器 (V3.0)...');
+    const win = window.parent || window;
+
+    // NAI 帳號同時只能一個生成請求，所有 _genNovelAI 呼叫透過此 Promise 鏈串行
+    let _naiQueue = Promise.resolve();
+    let _last429ToastAt = 0;   // 拼車撞 429 會一張一張連噴 → 節流：一段時間內只報一次，不洗版
+
+    // ── 本機 GPU 雙向紅綠燈（2026-06-11 實測修正：單向紅燈會讓圖片永遠等不到空檔）──
+    // 優先序：即時語音（玩家正在聽）＞ 本機圖片（頭像/插圖預載）＞ 預熱語音（未來台詞）。
+    //   • 圖片發單前讓「即時語音」≤8 秒（即時語音是幾秒的短爆發）
+    //   • 「預熱語音」反過來讓圖片：vn_tts._runPrewarm 每句前先等本機圖片清空
+    //     （否則 15 句連發＝紅燈常駐，圖片白等之外還跟語音擠爆 12GB VRAM → ComfyUI 卡死）
+    // 只有本機路線（comfyui_direct / tavern_sd）參與；雲端（NAI、自訂接口）不搶顯卡、照舊並行。
+    if (!win.AURELIA_GPU_LIGHT || !win.AURELIA_GPU_LIGHT.imgStart) {
+        win.AURELIA_GPU_LIGHT = {
+            _voiceBusy: 0,   // 即時語音（不含預熱）
+            _imgBusy: 0,     // 本機圖片生成中數量
+            voiceStart: function() { this._voiceBusy++; },
+            voiceEnd:   function() { this._voiceBusy = Math.max(0, this._voiceBusy - 1); },
+            imgStart:   function() { this._imgBusy++; },
+            imgEnd:     function() { this._imgBusy = Math.max(0, this._imgBusy - 1); },
+        };
+    }
+
+    // ── 本機 GPU 單線佇列（2026-06-11 終極版：紅綠燈互讓有競態窗口，遲到的單照樣撞）──
+    // 同時只跑「一件」本機 GPU 工作，物理上不可能再撞顯卡。
+    // 優先序：0=即時語音（玩家正在聽，插隊）＞ 1=本機圖片 ＞ 2=預熱語音（未來台詞墊底）。
+    // 只有本機工作進佇列（SoVITS、ComfyUI 直連、酒館SD）；雲端（NAI、自訂接口）不進、照舊並行。
+    if (!win.AURELIA_GPU_QUEUE) {
+        win.AURELIA_GPU_QUEUE = {
+            _q: [], _running: false, _seq: 0,
+            _lastImgTag: '',   // 剛跑完的圖片單是哪一桶（'img:char' 等）：同桶的單優先接續，LoRA 補丁不必拆掉重貼
+            // maxMs：單項逾時保險（預設 240 秒）。一項卡死（SoVITS 沒開、連線懸掛…）不准堵死整條隊，
+            // 逾時就放行後面的單，孤兒請求留在背景自生自滅。
+            // 🔬 診斷（預設關）：印出每件工作的等待/執行時間與隊列深度
+            //    要查 GPU 爭用時把 === '1' 改成 !== '0' 就會預設開（TauriTavern 沒 console，改碼比設 localStorage 快）。
+            _trace: function() { try { return localStorage.getItem('aurelia_gpu_trace') === '1'; } catch (e) { return false; } },
+            run: function(fn, prio, maxMs, tag) {
+                const self = this;
+                return new Promise(function(resolve, reject) {
+                    const _p = (prio == null ? 1 : prio);
+                    self._q.push({ fn: fn, prio: _p, maxMs: (maxMs || 240000), seq: self._seq++, resolve: resolve, reject: reject, tag: (tag || ('prio' + _p)), tQueued: Date.now() });
+                    self._q.sort(function(a, b) { return (a.prio - b.prio) || (a.seq - b.seq); });
+                    if (self._trace()) console.log('[GPU佇列] ＋排入 ' + (tag || ('prio' + _p)) + '(prio' + _p + ')　隊列深度=' + self._q.length + (self._running ? '　目前有工作在跑，得等它做完' : ''));
+                    self._pump();
+                });
+            },
+            _pump: function() {
+                const self = this;
+                if (self._running) return;
+                if (!self._q.length) return;
+                // 同桶連跑（只動圖片單）：立繪/插圖/背景三桶各掛不同 LoRA 組，交錯跑等於每張都把整組補丁
+                // 拆掉重貼；剛跑完哪桶就優先撿同桶的單，換桶時才付一次重貼。只在「跟隊頭同優先序」的
+                // 範圍內找——語音(prio 0)永遠先走，且語音自己不套用（播放順序敏感，維持嚴格先到先跑）。
+                let _idx = 0;
+                if (self._lastImgTag) {
+                    for (let i = 0; i < self._q.length; i++) {
+                        if (self._q[i].prio !== self._q[0].prio) break;
+                        if (self._q[i].prio === 1 && self._q[i].tag === self._lastImgTag) { _idx = i; break; }
+                    }
+                }
+                const item = self._q.splice(_idx, 1)[0];
+                if (!item) return;
+                self._running = true;
+                const _tr = self._trace();
+                const _tStart = Date.now();
+                if (_tr) console.log('[GPU佇列] ▶ 開跑 ' + item.tag + '　等了 ' + ((_tStart - item.tQueued) / 1000).toFixed(1) + 's　後面還排 ' + self._q.length + ' 件');
+                let done = false;
+                const finish = function(cb, v) {
+                    if (done) return;
+                    done = true;
+                    clearTimeout(timer);
+                    if (item.prio === 1 && String(item.tag).slice(0, 4) === 'img:') self._lastImgTag = item.tag;
+                    if (_tr) console.log('[GPU佇列] ■ 完成 ' + item.tag + '　佔用 ' + ((Date.now() - _tStart) / 1000).toFixed(1) + 's　（等待 ' + ((_tStart - item.tQueued) / 1000).toFixed(1) + 's）');
+                    cb(v);
+                    self._running = false;
+                    self._pump();
+                };
+                const timer = setTimeout(function() {
+                    console.warn('[GPU佇列] 一項工作逾時(' + item.maxMs + 'ms)，放行後面的單');
+                    finish(item.resolve, undefined);
+                }, item.maxMs);
+                Promise.resolve().then(function() { return item.fn(); })
+                    .then(function(v) { finish(item.resolve, v); }, function(e) { finish(item.reject, e); });
+            }
+        };
+    }
+
+    const ImageManager = {
+        config: {
+            // 各桶選的接口。2026-11-17 拿掉 Pollinations 之後，預設是「還沒接」（空字串）：新玩家要先去設置 → 圖片接一個。
+            service: '',          // legacy：單一全域服務，保留供舊讀者；新路由走三桶
+            serviceInanimate: '', // 死物桶：bg / item
+            serviceLiving: '',    // legacy：舊「活物桶」(char+scene 共用)，保留供遷移/舊讀者
+            serviceChar: '',      // 頭像桶：char（角色頭像／立繪）
+            serviceScene: '',     // 插圖桶：scene（場景插圖／CG）
+            serviceMap: '',       // 小地圖桶：map（場景俯視小地圖底板，畫風跟背景分開）
+            // 🌐 自訂接口：公益站／自架站那類 OpenAI 格式的生圖 API。
+            //    三格全部自己填，不內建站台清單——每個站的型號都不一樣，清單只會過期。
+            customApi: { url: '', apiKey: '', model: '', quality: 'medium', basePrompt: '' },
+            novelai: {
+                token: '',
+                url: 'https://image.novelai.net/ai/generate-image',
+                model: 'nai-diffusion-3',
+                // NAI 用 Danbooru tag 格式（逗號標籤），跟自訂接口那種讀句子的模型完全不同
+                charBasePrompt: 'masterpiece, best quality, very aesthetic, absurdres, anime style, detailed face',
+                charNegPrompt: 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry',
+                itemBasePrompt: 'masterpiece, best quality, white background, simple background, no background, product image, detailed',
+                itemNegPrompt: 'person, human, character, body, face, hands, worst quality, low quality, blurry, watermark, text',
+                capFreeSize: true,   // 🛡️ 防超免費尺寸：超過 1024×1024(約100萬px) 自動等比縮回，避免誤設大圖扣 Anlas
+                vibes: [],           // 🎨 氛圍轉印：{id,name,strength,on,models[]} 輕引用；encoding 本體在 IndexedDB(nai_vibe_<id>)
+                vibeScope: { char: false, scene: true, bg: true },   // 套用範圍：頭像/插圖/背景其他（頭像預設關＝避免每輪頭像被參考圖帶跑）
+            },
+            // 酒館原生 /sd：走使用者在酒館 Image Generation 擴展設好的後端；以下全可空，空=用酒館自己的設定
+            tavernSd: { negative: '', width: '', height: '', steps: '', cfg: '' },
+            // ComfyUI 直連：奧瑞亞內部組 workflow，走酒館伺服器代理(/api/sd/comfy/generate)生圖
+            comfyuiDirect: {
+                url: 'http://127.0.0.1:8188', modelType: 'checkpoint', model: '', vae: '', sampler: 'euler', scheduler: 'normal',
+                steps: 28, cfg: 6.5, width: 1024, height: 1024, seed: -1, clipSkip: 0,
+                basePrompt: '', negPrompt: '', loras: [],
+                // Flux 模式專用
+                fluxClipL: 'clip_l.safetensors', fluxT5: 't5xxl_fp8_e4m3fn.safetensors', fluxAe: 'ae.safetensors', guidance: 3.5,
+                // Anima 模式專用（Qwen 文字編碼器 + Qwen VAE）
+                animaClip: 'qwen_3_06b_base.safetensors', animaVae: 'qwen_image_vae.safetensors'
+            }
+        },
+
+        init: function() {
+            const saved = localStorage.getItem('os_image_config');
+            if (saved) {
+                try { 
+                    const savedConfig = JSON.parse(saved);
+                    this.config = {
+                        ...this.config,
+                        // 🚨 先把存檔整份帶進來，再用下面那幾條覆蓋需要特殊處理的。
+                        //    原本是「逐個列舉子物件」，名單上沒有的欄位在每次開機都會被預設值蓋回去 ——
+                        //    自訂接口就是這樣掉的：設定存進 localStorage 了，但這裡沒讀回來，
+                        //    於是當場按存能用、一重新整理就變回沒填網址（她第一章成功、第二章黃字）。
+                        ...savedConfig,
+                        service: savedConfig.service || this.config.service,
+                        // 向後相容：舊用戶只有單一 service → 各桶都繼承它，現狀不變
+                        serviceInanimate: savedConfig.serviceInanimate || savedConfig.service || this.config.service,
+                        serviceLiving: savedConfig.serviceLiving || savedConfig.service || this.config.service,
+                        // 頭像/插圖拆桶：沒存過新桶 → 遷移自舊「活物桶」serviceLiving，現狀不變（要分才分）
+                        serviceChar:  savedConfig.serviceChar  || savedConfig.serviceLiving || savedConfig.service || this.config.service,
+                        serviceScene: savedConfig.serviceScene || savedConfig.serviceLiving || savedConfig.service || this.config.service,
+                        // 小地圖桶：沒存過 → 退死物桶(背景)，現狀不變（要分才分）
+                        serviceMap:   savedConfig.serviceMap   || savedConfig.serviceInanimate || savedConfig.service || this.config.service,
+                        novelai: {
+                            ...this.config.novelai,
+                            ...savedConfig.novelai
+                        },
+                        customApi: {
+                            ...this.config.customApi,
+                            ...(savedConfig.customApi || {})
+                        },
+                        tavernSd: {
+                            ...this.config.tavernSd,
+                            ...(savedConfig.tavernSd || {})
+                        },
+                        comfyuiDirect: {
+                            ...this.config.comfyuiDirect,
+                            ...(savedConfig.comfyuiDirect || {}),
+                            loras: (savedConfig.comfyuiDirect && Array.isArray(savedConfig.comfyuiDirect.loras)) ? savedConfig.comfyuiDirect.loras : this.config.comfyuiDirect.loras
+                        }
+                    };
+                    
+                    // 🗑 2026-11-17 拿掉 Pollinations：舊存檔裡選它的桶一律變「還沒接」，它那份設定也不再帶著存
+                    ['service', 'serviceInanimate', 'serviceLiving', 'serviceChar', 'serviceScene', 'serviceMap'].forEach(k => {
+                        if (this.config[k] === 'pollinations') this.config[k] = '';
+                    });
+                    delete this.config.pollinations;
+                    console.log('[ImageManager] ✅ 配置已載入');
+                } catch(e){
+                    console.error('[ImageManager] ❌ 載入配置失敗:', e);
+                }
+            }
+        },
+
+        // --- 同 (prompt, type) 結果快取 ---
+        // 解決 011.html 這類「ST 正則注入面板」script 多次重跑導致每次都吃新 seed / 耗 token 的問題。
+        // 同 prompt + type 第二次呼叫直接回傳第一次的結果（NAI／ComfyUI 等直接複用既有 blob URL）。
+        // options.force = true 可跳過 cache 強制重生。
+        _urlCache: new Map(),
+
+        // 快取鍵：帶 use 的另外算（同一句話不同列可能走不同接口）；prompt 是 _applyUse 拼過畫風底詞的那句
+        _cacheKey: function(type, prompt, options) {
+            return (options && options.use ? options.use + '|' : '') + type + '|' + (prompt || '');
+        },
+
+        // 釋放某個 cache 項（blob 順手 revoke）→ 圖庫重生轉成持久 dataURL 後呼叫，免暫時 blob URL 永久佔記憶體
+        //   generate 帶了 use 就要帶同一份 options（use／styleDone）：鍵裡有那一列的畫風底詞，照 _applyUse 拼回去才對得上
+        evict: function(type, prompt, options) {
+            try {
+                const k = this._cacheKey(type || 'scene', this._withStylePos(prompt || '', options), options);
+                const v = this._urlCache.get(k);
+                if (v && typeof v === 'string' && v.startsWith('blob:')) { try { URL.revokeObjectURL(v); } catch (e) {} }
+                this._urlCache.delete(k);
+            } catch (e) {}
+        },
+
+        // 🎭 插圖畫到誰（帶參考圖用）：插圖提示詞展開成外觀之後就看不出是誰了，
+        //    所以派發插圖時先記下「這條提示詞畫的是誰」。鍵是送進 generate 的原始提示詞（翻譯前）。
+        //    存進插圖相簿時也一起寫進去（scene_cache.cast），重整後按重生還找得到。
+        _sceneCast: new Map(),
+        setSceneCast: function(prompt, names) {
+            const k = String(prompt || '').trim();
+            if (!k) return;
+            const list = (Array.isArray(names) ? names : []).map(n => String(n || '').trim()).filter(Boolean);
+            if (list.length) this._sceneCast.set(k, list); else this._sceneCast.delete(k);
+            if (this._sceneCast.size > 200) this._sceneCast.delete(this._sceneCast.keys().next().value);
+        },
+        sceneCastOf: function(prompt) { return this._sceneCast.get(String(prompt || '').trim()) || []; },
+
+        // 帶參考圖：照出場順序最多四個角色，只拿她自己放的圖（角色圖鑑的 userRefUrl），抓不到的跳過。
+        _collectRefImages: async function(names) {
+            const CG = win.OS_CHAR_GALLERY || window.OS_CHAR_GALLERY;
+            if (!CG || typeof CG.userRefUrl !== 'function' || !Array.isArray(names)) return [];
+            const out = [], seen = [], missed = [];
+            for (const n of names) {
+                if (out.length >= 4) break;
+                const name = String(n || '').trim();
+                if (!name || seen.indexOf(name) >= 0) continue;
+                seen.push(name);
+                let url = '';
+                try { url = await CG.userRefUrl(name); } catch (e) {}
+                if (!url) continue;
+                try {
+                    const r = await fetch(url);
+                    if (!r.ok) throw new Error('HTTP ' + r.status);
+                    let blob = await r.blob();
+                    if (!/^image\/(png|jpe?g|webp)$/i.test(blob.type)) blob = await this._toPngBlob(blob);
+                    out.push({ name, blob });
+                } catch (e) {
+                    // 最常見是圖床不讓網頁直接抓（瀏覽器擋跨網站）。放得進舞台不代表抓得回來當附件。
+                    console.warn('[ImageManager] 參考圖抓不到，這張不帶「' + name + '」：', (e && e.message) || e);
+                    missed.push(name);
+                }
+            }
+            if (missed.length) {
+                try { AUI.toastr && AUI.toastr.warning('抓不到這幾個角色的立繪，這張沒帶他們：' + missed.join('、') + '。放到角色中心的本地上傳就一定抓得到。', '參考圖', { timeOut: 8000 }); } catch (e) {}
+            }
+            return out;
+        },
+        _toPngBlob: async function(blob) {
+            const bmp = await createImageBitmap(blob);
+            const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
+            cv.getContext('2d').drawImage(bmp, 0, 0);
+            return await new Promise((res, rej) => cv.toBlob(b => b ? res(b) : rej(new Error('轉檔失敗')), 'image/png'));
+        },
+
+        // --- 三桶路由：依 type 取該桶選的接口 ---
+        // 頭像桶 char = serviceChar；插圖桶 scene = serviceScene；其餘(bg/item/pet…) = serviceInanimate。
+        // char/scene 多重 fallback：新桶 → 舊「活物桶」serviceLiving → legacy 全域 service；都沒有＝''（還沒接接口）。
+        serviceFor: function(type) {
+            const c = this.config;
+            let s;
+            if (type === 'char')       s = c.serviceChar  || c.serviceLiving || c.service;
+            else if (type === 'scene') s = c.serviceScene || c.serviceLiving || c.service;
+            else if (type === 'map')   s = c.serviceMap   || c.serviceInanimate || c.service;
+            else                       s = c.serviceInanimate || c.service;
+            return (s && s !== 'pollinations') ? s : '';
+        },
+        // 🔕 沒接接口／接口沒填好：跳一次提示（一分鐘內同一句只跳一次，拼車一批圖不會連噴），這張不畫
+        _noService: function(why) {
+            const msg = why || '還沒接生圖接口：到「設置 → 圖片」選一個（NAI、ComfyUI、自訂接口或酒館）';
+            const now = Date.now();
+            if (this._noSvcMsg !== msg || now - (this._noSvcAt || 0) > 60000) {
+                this._noSvcMsg = msg; this._noSvcAt = now;
+                try { win.AUI && win.AUI.toast && win.AUI.toast(msg); } catch (e) {}
+            }
+            console.warn('[ImageManager] ' + msg);
+            return null;
+        },
+        // 🪽 帶翼角色的畫框加寬（角色圖路徑各自呼叫，不做在 generate() 裡）
+        //   翅膀的輪廓寬度是人身的 2~3 倍，人身比例的畫布必定切到翅膀；去背後那是一條直線切邊，
+        //   羽化只會把它變成半透明霧邊(羽毛淡出到一半，換任何背景都看得出是「消失」不是「延伸出畫面」)，
+        //   所以治本是加寬畫布、讓整對翅膀進得來。
+        //   ⚠️ 只認「輪廓會超出人身」的部位：獸耳/角/尾巴幅度小、魚尾往下長，畫框本來就裝得下，一律不算。
+        //   ⚠️ fairy 要收：模型看到 fairy 常自己長出翅膀，prompt 裡不一定寫 wings。
+        //   ⚠️ 刻意不做進 generate()：大廳走路圖(3×4 sheet)的寬高是切格幾何，被偷偷加寬會整張切錯格。
+        WING_RE: /\bwings?\b|\bharpy\b|\bfair(?:y|ies)\b/i,
+        // 光加寬有時模型會把翅膀跟著撐大填滿 → 要同時約束「整對翅膀進框、四周留白」
+        WING_FRAME_WORDS: 'entire wings visible in frame, empty margin around subject',
+        needsWideFrame: function (prompt) { return this.WING_RE.test(String(prompt || '')); },
+        // 回 { width, height, extra }；沒命中＝原樣回傳、extra 為空字串（呼叫端無腦串接即可）
+        wideFrame: function (w, h, prompt) {
+            w = parseInt(w, 10) || 0; h = parseInt(h, 10) || 0;
+            if (!w || !h || !this.needsWideFrame(prompt)) return { width: w, height: h, extra: '' };
+            const nw = Math.max(w, Math.round(w * 1.5 / 64) * 64);   // 64 倍數：NAI/SD 的硬規矩
+            if (nw === w) return { width: w, height: h, extra: '' };
+            console.log(`[ImageManager] 🪽 偵測到帶翼角色 → 畫框加寬 ${w}x${h} → ${nw}x${h}`);
+            return { width: nw, height: h, extra: this.WING_FRAME_WORDS };
+        },
+
+        // ComfyUI 每桶各自一份設定：char/scene/bg/map 各有 comfyuiDirect.buckets[桶] 覆蓋(模型/參數/底詞/預設包)，
+        //   只共用連線網址 url。沒設過該桶 → 退回扁平 comfyuiDirect(＝現狀,向後相容零風險)。
+        _comfyBucketOf: function(type) {
+            if (type === 'char') return 'char';
+            if (type === 'scene') return 'scene';
+            if (type === 'map') return 'map';
+            return 'bg';   // bg / item → 背景桶
+        },
+        _comfyCfgFor: function(type) {
+            const cd = this.config.comfyuiDirect || {};
+            const b = cd.buckets && cd.buckets[this._comfyBucketOf(type)];
+            if (!b || typeof b !== 'object') return cd;         // 該桶沒獨立設定 → 用扁平共用設定（現狀）
+            return Object.assign({}, cd, b, { url: cd.url });   // 桶設定覆蓋，網址永遠用共用的
+        },
+        // 預設包（組合）蓋在扁平設定上，跟 previewComfyPreset 同一種合法；網址永遠用共用的。
+        //   包裡沒帶工作流＝自動組（不能沿用扁平那份的自訂工作流）
+        _comfyCfgFromPreset: function(preset) {
+            const cd = this.config.comfyuiDirect || {};
+            const p = Object.assign({}, preset || {});
+            if (!p.customWorkflow || !String(p.customWorkflow).trim()) { p.workflowMode = 'auto'; p.customWorkflow = ''; }
+            else p.workflowMode = 'custom';
+            delete p.name; delete p.id; delete p.thumb;
+            return Object.assign({}, cd, p, { url: cd.url });
+        },
+
+        // ════════════════════════════════════════════════════════════════
+        // 🗂 圖片用途名冊（跟設置 → AI 模型「哪件事走哪個模型」同一套，2026-09-24）
+        //   以前每個生圖的地方跟著「桶」走：頭像跟立繪綁在一起、物品跟背景綁在一起，要分開就得加桶、加分頁，
+        //   設定頁越長越亂。現在一個地方一列，每列自己選用哪組接口、哪個畫風；呼叫端帶 options.use。
+        //   🔴 加新功能要生圖：這裡加一列，呼叫 generate／generateBackgroundAsync／generateItem 時帶 use。設定頁自動多一列。
+        //   沒改過的列（os_img_routes 裡沒有）＝照舊走原本的桶與原本的底詞，換面板當天出圖不變。
+        // ════════════════════════════════════════════════════════════════
+        USES: [
+            { id: 'avatar', name: '頭像',       type: 'char'  },
+            { id: 'sprite', name: '立繪',       type: 'char'  },
+            { id: 'scene',  name: '插圖',       type: 'scene' },
+            { id: 'bg',     name: '背景',       type: 'bg'    },
+            { id: 'item',   name: '物品',       type: 'item'  },
+            { id: 'map',    name: '小地圖',     type: 'map'   },
+            { id: 'phone',  name: '手機照片',   type: 'scene' },
+            { id: 'app',    name: '應用內圖片', type: 'item'  },
+            { id: 'expr',   name: '立繪表情',   type: 'char'  },   // 角色圖鑑「生一組表情」：只重畫臉；ComfyUI（comfyInpaint）或自訂接口 GPT 九宮格（capiEdit＋OS_EXPR_GRID），看 exprEngine
+            { id: 'doll',   name: '不倒翁小人', type: 'char'  },   // 角色中心「裝扮」頁的「生成不倒翁小人」（lobby_dress.js 的 _genDoll）：單獨一張，不跟立繪共用畫風；接自訂接口時一張三隻（正面／側面／背面）
+            { id: 'pv',     name: '世界宣傳片', type: 'bg'    },   // SN 收尾做的新世界宣傳片：一句旁白一張畫面（OS_WORLDGATE.pvDraw；阿洛值班時他自己畫，沒畫成才走這列）
+            { id: 'memory_card', name: '記憶牌面', type: 'scene' },   // 紫薇的記憶迴廊：抽到的那張牌正面畫回憶裡最關鍵的一刻（lobby_memory.js 的 _paintCard），一張牌一張
+        ],
+        useOf: function(id) { return this.USES.find(u => u.id === id) || null; },
+        _ROUTES_KEY: 'os_img_routes',
+        _STYLES_KEY: 'os_img_styles',
+        // { [use]: { conn, style } }；只存她改過的欄
+        getRoutes: function() {
+            try { const v = JSON.parse(localStorage.getItem(this._ROUTES_KEY) || '{}'); return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; }
+        },
+        setRoute: function(use, patch) {
+            const all = this.getRoutes();
+            const r = Object.assign({}, all[use] || {}, patch || {});
+            Object.keys(r).forEach(k => { if (r[k] === '' || r[k] == null) delete r[k]; });
+            if (Object.keys(r).length) all[use] = r; else delete all[use];
+            win.AUI.lsSet(this._ROUTES_KEY, JSON.stringify(all), '「用途設定」的設定');   // 空間滿了會自己跳提示
+            return r;
+        },
+        // 畫風包 [{ id, name, pos, neg, ref }]；ref＝底圖在 OS_DB 圖庫的編號
+        getStyles: function() {
+            try { const v = JSON.parse(localStorage.getItem(this._STYLES_KEY) || '[]'); return Array.isArray(v) ? v.filter(s => s && s.id) : []; } catch (e) { return []; }
+        },
+        setStyles: function(list) { return win.AUI.lsSet(this._STYLES_KEY, JSON.stringify(list || []), '畫風包'); },   // 存成回 true
+        // 這一列選了畫風嗎：沒選回 null（照舊）；選「不加」回空的一包
+        styleFor: function(use) {
+            // 🎨 2026-11-17 定案：畫風只給自訂接口。NAI、ComfyUI 寫底詞的方式完全不同，長相在它們自己的預設包裡，
+            //    這兩種接口一律不再疊畫風（連「原本的頭像／背景／物品底詞」也不加）。酒館照舊。
+            const svc = this.serviceForUse(use);
+            if (svc === 'novelai' || svc === 'comfyui_direct') return { id: 'none', name: '不加', pos: '', neg: '', ref: '' };
+            const r = this.getRoutes()[use];
+            if (!r || !r.style) return null;
+            if (r.style === 'none') return { id: 'none', name: '不加', pos: '', neg: '', ref: '' };
+            return this.getStyles().find(s => s.id === r.style) || null;   // 那包被刪了＝照舊
+        },
+        // 「用哪組」的選項：各接口頁存好的組合
+        connList: function() {
+            const out = [];
+            const nai = this.config.novelai || {};
+            out.push({ id: 'nai', svc: 'novelai', name: 'NAI・目前的設定' });
+            (nai.naiPresets || []).forEach(p => { if (p && p.id) out.push({ id: 'nai:' + p.id, svc: 'novelai', name: 'NAI・' + (p.name || '未命名') }); });
+            out.push({ id: 'comfy', svc: 'comfyui_direct', name: 'ComfyUI・目前的設定' });
+            ((this.config.comfyuiDirect || {}).presets || []).forEach(p => { if (p && p.name) out.push({ id: 'comfy:' + p.name, svc: 'comfyui_direct', name: 'ComfyUI・' + p.name }); });
+            out.push({ id: 'tavern', svc: 'tavern_sd', name: '酒館的生圖' });
+            out.push({ id: 'capi', svc: 'custom_api', name: '自訂接口・目前那組' });
+            let nodes = [];
+            try { nodes = JSON.parse(localStorage.getItem('os_img_capi_nodes') || '[]'); } catch (e) {}
+            (Array.isArray(nodes) ? nodes : []).forEach(n => { if (n && n.id && n.url) out.push({ id: 'capi:' + n.id, svc: 'custom_api', name: '自訂接口・' + (n.name || n.model || n.url) }); });
+            return out;
+        },
+        // 選項 → 要換成哪個接口、帶哪組參數。對不到（包被刪了、節點沒了）回 null＝照舊
+        _resolveConn: function(conn) {
+            conn = String(conn || '');
+            if (!conn) return null;
+            if (conn === 'poll')   return null;   // 2026-11-17 拿掉 Pollinations：舊存的這格當作沒選
+            if (conn === 'tavern') return { provider: 'tavern_sd' };
+            if (conn === 'nai')    return { provider: 'novelai' };
+            if (conn === 'capi')   return { provider: 'custom_api' };
+            // ComfyUI・目前的設定＝ComfyUI 頁面板上存的那份（扁平參數），不經四個凍住的桶
+            if (conn === 'comfy')  return { provider: 'comfyui_direct', _comfyCurrent: true };
+            const i = conn.indexOf(':'), kind = conn.slice(0, i), key = conn.slice(i + 1);
+            if (kind === 'comfy') {
+                const p = ((this.config.comfyuiDirect || {}).presets || []).find(x => x && x.name === key);
+                return p ? { provider: 'comfyui_direct', _comfyPreset: p } : null;
+            }
+            if (kind === 'nai') {
+                const p = ((this.config.novelai || {}).naiPresets || []).find(x => x && x.id === key);
+                if (!p) return null;
+                const pick = {};
+                ['charBasePrompt', 'charNegPrompt', 'itemBasePrompt', 'itemNegPrompt', 'sampler', 'scale', 'steps', 'ucPreset'].forEach(k => { if (p[k] !== undefined) pick[k] = p[k]; });
+                return { provider: 'novelai', _naiCfg: Object.assign({}, this.config.novelai, pick) };
+            }
+            if (kind === 'capi') {
+                let nodes = [];
+                try { nodes = JSON.parse(localStorage.getItem('os_img_capi_nodes') || '[]'); } catch (e) {}
+                const n = (Array.isArray(nodes) ? nodes : []).find(x => x && x.id === key);
+                if (!n || !n.url) return null;
+                const cur = this.config.customApi || {};
+                return { provider: 'custom_api', customApi: Object.assign({}, cur, { url: n.url, apiKey: n.apiKey, model: n.model, refImages: n.refImages }) };
+            }
+            return null;
+        },
+        // 這一列照舊的話走哪組（設定頁顯示「目前實際在用的」、第一次打開把舊設定轉成列用）
+        legacyServiceOf: function(use) {
+            const u = this.useOf(use);
+            return this.serviceFor(u ? u.type : 'scene');
+        },
+        // 這一列實際走哪個接口（改過就是改過的，沒改就是原本的桶）。
+        //   🚨 會先問接口再決定怎麼寫的地方（立繪要不要原樣送、插圖寫標籤還是句子、要不要一個一個排隊）一律問這支，
+        //      別再問 serviceFor(type)——那是桶，列改過之後就不準了。
+        serviceForUse: function(use) {
+            const r = this.getRoutes()[use];
+            const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
+            return hit ? hit.provider : this.legacyServiceOf(use);
+        },
+        // 這一列送得出參考圖嗎：走自訂接口、而且不是 SD WebUI 格式（那種站沒有帶圖編輯那條）。
+        //   小地圖帶灰度草稿（scene_map_engine.js）先問這支：送不出去的話草稿白畫，裁切也會裁錯。
+        takesRefImages: function(use) {
+            if (this.serviceForUse(use) !== 'custom_api') return false;
+            const r = this.getRoutes()[use] || {};
+            const hit = r.conn ? this._resolveConn(r.conn) : null;
+            const cfg = (hit && hit.customApi) || this.config.customApi || {};
+            const url = String(cfg.url || '').trim().replace(/\/+$/, '');
+            return !!url && !/\/sdapi(\/|$)/.test(url);
+        },
+        // 這一列走 ComfyUI 時用的那組參數（看模型類型決定寫標籤還是句子的地方用）
+        comfyCfgForUse: function(use) {
+            const r = this.getRoutes()[use];
+            const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
+            if (hit && hit._comfyPreset) return this._comfyCfgFromPreset(hit._comfyPreset);
+            if (hit && hit._comfyCurrent) return this.config.comfyuiDirect || {};
+            const u = this.useOf(use);
+            return this._comfyCfgFor(u ? u.type : 'scene');
+        },
+        // 🚪 唯一入口：呼叫端帶了 options.use → 套這一列改過的接口與畫風。
+        //   直接改 options 物件（generateBackgroundAsync 要把 translatedPrompt 寫回呼叫端那一份）。
+        //   options.provider 是呼叫端自己明指的（應用、大廳換裝），不蓋掉。
+        //   options.styleDone＝呼叫端已經照 styleFor 拼過底詞（頭像、背景、物品那種原本就自己拼的），這裡不再加一次。
+        _applyUse: async function(prompt, options) {
+            const use = options && options.use;
+            if (!use) return prompt;
+            const r = this.getRoutes()[use] || {};
+            if (r.conn && !options.provider) {
+                const hit = this._resolveConn(r.conn);
+                if (hit) Object.assign(options, hit);
+            }
+            const st = this.styleFor(use);
+            prompt = this._withStylePos(prompt, options);
+            if (st && !options.styleDone && st.neg && !options.negativePrompt) options.negativePrompt = st.neg;
+            // 畫風的底圖：只有自訂接口收得到參考圖
+            if (st && st.ref && (options.provider || this.legacyServiceOf(use)) === 'custom_api') {
+                try {
+                    const url = win.OS_DB && win.OS_DB.getImage ? await win.OS_DB.getImage(st.ref) : '';
+                    if (url) options._styleRef = { name: 'the art style reference', kind: 'style', blob: await (await fetch(url)).blob() };
+                } catch (e) { console.warn('[ImageManager] 畫風底圖讀不到，這張不帶:', e); }
+            }
+            return prompt;
+        },
+        // 這一列畫風的正向底詞拼在句首（_applyUse 與 evict 共用：快取鍵含這段，兩邊拼法要一樣）
+        _withStylePos: function(prompt, options) {
+            const st = (options && options.use && !options.styleDone) ? this.styleFor(options.use) : null;
+            return (st && st.pos) ? st.pos + ', ' + prompt : prompt;
+        },
+
+        // --- 核心生成函數 (整合翻譯 + cache) ---
+        generate: async function(prompt, type = 'scene', options = {}) {
+            // 🗂 這一列（options.use）改過的接口／畫風先套上；拷一份，不動呼叫端傳進來的物件
+            if (options && options.use) { options = Object.assign({}, options); prompt = await this._applyUse(prompt, options); }
+            // 🔥 步驟 0: cache 命中（帶 use 的另外算：同一句話不同列可能走不同接口）
+            const cacheKey = this._cacheKey(type, prompt, options);
+            if (!options.force && this._urlCache.has(cacheKey)) {
+                console.log(`[ImageManager] cache hit [${type}]: ${prompt}`);
+                return this._urlCache.get(cacheKey);
+            }
+
+            console.log(`[ImageManager] Raw Input [${type}]: ${prompt}`);
+            // 插圖的出場角色要在翻譯之前查（登記時用的是原始提示詞）
+            const _refCast = (type === 'scene') ? (options.refCast || this.sceneCastOf(prompt)) : [];
+
+            // 🔥 步驟 1: 自動翻譯
+            let englishPrompt = prompt;
+            if (win.TranslationManager) {
+                try {
+                    if (win.TranslationManager.isChinese(prompt)) {
+                        console.log('[ImageManager] 偵測到中文，正在翻譯...');
+                        const _tr = await win.TranslationManager.translate(prompt, 'zh', 'en');
+                        englishPrompt = (_tr && String(_tr).trim()) ? _tr : prompt;  // 翻譯回空→用原文，絕不送空 prompt
+                        console.log(`[ImageManager] 翻譯結果: ${englishPrompt}`);
+                    }
+                } catch(e) {
+                    console.warn('[ImageManager] 翻譯失敗，使用原文:', e);
+                }
+            }
+
+            // 🛡️ 空 prompt 防護：翻譯回空 / 來源本來就空 → 直接跳過，絕不用空 prompt 生圖（顛模型空 prompt 會吐裸圖）
+            if (!englishPrompt || !String(englishPrompt).trim()) {
+                console.warn('[ImageManager] 空 prompt，跳過生成');
+                return null;
+            }
+
+            // 🔥 步驟 2: 路由判斷（依 type 桶取接口：活物桶 char/scene、死物桶 bg/item/pet）
+            // options.provider 可「單次」覆蓋桶選擇（給 VN 面板、應用各自選接口用）；沒給就走該 type 的桶
+            const service = (['novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider : this.serviceFor(type);
+            this._noteImgSent({ type: type, service: service, prompt: englishPrompt });   // 見 _noteImgSent：給她自己看送了什麼
+            let result;
+            if (service === 'custom_api') {
+                console.log('[ImageManager] Final Prompt [' + type + '→自訂接口]: ' + englishPrompt);
+                result = await this._genCustomApi(englishPrompt, type, _refCast.length ? { ...options, refCast: _refCast } : options);
+            } else if (service === 'tavern_sd') {
+                // 酒館原生 /sd：raw prompt（不塞奧瑞亞底詞，尊重朋友的 SD 設定）；失敗回 null，不偷偷換來源
+                console.log(`[ImageManager] Final Prompt [${type}→TavernSD]: ${englishPrompt}`);
+                result = await this._genTavernSd(englishPrompt, type, options);
+            } else if (service === 'comfyui_direct') {
+                // ComfyUI 直連：奧瑞亞內部組 workflow（底詞由 comfyuiDirect.basePrompt 控制，不套 poll ai 底詞）
+                console.log(`[ImageManager] Final Prompt [${type}→ComfyUIDirect]: ${englishPrompt}`);
+                result = await this._genComfyuiDirect(englishPrompt, type, options);
+            } else if (service === 'novelai') {
+                // NAI 使用 Danbooru tag 格式，底詞/負詞在 _genNovelAI 內部處理
+                console.log(`[ImageManager] Final Prompt [${type}→NAI${options.raw ? ' RAW' : ''}]: ${englishPrompt}`);
+                result = await this._genNovelAI(englishPrompt, type, options);
+            } else {
+                // 沒接接口（2026-11-17 拿掉 Pollinations 之後，新玩家預設就是這樣）：跳一次提示，這張不畫
+                return this._noService();
+            }
+
+            if (result) {
+                // 覆蓋同 key 舊值前，若舊值是 blob URL 先 revoke（force 重生會留死 blob → 累積 OOM）
+                const _old = this._urlCache.get(cacheKey);
+                if (_old && _old !== result && typeof _old === 'string' && _old.startsWith('blob:')) { try { URL.revokeObjectURL(_old); } catch (e) {} }
+                this._urlCache.set(cacheKey, result);
+                // 上限保護：超過 60 條淘汰最舊的（blob 順手 revoke），避免 Map 無限長累積大字串 / 死 blob
+                if (this._urlCache.size > 60) {
+                    const _fk = this._urlCache.keys().next().value;
+                    const _fv = this._urlCache.get(_fk);
+                    if (_fv && typeof _fv === 'string' && _fv.startsWith('blob:')) { try { URL.revokeObjectURL(_fv); } catch (e) {} }
+                    this._urlCache.delete(_fk);
+                }
+            }
+            return result;
+        },
+
+        // --- 酒館原生 /sd 生成：走使用者在酒館 Image Generation 擴展設好的後端 ---
+        // 不塞奧瑞亞底詞/負詞（尊重朋友的 SD 設定）；失敗回 null 並用 toastr 提示，不偷偷換來源。
+        // 🌐 自訂接口（OpenAI 格式的生圖 API）
+        // ------------------------------------------------------------------
+        // 給「公益站／自架站」用：它們多半提供一條 OpenAI 相容的位址，
+        // 送 JSON、回 JSON。
+        // 模型名一律使用者自己填 —— 每個站支援的型號都不一樣，內建清單只會過期。
+        // 📝 留一份「這張圖到底送了什麼字出去」。她沒有 console，那幾行 Final Prompt 她一輩子看不到，
+        //    於是「畫風有沒有帶到」只能聽我說。這份給 DEBUG 那顆按鈕讀，她自己看得到。
+        //    只留在記憶體、最多 20 筆：小倉庫已經很擠，不落地是刻意的。
+        _imgSentLog: [],
+        _noteImgSent: function (e) {
+            try {
+                if (e && e.patch) {   // 接完底詞之後回填同一筆（真正出門的是那個字串）
+                    const last = this._imgSentLog[this._imgSentLog.length - 1];
+                    if (last) {
+                        last.sent = e.sent;
+                        // 沒帶的欄位別覆寫成空：有的線路只回填送出去的字，沒有底詞/raw 這兩格
+                        if (e.base !== undefined) last.base = e.base;
+                        if (e.raw !== undefined) last.raw = e.raw;
+                    }
+                    return;
+                }
+                this._imgSentLog.push({ t: Date.now(), type: e.type, service: e.service, sent: e.prompt });
+                while (this._imgSentLog.length > 20) this._imgSentLog.shift();
+            } catch (err) {}
+        },
+        lastImgSent: function (n) { return this._imgSentLog.slice(-(n || 5)); },
+
+        // 🎥 標籤體系的取景詞 → 自然語言模型讀得懂的一句話（GPT Image／DALL·E 那種）
+        //   「cowboy shot」在 Danbooru 是「頭頂到大腿中段」，但自然語言模型看到的只有 cowboy＝牛仔：
+        //   取景一點都沒生效，還可能真的給角色加頂牛仔帽。（實測：立繪預設寫了 cowboy shot，gpt 還是給全身照）
+        //   權重括號 (xxx:1.2) 同理，那是 SD 的語法，這種模型只會把「1.2」當字讀進去。
+        //   ⚠️ 只對這類模型做；SD／NAI／ComfyUI 那幾條照舊吃標籤，一個字都不動。
+        //   ⚠️ 同時出現幾個取景詞只認第一個：兩句互相矛盾的取景要求比沒寫還糟。
+        _FRAMING_SAY: [
+            [/\bcowboy\s*-?\s*shots?\b/gi, 'Show the character from the top of the head down to the middle of the thighs; do not show the knees, lower legs, feet or shoes.'],
+            [/\bfull\s*-?\s*body\b/gi,     'Show the whole character from head to feet, with the shoes inside the frame.'],
+            [/\b(?:upper\s*-?\s*body|waist\s*-?\s*up)\b/gi, 'Show the character from the top of the head down to the waist.'],
+            [/\bchest\s*-?\s*up\b/gi,      'Show the character from the top of the head down to the chest.'],
+            [/\b(?:bust\s*-?\s*shots?|head\s+and\s+shoulders)\b/gi, 'Show the head, shoulders and upper chest only.'],
+            [/\b(?:head\s*-?\s*shots?|close\s*-?\s*ups?)\b/gi, 'Show the face filling most of the frame.'],
+        ],
+        _naturalizePrompt: function (prompt) {
+            let s = String(prompt || '');
+            if (!s) return s;
+            s = s.replace(/\(([^()]*?):\s*[\d.]+\s*\)/g, '$1');            // (詞:1.2) → 詞
+            let say = '';
+            this._FRAMING_SAY.forEach(function (pair) {
+                const before = s;
+                s = s.replace(pair[0], '');
+                if (s !== before && !say) say = pair[1];
+            });
+            s = s.replace(/\s*,\s*(?:,\s*)+/g, ', ').replace(/^[\s,]+|[\s,]+$/g, '').replace(/[ \t]{2,}/g, ' ');
+            return say ? (s + '\n\n' + say) : s;
+        },
+
+        // 自訂接口回錯 → 給使用者看的一句話＋站方原話。生圖（_genCustomApi）和帶圖編輯（capiEdit）共用。
+        // 🚨 image_generation_user_error 是 OpenAI 圖片錯誤的「大類」：額度用完（billing_hard_limit_reached）、
+        //    參數不對也掛這一類。以前拿它當「內容被擋」，連測試鈕畫一隻貓都報被擋，真正的原因被蓋掉。
+        //    只認 code 或站方明講的審查說法；額度先認（兩邊都對得上時是額度）；不管認成哪種都附站方原話。
+        _capiErr: function (status, text) {
+            const t = String(text || '');
+            let j = null; try { j = JSON.parse(t); } catch (e) {}
+            const er = (j && typeof j.error === 'object' && j.error) || j || {};
+            const code = String(er.code || '');
+            const said = (typeof er.message === 'string' && er.message)
+                || (j && typeof j.error === 'string' && j.error)
+                || (typeof er.detail === 'string' && er.detail) || (typeof er.msg === 'string' && er.msg) || '';
+            const words = (String(said).trim() || t.replace(/\s+/g, ' ').trim()).slice(0, 240);
+            const quota = /insufficient_quota|billing_hard_limit|exceeded your current quota/i.test(code + ' ' + t);
+            const blocked = !quota && (/^(moderation_blocked|content_policy_violation)$/i.test(code)
+                || /safety system|content[_ ]policy/i.test(said || t));
+            const head = blocked ? '這張的內容被站方擋掉了（站方會記重複違規，常出現就回頭調插圖落點指令）'
+                : quota ? '生圖的額度用完了（或是這個月的上限到了），去這個站的帳單或額度頁看一下'
+                : status === 401 ? '站方不認這把金鑰（401）'
+                : status === 403 ? '站方不讓這把金鑰用這個（403）'
+                : status === 404 ? '網址或模型名站方找不到（404）'
+                : status === 429 ? '站方說太頻繁或排隊滿了，等一下再試（429）'
+                : ('站方回錯誤 ' + status);
+            return { msg: head + (words ? '。站方原話：' + words : ''), blocked: blocked, quota: quota };
+        },
+
+        _genCustomApi: async function(prompt, type, options = {}) {
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: type }); } catch (e) {}   // 📊 長期用量帳
+            // options.customApi：設置頁的「測試」鈕用的——讓她還沒按儲存就能試，不必先存壞設定
+            const cfg = options.customApi || (this.config && this.config.customApi) || {};
+            const rawUrl = String(cfg.url || '').trim();
+            const key = String(cfg.apiKey || '').trim();
+            const model = String(options.model || cfg.model || '').trim();
+            if (!rawUrl) { console.warn('[ImageManager] 自訂接口沒填網址'); return null; }
+
+            // 底詞：以前設定頁有一格，接在每張提示詞後面。2026-11-17 併進「我的畫風」（每列自己選，_applyUse 拼在句首），
+            //   設定頁那格拿掉了、存的字已轉成一包畫風。這裡留著讀，只給呼叫端自己帶 customApi.basePrompt 的情況。
+            //   options.raw 是「原樣送」的呼叫（她按原圖重生那種），不套。
+            const _basePrompt = String(cfg.basePrompt || '').trim();
+
+            // 網址容錯：站方通常給到 .../v1，但她也可能整條貼進來
+            const base = rawUrl.replace(/\/+$/, '');
+            // 兩種格式，看網址自己判斷 —— 她只要貼站方給的那條，不必再選一次「這是哪一種」。
+            //   .../sdapi/... → Stable Diffusion WebUI 格式（POST /sdapi/v1/txt2img，回 {images:[base64]}）
+            //                   模型是伺服器端設定、請求裡不帶；她本機的 antigravity2api 走這條。
+            //   其餘（通常 .../v1）→ OpenAI 格式（POST /v1/images/generations，回 {data:[{url|b64_json}]}）
+            const isSd = /\/sdapi(\/|$)/.test(base);
+            const endpoint = isSd
+                ? (/\/txt2img$/.test(base) ? base
+                    : (/\/sdapi\/v1$/.test(base) ? base + '/txt2img'
+                        : base.replace(/\/sdapi.*$/, '') + '/sdapi/v1/txt2img'))
+                : (/\/images\/generations$/.test(base) ? base : base + '/images/generations');
+
+            const width = options.width || 1024;
+            const height = options.height || 1024;
+            // OpenAI 官方那條只收固定幾個尺寸，別的一律 400；而奧瑞亞各處要圖時給的是自己的尺寸
+            // （地圖 1024×512、立繪 512×768…）。認出官方就把尺寸吸附到最接近的比例，別讓她每張都失敗。
+            // 只認官方網址或官方型號 —— 公益站／代理照原樣送，行為不變。
+            const _official = /(^|\.)api\.openai\.com$/i.test((function () {
+                try { return new URL(endpoint).hostname; } catch (e) { return ''; }
+            })()) || /^(gpt-image|dall-e)/i.test(model);
+            const _snapSize = function () {
+                const r = width / height;
+                if (/^dall-e-2/i.test(model)) return '1024x1024';                       // 只有正方形三種，取最大
+                if (/^dall-e-3/i.test(model)) return r > 1.2 ? '1792x1024' : (r < 0.83 ? '1024x1792' : '1024x1024');
+                return r > 1.2 ? '1536x1024' : (r < 0.83 ? '1024x1536' : '1024x1024');  // gpt-image-1 與其後續
+            };
+            // 底詞接在後面：SD 那種吃逗號串接，OpenAI 那種吃自然語言、隔一個空行讀起來才是「另一句要求」。
+            // 🎥 OpenAI 格式那邊是「讀句子」的模型：權重括號跟 Danbooru 取景詞對它無效，先翻成話（見 _naturalizePrompt）。
+            //    在接底詞之前做：底詞是她自己寫的句子，不該被動。SD WebUI 格式照舊吃標籤，一個字不碰。
+            const _base = isSd ? prompt : this._naturalizePrompt(prompt);
+            const _p = (!_basePrompt || options.raw) ? _base
+                : (isSd ? (_base + ', ' + _basePrompt) : (_base + '\n\n' + _basePrompt));
+            // 回填那筆記錄：上面記的是「接底詞之前」的字，真正出門的是這個
+            this._noteImgSent({ patch: true, sent: _p, base: _basePrompt, raw: !!options.raw });
+            const body = isSd
+                ? { prompt: _p, negative_prompt: options.negativePrompt || '', width: width, height: height }
+                : { model: model, prompt: _p, n: 1, size: _official ? _snapSize() : (width + 'x' + height) };
+            // dall-e 回的是一小時就過期的網址，存進聊天記錄隔天就是破圖 → 要它直接回圖檔本體。
+            // gpt-image-1 本來就只回圖檔本體，而且不收這個參數，所以不能一律加。
+            if (!isSd && /^dall-e/i.test(model)) body.response_format = 'b64_json';
+            // gpt-image-1 唯一能調鬆的一格：預設 auto 連刀光血跡都可能擋，low 是官方允許的下限。
+            // 它不解禁情色，只是別讓劇情裡的打鬥整批生不出來。dall-e 不收這個參數，不能一律加。
+            if (!isSd && /^gpt-image/i.test(model)) body.moderation = 'low';
+            // 畫質分檔：只有認得出來的型號才送，而且每家的值不一樣（gpt-image 是 low/medium/high、
+            // dall-e-3 是 standard/hd）。公益站、代理、Banana 那些一律不送 —— 它們多半沒有這一格，
+            // 送一個沒見過的欄位輕則被忽略、重則整包 400，跟 negative_prompt 那次一樣。
+            if (!isSd) {
+                const _q = String(cfg.quality || 'medium').toLowerCase();
+                if (/^gpt-image/i.test(model)) body.quality = (_q === 'low' || _q === 'high') ? _q : 'medium';
+                else if (/^dall-e-3/i.test(model)) body.quality = (_q === 'high') ? 'hd' : 'standard';
+            }
+            if (!isSd && !_official && options.negativePrompt) body.negative_prompt = options.negativePrompt;   // 有些站吃，不吃的會忽略；官方不吃且會擋
+
+            const headers = { 'Content-Type': 'application/json' };
+            if (key) headers['Authorization'] = 'Bearer ' + key;
+
+            // 🎭 帶參考圖（節點上的開關）：插圖附上出場角色的立繪，改走「帶圖編輯」那條（/images/edits，圖當附件送）。
+            //    一張都拿不到就照原本純文字生圖。SD WebUI 那種站沒有這條，不帶。
+            //    官方文件：GPT 圖片模型一次最多 16 張、每張 png/webp/jpg；這條不收 moderation，所以不送。
+            const _refOn = cfg.refImages === true || cfg.refImages === '1' || cfg.refImages === 'true';
+            let refs = [];
+            if (!isSd && _refOn) {
+                refs = Array.isArray(options.refBlobs) ? options.refBlobs
+                    : (type === 'scene' ? await this._collectRefImages(options.refCast) : []);
+            }
+            // 畫風的底圖（_applyUse 讀好的）：不管這個節點有沒有開「帶參考圖」都送——她是在畫風裡特地放的
+            if (!isSd && options._styleRef) refs = refs.concat([options._styleRef]);
+            // 三合一生成的母圖（VN_Image.getTrio）：白底、黑線分三格。同畫風底圖，不看節點開關；排第一張
+            if (!isSd && options._layoutRef) refs = [options._layoutRef].concat(refs);
+            const _editsEndpoint = endpoint.replace(/\/images\/generations$/, '/images/edits');
+            const _buildEditForm = () => {
+                const fd = new FormData();
+                if (model) fd.append('model', model);
+                const _chars = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind !== 'style' && x.r.kind !== 'layout');
+                const _styles = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind === 'style');
+                const _layouts = refs.map((r, i) => ({ r: r, n: i + 1 })).filter(x => x.r.kind === 'layout');
+                // 格子那段跟 SPRITE_TRIO_LAB 試成功的那段同一套說法
+                //   版面圖自己帶說法（lead，{n}＝它是第幾張）就用它的：小地圖的灰度草稿（scene_map_engine.js）走這條
+                const _lead = (_layouts.length && _layouts[0].r.lead ? String(_layouts[0].r.lead).replace(/\{n\}/g, _layouts[0].n) + '\n'
+                    : _layouts.length ? 'Image ' + _layouts[0].n + ' is the layout to draw on: a white canvas divided by thick black lines into three framed panels. '
+                        + 'One tall panel on the left runs the full height; on the right there are two panels stacked on top of each other, an upper one and a lower one. '
+                        + 'Keep every black line exactly where it is in that image: straight, unbroken, the same thickness, and keep the black frame around the edge. '
+                        + 'Fill each panel edge to edge with its own picture. Nothing is drawn on the lines and nothing crosses from one panel into another.\n' : '')
+                    + (_chars.length ? 'Reference images for how the characters look: ' + _chars.map(x => 'image ' + x.n + ' is ' + x.r.name).join('; ') + '. Keep each of them looking like their reference image.\n' : '')
+                    + (_styles.length ? 'Image ' + _styles.map(x => x.n).join(' and ') + ' shows the art style to follow; match its rendering, colors and line quality, not its content.\n' : '');
+                fd.append('prompt', _lead + '\n' + body.prompt);
+                fd.append('n', '1');
+                if (body.size) fd.append('size', body.size);
+                if (body.quality) fd.append('quality', body.quality);
+                if (body.negative_prompt) fd.append('negative_prompt', body.negative_prompt);
+                refs.forEach((r, i) => {
+                    const ext = /webp/i.test(r.blob.type) ? 'webp' : (/jpe?g/i.test(r.blob.type) ? 'jpg' : 'png');
+                    fd.append('image[]', r.blob, 'ref' + (i + 1) + '.' + ext);
+                });
+                return fd;
+            };
+
+            // 一次送出（不重試）。回傳圖片網址／data URL；失敗就 throw，由外層決定要不要再來一次。
+            const _once = async () => {
+                const _withRefs = refs.length > 0;
+                const _h = Object.assign({}, headers);
+                if (_withRefs) delete _h['Content-Type'];   // 附件要讓瀏覽器自己帶分隔線，手寫 Content-Type 會壞
+                const resp = await fetch(_withRefs ? _editsEndpoint : endpoint, {
+                    method: 'POST', headers: _h, body: _withRefs ? _buildEditForm() : JSON.stringify(body),
+                    signal: options.signal || undefined,
+                });
+                const text = await resp.text();
+                if (!resp.ok && _withRefs && (resp.status === 404 || resp.status === 405)) {
+                    // 節點上「帶參考圖」那個開關只管角色立繪那種；畫風底圖、三格母圖、小地圖草稿、小人樣張是呼叫端自己附的，關了那個開關也照送
+                    const _byNode = refs.some(r => r.kind !== 'style' && r.kind !== 'layout');
+                    const e = new Error((_byNode ? '這個站不收參考圖（到圖片設置把這個節點的「帶參考圖」關掉）：' : '這個站不收參考圖，這張沒畫：') + resp.status);
+                    e.status = resp.status;
+                    throw e;
+                }
+                if (!resp.ok) {
+                    // 站方回的是一整包英文 JSON：認得出來的講人話（被擋／額度／金鑰…），一律附站方原話（見 _capiErr）
+                    const _ce = this._capiErr(resp.status, text);
+                    const e = new Error(_ce.msg);
+                    e.status = resp.status;
+                    e.blocked = _ce.blocked;
+                    throw e;
+                }
+
+                let data;
+                try { data = JSON.parse(text); }
+                catch (e) { throw new Error('回應不是 JSON（多半是網址填錯，指到了網頁而不是 API）：' + text.slice(0, 120)); }
+                // 這張用了多少（官方 GPT 圖片會回 usage）：借接口那格（os_keyrun.js）拿來估這張大概幾塊錢
+                this._lastCustomApiUsage = { usage: (data && data.usage) || null, model: model, official: _official, at: Date.now() };
+
+                if (isSd) {
+                    const b64 = data && Array.isArray(data.images) ? data.images[0] : null;
+                    if (!b64) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
+                    return /^data:/.test(b64) ? b64 : ('data:image/png;base64,' + b64);
+                }
+                // 參考圖實際吃掉多少：官方回應會分開寫圖片輸入用了幾個單位。第一次讓她在畫面上看到大概多少錢，之後只記在 console。
+                if (refs.length) {
+                    const _imgTok = data && data.usage && data.usage.input_tokens_details && data.usage.input_tokens_details.image_tokens;
+                    if (typeof _imgTok === 'number') {
+                        this._lastRefUsage = { imageTokens: _imgTok, refs: refs.length, at: Date.now() };
+                        const _usd = _official ? (_imgTok * 8 / 1e6) : null;   // 官方 GPT Image 2 圖片輸入 US$8／百萬
+                        console.log('[ImageManager] 🎭 參考圖 ' + refs.length + ' 張，圖片輸入 ' + _imgTok + (_usd != null ? '（約 US$' + _usd.toFixed(4) + '）' : ''));
+                        if (_usd != null && !this._refUsageToasted) {
+                            this._refUsageToasted = true;
+                            try { AUI.toastr && AUI.toastr.info('這張帶了 ' + refs.length + ' 張參考圖，參考圖這部分約 US$' + _usd.toFixed(3) + '（不含畫圖本身）', '參考圖', { timeOut: 9000 }); } catch (e) {}
+                        }
+                    }
+                }
+                const first = data && Array.isArray(data.data) ? data.data[0] : null;
+                if (!first) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
+                if (first.b64_json) return 'data:image/png;base64,' + first.b64_json;
+                if (first.url) return first.url;
+                throw new Error('回應的格式看不懂：' + JSON.stringify(first).slice(0, 200));
+            };
+
+            try {
+                try {
+                    return await _once();
+                } catch (e1) {
+                    // 🔁 只對「站方那邊的問題」重試一次：5xx＝上游沒吐圖／逾時／忙（公益站很常見），
+                    //    網路錯誤沒有 status。4xx 不重試 —— 那是網址、Key、型號名或內容被擋，
+                    //    再送一次只會拿到同一個答案，還多燒她一次額度。
+                    const st = e1 && e1.status;
+                    const worthRetry = (!st || st >= 500);
+                    if (!worthRetry || options.signal?.aborted) throw e1;
+                    console.warn('[ImageManager] 自訂接口第一次沒成功，等 2 秒重試一次：' + ((e1 && e1.message) || e1));
+                    await new Promise(r => setTimeout(r, 2000));
+                    return await _once();
+                }
+            } catch (e) {
+                const msg = (e && e.message) || String(e);
+                console.error('[ImageManager] ❌ 自訂接口生圖失敗:', msg);
+                // 她的 console 是唯讀的，錯誤要彈到畫面上才看得到（跟 NAI 那條同款）。
+                // 內容被擋也要彈：一直被擋代表落點指令沒擋住，而站方會把重複違規記在帳號上，
+                // 使用者要看得到次數才知道該回頭調指令。真正的防線在指令那邊，紅框只負責提醒。
+                try {
+                    const _tr = AUI.toastr;
+                    if (_tr) _tr.error(msg, '自訂接口生圖失敗', { timeOut: 9000 });
+                } catch (_) {}
+                this._lastCustomApiError = { msg: msg, at: Date.now(), blocked: !!e.blocked };
+                return null;   // 不偷偷換來源
+            }
+        },
+
+        _genTavernSd: async function(prompt, type, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'tavern_sd', type: type }); } catch (e) {}   // 📊 長期用量帳
+
+            const trigger = (win.TavernHelper && win.TavernHelper.triggerSlash) || win.triggerSlash;
+            if (typeof trigger !== 'function') {
+                console.warn('[ImageManager] 找不到 triggerSlash，無法走酒館原生生圖');
+                try { AUI.toastr && AUI.toastr.warning('找不到酒館助手，無法使用「酒館原生」生圖', '生圖'); } catch (e) {}
+                return null;
+            }
+
+            // 淨化 prompt：移除會破壞 STscript 解析的字元（| 管道、{{ }} 巨集、換行）
+            const clean = String(prompt || '')
+                .replace(/\|/g, ' ')
+                .replace(/\{\{|\}\}/g, '')
+                .replace(/[\r\n]+/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!clean) return null;
+
+            const t = this.config.tavernSd || {};
+            const args = ['quiet=true', 'gallery=false', 'extend=false'];
+            const neg = options.negativePrompt || t.negative;
+            if (neg) args.push('negative="' + String(neg).replace(/"/g, '') + '"');
+            if (options.seed) args.push('seed=' + options.seed);
+            const w = options.width || t.width;  if (w) args.push('width=' + w);
+            const h = options.height || t.height; if (h) args.push('height=' + h);
+            if (t.steps) args.push('steps=' + t.steps);
+            if (t.cfg)   args.push('cfg=' + t.cfg);
+
+            const cmd = '/sd ' + args.join(' ') + ' ' + clean;
+            console.log('[ImageManager] 酒館原生 /sd 指令:', cmd);
+
+            // 進本機 GPU 單線佇列（優先序 1）：跟語音絕不同時上顯卡
+            return await win.AURELIA_GPU_QUEUE.run(async () => {
+                try {
+                    try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                    const url = await trigger(cmd);
+                    if (!url || typeof url !== 'string' || !url.trim()) {
+                        console.warn('[ImageManager] /sd 回傳空，可能未設定後端');
+                        try { AUI.toastr && AUI.toastr.warning('生圖失敗，請先在酒館「圖像生成」擴展設定好後端', '酒館原生生圖'); } catch (e) {}
+                        return null;
+                    }
+                    console.log('[ImageManager] ✅ 酒館原生生圖成功');
+                    return url.trim();
+                } catch (error) {
+                    console.error('[ImageManager] ❌ 酒館原生生圖失敗:', error);
+                    try { AUI.toastr && AUI.toastr.error('生圖失敗：' + (error.message || error), '酒館原生生圖'); } catch (e) {}
+                    return null;
+                } finally {
+                    try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
+                }
+            }, 1, undefined, 'img:sd');   // 酒館 /sd 後端只有一套設定，全部算同一桶
+        },
+
+        // 底詞污染偵測：底詞(basePrompt)會附加到「每一張」圖，只該放品質/風格/LoRA trigger。
+        //   一旦被存進具體人物或場景（多半是匯入 ComfyUI 工作流時把當下的 positive CLIP 整串吃進來），
+        //   舊背景/舊人物就會跟著每張新圖跑出來 → 背景穿越＋畫面多出第三人。
+        //   這裡只警告不自動刪：風格詞跟場景詞沒有可靠的機器判準，誤刪比誤留傷害大。
+        _SCENE_SIGNALS: /(?:\b\d+\s*(?:boys?|girls?|males?|females?|others?|people)\b|\bon the (?:left|right)\b|##\s*C?\d+[^#]*##|\b(?:standing|sitting|kneeling|lying|walking|running|holding|pointing|licking|kissing|hugging)\b|\b(?:cave|forest|beach|castle|tower|dome|temple|street|bedroom|kitchen|classroom|dungeon|mine)\b)/i,
+
+        // 組最終正向詞：底詞 + 本輪動態詞。三段分開印出來，出事時一眼看得出污染來自哪一段。
+        _composePos: function(cfg, prompt, tag) {
+            const base = String((cfg && cfg.basePrompt) || '').trim();
+            const dyn  = String(prompt || '').trim();
+            const final = [base, dyn].filter(Boolean).join(', ');
+            console.log(`[ImageManager] ── 正向詞三段 [${tag || '?'}] ──`);
+            console.log('[ImageManager] ① 底詞 basePrompt:', base || '（空）');
+            console.log('[ImageManager] ② 本輪動態詞:', dyn || '（空）');
+            console.log('[ImageManager] ③ 最終送出:', final);
+            if (base && this._SCENE_SIGNALS.test(base)) {
+                const hit = (base.match(this._SCENE_SIGNALS) || [''])[0];
+                console.warn(`[ImageManager] ⚠️ 底詞裡有具體人物/場景字樣「${hit}」——底詞會加到每一張圖，這會造成背景殘留或多出人物。請到 ComfyUI 直連把底詞清成只剩品質/風格/LoRA trigger。`);
+                if (!this.__basePolluteToasted) {
+                    this.__basePolluteToasted = true;   // 一次就好，別每張圖都跳
+                    try { AUI.toastr && AUI.toastr.warning(`底詞含有具體場景／人物字樣（${hit}），會附加到每張插圖。請到「ComfyUI 直連」清理底詞。`, '底詞可能被污染', { timeOut: 12000 }); } catch (e) {}
+                }
+            }
+            return final;
+        },
+
+        // --- ComfyUI 暖機（vn_core「故事撰寫中」幕布呼叫）---
+        // 「起步慢」的錢全花在冷載入＋貼 LoRA 補丁、不在採樣（實測：冷 22 秒、熱 7 秒，採樣只佔 3 秒）。
+        // 趁 AI 還在寫劇本的空檔先丟一張極小圖，把即將用到那桶的模型整組拉上顯卡；
+        // 進的是同一條 GPU 佇列、同一個桶 tag，所以正式批次到時直接接在它後面連跑。
+        // 沒有一列走 ComfyUI 直連＝無事可做；十分鐘內剛生過圖＝模型還熱著，也不浪費這張。
+        // uses：呼叫端接下來要畫的那幾列（USES 的 id），照先後排。挑第一個實際走 ComfyUI 的列，
+        //   經 _applyUse 拿它選的那個預設包（模型＋LoRA），跟正式那張走同一條。
+        //   🚨 別再照桶問 serviceFor(type)：09-24 起桶凍住了，列改過之後桶說的接口、模型、LoRA 都不準——
+        //      列換成 ComfyUI 而桶不是＝該暖不暖；桶跟列掛不同的包＝暖錯模型。
+        _lastComfyJobAt: 0,
+        warmup: function(uses) {
+            try {
+                const list = (Array.isArray(uses) && uses.length) ? uses : ['avatar', 'scene', 'bg'];
+                const use = list.find((u) => this.useOf(u) && this.serviceForUse(u) === 'comfyui_direct');
+                if (!use) return;
+                if (Date.now() - this._lastComfyJobAt < 10 * 60 * 1000) return;
+                this._lastComfyJobAt = Date.now();   // 先佔位：幕布短時間亮兩次也只排一張暖機單
+                const type = this.useOf(use).type;   // 型別決定佇列的桶 tag：跟正式那張同一個，才會接在它後面連跑
+                const opts = { use: use, width: 128, height: 128, warmup: true };
+                this._applyUse('warmup', opts).then((p) => {
+                    console.log('[ImageManager] 🔥 ComfyUI 暖機（' + use + '：' + (opts._comfyPreset ? opts._comfyPreset.name : opts._comfyCurrent ? '目前的設定' : '原本的' + this._comfyBucketOf(type) + '桶') + '）：趁寫稿空檔先把模型拉上顯卡');
+                    return this._genComfyuiDirect(p, type, opts);
+                }).catch(() => {});
+            } catch (e) {}
+        },
+
+        // --- ComfyUI 直連：奧瑞亞內部自動組 workflow → 走酒館伺服器代理(/api/sd/comfy/generate) → 回 base64 ---
+        // 不依賴 ST 的 workflow 檔；LoRA/參數全由 config.comfyuiDirect（奧瑞亞 UI）控制。
+        _genComfyuiDirect: async function(prompt, type, options = {}) {
+            // options.warmup＝暖機單（warmup()）：不計生圖數、不套場景高清/修臉、失敗全靜默——它只為了把模型拉上顯卡
+            if (!options.warmup) {
+                try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+                try { win.OS_USAGE && win.OS_USAGE.note({ source: 'comfyui_direct', type: type }); } catch (e) {}   // 📊 長期用量帳
+            }
+            // 這一列選了某個組合（預設包）就用它；沒選照舊按桶取（char/scene/bg/map 各自一份，沒設過退共用）
+            // 目前的設定（_comfyCurrent）＝扁平那份本身，不讓凍住的桶蓋上去
+            const cfg = options._comfyPreset ? this._comfyCfgFromPreset(options._comfyPreset)
+                : options._comfyCurrent ? (this.config.comfyuiDirect || {})
+                : this._comfyCfgFor(type);
+            const url = (cfg.url || '').trim();
+            if (!url) {
+                if (!options.warmup) { try { AUI.toastr && AUI.toastr.warning('請先在「ComfyUI 直連」設定填入網址', 'ComfyUI 直連'); } catch (e) {} }
+                return null;
+            }
+            if (!cfg.model && cfg.workflowMode !== 'custom') {
+                if (!options.warmup) { try { AUI.toastr && AUI.toastr.warning('請先在「ComfyUI 直連」選一個模型', 'ComfyUI 直連'); } catch (e) {} }
+                return null;
+            }
+
+            // 酒館驗證 headers（含 CSRF），走伺服器代理免 CORS
+            const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+
+            let posText = this._composePos(cfg, prompt, type);
+            let negText = options.negativePrompt || cfg.negPrompt || '';
+            // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，保留 comfy 面板負詞
+            if (options.extraNegative) negText = [negText, options.extraNegative].filter(Boolean).join(', ');
+            let wf;
+            if (cfg.workflowMode === 'custom' && (cfg.customWorkflow || '').trim()) {
+                // 自帶工作流模式（進階）：用使用者貼的 ComfyUI 工作流，只注入 %prompt%/%negative%/%seed%/%width%/%height%
+                // 模型/LoRA/參數/放大/修臉全由他的工作流決定，奧瑞亞不自動組
+                wf = this._applyCustomWorkflow(cfg.customWorkflow, posText, negText, options, cfg);
+                if (!wf) return null;  // JSON 解析失敗（已 toastr 提示）
+            } else {
+                // 自動組：場景插圖(type==='scene')依設定自動套高清修復 + FaceDetailer 修臉
+                // （頭像每輪生不套以免變慢；立繪走自己的開關，不經這裡）
+                let _opts = options;
+                if (type === 'scene' && !options.warmup) {
+                    _opts = Object.assign({}, options);
+                    // 預設開：config 沒這欄位(舊存檔/沒開過設定)也視為開，除非使用者明確存成 false
+                    if (cfg.sceneHires !== false && !_opts.comfyHires) _opts.comfyHires = { scale: parseFloat(cfg.sceneHiresScale) || 1.5, denoise: 0.45 };
+                    if (cfg.sceneFaceDetailer !== false) _opts.comfyFaceDetailer = true;
+                }
+                wf = this._buildComfyWorkflow(posText, negText, type, _opts, cfg);
+            }
+            // 暖機單那張 128 小圖沒有人要看：存圖節點換成預覽節點，檔案落在 ComfyUI 的暫存夾（重開就清），
+            //   不進 output 資料夾。她在 ComfyUI 的「已生成」裡一直看到一格一格的色塊圖、提示詞尾巴寫著 warmup，就是這個。
+            if (options.warmup && wf && typeof wf === 'object') {
+                Object.keys(wf).forEach(function (k) {
+                    const n = wf[k];
+                    if (n && n.class_type === 'SaveImage') { n.class_type = 'PreviewImage'; if (n.inputs) delete n.inputs.filename_prefix; }
+                });
+            }
+            const body ={ url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
+
+            // 進本機 GPU 單線佇列（優先序 1）：跟語音絕不同時上顯卡
+            return await win.AURELIA_GPU_QUEUE.run(async () => {
+                // 逾時保險：ComfyUI 卡死（OOM/排隊爆掉）時 180 秒放棄這張，別讓佇列整條凍住
+                const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 180000) : null;
+                try {
+                    try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                    // PWA/手機沒有酒館後端代理 → 瀏覽器直接打 ComfyUI(需 --listen --enable-cors-header)；酒館內照舊走代理免 CORS
+                    if (this._comfyDirectBrowser()) {
+                        return await this._genComfyuiBrowserDirect(wf, url, _ac);
+                    }
+                    const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body), signal: _ac ? _ac.signal : undefined });
+                    if (!res.ok) {
+                        const t = await res.text().catch(() => '');
+                        console.error('[ImageManager] ComfyUI 直連失敗:', res.status, t);
+                        if (!options.warmup) { try { AUI.toastr && AUI.toastr.error('ComfyUI 生圖失敗：' + (t || res.status), 'ComfyUI 直連'); } catch (e) {} }
+                        return null;
+                    }
+                    const j = await res.json();
+                    if (j && j.data) {
+                        console.log('[ImageManager] ✅ ComfyUI 直連生圖成功');
+                        return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+                    }
+                    return null;
+                } catch (error) {
+                    const _msg = (error && error.name === 'AbortError') ? '生成逾時(180秒)，已放棄這張讓後面的繼續' : (error.message || error);
+                    console.error('[ImageManager] ComfyUI 直連錯誤:', _msg);
+                    if (!options.warmup) { try { AUI.toastr && AUI.toastr.error('ComfyUI 連線錯誤：' + _msg, 'ComfyUI 直連'); } catch (e) {} }
+                    return null;
+                } finally {
+                    if (_timer) clearTimeout(_timer);
+                    try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
+                    this._lastComfyJobAt = Date.now();   // 記下「剛用過 ComfyUI」：十分鐘內模型還熱著，暖機可免
+                }
+            }, 1, undefined, 'img:' + this._comfyBucketOf(type));   // 桶當 tag：佇列靠它把同 LoRA 組的單連著跑
+        },
+
+        // PWA/手機沒有酒館後端 → 瀏覽器直接打 ComfyUI；酒館內(有 SillyTavern.getContext)走代理免 CORS
+        _comfyDirectBrowser: function() {
+            try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); }
+            catch (e) { return false; }
+        },
+
+        // 瀏覽器直連 ComfyUI：POST /prompt → 輪詢 /history/{id} → /view 抓圖 → base64
+        // 需 ComfyUI 啟動帶 --listen 0.0.0.0 --enable-cors-header（否則跨來源被瀏覽器擋）
+        _genComfyuiBrowserDirect: async function(wf, url, ac) {
+            const base = String(url || '').replace(/\/+$/, '');
+            const sig = ac ? ac.signal : undefined;
+            const cid = this._comfyClientId || (this._comfyClientId = 'aurelia_' + Math.floor(Math.random() * 1e9).toString(36));
+            // 1) 送工作流
+            const qr = await fetch(base + '/prompt', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ prompt: wf, client_id: cid }), signal: sig,
+            });
+            if (!qr.ok) { const t = await qr.text().catch(function(){ return ''; }); throw new Error('送工作流被拒 ' + qr.status + (t ? '：' + t.slice(0, 160) : '')); }
+            const qj = await qr.json().catch(function(){ return {}; });
+            if (qj.node_errors && Object.keys(qj.node_errors).length) throw new Error('工作流節點錯誤：' + JSON.stringify(qj.node_errors).slice(0, 200));
+            const pid = qj.prompt_id;
+            if (!pid) throw new Error('ComfyUI 沒回 prompt_id（檢查工作流/模型名）');
+            // 2) 輪詢歷史（逾時靠外層 AbortController 180s）
+            let outputs = null;
+            while (true) {
+                if (sig && sig.aborted) { const e = new Error('AbortError'); e.name = 'AbortError'; throw e; }
+                await new Promise(function (r) { setTimeout(r, 1000); });
+                let hj = null;
+                try { const hr = await fetch(base + '/history/' + pid, { signal: sig }); if (hr.ok) hj = await hr.json(); }
+                catch (e) { if (e && e.name === 'AbortError') throw e; }
+                const entry = hj && hj[pid];
+                if (entry) {
+                    if (entry.status && entry.status.status_str === 'error') throw new Error('ComfyUI 執行失敗（看 ComfyUI 終端機錯誤）');
+                    if (entry.outputs) { outputs = entry.outputs; break; }
+                }
+            }
+            // 3) 找產出圖（優先 type=output 的 SaveImage 結果）
+            const imgs = [];
+            for (const nid in outputs) { const o = outputs[nid]; if (o && Array.isArray(o.images)) Array.prototype.push.apply(imgs, o.images); }
+            const img = imgs.filter(function (x) { return x && x.type === 'output'; })[0] || imgs[0];
+            if (!img) throw new Error('ComfyUI 沒產出圖片');
+            // 4) 抓圖 → base64（與代理回傳格式一致）
+            const vp = new URLSearchParams({ filename: img.filename || '', subfolder: img.subfolder || '', type: img.type || 'output' });
+            const ir = await fetch(base + '/view?' + vp.toString(), { signal: sig });
+            if (!ir.ok) throw new Error('抓圖失敗 ' + ir.status);
+            const blob = await ir.blob();
+            const dataUrl = await new Promise(function (resolve, reject) { const fr = new FileReader(); fr.onload = function () { resolve(fr.result); }; fr.onerror = reject; fr.readAsDataURL(blob); });
+            console.log('[ImageManager] ✅ ComfyUI 瀏覽器直連生圖成功');
+            return dataUrl;
+        },
+
+        // ════════════════════════════════════════════════════════════════
+        // 🎭 立繪換表情（角色圖鑑「生一組表情」，11-04）：原圖不動，只重畫臉那一圈
+        //   圖跟遮罩用 ETN_LoadImageBase64／ETN_LoadMaskBase64（comfyui-tooling-nodes；酒館自己生圖的 %char_avatar% 也靠它）
+        //   直接塞進工作流：酒館的代理只收工作流、收不了上傳檔，PWA 直連也走同一條。
+        //   找臉用 Impact Pack 的 face_yolov8m（插圖修臉同一顆）。只認 ComfyUI 直連、自動組的包。
+        // ════════════════════════════════════════════════════════════════
+        // 「立繪表情」那列沒改過＝跟「立繪」那列走同一組：同一個包畫的臉才接得上原圖
+        exprUse: function() { return this.getRoutes().expr ? 'expr' : 'sprite'; },
+        // 這一列實際用的 ComfyUI 參數；不是 ComfyUI、自帶工作流的包、沒網址沒模型就丟錯（字是給她看的）
+        _comfyCfgForInpaint: async function(prompt, options) {
+            const opts = Object.assign({}, options);
+            prompt = await this._applyUse(prompt, opts);
+            const svc = opts.provider || this.legacyServiceOf(opts.use);
+            if (svc !== 'comfyui_direct') throw new Error('只重畫臉要用 ComfyUI：到設置→圖片「用途設定」，把「立繪表情」選成 ComfyUI 的包');
+            const cfg = opts._comfyPreset ? this._comfyCfgFromPreset(opts._comfyPreset)
+                : opts._comfyCurrent ? (this.config.comfyuiDirect || {})
+                : this._comfyCfgFor('char');
+            if (!String(cfg.url || '').trim()) throw new Error('ComfyUI 還沒填網址');
+            if (cfg.workflowMode === 'custom') throw new Error('這個包用的是自帶工作流，沒辦法只重畫一塊；「立繪表情」換一個自動組的包');
+            if (!cfg.model) throw new Error('這個包沒選模型');
+            return { cfg: cfg, prompt: prompt, opts: opts };
+        },
+        // 跑一份工作流、拿第一張圖（排進 GPU 佇列；酒館走代理、PWA 直連）。出錯丟錯、不跳提示，呼叫端自己講給她聽
+        _comfyRunWf: async function(wf, url) {
+            const out = await win.AURELIA_GPU_QUEUE.run(async () => {
+                const ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const timer = ac ? setTimeout(() => { try { ac.abort(); } catch (e) {} }, 180000) : null;
+                try {
+                    try { win.AURELIA_GPU_LIGHT.imgStart(); } catch (e) {}
+                    if (this._comfyDirectBrowser()) return await this._genComfyuiBrowserDirect(wf, url, ac);
+                    const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                    const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+                    const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers,
+                        body: JSON.stringify({ url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' }), signal: ac ? ac.signal : undefined });
+                    if (!res.ok) { const t = await res.text().catch(() => ''); throw new Error('ComfyUI 回 ' + res.status + (t ? '：' + String(t).slice(0, 160) : '')); }
+                    const j = await res.json();
+                    if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+                    throw new Error('ComfyUI 沒回圖');
+                } catch (e) {
+                    if (e && e.name === 'AbortError') throw new Error('等了 180 秒 ComfyUI 還沒出圖');
+                    throw e;
+                } finally {
+                    if (timer) clearTimeout(timer);
+                    try { win.AURELIA_GPU_LIGHT.imgEnd(); } catch (e) {}
+                    this._lastComfyJobAt = Date.now();
+                }
+            }, 1, undefined, 'img:char');
+            if (!out) throw new Error('排隊太久被放行了，ComfyUI 沒回圖');   // 佇列逾時是 resolve(undefined)
+            return out;
+        },
+        // 「立繪表情」那列用哪一種畫：'comfy'＝ComfyUI 一張一張重畫臉；'gpt'＝自訂接口（GPT 那種帶圖編輯）一通九宮格（OS_EXPR_GRID）；
+        //   '' ＝兩種都不是（NAI、酒館…），生表情做不了
+        exprEngine: function() {
+            const svc = this.serviceForUse(this.exprUse());
+            return svc === 'comfyui_direct' ? 'comfy' : (svc === 'custom_api' ? 'gpt' : '');
+        },
+        // 🎭 帶圖編輯（自訂接口那種，GPT）：給 use 那一列選的那組，送圖＋一段話，回 { image: dataURL, usage }。
+        //   圖鑑生表情的 GPT 九宮格用。不套畫風、不翻譯、不接底詞（圖本身就是畫風）；出錯丟錯（字是給她看的），
+        //   說法跟 _genCustomApi 同一套；5xx／斷線重試一次，4xx 不重試（再送只會多花一次錢）。
+        capiEdit: async function(use, prompt, images, size) {
+            const r = this.getRoutes()[use];
+            const hit = (r && r.conn) ? this._resolveConn(r.conn) : null;
+            const svc = hit ? hit.provider : this.legacyServiceOf(use);
+            if (svc !== 'custom_api') throw new Error('這一列沒選自訂接口');
+            const cfg = (hit && hit.customApi) || this.config.customApi || {};
+            const base = String(cfg.url || '').trim().replace(/\/+$/, '');
+            if (!base) throw new Error('自訂接口還沒填網址');
+            if (/\/sdapi(\/|$)/.test(base)) throw new Error('這組自訂接口是 SD WebUI 那種，不收帶圖的請求；換 GPT 那種的接口');
+            const url = /\/images\/edits$/.test(base) ? base : (/\/images\/generations$/.test(base) ? base.replace(/\/images\/generations$/, '/images/edits') : base + '/images/edits');
+            const model = String(cfg.model || '').trim(), key = String(cfg.apiKey || '').trim();
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'custom_api', type: 'char' }); } catch (e) {}   // 📊 長期用量帳
+            const toBlob = (u) => { const m = String(u).match(/^data:([^;]+);base64,(.*)$/); const bin = atob(m[2]); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return new Blob([a], { type: m[1] }); };
+            const once = async () => {
+                const fd = new FormData();
+                if (model) fd.append('model', model);
+                fd.append('prompt', prompt);
+                fd.append('n', '1');
+                fd.append('size', size);
+                if (/^gpt-image/i.test(model)) { const q = String(cfg.quality || 'medium').toLowerCase(); fd.append('quality', (q === 'low' || q === 'high') ? q : 'medium'); }
+                (images || []).forEach((u, i) => fd.append('image[]', toBlob(u), 'image' + (i + 1) + '.png'));   // 帶圖這條不收 moderation，不送
+                const resp = await fetch(url, { method: 'POST', headers: key ? { Authorization: 'Bearer ' + key } : {}, body: fd });
+                const text = await resp.text();
+                if (!resp.ok) {
+                    const ce = this._capiErr(resp.status, text);
+                    const e = new Error((!ce.blocked && !ce.quota && (resp.status === 404 || resp.status === 405))
+                        ? '這個接口不收帶圖的請求（' + resp.status + '）' : ce.msg);
+                    e.status = resp.status;
+                    throw e;
+                }
+                let data; try { data = JSON.parse(text); } catch (e) { throw new Error('回應不是 JSON（多半是網址填錯）：' + text.slice(0, 120)); }
+                const first = data && Array.isArray(data.data) ? data.data[0] : null;
+                let image = '';
+                if (first && first.b64_json) image = 'data:image/png;base64,' + first.b64_json;
+                else if (first && first.url) {
+                    const b = await (await fetch(first.url)).blob();
+                    image = await new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(b); });
+                }
+                if (!image) throw new Error('回應裡沒有圖：' + text.slice(0, 200));
+                return { image: image, usage: data.usage || null };
+            };
+            try { return await once(); }
+            catch (e1) {
+                const st = e1 && e1.status;
+                if (st && st < 500) throw e1;
+                console.warn('[ImageManager] 帶圖編輯第一次沒成功，等 2 秒重試一次：' + ((e1 && e1.message) || e1));
+                await new Promise(r2 => setTimeout(r2, 2000));
+                return await once();
+            }
+        },
+        // 找臉：回 { x0, y0, x1, y1 }（原圖像素）；ComfyUI 沒裝 Impact Pack、圖裡找不到臉都回 null（她自己拖圈）
+        //   表情走 GPT 的時候：ComfyUI 頁有填網址就借它找臉，沒填回 null，不丟錯（GPT 那條不需要 ComfyUI）
+        comfyFindFace: async function(imageDataUrl) {
+            let faceUrl = '';
+            if (this.exprEngine() === 'comfy') faceUrl = String((await this._comfyCfgForInpaint('face', { use: this.exprUse() })).cfg.url).trim();
+            else faceUrl = String((this.config.comfyuiDirect || {}).url || '').trim();
+            if (!faceUrl) return null;
+            const r = { cfg: { url: faceUrl } };
+            const wf = {
+                '1': { class_type: 'ETN_LoadImageBase64', inputs: { image: String(imageDataUrl).replace(/^data:[^,]*,/, '') } },
+                '2': { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: 'bbox/face_yolov8m.pt' } },
+                '3': { class_type: 'BboxDetectorSEGS', inputs: { bbox_detector: ['2', 0], image: ['1', 0], threshold: 0.4, dilation: 0, crop_factor: 1.0, drop_size: 10, labels: 'all' } },
+                '4': { class_type: 'SegsToCombinedMask', inputs: { segs: ['3', 0] } },
+                '5': { class_type: 'MaskToImage', inputs: { mask: ['4', 0] } },
+                '6': { class_type: 'PreviewImage', inputs: { images: ['5', 0] } },
+            };
+            let maskUrl;
+            try { maskUrl = await this._comfyRunWf(wf, String(r.cfg.url).trim()); }
+            catch (e) { console.warn('[ImageManager] 找臉沒成功（沒裝 Impact Pack？）', e); return null; }
+            // 臉的位置＝遮罩上白的那塊的外框
+            const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = maskUrl; });
+            const w = img.naturalWidth, h = img.naturalHeight;
+            const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+            const g = cv.getContext('2d'); g.drawImage(img, 0, 0);
+            const px = g.getImageData(0, 0, w, h).data;
+            let x0 = w, y0 = h, x1 = -1, y1 = -1;
+            for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+                if (px[(y * w + x) * 4] > 128) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+            }
+            return x1 < 0 ? null : { x0: x0, y0: y0, x1: x1 + 1, y1: y1 + 1 };
+        },
+        // 只重畫一塊：image＝要改的圖（不透明），mask＝同大小黑白圖（白＝重畫），回同大小的新圖 dataURL。
+        //   用的是自動組那份工作流，只把空白畫布換成「原圖編碼＋遮罩」，denoise 照呼叫端（表情 0.7～0.8）
+        comfyInpaint: async function(imageDataUrl, maskDataUrl, prompt, options) {
+            options = Object.assign({ use: this.exprUse() }, options || {});
+            const r = await this._comfyCfgForInpaint(prompt, options);
+            const cfg = r.cfg;
+            const posText = this._composePos(cfg, r.prompt, 'expr');
+            const negText = r.opts.negativePrompt || cfg.negPrompt || '';
+            const seed = options.seed || Math.floor(Math.random() * 1e15);
+            const wf = this._buildComfyWorkflow(posText, negText, 'char', { width: 1024, height: 1024, seed: seed }, cfg);
+            if (!wf || !wf['3'] || !wf['8']) throw new Error('工作流組不出來');
+            delete wf['5'];   // 空白畫布不要了
+            wf['90'] = { class_type: 'ETN_LoadImageBase64', inputs: { image: String(imageDataUrl).replace(/^data:[^,]*,/, '') } };
+            wf['91'] = { class_type: 'ETN_LoadMaskBase64', inputs: { mask: String(maskDataUrl).replace(/^data:[^,]*,/, '') } };
+            wf['92'] = { class_type: 'VAEEncode', inputs: { pixels: ['90', 0], vae: wf['8'].inputs.vae } };
+            wf['93'] = { class_type: 'SetLatentNoiseMask', inputs: { samples: ['92', 0], mask: ['91', 0] } };
+            wf['3'].inputs.latent_image = ['93', 0];
+            wf['3'].inputs.denoise = (options.denoise != null) ? options.denoise : 0.75;
+            // diff：遮罩是深淺不一的（白＝全力重畫、灰＝只改一點），要 DifferentialDiffusion 才照深淺分力道（ComfyUI 內建節點）
+            if (options.diff && wf['3'].inputs.model) {
+                wf['94'] = { class_type: 'DifferentialDiffusion', inputs: { model: wf['3'].inputs.model } };
+                wf['3'].inputs.model = ['94', 0];
+            }
+            if (wf['9']) { wf['9'].class_type = 'PreviewImage'; delete wf['9'].inputs.filename_prefix; }   // 半成品不進 output 資料夾
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'comfyui_direct', type: 'char' }); } catch (e) {}
+            try { return await this._comfyRunWf(wf, String(cfg.url).trim()); }
+            catch (e) {
+                // 少了 comfyui-tooling-nodes 時 ComfyUI 會說找不到 ETN_ 開頭的節點（酒館代理只回一句 500，看不到原因）
+                const m = String((e && e.message) || e);
+                if (/ETN_|500/.test(m)) throw new Error(m + '（ComfyUI 沒裝 comfyui-tooling-nodes 這個外掛的話要先裝：ComfyUI Manager 搜 tooling nodes）');
+                throw e;
+            }
+        },
+
+        // 抓 ComfyUI 清單（模型/採樣器/排程/VAE/LoRA）：直連時自己解析 /object_info，酒館內走代理。回 {models,samplers,schedulers,vaes,loras}
+        fetchComfyLists: async function(url) {
+            const base = String(url || '').replace(/\/+$/, '');
+            if (this._comfyDirectBrowser()) {
+                const r = await fetch(base + '/object_info');
+                if (!r.ok) throw new Error('object_info ' + r.status);
+                const oi = await r.json();
+                const pick = function (node, field) {
+                    try {
+                        const inp = oi[node] && oi[node].input;
+                        const a = inp && ((inp.required && inp.required[field]) || (inp.optional && inp.optional[field]));
+                        return (a && Array.isArray(a[0])) ? a[0] : [];
+                    } catch (e) { return []; }
+                };
+                const ckpts = pick('CheckpointLoaderSimple', 'ckpt_name');
+                const unets = pick('UNETLoader', 'unet_name');
+                const ggufs = pick('UnetLoaderGGUF', 'unet_name');
+                // 對齊代理格式：models 是 {value,text}，text 帶 UNet:/GGUF: 前綴供面板分類
+                const models = [].concat(
+                    ckpts.map(function (n) { return { value: n, text: n }; }),
+                    unets.map(function (n) { return { value: n, text: 'UNet: ' + n }; }),
+                    ggufs.map(function (n) { return { value: n, text: 'GGUF: ' + n }; })
+                );
+                return { models: models, samplers: pick('KSampler', 'sampler_name'), schedulers: pick('KSampler', 'scheduler'), vaes: pick('VAELoader', 'vae_name'), loras: pick('LoraLoader', 'lora_name') };
+            }
+            // 酒館代理
+            const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+            const post = async function (path) { try { const r = await fetch(path, { method: 'POST', headers: headers, body: JSON.stringify({ url: url }) }); return r.ok ? await r.json() : null; } catch (e) { return null; } };
+            return { models: await post('/api/sd/comfy/models'), samplers: await post('/api/sd/comfy/samplers'), schedulers: await post('/api/sd/comfy/schedulers'), vaes: await post('/api/sd/comfy/vaes'), loras: await post('/api/sd/comfy/loras') };
+        },
+
+        // 預設包風格預覽：用「指定預設包設定 + 測試詞」生一張小圖，不動到當前面板設定
+        // presetCfg：一個預設包物件（含 model/loras/params…，但通常沒有 url）→ 與當前 config 合併補 url
+        previewComfyPreset: async function(presetCfg, prompt, opts) {
+            const live = this.config.comfyuiDirect || {};
+            const cfg = Object.assign({}, live, presetCfg || {});  // 預設包覆蓋模型/LoRA/參數；url 等沿用 live
+            const url = (cfg.url || '').trim();
+            if (!url) throw new Error('ComfyUI 網址空白（先在面板填網址＋測試）');
+            const _hasCustomWf = !!(cfg.customWorkflow && String(cfg.customWorkflow).trim());
+            if (!cfg.model && !_hasCustomWf) throw new Error('這個包沒有模型(model 空白) — 另存時面板可能沒選到模型');
+            const ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            const headers = (ctx && ctx.getRequestHeaders && ctx.getRequestHeaders()) || { 'Content-Type': 'application/json' };
+            const posText = this._composePos(cfg, prompt, 'preview');
+            const negText = cfg.negPrompt || '';
+            // 尺寸：opts.packSize=true → 不塞任何尺寸、builder 落到 cfg.width/height＝完全用預設包自己調的
+            //   （裝扮室生成走這條）；沒帶 opts 維持預覽小圖 512×768（設置頁預設卡縮圖用）。
+            // 每次給新隨機種子→避開 ComfyUI 對「相同工作流」的快取
+            // （完全命中快取時不產生新輸出→代理拿不到圖→伺服器 500），順便讓重新生成有變化
+            const _pvOpts = (opts && opts.packSize)
+                ? { seed: Math.floor(Math.random() * 1e15) }
+                : { width: 512, height: 768, seed: Math.floor(Math.random() * 1e15) };
+            // 帶工作流的預設包（拖圖還原的卡）→ 走自訂工作流；否則自動組
+            const wf = _hasCustomWf
+                ? this._applyCustomWorkflow(cfg.customWorkflow, posText, negText, _pvOpts, cfg)
+                : this._buildComfyWorkflow(posText, negText, 'char', _pvOpts, cfg);
+            if (!wf) throw new Error('工作流解析失敗（自訂工作流 JSON 格式不對）');
+            // PWA/手機：瀏覽器直連 ComfyUI（不吞錯，讓真正原因往上拋給卡片顯示）
+            //   跟正式生圖同一個 180 秒上限：以前傳 null 進去，ComfyUI 一直沒出圖就每秒問一次、永遠問下去
+            if (this._comfyDirectBrowser()) {
+                const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 180000) : null;
+                try { return await this._genComfyuiBrowserDirect(wf, url, _ac); }
+                catch (e) { if (e && e.name === 'AbortError') throw new Error('生成逾時(180秒)，ComfyUI 一直沒出圖'); throw e; }
+                finally { if (_timer) clearTimeout(_timer); }
+            }
+            const body = { url: url, prompt: '{"prompt": ' + JSON.stringify(wf) + '}' };
+            // 注意：不吞錯，把真正原因往上拋給卡片顯示
+            const res = await fetch('/api/sd/comfy/generate', { method: 'POST', headers: headers, body: JSON.stringify(body) });
+            if (!res.ok) {
+                const t = await res.text().catch(function(){ return ''; });
+                throw new Error('伺服器 ' + res.status + (t ? ('：' + String(t).slice(0, 180)) : ''));
+            }
+            const j = await res.json();
+            if (j && j.data) return 'data:image/' + (j.format || 'png') + ';base64,' + j.data;
+            throw new Error('沒回傳圖片資料（檢查模型/LoRA 名稱是否正確）');
+        },
+
+        // 自帶工作流：把使用者貼的 ComfyUI 工作流(API 格式)注入變數後，回傳工作流節點物件
+        // 支援變數（含引號替換）：%prompt% %negative%（字串）/ %seed% %width% %height%（數字）
+        _applyCustomWorkflow: function(tpl, posText, negText, options, cfg) {
+            options = options || {}; cfg = cfg || {};
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const seed = (options.seed && Number(options.seed) >= 0) ? Number(options.seed) : Math.floor(Math.random() * 1e15);
+            let s = String(tpl);
+            s = s.split('"%prompt%"').join(JSON.stringify(posText || ''));
+            s = s.split('"%negative%"').join(JSON.stringify(negText || ''));
+            s = s.split('"%model%"').join(JSON.stringify(cfg.model || ''));
+            s = s.split('"%seed%"').join(String(seed));
+            s = s.split('"%width%"').join(String(w));
+            s = s.split('"%height%"').join(String(h));
+            let obj;
+            try { obj = JSON.parse(s); }
+            catch (e) {
+                try { AUI.toastr && AUI.toastr.error('自訂工作流 JSON 解析失敗：' + (e.message || e), 'ComfyUI 直連'); } catch (_) {}
+                return null;
+            }
+            // 解開 {"prompt": {...}} 外殼（有些匯出帶 prompt 鍵）
+            if (obj && obj.prompt && typeof obj.prompt === 'object' && !obj.prompt.class_type) obj = obj.prompt;
+            return obj;
+        },
+
+        // 加 FaceDetailer 修臉節點（偵測臉→裁出放大重畫→貼回）；回傳修臉後的影像輸出 ref
+        // refs: { image, model, clip, vae, positive, negative }；samp = { cfg, sampler_name, scheduler } 控制二次採樣
+        _addFaceDetailerNodes: function(nodes, refs, nid, samp) {
+            samp = samp || { cfg: 7.0, sampler_name: 'dpmpp_2m', scheduler: 'karras' };
+            const detId = String(nid);
+            const fdId  = String(nid + 1);
+            nodes[detId] = { class_type: 'UltralyticsDetectorProvider', inputs: { model_name: 'bbox/face_yolov8m.pt' } };
+            nodes[fdId] = { class_type: 'FaceDetailer', inputs: {
+                image: refs.image, model: refs.model, clip: refs.clip, vae: refs.vae,
+                positive: refs.positive, negative: refs.negative, bbox_detector: [detId, 0],
+                guide_size: 512, guide_size_for: true, max_size: 1024,
+                seed: Math.floor(Math.random() * 1e15), steps: 20,
+                cfg: samp.cfg,
+                sampler_name: samp.sampler_name,
+                scheduler: samp.scheduler,
+                denoise: 0.45, feather: 5, noise_mask: true, force_inpaint: true,
+                bbox_threshold: 0.5, bbox_dilation: 10, bbox_crop_factor: 3.0,
+                sam_detection_hint: 'center-1', sam_dilation: 0, sam_threshold: 0.93,
+                sam_bbox_expansion: 0, sam_mask_hint_threshold: 0.7, sam_mask_hint_use_negative: 'False',
+                drop_size: 10, wildcard: '', cycle: 1
+            }};
+            return [fdId, 0];
+        },
+
+        // 內部組 ComfyUI API workflow（txt2img + LoRA 串接，全用 ComfyUI 內建節點，不依賴 rgthree）
+        _buildComfyWorkflow: function(posText, negText, type, options, cfg) {
+            if (cfg.modelType === 'flux') return this._buildFluxWorkflow(posText, negText, type, options, cfg);
+            if (cfg.modelType === 'anima') return this._buildAnimaWorkflow(posText, negText, type, options, cfg);
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const steps = parseInt(cfg.steps) || 28;
+            const cfgScale = parseFloat(cfg.cfg) || 6.5;
+            const sampler = cfg.sampler || 'euler';
+            const scheduler = cfg.scheduler || 'normal';
+            let seed = (cfg.seed != null && Number(cfg.seed) >= 0) ? Number(cfg.seed) : Math.floor(Math.random() * 1e15);
+            if (options.seed) seed = options.seed;
+
+            const nodes = {};
+            let nid = 100;
+
+            // 1) checkpoint
+            nodes['4'] = { class_type: 'CheckpointLoaderSimple', inputs: { ckpt_name: cfg.model || '' } };
+            let modelRef = ['4', 0];
+            let clipRef  = ['4', 1];
+
+            // 2) LoRA 串接（內建 LoraLoader）
+            (cfg.loras || []).forEach((L) => {
+                if (!L || !L.on || !L.name) return;
+                const id = String(nid++);
+                nodes[id] = {
+                    class_type: 'LoraLoader',
+                    inputs: {
+                        lora_name: L.name,
+                        strength_model: (L.strengthModel != null ? parseFloat(L.strengthModel) : 1) || 0,
+                        strength_clip:  (L.strengthClip  != null ? parseFloat(L.strengthClip)  : 1) || 0,
+                        model: modelRef, clip: clipRef
+                    }
+                };
+                modelRef = [id, 0]; clipRef = [id, 1];
+            });
+
+            // 3) CLIP skip（可選）
+            if (cfg.clipSkip && parseInt(cfg.clipSkip) > 0) {
+                const id = String(nid++);
+                nodes[id] = { class_type: 'CLIPSetLastLayer', inputs: { clip: clipRef, stop_at_clip_layer: -Math.abs(parseInt(cfg.clipSkip)) } };
+                clipRef = [id, 0];
+            }
+
+            // 4) 提示詞編碼
+            nodes['6'] = { class_type: 'CLIPTextEncode', inputs: { text: posText || '', clip: clipRef } };
+            nodes['7'] = { class_type: 'CLIPTextEncode', inputs: { text: negText || '', clip: clipRef } };
+
+            // 5) 空 latent
+            nodes['5'] = { class_type: 'EmptyLatentImage', inputs: { width: w, height: h, batch_size: 1 } };
+
+            // 6) KSampler
+            nodes['3'] = { class_type: 'KSampler', inputs: {
+                seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: 1.0,
+                model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0]
+            }};
+
+            // 6.5) 高清修復（ComfyUI 直連專屬）：base latent → 潛空間放大 → 二次低重繪採樣補細節
+            let latentRef = ['3', 0];
+            const _hr = options.comfyHires;
+            if (_hr && parseFloat(_hr.scale) > 1) {
+                const upId = String(nid++);
+                nodes[upId] = { class_type: 'LatentUpscaleBy', inputs: { samples: ['3', 0], upscale_method: 'nearest-exact', scale_by: parseFloat(_hr.scale) } };
+                const ks2 = String(nid++);
+                const hd = (_hr.denoise != null ? parseFloat(_hr.denoise) : 0.45);
+                nodes[ks2] = { class_type: 'KSampler', inputs: {
+                    seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: hd,
+                    model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: [upId, 0]
+                }};
+                latentRef = [ks2, 0];
+            }
+
+            // 7) VAE：空=用 checkpoint 內建；有填=VAELoader
+            let vaeRef = ['4', 2];
+            if (cfg.vae && String(cfg.vae).trim()) {
+                const id = String(nid++);
+                nodes[id] = { class_type: 'VAELoader', inputs: { vae_name: cfg.vae } };
+                vaeRef = [id, 0];
+            }
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: vaeRef } };
+
+            // 8.5) FaceDetailer 修臉（場景插圖用，options.comfyFaceDetailer）
+            let imageRef = ['8', 0];
+            if (options.comfyFaceDetailer) {
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: vaeRef, positive: ['6', 0], negative: ['7', 0] }, nid, { cfg: 7.0, sampler_name: 'dpmpp_2m', scheduler: 'karras' });
+            }
+
+            // 9) 存圖
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: imageRef } };
+
+            return nodes;
+        },
+
+        // 內部組 Flux API workflow（UNETLoader + DualCLIPLoader + FluxGuidance + 16通道 latent）
+        _buildFluxWorkflow: function(posText, negText, type, options, cfg) {
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const steps = parseInt(cfg.steps) || 20;
+            const sampler = cfg.sampler || 'euler';
+            const scheduler = cfg.scheduler || 'simple';
+            const guidance = (cfg.guidance != null ? parseFloat(cfg.guidance) : 3.5) || 3.5;
+            let seed = (cfg.seed != null && Number(cfg.seed) >= 0) ? Number(cfg.seed) : Math.floor(Math.random() * 1e15);
+            if (options.seed) seed = options.seed;
+
+            const nodes = {};
+            let nid = 100;
+            // 載入：UNET(Flux 模型) + 雙 CLIP(clip_l + t5xxl, type=flux) + VAE(ae)
+            nodes['4']  = { class_type: 'UNETLoader',     inputs: { unet_name: cfg.model || '', weight_dtype: 'default' } };
+            nodes['11'] = { class_type: 'DualCLIPLoader', inputs: { clip_name1: cfg.fluxClipL || 'clip_l.safetensors', clip_name2: cfg.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors', type: 'flux' } };
+            nodes['10'] = { class_type: 'VAELoader',      inputs: { vae_name: cfg.fluxAe || 'ae.safetensors' } };
+            let modelRef = ['4', 0];
+            let clipRef  = ['11', 0];
+
+            // LoRA 串接（Flux LoRA 也走 LoraLoader）
+            (cfg.loras || []).forEach((L) => {
+                if (!L || !L.on || !L.name) return;
+                const id = String(nid++);
+                nodes[id] = {
+                    class_type: 'LoraLoader',
+                    inputs: {
+                        lora_name: L.name,
+                        strength_model: (L.strengthModel != null ? parseFloat(L.strengthModel) : 1) || 0,
+                        strength_clip:  (L.strengthClip  != null ? parseFloat(L.strengthClip)  : 1) || 0,
+                        model: modelRef, clip: clipRef
+                    }
+                };
+                modelRef = [id, 0]; clipRef = [id, 1];
+            });
+
+            // 正向 → FluxGuidance（取代 CFG）；負向（Flux 多半空，但節點要在）
+            nodes['6']  = { class_type: 'CLIPTextEncode', inputs: { text: posText || '', clip: clipRef } };
+            nodes['22'] = { class_type: 'FluxGuidance',   inputs: { conditioning: ['6', 0], guidance: guidance } };
+            nodes['7']  = { class_type: 'CLIPTextEncode', inputs: { text: negText || '', clip: clipRef } };
+
+            // Flux 用 16 通道 latent
+            nodes['5'] = { class_type: 'EmptySD3LatentImage', inputs: { width: w, height: h, batch_size: 1 } };
+
+            // KSampler：Flux 固定 cfg=1（引導靠 FluxGuidance）
+            nodes['3'] = { class_type: 'KSampler', inputs: {
+                seed: seed, steps: steps, cfg: 1.0, sampler_name: sampler, scheduler: scheduler, denoise: 1.0,
+                model: modelRef, positive: ['22', 0], negative: ['7', 0], latent_image: ['5', 0]
+            }};
+
+            // 高清修復（Flux）：潛空間放大 → 二次低重繪採樣（cfg 維持 1，引導靠 FluxGuidance）
+            let latentRef = ['3', 0];
+            const _hr = options.comfyHires;
+            if (_hr && parseFloat(_hr.scale) > 1) {
+                const upId = String(nid++);
+                nodes[upId] = { class_type: 'LatentUpscaleBy', inputs: { samples: ['3', 0], upscale_method: 'nearest-exact', scale_by: parseFloat(_hr.scale) } };
+                const ks2 = String(nid++);
+                const hd = (_hr.denoise != null ? parseFloat(_hr.denoise) : 0.45);
+                nodes[ks2] = { class_type: 'KSampler', inputs: {
+                    seed: seed, steps: steps, cfg: 1.0, sampler_name: sampler, scheduler: scheduler, denoise: hd,
+                    model: modelRef, positive: ['22', 0], negative: ['7', 0], latent_image: [upId, 0]
+                }};
+                latentRef = [ks2, 0];
+            }
+
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: ['10', 0] } };
+            let imageRef = ['8', 0];
+            if (options.comfyFaceDetailer) {
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: ['10', 0], positive: ['22', 0], negative: ['7', 0] }, nid, { cfg: 1.0, sampler_name: 'euler', scheduler: 'simple' });
+            }
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: imageRef } };
+            return nodes;
+        },
+
+        // 內部組 Anima API workflow（UNETLoader + 單 CLIPLoader[qwen, type=stable_diffusion] + VAELoader[qwen]）
+        // 對位官方 image_anima_base_v1 範本：載入像 Flux（三檔分離），但採樣走標準正負向＋CFG（非 FluxGuidance）；
+        // latent 用標準 EmptyLatentImage（非 SD3 16 通道，範本如此）；自然語言提示詞。
+        _buildAnimaWorkflow: function(posText, negText, type, options, cfg) {
+            const w = parseInt(options.width  || cfg.width  || 1024) || 1024;
+            const h = parseInt(options.height || cfg.height || 1024) || 1024;
+            const steps = parseInt(cfg.steps) || 30;
+            // CFG 直接吃面板，但夾在 Anima 安全區（1~6）；超出（例如 SDXL 殘留的 6.5/7）→ 自動回 4 防過曝燒圖
+            const _c = parseFloat(cfg.cfg);
+            const cfgScale = (_c >= 1 && _c <= 6) ? _c : 4.0;
+            // 採樣器/排程器：直接吃面板；留空才退 Anima 官方推薦 er_sde/simple
+            const sampler   = cfg.sampler   || 'er_sde';
+            const scheduler = cfg.scheduler || 'simple';
+            let seed = (cfg.seed != null && Number(cfg.seed) >= 0) ? Number(cfg.seed) : Math.floor(Math.random() * 1e15);
+            if (options.seed) seed = options.seed;
+
+            const nodes = {};
+            let nid = 100;
+            // 載入：UNET(Anima 本體) + 單 CLIP(qwen 文字編碼器, type=stable_diffusion) + VAE(qwen)
+            nodes['4']  = { class_type: 'UNETLoader', inputs: { unet_name: cfg.model || '', weight_dtype: 'default' } };
+            nodes['11'] = { class_type: 'CLIPLoader', inputs: { clip_name: cfg.animaClip || 'qwen_3_06b_base.safetensors', type: 'stable_diffusion' } };
+            nodes['10'] = { class_type: 'VAELoader',  inputs: { vae_name: cfg.animaVae || 'qwen_image_vae.safetensors' } };
+            let modelRef = ['4', 0];
+            let clipRef  = ['11', 0];
+
+            // LoRA 串接（Anima LoRA 也走 LoraLoader）
+            (cfg.loras || []).forEach((L) => {
+                if (!L || !L.on || !L.name) return;
+                const id = String(nid++);
+                nodes[id] = {
+                    class_type: 'LoraLoader',
+                    inputs: {
+                        lora_name: L.name,
+                        strength_model: (L.strengthModel != null ? parseFloat(L.strengthModel) : 1) || 0,
+                        strength_clip:  (L.strengthClip  != null ? parseFloat(L.strengthClip)  : 1) || 0,
+                        model: modelRef, clip: clipRef
+                    }
+                };
+                modelRef = [id, 0]; clipRef = [id, 1];
+            });
+
+            // 提示詞編碼（標準正負向 + CFG，不走 FluxGuidance）
+            nodes['6'] = { class_type: 'CLIPTextEncode', inputs: { text: posText || '', clip: clipRef } };
+            nodes['7'] = { class_type: 'CLIPTextEncode', inputs: { text: negText || '', clip: clipRef } };
+
+            // 標準 4 通道 latent（對位官方範本，非 SD3）
+            nodes['5'] = { class_type: 'EmptyLatentImage', inputs: { width: w, height: h, batch_size: 1 } };
+
+            nodes['3'] = { class_type: 'KSampler', inputs: {
+                seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: 1.0,
+                model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: ['5', 0]
+            }};
+
+            // 高清修復：潛空間放大 → 二次低重繪採樣（cfg/採樣器維持 Anima 設定）
+            let latentRef = ['3', 0];
+            const _hr = options.comfyHires;
+            if (_hr && parseFloat(_hr.scale) > 1) {
+                const upId = String(nid++);
+                nodes[upId] = { class_type: 'LatentUpscaleBy', inputs: { samples: ['3', 0], upscale_method: 'nearest-exact', scale_by: parseFloat(_hr.scale) } };
+                const ks2 = String(nid++);
+                const hd = (_hr.denoise != null ? parseFloat(_hr.denoise) : 0.45);
+                nodes[ks2] = { class_type: 'KSampler', inputs: {
+                    seed: seed, steps: steps, cfg: cfgScale, sampler_name: sampler, scheduler: scheduler, denoise: hd,
+                    model: modelRef, positive: ['6', 0], negative: ['7', 0], latent_image: [upId, 0]
+                }};
+                latentRef = [ks2, 0];
+            }
+
+            nodes['8'] = { class_type: 'VAEDecode', inputs: { samples: latentRef, vae: ['10', 0] } };
+            let imageRef = ['8', 0];
+            if (options.comfyFaceDetailer) {
+                imageRef = this._addFaceDetailerNodes(nodes, { image: ['8', 0], model: modelRef, clip: clipRef, vae: ['10', 0], positive: ['6', 0], negative: ['7', 0] }, nid, { cfg: cfgScale, sampler_name: sampler, scheduler: scheduler });
+            }
+            nodes['9'] = { class_type: 'SaveImage', inputs: { filename_prefix: 'Aurelia', images: imageRef } };
+            return nodes;
+        },
+
+        // --- ZIP 解析：從中央目錄讀正確大小，避免 data descriptor 格式導致 size=0 ---
+        _extractZipFirstFile: async function(arrayBuffer) {
+            const buf  = new Uint8Array(arrayBuffer);
+            const view = new DataView(arrayBuffer);
+
+            if (view.getUint32(0, true) !== 0x04034b50) throw new Error('非 ZIP 格式');
+
+            // 從末端找 End of Central Directory (EOCD) 簽名 PK\x05\x06
+            let eocd = -1;
+            for (let i = buf.length - 22; i >= 0; i--) {
+                if (view.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+            }
+            if (eocd === -1) throw new Error('找不到 EOCD');
+
+            // 讀中央目錄偏移
+            const cdOffset = view.getUint32(eocd + 16, true);
+            if (view.getUint32(cdOffset, true) !== 0x02014b50) throw new Error('找不到中央目錄');
+
+            // 從中央目錄取正確的壓縮大小（data descriptor 時本地檔頭的值為 0）
+            const compression      = view.getUint16(cdOffset + 10, true);
+            const compressedSz     = view.getUint32(cdOffset + 20, true);
+            const localHeaderOff   = view.getUint32(cdOffset + 42, true);
+
+            // 從本地檔頭算資料起始位置
+            const localFnLen   = view.getUint16(localHeaderOff + 26, true);
+            const localExtraLen= view.getUint16(localHeaderOff + 28, true);
+            const dataStart    = localHeaderOff + 30 + localFnLen + localExtraLen;
+
+            const rawData = arrayBuffer.slice(dataStart, dataStart + compressedSz);
+
+            if (compression === 0) return rawData; // Store
+
+            if (compression === 8) {               // Deflate
+                const ds = new DecompressionStream('deflate-raw');
+                const writer = ds.writable.getWriter();
+                const reader = ds.readable.getReader();
+                writer.write(new Uint8Array(rawData));
+                writer.close();
+                const chunks = [];
+                let { done, value } = await reader.read();
+                while (!done) { chunks.push(value); ({ done, value } = await reader.read()); }
+                const total = new Uint8Array(chunks.reduce((n, c) => n + c.length, 0));
+                let off = 0;
+                for (const c of chunks) { total.set(c, off); off += c.length; }
+                return total.buffer;
+            }
+            throw new Error('不支援的壓縮方式: ' + compression);
+        },
+
+        // 🔌 NovelAI 格的網址：官方以外，NovelAI 同一種送法的站（公益站、轉發站）都走這格，換節點就是換網址＋Token。
+        //    站方常只給到 .../api/novelai（酒館插件那格的填法），也可能整條 .../ai/generate-image 貼進來 → 兩種都認。
+        _naiEndpoint: function(raw) {
+            const u = String(raw || '').trim().replace(/\/+$/, '');
+            if (!u) return 'https://image.novelai.net/ai/generate-image';
+            return /\/ai\/generate-image$/.test(u) ? u : u + '/ai/generate-image';
+        },
+
+        // --- NovelAI 生成邏輯（char / item / scene）---
+        _genNovelAI: async function(prompt, type, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數
+            try { win.OS_USAGE && win.OS_USAGE.note({ source: 'novelai', type: type }); } catch (e) {}   // 📊 長期用量帳
+            // 這一列選了某個 NAI 預設就用它那幾欄（_resolveConn 拼好的一份），不動全域設定——大廳換裝那種「暫時換掉再換回來」在並行時會互相蓋
+            const cfg = options._naiCfg || this.config.novelai;
+            // NAI 沒填 token：跳提示、這張不畫（以前退回 Pollinations，2026-11-17 拿掉了）
+            if (!cfg.token) return this._noService('NAI 還沒填 Token：到「設置 → 圖片 → NAI」填好再畫');
+
+            // Mutex：等待前一個 NAI 請求完成後才開始，避免 429 Concurrent lock
+            let _release;
+            const prevQueue = _naiQueue;
+            _naiQueue = new Promise(res => { _release = res; });
+            await prevQueue; // 等前一個完成
+            console.log('[ImageManager] NAI 輪到我了，開始生成...');
+
+            // 尺寸：預設 1024x1024，但接受 options 傳入
+            // scene / char 都是人物插圖類型；item 是物品類型
+            const isChar = (type === 'char' || type === 'scene');
+            let width  = options.width  || 1024;
+            let height = options.height || 1024;
+            // 🛡️ 防超免費尺寸：NAI Opus 免 Anlas 上限 ≈ 1024×1024(1,048,576px)。超過就等比縮回上限、避免誤設大圖扣點數。
+            //    config.novelai.capFreeSize === false 才放行大圖（想花 Anlas 出大圖的人自己關）。
+            if (cfg.capFreeSize !== false) {
+                const _freePx = 1024 * 1024;
+                if (width * height > _freePx) {
+                    const _s = Math.sqrt(_freePx / (width * height));
+                    const _w = Math.max(64, Math.round(width  * _s / 64) * 64);
+                    const _h = Math.max(64, Math.round(height * _s / 64) * 64);
+                    console.warn(`[ImageManager] 🛡️ NAI 尺寸 ${width}x${height} 超過免費上限 → 縮到 ${_w}x${_h}（防扣 Anlas；要出大圖請到 NAI 設定關「防超免費尺寸」）`);
+                    width = _w; height = _h;
+                }
+            }
+            // 🔒 NAI 鐵規則：寬高必須是 64 的倍數，否則伺服器直接回 500 Internal Server Error。
+            //    （例：自訂 1020×1020 非 64 倍數 → NAI 500；這裡 round 到最近的 64 倍數 → 1024×1024，使用者無感）
+            width  = Math.max(64, Math.round(width  / 64) * 64);
+            height = Math.max(64, Math.round(height / 64) * 64);
+
+            // 底詞：NAI Danbooru tag 格式（設定可自訂）
+            // scene / char 已由呼叫方（getScene/getAvatar）預先 join avatarBasePrompt，
+            // 這裡再前置 NAI 品質底詞（masterpiece, best quality…）
+            // options.raw = true 完全跳過底詞 / 負詞注入（立繪用，自己帶模板）
+            let finalPrompt = prompt;
+            if (!options.raw) {
+                if (isChar && cfg.charBasePrompt) {
+                    finalPrompt = cfg.charBasePrompt + ', ' + prompt;
+                } else if (!isChar && cfg.itemBasePrompt) {
+                    finalPrompt = cfg.itemBasePrompt + ', ' + prompt;
+                }
+            }
+
+            // 負向提示詞：優先使用呼叫方傳入的 options.negativePrompt（使用者自訂），
+            // 否則按類型使用預設值
+            let negativePrompt = options.negativePrompt ||
+                (options.raw ? '' :
+                    (isChar
+                        ? (cfg.charNegPrompt || 'nsfw, lowres, bad anatomy, bad hands, extra fingers, missing fingers, worst quality, low quality, jpeg artifacts, signature, watermark, blurry')
+                        : (cfg.itemNegPrompt || 'person, human, body, face, hands, worst quality, low quality, blurry, watermark, text')));
+            // options.extraNegative：接在既有負詞後面(不取代)→立繪負詞欄用，raw 也生效且保留 NAI 品質負詞
+            if (options.extraNegative) negativePrompt = [negativePrompt, options.extraNegative].filter(Boolean).join(', ');
+
+            const model   = cfg.model    || 'nai-diffusion-3';
+            const isV4    = model.includes('nai-diffusion-4');
+            const seed    = Math.floor(Math.random() * 9999999999);
+
+            // 🎨 氛圍轉印（Vibe Transfer）：把 .naiv4vibe 匯入的現成 encoding 附進請求（V4 系列限定）。
+            //    encoding 是「參考圖 + information_extracted」預先算好的向量 → 生圖時只送 encoding + 強度，
+            //    不重算、不扣 Anlas；information_extracted 已烤在 encoding 裡，這裡沒有那顆旋鈕。
+            //    encoding 按模型分（v4-5full 的向量餵 v4full 沒用）→ 只挑對得上當前模型的。
+            let _vibeEnc = [], _vibeStr = [];
+            if (isV4 && Array.isArray(cfg.vibes) && cfg.vibes.length) {
+                const _scope = cfg.vibeScope || {};
+                const _sKey = (type === 'char') ? 'char' : (type === 'scene' ? 'scene' : 'bg');
+                const _sOn = (_scope[_sKey] !== undefined) ? _scope[_sKey] : (_sKey !== 'char');
+                if (_sOn) {
+                    // 模型名 → vibe 檔 encoding 鍵：nai-diffusion-4-5-full → v4-5full；
+                    // curated-preview 是 curated 的預覽版、vibe 鍵同 v4curated → 先剝 -preview
+                    const _mKey = 'v' + model.replace('nai-diffusion-', '').replace(/-preview$/, '').replace(/-(full|curated)$/, '$1');
+                    for (const v of cfg.vibes) {
+                        if (!v || v.on === false) continue;
+                        try {
+                            const rec = await win.OS_DB.getNaiVibe(v.id);
+                            const enc = rec && rec.encodings && rec.encodings[_mKey];
+                            if (enc) {
+                                _vibeEnc.push(enc);
+                                _vibeStr.push(typeof v.strength === 'number' ? v.strength : 0.6);
+                            } else {
+                                console.warn(`[ImageManager] 🎨 Vibe「${v.name || v.id}」沒有 ${_mKey} 的 encoding，這輪跳過（該 vibe 檔是給別的模型的）`);
+                            }
+                        } catch (e) { console.warn('[ImageManager] 🎨 Vibe 讀取失敗', e); }
+                    }
+                    // 🛡️ 防超免費：NAI 同一張圖掛到第 5 顆 vibe 起、每生一張多扣 2 Anlas → 跟尺寸/步數同一顆保險絲，只取前 4 顆
+                    if (cfg.capFreeSize !== false && _vibeEnc.length > 4) {
+                        console.warn(`[ImageManager] 🛡️ 同時開了 ${_vibeEnc.length} 顆 vibe，第 5 顆起每張圖扣 2 Anlas → 只用前 4 顆（要全用請到 NAI 設定關「防超免費尺寸」）`);
+                        _vibeEnc = _vibeEnc.slice(0, 4);
+                        _vibeStr = _vibeStr.slice(0, 4);
+                    }
+                    if (_vibeEnc.length) console.log(`[ImageManager] 🎨 Vibe ×${_vibeEnc.length} 強度[${_vibeStr.join(', ')}] → ${type}`);
+                }
+            }
+
+            // 從用戶設定讀取，fallback 到安全預設值
+            const sampler       = cfg.sampler       || 'k_euler_ancestral';
+            const scale         = cfg.scale         ?? 5;
+            let   steps         = cfg.steps         ?? 28;
+            // 🛡️ 防超免費步數：跟尺寸保險同一個開關（capFreeSize）→ 步數夾在 28 內不扣 Anlas；想衝高步數就到 NAI 設定關掉那個開關
+            if (cfg.capFreeSize !== false) steps = Math.min(steps, 28);
+            const ucPreset      = cfg.ucPreset      ?? 1;
+            const qualityToggle = cfg.qualityToggle !== false;
+            const smea          = cfg.smea          !== false;
+            const smeaDyn       = cfg.smeaDyn       ?? false;
+
+            const parameters = isV4 ? {
+                // V4 / V4.5：使用用戶設定的 sampler / scale / steps
+                params_version: 3,
+                width, height,
+                scale,
+                sampler,
+                steps,
+                seed,
+                n_samples: 1,
+                ucPreset,
+                qualityToggle,
+                autoSmea: false,
+                dynamic_thresholding: false,
+                controlnet_strength: 1,
+                legacy: false,
+                add_original_image: true,
+                cfg_rescale: 0.6,              // 對應真實成品，不花 Anlas
+                noise_schedule: 'karras',
+                legacy_v3_extend: false,
+                skip_cfg_above_sigma: 83.3,    // V4.5 優化，不影響計費
+                use_coords: false,
+                legacy_uc: false,
+                normalize_reference_strength_multiple: true,
+                inpaintImg2ImgStrength: 1,
+                characterPrompts: [],
+                v4_prompt: {
+                    caption: { base_caption: finalPrompt, char_captions: [] },
+                    use_coords: false,
+                    use_order: true
+                },
+                v4_negative_prompt: {
+                    caption: { base_caption: negativePrompt, char_captions: [] },
+                    legacy_uc: false
+                },
+                negative_prompt: negativePrompt,
+                deliberate_euler_ancestral_bug: false,
+                prefer_brownian: true,
+                ...(_vibeEnc.length ? { reference_image_multiple: _vibeEnc, reference_strength_multiple: _vibeStr } : {}),
+            } : {
+                // V3：SMEA 從用戶設定讀取
+                width, height,
+                scale,
+                sampler,
+                steps,
+                seed,
+                n_samples: 1,
+                ucPreset,
+                qualityToggle,
+                sm: smea,           // V3 專屬，建議開啟
+                sm_dyn: smeaDyn,
+                dynamic_thresholding: false,
+                controlnet_strength: 1,
+                legacy: false,
+                add_original_image: false,
+                cfg_rescale: 0,
+                noise_schedule: 'native',  // V3 用 native
+                negative_prompt: negativePrompt
+            };
+
+            const requestBody = {
+                input: finalPrompt,
+                model,
+                action: 'generate',
+                parameters
+            };
+
+            console.log(`[ImageManager] NAI 請求 [${type}] → ${requestBody.model} ${width}x${height}`);
+            console.log(`[ImageManager] NAI 實際 prompt: ${finalPrompt.slice(0, 80)}...`);
+
+            try {
+                const response = await fetch(this._naiEndpoint(cfg.url), {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${cfg.token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`NAI ${response.status}: ${errText.slice(0, 120)}`);
+                }
+
+                const zipBuffer = await response.arrayBuffer();
+                const pngBuffer = await this._extractZipFirstFile(zipBuffer);
+                const blobUrl   = URL.createObjectURL(new Blob([pngBuffer], { type: 'image/png' }));
+
+                console.log('[ImageManager] ✅ NAI 生成成功');
+                _release(); // 釋放 mutex，讓下一個排隊請求繼續
+                return blobUrl;
+
+            } catch (error) {
+                _release(); // 無論成功失敗都釋放
+                const _emsg = (error && error.message) || String(error);
+                console.error('[ImageManager] ❌ NAI 失敗:', _emsg);
+                // 🔎 把 NAI 真實錯誤碼/內文彈到畫面（console 唯讀看不到）→ 撞錯誤立刻見真章：
+                //    併發限制是 429/"concurrent"；500=NAI 伺服器錯誤；400=prompt/參數問題；402=Anlas 不足。各自對策不同。
+                this._lastNaiError = { msg: _emsg, type: type, at: '' };
+                try {
+                    const _tr = AUI.toastr;
+                    if (_tr) {
+                        const _concur = /\b429\b|concurrent|conflict|too many|rate.?limit/i.test(_emsg);
+                        if (_concur) {
+                            // 拼車時一批圖會同時撞 429、一張一張連噴 → 30 秒內只報一次，避免洗版（仍每張都退/略過、只是不重複彈窗）
+                            const _now = Date.now();
+                            if (_now - _last429ToastAt > 30000) {
+                                _last429ToastAt = _now;
+                                _tr.error('NAI 併發衝突（多半是拼車同時生圖）→ 錯開幾秒按「重試」', 'NAI 429 併發', { timeOut: 8000 });
+                            }
+                        }
+                        else _tr.warning('NAI 生圖失敗（非併發）：' + _emsg, 'NAI 錯誤', { timeOut: 8000 });
+                    }
+                } catch (_) {}
+                // NAI 失敗這張就略過（上游都判空：立繪落到她設的預設立繪、背景留原本那張），可以按 🔄 重生。
+                //   以前背景／物品會退回 Pollinations，2026-11-17 拿掉了。
+                return null;
+            }
+        },
+
+        // 🔥 異步版本 (給 Host/OS/VN_Core 使用)
+        generateBackgroundAsync: async function(rawPrompt, options = {}) {
+            try { win.AURELIA_USAGE && win.AURELIA_USAGE.bumpImg(); } catch (e) {}   // 生圖計數（背景）
+            // 🗂 這一列（options.use）改過的接口／畫風。直接改呼叫端那份 options：translatedPrompt 要寫回去給它
+            if (options && options.use) rawPrompt = await this._applyUse(rawPrompt, options);
+            console.log(`[ImageManager] 🚀 OS 接收原始 prompt: ${rawPrompt.substring(0, 50)}...`);
+
+            let translatedPrompt = rawPrompt;
+            const isChinese = /[\u4e00-\u9fa5]/.test(rawPrompt);
+
+            if (isChinese && win.TranslationManager) {
+                try {
+                    // 用纯 translate：translateForImageGeneration 会硬加 photorealistic 风格词，跟下方 negative prompt 打架
+                    const _tr = await win.TranslationManager.translate(rawPrompt, 'zh', 'en');
+                    translatedPrompt = (_tr && String(_tr).trim()) ? _tr : rawPrompt;  // 翻譯回空→用原文，絕不送空 prompt
+                } catch (e) {}
+            }
+
+            // 🔥 把翻譯後的 prompt 寫回 options，讓 caller（vn_core 等）拿來存 cache
+            options.translatedPrompt = translatedPrompt;
+
+            // 🗑️ 已拔除硬塞的 defaultPrompt style，直接使用翻譯後的原意
+            const optimizedPrompt = translatedPrompt;
+
+            // ✅ 優先使用外部傳入的 Negative Prompt，否則用預設防護詞
+            const negativePrompt = options.negativePrompt || 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render';
+
+            // 🗺️ 小地圖模式(options.imgType==='map')：走「小地圖桶」(serviceFor/comfy 都用 map)。
+            //    🗑️ 內建去人物/去透視負詞(MAP_NEG)已刪（定案）：負詞由使用者自己放小地圖預設包/桶負詞欄，
+            //    引擎不再暗掛任何固定詞，要改直接改包。
+            const _isMap = options.imgType === 'map';
+            // 🌄 背景/小地圖接口由對應桶決定：背景→死物桶、小地圖→map 桶（各自的模型/負詞）。
+            const _tp = _isMap ? 'map' : 'bg';
+            const _bgSvc = (['novelai', 'tavern_sd', 'comfyui_direct', 'custom_api'].includes(options.provider)) ? options.provider
+                : this.serviceFor(_tp);
+            if (_bgSvc) {
+                const _bgOpts = { ...options, width: options.width || 1024, height: options.height || 1024 };
+                if (_isMap) {
+                    delete _bgOpts.negativePrompt;   // 小地圖：負詞全聽 map 桶/預設包自己的
+                } else {
+                    _bgOpts.negativePrompt = negativePrompt;
+                }
+                if (_bgSvc === 'novelai' && ((options._naiCfg && options._naiCfg.token) || (this.config.novelai && this.config.novelai.token))) {
+                    // raw=true：跳過 NAI 物品底詞(white background/no background…會毀背景)，只用 bgBasePrompt + bgNegPrompt
+                    return await this._genNovelAI(optimizedPrompt, _tp, { ..._bgOpts, raw: true });
+                } else if (_bgSvc === 'comfyui_direct') {
+                    return await this._genComfyuiDirect(optimizedPrompt, _tp, _bgOpts);
+                } else if (_bgSvc === 'tavern_sd') {
+                    return await this._genTavernSd(optimizedPrompt, _tp, _bgOpts);
+                } else if (_bgSvc === 'custom_api') {
+                    // 🚨 背景是獨立路徑、不走 generate()，新接口一定要在這裡也接一次，
+                    //    否則選了它背景會靜靜畫不出來（這個坑背景踩過兩次）。
+                    return await this._genCustomApi(optimizedPrompt, _tp, _bgOpts);
+                }
+                if (_bgSvc === 'novelai') return this._noService('NAI 還沒填 Token：到「設置 → 圖片 → NAI」填好再畫');
+            }
+            // 沒接接口（2026-11-17 拿掉 Pollinations 之後，新玩家預設就是這樣）：跳一次提示，這張不畫
+            return this._noService();
+        },
+
+        // 🔥 物品生成專用接口（獨立底詞，不混用角色詞）
+        generateItem: function(prompt, options = {}) {
+            console.log(`[ImageManager] 生成物品: ${prompt.substring(0, 50)}...`);
+            // 物品專用底詞/負詞（與角色分離），整條走統一 generate 路由：serviceFor('item')=死物桶，
+            //   comfyui_direct / novelai / tavern_sd / custom_api 全由 generate 內部分派 → 換哪條線路物品都跟著走。
+            // 🗂 這一列選了畫風＝用那包取代原本的物品底詞（styleDone：generate 那邊不再加一次）
+            const _st = options.use ? this.styleFor(options.use) : null;
+            const itemBase = _st ? _st.pos : '';   // 以前沒選畫風會借 Pollinations 那份物品底詞，2026-11-17 拿掉了
+            const finalPrompt = itemBase ? itemBase + ', ' + prompt : prompt;
+            const negPrompt = options.negativePrompt || (_st ? _st.neg : '') || undefined;
+            return this.generate(finalPrompt, 'item', {
+                ...options,
+                width: options.width || 512,
+                height: options.height || 512,
+                negativePrompt: negPrompt,
+                raw: true,
+                styleDone: true
+            });
+        },
+
+        saveConfig: function() {
+            const ok = win.AUI.lsSet('os_image_config', JSON.stringify(this.config), '圖片設定');   // 空間滿了跳提示，以前只寫在 console
+            if (ok) console.log('[ImageManager] 配置已保存');
+            return ok;
+        }
+    };
+
+    win.OS_IMAGE_MANAGER = ImageManager;
+    ImageManager.init();
+})();

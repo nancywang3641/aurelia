@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>留言板</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+<style>
+    html, body { margin: 0; height: 100%; }
+    body {
+        display: flex;
+        flex-direction: column;
+        background: #1e3554;
+        font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
+        font-size: 15px;
+    }
+    .top {
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px;
+        background: #1e3554;
+        color: #fff;
+    }
+    .top a, .top .sp {
+        width: 76px;
+        color: #fff;
+        font-size: 14px;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .top h1 { flex: 1; margin: 0; font-size: 16px; letter-spacing: 2px; text-align: center; }
+    #board { flex: 1; min-height: 0; background: #fdfdfc; }
+    .msg { padding: 40px 18px; text-align: center; color: #46639b; font-size: 13px; line-height: 1.9; }
+</style>
+</head>
+<body>
+<div class="top">
+    <a href="./index.html"><i class="fa-solid fa-chevron-left"></i>奧瑞亞</a>
+    <h1>留言板</h1>
+    <span class="sp"></span>
+</div>
+<div id="board"><div class="msg">正在拉留言板…</div></div>
+
+<script>
+(function () {
+    'use strict';
+    // 通知點進來那頁。畫面跟宿舍裡的留言板是同一支（房間 repo 的 os_board.js），這裡只給連線、不另外養一份。
+    var LS = 'aurelia_push_cfg';
+    var box = document.getElementById('board');
+
+    function esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function say(html) { box.innerHTML = '<div class="msg">' + html + '</div>'; }
+
+    var c;
+    try { c = JSON.parse(localStorage.getItem(LS) || '{}'); } catch (_) { c = {}; }
+    if (!c.url || !c.key) {
+        say('還沒設定連線。<br>去 <b>設定 → 系統/備份 → 手機通知</b> 填一次網址跟密鑰，這裡就會自己讀到。');
+        return;
+    }
+
+    // 房間的版本只記在 index.html 那一處（__CCR_BASE__），這頁照著讀，不另外抄一份鎖點
+    fetch('./index.html', { cache: 'no-cache' }).then(function (r) {
+        return r.text();
+    }).then(function (t) {
+        var m = t.match(/__CCR_BASE__\s*=\s*["']([^"']+)["']/);
+        if (!m) throw new Error('找不到留言板的程式在哪。');
+        var base = m[1];
+        var css = document.createElement('link');
+        css.rel = 'stylesheet';
+        css.href = base + 'css/os_board.css';
+        document.head.appendChild(css);
+        return new Promise(function (resolve, reject) {
+            var s = document.createElement('script');
+            s.src = base + 'core/os_board.js';
+            s.onload = resolve;
+            s.onerror = function () { reject(new Error('留言板的程式載不下來，網路可能斷了。')); };
+            document.head.appendChild(s);
+        });
+    }).then(function () {
+        window.OS_BOARD.setConnection({ base: c.url, key: c.key });
+        window.OS_BOARD.launch(box);
+    }).catch(function (e) {
+        say('板子打不開。<br>' + esc(e && e.message ? e.message : e));
+    });
+})();
+</script>
+</body>
+</html>

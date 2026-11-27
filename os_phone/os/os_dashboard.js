@@ -1,0 +1,773 @@
+// ----------------------------------------------------------------
+// [檔案] os_dashboard.js
+// 路徑：os_phone/os/os_dashboard.js
+// 職責：🎛️「控制台」獨立窗口（大廳右側 dock 開啟）——整個奧瑞亞的中轉站看板。
+//   書籤①今天　＝每天用了多少（次數／送出回來 Tokens／生圖）＋哪件事最花＋近 14 天
+//   書籤②通道　＝哪件事走哪個模型（可直接改）＋主／副／自訂通道各自的今日用量＋新增編輯通道
+//   書籤③記錄　＝這次開機以來每一次呼叫（送出的 prompt、回來的原文、錯誤、複製）
+//   書籤④訊息　＝系統訊息（使用者的殼沒有 devtools，訊息只有這裡看得到）
+//   長期數字來自 os_usage.js（IndexedDB，關掉 app 不歸零）；記錄與訊息是這次開機的環形緩衝。
+//   視覺＝白藍視差風（同房產手帳）。純前端、零伺服器。
+// 🚨 調試／微調／作弊那類工具不搬進來，繼續留在本機的 DEBUG.js。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    const d = win.document;
+
+    // ================================================================
+    // 系統訊息收集：載入當下就開始接，不是開了面板才接（不然早期訊息全漏）
+    // 做法沿用本機 DEBUG.js：掛 window/parent/top 三個視窗、每 2 秒重掛回去
+    // （酒館與各擴展也會重包 console，不重掛就會被擠掉），原生輸出照樣保留。
+    // ================================================================
+    const MSG_MAX = 400;
+    const MSGS = [];
+    let _msgSeq = 0;
+    const NOISE = /ResizeObserver loop (completed with undelivered notifications|limit exceeded)/i;
+
+    function _fmtArg(a) {
+        if (typeof a === 'string') return a;
+        // 🚨 不能只認 instanceof Error：錯誤是別的視窗（iframe／酒館主頁）造出來的就不算，JSON 化只剩 {}，原因整個看不到
+        //    請求被中斷的那種（DOMException）身上沒有 stack，只有 name + message，也要認
+        if (a instanceof Error || (a && typeof a === 'object' && typeof a.message === 'string' && (typeof a.stack === 'string' || typeof a.name === 'string')))
+            return (a.name && a.name !== 'Error' ? a.name + ': ' : '') + a.message + (a.stack ? ('\n' + a.stack) : '');
+        try { return JSON.stringify(a); } catch (e) { return String(a); }
+    }
+    function _clock(ms) {
+        try { return new Date(ms == null ? Date.now() : ms).toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+        catch (e) { return ''; }
+    }
+    function _pushMsg(ty, args) {
+        try {
+            const m = Array.prototype.map.call(args, _fmtArg).join(' ');
+            if (NOISE.test(m)) return;
+            const rec = { id: ++_msgSeq, ty: ty, t: Date.now(), m: m };
+            MSGS.push(rec);
+            while (MSGS.length > MSG_MAX) MSGS.shift();
+            _msgAppend(rec);
+        } catch (e) {}
+    }
+    const WINS = [];
+    [window, window.parent, window.top].forEach(function (w) { try { if (w && w.console && WINS.indexOf(w) < 0) WINS.push(w); } catch (e) {} });
+    function _hookConsole() {
+        WINS.forEach(function (ww) {
+            ['log', 'warn', 'error', 'info'].forEach(function (k) {
+                try {
+                    const cur = ww.console[k];
+                    if (cur && cur.__dshL === MSGS) return;
+                    const orig = (cur && cur.__dshO) || cur;
+                    const ob = (orig && orig.bind) ? orig.bind(ww.console) : function () {};
+                    const FLAG = '__DSH_IN_' + k;
+                    // 重入閂：別的攔截器包在外面時，重掛會疊出好幾層，同一句話會被記好幾次
+                    const wf = function () {
+                        const top = !win[FLAG];
+                        if (top) { win[FLAG] = true; try { _pushMsg(k, arguments); } catch (e) {} }
+                        try { ob.apply(null, arguments); } catch (e) {}
+                        if (top) win[FLAG] = false;
+                    };
+                    wf.__dshL = MSGS; wf.__dshO = orig;
+                    ww.console[k] = wf;
+                } catch (e) {}
+            });
+        });
+    }
+    if (!win.__DSH_CONSOLE_ON) {
+        win.__DSH_CONSOLE_ON = true;
+        _hookConsole();
+        setInterval(_hookConsole, 2000);
+        try {
+            win.addEventListener('error', function (e) { _pushMsg('error', ['[錯誤] ' + (e.message || '') + ' @ ' + (e.filename || '') + ':' + (e.lineno || '')]); });
+            win.addEventListener('unhandledrejection', function (e) { const r = e && e.reason; _pushMsg('error', ['[未處理的失敗] ' + ((r && r.message) || _fmtArg(r))]); });
+        } catch (e) {}
+    }
+
+    // ================================================================
+    // 小工具
+    // ================================================================
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _n(v) { return (Number(v) || 0).toLocaleString('en-US'); }
+    function _hostOf(u) {
+        try { return new URL(String(u)).host; } catch (e) { return String(u || '').replace(/^https?:\/\//, '').split('/')[0]; }
+    }
+    function _toast(m) { try { (win.AUI || window.AUI).toastr.info(m); } catch (e) {} }
+    function _confirm(m) {
+        const A = win.AUI || window.AUI;
+        if (A && A.confirm) return A.confirm(m);
+        return Promise.resolve(false);   // 對話框模組沒載到就不做會回不來的事
+    }
+
+    // 複製：酒館殼裡 clipboard 是「非同步失敗」，try/catch 抓不到 → 三層退路，每層都要有回饋
+    function _copy(text, label, cb) {
+        const tx = String(text == null ? '' : text);
+        const done = function () { try { cb && cb('已複製 ' + tx.length.toLocaleString() + ' 字'); } catch (e) {} };
+        const manual = function () {
+            const ov = d.createElement('div');
+            ov.className = 'dsh-copybox';
+            ov.innerHTML = '<div class="dsh-copybox-in"><div class="dsh-copybox-h">' + _esc(label || '內容') +
+                '（' + tx.length.toLocaleString() + ' 字）　—　已經幫你全選好了，直接按 Ctrl+C</div>' +
+                '<textarea readonly class="dsh-copybox-ta"></textarea><button class="dsh-btn dsh-copybox-x">關閉</button></div>';
+            d.body.appendChild(ov);
+            const ta = ov.querySelector('textarea');
+            ta.value = tx;
+            ov.querySelector('.dsh-copybox-x').onclick = function () { ov.remove(); };
+            ov.onclick = function (e) { if (e.target === ov) ov.remove(); };
+            setTimeout(function () { try { ta.focus({ preventScroll: true }); ta.select(); ta.setSelectionRange(0, tx.length); } catch (e) {} }, 30);
+            try { cb && cb('請按 Ctrl+C'); } catch (e) {}
+        };
+        const viaExec = function () {
+            try {
+                const ta = d.createElement('textarea');
+                ta.value = tx;
+                ta.className = 'dsh-offscreen';
+                d.body.appendChild(ta);
+                ta.focus({ preventScroll: true }); ta.select();   // 藏在畫面外的那格：不擋的話整頁會被捲過去找它
+                let ok = false;
+                try { ok = d.execCommand('copy'); } catch (e) {}
+                ta.remove();
+                if (ok) { done(); return; }
+            } catch (e) {}
+            manual();
+        };
+        try {
+            if (win.navigator && win.navigator.clipboard && win.navigator.clipboard.writeText) {
+                win.navigator.clipboard.writeText(tx).then(done, viaExec);
+                return;
+            }
+        } catch (e) {}
+        viaExec();
+    }
+    function _flash(el, msg, ms) {
+        if (!el) return;
+        const o = el.textContent;
+        el.textContent = msg;
+        setTimeout(function () { el.textContent = o; }, ms || 1800);
+    }
+
+    function _U() { return win.OS_USAGE || window.OS_USAGE || null; }
+    function _S() { return win.OS_SETTINGS || window.OS_SETTINGS || null; }
+    function _apiLog() {
+        for (let i = 0; i < WINS.length; i++) { try { if (WINS[i] && WINS[i].AURELIA_API_LOG) return WINS[i].AURELIA_API_LOG; } catch (e) {} }
+        return win.AURELIA_API_LOG || [];
+    }
+    // 任務名冊只有一份：os_settings 的 LLM_TASKS（設置頁那張「哪件事走哪個模型」也照它畫）。這裡不再抄一份，
+    // 以前抄的那份每加一件事就要手動對一次，沒對到的在控制台就只剩代號。
+    function _tasks() {
+        const S = _S();
+        return (S && Array.isArray(S.LLM_TASKS)) ? S.LLM_TASKS : [];
+    }
+    function _taskName(id) {
+        if (!id || id === '(未標)') return '沒有標記的';
+        const t = _tasks().find(function (x) { return x.id === id; });
+        return t ? t.name : id;
+    }
+    const SRC_NAME = {
+        pollinations: 'Pollinations'  /* 11-17 拿掉了，留著給舊的用量紀錄顯示名字 */, novelai: 'NovelAI', tavern_sd: '酒館原生生圖',
+        comfyui_direct: 'ComfyUI', custom_api: '自訂生圖接口'
+    };
+
+    // ================================================================
+    // 窗口
+    // ================================================================
+    let _root = null, _tab = 'today', _hook = null;
+    let _days = [], _pickDay = '';
+    let _logFilter = 'all';
+    const _openLogs = {};   // 展開的呼叫記錄（重畫時要記得誰是開著的）
+
+    const TAB_NAME = { today: '今天', chan: '通道', log: '記錄', msg: '訊息' };
+    // 「訊息」頁是程式自己印的英文紀錄（給丹查錯用）：新玩家打開控制台看到一堆 [LobbyStage] unmounted 只會以為壞了。
+    //   預設收起來，要找丹修東西時在「今天」頁最下面打開（小斐 11-17 新玩家檢查第 1 條）。訊息照樣在背景收，打開就看得到之前的
+    const K_DEV = 'aurelia_dsh_devmsg';
+    function _devOn() { try { return localStorage.getItem(K_DEV) === '1'; } catch (e) { return false; } }
+    function _tabsHtml() {
+        return Object.keys(TAB_NAME).filter(function (k) { return k !== 'msg' || _devOn(); }).map(function (k) {
+            return '<button class="dsh-tab' + (k === _tab ? ' on' : '') + '" data-tab="' + k + '">' + TAB_NAME[k] + '</button>';
+        }).join('');
+    }
+    function _bindTabs() {
+        _root.querySelectorAll('.dsh-tab').forEach(function (b) {
+            b.onclick = function () { _switch(b.dataset.tab); };
+        });
+    }
+
+    function open() {
+        if (_root) { close(); return; }
+        const U = _U();
+        _pickDay = U ? U.dayKey() : '';
+        if (_tab === 'msg' && !_devOn()) _tab = 'today';
+        _root = d.createElement('div');
+        _root.id = 'dsh-root';
+        _root.innerHTML =
+            '<div class="dsh-book">' +
+            '  <button class="dsh-close" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
+            '  <div class="dsh-title-row"><div class="dsh-wing"></div><h1 class="dsh-h1">控制台<span class="dsh-ver" id="dsh-ver" title="這台裝置現在跑的版本"></span><button type="button" class="dsh-upd" id="dsh-upd" hidden><i class="fa-solid fa-arrows-rotate"></i><span>有新版</span></button></h1><div class="dsh-wing r"></div></div>' +
+            // 授權那一行（11-26「我只是不想別人賣入口」）：付費拿到的人一打開就看得到。全文在專案根目錄 LICENSE
+            '  <div class="dsh-free">本作免費發佈，禁止販售與收費代裝。付費取得者請向賣家要求退款。</div>' +
+            '  <div class="dsh-head">' +
+            '    <div class="dsh-tabs">' + _tabsHtml() + '</div>' +
+            '    <div class="dsh-pill" id="dsh-pill"><i class="fa-solid fa-bolt"></i><span>—</span></div>' +
+            '  </div>' +
+            '  <div class="dsh-page" id="dsh-page"></div>' +
+            '</div>';
+        d.body.appendChild(_root);
+        _root.querySelector('.dsh-close').onclick = close;
+        _root.addEventListener('click', function (e) { if (e.target === _root) close(); });
+        _bindTabs();
+        _render();
+        _checkUpdate();
+        // 🚨 記錄與訊息是一直在長的東西，但**不要**定時整頁重畫：重畫＝捲動的框從頭開始，
+        //    使用者在讀的東西會被拉回頂端。改成新的來一筆就補一筆（跟本機 DEBUG.js 一樣），
+        //    狀態變了只改那一列的那兩個字。今天／通道是統計快照，切過去的時候畫一次就好。
+        _hook = function (kind, rec) {
+            if (!_root) return;
+            if (kind === 'start') _logAppend(rec); else _logUpdate(rec);
+            _updatePill();
+        };
+        try { (win.AURELIA_API_LOG_HOOKS = win.AURELIA_API_LOG_HOOKS || []).push(_hook); } catch (e) {}
+    }
+    function close() {
+        if (_hook) {
+            try {
+                const hs = win.AURELIA_API_LOG_HOOKS || [];
+                const i = hs.indexOf(_hook);
+                if (i >= 0) hs.splice(i, 1);
+            } catch (e) {}
+            _hook = null;
+        }
+        if (_root) { try { _root.remove(); } catch (e) {} _root = null; }
+    }
+    function _switch(tab) {
+        _tab = tab;
+        if (!_root) return;
+        _root.querySelectorAll('.dsh-tab').forEach(function (t) { t.classList.toggle('on', t.dataset.tab === _tab); });
+        _root.scrollTop = 0;
+        _render();
+    }
+
+    // 重畫只發生在「使用者自己動手」的時候：開窗、換書籤、換篩選、清空。
+    // 定時重畫已經拿掉了——那才是捲軸一直跳回頂端的原因。
+    function _paint(page, h) {
+        if (!page || page.__dshHtml === h) return;
+        page.innerHTML = h;
+        page.__dshHtml = h;
+    }
+
+    // 這台裝置現在跑的版本：讀 sw.js 裡的 CACHE_VERSION（唯一一份，不另外抄）。手機 PWA 常卡在舊版，
+    //   使用者手機跟電腦結果不一樣時，先看兩邊版本號一不一樣，別再猜。
+    async function _showVersion() {
+        const el = _root && _root.querySelector('#dsh-ver');
+        if (!el) return;
+        try {
+            // 擴展放在哪由 index.js／index.html 掛在 AURELIA_EXT_BASE（沒有底線開頭）。以前這裡讀成 _AURELIA_EXT_BASE（index.js 自己的區域變數，外面看不到），
+            //   酒館端永遠退回 '.'＝去抓酒館網站根目錄的 sw.js（沒有這支）→ 版本號一直是空的。
+            const base = win.AURELIA_EXT_BASE || window.AURELIA_EXT_BASE || '.';
+            const r = await fetch(base.replace(/\/$/, '') + '/sw.js?ver=' + Date.now(), { cache: 'no-store' });
+            const m = /CACHE_VERSION\s*=\s*(\d+)/.exec(await r.text());
+            el.textContent = m ? ('v' + m[1]) : '';
+        } catch (e) { el.textContent = ''; }
+    }
+
+    // 🔄 換新版：酒館助手一行 import 鎖號碼載的（boot.js@<號碼>）才有。開控制台時問 GitHub 這個號碼之後 main 多了幾個，
+    //   有的話版本號旁邊出「有新版」；按了列出多了什麼，同意就把酒館助手那支腳本裡的號碼換成最新、等酒館存好再重新整理。
+    //   以前要自己開酒館助手、改號碼、記得開關打開（10-17 改成一鍵換版）。
+    //   🚨 存檔：酒館助手改腳本後是酒館「停 1 秒再存」，不能直接 import 酒館的存檔函式（TauriTavern 打包過，拿到的是另一份空設定，存下去會蓋掉）。
+    //      全域腳本改完讀回存檔確認新號碼在了才重開；角色卡、預設底下的腳本讀不回來，就等 3 秒。
+    //   🚨 換號碼那一下酒館助手會馬上跑新的 boot.js，它看到舊版還在跑會自己重新整理——可能比存檔早。
+    //      所以先在主頁面立 __AURELIA_SWAPPING__，新 boot.js 看到就先不動（這版之後的 boot.js 都認）。
+    let _upd = null;   // { pin, head, list } 這次打開查到的
+    function _pinInfo() {
+        let base = '';
+        try { base = String(win.__AURELIA_LOADED_BASE__ || ''); } catch (e) {}
+        const m = /^(https?:\/\/[^/]+)\/gh\/([^/]+)\/([^/@]+)@([0-9a-f]{7,40})$/i.exec(base);
+        const TH = win.TavernHelper || window.TavernHelper;
+        if (!m || !TH || typeof TH.getScriptTrees !== 'function' || typeof TH.updateScriptTreesWith !== 'function') return null;
+        return { host: m[1], owner: m[2], repo: m[3], hash: m[4], TH: TH };
+    }
+    function _firstLine(msg) {
+        const s = String(msg || '').split('\n')[0];
+        const cut = s.search(/[：。（(]/);
+        const t = (cut > 0 ? s.slice(0, cut) : s).trim();
+        return t.length > 38 ? t.slice(0, 37) + '…' : t;
+    }
+    async function _checkUpdate() {
+        const btn = _root && _root.querySelector('#dsh-upd');
+        const pin = _pinInfo();
+        if (!btn || !pin) return;
+        _upd = null;
+        try {
+            const api = 'https://api.github.com/repos/' + pin.owner + '/' + pin.repo;
+            const r = await fetch(api + '/compare/' + pin.hash + '...main', { cache: 'no-store' });
+            if (!r.ok) {
+                // 倉庫歷史重新開始過（2026-11-27），舊鎖點跟 main 沒有共同祖先，compare 回 404：
+                // 改問 main 最新那一版，不是同一版就提供換版
+                if (r.status !== 404) return;
+                const m = await fetch(api + '/commits/main', { cache: 'no-store' });
+                if (!m.ok) return;
+                const h = await m.json();
+                if (!h || !h.sha || h.sha.indexOf(pin.hash) === 0) return;
+                _upd = { pin: pin, head: h.sha, n: 1, list: [_firstLine(h.commit && h.commit.message)] };
+                if (!_root || !btn.isConnected) return;
+                btn.querySelector('span').textContent = '有新版';
+                btn.title = '有新版';
+                btn.hidden = false;
+                btn.onclick = _askSwap;
+                return;
+            }
+            const j = await r.json();
+            const cs = Array.isArray(j.commits) ? j.commits : [];
+            if (!(j.ahead_by > 0) || !cs.length) return;
+            _upd = { pin: pin, head: cs[cs.length - 1].sha, n: j.ahead_by, list: cs.map(function (c) { return _firstLine(c.commit && c.commit.message); }).reverse() };
+        } catch (e) { return; }
+        if (!_root || !btn.isConnected) return;
+        btn.querySelector('span').textContent = '有新版';
+        btn.title = '多了 ' + _upd.n + ' 個更新';
+        btn.hidden = false;
+        btn.onclick = _askSwap;
+    }
+    async function _askSwap() {
+        const u = _upd;
+        const A = win.AUI || window.AUI;
+        if (!u || !A || !A.confirm) return;
+        const show = u.list.slice(0, 6);
+        const more = u.list.length - show.length;
+        const ok = await A.confirm('這次多了 ' + u.n + ' 個更新：\n' + show.map(function (t) { return '• ' + t; }).join('\n') + (more > 0 ? '\n…還有 ' + more + ' 個' : '') + '\n\n換好會自己重新整理一次。',
+            { title: '換到新版', okText: '換好重開', cancelText: '先不要', danger: false, left: true });
+        if (ok) _swapTo(u);
+    }
+    async function _swapTo(u) {
+        const pin = u.pin, to = u.head.slice(0, 8);
+        const btn = _root && _root.querySelector('#dsh-upd');
+        const say = function (t) { if (btn) btn.querySelector('span').textContent = t; };
+        if (btn) btn.disabled = true;
+        const fail = function (t) { _toast(t); say('有新版'); if (btn) btn.disabled = false; try { win.__AURELIA_SWAPPING__ = false; } catch (e) {} };
+        // ① 新版下載得到才換（剛更新完幾分鐘內，下載點常常還沒拿到）
+        say('確認新版…');
+        const newBase = pin.host + '/gh/' + pin.owner + '/' + pin.repo + '@' + to;
+        const probe = async function (f) {
+            const ac = new AbortController(); const tm = setTimeout(function () { ac.abort(); }, 25000);
+            try { const r = await fetch(newBase + '/' + f, { cache: 'no-store', signal: ac.signal }); return r.ok; }
+            catch (e) { return false; } finally { clearTimeout(tm); }
+        };
+        if (!(await probe('boot.js')) || !(await probe('index.js'))) { fail('新版還在送到下載點，過幾分鐘再按一次'); return; }
+        // ② 找載奧瑞亞的那支腳本，換號碼
+        const needle = pin.owner + '/' + pin.repo + '@' + pin.hash;
+        const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=/)', 'i');
+        let where = '';
+        try { win.__AURELIA_SWAPPING__ = true; } catch (e) {}
+        for (const type of ['global', 'character', 'preset']) {
+            try {
+                let hit = false;
+                const has = (pin.TH.getScriptTrees({ type: type }) || []).some(function (t) {
+                    return (t.type === 'folder' ? (t.scripts || []) : [t]).some(function (s) { return re.test(String(s.content || '')); });
+                });
+                if (!has) continue;
+                pin.TH.updateScriptTreesWith(function (trees) {
+                    const fix = function (s) {
+                        if (hit || !re.test(String(s.content || ''))) return s;
+                        hit = true;
+                        return Object.assign({}, s, { content: String(s.content).replace(re, pin.owner + '/' + pin.repo + '@' + to) });
+                    };
+                    return trees.map(function (t) { return t.type === 'folder' ? Object.assign({}, t, { scripts: (t.scripts || []).map(fix) }) : fix(t); });
+                }, { type: type });
+                if (hit) { where = type; break; }
+            } catch (e) { console.warn('[控制台] 換新版：改酒館助手腳本失敗', type, e); }
+        }
+        if (!where) { fail('找不到載奧瑞亞的那支腳本，這次請到酒館助手自己換號碼：' + to); return; }
+        // ③ 等酒館存好
+        say('存檔中…');
+        const wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+        if (where === 'global') {
+            let saved = false, readable = false;
+            for (let i = 0; i < 6 && !saved; i++) {
+                await wait(i ? 1000 : 1600);
+                try {
+                    const ctx = (win.SillyTavern || window.SillyTavern).getContext();
+                    const r = await win.fetch('/api/settings/get', { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify({}), cache: 'no-cache' });
+                    const j = r.ok ? await r.json() : null;
+                    const st = j && j.settings ? (typeof j.settings === 'string' ? j.settings : JSON.stringify(j.settings)) : '';
+                    if (st) { readable = true; saved = st.indexOf(pin.owner + '/' + pin.repo + '@' + to) >= 0; }
+                } catch (e) {}
+                if (!readable) break;
+            }
+            if (!readable) await wait(3000);
+            else if (!saved) { fail('新號碼還沒存進去，先別重新整理，到酒館助手看看那支腳本現在是不是 ' + to); return; }
+        } else await wait(3000);
+        say('重新整理…');
+        try { win.sessionStorage.removeItem('aurelia_boot_reload'); } catch (e) {}
+        win.location.reload();
+    }
+
+    async function _render() {
+        if (!_root) return;
+        _showVersion();
+        const page = _root.querySelector('#dsh-page');
+        if (!page) return;
+        page.onclick = null;          // 上一頁掛的委派事件不要留到下一頁
+        if (_tab === 'today') await _renderToday(page);
+        else if (_tab === 'chan') await _renderChannels(page);
+        else if (_tab === 'log') _renderLogs(page);
+        else _renderMsgs(page);
+        _updatePill();
+    }
+
+    async function _updatePill() {
+        const U = _U();
+        const el = _root && _root.querySelector('#dsh-pill span');
+        if (!el || !U) return;
+        try {
+            const t = await U.today();
+            el.textContent = '今天 ' + _n(t.n) + ' 次' + (t.img ? ' · 生圖 ' + _n(t.img) : '');
+        } catch (e) {}
+    }
+
+    // ── 書籤①：今天 ────────────────────────────────────────────────
+    function _sec(name) {
+        return '<div class="dsh-sec"><span class="d"></span><b>' + _esc(name) + '</b><span class="d r"></span></div>';
+    }
+    function _diffText(cur, prev) {
+        if (!prev) return cur ? '昨天沒有' : '';
+        const dv = cur - prev;
+        if (!dv) return '跟前一天一樣';
+        const pct = Math.round(Math.abs(dv) / prev * 100);
+        return '<span class="' + (dv > 0 ? 'up' : 'down') + '">' + (dv > 0 ? '↑' : '↓') + ' ' + pct + '%</span> 前一天 ' + _n(prev);
+    }
+    function _barGroup(map, valueOf, nameOf, rightOf) {
+        const rows = Object.keys(map || {}).map(function (k) {
+            return { k: k, v: valueOf(map[k]), n: map[k].n || 0 };
+        }).filter(function (r) { return r.v > 0 || r.n > 0; }).sort(function (a, b) { return b.v - a.v; });
+        if (!rows.length) return '';
+        const max = rows[0].v || 1;
+        return '<div class="dsh-bars">' + rows.map(function (r) {
+            // --w 是依資料算出來的比例，只能由程式帶進來 → 用 CSS 變數，不寫 inline 樣式
+            return '<div class="dsh-bar-row">' +
+                '<span class="dsh-bar-name" title="' + _esc(nameOf(r.k)) + '">' + _esc(nameOf(r.k)) + '</span>' +
+                '<span class="dsh-bar-track"><span class="dsh-bar-fill" style="--w:' + Math.max(2, Math.round(r.v / max * 100)) + '%"></span></span>' +
+                '<span class="dsh-bar-num">' + rightOf(r) + '</span>' +
+                '</div>';
+        }).join('') + '</div>';
+    }
+    const _rightTok = function (r) { return _n(r.n) + ' 次　' + _n(r.v) + ' Tokens'; };
+    const _rightImg = function (r) { return _n(r.n) + ' 張'; };
+
+    async function _renderToday(page) {
+        const U = _U();
+        if (!U) { _paint(page, '<div class="dsh-empty"><i class="fa-solid fa-plug-circle-xmark"></i>用量記錄還沒啟動。</div>'); return; }
+        const today = U.dayKey();
+        _days = await U.days(U.shiftDay(today, -13), today);
+        if (!_days.some(function (x) { return x.id === _pickDay; })) _pickDay = today;
+        const cur = _days.find(function (x) { return x.id === _pickDay; }) || _days[_days.length - 1];
+        const idx = _days.indexOf(cur);
+        const prev = idx > 0 ? _days[idx - 1] : null;
+        const isToday = cur.id === today;
+        const maxN = Math.max.apply(null, _days.map(function (x) { return x.n + x.img; }).concat([1]));
+
+        const spark = '<div class="dsh-spark">' + _days.map(function (x) {
+            const h = Math.round((x.n + x.img) / maxN * 100);
+            // --h 同上：柱子高度是當天用量的比例
+            return '<div class="dsh-spark-col' + (x.id === _pickDay ? ' on' : '') + '" data-day="' + x.id + '" title="' + x.id + '：' + _n(x.n) + ' 次">' +
+                '<span class="dsh-spark-bar" style="--h:' + h + '%"></span>' +
+                '<span class="dsh-spark-lbl">' + x.id.slice(5).replace('-', '/') + '</span>' +
+                '</div>';
+        }).join('') + '</div>';
+
+        const empty = (!cur.n && !cur.img);
+        const WD = ['日', '一', '二', '三', '四', '五', '六'];
+        const dparts = cur.id.split('-');
+        const wd = WD[new Date(+dparts[0], +dparts[1] - 1, +dparts[2]).getDay()];
+        let html = '';
+        html += '<div class="dsh-daybar"><b>' + (isToday ? '今天' : (dparts[1] + ' 月 ' + (+dparts[2]) + ' 日')) + '</b>' +
+            '<span class="dsh-note">星期' + wd + '</span><span class="sp"></span>' +
+            (isToday ? '' : '<span class="dsh-chip" id="dsh-back-today">回到今天</span>') + '</div>';
+        html += '<div class="dsh-stats">' +
+            '<div class="dsh-stat"><span class="dsh-stat-k">呼叫次數</span><span class="dsh-stat-v">' + _n(cur.n) +
+            (cur.fail ? '<small>· 失敗 ' + _n(cur.fail) + '</small>' : '') + '</span><span class="dsh-stat-sub">' + _diffText(cur.n, prev && prev.n) + '</span></div>' +
+            '<div class="dsh-stat"><span class="dsh-stat-k">送出 Tokens</span><span class="dsh-stat-v">' + _n(cur.inTok) + '</span><span class="dsh-stat-sub">' + _diffText(cur.inTok, prev && prev.inTok) + '</span></div>' +
+            '<div class="dsh-stat"><span class="dsh-stat-k">回來 Tokens</span><span class="dsh-stat-v">' + _n(cur.outTok) + '</span><span class="dsh-stat-sub">' + _diffText(cur.outTok, prev && prev.outTok) + '</span></div>' +
+            '<div class="dsh-stat"><span class="dsh-stat-k">生圖</span><span class="dsh-stat-v">' + _n(cur.img) + '<small>張</small></span><span class="dsh-stat-sub">' + _diffText(cur.img, prev && prev.img) + '</span></div>' +
+            '</div>';
+
+        if (empty) {
+            html += '<div class="dsh-empty"><i class="fa-solid fa-mug-hot"></i>' +
+                (isToday ? '今天還沒跟模型講過話。' : (_pickDay + ' 這天沒有任何紀錄。')) +
+                '<br><small>之後每一次對話、總結、生圖都會記在這裡，關掉也不會歸零。</small></div>';
+        } else {
+            const byTask = _barGroup(cur.task, function (b) { return (b.inTok || 0) + (b.outTok || 0); }, _taskName, _rightTok);
+            if (byTask) html += _sec('哪件事最花') + byTask;
+            const byChan = _barGroup(cur.chan, function (b) { return (b.inTok || 0) + (b.outTok || 0); }, function (k) { return k; }, _rightTok);
+            if (byChan) html += _sec('走哪條通道') + byChan;
+            if (cur.img) {
+                const bySrc = _barGroup(cur.src, function (b) { return b.n || 0; }, function (k) { return SRC_NAME[k] || k; }, _rightImg);
+                if (bySrc) html += _sec('生圖走哪裡') + bySrc;
+            }
+        }
+        html += _sec('最近十四天') + spark +
+            '<div class="dsh-actions"><span class="dsh-note">點圖上的柱子，可以看那一天的用量。</span><span class="sp"></span>' +
+            '<button class="dsh-btn warn" id="dsh-clear-usage">清空所有用量紀錄</button></div>' +
+            '<div class="dsh-actions dsh-dev"><span class="dsh-note">除錯訊息是給程式看的英文紀錄，請丹幫忙修東西時才需要。</span><span class="sp"></span>' +
+            '<button class="dsh-btn" id="dsh-dev-toggle">' + (_devOn() ? '收起「訊息」頁' : '打開「訊息」頁') + '</button></div>';
+
+        _paint(page, html);
+        page.querySelectorAll('.dsh-spark-col').forEach(function (c) {
+            c.onclick = function () { _pickDay = c.dataset.day; _render(); };
+        });
+        const bt = page.querySelector('#dsh-back-today');
+        if (bt) bt.onclick = function () { _pickDay = today; _render(); };
+        const dv = page.querySelector('#dsh-dev-toggle');
+        if (dv) dv.onclick = function () {
+            const on = !_devOn();
+            if (!win.AUI.lsSet(K_DEV, on ? '1' : '0', '控制台的除錯訊息開關')) return;
+            const tabs = _root.querySelector('.dsh-tabs');
+            if (tabs) { tabs.innerHTML = _tabsHtml(); _bindTabs(); }
+            page.__dshHtml = null;
+            _render();
+            _toast(on ? '上面多了「訊息」頁。' : '「訊息」頁收起來了。');
+        };
+        const cl = page.querySelector('#dsh-clear-usage');
+        if (cl) cl.onclick = async function () {
+            const ok = await _confirm('把所有的用量紀錄清掉？每天的數字會全部歸零，而且回不來。');
+            if (!ok) return;
+            await _U().clearAll();
+            _toast('用量紀錄已清空。');
+            _render();
+        };
+    }
+
+    // ── 書籤②：通道 ────────────────────────────────────────────────
+    // 🚨 這一頁只給看，不給改。以前這裡放了下拉單跟「新增／編輯／刪掉通道」，
+    //    跟設置 → AI 模型 → 通道那頁是同一份資料、兩個地方都能改 —— 控制台只是看的，
+    //    不該哪裡都塞編輯按鈕。要改就回設置那一頁改。
+    async function _renderChannels(page) {
+        const S = _S(), U = _U();
+        if (!S) { _paint(page, '<div class="dsh-empty"><i class="fa-solid fa-plug-circle-xmark"></i>設定模組還沒載入。</div>'); return; }
+        const routes = S.getRoutes ? S.getRoutes() : {};
+        const chans = S.getChannels ? S.getChannels() : [];
+        const main = S.getConfig ? S.getConfig() : {};
+        const sec = S.getSecondaryConfig ? S.getSecondaryConfig() : {};
+        const day = U ? await U.today() : null;
+        // 在酒館裡跑的時候，正文是酒館自己那條連線生的，根本沒有經過奧瑞亞的通道；
+        // 只有 PWA（沒有酒館）那份才吃這裡的設定。不講清楚會以為改了這裡就換得掉正文的模型。
+        const standalone = !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone());
+        const useOf = function (name) {
+            const b = day && day.chan && day.chan[name];
+            if (!b) return '今天還沒用到';
+            return '今天 ' + _n(b.n) + ' 次 · ' + _n((b.inTok || 0) + (b.outTok || 0)) + ' Tokens';
+        };
+        const chanName = function (v) {
+            if (v === 'main') return '主模型';
+            if (v === 'sec') return '副模型';
+            const c = chans.find(function (x) { return x.id === v; });
+            return c ? (c.name || '未命名通道') : '主模型';
+        };
+
+        let _grp = '';
+        let html = _sec('模型分配') + '<div class="dsh-routes">' +
+            _tasks().map(function (t) {
+                const off = (t.id === 'story' && !standalone);
+                const head = (t.group && t.group !== _grp) ? ('<div class="dsh-route-group">' + _esc(t.group) + '</div>') : '';
+                if (t.group) _grp = t.group;
+                return head + '<div class="dsh-route-row"><span>' + _esc(t.name) + '</span>' +
+                    '<span class="dsh-route-v' + (off ? ' off' : '') + '">' +
+                    (off ? '酒館自己生成，不走這裡' : _esc(chanName(routes[t.id] || t.def))) + '</span></div>';
+            }).join('') + '</div>' +
+            '<div class="dsh-actions"><span class="dsh-note">要改走哪一條，在設置 → AI 模型 → 通道</span></div>';
+
+        html += _sec('我的通道');
+        html += '<div class="dsh-chans">';
+        html += '<div class="dsh-chan"><span class="dsh-chan-name">主模型</span>' +
+            '<span class="dsh-chan-meta">模型 <b>' + _esc(main.model || '（沒填）') + '</b><br>' +
+            (main.useSystemApi ? '跟著酒館的連線走' : ('直連 ' + _esc(_hostOf(main.url) || '（沒填網址）'))) + '</span>' +
+            '<span class="dsh-chan-use">' + useOf('主模型') + '</span></div>';
+        html += '<div class="dsh-chan"><span class="dsh-chan-name">副模型</span>' +
+            '<span class="dsh-chan-meta">模型 <b>' + _esc(sec.model || '（沒填）') + '</b><br>' +
+            (sec.useSystemApi ? '跟著酒館的連線走' : ('直連 ' + _esc(_hostOf(sec.url) || '（沒填網址）'))) + '</span>' +
+            '<span class="dsh-chan-use">' + useOf('副模型') + '</span></div>';
+        chans.forEach(function (c) {
+            const bad = (!c.url || !c.key);
+            html += '<div class="dsh-chan"><span class="dsh-chan-name">' + _esc(c.name || '未命名通道') + '</span>' +
+                '<span class="dsh-chan-meta">模型 <b>' + _esc(c.model || '（沒填）') + '</b><br>' + _esc(_hostOf(c.url) || '（沒填網址）') +
+                (bad ? '<br>還沒填完，指到這條的會先走原本的主／副模型' : '') + '</span>' +
+                '<span class="dsh-chan-use">' + useOf(c.name || '未命名通道') + '</span></div>';
+        });
+        html += '</div>';
+
+        _paint(page, html);
+    }
+
+    // ── 書籤③：記錄 ────────────────────────────────────────────────
+    function _oneLogText(r) {
+        return [
+            '時間：' + _clock(r.t),
+            '連線：' + (r.cat === 'main' ? '主模型' : r.cat === 'sec' ? '副模型' : '其他'),
+            '用途：' + (r.task ? _taskName(r.task) : '') + (r.route ? ('（' + r.route + '）') : (r.task ? '' : '（沒標）')),
+            '狀態：' + (r.ok === null ? '進行中' : r.ok ? ('成功 ' + r.ms + 'ms') : ('失敗 ' + r.ms + 'ms')),
+            'Tokens：送出 ' + (r.inTok == null ? '—' : r.inTok) + ' / 回來 ' + (r.outTok == null ? '—' : r.outTok),
+            '',
+            '── 送出的 prompt ──', r.prompt || '（空）',
+            '',
+            ...(r.think ? ['── 思考 ──', r.think, ''] : []),
+            '── 回來的原文 ──', r.ok === false ? ('（失敗）' + (r.err || '')) : (r.raw || '（空）')
+        ].join('\n');
+    }
+    // 一列的樣子單獨一支：整頁畫的時候用它，之後補一列也用它，兩邊永遠長一樣
+    function _logRowHtml(r) {
+        const on = !!_openLogs[r.id];
+        return '<div class="dsh-log" data-id="' + r.id + '">' +
+            '<div class="dsh-log-head">' +
+            '<span class="dsh-log-t">' + _clock(r.t) + '</span>' +
+            '<span class="dsh-badge ' + (r.cat || 'aux') + '">' + (r.cat === 'main' ? '主' : r.cat === 'sec' ? '副' : '其他') + '</span>' +
+            '<span class="dsh-log-task">' + _esc(r.task ? _taskName(r.task) : (r.route || '（沒標）')) + '</span>' +
+            '<span class="dsh-log-sp"></span>' +
+            _logTokHtml(r) + _logStHtml(r) + '</div>' +
+            '<div class="dsh-log-body' + (on ? '' : ' dsh-hide') + '">' + _logBodyHtml(r) + '</div></div>';
+    }
+    function _logStHtml(r) {
+        return r.ok === null ? '<span class="dsh-log-st">進行中</span>'
+             : r.ok ? '<span class="dsh-log-st ok" title="花了多久">' + _n(r.ms) + 'ms</span>'
+                    : '<span class="dsh-log-st bad">失敗</span>';
+    }
+    function _logTokHtml(r) {
+        return '<span class="dsh-log-tok" title="送出 / 回來 Tokens">↑' + (r.inTok == null ? '—' : _n(r.inTok)) +
+               ' ↓' + (r.outTok == null ? '—' : _n(r.outTok)) + '</span>';
+    }
+    function _paramsText(p) {
+        if (!p) return '';
+        const fmt = { tavern: '酒館連線', gemini: 'Gemini 原生', openai: 'OpenAI 相容' }[p.format] || String(p.format || '');
+        return '模型：' + (p.model || '—') + '\n字數上限：' + (p.max_tokens == null ? '—' : p.max_tokens) + '\n溫度：' + (p.temperature == null ? '—' : p.temperature)
+             + (p.top_p == null ? '' : '\ntop_p：' + p.top_p) + '\n思考：' + (p.thinking ? '開' : '關') + '\n格式：' + fmt;
+    }
+    function _logBodyHtml(r) {
+        return (r.ok === false ? '<div class="dsh-pre-k">錯誤</div><pre class="dsh-pre">' + _esc(r.err || '') + '</pre>' : '') +
+            (r.params ? '<div class="dsh-pre-k">參數</div><pre class="dsh-pre">' + _esc(_paramsText(r.params)) + '</pre>' : '') +
+            '<div class="dsh-pre-k">送出的 prompt</div><pre class="dsh-pre">' + _esc(r.prompt || '（空）') + '</pre>' +
+            (r.reqBody ? '<div class="dsh-pre-k">實際送出的 JSON（交給網路那一字串，原封不動）</div><pre class="dsh-pre">' + _esc(r.reqBody) + '</pre>' : '') +
+            (r.think ? '<div class="dsh-pre-k">思考</div><pre class="dsh-pre">' + _esc(r.think) + '</pre>' : '') +
+            '<div class="dsh-pre-k">回來的原文</div><pre class="dsh-pre">' + _esc(r.raw || '（空）') + '</pre>' +
+            '<div class="dsh-actions"><span class="sp"></span><button class="dsh-btn" data-one="' + r.id + '">複製這筆</button></div>';
+    }
+    function _logShown(r) { return _logFilter === 'all' || r.cat === _logFilter; }
+
+    // 新的一筆呼叫 → 補在最上面。整頁不動，使用者捲到哪裡就還在哪裡。
+    function _logAppend(r) {
+        if (!_root || _tab !== 'log' || !r || !_logShown(r)) return;
+        const page = _root.querySelector('#dsh-page');
+        let box = page && page.querySelector('.dsh-logs');
+        if (!box) { _render(); return; }             // 本來是空的那張圖 → 讓它整頁畫一次就有清單了
+        box.insertAdjacentHTML('afterbegin', _logRowHtml(r));
+        page.__dshHtml = '';                          // 已經跟畫的時候不一樣了，別讓 _paint 誤判成沒變
+        const rows = box.querySelectorAll('.dsh-log');
+        if (rows.length > 200) rows[rows.length - 1].remove();
+    }
+    // 那一筆跑完了／token 算出來了 → 只改那一列的那幾個字，不重畫
+    function _logUpdate(r) {
+        if (!_root || _tab !== 'log' || !r) return;
+        const page = _root.querySelector('#dsh-page');
+        const row = page && page.querySelector('.dsh-log[data-id="' + r.id + '"]');
+        if (!row) { _logAppend(r); return; }
+        const st = row.querySelector('.dsh-log-st');
+        if (st) st.outerHTML = _logStHtml(r);
+        const tok = row.querySelector('.dsh-log-tok');
+        if (tok) tok.outerHTML = _logTokHtml(r);
+        const body = row.querySelector('.dsh-log-body');
+        if (body && !_openLogs[r.id]) body.innerHTML = _logBodyHtml(r);   // 展開著就不要在使用者眼前抽換內容
+    }
+
+    function _renderLogs(page) {
+        const arr = _apiLog().filter(_logShown).slice().reverse();
+        const CHIPS = [['all', '全部'], ['main', '主模型'], ['sec', '副模型'], ['aux', '其他']];
+        let html = '<div class="dsh-actions"><span class="dsh-chips">' +
+            CHIPS.map(function (c) { return '<span class="dsh-chip' + (_logFilter === c[0] ? ' on' : '') + '" data-f="' + c[0] + '">' + c[1] + '</span>'; }).join('') +
+            '</span><span class="sp"></span><button class="dsh-btn" id="dsh-copy-page">複製這頁</button></div>';
+        if (!arr.length) {
+            html += '<div class="dsh-empty"><i class="fa-solid fa-inbox"></i>這次開起來以後還沒有呼叫。' +
+                '<br><small>這一頁記的是這次開機以來每一次跟模型講話的原文；每天的數字在「今天」那一頁，關掉也不會不見。</small></div>';
+        } else {
+            html += '<div class="dsh-logs">' + arr.map(_logRowHtml).join('') + '</div>';
+        }
+        _paint(page, html);
+        // 🚨 事件掛在外框、用 closest 找：後來補進去的那幾列不用重新綁，也就不需要為了綁事件而重畫。
+        page.onclick = function (e) {
+            const f = e.target.closest ? e.target.closest('[data-f]') : null;
+            if (f) { _logFilter = f.dataset.f; _render(); return; }
+            const one = e.target.closest ? e.target.closest('[data-one]') : null;
+            if (one) {
+                e.stopPropagation();
+                const r = _apiLog().find(function (x) { return String(x.id) === one.dataset.one; });
+                if (r) _copy(_oneLogText(r), '這一筆呼叫', function (m) { _flash(one, m); });
+                return;
+            }
+            const cp = e.target.closest ? e.target.closest('#dsh-copy-page') : null;
+            if (cp) {
+                _copy(_apiLog().filter(_logShown).slice().reverse().map(_oneLogText).join('\n\n════════\n\n'), '呼叫記錄', function (m) { _flash(cp, m); });
+                return;
+            }
+            const h = e.target.closest ? e.target.closest('.dsh-log-head') : null;
+            if (h) {
+                const box = h.parentElement, id = box.dataset.id;
+                _openLogs[id] = !_openLogs[id];
+                box.querySelector('.dsh-log-body').classList.toggle('dsh-hide', !_openLogs[id]);
+            }
+        };
+    }
+
+    // ── 書籤④：訊息 ────────────────────────────────────────────────
+    function _msgRowHtml(m) {
+        return '<div class="dsh-msg ' + m.ty + '"><span class="ts">' + _clock(m.t) + '</span>' + _esc(m.m) + '</div>';
+    }
+    // console 一有新的就補一列（跟本機 DEBUG.js 一樣），不等任何輪詢
+    function _msgAppend(m) {
+        if (!_root || _tab !== 'msg' || !m) return;
+        const page = _root.querySelector('#dsh-page');
+        const box = page && page.querySelector('.dsh-msgs');
+        if (!box) { _render(); return; }
+        box.insertAdjacentHTML('afterbegin', _msgRowHtml(m));
+        page.__dshHtml = '';
+        const rows = box.querySelectorAll('.dsh-msg');
+        if (rows.length > MSG_MAX) rows[rows.length - 1].remove();
+    }
+    function _renderMsgs(page) {
+        const arr = MSGS.slice().reverse();
+        let html = '<div class="dsh-actions"><span class="dsh-note">最新的在最上面</span><span class="sp"></span>' +
+            '<button class="dsh-btn" id="dsh-copy-msgs">複製這頁</button>' +
+            '<button class="dsh-btn warn" id="dsh-clear-msgs">清掉</button></div>';
+        if (!arr.length) {
+            html += '<div class="dsh-empty"><i class="fa-solid fa-feather"></i>目前沒有任何系統訊息。' +
+                '<br><small>奧瑞亞跑起來說的話、出的錯，都會出現在這裡。</small></div>';
+        } else {
+            html += '<div class="dsh-msgs">' + arr.map(_msgRowHtml).join('') + '</div>';
+        }
+        _paint(page, html);
+        page.onclick = function (e) {
+            const cp = e.target.closest ? e.target.closest('#dsh-copy-msgs') : null;
+            if (cp) {
+                _copy(MSGS.slice().reverse().map(function (m) { return _clock(m.t) + ' [' + m.ty + '] ' + m.m; }).join('\n'), '系統訊息', function (x) { _flash(cp, x); });
+                return;
+            }
+            const cl = e.target.closest ? e.target.closest('#dsh-clear-msgs') : null;
+            if (cl) {
+                // 清空類一律紅色＋再問一次（小斐 11-17 新玩家檢查第 7 條）
+                _confirm('把這頁的訊息全部清掉？清掉就看不到了，要給丹看錯誤的話先按「複製這頁」。').then(function (ok) {
+                    if (!ok) return;
+                    MSGS.length = 0; _render();
+                });
+            }
+        };
+    }
+
+    // copy：手機殼 app 載入失敗時也要能一鍵把錯誤複製給我，共用同一套三層退路
+    // 直接翻到記錄頁的某一筆、展開它（劇情裡小劇場的 COT／CTX「到控制台看這一通」用）。開著就不關，照樣翻過去
+    function openLog(id) {
+        _logFilter = 'all';
+        _openLogs[id] = true;
+        if (!_root) { _tab = 'log'; open(); } else _switch('log');
+        if (!_root) return;
+        const row = _root.querySelector('.dsh-log[data-id="' + id + '"]');
+        if (row) { try { row.scrollIntoView({ block: 'start' }); } catch (e) {} row.classList.add('dsh-log-hit'); }
+    }
+
+    win.OS_DASHBOARD = { open: open, close: close, openLog: openLog, messages: MSGS, copy: _copy };
+    if (win !== window) { try { window.OS_DASHBOARD = win.OS_DASHBOARD; } catch (e) {} }
+    console.log('[PhoneOS] 載入控制台 (OS_DASHBOARD)');
+})();

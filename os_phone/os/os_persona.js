@@ -1,0 +1,560 @@
+﻿// ----------------------------------------------------------------
+// [檔案] os_persona.js (V5.8 - 終極穩定版：V5.0 核心通訊 + 拿鐵咖啡 UI)
+// 路徑：os_phone/os/os_persona.js
+// 職責：統一的人設切換與管理 (OS 層級)
+// 說明：完美還原 V5.0 的 REQUEST_SWITCH_USER_PERSONA 通訊協議，確保 ST 模式切換絕對有效，並整合拿鐵主題。
+// ----------------------------------------------------------------
+(function() {
+    console.log('[PhoneOS] 載入人設管理器 V5.8 (拿鐵咖啡色票版)...');
+    const win = window.parent || window;
+    const doc = win.document;
+
+    const LS_KEY = 'os_personas';          
+    const LS_CUR = 'os_persona_current';   
+
+    // ── 當前人設快取 (還原 V5.0 結構) ──
+    let CURRENT_PERSONA = { name: 'User', id: 'user_default', avatar: '', desc: '', personas: [] };
+    let ST_PERSONAS_LIST = []; 
+
+    function isStandalone() {
+        try { return !(win.SillyTavern && win.SillyTavern.getContext); } 
+        catch(e) { return true; }
+    }
+
+    function loadLocalPersonas() {
+        try { return JSON.parse(localStorage.getItem(LS_KEY) || '[]'); } catch(e) { return []; }
+    }
+    // 存成回 true；空間滿了回 false（AUI.lsSet 已經跳「○○沒存下來」）
+    function saveLocalPersonas(list) {
+        return win.AUI.lsSet(LS_KEY, JSON.stringify(list), '人設清單');
+    }
+    function loadCurrentId() {
+        return localStorage.getItem(LS_CUR) || null;
+    }
+    function saveCurrentId(id) {
+        return win.AUI.lsSet(LS_CUR, id, '目前用的人設');
+    }
+
+    // ── 建立與酒館的通訊橋樑 (還原 V5.0) ──
+    if (!win._os_persona_listening) {
+        win.addEventListener('message', e => {
+            if (!e.data) return;
+            if (e.data.type === 'USER_PERSONA_LIST_RESPONSE') {
+                ST_PERSONAS_LIST = e.data.data?.personas || [];
+                if (_rootContainer) refreshList(); 
+            }
+        });
+        win._os_persona_listening = true;
+    }
+
+    // ── 新版拿鐵咖啡 UI 樣式 ──
+
+    // ── 完全還原 V5.0 的 ST 狀態同步邏輯 ──
+    function syncFromST() {
+        if (isStandalone()) return;
+        try {
+            const pu = win.power_user || win.parent?.power_user;
+            const userBlock = doc.querySelector('#user_avatar_block .avatar-container.selected');
+            if (userBlock) {
+                const nameEl = userBlock.querySelector('.ch_name.flex1');
+                if (nameEl?.textContent.trim()) CURRENT_PERSONA.name = nameEl.textContent.trim();
+                const avatarEl = userBlock.querySelector('[data-avatar-id]');
+                const id = avatarEl ? avatarEl.getAttribute('data-avatar-id') : '';
+                if (id) { CURRENT_PERSONA.id = id; CURRENT_PERSONA.avatar = `/thumbnail?type=persona&file=${id}`; }
+                const descEl = userBlock.querySelector('.ch_description');
+                let d = descEl ? descEl.textContent.trim().replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '').trim() : '';
+                if (d.includes('無使用者角色描述')) d = '';
+                // 畫面上讀不到就問酒館存的那份；都沒有＝這個人設本來就沒寫描述，要清空，不能沿用上一個人設的
+                if (!d && id && pu?.persona_descriptions?.[id]) d = String(pu.persona_descriptions[id].description || '').replace(/<[^>]+>/g, '').trim();
+                CURRENT_PERSONA.desc = d;
+            }
+            if (pu?.personas) {
+                if (!CURRENT_PERSONA.name || CURRENT_PERSONA.name === 'User') {
+                    if (pu.persona_selected && pu.personas[pu.persona_selected]) {
+                        const p = pu.personas[pu.persona_selected];
+                        CURRENT_PERSONA.name = p.name || pu.persona_selected;
+                        CURRENT_PERSONA.desc = (p.description || '').replace(/<[^>]+>/g, '').trim();
+                        if (p.avatar) CURRENT_PERSONA.avatar = p.avatar;
+                    }
+                }
+            }
+        } catch(e) {}
+    }
+
+    function initCurrent() {
+        if (isStandalone()) {
+            const list = loadLocalPersonas();
+            const curId = loadCurrentId();
+            let p = list.find(x => x.id === curId);
+            if (!p && list.length > 0) { p = list[0]; saveCurrentId(p.id); }
+            if (p) {
+                CURRENT_PERSONA = { ...p };
+            } else {
+                const defaultP = { id: 'p_' + Date.now(), name: 'User', desc: '這是一個預設的身分。', avatar: '' };
+                saveLocalPersonas([defaultP]);
+                saveCurrentId(defaultP.id);
+                CURRENT_PERSONA = { ...defaultP };
+            }
+        } else {
+            syncFromST();
+        }
+    }
+
+    let _rootContainer = null;
+    // 編輯頁本體。🚨 人設 app 不一定裝在大空間裡：大廳右上角人設頭像的下拉窗也是裝這個 app，
+    //   編輯頁只蓋滿 app 的話在下拉窗裡還是那麼小 → 打開時整塊搬到手機螢幕上，關掉搬回來。
+    let _editEl = null;
+    const _q = (s) => (_editEl ? _editEl.querySelector(s) : null);
+    // 開在哪：app 所在的浮動手機 app 區 → 奧瑞亞主窗口的螢幕 → 都沒有才蓋滿整個視窗
+    function _editHost() {
+        const from = _rootContainer;
+        const near = from && from.closest && (from.closest('#aps-app') || from.closest('#aurelia-phone-screen'));
+        if (near) return near;
+        const scr = doc.getElementById('aurelia-phone-screen');
+        if (scr && scr.getClientRects().length && scr.clientWidth > 0 && scr.clientHeight > 0) return scr;
+        return null;
+    }
+
+    // 酒館版多一個「世界書」分頁（os_wb_mount.js）：這段聊天讀了哪幾本書、掛上拿掉。PWA 沒有酒館的掛書，只留關於我。
+    let _tab = 'me';
+    function _hasWbTab() { return !isStandalone() && !!(win.OS_WB_MOUNT || window.OS_WB_MOUNT); }
+    function _showTab(tab) {
+        if (!_rootContainer) return;
+        _tab = tab === 'wb' && _hasWbTab() ? 'wb' : 'me';
+        _rootContainer.querySelectorAll('.ps-tab').forEach(b => b.classList.toggle('on', b.dataset.tab === _tab));
+        const me = _rootContainer.querySelector('#ps-list-container');
+        const wb = _rootContainer.querySelector('#ps-wb-container');
+        if (me) me.hidden = _tab !== 'me';
+        if (wb) wb.hidden = _tab !== 'wb';
+        if (_tab === 'wb') (win.OS_WB_MOUNT || window.OS_WB_MOUNT).render(wb);
+    }
+
+    function renderApp(container) {
+        _rootContainer = container;
+        if (_editEl && _editEl.isConnected && !container.contains(_editEl)) _editEl.remove();   // 上一次搬出去還沒搬回來的
+        const head = _hasWbTab()
+            ? `<div class="ps-tabs">
+                    <button class="ps-tab" type="button" data-tab="me"><i class="fa-solid fa-address-card"></i> 關於我</button>
+                    <button class="ps-tab" type="button" data-tab="wb"><i class="fa-solid fa-book"></i> 世界書</button>
+               </div>`
+            : `<div class="ps-title"><i class="fa-solid fa-address-card"></i> 關於我</div>`;
+        container.innerHTML = `
+            <div class="ps-app" id="ps-app-root">
+                <div class="ps-header">${head}</div>
+                <div class="ps-body" id="ps-list-container">
+                    <div style="text-align:center; padding:40px; color:rgba(26,28,40,0.72);">載入中...</div>
+                </div>
+                <div class="ps-body" id="ps-wb-container" hidden></div>
+
+                <!-- 編輯頁：打開時搬到整個手機螢幕上（手機上小窗改不動長設定），自帶返回鍵 -->
+                <div class="ps-edit" id="ps-modal">
+                    <div class="ps-edit-hd">
+                        <button class="ps-edit-back" id="ps-btn-cancel" type="button" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>
+                        <div class="ps-edit-title" id="ps-modal-title">編輯設定</div>
+                        <button class="ps-edit-save" id="ps-btn-save" type="button">儲存</button>
+                    </div>
+                    <div class="ps-edit-body">
+                        <div class="ps-field">
+                            <label for="ps-f-name">名稱</label>
+                            <input type="text" id="ps-f-name" placeholder="輸入名稱..." />
+                        </div>
+                        <div class="ps-field">
+                            <label>頭像</label>
+                            <div class="ps-av-row">
+                                <div class="ps-av-box"><i class="fa-solid fa-user"></i><img id="ps-av-preview" alt="" hidden /></div>
+                                <div class="ps-av-side">
+                                    <input type="text" id="ps-f-avatar" placeholder="貼圖片網址" />
+                                    <div class="ps-av-btns">
+                                        <button class="ps-av-btn" id="ps-av-upload" type="button"><i class="fa-solid fa-upload"></i> 本地上傳</button>
+                                        <button class="ps-av-btn" id="ps-av-clear" type="button"><i class="fa-solid fa-xmark"></i> 清除</button>
+                                    </div>
+                                    <div class="ps-av-note" id="ps-av-note" hidden>用的是本地上傳的圖</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="ps-field ps-field-grow">
+                            <label for="ps-f-desc">背景與特徵</label>
+                            <textarea id="ps-f-desc" placeholder="詳細描述你的外觀、性格與背景..."></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        _editEl = container.querySelector('#ps-modal');
+        container.querySelectorAll('.ps-tab').forEach(b => b.addEventListener('click', () => _showTab(b.dataset.tab)));
+        _showTab(_tab);
+
+        if (!isStandalone()) {
+            win.postMessage({ type: 'REQUEST_USER_PERSONA_LIST', source: 'PHONE_OS' }, '*');
+            setTimeout(refreshList, 150); 
+        } else {
+            refreshList();
+        }
+    }
+
+    // ── 渲染酒館專屬的同步列表 ──
+    function renderSTModeList(listContainer) {
+        syncFromST(); // 確保抓到最新狀態
+        let curId = CURRENT_PERSONA.id || CURRENT_PERSONA.name; 
+
+        // 嘗試從 DOM 輔助獲取精確 ID
+        const select = doc.getElementById('user_persona');
+        if (select && select.value) curId = select.value;
+
+        let listToRender = [];
+        if (ST_PERSONAS_LIST.length > 0) {
+            listToRender = ST_PERSONAS_LIST.map(p => ({
+                id: p.id || p.avatar || p.name, 
+                name: p.name,
+                desc: p.description || p.desc || '',
+                avatar: p.avatar_url || p.avatar || '',
+                active: (p.id === curId || p.avatar === curId || p.name === curId)
+            }));
+        } else if (select) {
+            listToRender = Array.from(select.options).map(opt => ({
+                id: opt.value,
+                name: opt.text,
+                desc: '',
+                avatar: '',
+                active: opt.value === curId
+            }));
+        }
+
+        if (listToRender.length === 0) {
+            listContainer.innerHTML = `<div style="text-align:center; padding:40px; color:rgba(26,28,40,0.72);">無法讀取酒館人設列表。</div>`;
+            return;
+        }
+
+        listContainer.innerHTML = `
+            <div class="ps-sync-info">
+                <i class="fa-solid fa-link"></i> <b>已與 ST 酒館人設同步</b><br>
+                <span class="ps-sync-sub">(若需新增或編輯，請使用右側原生面板)</span>
+            </div>
+        ` + listToRender.map(p => `
+            <div class="ps-card ${p.active ? 'active' : ''}" data-id="${esc(p.id)}" data-name="${esc(p.name)}">
+                ${p.avatar ? `<img class="ps-avatar" src="${esc(p.avatar)}" onerror="this.src='https://files.catbox.moe/l5hl69.png'" />` : 
+                `<div class="ps-avatar" style="display:flex;align-items:center;justify-content:center;font-size:24px;color:#1A1C28;"><i class="fa-solid fa-user"></i></div>`}
+                <div class="ps-info">
+                    <div class="ps-name">
+                        ${esc(p.name)} 
+                        ${p.active ? '<i class="fa-solid fa-circle-check" style="color:#1A1C28; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(26,28,40,0.30);" title="當前使用中"></i>' : ''}
+                    </div>
+                    <div class="ps-desc">${esc(p.desc) || '<i style="opacity:0.6">ST 原生設定檔</i>'}</div>
+                </div>
+            </div>
+        `).join('');
+
+        // 🔥 點擊觸發還原版的 switchPersona
+        listContainer.querySelectorAll('.ps-card').forEach(el => {
+            el.addEventListener('click', () => {
+                const targetId = el.dataset.id;
+                const targetName = el.dataset.name;
+                
+                API.switchPersona(targetId, targetName);
+
+                // 樂觀更新畫面 UI
+                listContainer.querySelectorAll('.ps-card').forEach(card => card.classList.remove('active'));
+                listContainer.querySelectorAll('.fa-circle-check').forEach(icon => icon.remove());
+                
+                el.classList.add('active');
+                const nameEl = el.querySelector('.ps-name');
+                if (nameEl && !nameEl.querySelector('.fa-circle-check')) {
+                    nameEl.insertAdjacentHTML('beforeend', ' <i class="fa-solid fa-circle-check" style="color:#1A1C28; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(26,28,40,0.30);" title="當前使用中"></i>');
+                }
+            });
+        });
+    }
+
+    function refreshList() {
+        const listContainer = _rootContainer.querySelector('#ps-list-container');
+        
+        if (!isStandalone()) {
+            renderSTModeList(listContainer);
+            return;
+        }
+
+        // ── 獨立模式 ──
+        const list = loadLocalPersonas();
+        const curId = loadCurrentId();
+
+        listContainer.innerHTML = list.map(p => `
+            <div class="ps-card ${p.id === curId ? 'active' : ''}" data-id="${esc(p.id)}">
+                <img class="ps-avatar" src="${esc(p.avatar || 'https://files.catbox.moe/l5hl69.png')}" onerror="this.src='https://files.catbox.moe/l5hl69.png'" />
+                <div class="ps-info">
+                    <div class="ps-name">
+                        ${esc(p.name)} 
+                        ${p.id === curId ? '<i class="fa-solid fa-circle-check" style="color:#1A1C28; margin-left:6px; font-size:14px; text-shadow:0 0 5px rgba(26,28,40,0.30);" title="當前使用中"></i>' : ''}
+                    </div>
+                    <div class="ps-desc">${esc(p.desc) || '<i style="opacity:0.6">點擊編輯新增設定...</i>'}</div>
+                </div>
+                <div class="ps-actions">
+                    <button class="ps-btn-edit" data-id="${esc(p.id)}" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                    ${list.length > 1 ? `<button class="ps-btn-del" data-id="${esc(p.id)}" title="刪除"><i class="fa-solid fa-trash"></i></button>` : ''}
+                </div>
+            </div>
+        `).join('') + `
+            <button class="ps-add-btn" id="ps-btn-add"><i class="fa-solid fa-plus"></i> 創建新人設</button>
+        `;
+
+        listContainer.querySelectorAll('.ps-card').forEach(el => {
+            el.addEventListener('click', (e) => {
+                if(e.target.closest('button')) return; 
+                API.switchPersona(el.dataset.id, null); 
+            });
+        });
+
+        listContainer.querySelectorAll('.ps-btn-edit').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openEditModal(el.dataset.id);
+            });
+        });
+
+        listContainer.querySelectorAll('.ps-btn-del').forEach(el => {
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                deletePersona(el.dataset.id);
+            });
+        });
+
+        listContainer.querySelector('#ps-btn-add').addEventListener('click', () => {
+            openEditModal(null);
+        });
+    }
+
+    async function deletePersona(id) {
+        if (!await AUI.confirm('確定要刪除這個設定嗎？')) return;
+        let list = loadLocalPersonas();
+        list = list.filter(x => x.id !== id);
+        if (!saveLocalPersonas(list)) return;   // 沒刪成（已經跳過提示了），清單照舊
+        if (loadCurrentId() === id && list.length > 0) {
+            API.switchPersona(list[0].id, null);
+        } else {
+            refreshList();
+        }
+    }
+
+    let _editingId = null;
+    let _editAvatar = '';   // 頭像：網址，或本地上傳壓過的 data URL（不塞進網址那格，免得一大串編碼露在畫面上）
+    let _editSnap = '';     // 打開時的樣子：返回時比對，有改過沒存就先問
+
+    function _editNow() {
+        return JSON.stringify({ n: _q('#ps-f-name').value.trim(), a: _editAvatar, d: _q('#ps-f-desc').value.trim() });
+    }
+
+    function _paintAvatar() {
+        const img = _q('#ps-av-preview');
+        const input = _q('#ps-f-avatar');
+        const note = _q('#ps-av-note');
+        const isLocal = /^data:/.test(_editAvatar);
+        if (input && doc.activeElement !== input) input.value = isLocal ? '' : _editAvatar;
+        if (note) note.hidden = !isLocal;
+        if (img) {
+            if (_editAvatar) { img.hidden = false; img.src = _editAvatar; }
+            else { img.hidden = true; img.removeAttribute('src'); }
+        }
+    }
+
+    function openEditModal(id) {
+        if (!_editEl) return;
+        const modal = _editEl;
+        const titleEl = _q('#ps-modal-title');
+        const fName = _q('#ps-f-name');
+        const fAvatar = _q('#ps-f-avatar');
+        const fDesc = _q('#ps-f-desc');
+        const img = _q('#ps-av-preview');
+
+        _editingId = id;
+
+        if (id) {
+            const list = loadLocalPersonas();
+            const p = list.find(x => x.id === id);
+            titleEl.textContent = '編輯設定';
+            fName.value = p?.name || '';
+            _editAvatar = p?.avatar || '';
+            fDesc.value = p?.desc || '';
+        } else {
+            titleEl.textContent = '新增設定';
+            fName.value = '';
+            _editAvatar = '';
+            fDesc.value = '';
+        }
+        fAvatar.value = '';
+        _paintAvatar();
+        _editSnap = _editNow();
+
+        fAvatar.oninput = () => { _editAvatar = fAvatar.value.trim(); _paintAvatar(); };
+        if (img) img.onerror = () => { img.hidden = true; };
+        _q('#ps-av-upload').onclick = async () => {
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            if (!PI || !PI.pickPhoto) { AUI.alert('這裡還不能上傳圖片'); return; }
+            try {
+                // 壓到長邊 400：人設清單存在瀏覽器本機，原圖塞進去很快就滿
+                const url = await PI.pickPhoto({ maxSide: 400, quality: 0.85 });
+                if (url) { _editAvatar = url; _paintAvatar(); }
+            } catch (e) { AUI.alert('圖片讀不進來：' + (e.message || e)); }
+        };
+        _q('#ps-av-clear').onclick = () => { _editAvatar = ''; fAvatar.value = ''; _paintAvatar(); };
+        _q('#ps-btn-save').onclick = saveModalData;
+        _q('#ps-btn-cancel').onclick = async () => {
+            if (_editNow() !== _editSnap && !(await AUI.confirm('還沒儲存，確定要離開嗎？'))) return;
+            closeEditModal();
+        };
+
+        const host = _editHost();
+        modal.classList.toggle('ps-edit-fixed', !host);
+        (host || doc.body).appendChild(modal);
+        modal.classList.add('show');
+    }
+
+    function closeEditModal() {
+        if (!_editEl) return;
+        _editEl.classList.remove('show');
+        const home = _rootContainer && _rootContainer.querySelector('.ps-app');
+        if (home && _editEl.parentNode !== home) home.appendChild(_editEl);   // 搬回人設 app 裡
+        _editingId = null;
+    }
+
+    function saveModalData() {
+        const fName = _q('#ps-f-name').value.trim();
+        const fAvatar = _editAvatar;
+        const fDesc = _q('#ps-f-desc').value.trim();
+
+        if (!fName) { AUI.alert('請至少輸入名稱！'); return; }
+
+        let list = loadLocalPersonas();
+
+        if (_editingId) {
+            const idx = list.findIndex(x => x.id === _editingId);
+            if (idx > -1) {
+                list[idx].name = fName;
+                list[idx].avatar = fAvatar;
+                list[idx].desc = fDesc;
+                if (loadCurrentId() === _editingId) {
+                    CURRENT_PERSONA = { ...list[idx] };
+                }
+            }
+        } else {
+            const newP = {
+                id: 'p_' + Date.now(),
+                name: fName,
+                avatar: fAvatar,
+                desc: fDesc
+            };
+            list.push(newP);
+            if (list.length === 1) {
+                saveCurrentId(newP.id);
+                CURRENT_PERSONA = { ...newP };
+            }
+        }
+
+        if (!saveLocalPersonas(list)) return;   // 沒存下來（頭像是本機上傳的話最容易撐爆）：編輯頁留著，打的字還在
+        closeEditModal();
+        refreshList();
+        // 大廳右上角的人設頭像跟著換（它只在下拉窗關掉時才自己重讀）
+        try { const VT = win.VoidTerminal || window.VoidTerminal; if (VT && VT._refreshPersonaAvatar) VT._refreshPersonaAvatar(); } catch (e) {}
+        win.eventEmit && win.eventEmit('CHAT_CHANGED');
+    }
+
+    function esc(s) {
+        return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    initCurrent();
+
+    const API = {
+        launch: function(container) {
+            if (!container) return; 
+            renderApp(container);
+            // 啟動時也啟動輪詢同步，確保不會掉速 (還原 V5.0 穩定度)
+            if (!isStandalone() && !win._os_persona_sync_interval) {
+                win._os_persona_sync_interval = setInterval(() => { if (!document.hidden) syncFromST(); }, 1500);
+            }
+        },
+        launchApp: function(container) { API.launch(container); },
+        // 大廳右上角的下拉窗只建一次、之後只是收起打開：打開時叫這支，停在世界書分頁就重讀一次（換過卡、換過聊天都要是現在的）
+        onShow: function() { if (_rootContainer && _tab === 'wb') _showTab('wb'); },
+        
+        // 🔥 完全還原 V5.0 的切換邏輯
+        switchPersona: function(personaId, personaName) {
+            if (isStandalone()) {
+                if (!saveCurrentId(personaId)) return;   // 沒存下來就別切（清單畫的是存著的那個）
+                const list = loadLocalPersonas();
+                const found = list.find(p => p.id === personaId);
+                if (found) CURRENT_PERSONA = { ...found };
+                refreshList();
+                win.eventEmit && win.eventEmit('CHAT_CHANGED');
+            } else {
+                if (personaName) CURRENT_PERSONA.name = personaName;
+                
+                // 【核心復原】：發送通訊協議給 bridge 處理切換
+                win.postMessage({ type: 'REQUEST_SWITCH_USER_PERSONA', source: 'PHONE_OS', personaId }, '*');
+                
+                // 短期內密集更新本地快取，確保資料同步
+                let count = 0;
+                const s = setInterval(() => { 
+                    syncFromST(); 
+                    if (++count > 10) clearInterval(s); 
+                }, 300);
+                
+                win.eventEmit && win.eventEmit('CHAT_CHANGED');
+            }
+        },
+        
+        getCurrent: function() {
+            initCurrent(); 
+            return { name: CURRENT_PERSONA.name, id: CURRENT_PERSONA.id, desc: CURRENT_PERSONA.desc, description: CURRENT_PERSONA.desc, avatar: CURRENT_PERSONA.avatar };
+        },
+        getInfo: function() { return this.getCurrent(); },
+        getName: function() { return this.getCurrent().name || 'User'; },
+        getDesc: function() { return this.getCurrent().desc || ''; },
+
+        // 對外開放整份人設清單（給「我的角色」匯入用）：回 [{id,name,desc,avatar}]
+        getList: function() {
+            if (isStandalone()) {
+                return loadLocalPersonas().map(p => ({ id: p.id, name: p.name, desc: p.desc || '', avatar: p.avatar || '' }));
+            }
+            try { win.postMessage({ type: 'REQUEST_USER_PERSONA_LIST', source: 'PHONE_OS' }, '*'); } catch(e) {}
+            let out = [];
+            if (ST_PERSONAS_LIST.length > 0) {
+                out = ST_PERSONAS_LIST.map(p => ({ id: p.id || p.avatar || p.name, name: p.name, desc: p.description || p.desc || '', avatar: p.avatar_url || p.avatar || '' }));
+            }
+            if (!out.length) {
+                const pu = win.power_user || (win.parent && win.parent.power_user);
+                if (pu && pu.personas) {
+                    out = Object.keys(pu.personas).map(key => {
+                        const v = pu.personas[key];
+                        const nm = (typeof v === 'string') ? v : (v && v.name) || key;
+                        let desc = '';
+                        try { desc = (pu.persona_descriptions && pu.persona_descriptions[key] && pu.persona_descriptions[key].description) || (v && v.description) || ''; } catch(e) {}
+                        return { id: key, name: nm, desc: String(desc).replace(/<[^>]+>/g, '').trim(), avatar: '/thumbnail?type=persona&file=' + encodeURIComponent(key) };
+                    });
+                }
+            }
+            if (!out.length) {
+                const select = doc.getElementById('user_persona');
+                if (select) out = Array.from(select.options).map(opt => ({ id: opt.value, name: opt.text, desc: '', avatar: '' }));
+            }
+            return out;
+        },
+
+        // 依 id 取單一人設（給大廳 guest NPC：用「那輪玩的 persona」而非當前）。找不到回 null。
+        getById: function(id) {
+            if (!id) return null;
+            try {
+                const cur = this.getCurrent();
+                if (cur && cur.id === id) return cur;   // 當前就是它 → 直接回（最快、含 desc）
+            } catch (e) {}
+            try {
+                const found = (this.getList() || []).find(p => p && p.id === id);
+                if (found) return found;
+            } catch (e) {}
+            return null;
+        }
+    };
+
+    win.OS_PERSONA = API;
+    win.OS_USER = API;
+    win.WX_USER = API; 
+
+})();

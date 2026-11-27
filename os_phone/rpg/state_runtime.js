@@ -1,0 +1,3354 @@
+// ----------------------------------------------------------------
+// [檔案] state_runtime.js (V1 - Stage 2：副模型抽 + patch + injectPrompts)
+// 路徑：os_phone/rpg/state_runtime.js
+// 職責：
+// 1. 監聽 GENERATION_ENDED → 副模型按 schema 抽劇情狀態變化 → 釘 <!--avs:id--> 進正文 → 寫 patches → 重算 current
+//    （2026-08-01 身分制：patch 認正文裡的 id，不認樓號；刪使用者指令／刪中間樓不再誤回滾）
+// 2. 監聽 GENERATION_STARTED → injectPrompts 把 current state 注入下一輪主模型 system prompt
+// 3. 監聽 MESSAGE_DELETED / SWIPED → 砍對應 patch → 重算 current（編輯 UPDATED/EDITED 絕不觸發回朔）
+// 4. 對外：setEnabled / forceExtract / clearPatches
+// ----------------------------------------------------------------
+(function() {
+    console.log('🛰️ [State Runtime] V1 載入');
+    const win = window.parent || window;
+
+    const CONFIG = {
+        debounceMs: 1500,           // GENERATION_ENDED 後 N 毫秒才開始抽
+        timeoutMs: 60000,
+        retryCount: 2,
+        recentMsgs: 4,              // 抽取時參考最近幾條訊息
+        maxPatches: 80,             // patches 上限，超過砍最舊
+        injectId: 'aurelia_state_brief',
+        rulesInjectId: 'aurelia_avs_rules',
+        avatarInjectId: 'aurelia_avatar_reminder',
+        achvInjectId: 'aurelia_achv_reminder',
+        storageKey: 'aurelia_state_runtime_enabled'
+    };
+
+    let _debounceTimer = null;
+    let _repairDebounce = null;     // 開頭設置(Bg/BGM)補救的 debounce
+    let _selfEditing = false;       // 開頭補救正在改寫訊息 → 擋 onMessageInvalidated 誤砍本則剛存的 patch
+    let _running = false;           // 防止並發抽取
+    let _missedRun = null;          // 抽取還在等副模型時又來了一次（下一輪寫完了）→ 記下來，這通跑完補抽那一樓
+    let _genStopped = false;        // 本通生成是否被「手動停止」(GENERATION_STOPPED)→ 全副模型跳過，別拿半截正文白燒
+    let _lastInjectUninject = null; // 上次 state inject 的 uninject 函式
+    let _lastRulesUninject = null;  // 上次 rules inject 的 uninject 函式
+    let _lastAvatarUninject = null; // 上次「缺頭像提醒」inject 的 uninject 函式
+    let _lastAchvUninject = null;   // 上次「成就乾旱提醒」inject 的 uninject 函式
+
+    // --- 工具 ---
+    // 把 ctx.chatId 或 chat_file_name 清乾淨：剝路徑、砍 .jsonl/.json
+    // 統一格式才能跟 CHAT_DELETED 事件 payload 對齊
+    function normalizeChatId(raw) {
+        if (!raw) return '';
+        let s = String(raw).split(/[\\/]/).pop() || '';
+        s = s.replace(/\.jsonl?$/i, '');
+        return s.trim();
+    }
+
+    // 🚨 分艙鍵一律走 adapter（酒館＝chatId、PWA＝storyId）。
+    //    這裡以前只認 SillyTavern.getContext().chatId → PWA 一律空字串，而全檔 14 個呼叫點都吃它：
+    //    最明顯的是 getActiveSchema 用它濾變數包（p.chatId === 當前），PWA 生好的包 chatId 是 storyId、
+    //    比不中 → 面板永遠停在「這個世界還沒開始追蹤狀態」，AI 明明已經生完欄位。
+    let _pwaWired = false;   // VN_CHAPTER_SAVED 只掛一次（init 會被 setTimeout 重呼叫）
+
+    function _isStandalone() {
+        try { return !!(win.OS_API?.isStandalone?.()); } catch (e) { return false; }
+    }
+
+    // 「這輪有沒有身分」：酒館的身分是樓號(數字,-1 代表沒有)，PWA 是章節 id(字串)。
+    //   別再寫 lastId >= 0 —— 字串跟數字比大小永遠是 false,PWA 會整條靜默跳過。
+    function _hasId(v) {
+        if (typeof v === 'number') return v >= 0;
+        return !!(v && String(v).trim());
+    }
+
+    function getChatId() {
+        try {
+            const id = win.OS_AVS_ADAPTER?.getCurrentChatId?.();
+            if (id) return id;
+            const ctx = win.SillyTavern?.getContext?.();
+            return normalizeChatId(ctx?.chatId);
+        } catch(e) { return ''; }
+    }
+
+    function isEnabled() {
+        return localStorage.getItem(CONFIG.storageKey) === '1';
+    }
+
+    function setEnabled(on) {
+        win.AUI.lsSet(CONFIG.storageKey, on ? '1' : '0', '即時記錄開關');
+        if (!on) {
+            try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
+        }
+        try { win.eventEmit?.('AURELIA_STATE_RUNTIME_TOGGLED', { enabled: on }); } catch(e) {}
+    }
+
+    function showToast(msg, type = 'info') {
+        if (AUI.toastr) AUI.toastr[type](msg);
+        else console.log('[State Runtime Toast]', msg);
+    }
+
+    function extractJSON(text) {
+        if (!text) return null;
+        try { return JSON.parse(text); } catch(e) {}
+        const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fence) { try { return JSON.parse(fence[1]); } catch(e) {} }
+        const brace = text.match(/\{[\s\S]*\}/);
+        if (brace) { try { return JSON.parse(brace[0]); } catch(e) {} }
+        return null;
+    }
+
+    // --- patch 累積：把 patches 按 msgId 由小到大套到 current ---
+    // 把點記法 key（角色.卡蜜拉.HP）展開寫進巢狀物件，與 AVS 引擎的 <vars> 點記法結構一致
+    function _setDeep(obj, path, val) {
+        const keys = path.split('.');
+        let cur = obj;
+        for (let i = 0; i < keys.length - 1; i++) {
+            const k = keys[i];
+            if (!cur[k] || typeof cur[k] !== 'object') cur[k] = {};
+            cur = cur[k];
+        }
+        cur[keys[keys.length - 1]] = val;
+    }
+
+    // 深合併 src 進 dst：巢狀物件遞迴合併、純值取 src。給 object 型欄位 patch 用，
+    // 避免「AI 一次輸出整個物件就把整碗覆蓋掉、舊角色全消失」(時而一人時而三人的根因)。
+    function _deepMergeObj(dst, src) {
+        if (!src || typeof src !== 'object' || Array.isArray(src)) return src;
+        if (!dst || typeof dst !== 'object' || Array.isArray(dst)) dst = {};
+        for (const k of Object.keys(src)) {
+            const sv = src[k];
+            dst[k] = (sv && typeof sv === 'object' && !Array.isArray(sv)) ? _deepMergeObj(dst[k], sv) : sv;
+        }
+        return dst;
+    }
+
+    // 刪除哨兵：patch 值等於它 = 把這個 key 整個刪掉（死亡/永久退場實體用）。
+    // 刪除走 patch 而非直接改 current，重播/swipe 回滾/trim 收斂的語義才跟 updates 一致。
+    const DEL_SENTINEL = '__AVS_DEL__';
+
+    // 按點記法路徑刪除節點；路徑不存在就靜默跳過（重播舊 patch 時目標可能早已不在）
+    function _deleteDeep(obj, path) {
+        const keys = path.split('.');
+        let cur = obj;
+        for (let i = 0; i < keys.length - 1; i++) {
+            cur = cur[keys[i]];
+            if (!cur || typeof cur !== 'object') return;
+        }
+        if (cur && typeof cur === 'object') delete cur[keys[keys.length - 1]];
+    }
+
+    // 按點記法讀當前值（不建中間節點）；路徑不存在回 undefined
+    function _getDeep(obj, path) {
+        let cur = obj;
+        for (const k of path.split('.')) {
+            if (!cur || typeof cur !== 'object') return undefined;
+            cur = cur[k];
+        }
+        return cur;
+    }
+
+    // 🧮 增減量計算機：值寫成 "+=3" / "-=2" → 腳本拿當前值自己加減（AI 只判斷幅度、不心算新值——
+    //   小模型算術不穩是絕對值寫錯的主因；相對量在 patch 重播/砍樓回滾下語義也更正確）。
+    //   當前值不是數字（缺欄/待定）就從 0 起算；非增減量格式原樣放行。
+    const DELTA_RE = /^([+-])=\s*(-?\d+(?:\.\d+)?)$/;
+    //   容錯版：AI 常忘了等號("+25")、帶單位("+=25 金幣")、或吐全形("＋＝25")。
+    //   這些原本都判定成「不是 delta」→ 整串字串被寫進數字欄位 → 下一次 delta 拿它當基底 = NaN
+    //   → 從 0 重新起算＝錢憑空歸零（實測 200 開局金幣就是這樣消失的：-1 再 +25 剛好剩 24）。
+    const DELTA_LOOSE_RE = /^([+-])=?\s*(\d+(?:\.\d+)?)\s*[^\d]{0,6}$/;
+    function _resolveDelta(cur, k, v) {
+        if (typeof v !== 'string') return v;
+        if (v === DEL_SENTINEL) return v;                     // 刪除哨兵照原樣交給 _applyPatchInto
+        const raw = v.trim()
+            .replace(/[＋]/g, '+').replace(/[－−—]/g, '-').replace(/[＝]/g, '=');   // 全形正規化
+        const hasField = (k.includes('.') ? _getDeep(cur, k) : cur[k]);
+        const base = Number(hasField);
+
+        let m = raw.match(DELTA_RE);
+        if (!m) {
+            const loose = raw.match(DELTA_LOOSE_RE);
+            if (loose) {
+                m = loose;
+                console.warn(`🧮 [AVS] 「${k}」的增減量寫成「${v}」（正確格式是 "+=25"）→ 已按 ${loose[1]}${loose[2]} 計算。不修的話這串會整個被寫進數字欄位，下一次加減就從 0 重算、餘額憑空歸零。`);
+            }
+        }
+        if (!m) {
+            // 不是增減量：數字欄位卻收到一串沒辦法當數字的東西 → 拒收、保住舊值。
+            //   （直接寫絕對數字如 "200" 仍照舊放行，那是初始化/劇情明定數值的正當用法）
+            if (hasField !== undefined && hasField !== null && !isNaN(base) && raw !== '' && isNaN(Number(raw))) {
+                console.warn(`🧮 [AVS] 「${k}」目前是數字 ${base}，但這輪想寫成「${v}」→ 已拒收、保留原值。數字欄位被寫成字串的話，之後的加減會從 0 重算＝整筆歸零。`);
+                return base;
+            }
+            return v;
+        }
+        const d = Number(m[2]) * (m[1] === '-' ? -1 : 1);
+        if (hasField !== undefined && hasField !== null && isNaN(base)) {
+            console.warn(`🧮 [AVS] 「${k}」要加減 ${m[1]}${m[2]}，但它現在的值「${hasField}」不是數字 → 只能從 0 起算。上一輪多半把非數字寫進了這個欄位。`);
+        }
+        return Math.round(((isNaN(base) ? 0 : base) + d) * 100) / 100;   // 修掉浮點尾巴
+    }
+
+    // 把單筆 patch（key→value）套進 cur：點記法→巢狀；物件→深合併；純值→取新；刪除哨兵→整節點移除；"+=n"→增減量
+    // 🀄 簡繁同名：副模型常把名字寫成繁體、甚至半簡半繁（张伟 → 张偉），
+    //   逐字比對會當成新角色，多長出一張只有一兩格的卡。寫入前每一層先找「折成簡體後一樣」的既有鑰匙，
+    //   有就寫回那一個（沿用最早出現的寫法＝正文、立繪用的那個名字）。重算整條時同一條路也會把舊的分身併回去。
+    function _foldKey(obj, k) {
+        if (!obj || typeof obj !== 'object' || Object.prototype.hasOwnProperty.call(obj, k)) return k;
+        const Z = win.OS_ZH;
+        if (!Z || typeof Z.key !== 'function') return k;
+        const fk = Z.key(k);
+        if (!fk) return k;
+        for (const ek of Object.keys(obj)) if (Z.key(ek) === fk) return ek;
+        return k;
+    }
+    function _foldPath(obj, path) {
+        const keys = String(path).split('.');
+        let cur = obj;
+        for (let i = 0; i < keys.length; i++) {
+            keys[i] = _foldKey(cur, keys[i]);
+            cur = (cur && typeof cur === 'object') ? cur[keys[i]] : undefined;
+        }
+        return keys.join('.');
+    }
+    function _foldObjKeys(dst, src) {
+        if (!src || typeof src !== 'object' || Array.isArray(src)) return src;
+        const out = {};
+        for (const k of Object.keys(src)) {
+            const fk = _foldKey(dst, k);
+            const sv = src[k];
+            out[fk] = (sv && typeof sv === 'object' && !Array.isArray(sv)) ? _foldObjKeys(dst && typeof dst === 'object' ? dst[fk] : undefined, sv) : sv;
+        }
+        return out;
+    }
+
+    // 已經長出來的分身（改好之前寫進去的）：同一層裡折成簡體一樣的兩個角色併成一個。
+    //   留先出現的那個名字；分身是後來才長的，它身上的值比較新 → 蓋過去。
+    function _foldMergeDupes(state) {
+        const Z = win.OS_ZH;
+        if (!Z || typeof Z.key !== 'function' || !state || typeof state !== 'object') return 0;
+        let n = 0;
+        for (const ck of Object.keys(state)) {
+            const cont = state[ck];
+            if (!cont || typeof cont !== 'object' || Array.isArray(cont)) continue;
+            const first = {};
+            for (const ek of Object.keys(cont)) {
+                const ev = cont[ek];
+                if (!ev || typeof ev !== 'object' || Array.isArray(ev)) continue;
+                const fk = Z.key(ek);
+                if (!fk) continue;
+                if (!first[fk]) { first[fk] = ek; continue; }
+                const keep = first[fk];
+                cont[keep] = _deepMergeObj(cont[keep], _foldObjKeys(cont[keep], ev));
+                delete cont[ek]; n++;
+                console.log('[State Runtime] 簡繁同名合併：「' + ek + '」併入「' + keep + '」(' + ck + ')');
+            }
+        }
+        return n;
+    }
+
+    function _applyPatchInto(cur, p) {
+        if (!p || typeof p !== 'object') return;
+        for (const [k0, rawV0] of Object.entries(p)) {
+            const k = _foldPath(cur, k0);
+            const rawV = (rawV0 && typeof rawV0 === 'object' && !Array.isArray(rawV0)) ? _foldObjKeys(cur[k], rawV0) : rawV0;
+            const v = _resolveDelta(cur, k, rawV);
+            if (v === DEL_SENTINEL) _deleteDeep(cur, k);                       // 退場刪除 → 節點整個移除
+            else if (k.includes('.')) _setDeep(cur, k, v);                     // 點記法 → 巢狀（動態實體用，如 角色.路人甲.HP）
+            else if (v && typeof v === 'object' && !Array.isArray(v)) cur[k] = _deepMergeObj(cur[k], v);  // 物件欄位 → 深合併(別整碗覆蓋)
+            else cur[k] = v;                                                   // 數字/字串/陣列 → 取新值
+        }
+    }
+
+    // ══ patch 身分制（2026-08-01 整改）══════════════════════════════════
+    // 舊制以「樓號」當 patch 的鍵、另存內容簽名對帳 → 刪掉中間任何一則（含使用者的純指令）
+    // 都會讓後面整批位移、簽名全部對不上，於是 AI 正文明明還在、狀態卻被回滾。
+    // 新制照 VN_SceneInsert 的原則：**識別碼住在正文裡**。
+    //   • 抽取完成 → 產一個 id，寫進該則正文的 <!--avs:id--> 標記，patch 記成 { id, updates }
+    //   • patches 是「時序陣列」，順序＝陣列順序，完全不碰樓號
+    //   • 對帳＝掃全檔收集現存 id，patch 的 id 還在就活、不在就死
+    //   ⇒ 刪使用者指令／刪中間樓／樓號漂移一律無感；改寫正文只要沒刪標記也不誤殺。
+    const AVS_TAG_RE = /<!--avs:([a-z0-9]+)-->/gi;
+    function _newAvsId() {
+        return Date.now().toString(36) + Math.floor(Math.random() * 46656).toString(36).padStart(3, '0');
+    }
+    function _idsInText(text) {
+        const out = [];
+        String(text || '').replace(AVS_TAG_RE, (_m, id) => { out.push(id); return _m; });
+        return out;
+    }
+    // patches 一律是 [{id, updates}]；非陣列＝還沒遷移完的殘骸，當空看待（遷移函式負責補）
+    function _patchList(patches) { return Array.isArray(patches) ? patches.filter(p => p && p.id) : []; }
+
+    // 從 base 快照起算，依陣列順序重播 patches → current。
+    // base 是「被 trim 掉的舊 patch 收斂成的底」，確保穩定屬性(形象/身分等)不會因 patch 被砍而消失。
+    function recomputeCurrent(patches, base) {
+        const cur = base ? JSON.parse(JSON.stringify(base)) : {};
+        for (const p of _patchList(patches)) _applyPatchInto(cur, p.updates);
+        return cur;
+    }
+
+    // patches 超過上限時：把最舊的幾筆「疊進 base 快照」再刪除（資料不流失、只是收斂成底）。
+    // 回傳 { patches, base }。
+    function trimPatches(patches, base) {
+        const list = _patchList(patches);
+        const newBase = base ? JSON.parse(JSON.stringify(base)) : {};
+        if (list.length <= CONFIG.maxPatches) return { patches: list, base: newBase };
+        const keep = list.length - CONFIG.maxPatches;
+        list.slice(0, keep).forEach(p => _applyPatchInto(newBase, p.updates));
+        return { patches: list.slice(keep), base: newBase };
+    }
+
+    // --- 蒐集最近幾條訊息給副模型 ---
+    // PWA 的「最近幾則」＝這條故事最近幾章(舊→新)。
+    async function _gatherRecentChapters() {
+        const empty = { text: '', lastId: -1, lastContent: '' };
+        try {
+            if (!win.OS_DB?.getAllVnChapters) return empty;
+            const sid = getChatId();
+            const all = (await win.OS_DB.getAllVnChapters()) || [];
+            const mine = all.filter(c => c && c.storyId === sid).sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            if (!mine.length) return empty;
+            const win_ = mine.slice(-CONFIG.recentMsgs);
+            const last = win_[win_.length - 1];
+            const lastContent = String(last.content || '').slice(0, 4000);
+            // 標「哪一章才是本輪」——同酒館：滑動視窗會讓舊章重複出現,不標的話同一筆交易會被連扣好幾輪
+            const text = win_.map((ch, i) => {
+                const isCurrent = i === win_.length - 1;
+                const raw = String(ch.content || '');
+                const t = isCurrent
+                    ? (raw.length <= 6000 ? raw : raw.slice(0, 3000) + '\n……（中段省略）……\n' + raw.slice(-3000))
+                    : raw.slice(0, 1500);
+                const q = String(ch.request || '').trim();
+                const head = isCurrent ? '〔本輪新內容〕' : '〔前情參照〕';
+                return head + (q ? '\n[USER] ' + q.slice(0, 600) : '') + '\n[AI] ' + t;
+            }).join('\n\n');
+            return { text, lastId: String(last.id), lastContent };
+        } catch (e) {
+            console.warn('🛰️ [State Runtime] 讀章節失敗:', e);
+            return empty;
+        }
+    }
+
+    async function gatherRecentMessages() {
+        // 🧩 PWA：正文不是聊天樓而是 OS_DB 章節。身分＝章節 id(字串),不是樓號。
+        //    其餘一切(標本輪、砍中段不砍尾、給副模型的格式)照抄酒館那條,兩邊吃到的 prompt 形狀一樣。
+        if (_isStandalone()) return await _gatherRecentChapters();
+        try {
+            if (!win.TavernHelper?.getChatMessages) return { text: '', lastId: -1 };
+            const last = await win.TavernHelper.getChatMessages(-1);
+            if (!last || !last[0]) return { text: '', lastId: -1 };
+            const lastId = last[0].message_id ?? last[0].id ?? 0;
+            // 最後一則完整原文（不切片）→ 給場景插圖切段編號用（程式自己對位，不靠 AI 逐字抄）
+            const lastContent = String(last[0].message || last[0].mes || '').slice(0, 4000);
+            const start = Math.max(0, lastId - CONFIG.recentMsgs + 1);
+            const msgs = await win.TavernHelper.getChatMessages(`${start}-${lastId}`);
+            if (!msgs || !msgs.length) return { text: '', lastId, lastContent };
+            // 🏷️ 標出「哪段才是本輪」：視窗是滑動的、舊訊息會重複出現——沒有標記，小模型分不出
+            //   哪些交易/變化已經入過帳，金錢會被同一筆消費連扣好幾輪（帳本越扣越負的真兇）。
+            //   最後兩則(玩家輸入+AI回覆)＝本輪要抽的；更早的＝僅供理解上下文。
+            const text = msgs.map((m, i) => {
+                const role = m.is_user ? 'USER' : (m.name || 'AI');
+                const isCurrent = i >= msgs.length - 2;
+                const raw = String(m.message || m.mes || '');
+                // 〔本輪新內容〕是唯一的記帳來源，不能砍尾——交易/結算幾乎都寫在場景結尾，
+                // 一律 slice(0,1500) 砍尾＝副模型「劇情沒寫價格」、錢包長期對不準的元兇。
+                // 超長時保頭保尾、犧牲中段；前情參照僅供理解，維持 1500 省 token。
+                const t = isCurrent
+                    ? (raw.length <= 6000 ? raw : raw.slice(0, 3000) + '\n……（中段省略）……\n' + raw.slice(-3000))
+                    : raw.slice(0, 1500);
+                const tag = isCurrent ? '〔本輪新內容〕' : '〔前情參照·已入帳〕';
+                return `${tag}[${role}] ${t}`;
+            }).join('\n\n');
+            return { text, lastId, lastContent };
+        } catch(e) {
+            console.warn('[State Runtime] 撈訊息失敗:', e);
+            return { text: '', lastId: -1 };
+        }
+    }
+
+    // --- 副模型呼叫 ---
+    let _lastRawText = '';      // 最近一次副模型原始輸出(診斷複製用，含解析失敗的也存)
+    let _lastExtract = null;    // 最近一次抽取結果(給資訊中心狀態面板顯示/複製)
+
+    function callSecondary(prompt) {
+        return new Promise((resolve, reject) => {
+            // 🎬 導演模式開著 → AVS＋記憶抽取升格走「主模型接口」（讓嚴謹的模型幫記 AVS）；
+            //    插圖開「獨立插圖」時留在副模型 flash。導演關著＝照舊全走副模型。
+            //    主接口通常掛較慢的模型 → 超時放寬到 2 倍。
+            const _viaMain = directorOn() && typeof win.OS_API?.chatMain === 'function';
+            if (!_viaMain && !win.OS_API?.chatSecondary) return reject(new Error('OS_API.chatSecondary 不可用'));
+            // 主接口通常掛「會思考」的模型＋破甲思考鏈 → 實測回覆 138~173 秒才到；
+            // 便車合併通(AVS+記憶+導演)更重、實測 304 秒才回 → ×4(240s) 會誤判超時把真回覆丟掉、再白燒一通重試
+            // → 放寬到 ×6(360s)。背景作業不擋畫面，慢沒關係。
+            const messages = [
+                // ⏱️ 分析硬性壓短：實測模型把「簡短分析」寫成 1.5 萬字草稿(逐字生成=主要耗時)、產完又整段被丟棄。
+                //    鎖 300 字內、每項一行、禁反覆重想/自我對話 → 直接砍輸出長度＝直接砍時間；核心校對保留。
+                { role: 'system', content: '你是嚴謹的劇情狀態抽取器。先做「極精簡」分析：出場角色/本輪變化/新角色/主角/校對，每項最多一行、全部合計不超過 300 字。嚴禁長篇逐步推理、嚴禁「等等我再想想」式反覆重想或自我對話、嚴禁重算同一數值。分析越短越好，抽取 JSON 才是重點。分析後立刻輸出一個 ```json 程式碼區塊。' },
+                { role: 'user', content: prompt }
+            ];
+            // 副模型也一樣（11-18 實測副模型一通要 90 秒）：以前 60 秒就當失敗 → 回覆晚到被丟、還自動再打一通，
+            //   兩通都丟就這輪狀態、記憶全沒記。改成最多等 5 分鐘；劇情不用等它（插圖閘門 60 秒先放，見 extractOnce）。
+            let done = false;
+            const timer = setTimeout(() => {
+                if (done) return; done = true;
+                reject(new Error(_viaMain ? '抽取(主接口)超時' : '副模型超時'));
+            }, _viaMain ? CONFIG.timeoutMs * 6 : Math.max(CONFIG.timeoutMs, 300000));
+            const dispatch = _viaMain
+                ? win.OS_API.chatMain.bind(win.OS_API)
+                : win.OS_API.chatSecondary.bind(win.OS_API);
+            dispatch(messages, null, (text) => {
+                if (done) return; done = true;
+                clearTimeout(timer);
+                resolve(text);
+            }, (err) => {
+                if (done) return; done = true;
+                clearTimeout(timer);
+                reject(err);
+            }, { task: 'extract' });
+        });
+    }
+
+    // 🙋 重試詢問彈窗（主接口慢模型逾時常常只是「慢出」不是真失敗 → 自動重打會多燒一整通＋造成重複觸發）。
+    //    非阻塞、單例、走 class 不寫 inline；回 Promise<bool>。主頁沒有 app 層的 stConfirm，故自建（仿 DEBUG.js 注一次 style）。
+    let _retryAsking = false;
+    function _askRetry(reason) {
+        return new Promise((resolve) => {
+            try {
+                const doc = win.document;
+                if (!doc || !doc.body || _retryAsking) { resolve(false); return; }
+                _retryAsking = true;
+                if (!doc.getElementById('avs-retry-style')) {
+                    const s = doc.createElement('style'); s.id = 'avs-retry-style';
+                    s.textContent = '.avs-retry-ov{position:fixed;inset:0;z-index:2147483646;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;background:rgba(0,0,0,.5)}.avs-retry-box{background:#1c1e2a;color:#eee;border:1px solid rgba(140,160,220,.35);border-radius:14px;padding:18px 18px 14px;max-width:320px;width:100%;box-shadow:0 10px 34px rgba(0,0,0,.55);font-size:14px;line-height:1.6}.avs-retry-msg{margin-bottom:14px;white-space:pre-wrap}.avs-retry-row{display:flex;gap:8px;justify-content:flex-end}.avs-retry-row button{padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;border:0}.avs-retry-no{background:transparent;border:1px solid rgba(200,200,220,.3);color:#cdd}.avs-retry-yes{background:#5a6bd8;color:#fff}';
+                    doc.head.appendChild(s);
+                }
+                const ov = doc.createElement('div'); ov.className = 'avs-retry-ov';
+                const box = doc.createElement('div'); box.className = 'avs-retry-box';
+                const m = doc.createElement('div'); m.className = 'avs-retry-msg';
+                m.textContent = (reason || '這一輪的狀態／記憶沒成功回來') + '\n可能只是比較慢、不一定是真的失敗。要重試一次嗎？';
+                const row = doc.createElement('div'); row.className = 'avs-retry-row';
+                const no = doc.createElement('button'); no.className = 'avs-retry-no'; no.textContent = '先不要';
+                const yes = doc.createElement('button'); yes.className = 'avs-retry-yes'; yes.textContent = '重試一次';
+                const close = (v) => { try { ov.remove(); } catch (e) {} _retryAsking = false; resolve(v); };
+                no.onclick = () => close(false);
+                yes.onclick = () => close(true);
+                ov.onclick = (e) => { if (e.target === ov) close(false); };
+                row.appendChild(no); row.appendChild(yes);
+                box.appendChild(m); box.appendChild(row); ov.appendChild(box);
+                doc.body.appendChild(ov);
+            } catch (e) { _retryAsking = false; resolve(false); }
+        });
+    }
+
+    async function runWithRetry(prompt) {
+        // 🙋 導演開＝走主接口慢模型：逾時/失敗常只是慢出、接口沒真掛 → 自動重打多燒一整通＋重複觸發(實測抓到的)。
+        //    改成第一次失敗之後「彈窗問過再打」；flash 副模型快又便宜 → 維持自動重試不打擾。
+        const _viaMain = directorOn() && typeof win.OS_API?.chatMain === 'function';
+        let lastErr;
+        for (let i = 0; i < CONFIG.retryCount; i++) {
+            // 副模型等了 5 分鐘都沒回＝那邊真的卡住了，再自動打一通只是多花一次錢；回錯、JSON 壞掉這種才自動重試
+            if (i > 0 && !_viaMain && lastErr && /逾時|超時|timeout/i.test(lastErr.message || '')) { console.log('🛰️ [State Runtime] 副模型等 5 分鐘沒回 → 不自動再打一通'); break; }
+            if (i > 0 && _viaMain) {
+                const _slow = lastErr && /逾時|超時|timeout/i.test(lastErr.message || '');
+                const _go = await _askRetry(_slow ? '這一輪的狀態／記憶等太久沒回來' : '這一輪的狀態／記憶沒成功回來');
+                if (!_go) { console.log('🛰️ [State Runtime] 使用者選擇不重試 → 本輪到此為止（不重複觸發接口）'); break; }
+            }
+            try {
+                const raw = await callSecondary(prompt);
+                _lastRawText = raw;   // 存原始輸出(成功/失敗都存，給診斷看格式有沒有亂)
+                const json = extractJSON(raw);
+                // 結合觸發後：updates(狀態) / memories(記憶) / scenes(插圖) 任一存在即算成功
+                //   🖼️ scenes 也要認：「只有插圖」那一路(沒有變數包、記憶走自己的路)回的就是純 scenes，
+                //      以前不認 → 被判定失敗、重試兩次後整通拋掉，插圖永遠不會派發。
+                if (json && (typeof json.updates === 'object' || Array.isArray(json.memories) || Array.isArray(json.scenes) || (json.plan_log && typeof json.plan_log === 'object') || (json.check && typeof json.check === 'object'))) return json;
+                lastErr = new Error(`第 ${i+1} 次：JSON 不含 updates/memories/scenes/plan_log`);
+                console.warn('[State Runtime]', lastErr.message, 'raw head:', String(raw).slice(0, 300));
+            } catch(e) {
+                lastErr = e;
+                console.warn('[State Runtime] 第', i+1, '次失敗:', e?.message || e);
+            }
+        }
+        throw lastErr || new Error('副模型重試耗盡');
+    }
+
+    // ── 🗜️ 記憶合併壓縮（治長線過載）：把舊的零碎記憶交副模型併成密度更高的少數摘要 ──
+    //    軟壓縮：新增 condensed 條目、原始標 merged:true 隱藏（不真刪、可還原）。
+    //    npc/relationship/dialogue 不碰（人/防 OOC）、最近窗保留原樣。
+    function _compressCall(prompt) {
+        return new Promise((resolve, reject) => {
+            if (!win.OS_API?.chatSecondary) return reject(new Error('副模型不可用'));
+            const messages = [
+                { role: 'system', content: '你是記憶歸檔員：把多條零碎的舊劇情記憶合併壓縮成數量更少、資訊密度更高的摘要，保留所有關鍵事實與因果，最後把結果放進一個 ```json 程式碼區塊。' },
+                { role: 'user', content: prompt }
+            ];
+            let done = false;
+            // 可以在通道換成主模型（09-27 起），主模型整批寫比較慢：等久一點
+            const timer = setTimeout(() => { if (done) return; done = true; reject(new Error('模型太久沒回應')); }, Math.max(CONFIG.timeoutMs, 180000));
+            win.OS_API.chatSecondary(messages, null,
+                (text) => { if (done) return; done = true; clearTimeout(timer); resolve(text); },
+                (err) => { if (done) return; done = true; clearTimeout(timer); reject(err); },
+                { task: 'mem_tidy' });   // 自己一列：換成主模型不會連每輪的記憶抽取一起換過去
+        });
+    }
+    async function _compressRun(prompt) {
+        let lastErr;
+        for (let i = 0; i < CONFIG.retryCount; i++) {
+            try {
+                const raw = await _compressCall(prompt);
+                const json = extractJSON(raw);
+                if (json && Array.isArray(json.memories)) return json;
+                lastErr = new Error('輸出不含 memories 陣列');
+            } catch (e) { lastErr = e; console.warn('[記憶壓縮] 第', i + 1, '次失敗:', e?.message || e); }
+        }
+        throw lastErr || new Error('壓縮重試耗盡');
+    }
+    function _compressPrompt(chunk) {
+        const list = chunk.map((m, i) => `${i + 1}. [${m.type}] ${String(m.summary || '').trim()}${m.text ? ' — ' + String(m.text).trim() : ''}`).join('\n');
+        return `下面是同一個故事【較早期】的零碎劇情記憶，依時間排序。請把它們合併壓縮成數量更少、但資訊密度更高的摘要，方便長期保存。
+
+【合併原則】
+- 把同一條劇情線 / 同一地點 / 同一任務的多條，併成一條涵蓋整段的摘要。
+- 保留所有關鍵事實：角色名、因果關係、重大轉折、得到或失去的東西、尚未了結的伏筆。可捨棄重複、純過場、對後續無影響的瑣事。
+- 數量目標：壓到原本的三分之一上下；寧可資訊完整，也別併到失真。
+- 不要加入原文沒有的推測。
+
+【輸出格式】嚴格 JSON、放進一個 \`\`\`json 區塊：
+{ "memories": [ { "type": "event", "summary": "一句話索引、20字內", "text": "1～3句完整細節", "tags": ["關鍵詞"] } ] }
+
+【待合併記憶】
+${list}`;
+    }
+    // 🚪 記憶整理分批：同一批只放同一個地方的（照時間排好的 list 進來，回 [{ place, chunk }]；place＝null 是認不出地方的那堆）
+    async function _placeBatches(list, size) {
+        let of = null;
+        try { of = (typeof win.OS_VECTOR_ENGINE?.placeResolver === 'function') ? await win.OS_VECTOR_ENGINE.placeResolver() : null; } catch (e) {}
+        const groups = new Map(), out = [];
+        list.forEach(m => { const p = of ? of(m) : null; const k = p == null ? '?' : 'p:' + p; if (!groups.has(k)) groups.set(k, { place: p, list: [] }); groups.get(k).list.push(m); });
+        groups.forEach(g => { for (let i = 0; i < g.list.length; i += size) out.push({ place: g.place, chunk: g.list.slice(i, i + size) }); });
+        return out;
+    }
+    // storyId 由呼叫端(os_avs_memory 面板)傳入；回 { mergedCount, madeCount, after, before }
+    async function compressOldMemories(opts) {
+        opts = opts || {};
+        const onProgress = typeof opts.onProgress === 'function' ? opts.onProgress : function () {};
+        if (win.__AURELIA_SUMMARIZING) throw new Error('正在大總結，請稍後再試');
+        if (!win.OS_DB?.getAllVnMemories || !win.OS_DB?.saveVnMemory) throw new Error('記憶資料庫不可用');
+        if (!win.OS_API?.chatSecondary) throw new Error('副模型未設定（去記憶服務設定）');
+        const storyId = opts.storyId;
+        if (!storyId) throw new Error('找不到當前世界');
+
+        const COMPRESS_TYPES = { event: 1, item: 1, location: 1, rule: 1 };   // npc/relationship/dialogue 不碰
+        const KEEP_RECENT = 40;   // 這些類型最近 N 條保留原始細節、不壓
+        const CHUNK = 35;
+
+        const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+        const live = all.filter(m => m && !m.merged);
+        const compressible = live
+            .filter(m => COMPRESS_TYPES[m.type] && !m.condensed)              // 已壓過的不再壓，避免反覆壓到失真
+            .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+        if (compressible.length <= KEEP_RECENT) throw new Error('舊記憶還不夠多、暫時不需要整理');
+        let targets = compressible.slice(0, compressible.length - KEEP_RECENT);
+        // 按下去之前先告訴使用者要叫幾次模型（每批一次，失敗的那批會重試）
+        if (opts.plan) return { targets: targets.length, calls: (await _placeBatches(targets, CHUNK)).length };   // 🚪 分地方壓，批數照分好的算
+        // 自動整理（CTX 面板「自動整理記憶」）：不到一整批不叫模型（叫一次只併兩三條不划算）；一次最多 maxBatches 批、從最舊的開始
+        if (opts.auto && targets.length < CHUNK) throw new Error('舊記憶還不夠多、暫時不需要整理');
+        if (opts.maxBatches > 0) targets = targets.slice(0, opts.maxBatches * CHUNK);
+
+        // 🚪 世界門（11-15）：同一批只放同一個地方的記憶（世界名，''＝主角原本生活的地方），壓出來的那條記著地方；
+        //   混著壓的話，奧瑞亞和某個視差世界的事會揉成一條，之後自動召回就分不開（OS_VECTOR_ENGINE.placeKeep）。
+        let _batches = await _placeBatches(targets, CHUNK);
+        // 自動整理：分地方之後不滿一整批的那堆先不壓（同上面「不到一整批不叫模型」，那是使用者的錢）
+        if (opts.auto) _batches = _batches.filter(b => b.chunk.length >= CHUNK);
+        let mergedCount = 0, madeCount = 0, _doneN = 0;
+        for (const _b of _batches) {
+            const chunk = _b.chunk, i = _doneN;
+            _doneN += chunk.length;
+            onProgress(`整理中… ${Math.min(i + chunk.length, targets.length)}/${targets.length}`);
+            let json;
+            try { json = await _compressRun(_compressPrompt(chunk)); }
+            catch (e) { console.warn('[記憶壓縮] 這批失敗、保留原始跳過:', e?.message || e); continue; }
+            const out = (json.memories || []).filter(x => x && (x.summary || x.text));
+            // 安全閥：必須真的變少、且非空，否則不動原始（不讓壞輸出毀資料）
+            if (!out.length || out.length >= chunk.length) { console.warn('[記憶壓縮] 這批沒變少、跳過'); continue; }
+            const baseTs = chunk[0].createdAt || Date.now();
+            // 先存新條目，存成至少一條才標原始 merged（中途崩最壞只是重複、不是資料遺失）
+            let saved = 0;
+            for (let k = 0; k < out.length; k++) {
+                const e = out[k];
+                try {
+                    await win.OS_DB.saveVnMemory({
+                        storyId,
+                        type: e.type || 'event',
+                        summary: String(e.summary || '').trim().slice(0, 60),
+                        text: String(e.text || e.summary || '').trim(),
+                        tags: Array.isArray(e.tags) ? e.tags.filter(Boolean).slice(0, 4) : [],
+                        createdAt: baseTs + k,   // 排回原本時段
+                        condensed: true,
+                        ...(_b.place != null ? { place: _b.place } : {})   // 🚪 這一批都是同一個地方的
+                    });
+                    saved++; madeCount++;
+                } catch (err) { console.warn('[記憶壓縮] 存新條目失敗:', err?.message || err); }
+            }
+            if (saved === 0) continue;   // 新的一條都沒存成 → 別動原始
+            for (const m of chunk) {
+                m.merged = true; m.mergedAt = Date.now();
+                try { await win.OS_DB.saveVnMemory(m); mergedCount++; } catch (err) {}
+            }
+        }
+        onProgress('完成');
+        return { mergedCount, madeCount, after: live.length - mergedCount + madeCount, before: live.length };
+    }
+
+    // ── 🔁 AVS 角色去重：同一容器裡「繁體一個/簡體一個」或別名重複的同一角色 → 副模型確認後程式合併刪除 ──
+    //    觸發：程式先掃「疑似繁簡變體」候選(同長度、差異字全是漢字)；有候選才花一次副模型呼叫，沒候選＝0 成本。
+    //    防誤併：副模型只「確認」程式給的候選、被明確指示「不同角色絕不合併、不確定各自獨立」。
+    //    防燒錢：同一組名單若副模型判「沒得併」(如王五/李四同長度)→ 記進 _dedupeSeen 不再問；名單變了才重評。
+    const _dedupeSeen = new Map();   // contKey → 上次評估過、判「沒得併」的名字簽章
+    const _CJK = /[㐀-鿿]/;
+    function _normName(s) {
+        return String(s == null ? '' : s).replace(/[（(][^（()]*[)）]/g, '').replace(/[「」『』“”"'·・,，。、\s\-_]/g, '').trim();
+    }
+    // 疑似同一角色的兩個寫法：正規化後相等(只差標點/空白)，或同長度且差異字全是漢字(繁簡特徵)
+    function _looksLikeVariant(a, b) {
+        const na = _normName(a), nb = _normName(b);
+        if (!na || !nb) return false;
+        if (na === nb) return true;                 // 只差標點/括號/空白 → 幾乎一定同角色
+        if (na.length !== nb.length) return false;  // 不同長度的別名不在這抓(避免噪音)，交副模型在整組裡順手判
+        for (let i = 0; i < na.length; i++) {
+            if (na[i] === nb[i]) continue;
+            if (!_CJK.test(na[i]) || !_CJK.test(nb[i])) return false;   // 差異含非漢字 → 不算繁簡變體
+        }
+        return true;   // 同長度、差異全漢字 = 繁簡候選(由副模型最終確認)
+    }
+    // 角色名去重「搭便車」：掃 currentState 找繁簡/別名候選容器 → 回 { block, pending }（沒候選回 null）。
+    //   block 附進主副模型 prompt，要它在「同一個 json」多吐 "dupes"；★不再另開一通 chatSecondary（治「一輪三次 API」）。
+    function _buildDedupeBlock(state) {
+        if (!state || typeof state !== 'object') return null;
+        const conts = [];
+        for (const contKey of Object.keys(state)) {
+            const cont = state[contKey];
+            if (!cont || typeof cont !== 'object' || Array.isArray(cont)) continue;
+            const names = Object.keys(cont).filter(n => cont[n] && typeof cont[n] === 'object' && !Array.isArray(cont[n]));
+            if (names.length < 2 || names.length > 60) continue;
+            let hasCand = false;
+            outer: for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++)
+                if (_looksLikeVariant(names[i], names[j])) { hasCand = true; break outer; }
+            if (!hasCand) continue;
+            const sig = names.slice().sort().join('|');
+            if (_dedupeSeen.get(contKey) === sig) continue;   // 上次已判「沒得併」的同一組 → 不再問
+            conts.push({ contKey: contKey, names: names, sig: sig });
+        }
+        if (!conts.length) return null;
+        const listText = conts.map(c => '· 容器「' + c.contKey + '」：' + c.names.join('、')).join('\n');
+        const block = '\n\n【附帶任務 · 角色名去重 — 在同一個 json 區塊一起輸出，不要另外回覆】\n' +
+            '下列容器裡可能有「其實是同一角色」被寫成繁體/簡體或別名的重複：\n' + listText + '\n' +
+            '請判斷並在輸出的 json 裡多加一個 "dupes" 欄位：\n' +
+            '- 只把「確定是同一角色」的名字分到同一組；不同角色絕對不要併，寧可不併；不確定→不要放進組。\n' +
+            '- 每組指定 keep(保留名)：優先「繁體＋最完整」的寫法。\n' +
+            '- 只列「至少 2 個名字」的組；沒有任何重複就給空陣列。\n' +
+            '格式： "dupes": [ { "container": "容器名", "keep": "保留名", "dup": ["被併掉的名1"] } ]';
+        return { block: block, pending: conts };
+    }
+    // 深合併：把 src 欄位補進 dst(保留角色)，dst 既有非空值優先、只填 dst 缺的(空/待定/—)
+    function _mergeEntity(dst, src) {
+        if (!src || typeof src !== 'object' || !dst || typeof dst !== 'object') return dst;
+        const _empty = v => v == null || v === '' || v === '待定' || v === '—';
+        for (const k of Object.keys(src)) {
+            const sv = src[k], dv = dst[k];
+            if (dv && typeof dv === 'object' && !Array.isArray(dv) && sv && typeof sv === 'object' && !Array.isArray(sv)) _mergeEntity(dv, sv);
+            else if (_empty(dv) && !_empty(sv)) dst[k] = sv;
+        }
+        return dst;
+    }
+    // 套用主副模型「搭便車」回的 dupes → 就地合併 state、記 _dedupeSeen。回合併筆數。
+    //   pending = _buildDedupeBlock 這輪問過的候選容器；即使這輪沒併也記 _dedupeSeen（同組別再問，防燒 prompt）。
+    function _applyDupes(state, dupes, pending) {
+        if (!state || typeof state !== 'object') return 0;
+        const byCont = {};
+        (Array.isArray(dupes) ? dupes : []).forEach(g => {
+            if (!g) return;
+            const ck = String(g.container || '').trim();
+            if (ck) { (byCont[ck] = byCont[ck] || []).push(g); }
+        });
+        let total = 0;
+        (pending || []).forEach(p => {
+            const cont = state[p.contKey];
+            if (!cont || typeof cont !== 'object') return;
+            let mergedHere = 0;
+            (byCont[p.contKey] || []).forEach(g => {
+                let keep = String(g.keep || '').trim();
+                const dups = (Array.isArray(g.dup) ? g.dup : []).map(x => String(x || '').trim()).filter(Boolean);
+                const groupAll = [keep, ...dups].filter(n => cont[n]);
+                if (groupAll.length < 2) return;
+                if (!groupAll.includes(keep)) keep = groupAll.slice().sort((a, b) => Object.keys(cont[b] || {}).length - Object.keys(cont[a] || {}).length)[0];
+                for (const d of groupAll) {
+                    if (d === keep || !cont[d]) continue;
+                    _mergeEntity(cont[keep], cont[d]); delete cont[d]; mergedHere++; total++;
+                    console.log('[State Runtime] 角色去重(搭便車)：「' + d + '」併入「' + keep + '」(' + p.contKey + ')');
+                }
+            });
+            if (mergedHere === 0) _dedupeSeen.set(p.contKey, p.sig);   // 沒併 → 記住別再問同一組
+            else _dedupeSeen.delete(p.contKey);                        // 併過 → 名單變了、清掉重評
+        });
+        return total;
+    }
+
+    // --- prompt：給 schema + current + 最近劇情 → 抽 diff（或初始 fill）---
+    function buildExtractPrompt(schema, current, recentText, isInitialFill) {
+        const modeRules = isInitialFill
+            ? `【初始化模式 / FIRST RUN】
+- 這是首次抽取，當下狀態為空
+- 必須把 schema 中**所有欄位**的當下值都填進 updates，不能漏
+- 從劇情推斷；劇情沒明說的欄位，依世界觀給合理初值（好感類給 0 / 能力類給基準值 / 倒計時看 schema.desc 的初值）
+- 故事可能已經進行很久才開始追蹤：下面附了劇情大總結的話，前面發生過的事都算數——角色跟主角的好感、關係、身分、持有物、任務進度，照大總結寫到的現況給值，不要當成剛認識、從零開始；最近劇情裡的一次吵架或摩擦，是在那個基礎上的變化
+- 寧可用 schema.desc 裡的範圍初值，也不要留空`
+            : `【更新模式 / DIFF】
+- 只輸出**這輪有變化**的欄位；沒變的不要寫進 updates
+- 補齊例外：若【當下狀態】裡某個已登場實體，缺少 schema 基礎屬性組裡的穩定欄位，這輪順手把缺的那幾個補上（從劇情或世界觀推合理值）；穩定屬性補一次即可、之後不必再動
+- 如果這輪劇情完全沒觸發任何欄位變化，輸出 { "updates": {} }`;
+
+        // 「schema 有、當下狀態卻完全沒有」的頂層欄位。
+        //   中途才套用變數包／沿用別的故事設定時，這些欄位不會被更新模式抽到——AI 只寫劇情提到的，
+        //   沒人提的 HP／貨幣／主線進度就永遠掛著「—」（初始化模式只在 current 全空時才觸發，中途套包碰不到）。
+        //   ⚠️ 空陣列不算缺：像「契約夥伴清單」desc 本來就寫「未取得前為空」，那是正當的值。
+        const _curForFill = current || {};
+        const _missingKeys = Object.keys(schema || {}).filter(k => {
+            const v = _curForFill[k];
+            if (v === undefined || v === null || v === '') return true;
+            if (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0) return true;
+            return false;
+        });
+        const _fillMissing = (!isInitialFill && _missingKeys.length)
+            ? `
+
+【補初值 — 這些欄位到現在還沒有任何值，這輪一併補齊】
+${_missingKeys.map(k => '- ' + k).join('\n')}
+- 依各欄位的 schema 定義（desc／init／structure 範本）＋開局設定給出合理初值；劇情沒明說的就用世界觀常識推，**不要留空**。
+- 物件型欄位要照 structure 範本把子欄位一起補齊，不要只補外層。
+- 這是一次性補齊：補完之後這些欄位就照常只抽變化。`
+            : '';
+
+        // 檢查清單依「這張卡實際在追蹤的欄位」動態長出來——寫死的通用步驟只會檢查角色，
+        // 每張卡各自的數值欄位（錢／物資／進度…）永遠不在清單裡，就是漏帳的根源。
+        // 只列名稱＋型別；完整 desc 在上面的 schema 區塊，不重複佔 token。
+        const _fieldChecklist = Object.keys(schema || {}).length
+            ? Object.keys(schema).map((k, i) => `   ${i + 1}) ${k}（${(schema[k] && schema[k].type) || 'string'}）`).join('\n')
+            : '   （這個世界還沒有追蹤欄位）';
+
+        return `你是劇情狀態追蹤抽取器。**先分析、再輸出**——不要直接吐 JSON，先想清楚再寫。
+
+【schema 定義 / 每個欄位的 desc 就是必須嚴守的約束】
+${JSON.stringify(schema, null, 2)}
+
+【上一輪後的當下狀態】
+${JSON.stringify(current, null, 2)}
+
+【最近劇情】（〔本輪新內容〕＝這一輪要抽的變化來源；〔前情參照·已入帳〕＝只供理解上下文，裡面的變化早已記過帳、嚴禁再抽）
+${recentText || '（無）'}
+
+${modeRules}${_fillMissing}
+
+---
+【第一步 · 先分析】純文字、簡短，每項一兩句，**不准省略這步**：
+1. 出場角色：這輪劇情出現哪些「具名、對劇情有份量」的角色？（雜魚/路人/野獸/怪物/雜兵不算；以該 object 欄位 desc 的規定為準）
+2. 本輪變化：逐一看每個出場角色，這輪有什麼狀態變化？（好感度增減多少／身分是否揭露／外觀是否被描寫）——**只認劇情明寫或強烈暗示的，沒寫的不要編**
+3. 新角色：有沒有第一次登場的角色？要按該欄位 desc 的「基礎屬性組」補哪幾個初值？
+4. 主角檢查：出場的有沒有主角／MC／{{user}} 本人？（主角好感度填 null，其餘欄照記）
+5. 初遇檢查：這輪見過 MC 的角色，每個都記了「初遇」嗎？（短暫出場、戲份少的也要；【當下狀態】裡缺初遇的見過 MC 的角色也要回補）
+6. 退場檢查：有沒有角色這輪**確定死亡或永久退場**？符合下方 removes 的刪除條件嗎？（通常答「無」）
+7. 逐欄位對帳（**這項最常被跳過，必須逐條寫，不准整批略過**）：把下面「這個世界實際在追蹤的欄位」一欄一欄走過，
+   每欄用一句話交代「這輪有沒有變、為什麼」；**沒變也要寫「無變化」**。
+   ⚠️ 數值型（錢／物資／體力／進度／倒計時）最容易漏：只要〔本輪新內容〕出現金額、付款、收款、消耗、獲得、盤點，
+   就一定要回到對應欄位確認一次，別只顧著寫角色好感度。
+${_fieldChecklist}
+8. 校對：有沒有漏掉出場角色、有沒有編造、數值有沒有超出 desc 範圍、是否用點記法、沒變的有沒有誤寫進去
+
+【第二步 · 輸出】把上面分析的結論整理成 JSON，放進一個 \`\`\`json 區塊（區塊外才是分析文字）：
+\`\`\`json
+{ "updates": { "<欄位名 或 容器.實體.屬性>": <新值> }, "removes": ["<容器.實體名>"] }
+\`\`\`
+（removes 平常沒有就整個省略）
+
+【通用規則】
+- 數字欄位「報增減量、不要自己算新值」：值寫 "+=幅度" 或 "-=幅度"（例：好感升 3 → "+=3"；體力掉 10 → "-=10"），腳本會拿當前值自己加減，你心算反而會錯。例外＝「直接設成某值」才給純數字：初始化、新角色首登場的基礎屬性初值、劇情明定數值（歸零/直接變成50 之類）
+- **金錢/物資類「帳本欄位」鐵則**（這類欄位最容易記爛，嚴守）：
+  ① 收支**只認〔本輪新內容〕段落裡明寫的交易**；出現在〔前情參照·已入帳〕的收支、或本輪只是提及/回顧/對話聊到的舊交易，**絕不重複記帳**——重複扣款是帳本記爛的頭號原因
+  ② 金額只認劇情**明寫的數字**；交易發生了但沒寫金額 → **不動這個欄位**（寧可漏記，嚴禁自己編價格）
+  ③ 同一輪多筆收支 → 加總成一筆淨變化報（賺100花30 → "+=70"）
+  ④ 〔本輪新內容〕明寫「現在還剩 X」這種盤點句 → 用絕對值 X 直接對帳（盤點句優先於增減推算；前情參照裡的舊盤點句不算）
+- 字串/enum：給新字串；list：給完整陣列（追加後完整輸出）
+- 不要編造劇情沒寫的事（初始化模式才可從 desc 推合理初值）
+- **嚴守每個欄位的 desc 約束**：desc 寫「0-100」就不准超範圍、寫枚舉就不准給別的值
+- **好感度＝對主角的「情感親密／信任」，不是性慾**：性事可以長好感，但**幅度要看關係階段、不能用飛的**——關係還停在炮友／純肉體／逢場作戲（曖昧以下）時，性事對好感度只給很小增幅（炮友卻好感狂飆很詭異）；唯有關係已在**曖昧以上**（有情感基礎、互相在意）的情事，才可隨情感推進正常增長。好感度每輪通常只小幅變動（個位數），唯有重大情感事件才較大增減。對「身體/慾望」另有欄位的世界，性事強度寫進那欄、別灌進好感度。
+- 「主線目標」是**穩定錨點**：初始化時依最初任務設定一次，之後**視為固定、不要再寫進 updates**（跑團再深也別覆蓋；每輪該變的是「當前任務」不是「主線目標」）；除非劇情明確翻轉主線（原目標作廢／被取代）才更新。
+
+【物件型欄位 / 動態實體（重要）】
+- type 是 "object" 的欄位 = 裝「多個實體各自的屬性」，updates 的 key 用點記法「欄位名.實體名.屬性」，值放最末層
+  例：{ "角色狀態.卡蜜拉.好感度": 70, "角色狀態.阿傑.身分": "店主" }
+- 對劇情中所有「具名有份量」的出場角色都要抽（是否含路人/臨時 NPC，以該欄位 desc 為準）
+- 新角色首次登場：按 desc 的「基礎屬性組」補齊每一個基礎屬性初值，之後才依劇情加特有屬性
+- 「初遇」錨點（防 NPC 失憶）：只要某角色**與 MC 當面見過 / 互動過**，首次登場時就給它一個「初遇」屬性，記「第一次與 MC 相遇的時序＋地點＋怎麼遇上的」（例：{ "角色狀態.某人.初遇": "第4輪・城門口・替MC指路認識" }）。**即使該角色只是短暫出場、戲份很少，只要見過 MC 就一定要記**——這是為了讓他很久以後再登場時，不會被當成第一次見 MC。
+- 「初遇」一旦寫入＝**永久錨點**：之後視為固定、不要再寫進 updates、不可改寫或刪除（角色消失幾百輪後再出現，初遇仍在）。若【當下狀態】裡某個見過 MC 的角色「缺」初遇，這輪順手回補（從劇情回推第一次相遇）。
+- 「當前目標」＝**現在進行式、會過期的欄位**：只更新**本輪有戲份**的角色——他的目標達成了／破局了／被更急的事取代，這輪就換成他眼下真正在謀劃的那件事；真的無事可謀就填「無」。本輪沒出場的角色**不要動他的目標**（沒有新資訊，改了就是編的），那句話會由系統自動標成「最後動向」再餵給正文模型。
+- 「退場刪除」removes（嚴格、寧缺勿濫）：只有**劇情明確寫死了或永久退場**（死亡且無復活可能／徹底離開故事不會再出現）**且沒有未了牽扯**（沒有進行中任務、債務、物品往來或懸念掛在他身上）的實體，才把「容器.實體名」整條列進 removes。主角／MC／{{user}} **絕不可列**；只能刪整個實體、不能刪單一屬性；**不確定就保留**（頂多在 updates 把他的狀態改成死亡）；沒有要刪就省略 removes。`;
+    }
+
+    // --- 從 AVS 變數包合併出 schema（融合：schema 來源從 OS_DB.state_data.schema → AVS 變數包）---
+    async function getActiveSchema() {
+        if (!win.OS_DB?.getAllVarPacks) return null;
+        const allPacks = await win.OS_DB.getAllVarPacks();
+        if (!allPacks.length) return null;
+        // 只用「沒綁 chatId（全域 pack）」或「綁定當前 chatId」的 pack
+        // 避免跨 chat / 跨角色卡的 pack 互相污染（每個 chat 角色不同、變數不同）
+        const chatId = getChatId();
+        const packs = allPacks.filter(p => !p.chatId || p.chatId === chatId);
+        const schema = {};
+        for (const pack of packs) {
+            if (!Array.isArray(pack.variables)) continue;
+            for (const v of pack.variables) {
+                if (!v.name) continue;
+                const entry = {
+                    type: v.type || 'string',
+                    desc: v.desc || '',
+                    init: v.defaultValue
+                };
+                // 物件型：把縮排結構文字 parse 成巢狀範本，讓副模型看得到有哪些子欄位
+                if (v.type === 'object' && win._AVS_ENGINE?.parseTree) {
+                    try {
+                        const tree = win._AVS_ENGINE.parseTree(v.defaultValue);
+                        const keys = Object.keys(tree);
+                        entry.structure = (keys.length === 1 && keys[0] === v.name) ? tree[v.name] : tree;
+                        delete entry.init; // structure 已完整表達，init 原始字串多餘
+                    } catch(e) {}
+                }
+                schema[v.name] = entry;
+            }
+        }
+        return Object.keys(schema).length ? schema : null;
+    }
+
+    // --- 記憶抽取規則（結合觸發共用向量引擎的規則，沒有就退而求其次給簡述）---
+    function _memoryRulesText() {
+        return (win.OS_VECTOR_ENGINE?.EXTRACTION_PROMPT)
+            || '從劇情抽出值得長期記住的條目：關鍵事件、角色狀態變化、重要物品、世界規則、人物關係、以及每個重要角色最能代表性格的原句台詞與口癖(防 OOC)。跳過純過場與不帶資訊的閒聊。';
+    }
+    // 附加在「狀態 prompt」後面：要求同一個 JSON 多吐一個 memories 欄位（共用同一通副模型）
+    function _memoryAddendum(relNow) {
+        return `
+
+═══════════════════════════════════════
+【★ 同時抽取「長期記憶」→ 放進同一個 JSON 的 "memories" 欄位】
+除了上面的 "updates"，請在**同一個 JSON** 裡再加一個 "memories" 陣列，每筆 { "type", "summary", "text", "tags" }；沒有值得記的就給 []。
+抽取規則：
+${_memoryRulesText()}
+
+${relNow ? '\n' + relNow + '\n' : ''}
+最終輸出格式：{ "updates": { ... }, "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
+    }
+    // 🎬 記憶導演：把帶碼全記憶目錄附給副模型，讓它挑「下一輪主模型該被提醒哪幾條」(放進同一個 JSON 的 recall_next)
+    //   09-26 改：以前只說「挑下一輪最需要的」，它把剛發生那輪順帶提到的舊事全挑回來（實測每輪挑 3～4 條已結束的支線，正文就一直重演）。
+    //   拿一段 170 樓聊天的真請求考 4 次：舊寫法平均挑 3.5 條舊線；這版＋結案名單 1.75 條。再附「上一輪挑過哪些」反而 2.25 條，沒放。
+    function _recallAddendum(catText, closedNames) {
+        const closed = (Array.isArray(closedNames) ? closedNames : []).filter(Boolean);
+        return `
+
+═══════════════════════════════════════
+【★ 兼任「記憶導演」→ 放進同一個 JSON 的 "recall_next" 欄位】
+下面是本劇過往記憶的帶碼目錄。你挑出的條目，下一輪會把完整內容附給主模型，提醒它別寫出跟過去矛盾的內容。
+挑的標準只有一個：下一輪很可能會直接寫到某個人、某樣東西、某個地方或某個約定，而主模型不知道這條記憶就會寫錯。
+這些不要挑：
+・剛發生的這一輪只是順帶提到（看到訊息、聽到消息、心裡想起）——被提到不等於下一輪會用到。
+・已經收尾、下一輪不會再碰到的事——再提醒只會讓主模型以為它還沒完，一直把它寫回來。
+・跟目錄裡另一條講的是同一件事——只留最能說清楚那件事的一條。${closed.length ? `
+下面這些事已經結案；跟它們有關的記憶一律不挑，除非剛發生的這一輪主角自己回頭去碰了：
+${closed.map(s => '・' + s).join('\n')}` : ''}
+規則：recall_next 只放代號（目錄每行行首 A 開頭的編號），純代號字串、不要改寫內容。有幾條放幾條，沒有就給 []，最多 6 條。
+
+【全記憶帶碼目錄】
+${catText}
+
+→ 最終 JSON 需含 "recall_next" 欄位（你挑出的代號字串組成的陣列，沒有就 []）`;
+    }
+    // 只有記憶要抽時的獨立 prompt（沒變數包 / 這則狀態已抽過）
+    function _memoryOnlyPrompt(text, relNow) {
+        return `你是長期記憶抽取器。從下面的劇情抽出值得長期記住的記憶條目。
+${relNow ? '\n' + relNow + '\n' : ''}
+【劇情】
+${text || '（無）'}
+
+抽取規則：
+${_memoryRulesText()}
+
+請輸出嚴格 JSON（不包 markdown）：{ "memories": [ { "type":"...", "summary":"...", "text":"...", "tags":[...] } ] }`;
+    }
+    // 把最後一則劇情「自己切段編號」→ 供副模型只挑數字、程式自己對位（不靠 AI 逐字抄原文）
+    // 回傳敘事行陣列（已濾掉結構標籤/註解/code block）；index+1 = 給 AI 看的 [P編號]
+    function _segmentStory(content) {
+        if (!content) return [];
+        let body = String(content).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // 先剝 CoT：思考區提到 <content> 會害正則從 CoT 開抓
+        const m = body.match(/<content>([\s\S]*?)<\/content>/i);
+        if (m) body = m[1];
+        body = body.replace(/<!--[\s\S]*?-->/g, '');   // HTML 註解
+        body = body.replace(/```[\s\S]*?```/g, '');     // code block
+        const out = [];
+        const lines = body.split('\n').map(l => l.trim()).filter(Boolean);
+        for (const l of lines) {
+            if (/^(scene-id|status|summary|content)\s*[:：]/i.test(l)) continue;
+            if (l === '</content>' || l === '</scene>') continue;
+            if (/^[\[<【]/.test(l)) {
+                // 🚨 VN 正文「每一行都是 [Nar|…]／[Char|…]／[Inner|…]」——舊版把開頭是 [ 的行全部丟掉，
+                //    等於一整章切出 0 個段落 → 場景區塊靜默不附進 prompt →「插圖規範根本沒送給副模型」。
+                //    所以要把這三種「有台詞/敘述的」標籤裡的字撈出來當段落；
+                //    撈出來的字是原始行的子字串 → VN_SceneInsert._findAnchor 照樣定位得到那一行。
+                //    其餘結構行（Bg/BGM/Chapter/Choice/Item/Scene/Trans/Avatar…）仍然跳過。
+                const _m = l.match(/^\[Nar\|([^\]]+)\]/i)
+                       || l.match(/^\[Char\|[^|]*\|[^|]*\|([^|\]]+)/i)
+                       || l.match(/^\[Inner\|[^|]*\|([^|\]]+)/i);
+                if (!_m) continue;
+                const _t = String(_m[1] || '').trim();
+                if (!_t) continue;
+                out.push(_t);
+                if (out.length >= 40) break;
+                continue;
+            }
+            out.push(l);
+            if (out.length >= 40) break;                              // 上限防爆
+        }
+        return out;
+    }
+
+    // 從 AVS 狀態抽「角色外觀錨點」：掃 object 容器(角色狀態)裡每個角色的外觀欄位，組成權威外觀清單。
+    // 用途：補漏——給沒有頭像快取、但 AVS 有記外觀的角色。skip：已被頭像快取覆蓋的角色名(不重複列)。
+    function _charLooksRef(state, skip, keep) {
+        if (!state || typeof state !== 'object') return '';
+        const LOOK_KEYS = ['髮色','髮型','瀏海','眼色','瞳色','膚色','體型','身材','身高','服裝','衣著','外觀','形象','身分','身份','氣質','臉型'];
+        const lines = [];
+        for (const v of Object.values(state)) {
+            if (!v || typeof v !== 'object' || Array.isArray(v)) continue;   // 只看 object 容器
+            for (const [name, ent] of Object.entries(v)) {
+                if (!ent || typeof ent !== 'object' || Array.isArray(ent)) continue;   // 每個角色實體
+                if (skip && skip.has(name)) continue;                         // 頭像快取已覆蓋 → 不重複
+                if (keep && !keep(name)) continue;                            // 近期濾鏡：不在最近名單就跳過
+                const looks = LOOK_KEYS
+                    .filter(k => ent[k] != null && String(ent[k]).trim() && String(ent[k]).trim() !== '待定')
+                    .map(k => `${k}:${String(ent[k]).trim()}`);
+                if (looks.length) lines.push(`・${name}（${looks.join('、')}）`);
+            }
+        }
+        return lines.join('\n');
+    }
+
+    // 「最近出現過的角色」名單：掃 [Char|名字] 標籤 = 當前這輪正文 + 最近 3 章 content。
+    //   給 _buildLooksRef 當濾鏡 → 外觀錨點只留近期角色，不再每個曾畫過的都塞、無限長。
+    //   ★安全閥：空集合(剛開局/掃不到標籤)→ 呼叫端退回「全列」，永不因濾過頭害副模型沒外觀可參考、把人畫崩。
+    async function _recentCharNames() {
+        const names = new Set();
+        const scan = (txt) => {
+            if (!txt) return;
+            const re = /\[Char\|([^|\]\n]+)/g; let m;
+            while ((m = re.exec(String(txt))) !== null) { const n = (m[1] || '').trim(); if (n) names.add(n); }
+        };
+        // 當前這輪（讀最後一則原文，含正在被抽的這輪、其說話角色一定保留）
+        try { const arr = await win.TavernHelper?.getChatMessages?.(-1); scan(arr && arr[0] && (arr[0].message || arr[0].mes)); } catch (e) {}
+        // 最近 3 章正文（每章 saveVnChapter 都存了 content）
+        try {
+            if (win.OS_DB && win.OS_DB.getAllVnChapters) {
+                let chs = (await win.OS_DB.getAllVnChapters()) || [];
+                let sid = '';
+                try { sid = localStorage.getItem('vn_current_story_id') || (win.OS_AVS_ADAPTER && win.OS_AVS_ADAPTER.getStoryId && win.OS_AVS_ADAPTER.getStoryId()) || ''; } catch (e) {}
+                if (sid) { const f = chs.filter(c => c && c.storyId === sid); if (f.length) chs = f; }   // 只看當前故事；對不到就全章退路
+                chs.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+                chs.slice(0, 3).forEach(c => scan(c && c.content));
+            }
+        } catch (e) {}
+        return names;
+    }
+
+    // 組「角色外觀錨點」：★主來源＝每個角色「頭像當初生成用的提示詞」(avatar_cache, ground truth)——
+    //   插圖照它畫就跟頭像/立繪同一個人。沒有頭像的角色才退回 AVS 狀態記的外觀(_charLooksRef)。
+    //   跟 vn_core 立繪同邏輯(優先 avatar_cache.prompt，沒有才退腳本描述)，徹底解決「久了被摘要、副模型查不到外觀」。
+    //   ★ 只列「最近出現過的角色」(近 3 章 + 這輪)，避免清單隨遊戲無限累積；空集合則不濾(全列)。
+    async function _buildLooksRef(state) {
+        const recentNames = await _recentCharNames();
+        const filterOn = recentNames.size > 0;
+        const keep = (name) => !filterOn || recentNames.has(name);
+        const lines = [];
+        const seen = new Set();
+        try {
+            const C = win.VN_Cache;
+            if (C && C.getAllMeta) {
+                const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
+                const all = await C.getAllMeta('avatar_cache');   // 只要生成詞，不讀圖（整庫頭像一次進記憶體會 OOM）
+                for (const e of (all || [])) {
+                    if (!e || !e.prompt) continue;
+                    if (world && C.worldOf && C.worldOf(e) !== world) continue;   // 只看當前世界
+                    const name = (C.bareKeyOf ? C.bareKeyOf(e) : e.key) || '';
+                    const p = String(e.prompt).trim();
+                    if (!name || !p || seen.has(name)) continue;
+                    if (!keep(name)) continue;                                   // 近期濾鏡：只留最近出現的角色
+                    seen.add(name);
+                    lines.push(`・${name}｜頭像生成詞：${p}`);
+                }
+            }
+        } catch (e) {}
+        const avs = _charLooksRef(state, seen);   // 補漏：沒頭像但 AVS 有外觀的角色 → 保持全列、不吃近期濾鏡(AVS 是全開的底，近期濾鏡只砍重的頭像生成詞)
+        if (avs) lines.push(avs);
+        return lines.join('\n');
+    }
+
+    // 頭像詞→插圖用：剝掉「肖像框架詞」(數量1boy/solo/portrait/bust/簡單背景/looking at viewer)。
+    //   頭像是單人肖像、那些詞對；但 ##C代號## 是塞進「已經數過人(2boys)的多角色場景」→ 數量/solo 會打架害 NAI 多生人。
+    //   性別不會丟(還有 adult male/young man+種族)。頭像本身那串不動，只動插圖展開的副本。
+    function _stripAvatarFraming(p) {
+        const DROP = [
+            /^\d+\s*(boys?|girls?|others?)$/i,
+            /^solo(\s+focus)?$/i,
+            /^(portrait|bust[\s_-]?shot|upper[\s_-]?body|cowboy[\s_-]?shot|head\s?shot|close[\s_-]?up|closeup|face\s+focus)$/i,
+            /^(simple|white|plain|gradient|grey|gray|dark|light|blurry)[\s_].*background$/i,
+            /^(simple\s+)?background$/i,
+            /^.*\bbackground\b.*$/i,            // 頭像詞常寫 "underground mine background"/"tavern background" → 背景一律交給場景，不然舊場景跟著角色跑
+            /^looking[\s_]at[\s_]viewer$/i,
+            // ↓ 以下都是「畫那張頭像當下的狀態」，不是這個人的固定長相。留著會黏在他之後的每一張插圖上
+            //   （佣兵甲在礦洞打鬥還端著酒杯就是這樣來的）。服裝／動作／表情一律交給場景副模型按當下劇情寫。
+            /^(holding|carrying|wielding|gripping|grabbing|grasping)\b/i,          // 手上的道具
+            /^(looking|gazing|staring|glancing|facing|watching)\b/i,               // 視線朝向
+            /^(sitting|standing|kneeling|lying|leaning|walking|running|posing)\b/i, // 姿勢
+            /^(wearing|dressed\s+in|clad\s+in)\b/i,                                // 服裝（洗澡場景還穿著衣服就是沒剝這個）
+            /\bexpression\b/i,                                                     // "a focused and sharp expression"
+            /\b(smil\w*|smirk\w*|grin\w*|frown\w*|pout\w*|scowl\w*|blush\w*|crying|laughing)\b/i,  // "gentle smile" / "a faint smile"：拍頭像那一瞬的表情
+            /^[\s.,;:!?]*$/,                                                        // 剝完剩標點的空片段
+        ];
+        // 先處理括號組，兩種待遇：
+        //   ① (服裝, simple background) ＝ [Avatar] 格式的「服裝+背景」欄 → 整組剝掉（背景交給場景畫）。
+        //   ② (short grayish-brown hair:1.25) ＝ NAI 權重語法、是外觀本體 → 整組保留。
+        //      剝掉會讓角色沒髮色（克里就是這樣掉了髮色，還留下破碎的 "in his 20s with,"）。
+        //   ⚠️ 保留的要先換成佔位符再切逗號：權重括號裡本來就有逗號，直接切會把它切散，
+        //      萬一切出來的某段命中 DROP，括號就剩半邊、NAI 語法整條壞掉。
+        const keep = [];
+        const s = String(p || '').replace(/[（(]([^（()]*)[)）]/g, (m, inner) => {
+            if (/:\s*[\d.]+\s*$/.test(inner)) { keep.push(m); return '\u0000K' + (keep.length - 1) + '\u0000'; }
+            return ' ';
+        });
+        return s.split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t)))
+                .join(', ').replace(/\s+([,.])/g, '$1').replace(/(?:\s*with)\s*$/i, '').trim()
+                .replace(/\u0000K(\d+)\u0000/g, (m, i) => keep[i] || '');
+    }
+
+    // {角色名 → 外觀字串}登記表：avatar_cache 頭像生成詞(主，剝肖像框架) + AVS 簡易形象(補漏)。給「##角色名## 佔位模式」展開用。
+    //   全角色、不濾近期(展開是 lookup、不進 prompt，不怕多)；同名優先頭像詞。
+    async function _buildLooksMap(state) {
+        const map = {};
+        try {
+            const C = win.VN_Cache;
+            if (C && C.getAllMeta) {
+                const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
+                const all = await C.getAllMeta('avatar_cache');   // 只要生成詞，不讀圖（整庫頭像一次進記憶體會 OOM）
+                for (const e of (all || [])) {
+                    if (!e || !e.prompt) continue;
+                    if (world && C.worldOf && C.worldOf(e) !== world) continue;
+                    const name = (C.bareKeyOf ? C.bareKeyOf(e) : e.key) || '';
+                    const p = _stripAvatarFraming(String(e.prompt).trim());   // 剝肖像框架詞(1boy/solo/portrait/bust/簡單背景)防場景數量打架
+                    if (name && p && !map[name]) map[name] = p;
+                }
+            }
+        } catch (e) {}
+        // ★ 不再灌 AVS 中文外觀：NAI 不吃中文，塞進 prompt＝廢字。沒英文頭像詞的角色一律不進登記表，
+        //   交給副模型「自己用英文 NAI tag 寫外觀」(見 _sceneAddendum 佔位指示)。state 參數保留(相容呼叫端)。
+        return map;
+    }
+
+    // 把 scene prompt 裡的 ##角色名## / ##C2## / ##C2. 名## 換成登記表外觀；
+    //   對不到走小寫正規化、再拆「代號+名」各試一次，都不到才留原名(別讓 ## 進生圖)。
+    //   用 ## 不用 {{}}：NAI 的 {{}}/[]/() 是權重語法，佔位改 ## 才不會跟底詞/預設包的權重撞(2026-06-23)。
+    // 同一個角色在一條 prompt 裡被展開第二次以上時，改用的簡短代稱。
+    //   完整外觀重複兩三次，文字編碼器會當成「介紹了好幾個人」→ 複製人／畫面多出第三人。
+    //   取得出「是誰」的一兩個標籤（性別／髮色／瞳色優先）當回指，保留指向性又不再多生一個人。
+    function _shortLookRef(full) {
+        const tags = String(full || '').split(',').map(t => t.trim()).filter(Boolean);
+        if (!tags.length) return '';
+        const KEY = /(hair|eyes?|\bman\b|\bmen\b|\bboy\b|\bgirl\b|\bwoman\b|male|female|elf|beast|skin)/i;
+        const picked = tags.filter(t => KEY.test(t)).slice(0, 2);
+        return (picked.length ? picked : tags.slice(0, 2)).join(', ');
+    }
+
+    // 代號去重展開：第一次給完整外觀，之後同一個人改代稱並留 warning（模板規範是每個代號只該寫一次）。
+    //   去重的 key 用「展開後的外觀字串」而不是代號 —— 同一人被 ##C3## 跟 ##名字## 各寫一次也算重複。
+    function _dedupeExpand(seen, hit, label, used) {
+        const n = (seen[hit] = (seen[hit] || 0) + 1);
+        if (n === 1) { if (used) used.push(hit); return hit; }
+        const short = _shortLookRef(hit);
+        console.warn(`🖼️ [插圖] 同一個角色的代號 ##${label}## 在這條 prompt 裡是第 ${n} 次出現 → 只有第一次展開完整外觀，這次改成代稱「${short}」。重複展開完整外觀會讓模型以為要畫好幾個人（複製人／多出第三人）。副模型模板應該讓每個代號只出現一次。`);
+        return short;
+    }
+
+    // 展開之外的「額外人物引介」偵測（治第四人／多頭鬼）。
+    //   系統已經把 ##C3## 填成完整外觀了，副模型卻常在同一子句再補一句 "a sturdy dwarf"、
+    //   或在場面句寫 "a massive man pinning a priest" —— 對文字編碼器來說那是又介紹了一個人，
+    //   於是畫面多長一顆頭／多一個人。這裡只警告不改內容（改寫語意風險太大），讓違規在 console 現形。
+    const _PERSON_INTRO = /(?:^|[,.;:]\s*|\s)(?:a|an|another|one|two|three)\s+(?:[a-z][a-z-]*\s+){0,4}(men|man|women|woman|males?|females?|dwarf|dwarves|elf|elves|orc|priests?|knights?|soldiers?|guys?|persons?|people|monsters?)\b/gi;
+    function _warnExtraPersons(finalPrompt, used) {
+        try {
+            let rest = String(finalPrompt || '');
+            for (const u of (used || [])) rest = rest.split(u).join(' ');   // 挖掉系統自己展開的角色外觀，只看副模型多寫的
+            const hits = rest.match(_PERSON_INTRO);
+            if (!hits || !hits.length) return;
+            const list = hits.map(h => h.replace(/^[,.;:\s]+/, '').trim()).join('｜');
+            console.warn(`🖼️ [插圖] 這條 prompt 在「系統展開的角色」之外還引介了 ${hits.length} 個人物：${list}。每一個 a/an + 人物名詞都會被模型當成畫面上多一個人（第四人、多頭鬼多半是這樣來的）。登記角色的外觀交給代號展開就好，重述請改成 he／the man on the left 這類代稱；場面句也別用 "a massive man pinning a priest" 這種寫法。`);
+        } catch (e) {}
+    }
+
+    // 三人以上時的「總結互動句」風險（實測：刪掉最後那句就從四個人變回三個人）。
+    //   模板結構要求「第 3 段寫一句核心互動，只用位置代稱」，但 Anima/NAI 沒有指代消解——
+    //   the right man 對它不是「前面提過的那個人」，只是又一個 man 名詞短語。
+    //   雙人時 2＋2 剛好湊得上看不出來；三人時 3＋2 就超過宣告人數，多的長成第四個人。
+    //   動作本來就該寫在各人自己的子句裡，總結句是純重複。
+    const _PERSON_REF = /\bthe\s+(?:[a-z][a-z-]*\s+){0,3}(men|man|women|woman|males?|females?|dwarf|dwarves|elf|elves|guys?|persons?)\b/gi;
+    function _warnTrailingInteraction(finalPrompt) {
+        try {
+            const s = String(finalPrompt || '');
+            const dec = s.match(/\b([2-9]|two|three|four|five)\s+(?:male|female|man|men|woman|women)\b/i);
+            const n = dec ? ({ two: 2, three: 3, four: 4, five: 5 }[String(dec[1]).toLowerCase()] || parseInt(dec[1], 10)) : 0;
+            if (n < 3) return;   // 雙人是模板的標準寫法，不吵
+            // 取鏡頭段之前的最後一個句子當「總結互動句」
+            const body = s.split(/\b(?:eye-level|medium shot|wide shot|cowboy shot|full body|close-?up|from side|from behind)\b/i)[0];
+            const last = (body.split(/[.;]\s*/).filter(Boolean).pop() || '');
+            const refs = last.match(_PERSON_REF);
+            if (!refs || refs.length < 2) return;
+            console.warn(`🖼️ [插圖] 這是 ${n} 人的畫面，結尾還有一句總結互動「${last.trim()}」，裡面帶了 ${refs.length} 個人物代稱（${refs.join('｜')}）。生圖模型不會把 the right man 認成前面那個人，只會當成又一個人 → 三人以上很容易多長一個。動作寫進各人自己的子句就好，這句可以整句拿掉。`);
+        } catch (e) {}
+    }
+
+    function _expandSceneNames(str, map, used) {
+        if (!str || String(str).indexOf('##') < 0) return str;
+        const lowerMap = {};
+        for (const k of Object.keys(map || {})) lowerMap[k.toLowerCase()] = map[k];
+        const _look = (k) => { if (!k) return null; const kk = String(k).trim(); return (map && (map[kk] || map[kk.toUpperCase()])) || lowerMap[kk.toLowerCase()] || null; };
+        const seen = Object.create(null);
+        return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
+            const name = String(raw).trim();
+            let hit = _look(name);
+            if (hit) return _dedupeExpand(seen, hit, name, used);
+            const mm = name.match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i);   // ##C2. 名## → 拆代號與名各試
+            if (mm) { hit = _look(mm[1]) || _look(mm[2]); if (hit) return _dedupeExpand(seen, hit, name, used); }
+            return name;
+        });
+    }
+
+    // 插圖畫到誰（帶參考圖用）：從還沒展開的提示詞裡的 ##代號## / ##角色名## 找出登記表上的角色名，照出場順序、不重複。
+    //   代號 Cn 對回名字：登記表裡名字鍵跟代號鍵指到同一份外觀，找那個不是代號的鍵。登記表外的名字不算（沒有她放的圖可帶）。
+    function _sceneCastOf(str, map) {
+        const out = [];
+        if (!str || !map || String(str).indexOf('##') < 0) return out;
+        const keys = Object.keys(map);
+        const isCode = (k) => /^C\d+$/i.test(k);
+        const nameOf = (tok) => {
+            const t = String(tok || '').trim();
+            if (!t) return '';
+            if (isCode(t)) {
+                const look = map[t.toUpperCase()] || map[t];
+                return look ? (keys.find(k => !isCode(k) && map[k] === look) || '') : '';
+            }
+            if (Object.prototype.hasOwnProperty.call(map, t)) return t;
+            return keys.find(k => !isCode(k) && k.toLowerCase() === t.toLowerCase()) || '';
+        };
+        String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
+            let n = nameOf(raw);
+            if (!n) { const mm = String(raw).trim().match(/^(C\d+)[\s.．:：、,，_-]+(.+)$/i); if (mm) n = nameOf(mm[1]) || nameOf(mm[2]); }
+            if (n && out.indexOf(n) < 0) out.push(n);
+            return m;
+        });
+        return out;
+    }
+
+    // 場景插圖最終清洗：剝掉「角色 [...] 區塊內」的人數/獨照框架詞(1boy/1girl/solo/portrait...)。
+    //   登記表展開那條已由 _stripAvatarFraming 剝過；但「沒頭像的角色」是副模型自己 inline 寫外觀、會自帶 1boy →
+    //   多角色場景每個 block 各帶 1boy 會跟場景級 2boys 數量打架 → NAI 吐多人/亂框。這裡兜底剝乾淨。
+    //   ★只動 [...] 內：場景級總人數(括號外，如開頭 2boys)保留——那是對的，告訴 NAI 總共幾人。
+    function _scrubSceneCounts(str) {
+        if (!str || String(str).indexOf('[') < 0) return str;
+        const DROP = [
+            /^\d+\s*(boys?|girls?|others?)$/i,        // 1boy / 1 boy / 2boys / 1girl
+            /^solo(\s+focus)?$/i,
+            /^(portrait|bust[\s_-]?shot|upper[\s_-]?body|head\s?shot|close[\s_-]?up|closeup)$/i,
+        ];
+        return String(str).replace(/\[([^\[\]]*)\]/g, (m, inner) => {
+            const kept = inner.split(',').map(t => t.trim()).filter(t => t && !DROP.some(re => re.test(t)));
+            return '[' + kept.join(', ') + ']';
+        });
+    }
+
+    // 附加在 prompt 後面：要求同一個 JSON 多吐 "scenes"（場景插圖）。
+    // ★ 定位用「編號段落 + after_paragraph 數字」——AI 只挑數字、絕不抄原文（避免簡繁/改寫/引舊訊息對不上）。
+    function _sceneAddendum(userPrompt, numberedText, looksRef, nameList) {
+        // nameList 非空 = ##代號/角色名##佔位模式（不塞外觀大塊、AI 只寫動作場景、系統事後展開）；否則 = 外觀錨點模式（整塊塞）
+        //   nameList = [{code:'C1', name:'小米'}, ...]；代號只在這通 prompt 內有效，AI 用代號最準(簡繁/暱稱免對錯)
+        //   佔位用 ## ## 不用 {{}}：NAI 的 {{}} 是權重語法、會跟底詞/預設包撞，## 才安全
+        const charBlock = (nameList && nameList.length)
+            ? `\n【角色外觀】下面是「已登記角色」清單(每個附代號 C1/C2…)。**只有清單裡的角色才有代號**：畫到他→**只寫 ##代號##**(如 ##C1##；系統自動填入外觀、跟頭像同一個人)，**用代號最準**(簡繁/暱稱不會對錯)；固定外觀(髮型/瞳色/種族/體型)交給 ##代號##、你不要自己重寫，但**服裝穿脫/裸露由你按本輪劇情寫**(代號只給固定外觀、不含服裝，否則洗澡會穿著衣服)。\n已登記角色：${nameList.map(e => e.code + '. ' + e.name).join('｜')}\n⚠️ **清單裡「沒有」的角色(沒代號)→ 直接用英文 NAI 標籤寫他完整外觀(種族/年齡/髮色/眼色/體型/服裝)，名字「絕對不要」用 ## 包**——沒代號就沒得填，包了系統認不得、會把 ##名字## 原樣送進 NAI 壞掉。一句話：**有代號才用 ##，沒代號就寫外觀、不准包名字**。\n⚠️ 只有代號要用井號 ## 包、**不要用 {{ }}**——{{ }} 是 NAI 權重會壞。\n你負責：動作／姿勢／表情／站位／互動／場景／環境／鏡頭／光線**＋服裝/裸露狀態**(洗澡→裸體、戰鬥→盔甲、睡覺→睡衣…)；已登記角色的固定外觀(髮/瞳/種族/體型)交給 ##代號##。\n`
+            : ((looksRef && looksRef.trim())
+                ? `\n【角色外觀錨點（★最高權威）：以下是每個角色已確立的外觀——「頭像生成詞」即當初畫這張頭像用的提示詞。畫到哪個角色，就照他這串外觀畫：髮色／眼色／體型／髮型／服裝一律沿用(姿勢、表情、鏡頭可依本輪劇情調整)。劇情或摘要沒寫到外觀也要主動補上，嚴禁漏髮色/眼色/體型，更嚴禁自行另編一個長相】\n${looksRef.trim()}\n`
+                : '');
+        return `
+
+═══════════════════════════════════════
+【★ 同時輸出「場景插圖」→ 放進同一個 JSON 的 "scenes" 欄位】
+${(userPrompt || '').trim()}
+${charBlock}
+【定位規則｜務必嚴格遵守】（「插圖位置」的格式一律以這裡為準；上方規範要求的其他欄位如 summary/pov 照常輸出、不受此段影響）
+- 下面【本輪最新劇情（編號段落）】是切好編號的段落，你只能從這些編號裡挑插圖位置。
+- 嚴禁為世界書設定/歷史對話/舊訊息生圖——只畫最新這一輪的劇情。
+- 每張插圖輸出 "after_paragraph"：一個數字，代表這張圖要出現在哪個編號段落「之後」。
+- 不要複製、不要引用原文文字，只給數字編號。
+- 上方規範若要求每張插圖先輸出 summary/pov 等思考欄位，照規範輸出、放在 "prompt" 之前（系統只讀 after_paragraph 與 prompt，多的欄位無害）。
+- 格式範例：{ "scenes": [ { "after_paragraph": 3, "prompt": "..." }, { "after_paragraph": 7, "prompt": "..." } ] }
+
+【本輪最新劇情（編號段落）】
+${numberedText}`;
+    }
+
+    // 依「插圖來源」(scene service) 直接挑該接口的副模型插圖指令；每接口各自獨立，互不污染。
+    // 舊存檔 fallback：沒有 per-接口欄 → 退回舊的 標籤/自然語言/單一 extractPrompt
+    function _pickScenePrompt(cfg) {
+        cfg = cfg || {};
+        let svc = '';
+        try { svc = ((win.OS_IMAGE_MANAGER?.serviceForUse?.('scene') || win.OS_IMAGE_MANAGER?.serviceFor?.('scene'))) || win.OS_IMAGE_MANAGER?.config?.service || ''; } catch (e) {}
+        const perIface = ({
+            novelai:        cfg.extractPromptNovelai,
+            tavern_sd:      cfg.extractPromptTavern,
+            comfyui_direct: cfg.extractPromptComfy,
+            custom_api:     cfg.extractPromptCustom,
+        })[svc];
+        const picked = (perIface || '').trim();
+        if (picked) return picked;
+        // 舊存檔退路
+        const tags = (cfg.extractPromptTags || '').trim();
+        const nat  = (cfg.extractPromptNatural || '').trim();
+        const legacy = (cfg.extractPrompt || '').trim();
+        return (svc === 'novelai' ? tags : nat) || legacy || nat || tags || '';
+    }
+
+    // --- 主流程：抽一次（結合觸發：狀態 + 記憶共用同一通副模型）---
+    async function extractOnce(opts) {
+        if (_running) { _missedRun = { opts: opts || {} }; return; }
+        _running = true;
+        let pendingMem = null, memIngested = false, _dedupe = null, _dirRide = false, _dirLanded = false;
+        let _runLastId = null, _softGate = null;
+        // 🎬 便車搶跑修正：導演開著就「同步」先搶下本輪防抖旗標——別等跑到下面設（那行藏在向量召回等 await 之後，
+        //    慢召回會讓獨立導演在 2.7s 先開打＝雙導演稿＋多打一通主接口）。真正落地與否由下方 _dirRide/_dirLanded 決定；
+        //    沒落地就在 finally 補一通獨立（extractDirector 自帶同樓/截斷/停止守門，重複呼叫也安全）。
+        const _dirIntended = directorOn() && typeof win.OS_API?.chatMain === 'function';
+        if (_dirIntended) _directorHandledThisRound = true;
+        try {
+            if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過抽取(AVS/記憶)'); return; }
+            const chatId = getChatId();
+            if (!chatId || !win.OS_DB?.getStateData) return;
+
+            // ── 截斷守門：半截正文(破甲/中途停)→ 整通副模型跳過：別拿髒正文抽 AVS／記憶／場景，也別白燒一張圖。
+            //    「繼續生成／重新生成」補齊後 GENERATION_ENDED 會再觸發、收尾完整就正常抽（同一 msgId 重生，故這通若已寫髒 patch 會擋住重抽，所以這裡要擋乾淨）。
+            //    讀「完整原文」判斷(不切片，避免長正文結尾被截誤判)。兩種截斷：
+            //    ① 有 <content> 沒 </content> = 截在正文中（任何聊天都擋）
+            //    ② VN 前景但連 <content> 都沒有 = 思考期就截、正文還沒冒出來（只在 VN 模式擋，避免誤傷非 VN 訊息；建檔/套預設初始填充 skipScenes 不擋，怕卡片問候語沒 <content>）
+            //
+            // 🚨 這整段讀的是「酒館最後一則訊息」。獨立版沒有 TavernHelper → _lastRaw 永遠是空字串，
+            //    於是 _hasOpen=false、而 VN 一定在前景(_vnFg=true) → 條件②每次都成立 →
+            //    每一章都印「正文截斷 → 跳過本通抽取」然後 return。AVS 抽不到、插圖搭不上車，
+            //    兩個功能同時像壞掉，實際上是這道守門把整通擋死了。
+            //    獨立版不需要這道守門：生成器在存章節之前就先驗過貨了（壞的根本不會落地，見 vn_generator 的壞回覆橫幅），
+            //    存下來的章節照定義就是完整的。
+            if (!_isStandalone()) try {
+                const _lastArr = await win.TavernHelper?.getChatMessages?.(-1);
+                const _lastRaw = String((_lastArr && _lastArr[0] && (_lastArr[0].message || _lastArr[0].mes)) || '');
+                // 🚫 API 報錯佔位訊息(主模型生成失敗、錯誤字串被當正文寫進聊天)→ 不是真劇情：
+                //    整通副模型跳過，別拿錯誤字串抽 AVS／記憶／場景、白燒額度，也別寫髒 patch 卡住 swipe 重生的正解。
+                //    主路靠 ST 標準前綴 [API Error]；輔以「短訊息含 API 憑證錯誤特徵」(這些字串幾乎不會出現在劇情正文)。
+                const _errRaw = _lastRaw.trim();
+                if (/^\[API Error\]/i.test(_errRaw)
+                    || (_errRaw.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_errRaw))) {
+                    console.log('🛰️ [State Runtime] 偵測到 API 報錯訊息 → 跳過本通抽取/記憶/場景，等重生補齊');
+                    return;
+                }
+                const _rawNoCot = _lastRaw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // CoT 提到 <content> 字樣不算正文
+                const _hasOpen = _rawNoCot.indexOf('<content>') !== -1;
+                const _hasClose = _rawNoCot.indexOf('</content>') !== -1;
+                const _vnFg = (() => { try { const p = win.document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && win.document.getElementById('page-game')); } catch (e) { return false; } })();
+                // 這張卡是不是 VN 正文格式（同 vn_core._storyFormatChat；鐵則：截斷判定看格式不看面板）：
+                // 往前找最多 6 則「先前的」AI 樓，任一帶 <content> ＝ VN 格式卡 → 新樓連 <content> 都沒有＝壞樓，
+                // 不管面板開沒開都跳過抽取（API 錯誤樓不匹配錯誤特徵字串時，靠這條兜底）。
+                const _storyFmt = (() => {
+                    try {
+                        const c = win.SillyTavern?.getContext?.()?.chat;
+                        if (!Array.isArray(c)) return false;
+                        let seen = 0, skippedCur = false;
+                        for (let i = c.length - 1; i >= 0 && seen < 6; i--) {
+                            const m = c[i];
+                            if (!m || m.is_user) continue;
+                            if (!skippedCur) { skippedCur = true; continue; }
+                            seen++;
+                            if (String(m.mes || m.message || '').indexOf('<content>') !== -1) return true;
+                        }
+                        return false;
+                    } catch (e) { return false; }
+                })();
+                const _isInitFill = !!(opts && opts.skipScenes);
+                if ((_hasOpen && !_hasClose) || ((_vnFg || _storyFmt) && !_hasOpen && !_isInitFill)) {
+                    console.log('🛰️ [State Runtime] 正文截斷 → 跳過本通抽取，等補齊/重生再抽');
+                    return;
+                }
+            } catch (e) {}
+
+            const schema = await getActiveSchema();
+            const hasState = !!(schema && Object.keys(schema).length);
+
+            // 結合觸發：取走 vector_inject 掛的待處理記憶（狀態系統開著時它會交棒過來）
+            pendingMem = (win.OS_VECTOR_INJECT?.consumePendingMemory?.()) || null;
+            const wantMemory = !_isStandalone() && !!(pendingMem && win.OS_VECTOR_ENGINE?.isEnabled?.() === true && typeof win.OS_VECTOR_ENGINE?.ingestEntries === 'function');
+            // 場景插圖（副模型版）：搭便車在這通副模型多吐 scenes（不另開呼叫）
+            const _sceneCfg = (function(){ try { return (JSON.parse(localStorage.getItem('os_image_config')||'{}').sceneGen) || {}; } catch(e){ return {}; } })();
+            const _scenePromptText = _pickScenePrompt(_sceneCfg);
+            // 建檔/套預設的「初始填充」傳 skipScenes:true → 只填狀態、不搭便車生場景插圖（建檔不是劇情推進，不該生圖）
+            // 開了「獨立插圖副模型」→ 搭便車插圖停（改走 extractScenesStandalone 那條獨立通）；沒開＝照舊搭便車
+            // 🧩 PWA 這通不做的是「記憶」與「NPC 檔案」：那兩樣各自掛在 VN_CHAPTER_SAVED 上跑自己的副模型，
+            //    搭便車會變成同一章打兩通、登場數還會灌水。
+            //    但「場景插圖」要走：它沒有自己的 VN_CHAPTER_SAVED 路，生產者只有兩個 ——
+            //    搭便車(這裡)或獨立插圖副模型(extractScenesStandalone)，跟酒館的分工完全一樣。
+            const wantScenes = !(opts && opts.skipScenes) && !!(_sceneCfg.extractEnabled && _scenePromptText) && !_sceneCfg.standaloneEnabled;
+            // 🔍 插圖開著卻沒生：把原因印出來。以前這裡是一路靜默 return，畫面上跟「AI 就是沒挑到要插圖」長得一模一樣。
+            if (_sceneCfg.extractEnabled && !wantScenes) {
+                let _why = '';
+                if (opts && opts.skipScenes) _why = '這通是初始填充/獨立插圖模式，插圖不搭這通';
+                else if (_sceneCfg.standaloneEnabled) _why = '開著「獨立插圖副模型」→ 由那條獨立通負責，不搭這通';
+                else if (!_scenePromptText) {
+                    let _svc = ''; try { _svc = ((win.OS_IMAGE_MANAGER?.serviceForUse?.('scene') || win.OS_IMAGE_MANAGER?.serviceFor?.('scene'))) || ''; } catch (e) {}
+                    _why = '這個插圖來源(' + (_svc || '未知') + ')的「插圖規範」是空的 → 去 設置→圖片→插圖 把那一格填好（規範是按來源各存一份的）';
+                }
+                if (_why) console.warn('🖼️ [State Runtime] 插圖這輪沒跑：' + _why);
+            }
+
+            // 🖼️ 插圖也算一件事：以前只看狀態/記憶，於是「插圖開著但沒有變數包」時整通直接 return，
+            //    使用者看到的是「插圖開了卻永遠不生」而且沒有任何訊息。PWA 尤其明顯 ——
+            //    記憶在獨立版走自己的路(wantMemory 恆 false)，等於插圖被綁死在「必須先有 AVS 變數包」。
+            // 🎬 世界門場記表（11-18）：人在白板企劃展開的世界裡、還有沒走到的岔路或結局 → 這一通順便判岔路（os_worldgate.js 的 logAddendum／logCommit）。
+            //   建檔／套預設的初始填充（skipScenes）不是劇情推進，不判
+            let wantLog = false;
+            try { wantLog = !(opts && opts.skipScenes) && !!(win.OS_WORLDGATE?.logWanted && await win.OS_WORLDGATE.logWanted()); } catch (e) {}
+            const wantCheck = !(opts && opts.skipScenes) && endCheckOn();   // 🔎 末尾檢查（試用）：建檔初始填充不是一章，不查
+            if (!hasState && !wantMemory && !wantScenes && !wantLog && !wantCheck) return;   // 五件事都沒得做
+
+            const currentState = win._AVS_ENGINE?.read?.() || {};
+            const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
+            _runLastId = lastId;
+
+            const data = (await win.OS_DB.getStateData(chatId)) || {};
+            // force（狀態面板「立即抽一次」）＝無視「這樓已抽過」守門重抽——按鈕的意義就是換好模型重來一次，
+            // 原本已抽過就靜默跳過，按了等於沒按
+            // 🆔 身分制：「這樓抽過沒」看正文有沒有 avs 標記、且那個 id 確實在 patches 裡（不再比樓號）
+            //    ⚠️ 必須讀完整正文：lastContent 是截斷到 4000 字的，標記釘在 </content> 前會被切掉
+            const _force = !!(opts && opts.force);
+            let _lastFull = '';
+            if (!_isStandalone()) {
+                try {
+                    const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
+                    _lastFull = String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || '');
+                } catch (e) {}
+            }
+            const _known = new Set(_patchList(data.patches).map(p => String(p.id)));
+            // 身分制的兩種身分：酒館＝正文裡釘的 <!--avs:id-->；PWA＝章節 id 本身(章節就是那一輪,不必往正文釘東西)
+            const _doneIds = _isStandalone() ? [String(lastId)] : _idsInText(_lastFull || lastContent);
+            const stateAlreadyDone = !_force && hasState && _hasId(lastId) && _doneIds.some(id => _known.has(id));
+            const doState = hasState && !stateAlreadyDone && !!recentText && _hasId(lastId);
+
+            if (!doState && !wantMemory && !wantScenes && !wantLog && !wantCheck) return;
+
+            // 組 prompt：狀態部分用原本 buildExtractPrompt(不動，保品質)；要記憶就附加 memories 區段共用同一通
+            let prompt;
+            if (doState) {
+                const isInitialFill = !currentState || Object.keys(currentState).length === 0;
+                prompt = buildExtractPrompt(schema, currentState, recentText, isInitialFill);
+                if (!isInitialFill) {   // 中途才套變數包時，把「還沒有值的欄位」印出來，對照面板缺什麼
+                    try {
+                        const _c = currentState || {};
+                        const _miss = Object.keys(schema || {}).filter(k => {
+                            const v = _c[k];
+                            return v === undefined || v === null || v === ''
+                                || (typeof v === 'object' && !Array.isArray(v) && Object.keys(v).length === 0);
+                        });
+                        if (_miss.length) console.log('[State Runtime] 這輪要補初值的欄位（' + _miss.length + '）：' + _miss.join('、'));
+                    } catch (e) {}
+                }
+                // 📜 大總結參照（唯讀）：早期劇情被總結收走後最近樓層看不到 → 副模型對不到帳，
+                //   任務早完成了狀態還掛「進行中」。附壓縮版總結讓它比對「當前狀態 vs 既成事實」修正。
+                //   sp_avs_summary_ref=0 可關（省 token）。
+                try {
+                    if (localStorage.getItem('sp_avs_summary_ref') !== '0' && win.OS_STORY_TOOLS?.getCurrentInjectionPayload) {
+                        const _sum = await win.OS_STORY_TOOLS.getCurrentInjectionPayload();
+                        if (_sum) prompt += '\n\n【劇情大總結（唯讀參照，嚴禁複述進輸出）】\n若「當前狀態」的欄位與下列既成事實不符（例如任務其實已完成、酬勞已領、關係已變化），請在 updates 修正該欄位：\n' + _sum;
+                    }
+                } catch (e) {}
+                // 🧭 這一章出場的人上一次記下的關係：relationship 以此為底寫到現在（見 OS_VECTOR_INJECT.relationNow）
+                let _relNow = '';
+                if (wantMemory) { try { _relNow = (await win.OS_VECTOR_INJECT?.relationNow?.(pendingMem.content || recentText || '', pendingMem.storyId)) || ''; } catch (e) {} }
+                if (wantMemory) prompt += _memoryAddendum(_relNow);
+                // 角色去重搭便車：有繁簡/別名候選才把名單塞進這通 prompt（不另開 API）
+                if (localStorage.getItem('sp_avs_dedupe') !== '0') { _dedupe = _buildDedupeBlock(currentState); if (_dedupe) prompt += _dedupe.block; }
+            } else if (wantMemory) {
+                let _relNow2 = '';
+                try { _relNow2 = (await win.OS_VECTOR_INJECT?.relationNow?.(pendingMem.content || recentText || '', pendingMem.storyId)) || ''; } catch (e) {}
+                prompt = _memoryOnlyPrompt(recentText || pendingMem.content || '', _relNow2);
+            } else {
+                // 只有插圖：不抽狀態也不抽記憶，這通就純粹是「挑段落 + 寫插圖提示詞」。
+                // 指令本體由下面的 _sceneAddendum 附上（跟搭便車模式同一份規範，不另寫一套）。
+                prompt = wantScenes ? '你是插圖分鏡助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。'
+                       : wantLog ? '你是互動小說的記帳助手。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。'   // 只有場記表要判
+                       : '你是互動小說的校對。只輸出 JSON，不要 markdown 圍欄、不要解釋、不要續寫劇情。';   // 只有末尾檢查
+            }
+            // 📇 NPC 檔案搭便車：登場記帳(0 API) + 回頭客建檔候選附進同一通（sp_npc_dossier=0 可關）
+            let _npc = null;
+            try {
+                // 🧩 PWA 跳過：npc_dossier 自己掛在 VN_CHAPTER_SAVED 上做記帳+建檔，
+                //    這裡再 prepare 一次＝同一章登場記兩次(出場數灌水)＋多一通副模型。
+                if (!_isStandalone() && win.OS_NPC_DOSSIER?.prepare) {
+                    _npc = await win.OS_NPC_DOSSIER.prepare(chatId, _lastFull || lastContent, lastId);   // 完整正文：長章節後半登場的NPC也要記到出場數
+                    if (_npc && _npc.block) prompt += _npc.block;
+                }
+            } catch (e) {}
+            // 📇 往事線索搭便車（記憶迴廊抽牌用，11-26）：兩端都搭這通，網頁版也是（只讀不記帳，不會灌水登場數）
+            //   建檔初始填充不是劇情推進，不記
+            let _past = null;
+            try {
+                if (!(opts && opts.skipScenes) && win.OS_NPC_DOSSIER?.preparePasts) {
+                    _past = await win.OS_NPC_DOSSIER.preparePasts(chatId, _lastFull || lastContent);
+                    if (_past && _past.block) prompt += _past.block;
+                }
+            } catch (e) {}
+            // 場景插圖搭便車：把最後一則自己切段編號，要副模型只挑 after_paragraph 數字（程式自己對位）
+            let _sceneParas = [];
+            let _looksMap = null;   // ##角色名##佔位模式才建；null = 用外觀錨點舊模式、派發時不展開
+            const _useNamePH = wantScenes && _sceneCfg.useNamePlaceholder !== false;   // 預設開
+            if (wantScenes && recentText) {
+                _sceneParas = _segmentStory(_lastFull || lastContent || '');   // 完整正文分段：4000字後的段落也要能掛插圖（結尾高潮戲原本永遠沒編號）
+                if (_sceneParas.length) {
+                    const numbered = _sceneParas.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
+                    if (_useNamePH) {
+                        const _nameMap = await _buildLooksMap(currentState);
+                        // 列「所有有外觀資料的角色」(頭像 + AVS-only NPC)；佔位模式名單只是名字+代號、很短不臃腫，
+                        // 不再濾近期(濾近期會把沒頭像、只有 AVS 的 NPC 漏掉→副模型不知有這角色→畫崩)
+                        const _names = Object.keys(_nameMap);
+                        // 配代號 Cn（只在這通 prompt 內有效；AI 用 ##Cn## 最準、免簡繁/暱稱對錯，也可用 ##角色名##）
+                        const _entries = _names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
+                        _looksMap = { ..._nameMap };                                       // 名字鍵 → 外觀
+                        _entries.forEach(e => { _looksMap[e.code] = _nameMap[e.name]; });   // 代號鍵 → 同一外觀(展開時兩種都認)
+                        prompt += _sceneAddendum(_scenePromptText, numbered, '', _entries);
+                    } else {
+                        prompt += _sceneAddendum(_scenePromptText, numbered, await _buildLooksRef(currentState));
+                    }
+                }
+            }
+
+            // 🎬 場記表搭便車：段落跟插圖同一套切法；插圖那段已經印過編號就不再印一次
+            let _logH = null;
+            try {
+                if (wantLog && recentText) {
+                    const _lp = _sceneParas.length ? _sceneParas : _segmentStory(_lastFull || lastContent || '');
+                    _logH = await win.OS_WORLDGATE.logAddendum(_lp, { numbered: _sceneParas.length > 0 });
+                    if (_logH && _logH.block) prompt += _logH.block;
+                }
+            } catch (e) {}
+
+            // 🔎 末尾檢查搭便車：沒抽狀態也沒抽記憶的話，上面沒有前情和狀態，這裡自己補
+            let _chkOn = false;
+            try {
+                if (wantCheck && recentText) {
+                    const _cp = _sceneParas.length ? _sceneParas : _segmentStory(_lastFull || lastContent || '');
+                    if (_cp.length) {
+                        const _printed = _sceneParas.length > 0 || !!(_logH && _logH.block);
+                        const _ctx = (!doState && !wantMemory)
+                            ? '\n【前情】\n' + String(recentText).slice(-6000) + '\n【目前狀態】\n' + JSON.stringify(currentState || {}).slice(0, 2000)
+                            : '';
+                        prompt += _checkAddendum(_cp, _printed, _ctx);
+                        _chkOn = true;
+                    }
+                }
+            } catch (e) {}
+
+            // 🎬 記憶導演：給副模型「全記憶帶碼目錄」，讓它挑下一輪主模型該被提醒哪幾條（搭這通、不多打 API）
+            let _recallCat = null;
+            try {
+                if ((doState || wantMemory) && win.OS_VECTOR_INJECT?.getCatalogForPicking) {
+                    // 把「當下劇情」當 query 傳進去 → 召回端用向量粗篩出相關候選給導演挑（取代全目錄常駐）；沒向量就退回全目錄。
+                    _recallCat = await win.OS_VECTOR_INJECT.getCatalogForPicking(lastContent || recentText || '');
+                    let _closedNames = [];
+                    try { _closedNames = (await win.OS_STORY_TOOLS?.getCurrentClosedNames?.()) || []; } catch (e) {}
+                    if (_recallCat && _recallCat.text) prompt += _recallAddendum(_recallCat.text, _closedNames);
+                }
+            } catch (e) {}
+
+            // 🎬 導演稿搭便車（主接口沒必要一輪打兩通）：導演開著→六格稿掛同一通、JSON 之後輸出，
+            //    省一整段思考期＋重複上下文；沒搭上（模型漏寫/整通失敗）→ 降級回獨立 extractDirector 補一通。
+            try {
+                if (_dirIntended) {
+                    const _dirIds = new Set((Array.isArray(data.director?.patches) ? data.director.patches : []).map(d => String(d.id)));
+                    if (_doneIds.some(id => _dirIds.has(id))) {
+                        _dirLanded = true;   // 本樓早有導演稿（手改/回放）→ 不用再補
+                    } else {
+                        const _dirPrev = _latestDirectorText(data.director);
+                        prompt += _directorAddendum(_dirPrev, _activeCastNames());
+                        _dirRide = true;   // 導演稿掛便車、隨這通 JSON 之後一起輸出
+                    }
+                }
+            } catch (e) {}
+
+            // 🎭 表情搭便車：這張卡選「副模型補表情」（或視差世界裡主模型寫不了）就附上那幾句台詞，不另開一通。
+            //    獨立插圖副模型開著時讓那條做：劇情開播會等那條，表情來得及在播之前就位。
+            let _faces = null;
+            try { if (!(_sceneCfg.standaloneEnabled && String(_sceneCfg.standaloneSpec || '').trim())) { _faces = await win.VN_FREE_MODE?.fillTask?.(_lastFull || lastContent || ''); if (_faces) prompt += _faces.block; } } catch (e) {}
+
+            // 🧵 線索帳搭便車：這一章輪到這通記（酒館 AVS 開；PWA 記憶關、AVS 開）就附上，不另開一通
+            let _thr = null;
+            try {
+                if ((doState || wantMemory) && win.OS_STORY_THREADS?.siteFor?.() === 'avs') {
+                    _thr = await win.OS_STORY_THREADS.addendum(lastId);
+                    if (_thr && _thr.block) prompt += _thr.block;
+                }
+            } catch (e) {}
+
+            // 劇情不陪副模型乾等：60 秒還沒回就先放開開播閘門（插圖晚到照樣插），回覆照等
+            const _t0 = Date.now();
+            let _wasLate = false;
+            _softGate = setTimeout(() => { _wasLate = true; console.warn('🖼️ [State Runtime] 副模型超過 ' + Math.round(CONFIG.timeoutMs / 1000) + ' 秒還沒回 → 劇情先播，狀態和插圖回來再補'); _sceneGateRelease('ride'); }, CONFIG.timeoutMs);
+            const json = await runWithRetry(prompt);
+            const _lateSec = Math.round((Date.now() - _t0) / 1000);
+            // 晚到時這段時間可能已經有新的一樓：狀態照樣記在原本那樓（patch 認的是那樓的標記），插圖就不插，免得插進下一章
+            let _floorMoved = false;
+            if (_wasLate) {
+                try { const g = await gatherRecentMessages(); _floorMoved = getChatId() !== chatId || String(g && g.lastId) !== String(lastId); } catch (e) {}
+                console.log('🛰️ [State Runtime] 副模型 ' + _lateSec + ' 秒才回' + (_floorMoved ? '，這段時間已經換了一樓 → 狀態照記在 msg#' + lastId + '，插圖不插' : '，還是同一樓 → 照常'));
+            }
+            if (_floorMoved && getChatId() !== chatId) {
+                // 換了聊天室：狀態、插圖寫進去會落到現在這間（引擎和正文標記都跟著畫面走），整份不寫；
+                //   記憶帶著自己那本故事的編號，照樣收進原本那本
+                if (wantMemory && Array.isArray(json.memories)) { try { await win.OS_VECTOR_ENGINE.ingestEntries(json.memories, pendingMem.storyId, pendingMem.chapterId); memIngested = true; } catch (e) {} }
+                return;
+            }
+            // 存本輪抽取(原始輸出+memories)，狀態部分等下面算完 filtered/current 再補上 → 給狀態面板診斷/複製
+            _lastExtract = { at: Date.now(), msgId: lastId, raw: _lastRawText, updates: null, memories: Array.isArray(json.memories) ? json.memories : null, current: null };
+
+            // 🎬 記憶導演：副模型挑的代號 → 記憶物件 → 交棒 vector_inject，下一輪注入完整內文（取代主模型常忘記寫的 <recall>）
+            try {
+                if (_recallCat && _recallCat.map && win.OS_VECTOR_INJECT?.setPendingRecall) {
+                    const _codes = Array.isArray(json.recall_next) ? json.recall_next : [];
+                    const _picked = _codes.map(c => _recallCat.map[String(c).trim().toUpperCase()]).filter(Boolean);
+                    win.OS_VECTOR_INJECT.setPendingRecall(_picked);
+                    // 🧠 Jev 影子比對（os_jev_shadow.js）：同一批候選也讓 Jev 排一次，只記進 DEBUG 面板對照，實際送出的仍是上面副模型挑的；不 await，Jev 慢或掛了都不影響這一輪
+                    try { win.OS_JEV_SHADOW?.compare({ map: _recallCat.map, query: lastContent || recentText || '', picked: _codes, msgId: lastId }); } catch (e) {}
+                }
+            } catch (e) {}
+
+            // --- 狀態 patch（邏輯與原本一致）---
+            if (doState && json.updates && typeof json.updates === 'object') {
+                const updates = json.updates;
+                const filtered = {};
+                for (const k of Object.keys(updates)) {
+                    const root = k.split('.')[0];
+                    if (schema[k] !== undefined || schema[root] !== undefined) filtered[k] = updates[k];
+                }
+                // 🗑️ 退場刪除：removes=["容器.實體"] → 以刪除哨兵寫進同一筆 patch
+                //    （重播/swipe 回滾/trim 收斂全走既有 patch 機制、砍樓自動復原）。sp_avs_removes=0 可關。
+                let removedN = 0;
+                if (Array.isArray(json.removes) && localStorage.getItem('sp_avs_removes') !== '0') {
+                    for (const r of json.removes) {
+                        const path = String(r || '').trim();
+                        if (!path.includes('.')) continue;                             // 只准刪「容器.實體」，頂層欄位不准
+                        if (schema[path.split('.')[0]] === undefined) continue;
+                        let node = currentState || {};
+                        for (const seg of path.split('.')) { node = node?.[seg]; if (node === undefined) break; }
+                        if (node === undefined) continue;                              // 不存在的別寫進 patch
+                        filtered[path] = DEL_SENTINEL;                                 // 同 key 的 update 被蓋掉：退場優先
+                        removedN++;
+                    }
+                    if (removedN > 0) console.log(`🗑️ [State Runtime] 本輪退場刪除 ${removedN} 個實體:`, json.removes);
+                }
+                // 🆔 身分制：先把 <!--avs:id--> 釘進這則正文，釘成功才把 patch 記下去。
+                //    釘不上（樓號漂到使用者樓／API 不給改）＝這輪沒有身分 → 狀態照樣寫進 current，
+                //    只是不進 patch（不可單獨回滾），總比記一筆對帳時找不到 id、下一輪被當孤兒清掉好。
+                // PWA：章節 id 就是身分,不必(也沒地方)往正文釘標記；刪章＝那筆 patch 自然失去對應章節。
+                const _avsId = _isStandalone() ? String(lastId) : _newAvsId();
+                const _stamped = _isStandalone() ? true : await _stampAvsId(lastId, _avsId);
+                if (!_stamped) console.warn(`🛰️ [State Runtime] msg#${lastId} 釘不上 avs 標記 → 這輪不記 patch（狀態仍會寫入，只是不能單獨回滾）`);
+                // 🚨 等副模型的這 10～60 秒裡，NPC 檔案、刪樓回溯都可能改過這份資料：
+                //    一律重讀最新的再疊這一輪，不拿送出前讀的舊份整份蓋回去
+                const fresh = (await win.OS_DB.getStateData(chatId)) || data;
+                const curNow = win._AVS_ENGINE?.read?.() || currentState || {};
+                const _prev = _patchList(fresh.patches);
+                const trimmed = trimPatches(_stamped ? [..._prev, { id: _avsId, updates: filtered }] : _prev, fresh.base);
+                // 🔑 新 current 一律「以引擎現有狀態為底、只疊這輪 patch」——不要用 recomputeCurrent 從 base 空白重建。
+                //   因為 patches/base 可能是空的(先前狀態由主模型 <vars> 寫入、沒進 patch 系統)，從空重建會把累積的角色全洗光——這就是覆蓋根因。
+                //   點記法 _setDeep 只動有變化的葉節點、其餘角色與屬性原封保留。
+                const newCurrent = JSON.parse(JSON.stringify(curNow));
+                _applyPatchInto(newCurrent, filtered);
+                try { _foldMergeDupes(newCurrent); } catch (e) { console.warn('[State Runtime] 簡繁同名合併略過:', e?.message || e); }
+                // 🔁 寫入前先去重：同一角色繁簡/別名重複 → 副模型確認後合併刪除（有候選才花呼叫、無候選 0 成本；sp_avs_dedupe=0 可關）
+                try {
+                    if (_dedupe) {   // 這輪有塞去重候選 → 套用主副模型同一通回的 json.dupes（沒併也會記 _dedupeSeen 別再問）
+                        const _m = _applyDupes(newCurrent, json.dupes, _dedupe.pending);
+                        if (_m > 0) { if (_lastExtract) _lastExtract.dedupedCount = _m; console.log(`🔁 [State Runtime] 本輪去重合併 ${_m} 個重複角色(搭便車)`); }
+                    }
+                } catch (e) { console.warn('[State Runtime] 角色去重略過:', e?.message || e); }
+                if (_lastExtract) { _lastExtract.updates = filtered; _lastExtract.current = newCurrent; }   // 補上狀態給診斷面板
+                // 📸 寫入前快照「抽取前狀態」→ 狀態面板「還原上一步」能撤掉這輪亂抽（小模型掉鏈子的保險）。
+                //   舊快照只掛在主模型 <vars> 退役路徑上，副模型抽取從沒寫過 → 按鈕永遠是暗的。
+                try { win._AVS_ENGINE?.snapshot?.(curNow); } catch (e) {}
+                // 🚨 順序與 await 都是關鍵：engine.write 內部是 async 且會「讀 DB→寫回 DB」。
+                //    以前它排在 saveStateData 之前、又沒 await → 它讀到的是還沒寫入新 patch 的舊資料，
+                //    等 saveStateData 存好之後它才慢一步寫回去，把剛存的 patches 蓋成舊值。
+                //    結果就是逐輪紀錄永遠停在 0 筆、回溯永遠沒東西可退。
+                //    正確順序：先把完整資料落地，再 await 引擎（此時它讀到的已是新資料，spread 原樣保留）。
+                await win.OS_DB.saveStateData(chatId, { ...fresh, patches: trimmed.patches, base: trimmed.base, current: newCurrent, patchFmt: 2 });
+                try { await win._AVS_ENGINE?.write?.(newCurrent); } catch(e) { console.warn('[State Runtime] AVS engine.write 失敗:', e); }
+                const changed = Object.keys(filtered).length;
+                if (changed > 0) console.log(`🛰️ [State Runtime] 抽取完成 msg#${lastId}：${changed} 欄位變化`, filtered);
+                try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: lastId, updates: filtered }); } catch(e) {}
+            }
+
+            // 📇 NPC 檔案落地：必須在上面狀態 saveStateData「之後」寫（否則會被舊 data spread 蓋掉）；
+            //    副模型沒吐 npc_files 也要 commit（登場記帳不能丟）
+            try { if (_npc && win.OS_NPC_DOSSIER?.commit) await win.OS_NPC_DOSSIER.commit(_npc, json.npc_files); } catch (e) {}
+            try { if (_past && win.OS_NPC_DOSSIER?.commitPasts) await win.OS_NPC_DOSSIER.commitPasts(_past, json.npc_pasts); } catch (e) {}
+            // 🧵 線索帳落地（存在自己那一格，不碰 state_data，順序無所謂）
+            try { if (_thr && _thr.handle) await win.OS_STORY_THREADS.commit(_thr.handle, json.threads); } catch (e) {}
+            try { if (_faces) await win.VN_FREE_MODE.commitFill(_faces, json.faces, chatId); } catch (e) {}
+
+            // --- 記憶入庫（結合觸發）---
+            if (wantMemory) {
+                if (Array.isArray(json.memories)) {
+                    try {
+                        await win.OS_VECTOR_ENGINE.ingestEntries(json.memories, pendingMem.storyId, pendingMem.chapterId);
+                        memIngested = true;
+                        console.log(`🧠 [State Runtime] 結合抽取：記憶 ${json.memories.length} 條入庫`);
+                    } catch(e) { console.warn('[State Runtime] 記憶入庫失敗:', e?.message || e); }
+                }
+                // 副模型沒吐 memories → 降級：讓向量引擎自己抽一通，不漏記憶
+                if (!memIngested) { try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); memIngested = true; } catch(e) {} }
+            }
+
+            // --- 場景插圖（副模型版）：把 scenes 交給渲染器（認 message_id 回填、防 desync）---
+            if (wantScenes && !_floorMoved && Array.isArray(json.scenes) && json.scenes.length && win.VN_SceneInsert?.fromExtract) {
+                try {
+                    // AI 只給段號 → 換成程式自己存的那段原文(逐字)當錨點；VN_SceneInsert 拿原文去 VN 劇本逐字對位
+                    const mapped = json.scenes.map(s => {
+                        let after = '';
+                        const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
+                        if (n >= 1 && _sceneParas[n - 1]) after = _sceneParas[n - 1];
+                        else if (s.after) after = String(s.after);  // 舊格式相容（AI 真給了引文）
+                        // 佔位模式：把 ##角色名## 換成登記表外觀（頭像詞→AVS→留原名）；非佔位模式 _looksMap=null 不動
+                        const _used = [];
+                        const _p = _scrubSceneCounts(_looksMap ? _expandSceneNames(s.prompt, _looksMap, _used) : s.prompt);
+                        _warnExtraPersons(_p, _used);
+                _warnTrailingInteraction(_p);
+                        _warnTrailingInteraction(_p);
+                        return { after: after, prompt: _p, cast: _looksMap ? _sceneCastOf(s.prompt, _looksMap) : [] };
+                    }).filter(s => s && s.prompt);
+                    win.VN_SceneInsert.fromExtract(mapped, { chatId: chatId, msgId: lastId, t0: _t0 });
+                    console.log(`🖼️ [State Runtime] 場景插圖：派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? s.afterParagraph ?? '?').join(',')}]/共${_sceneParas.length}段 (msg#${lastId})`);
+                } catch(e) { console.warn('[State Runtime] 場景插圖派發失敗:', e?.message || e); }
+            }
+
+            // 🎬 場記表收帳：判到的岔路寫回正文、結局交大模型確認、該想下一步就叫（換了一樓就只記帳不寫回）
+            if (_logH && _logH.handle) {
+                try { await win.OS_WORLDGATE.logCommit(_logH.handle, json.plan_log, { lastId, floorMoved: _floorMoved, text: _lastFull || lastContent || '' }); }
+                catch (e) { console.warn('[State Runtime] 場記表收帳失敗:', e?.message || e); }
+            }
+
+            // 🔎 末尾檢查收帳（試用：只記不改）
+            if (_chkOn) {
+                try { await _checkCommit(chatId, lastId, json.check, _lastFull || lastContent || ''); }
+                catch (e) { console.warn('[State Runtime] 末尾檢查收帳失敗:', e?.message || e); }
+            }
+
+            // 🎬 便車稿落地：從同一通原始輸出抓《導演稿開始/結束》（容繁簡）；缺失/不合格 → 降級獨立補一通
+            if (_dirRide) {
+                try {
+                    const _noCot = String(_lastRawText || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                    const _dm = _noCot.match(/《[導导]演稿[開开]始》([\s\S]*?)《[導导]演稿[結结]束》/);
+                    const _dClean = _dm ? _dm[1].trim() : '';
+                    if (_dClean && /【公共[劇剧]情】/.test(_dClean)) {
+                        await _saveDirectorPatch(chatId, lastId, _dClean);
+                        _dirLanded = true;   // 便車落地 → finally 不再補獨立
+                    } else {
+                        console.warn('🎬 [Director] 便車稿缺失/不合格 → 這輪不補（便車已打過一通、免重複觸發），下一輪再抽');
+                    }
+                } catch (e) {}
+            }
+        } catch(e) {
+            console.warn('[State Runtime] 抽取失敗:', e?.message || e);
+            // 整通失敗也別漏記憶：有 pending 就讓引擎自己補抽一通
+            if (pendingMem && !memIngested && win.OS_VECTOR_ENGINE?.isEnabled?.()) {
+                try { win.OS_VECTOR_ENGINE.ingest(pendingMem.content, pendingMem.storyId, pendingMem.chapterId); } catch(_) {}
+            }
+            // 🎬 便車稿跟著整通陪葬：這輪不再補（便車已打過那通、_dirRide=true → finally 不補），下一輪再抽
+        } finally {
+            // 🎬 導演補位：只在「便車根本沒打過那通」(_dirRide=false) 且沒手改稿(_dirLanded=false) 時補一通獨立——
+            //    例如 extractOnce 在掛導演前就提早 return。便車若已經打過一通(不管成敗)就不再補：
+            //    原則是「只打一通、失敗就這輪算了」——別對同一個慢/卡住的接口重複觸發。
+            //    _directorHandledThisRound 已在開頭同步搶下＝獨立防抖那顆不會再跑；extractDirector 自帶同樓/截斷/停止守門。
+            if (_dirIntended && !_dirRide && !_dirLanded) { try { extractDirector(); } catch (_) {} }
+            clearTimeout(_softGate);
+            _running = false;
+            _sceneGateRelease('ride');   // 搭便車路的插圖已派發（或這輪沒有）→ 交棒給真正的生圖單，放開 VN 開播閘門
+            // 等副模型的時候下一輪已經寫完、那次觸發被擋掉了 → 補抽「現在最新那一樓」。
+            //   只在真的換了一樓時補：同一樓再抽一次只會白打一通（狀態有「這樓抽過」守門，插圖沒有）
+            if (_missedRun) {
+                const _m = _missedRun; _missedRun = null;
+                const _did = _runLastId;
+                gatherRecentMessages().then(g => {
+                    if (!g || !_hasId(g.lastId) || String(g.lastId) === String(_did)) return;
+                    console.log('🛰️ [State Runtime] 剛才等副模型時 msg#' + g.lastId + ' 寫完了 → 補抽這一樓');
+                    extractOnce(_m.opts);
+                }).catch(() => {});
+            }
+        }
+    }
+
+    // 🎯 獨立插圖副模型：scenes 拆成「單獨一通 chatSecondary」，只吃 standaloneSpec、不背 AVS/記憶。
+    //    開關在 圖片設定→插圖→「獨立插圖副模型」。沒開＝走 extractOnce 搭便車路（上面，原碼保留），互不影響。
+    // 獨立插圖佔位展開：把 ##角色名##/##代號## 換成登記表外觀；NAI 的 {{}}/[]/() 權重一概不碰（只動井號 ##）。
+    function _expandHashNames(str, map, used) {
+        if (!str || String(str).indexOf('##') < 0) return str;
+        const lower = {}; for (const k of Object.keys(map || {})) lower[k.toLowerCase()] = map[k];
+        const seen = Object.create(null);   // 同一人重複出現只展開第一次（見 _dedupeExpand）
+        return String(str).replace(/##\s*([^#]+?)\s*##/g, (m, raw) => {
+            const name = String(raw).trim();
+            const hit = (map && (map[name] || map[name.toUpperCase()])) || lower[name.toLowerCase()];
+            return hit ? _dedupeExpand(seen, hit, name, used) : name;   // 登記到→外觀；沒登記→拿掉井號留原文（別讓 ## 進 NAI）
+        });
+    }
+    // ══ VN 開播閘門佔位（治「副模型還沒生插圖，loading 就放行了」）════════════
+    //   VN 的閘門判「圖都好了」是看「連續 1.5 秒沒有生圖單」，但插圖副模型是 GENERATION_ENDED
+    //   之後 debounceMs+600 ≈ 2.1 秒才開跑 —— 那 0.6 秒空窗必定被判成清空、劇情先播、圖後到。
+    //   所以在 GENERATION_ENDED 當下就先舉「盤點中」的牌佔位，等副模型把 scenes 派發出去
+    //   （那時真正的生圖單已經接手計數器）再降旗。
+    let _sceneGateHeld = false;
+    let _sceneGateOwner = '';       // 'standalone' | 'ride'：誰負責這輪的插圖，就由誰降旗
+    let _sceneGateTimer = null;
+
+    // 這輪到底會不會有插圖要生（不會就別佔位，免得白等）
+    function _willMakeScenes() {
+        try { if (localStorage.getItem('vn_scene_enabled') === '0') return ''; } catch (e) {}
+        const sg = (function () { try { return (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen) || {}; } catch (e) { return {}; } })();
+        if (sg.standaloneEnabled) return String(sg.standaloneSpec || '').trim() ? 'standalone' : '';
+        if (sg.extractEnabled && _pickScenePrompt(sg) && isEnabled()) return 'ride';
+        return '';
+    }
+
+    function _sceneGateRaise() {
+        if (_sceneGateHeld) return;
+        const VN = win.VN_Core;
+        if (!VN || typeof VN._imgScanStart !== 'function') return;
+        const owner = _willMakeScenes();
+        if (!owner) return;
+        VN._imgScanStart();
+        _sceneGateHeld = true;
+        _sceneGateOwner = owner;
+        clearTimeout(_sceneGateTimer);
+        // 保險閥：副模型掛掉/超時也一定要放行，絕不把開播 loading 卡死
+        _sceneGateTimer = setTimeout(function () {
+            if (!_sceneGateHeld) return;
+            console.warn('🖼️ [插圖] 副模型超過 90 秒還沒把插圖派發出來 → 先放行開播，圖之後補上。');
+            _sceneGateRelease(_sceneGateOwner);
+        }, 90000);
+    }
+
+    function _sceneGateRelease(owner) {
+        if (!_sceneGateHeld || (owner && owner !== _sceneGateOwner)) return;
+        _sceneGateHeld = false;
+        _sceneGateOwner = '';
+        clearTimeout(_sceneGateTimer);
+        // 延一個 macrotask 再降：fromExtract 的預熱是 promise chain（microtask）才掛進計數器，
+        // 立刻降旗會出現「舊牌已放、新單還沒掛」的空窗。
+        setTimeout(function () { try { win.VN_Core && win.VN_Core._imgScanEnd && win.VN_Core._imgScanEnd(); } catch (e) {} }, 0);
+    }
+
+    let _sceneRunning = false;
+    let _sceneRunId = 0;          // 第幾通插圖；晚到的那通被下一輪蓋過時，靠它認出自己已經過期
+    let _sceneRunLate = false;    // 正在跑的那通已經超過 60 秒（劇情先播了）→ 下一輪可以另開一通，不用等它
+    let _sceneDebounce = null;
+    async function extractScenesStandalone() {
+        if (_sceneRunning && !_sceneRunLate) return;
+        const _myRun = ++_sceneRunId;
+        _sceneRunning = true;
+        _sceneRunLate = false;
+        try {
+            if (_genStopped) { console.log('🛰️ [State Runtime] 本通生成被手動停止 → 跳過場景插圖'); return; }
+            if (win.__AURELIA_SUMMARIZING) return;
+            const sg = (function () { try { return (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen) || {}; } catch (e) { return {}; } })();
+            if (!sg.standaloneEnabled) return;
+            const spec = String(sg.standaloneSpec || '').trim();
+            if (!spec) return;
+            if (!win.OS_API?.chatSecondary || !win.VN_SceneInsert?.fromExtract) return;
+            const chatId = getChatId();
+            if (!chatId) return;
+            // 截斷守門（簡版）：API 報錯 / 半截正文 → 別生圖
+            //   PWA 沒有酒館樓層可讀 → 整段跳過（獨立版的半截正文由下面的章節內容自己顯現：沒 <content> 就沒段落可挑）
+            if (!_isStandalone()) try {
+                const _arr = await win.TavernHelper?.getChatMessages?.(-1);
+                const _raw = String((_arr && _arr[0] && (_arr[0].message || _arr[0].mes)) || '');
+                const _t = _raw.trim();
+                if (/^\[API Error\]/i.test(_t) || (_t.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_t))) return;
+                const _rawNC = _raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');   // CoT 提到 tag 字樣不算
+                // 截斷守門對齊 extractOnce：①<content>開了沒關=半截正文；②VN前景卻連<content>都沒有=思考期就截、正文還沒冒出來。
+                //   原本只擋①→思考期截斷時這條穿門照發 chatSecondary、拿不到正文回空 scene；補②一起擋。
+                const _hasOpen = _rawNC.indexOf('<content>') !== -1;
+                const _hasClose = _rawNC.indexOf('</content>') !== -1;
+                const _vnFg = (() => { try { const p = win.document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && win.document.getElementById('page-game')); } catch (e) { return false; } })();
+                if ((_hasOpen && !_hasClose) || (_vnFg && !_hasOpen)) return;
+            } catch (e) {}
+            const { text: recentText, lastId, lastContent } = await gatherRecentMessages();
+            if (!recentText || !_hasId(lastId)) return;
+            const paras = _segmentStory(lastContent || '');
+            if (!paras.length) return;
+            const numbered = paras.map((p, i) => `[P${i + 1}] ${p}`).join('\n');
+            // {{角色}} 登記表（同搭便車：頭像詞 + 代號 Cn）
+            const currentState = win._AVS_ENGINE?.read?.() || {};
+            const nameMap = await _buildLooksMap(currentState);
+            const names = Object.keys(nameMap);
+            const entries = names.map((n, i) => ({ code: 'C' + (i + 1), name: n }));
+            const looksMap = { ...nameMap };
+            entries.forEach(e => { looksMap[e.code] = nameMap[e.name]; });
+            const charList = entries.length ? entries.map(e => `##${e.code}## ${e.name}`).join('｜') : '（無已登記角色，全部 NPC 自己寫外觀）';
+            // 系統訊息 = 你貼的完整規範 + 對接層（只動我這邊：佔位用 ##名##、輸出 scenes JSON）；大佬規範的 {{}} 權重一概不碰
+            const _override = `\n\n────────\n【本系統對接（最高優先，覆蓋上面規範裡衝突的部分，含覆蓋「每個角色一律用代號」這種說法）】\n- 你只生成插圖提示詞、不寫劇情正文、不續寫、不解釋。\n- 下面 user 會給「已登記角色清單」(每個附代號 C1/C2…)。**只有清單裡的角色才有代號**：畫到他→**只寫 ##代號##**(如 ##C1##；系統自動填外觀、跟頭像一致)，不要自己寫這些人的固定長相/DNA，只寫動作/姿勢/表情/服裝/裸露/站位/互動。\n- **清單裡「沒有」的角色(沒代號)→ 直接用英文寫他的完整外觀(種族/年齡/髮色/眼色/體型/服裝)，他的名字「絕對不要」用 ## 包起來**——沒代號就沒得填，包了系統認不得、會把 ##名字## 原樣送進 NAI 壞掉。一句話：**有代號才用 ##，沒代號就寫外觀、不准包名字**。\n- 只有「代號」要用井號 ## 包(如 ##C1##)，**不要用 {{ }}**——{{ }} 是 NAI 權重語法、會壞；## 跟你規範裡的 {{}} 權重互不衝突。\n- 只輸出一個 JSON、前後不要任何文字：{ "scenes": [ { "after_paragraph": 數字, "prompt": "..." } ] }。after_paragraph 從用戶給的編號段落挑數字、不要抄原文。上方規範若要求每張插圖先輸出 summary/pov 等思考欄位，照規範加進每個 scene、放在 "prompt" 之前（系統只讀 after_paragraph 與 prompt，多的欄位無害）。`;
+            let userMsg = `【已登記角色（畫到就用 ##代號## 或 ##角色名##，系統自動填外觀；不在名單的 NPC 自己寫外觀）】\n${charList}\n\n【本輪最新劇情（編號段落；after_paragraph 從這些數字挑，別抄原文）】\n${numbered}`;
+            // 🎭 表情搭這通（選了「副模型補表情」才有）：開播會等這條，表情在播之前就位。台詞要看整章，酒館那邊讀完整正文
+            let _faces = null, _facesNote = '';
+            try {
+                if (win.VN_FREE_MODE?.fillOn?.()) {
+                    let _full = lastContent || '';
+                    if (!_isStandalone()) { try { const _lm = await win.TavernHelper?.getChatMessages?.(lastId); _full = String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || '') || _full; } catch (e) {} }
+                    _faces = await win.VN_FREE_MODE.fillTask(_full);
+                    if (_faces) { userMsg += _faces.block; _facesNote = '\n- 這一輪 user 最後還附了「表情」那段：照它的說明，在同一個 JSON 多放 "faces"（scenes 照舊）。'; }
+                }
+            } catch (e) {}
+            // 插圖來源是自訂接口時，補上「哪些落點不要選」——跟搭便車那條共用同一份（OS_API.sceneSafeRules）。
+            // 這條路的系統訊息是使用者貼的規範＋對接層，不會經過 os_api_engine 的組裝，所以要自己接上，
+            // 漏了的話開著獨立插圖副模型就等於這條規則沒生效。
+            let _safe = '';
+            try {
+                const _svc = ((win.OS_IMAGE_MANAGER?.serviceForUse?.('scene') || win.OS_IMAGE_MANAGER?.serviceFor?.('scene'))) || win.OS_IMAGE_MANAGER?.config?.service || '';
+                _safe = win.OS_API?.sceneSafeRules ? win.OS_API.sceneSafeRules(_svc) : '';
+            } catch (e) {}
+            const messages = [
+                { role: 'system', content: spec + _override + _facesNote + _safe },
+                { role: 'user', content: userMsg }
+            ];
+            // ⏱️ 等多久（11-18：插圖有調用、劇情裡卻沒插——那通 90 秒才回，60 秒就丟掉了）：
+            //   60 秒只是「先別讓劇情乾等」：到點先放開開播閘門，回覆照樣等；真的 5 分鐘都沒回才算失敗。
+            //   晚到的圖照常插（還沒播到的地方）、寫回正文和章節存檔；中間她已經送出下一輪的話就丟掉，免得插錯章。
+            const _t0 = Date.now();
+            let _late = false;
+            const raw = await new Promise((res, rej) => {
+                let done = false;
+                const soft = setTimeout(() => {
+                    if (done) return;
+                    _late = true;
+                    if (_myRun === _sceneRunId) _sceneRunLate = true;
+                    console.warn('🖼️ [獨立插圖] 副模型超過 ' + Math.round(CONFIG.timeoutMs / 1000) + ' 秒還沒回 → 劇情先播，插圖回來再補上');
+                    _sceneGateRelease('standalone');
+                }, CONFIG.timeoutMs);
+                const hard = setTimeout(() => { if (done) return; done = true; clearTimeout(soft); rej(new Error('獨立插圖副模型 5 分鐘都沒回')); }, Math.max(CONFIG.timeoutMs, 300000));
+                const fin = () => { done = true; clearTimeout(soft); clearTimeout(hard); };
+                win.OS_API.chatSecondary(messages, null,
+                    (text) => { if (done) return; fin(); res(text); },
+                    (err) => { if (done) return; fin(); rej(err); },
+                    { task: 'illust' });
+            });
+            if (_myRun !== _sceneRunId) { console.warn('[獨立插圖] 回覆晚到，下一輪的插圖已經開跑 → 這批不插'); return; }
+            if (_late) {
+                // 晚到：這段時間換了聊天室、或已經有新的一樓（她送出下一輪／重生），這批就不是現在這樓的了
+                let _stillHere = false;
+                try { const g = await gatherRecentMessages(); _stillHere = getChatId() === chatId && String(g && g.lastId) === String(lastId); } catch (e) {}
+                if (!_stillHere) { console.warn('[獨立插圖] 回覆晚到 ' + Math.round((Date.now() - _t0) / 1000) + ' 秒，這段時間已經換了一樓 → 這批不插'); return; }
+                console.log('[獨立插圖] 回覆晚到 ' + Math.round((Date.now() - _t0) / 1000) + ' 秒，還是同一樓 → 照常插');
+            }
+            const json = extractJSON(raw);
+            try { if (_faces && json) await win.VN_FREE_MODE.commitFill(_faces, json.faces, chatId); } catch (e) {}   // 這章沒挑到插圖也照存表情
+            if (!json || !Array.isArray(json.scenes) || !json.scenes.length) { console.warn('[獨立插圖] 輸出不含 scenes'); return; }
+            const mapped = json.scenes.map(s => {
+                let after = '';
+                const n = parseInt(s.after_paragraph ?? s.afterParagraph ?? '', 10);
+                if (n >= 1 && paras[n - 1]) after = paras[n - 1];
+                else if (s.after) after = String(s.after);
+                const _used = [];
+                const _p = _scrubSceneCounts(_expandHashNames(s.prompt, looksMap, _used));
+                _warnExtraPersons(_p, _used);
+                _warnTrailingInteraction(_p);
+                return { after, prompt: _p, cast: _sceneCastOf(s.prompt, looksMap) };
+            }).filter(s => s && s.prompt);
+            if (mapped.length) {
+                // 派發對位 msgId 用 getChatMessages(-1) 的「窗口號」lastId——跟 VN(_currentMessageId/loadScript)同一個 id 空間。
+                // ⚠️別用 _trueLastId(/api/chats/search 的磁碟真號)：懶載大聊天(如 493 樓只載入窗口顯示 101)時，真號(493)≠VN 窗口號(101)、差 392 插不進。
+                win.VN_SceneInsert.fromExtract(mapped, { chatId, msgId: lastId, t0: _t0 });
+                console.log(`🖼️ [獨立插圖] 派發 ${mapped.length} 張 段號[${json.scenes.map(s => s.after_paragraph ?? '?').join(',')}]/共${paras.length}段 (msg#${lastId})`);
+            }
+        } catch (e) { console.warn('[獨立插圖] 失敗:', e?.message || e); }
+        finally { if (_myRun === _sceneRunId) { _sceneRunning = false; _sceneRunLate = false; _sceneGateRelease('standalone'); } }   // 插圖已派發（或這輪沒有）→ 放開 VN 開播閘門；被下一輪蓋過的那通不碰下一輪的閘門
+    }
+
+    // ===== 🎬 導演模式（定案）：資訊不對稱帳本，走「奧瑞亞主模型接口」chatMain =====
+    // 分工：酒館正文=使用者選的寫手模型(如 Gemini)；導演稿=主接口掛的邏輯型模型(如 Sonnet)。
+    // 與 AVS/記憶(副模型 extractOnce)、獨立插圖(副模型 chatSecondary)三者各自獨立開關、互不搭車。
+    // 六類區塊：公共劇情 / 各角色私人記憶 / 各角色行動摘要 / 本輪可用張力。
+    // 存檔：stateData.director.patches=[{id,text}] 全文快照，id 錨在同輪 AVS patch（一起回朔）。
+    // 開關：localStorage sp_director_on==='1'（預設關；UI 11-18 起在「設置 → 劇情 → 導演」，os_avs_state.js 的 mountDirector）。
+    let _directorRunning = false;
+    let _directorDebounce = null;
+    let _lastDirectorUninject = null;
+    let _directorHandledThisRound = false;   // 本輪導演稿已由「抽取便車」接手 → 攔下獨立呼叫排程（省一通）
+    const DIRECTOR_INJECT_ID = 'aurelia_director_brief';
+    const DIRECTOR_MAX_PATCHES = 40;
+
+    function directorOn() { try { return localStorage.getItem('sp_director_on') === '1'; } catch (e) { return false; } }
+    function setDirectorOn(v) { win.AUI.lsSet('sp_director_on', v ? '1' : '0', '導演模式開關'); if (!v) { try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch (e) {} } }
+
+    // 🧭 這個故事的導演重點（11-18 加：不同劇本（例如戀愛劇）導演的思考方向、權重可以不同，
+    //    相當於自訂思考 prompt）。一個故事一份，存 sp_director_focus::<chatId> = { pick, text, push }。
+    //    只加在導演那份指令後面：改的是導演「留意什麼、張力往哪挑、推得多用力」，六格格式、條數、字數規範不動
+    //    （注入給寫正文那邊的導演稿格式、驗收【公共劇情】都靠那套格式）。
+    const DIRECTOR_FOCUS = [
+        { id: 'none', name: '不特別偏', text: '' },
+        { id: 'love', name: '戀愛', text: '這個故事以感情線為主。整理時特別留意：人物之間的距離怎麼變（誰靠近、誰退開）；說出口和沒說出口的心意各是什麼；彼此的誤會、顧慮還卡在哪裡；哪些小事對對方有意義。張力優先找能讓一段關係往前或往後挪一小步的機會；曖昧和試探本身就是戲，不急著讓人告白或確認關係。' },
+        { id: 'mystery', name: '懸疑推理', text: '這個故事以真相和線索為主。整理時特別留意：已經公開的線索、只有某個人掌握的線索、誰在說謊或隱瞞、還沒有人追問的疑點。私人記憶格要嚴守誰知道什麼。張力優先找能讓人物發現、對質或逼問的機會；你自己不替真相下結論。' },
+        { id: 'adventure', name: '冒險戰鬥', text: '這個故事以行動和處境為主。整理時特別留意：眼前的目標和阻礙、手上的資源、每個人的傷勢和體力、敵我的位置和威脅。張力優先找下一步可以做的選擇和各自的代價；連續打鬥或趕路之後照規範給喘息。' },
+        { id: 'daily', name: '日常', text: '這個故事以生活和人物相處為主。整理時特別留意：每個人最近在意的小事、習慣和喜好、彼此的默契和小摩擦、時間和季節的變化。張力以小插曲、小意外為主，不製造大危機。' },
+        { id: 'horror', name: '恐怖', text: '這個故事以氣氛和未知為主。整理時特別留意：已經出現了哪些異常、每個人各自察覺到多少、還剩哪些安全的地方和退路、恐懼怎麼一點一點累積。張力優先找逐步升高的異樣，不急著讓真相或威脅本體現身。' },
+        { id: 'custom', name: '自己寫', text: '' }
+    ];
+    const DIRECTOR_PUSH = {
+        soft: '【推進力道：輕】這個故事要多留白：【本輪可用張力】最多 1 條；沒有特別適合推進的時機，就只寫一條「留白：」。',
+        normal: '',
+        bold: '【推進力道：積極】這個故事節奏要緊湊：除非人物帶傷、力竭或剛經歷高壓場面，【本輪可用張力】至少列 1 個能讓劇情往前走的點；它仍然是選項，不是任務。'
+    };
+    const _focusKey = (cid) => 'sp_director_focus::' + cid;
+    function getDirectorFocus(cid) {
+        cid = cid || getChatId();
+        let r = {};
+        if (cid) { try { r = JSON.parse(localStorage.getItem(_focusKey(cid)) || '{}') || {}; } catch (e) { r = {}; } }
+        const pick = DIRECTOR_FOCUS.some(f => f.id === r.pick) ? r.pick : 'none';
+        const push = Object.prototype.hasOwnProperty.call(DIRECTOR_PUSH, r.push) ? r.push : 'normal';
+        const preset = DIRECTOR_FOCUS.find(f => f.id === pick);
+        const text = pick === 'custom' ? String(r.text || '') : preset.text;
+        return { chatId: cid || '', pick, push, text, custom: String(r.text || '') };
+    }
+    /** 改這個故事的導演重點：patch＝{ pick?, text?, push? }。回 false＝沒存到（或沒有開著的故事） */
+    function setDirectorFocus(patch, cid) {
+        cid = cid || getChatId();
+        if (!cid) return false;
+        const cur = getDirectorFocus(cid);
+        const next = { pick: cur.pick, push: cur.push, text: cur.custom, ...(patch || {}) };
+        if (next.pick === 'none' && next.push === 'normal' && !String(next.text || '').trim()) {
+            try { localStorage.removeItem(_focusKey(cid)); } catch (e) {}   // 全部是預設＝不留一把空鑰匙
+            return true;
+        }
+        return win.AUI.lsSet(_focusKey(cid), JSON.stringify({ pick: next.pick, push: next.push, text: String(next.text || '') }), '這個故事的導演重點');
+    }
+    // 接在導演指令最後的那一段；什麼都沒設回 ''
+    function _directorFocusBlock() {
+        const f = getDirectorFocus();
+        const parts = [];
+        const t = String(f.text || '').trim();
+        if (t) parts.push('【這個故事的導演重點（玩家指定）】\n' + t);
+        if (DIRECTOR_PUSH[f.push]) parts.push(DIRECTOR_PUSH[f.push]);
+        if (!parts.length) return '';
+        return '\n\n' + parts.join('\n') + '\n（以上只影響你留意什麼、張力往哪個方向挑；格式、條數和字數規範照舊。）';
+    }
+
+    // ═══ 🔎 末尾檢查（試用，11-18）═══
+    // 一般版導演模式作用不大，改成末尾檢查模式（先 beta；試幾次都沒用，一般版就拿掉）。
+    //   每章寫完，記狀態那一通順便找「這一章跟已經發生的事實對不上的地方」，給「原句 → 建議改成」、整章歪掉沒、下一章可能會歪的。
+    //   🚨 試用＝只標不改：正文一個字都不動、不跳重新生成、不送提醒給寫劇情的 AI；只記下來給使用者看（設置 → 劇情 → 導演），寫完一章跳一句有幾處。
+    //   看幾章覺得準，再做「直接改」。存在 app_data 'endcheck'／'log'（每個聊天室一份，最近 20 章）。
+    const ENDCHECK_KEY = 'sp_endcheck_on';
+    const ENDCHECK_MAX = 20;
+    function endCheckOn() { try { return localStorage.getItem(ENDCHECK_KEY) === '1'; } catch (e) { return false; } }
+    function setEndCheckOn(v) { return win.AUI.lsSet(ENDCHECK_KEY, v ? '1' : '0', '末尾檢查（試用）的開關'); }
+    function _checkAddendum(paras, printed, ctxBlock) {
+        return '\n\n═══ 額外任務:末尾檢查(跟上面要求的一起輸出,放在同一個 JSON 的 "check" 欄) ═══\n' +
+            '讀完「這一章」,對照前情和目前狀態,找出這一章裡跟已經發生的事實對不上的地方。只找事實錯誤:\n' +
+            '- 人物知道了他不在場、也沒有人告訴他的事\n' +
+            '- 傷勢、體力、物品、位置、時間跟前面對不上\n' +
+            '- 人物的性格、說話方式跟前面明顯不一樣\n' +
+            '- 同一章裡前後自己打架\n' +
+            '不算錯誤:文筆、節奏、用詞、劇情走向的好壞、你覺得可以寫得更好的地方。\n' +
+            '每一處給 find(這一章裡要改的那一句,一字不差照抄,只抄那一句)、replace(改成什麼,只改有錯的那幾個字,其他照原文)、why(一句話說對不上什麼)。最多 5 處。\n' +
+            '錯得太多、整章建立在錯的事實上、改幾句圓不回來:broken 填 true,broken_why 寫一句原因。\n' +
+            '還不到要改、但下一章可能會歪的,寫進 warn,一句一條。沒有問題就全給空的。\n' +
+            '格式:"check":{"fixes":[{"find":"原句","replace":"改成","why":"原因"}],"broken":false,"broken_why":"","warn":["一句"]}' +
+            (ctxBlock || '') +
+            (printed ? '\n【這一章】段落跟上面 [P1]、[P2]… 那份一樣。'
+                     : '\n【這一章(編號段落)】\n' + paras.map((t, i) => '[P' + (i + 1) + '] ' + t).join('\n'));
+    }
+    // 比對原句：去空白標點、簡繁折成同一種，模型抄得不完全一樣也認得
+    function _chkNorm(t) {
+        let x = String(t || '');
+        try { const Z = win.OS_ZH; if (Z && Z.toSimp) x = Z.toSimp(x); } catch (e) {}
+        try { return x.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ''); } catch (e) { return x.replace(/\s+/g, ''); }
+    }
+    async function _checkCommit(chatId, lastId, chk, fullText) {
+        if (!chatId || !win.OS_DB?.saveAppData) return null;
+        const c = (chk && typeof chk === 'object') ? chk : {};
+        const body = _chkNorm(_segmentStory(fullText).join(' '));   // 跟給模型看的同一份段落（標籤剝掉的字），不拿原文的 [Nar|…] 格式比
+        const fixes = (Array.isArray(c.fixes) ? c.fixes : []).slice(0, 5).map(f => ({
+            find: String((f && f.find) || '').trim().slice(0, 400), replace: String((f && f.replace) || '').trim().slice(0, 400), why: String((f && f.why) || '').trim().slice(0, 200),
+        })).filter(f => f.find && f.replace && f.find !== f.replace).map(f => Object.assign(f, { found: !!(_chkNorm(f.find) && body.indexOf(_chkNorm(f.find)) >= 0) }));
+        const warn = (Array.isArray(c.warn) ? c.warn : []).map(x => String(x || '').trim().slice(0, 200)).filter(Boolean).slice(0, 5);
+        const rec = { msgId: String(lastId), at: Date.now(), fixes, broken: c.broken === true, brokenWhy: String(c.broken_why || '').trim().slice(0, 200), warn };
+        let list = [];
+        try { list = (await win.OS_DB.getAppData('endcheck', 'log', chatId)) || []; } catch (e) {}
+        if (!Array.isArray(list)) list = [];
+        list = list.filter(r => r && String(r.msgId) !== rec.msgId);   // 同一樓重判：換成新的
+        list.unshift(rec);
+        await win.OS_DB.saveAppData('endcheck', 'log', list.slice(0, ENDCHECK_MAX), chatId);
+        if (rec.fixes.length || rec.broken) {
+            try { win.AUI?.toast?.('末尾檢查：這章' + (rec.broken ? '可能整章歪了' : '有 ' + rec.fixes.length + ' 處對不上') + '（設置 → 劇情 → 導演 看，試用中不會改）', { type: 'info' }); } catch (e) {}
+        }
+        console.log('🔎 [末尾檢查] msg#' + rec.msgId + '：' + rec.fixes.length + ' 處' + (rec.broken ? '、整章歪了' : '') + (rec.warn.length ? '、提醒 ' + rec.warn.length + ' 條' : ''));
+        return rec;
+    }
+    async function endCheckList() {
+        const cid = getChatId();
+        if (!cid || !win.OS_DB?.getAppData) return [];
+        try { const l = await win.OS_DB.getAppData('endcheck', 'log', cid); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+    }
+
+    // 導演稿也走身分制：[{id, text}] 時序陣列，最新一份＝最後一筆（不再有樓號可比大小）
+    function _latestDirectorText(director) {
+        const list = Array.isArray(director && director.patches) ? director.patches : [];
+        return list.length ? String(list[list.length - 1].text || '') : '';
+    }
+
+    // 六格格式＋規範（共用：獨立呼叫的 system ／ 搭便車的附加任務，規則一字不差）
+    function _directorSpec(castNames) {
+        const cast = castNames && castNames.length ? castNames.join('、') : '（依素材自行判定）';
+        return '【格式】六類區塊，標題行用【】固定；「角色」區塊按實際有戲份的角色各開一份（目前在場：' + cast + '）：\n' +
+'【公共劇情】所有角色都知道、或場景中已明示的事（條列 3-6 條）\n' +
+'【<角色名>私人記憶】只有該角色知道的事；只寫該角色的主觀認知，不得寫成旁白真相；每位角色一個區塊\n' +
+'【<角色名>行動摘要】該角色最近做了什麼、說了什麼、隱瞞了什麼、誤會了什麼；每位角色一個區塊\n' +
+'【本輪可用張力】先判斷本輪節奏再寫：適合推進→列 1-3 個「可推進但不強迫」的衝突點；' +
+'剛經歷高壓場面、角色帶傷/力竭、或已連續緊繃多輪→改寫「留白：」開頭的緩拍建議（休整、日常、沉澱），這跟列衝突一樣是合格輸出\n\n' +
+'【規範（硬性，違反=廢稿）】\n' +
+'- 以「上一版導演稿」為基礎增量更新：過時的刪掉、新資訊併入，不是重寫流水帳\n' +
+'- 電報體：每條一行、25 字內；禁粗體、禁排版裝飾、禁修飾性形容與推測語（「推測」「暗示」「待揭示」這類分析評註一律不寫）\n' +
+'- 條數上限：【公共劇情】≤5 條；每位角色【私人記憶】≤3 條、【行動摘要】≤3 條；【本輪可用張力】1-3 條、每條一句\n' +
+'- 只為「本輪有戲份」的角色開區塊（最多 4 位）；離場多輪的角色整組刪除，仍關鍵的秘密壓成 1 條留在其私人記憶\n' +
+'- 全文上限 500 字；快超就先砍行動摘要裡的舊條目\n' +
+'- 張力是選項不是任務：不得製造「必須熬夜／帶傷硬撐／一刻不停」的壓迫感；角色的傷勢與疲勞是硬約束，優先於任何推進\n' +
+'- 玩家（USER）不開私人記憶區塊\n' +
+'- 只整理素材裡有的事實，不編造、不預告未來劇情' + _directorFocusBlock();
+    }
+    // 獨立呼叫版 system（備援路／手動「立刻產一份」用）
+    function _buildDirectorInstruction(castNames) {
+        return '[系統指令：劇情監製]\n' +
+'你是本作品的劇情監製（導演）。讀完素材後，輸出一份最新版「導演稿」；只輸出導演稿本體，不要其他文字、不要 markdown 包裹。\n\n' +
+_directorSpec(castNames);
+    }
+    // 🎬 搭便車版（主接口沒必要一輪打兩通）：掛在 AVS 抽取同一通的 prompt 尾端，
+    //    JSON 之後另附《導演稿開始/結束》包住的稿——省一整段思考期＋重複上下文。
+    function _directorAddendum(prev, castNames) {
+        return '\n\n═══ 額外任務：導演稿（跟上面的 JSON「都要」輸出）═══\n' +
+'你同時兼任本作品的劇情監製。輸出完上面要求的 ```json 程式碼區塊後，另起一行，' +
+'輸出一份最新版導演稿，用《導演稿開始》和《導演稿結束》兩行包住（除此之外不要其他文字）。\n\n' +
+'【上一版導演稿】\n' + (prev || '（無，這是第一版）') + '\n\n' +
+_directorSpec(castNames);
+    }
+    // 寫 patch（cap 最舊）；便車路/獨立路共用。回 true=有寫入
+    // 🆔 導演稿錨在「這一輪 AVS patch 的 id」上：patch 被回滾 → 導演稿跟著走（_rollbackPatches 同批砍）。
+    //    這輪釘不上 id（純指令樓／API 拒改）就沿用最後一筆 patch 的 id；連 patch 都沒有就不存
+    //    ——沒有身分的導演稿等於孤兒，對帳時無從判斷生死。
+    async function _saveDirectorPatch(chatId, lastId, clean) {
+        const fresh = (await win.OS_DB.getStateData(chatId)) || {};   // 重讀防蓋掉期間別人寫入
+        const pl = _patchList(fresh.patches);
+        if (!pl.length) { console.warn('🎬 [Director] 這輪沒有可錨定的 avs id → 導演稿不落地（避免孤兒稿）'); return false; }
+        const anchor = String(pl[pl.length - 1].id);
+        const list = (Array.isArray(fresh.director?.patches) ? fresh.director.patches : []).filter(d => String(d.id) !== anchor);
+        list.push({ id: anchor, text: clean });
+        while (list.length > DIRECTOR_MAX_PATCHES) list.shift();
+        await win.OS_DB.saveStateData(chatId, { ...fresh, director: { patches: list, updatedAt: Date.now() } });
+        console.log('[Director] 導演稿已更新（錨 ' + anchor + '，' + clean.length + ' 字）');
+        try { win.eventEmit?.('AURELIA_DIRECTOR_UPDATED', { chatId, msgId: lastId }); } catch (e) {}
+        return true;
+    }
+
+    async function extractDirector() {
+        if (_directorRunning) return;
+        _directorRunning = true;
+        try {
+            if (!directorOn()) return;
+            if (_genStopped) { console.log('🎬 [Director] 本通生成被手動停止 → 跳過'); return; }
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.OS_API?.chatMain || !win.OS_DB?.getStateData) return;
+            const chatId = getChatId();
+            if (!chatId) return;
+            // 截斷守門（同獨立插圖）：API 錯誤頁 / 半截正文 → 別拿去寫導演稿
+            try {
+                const _arr = await win.TavernHelper?.getChatMessages?.(-1);
+                const _raw = String((_arr && _arr[0] && (_arr[0].message || _arr[0].mes)) || '');
+                const _t = _raw.trim();
+                if (/^\[API Error\]/i.test(_t) || (_t.length < 200 && /(x-api-key|invalid_credentials|Authentication required|API 返回內容為空)/i.test(_t))) return;
+                const _rawNC = _raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                if (_rawNC.indexOf('<content>') !== -1 && _rawNC.indexOf('</content>') === -1) return;
+            } catch (e) {}
+            const { text: recentText, lastId } = await gatherRecentMessages();
+            if (!recentText || lastId < 0) return;
+            const data = (await win.OS_DB.getStateData(chatId)) || {};
+            const director = data.director || { patches: [] };
+            // 💸 存不下的稿不要先叫模型：導演稿錨在 AVS 那一輪的紀錄上，一筆都沒有（狀態記錄關著）就算產出來也落不了地
+            if (!_patchList(data.patches).length) { console.log('🎬 [Director] 還沒有狀態紀錄可錨（即時記錄狀態關著？）→ 這輪不產稿，不叫模型'); return; }
+            // 這輪已有導演稿？看正文的 avs id 有沒有被導演稿錨過（重roll 會先走失效回朔）
+            //   網頁版的 avs id 就是章節 id（lastId），不用從正文撈
+            try {
+                const _dids = new Set((Array.isArray(director.patches) ? director.patches : []).map(d => String(d.id)));
+                if (_isStandalone()) { if (_dids.has(String(lastId))) return; }
+                else {
+                    const _lm = await win.TavernHelper?.getChatMessages?.(lastId);
+                    const _ids = _idsInText(String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || ''));
+                    if (_ids.some(id => _dids.has(id))) return;
+                }
+            } catch (e) {}
+            const prev = _latestDirectorText(director);
+            const cast = _activeCastNames();
+            // 📊 AVS 當前狀態附進素材（唯讀參照）：導演稿跟狀態對帳（傷勢/位置/數值），不再各記各的
+            let stateRef = '';
+            try {
+                const st = win._AVS_ENGINE?.read?.() || {};
+                if (st && Object.keys(st).length) {
+                    let s = JSON.stringify(st);
+                    if (s.length > 1200) s = s.slice(0, 1200) + '…(截斷)';
+                    stateRef = '【當前狀態（AVS，唯讀參照）】\n' + s + '\n\n';
+                }
+            } catch (e) {}
+            const material =
+                (prev ? ('【上一版導演稿】\n' + prev + '\n\n') : '【上一版導演稿】\n（無，這是第一版）\n\n') +
+                stateRef +
+                '【最近劇情】\n' + recentText;
+            const messages = [
+                { role: 'system', content: _buildDirectorInstruction(cast) },
+                { role: 'user', content: material },
+            ];
+            console.log('🎬 [Director] 產稿中（主模型接口）msg#' + lastId);
+            const text = await new Promise((resolve, reject) => {
+                let done = false;
+                const timer = setTimeout(() => { if (!done) { done = true; reject(new Error('導演稿超時')); } }, 150000);
+                win.OS_API.chatMain(messages,
+                    null,
+                    (full) => { if (done) return; done = true; clearTimeout(timer); resolve(String(full || '')); },
+                    (err) => { if (done) return; done = true; clearTimeout(timer); reject(err || new Error('導演稿失敗')); },
+                    { task: 'director' });
+            });
+            let clean = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').trim();
+            // 驗收容繁簡：卡片是簡體時模型會跟著寫「剧情/记忆」——別把好稿當廢稿丟（踩過：兩份稿全被逐字比對錯殺）
+            if (!clean || !/【公共[劇剧]情】/.test(clean)) { console.warn('🎬 [Director] 回稿沒有【公共劇情】區塊 → 丟棄不存'); return; }
+            await _saveDirectorPatch(chatId, lastId, clean);
+        } catch (e) {
+            console.warn('🎬 [Director] 產稿失敗:', e?.message || e);
+        } finally {
+            _directorRunning = false;
+        }
+    }
+
+    // 注入給正文模型：整份導演稿＋邊界鐵則（正文模型演所有角色=必須全知，但輸出要守知識邊界）
+    //   酒館走 injectPrompts（injectDirector）；網頁版由 os_api_engine 組 VN 提示詞時叫 directorBlock 插在同一個深度
+    async function directorBlock() {
+        if (!directorOn() || !win.OS_DB?.getStateData) return '';
+        const chatId = getChatId();
+        if (!chatId) return '';
+        const data = await win.OS_DB.getStateData(chatId);
+        const text = _latestDirectorText(data && data.director);
+        if (!text.trim()) return '';
+        return _directorWrap(text);
+    }
+    async function injectDirector() {
+        try {
+            try { _lastDirectorUninject?.(); } catch (e) {}
+            _lastDirectorUninject = null;
+            if (!win.TavernHelper?.injectPrompts) return;
+            const content = await directorBlock();
+            if (!content) return;
+            const result = win.TavernHelper.injectPrompts([{
+                id: DIRECTOR_INJECT_ID,
+                content,
+                position: 'in_chat',
+                depth: 1,
+                role: 'system'
+            }], { once: true });
+            _lastDirectorUninject = result?.uninject || null;
+        } catch (e) {
+            console.warn('🎬 [Director] inject 失敗:', e?.message || e);
+        }
+    }
+    function _directorWrap(text) {
+        return '<劇情監製稿 規則="寫作前必讀·知識邊界鐵則">\n' +
+            '下面是監製整理的劇情帳本。你演出所有角色，所以你全知；但每個角色「只能」依自己知道的資訊行動：\n' +
+            '- 角色的台詞、行動、內心不得使用「其他角色的私人記憶」——除非本輪劇情中正式得知。\n' +
+            '- 旁白不得直接揭露任何角色的私人記憶為客觀事實。\n' +
+            '- 【本輪可用張力】是可選方向、不是待辦清單：本輪一個都不用、讓角色休息或過日常，完全正常。\n' +
+            '- 角色的傷勢、疲勞、極限是硬約束：受傷該痛、力竭該倒，不得為了推進劇情讓角色硬撐或犧牲休息。\n\n' + text + '\n</劇情監製稿>';
+    }
+
+    // 手改導演稿（變數工坊 UI 用）：存成「當前最後一樓」的 patch＝最高權威、下一輪就注入
+    async function saveDirectorText(text) {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return false;
+        let lastId = 0;
+        try { const arr = await win.TavernHelper?.getChatMessages?.(-1); lastId = (arr && arr[0] && (arr[0].message_id ?? arr[0].id)) || 0; } catch (e) {}
+        const data = (await win.OS_DB.getStateData(chatId)) || {};
+        // 手改稿一樣錨在最後一筆 patch 的 id 上（沒有 patch 可錨 → 存不了，同 _saveDirectorPatch）
+        const pl = _patchList(data.patches);
+        if (!pl.length) { showToast('目前沒有可錨定的逐輪紀錄，導演稿無法存檔', 'warning'); return false; }
+        const anchor = String(pl[pl.length - 1].id);
+        const list = (Array.isArray(data.director?.patches) ? data.director.patches : []).filter(d => String(d.id) !== anchor);
+        list.push({ id: anchor, text: String(text || '').trim() });
+        await win.OS_DB.saveStateData(chatId, { ...data, director: { patches: list, updatedAt: Date.now() } });
+        return true;
+    }
+    async function getDirectorText() {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return '';
+        const data = await win.OS_DB.getStateData(chatId);
+        return _latestDirectorText(data && data.director);
+    }
+
+    // --- inject AVS rules：把當前生效規則的 <behavior_rules> 塞主模型 system prompt ---
+    // 跟 injectCurrent 並列；用獨立 inject id 互不影響
+    async function injectRules() {
+        try {
+            try { _lastRulesUninject?.(); } catch(e) {}
+            _lastRulesUninject = null;
+
+            if (!win.TavernHelper?.injectPrompts) return;
+            if (!win.OS_AVS_RULES?.getActiveContext) return;
+
+            // 變數狀態：優先用 adapter cache（已 refresh 過 OS_DB）
+            const state = win.OS_AVS_ADAPTER?.readState?.() || {};
+            if (!state || !Object.keys(state).length) return;
+
+            // V3：拿當前 chat 對應的 active pack IDs，傳給 getActiveContext 做 packId filter
+            //   （比法收在 OS_AVS_RULES.activePackIds，兩端共用一份）
+            let activePackIds = null;
+            try {
+                activePackIds = win.OS_AVS_RULES.activePackIds ? await win.OS_AVS_RULES.activePackIds(getChatId()) : null;
+            } catch(e) { /* fallback：activePackIds 留 null，走 worldId filter */ }
+
+            // 只送在場的人的規則：最近 3 則正文（含她剛送出的那句）提到名字才算在場；角色卡設成「想靠近」的人照送
+            let sceneText = '';
+            try {
+                const ctxST = win.SillyTavern?.getContext?.();
+                if (ctxST && Array.isArray(ctxST.chat)) sceneText = ctxST.chat.slice(-3).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+            } catch (e) {}
+            let keep = [];
+            try { keep = ((await win.OS_STORY_THREADS?.leanList?.()) || {}).near || []; } catch (e) {}
+
+            const ctx = win.OS_AVS_RULES.getActiveContext(state, activePackIds, { sceneText, keep }) || '';
+            if (!ctx.trim()) return;   // 沒命中任何規則就不 inject
+
+            const result = win.TavernHelper.injectPrompts([{
+                id: CONFIG.rulesInjectId,
+                content: ctx,
+                position: 'in_chat',
+                depth: 1,
+                role: 'system'
+            }], { once: true });
+            _lastRulesUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[State Runtime] rules inject 失敗:', e?.message || e);
+        }
+    }
+
+    // --- inject 缺頭像提醒：主模型有時投入劇情忘了給角色頭像 → 善意提醒補上 ---
+    // 只列「近期出場但還沒頭像」的；已宣告/已快取的去掉；一個都不缺就不注入。代號角色交給提醒文字讓模型自己略過。
+    async function injectAvatarReminder() {
+        try {
+            try { _lastAvatarUninject?.(); } catch(e) {}
+            _lastAvatarUninject = null;
+            if (!win.TavernHelper?.injectPrompts) return;
+            const VC = win.VN_Cache || (win.parent && win.parent.VN_Cache);
+            if (!VC || !VC.get) return;   // 查不了快取就別亂提醒(免誤報)
+
+            // 近期場景文字（in-memory chat 末段，繞檔讀；含本輪剛落地的）
+            let text = '';
+            try {
+                const ctx = win.SillyTavern?.getContext?.();
+                if (ctx && Array.isArray(ctx.chat)) {
+                    text = ctx.chat.slice(-8).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+                }
+            } catch(e) {}
+            if (!text) return;
+
+            const cast = new Set(), declared = new Set();
+            let mt;
+            const reChar = /\[Char\|([^|\]]+)/g;
+            while ((mt = reChar.exec(text))) { const n = (mt[1] || '').trim(); if (n && n.charAt(0) !== '{') cast.add(n); }
+            const reAv = /\[Avatar\|([^|\]]+)/g;
+            while ((mt = reAv.exec(text))) { const n = (mt[1] || '').trim(); if (n) declared.add(n); }
+            if (!cast.size) return;
+
+            // ⚠️時序：injectRules 只 await 一次就搶在 prompt 組裝前落地；這裡也必須併發查完(別逐個 await)
+            // 否則角色一多、序列 await 拖太久 → injectPrompts 比 prompt 組裝晚 → 這輪 prompt 沒被塞進去(看起來像 AI 無視)
+            const candidates = [...cast].filter(n => !declared.has(n));   // 扣掉近期已宣告頭像的
+            const checks = await Promise.all(candidates.map(async name => {
+                let has = false;
+                try { has = !!(await VC.get('avatar_cache', name)); } catch(e) {}
+                return has ? null : name;                          // 有快取→不缺；沒有→缺頭像
+            }));
+            const missing = checks.filter(Boolean);
+            console.log('[頭像提醒] 近期出場=[' + [...cast].join('、') + '] / 缺頭像=[' + (missing.join('、') || '無') + ']' + (missing.length ? ' → 注入提醒' : ' → 不注入'));
+            if (!missing.length) return;                          // 都有了 → 不注入
+
+            const content = `<頭像宣告·硬性必填 規則="本輪必須執行·不得略過">\n下列出場角色目前沒有頭像：${missing.join('、')}。\n你【必須】在這次回覆開頭的角色卡（ChapterCard）區，為其中「有正式人名」的角色補上頭像宣告：[Avatar|角色名|外觀特徵]。這是必填項，不准漏、不准拖到下一輪、不准用「之後再補」帶過。\n唯一例外：純代號／未具名／純路人角色可以不補；除此之外一律補齊。\n</頭像宣告·硬性必填>`;
+            const result = win.TavernHelper.injectPrompts([{
+                id: CONFIG.avatarInjectId,
+                content,
+                position: 'in_chat',
+                depth: 0,           // 越小越深、最貼生成點(最後一個讀到→最難被忽略)
+                role: 'system'
+            }], { once: true });
+            _lastAvatarUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[State Runtime] avatar reminder inject 失敗:', e?.message || e);
+        }
+    }
+
+    // --- inject 成就乾旱提醒：規則埋在總綱裡一行，主模型常常幾十輪想不起來發 [Achievement] ---
+    // 只在「近期是 VN 劇情(有 [Char])且連續多輪零成就」時注入；窗口內出現過就不吵。
+    // 措辭比照缺頭像提醒的教訓：硬性「必須檢查」，但保留「真沒事可記就不發」的窄出口——強迫每輪硬發會變模板成就。
+    async function injectAchievementReminder() {
+        try {
+            try { _lastAchvUninject?.(); } catch(e) {}
+            _lastAchvUninject = null;
+            if (!win.TavernHelper?.injectPrompts) return;
+
+            let droughtN = parseInt(localStorage.getItem('sp_achv_drought_msgs'));
+            if (!Number.isFinite(droughtN) || droughtN < 4) droughtN = 12;   // 預設看最近 12 則(約 6 輪)
+
+            let text = '';
+            try {
+                const ctx = win.SillyTavern?.getContext?.();
+                if (ctx && Array.isArray(ctx.chat)) {
+                    if (ctx.chat.length < droughtN) return;   // 開場沒幾輪 → 還談不上乾旱，別催
+                    text = ctx.chat.slice(-droughtN).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+                }
+            } catch(e) {}
+            if (!text) return;
+            if (!/\[Char\|/.test(text)) return;          // 近期不是 VN 劇情輪 → 不吵
+            const dry = !/\[Achievement\|/.test(text);
+            console.log('[成就提醒] 近 ' + droughtN + ' 則' + (dry ? '零成就 → 注入提醒' : '有成就 → 不注入'));
+            if (!dry) return;
+
+            const content = `<成就檢查·硬性必答 規則="本輪必須執行·不得略過">\n已經連續多輪沒有頒發任何成就。你【必須】在本輪回顧近期劇情：只要出現過目標達成、關係轉折、值得紀念或獵奇出格的節點，就在本輪正文附上 [Achievement|表情|名|描述]（表情決定歸檔：異常系＝柴郡，一般系＝愛麗絲）。不准拖到下一輪、不准用「之後再補」帶過。\n若世界檔案附了成就清單，這個世界的成就標記固定五格 [Achievement|表情|名|描述|代碼]：第五格對得上清單就填那條的代碼，對不上就填 none，不可以省略。\n唯一例外：近期劇情確實全是過場、毫無可記之事，才可以不發；不得為了湊數捏造成就。\n</成就檢查·硬性必答>`;
+            const result = win.TavernHelper.injectPrompts([{
+                id: CONFIG.achvInjectId,
+                content,
+                position: 'in_chat',
+                depth: 0,           // 越小越深、最貼生成點(最後一個讀到→最難被忽略)
+                role: 'system'
+            }], { once: true });
+            _lastAchvUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[State Runtime] achievement reminder inject 失敗:', e?.message || e);
+        }
+    }
+
+    // 好感度數字 → preset 的 5 階（每 20 一階；階段詞跟 preset 一字不差）
+    function _affinityStage(n) {
+        const v = parseFloat(n);
+        if (isNaN(v)) return null;
+        if (v <= 20) return '陌生';
+        if (v <= 40) return '相识';
+        if (v <= 60) return '友好';
+        if (v <= 80) return '信任';
+        return '亲密';
+    }
+    // 在場角色：掃最近幾則的 [Char|名]（跟缺頭像提醒同招），跳過 {代號} / *心聲*
+    function _activeCastNames() {
+        try {
+            const ctx = win.SillyTavern?.getContext?.();
+            if (!ctx || !Array.isArray(ctx.chat)) return [];
+            const text = ctx.chat.slice(-6).filter(m => m && !m.is_system).map(m => m.mes || m.message || '').join('\n');
+            const set = new Set(); let m;
+            const re = /\[Char\|([^|\]]+)/g;
+            while ((m = re.exec(text))) { const n = (m[1] || '').trim(); if (n && n.charAt(0) !== '{' && n.charAt(0) !== '*') set.add(n); }
+            return [...set];
+        } catch (e) { return []; }
+    }
+    // 遞迴掃 state 找每個角色的好感度：容器內某物件有「好感度」→ 該物件的 key 即角色名（角色狀態.名.好感度）
+    function _collectAffinity(obj, keyName, out) {
+        if (!obj || typeof obj !== 'object') return;
+        if (obj['好感度'] !== undefined && keyName) {
+            const n = parseFloat(obj['好感度']);
+            if (!isNaN(n)) out[keyName] = n;
+        }
+        for (const [k, v] of Object.entries(obj)) {
+            if (v && typeof v === 'object') _collectAffinity(v, k, out);
+        }
+    }
+
+    // 離場角色的「當前目標」→ 改標「最後動向」（只改注入給主模型的那份，權威資料不動）。
+    // 「當前目標」是現在進行式的措辭：人走了幾十輪、那句話還原封不動掛在狀態裡，主模型會讀成
+    // 「他此刻正在做這件事」——於是憑空把人拉回場，或讓在場的人談一件早就過期的盤算。
+    // 副模型抽取讀的仍是原始的「當前目標」，所以只在這裡換標籤、不落盤。
+    function _relabelOffstageGoals(node, keyName, active) {
+        if (Array.isArray(node)) {
+            return { node: node.map(v => (v && typeof v === 'object') ? _relabelOffstageGoals(v, null, active).node : v), hit: false };
+        }
+        let hit = false; const out = {};
+        for (const [k, v] of Object.entries(node)) {
+            if (k === '當前目標' && keyName && !active.has(keyName)) { out['最後動向'] = v; hit = true; continue; }
+            if (v && typeof v === 'object') { const r = _relabelOffstageGoals(v, k, active); out[k] = r.node; hit = hit || r.hit; }
+            else out[k] = v;
+        }
+        return { node: out, hit };
+    }
+
+    // --- inject：把 current 塞進下一輪主模型 system prompt ---
+    async function injectCurrent() {
+        try {
+            // 先撤上次的（避免疊加）
+            try { _lastInjectUninject?.(); } catch(e) {}
+            _lastInjectUninject = null;
+
+            if (!win.TavernHelper?.injectPrompts) return;
+            const chatId = getChatId();
+            if (!chatId || !win.OS_DB?.getStateData) return;
+            // 🧾 注入前先對帳（Scene 的做法：每次要用資料時對一次，不指望刪除事件會來）
+            //    ——刪樓事件在某些環境根本不觸發，只靠事件回滾就會是「刪了也沒反應」。
+            await _reconcilePatches('注入前');
+
+            // 變數定義說明書（2026-06-29 改：跟「當前值」一起即時注入，取代「每個 chatId 寫一條世界書」→不再堆條目）
+            let defsBlock = '';
+            try { if (win.OS_AVS?.buildVarDefsContent) defsBlock = (await win.OS_AVS.buildVarDefsContent(chatId)) || ''; } catch (e) {}
+
+            const data = await win.OS_DB.getStateData(chatId);
+            const _active = new Set(_activeCastNames());   // 掃不到在場名單（非 VN 格式）→ 一個都不改標
+            let stateBlock = '';
+            if (data && data.current && Object.keys(data.current).length) {
+                const _rl = _active.size ? _relabelOffstageGoals(data.current, null, _active) : { node: data.current, hit: false };
+                const lines = Object.entries(_rl.node)
+                    .map(([k, v]) => `- ${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+                    .join('\n');
+                const offstageNote = _rl.hit
+                    ? '\n不在場角色標的是「最後動向」＝他離開視線前在盤算的事，不是他此刻正在做的事；別寫成正在發生，也別為了呼應它把人硬拉回場。'
+                    : '';
+                stateBlock = `<世界狀態 規則="權威資料·寫作前必讀·不得矛盾·唯讀嚴禁複述">\n以下是當前劇情的權威狀態，由系統自動追蹤，屬於給你的唯讀背景。你接下來的寫作必須與這些數值、身分、關係完全一致，嚴禁與之矛盾或擅自更改。同時嚴禁在任何輸出（包括 <summary> 摘要）中複述、抄寫或整理本區塊內容——狀態由系統追蹤與保存，不需要也不允許你記錄。${offstageNote}\n${lines}\n</世界狀態>`;
+            }
+
+            // 關係階段：在場角色的好感度數字 → preset 5 階（權威階段，演法交給 preset 的情感发展逻辑）
+            let affinityBlock = '';
+            try {
+                if (data && data.current) {
+                    const all = {};
+                    _collectAffinity(data.current, null, all);
+                    const lines = Object.keys(all)
+                        .filter(name => _active.has(name))
+                        .map(name => { const st = _affinityStage(all[name]); return st ? `- ${name}：好感度 ${all[name]} → ${st} 阶段` : null; })
+                        .filter(Boolean);
+                    if (lines.length) {
+                        affinityBlock = `<关系阶段 规则="权威·依此演·严禁跳阶；每一阶怎么演交给情感发展逻辑按角色性格处理，不要套公式">\n${lines.join('\n')}\n</关系阶段>`;
+                    }
+                }
+            } catch (e) {}
+
+            const content = [defsBlock, stateBlock, affinityBlock].filter(Boolean).join('\n');
+            if (!content) return;   // 定義 + 當前值 + 關係階段都空 → 不注入
+
+            const result = win.TavernHelper.injectPrompts([{
+                id: CONFIG.injectId,
+                content,
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastInjectUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[State Runtime] inject 失敗:', e?.message || e);
+        }
+    }
+
+    // --- patch 維護：訊息變動(刪樓/swipe/編輯)時砍對應 patch＋回滾狀態 ---
+    // 🔙 回滾原則：只回復「被刪那筆 patch 碰過的 key」到「base+剩餘 patch 重播」的值，其餘欄位不動——
+    //    不整份用重播取代（手動✏️改數值/去重合併等沒進 patch 系統的資料會被洗掉，同 extract 處不從空重建的理由）。
+    // 🐛 修正史：舊版只把重播結果寫 OS_DB、沒寫 _AVS_ENGINE → 面板(讀引擎)看不到回滾，
+    //    且下一輪抽取以引擎舊狀態為底又把回滾蓋回去 → 「手動刪樓 AVS 不回朔」的真兇。
+    // 🔖 訊息簽名：patch 真正該綁的是「那則訊息」，不是會位移的樓號。
+    //    存下抽取當時的內容簽名，之後對帳時比對——訊息被刪、被改、或因刪中間樓而位移到別的號碼，
+    //    簽名都會對不上，patch 即失效。這樣完全不必依賴酒館事件參數（它在刪除時傳的是剩餘則數）。
+    //    ⚠️ 先截到 4000 再算：抽取端拿到的 lastContent 本來就被 gatherRecentMessages 截過，
+    //       對帳端讀到的是全文——不統一截斷長度，長訊息的簽名會永遠對不上。
+    // 把 <!--avs:id--> 標記寫進指定樓的正文（同 VN_SceneInsert：識別碼住在正文裡）。
+    //   • 冪等：正文已有這 id 就不重寫
+    //   • 位置：<content> 結束前；沒有 <content> 就接在最後（純指令樓不會走到這）
+    //   • _selfEditing 擋自己觸發 MESSAGE_UPDATED → 免得剛存的 patch 被自己砍掉
+    // 回傳 true=正文確實帶著這個 id 了（呼叫端才敢把 patch 記下去）
+    async function _stampAvsId(arrIdx, id) {
+        try {
+            const TH = win.TavernHelper;
+            if (!TH?.getChatMessages || !TH?.setChatMessages) return false;
+            const msgs = await TH.getChatMessages(arrIdx);
+            const m = Array.isArray(msgs) ? msgs[0] : null;
+            const text = m && (m.message || m.mes);
+            if (typeof text !== 'string' || !text) return false;
+            if (m.is_user || m.role === 'user') return false;          // 只釘 AI 正文樓
+            if (text.indexOf('<!--avs:' + id + '-->') >= 0) return true;   // 已經有了
+            const tag = '<!--avs:' + id + '-->';
+            const ci = text.lastIndexOf('</content>');
+            const next = ci >= 0 ? (text.slice(0, ci) + tag + '\n' + text.slice(ci)) : (text + '\n' + tag);
+            _selfEditing = true;
+            try {
+                // 💾 用舊版 setChatMessage（單數）寫入：它內部無條件 await saveChatConditional()＝立即落盤。
+                //    新版 setChatMessages 在 refresh:'none' 只叫「防抖存檔」——TauriTavern 的 /del 走磁碟
+                //    重讀重寫，防抖沒趕上＝標記蒸發（2026-08-04 驗屍：被砍的 id 從未出現在聊天檔）。
+                //    getContext().saveChat 在 TauriTavern 不存在（?.靜默跳過），不能依賴。
+                if (typeof TH.setChatMessage === 'function') {
+                    await TH.setChatMessage({ message: next }, arrIdx, { refresh: 'none' });
+                } else {
+                    await TH.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'none' });
+                }
+            } finally {
+                setTimeout(() => { _selfEditing = false; }, 2500);
+            }
+            // ✅ 寫完必須回讀驗證：setChatMessages 不保證當下就把標記落到記憶體訊息上，
+            //    沒驗證就回 true → patch 記了一個「正文其實沒有」的 id → 下次對帳判它死亡、無辜回滾。
+            //    （2026-08-01 實測：4 筆 patch 只有 2 筆的標記真的在聊天檔裡）
+            try {
+                const back = await TH.getChatMessages(arrIdx);
+                const bt = back && back[0] && (back[0].message || back[0].mes);
+                if (typeof bt === 'string' && bt.indexOf('<!--avs:' + id + '-->') >= 0) {
+                    // 💾 驗證通過後強制落盤：setChatMessages 的 refresh 只管畫面、不保證存檔（@types.txt），
+                    //    TauriTavern 又是懶存檔——標記只活在記憶體時，/del 觸發「從磁碟重讀→重寫」會讓它蒸發，
+                    //    對帳兩遍都掃不到 → 無辜回滾（「刪用戶樓也跳回溯」真兇）。存檔失敗只警告，複核制當第二道防線。
+                    try { await win.SillyTavern?.getContext?.()?.saveChat?.(); }
+                    catch (e2) { console.warn('🛰️ [State Runtime] avs 標記落盤失敗（標記僅在記憶體，刪樓可能誤回滾）:', e2?.message || e2); }
+                    return true;
+                }
+                console.warn('🛰️ [State Runtime] avs 標記寫入後回讀不到 → 這輪不記 patch');
+                return false;
+            } catch (e) { return false; }
+        } catch (e) {
+            console.warn('🛰️ [State Runtime] 寫入 avs 標記失敗:', e?.message || e);
+            return false;
+        }
+    }
+
+    // 一次性遷移：舊制 { 樓號: updates } + sigs → 新制 [{id, updates}] + 正文標記。
+    //   對每筆舊 patch，找到它當時那一樓，補釘 id；釘不上（那樓已不存在／唯讀）就把它疊進 base
+    //   ——資料不流失，只是收斂成底、失去單獨回滾能力。跑完 sigs 直接丟掉。
+    async function _migratePatches(chatId, data, fullMsgs) {
+        if (Array.isArray(data.patches)) return false;
+        const old = data.patches && typeof data.patches === 'object' ? data.patches : null;
+        const ids = old ? Object.keys(old).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b) : [];
+        const list = [];
+        const newBase = data.base ? JSON.parse(JSON.stringify(data.base)) : {};
+        let stamped = 0, folded = 0;
+        for (const oldId of ids) {
+            const updates = old[oldId];
+            if (!updates || !Object.keys(updates).length) continue;
+            const msg = Array.isArray(fullMsgs) ? fullMsgs[oldId] : null;
+            const isAi = msg && !(msg.is_user || msg.role === 'user');
+            let ok = false, id = '';
+            if (isAi) {
+                const exist = _idsInText(msg.message || msg.mes);
+                if (exist.length) { id = exist[0]; ok = true; }                 // 已經有標記＝直接沿用
+                else { id = _newAvsId(); ok = await _stampAvsId(oldId, id); }
+            }
+            if (ok) { list.push({ id, updates }); stamped++; }
+            else { _applyPatchInto(newBase, updates); folded++; }               // 釘不上 → 收斂進底，不丟資料
+        }
+        const dir = data.director && data.director.patches && !Array.isArray(data.director.patches)
+            ? data.director.patches : null;
+        let dirList = Array.isArray(data.director?.patches) ? data.director.patches : [];
+        if (dir) {
+            // 導演稿只留最新一份有意義（本來就是全文快照、後蓋前）
+            const dids = Object.keys(dir).map(Number).filter(n => !isNaN(n)).sort((a, b) => a - b);
+            const lastText = dids.length ? String(dir[dids[dids.length - 1]] || '') : '';
+            const anchor = list.length ? list[list.length - 1].id : '';
+            dirList = (lastText && anchor) ? [{ id: anchor, text: lastText }] : [];
+        }
+        const next = { ...data, patches: list, base: newBase, sigs: undefined, patchFmt: 2 };
+        delete next.sigs;
+        if (data.director) next.director = { ...data.director, patches: dirList };
+        await win.OS_DB.saveStateData(chatId, next);
+        Object.assign(data, next);
+        console.log(`🛰️ [State Runtime] patch 身分制遷移完成：${stamped} 筆釘上正文 id，${folded} 筆收斂進 base（那些樓已不在）`);
+        return true;
+    }
+
+    // 現在最後一樓的號碼——刻意跟抽取端用同一個來源(getChatMessages(-1))，
+    // 兩邊 id 空間一致，懶載入的影響也一致，才不會對不上鍵。拿不到回 -1（呼叫端就別動手）。
+    async function _currentLastId() {
+        try {
+            const last = await win.TavernHelper?.getChatMessages?.(-1);
+            const v = last && last[0] ? (last[0].message_id ?? last[0].id) : undefined;
+            return (typeof v === 'number' && v >= 0) ? v : -1;
+        } catch (e) { return -1; }
+    }
+
+    // 回滾核心：一次砍掉 deadIds 這幾筆 patch，並把它們碰過的欄位回復成「base+剩餘patch」的值。
+    // 回傳實際回滾的欄位數（0 = 沒有對應 patch，什麼都沒做）。
+    async function _rollbackPatches(chatId, data, deadIds) {
+        const kill = new Set((deadIds || []).map(String));
+        const list = _patchList(data.patches);
+        const newPatches = list.filter(p => !kill.has(String(p.id)));
+        const deadPatches = list.filter(p => kill.has(String(p.id))).map(p => p.updates);
+        if (!deadPatches.length) return 0;
+
+        const rolled = recomputeCurrent(newPatches, data.base);   // 重播基準（只用來查「被碰過的 key」該回到什麼值）
+        const cur = JSON.parse(JSON.stringify(win._AVS_ENGINE?.read?.() || data.current || {}));
+        // 被刪 patch 碰過的 key 攤平成葉路徑（物件型值逐葉展開，別整個容器覆蓋）；多筆取聯集
+        const leafSet = new Set();
+        const flatten = (prefix, val) => {
+            if (val && typeof val === 'object' && !Array.isArray(val)) { for (const k of Object.keys(val)) flatten(prefix + '.' + k, val[k]); }
+            else leafSet.add(prefix);
+        };
+        for (const dp of deadPatches) {
+            for (const [k, v] of Object.entries(dp)) {
+                if (v && typeof v === 'object' && !Array.isArray(v)) flatten(k, v);
+                else leafSet.add(k);
+            }
+        }
+        // 刪葉子後往上清「空殼父物件」（實體所有屬性都是這 patch 引入的 → 別留 {} 鬼實體）；頂層容器留著（空容器=正常）
+        const prune = (path) => {
+            const ks = path.split('.'); ks.pop();
+            while (ks.length >= 2) {
+                const pp = ks.join('.');
+                const parent = _getDeep(cur, pp);
+                if (parent && typeof parent === 'object' && !Array.isArray(parent) && !Object.keys(parent).length) { _deleteDeep(cur, pp); ks.pop(); }
+                else break;
+            }
+        };
+        for (const k of leafSet) {
+            const v = _getDeep(rolled, k);
+            if (v === undefined) { _deleteDeep(cur, k); prune(k); }   // 這 patch 首次引入的欄位 → 整個拿掉+清空殼
+            else if (k.includes('.')) _setDeep(cur, k, v);
+            else cur[k] = v;
+        }
+
+        // 引擎 / DB / 面板三邊一起回滾（少寫引擎 → 下輪抽取以舊底為基準，回滾等於沒發生）
+        // 導演稿跟著同一批 id 走（它現在也以正文 id 為錨，不再有樓號）
+        const newDir = data.director
+            ? { ...data.director, patches: (Array.isArray(data.director.patches) ? data.director.patches : []).filter(d => !kill.has(String(d.id))) }
+            : data.director;
+        // 先落地再 await 引擎（順序顛倒或漏 await → 引擎慢一步用舊資料蓋回來，回滾等於沒發生）
+        await win.OS_DB.saveStateData(chatId, { ...data, patches: newPatches, director: newDir, current: cur });
+        try { await win._AVS_ENGINE?.write?.(cur); } catch (e) {}
+        try { win.eventEmit?.('AURELIA_STATE_PATCHED', { chatId, msgId: deadIds[deadIds.length - 1], rollback: true }); } catch (e) {}
+        return leafSet.size;
+    }
+
+    // 🧳 整組欄位收起來／放回去（11-07，世界門用：在某個世界裡建的狀態欄跟著那個世界走，撤離就整組收走、回到那個世界再放回來）。
+    //   takeKeys：這幾個頂層欄位從「底」(base)、每一輪的紀錄(patches)、現在值(current)三處一起拿掉——只拿 current 的話，
+    //     之後刪樓重算（base＋剩下的 patches）會把它們長回來。回傳拿掉之前的值 { 欄位: 值 }。
+    //   putKeys：放回底和現在值；現在已經有這一欄的就不蓋（那是別的檔案正在記的）。回傳放回幾欄。
+    //   欄位名照簡繁折一次再比（劇情寫繁體、存的是簡體也算同一欄）。
+    //   酒館：資料庫那份是正本，寫完叫 adapter 重讀（別用引擎 read 再整份 write——快取還沒對到這一室時會讀到空的、整份寫回去）。
+    //   網頁版：引擎讀的是 localStorage 那份（同步讀、不會撞快取），跟資料庫那份一起改。
+    function _keyFold(k) { const Z = win.OS_ZH; return (Z && typeof Z.key === 'function') ? Z.key(String(k)) : String(k); }
+    async function takeKeys(keys, chatId) {
+        const cid = chatId || getChatId();
+        const want = new Set((Array.isArray(keys) ? keys : []).filter(Boolean).map(_keyFold));
+        const out = {};
+        if (!cid || !want.size) return out;
+        const hit = (path) => want.has(_keyFold(String(path).split('.')[0]));
+        const clone = (v) => (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
+        if (_isStandalone() && win._AVS_ENGINE?.read && win._AVS_ENGINE?.write) {
+            const s = win._AVS_ENGINE.read() || {};
+            let cut = false;
+            for (const k of Object.keys(s)) if (hit(k)) { out[k] = clone(s[k]); delete s[k]; cut = true; }
+            if (cut) { try { await win._AVS_ENGINE.write(s); } catch (e) {} }
+        }
+        if (!win.OS_DB?.getStateData || !win.OS_DB?.saveStateData) return out;
+        const data = await win.OS_DB.getStateData(cid);
+        if (!data) return out;
+        let changed = false;
+        const cur = Object.assign({}, data.current || {});
+        for (const k of Object.keys(cur)) if (hit(k)) { if (!(k in out)) out[k] = clone(cur[k]); delete cur[k]; changed = true; }
+        let base = data.base;
+        if (base && typeof base === 'object') {
+            base = Object.assign({}, base);
+            for (const k of Object.keys(base)) if (hit(k)) { if (!(k in out)) out[k] = clone(base[k]); delete base[k]; changed = true; }
+        }
+        const patches = Array.isArray(data.patches) ? data.patches.map(p => {
+            if (!p || !p.updates || typeof p.updates !== 'object') return p;
+            const u = {}; let cut = false;
+            for (const [k, v] of Object.entries(p.updates)) { if (hit(k)) { cut = true; continue; } u[k] = v; }
+            if (!cut) return p;
+            changed = true;
+            return Object.assign({}, p, { updates: u });
+        }) : data.patches;
+        if (changed) {
+            await win.OS_DB.saveStateData(cid, { ...data, base, patches, current: cur });
+            if (!_isStandalone()) {
+                try { await win.OS_AVS_ADAPTER?.refreshCache?.(); } catch (e) {}
+                try { win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: cur })); } catch (e) {}
+            }
+        }
+        return out;
+    }
+    async function putKeys(values, chatId) {
+        const cid = chatId || getChatId();
+        const ks = (values && typeof values === 'object') ? Object.keys(values) : [];
+        if (!cid || !ks.length) return 0;
+        const clone = (v) => (v && typeof v === 'object') ? JSON.parse(JSON.stringify(v)) : v;
+        const has = (obj, k) => !!obj && Object.keys(obj).some(x => _keyFold(x) === _keyFold(k));
+        let n = 0;
+        if (_isStandalone() && win._AVS_ENGINE?.read && win._AVS_ENGINE?.write) {
+            const s = win._AVS_ENGINE.read() || {};
+            let add = 0;
+            for (const k of ks) if (!has(s, k)) { s[k] = clone(values[k]); add++; }
+            if (add) { try { await win._AVS_ENGINE.write(s); } catch (e) {} }
+            n = add;
+        }
+        if (!win.OS_DB?.getStateData || !win.OS_DB?.saveStateData) return n;
+        const data = (await win.OS_DB.getStateData(cid)) || {};
+        const cur = Object.assign({}, data.current || {});
+        const base = Object.assign({}, data.base || {});
+        let add = 0;
+        for (const k of ks) {
+            if (has(cur, k)) continue;
+            cur[k] = clone(values[k]);
+            if (!has(base, k)) base[k] = clone(values[k]);
+            add++;
+        }
+        if (add) {
+            await win.OS_DB.saveStateData(cid, { ...data, base, current: cur });
+            if (!_isStandalone()) {
+                try { await win.OS_AVS_ADAPTER?.refreshCache?.(); } catch (e) {}
+                try { win.dispatchEvent(new CustomEvent('AVS_VARS_UPDATED', { detail: cur })); } catch (e) {}
+            }
+        }
+        return Math.max(n, add);
+    }
+
+    // 🧾 對帳式回滾（刪樓／任何說不準的變動都走這條）
+    // 🚨 為什麼不能信事件參數：酒館 MESSAGE_DELETED 傳的是「刪完還剩幾則」(script.js: emit(MESSAGE_DELETED, chat.length))，
+    //    不是被刪那則的號碼。拿它當 patch 鍵查 → 只有「剛好刪最後一樓」時數字碰巧相等才會動，
+    //    刪多則／批量刪一律查無此鍵、靜默 return ＝ 使用者眼中的「AVS 又沒回溯」。
+    // 做法（2026-08-01 身分制）：掃全檔收集現存的 <!--avs:id--> 標記，patch 的 id 還在就活、不在就死。
+    //    樓號與內容簽名一概不參與 ⇒ 刪使用者純指令、刪中間樓、樓號漂移都不會誤殺；
+    //    改寫正文只要沒把標記刪掉也不誤殺（舊的簽名制會把每個錯字修正都當成失效）。
+    async function _reconcilePatches(tag) {
+        try {
+            if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過對帳'); return; }
+            const chatId = getChatId();
+            if (!chatId || !win.OS_DB?.getStateData) return;
+
+            // 🚨 樓數必須讀「真實全檔」：VN_READER.fetchFullChat 直接讀聊天檔、繞開懶載入窗口
+            //    （記憶系統 reconcileToStory 也是走這條才會準）。getChatMessages 在 TauriTavern
+            //    會被懶載窗口騙出小樓號 → 對帳算出「沒有孤兒」→ 刪了也毫無反應。
+            let fullMsgs = null;
+            try { fullMsgs = await win.VN_READER?.fetchFullChat?.(); } catch (e) {}
+            let total = Array.isArray(fullMsgs) ? fullMsgs.length : -1;
+            let lastId = total > 0 ? total - 1 : await _currentLastId();   // 退路：拿不到全檔才用窗口號
+            if (total <= 0 && lastId >= 0) console.warn('🛰️ [State Runtime] 對帳：讀不到完整聊天檔，退回窗口號（可能不準）');
+            if (lastId < 0) { console.warn('🛰️ [State Runtime] 對帳：連樓號都拿不到，保守不動（可用狀態面板「還原上一步」）'); return; }
+            console.log(`🛰️ [State Runtime] 對帳(${tag})：真實樓數=${total > 0 ? total : '未知'}，最後一樓=#${lastId}`);
+
+
+            const data = await win.OS_DB.getStateData(chatId);
+            // 🔍 這幾個出口以前是靜默 return，查半天不知道卡在哪 → 一律說明原因
+            if (!data) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：這個聊天沒有任何狀態資料 → 沒東西可回滾`); return; }
+
+            // 🚪 這個聊天根本沒開 AVS → 直接跳過，別往下跑。
+            //    注意 data 非空不代表有 AVS：NPC Dossier 把 npcLedger/npcDossiers 寫進「同一筆」
+            //    state_data(chatId)，所以沒建過狀態的聊天照樣有記錄，會一路跑到底、
+            //    印出「current 有 0 個欄位表示狀態是別的路徑寫的（跑過深度整理…）」這種誤導訊息。
+            const _hasSchema = !!(data.schema && Object.keys(data.schema).length);
+            const _hasAny = _hasSchema
+                || _patchList(data.patches).length
+                || (data.current && Object.keys(data.current).length)
+                || (data.base && Object.keys(data.base).length);
+            if (!_hasAny) { console.log(`🛰️ [State Runtime] 對帳(${tag})：這個聊天沒在追蹤狀態（無 schema、無紀錄）→ 跳過`); return; }
+
+            // 舊制存檔（樓號為鍵＋sigs）→ 一次性遷移成身分制，之後永遠走 id
+            if (!Array.isArray(data.patches)) {
+                if (total <= 0) { console.warn(`🛰️ [State Runtime] 對帳(${tag})：要遷移舊 patch 但讀不到完整聊天檔 → 這次不動，下次再說`); return; }
+                await _migratePatches(chatId, data, fullMsgs);
+            }
+
+            const list = _patchList(data.patches);
+            const _cn = data.current ? Object.keys(data.current).length : 0;
+            const _bn = data.base ? Object.keys(data.base).length : 0;
+            console.log(`🛰️ [State Runtime] 對帳(${tag})：chatId=${chatId}｜逐輪紀錄 ${list.length} 筆｜當前狀態 ${_cn} 個頂層欄位｜底 ${_bn}`);
+            if (!list.length) {
+                console.warn(`[State Runtime] 對帳(${tag})：沒有逐輪紀錄可回滾（patches 空）。`
+                    + `current 有 ${_cn} 個欄位表示狀態是別的路徑寫的——例如跑過「深度整理」(會清空 patches)、`
+                    + `或狀態由主模型 <vars> 直接寫入。這種資料無法自動回溯，只能用面板「還原上一步」。`);
+                return;
+            }
+
+            // 掃全檔收集「現存的 avs id」——這就是唯一判準，樓號完全不參與。
+            // 🚨 必須「讀檔 ∪ 記憶體」聯集：fetchFullChat 讀的是磁碟上的聊天檔，而 TauriTavern
+            //    落盤有延遲——剛釘上的標記可能還只在記憶體裡。只信讀檔會把最新那筆 patch
+            //    誤判成死亡、無辜回滾（2026-08-01 實測：檔案只有 2 個標記，實際有 4 筆 patch）。
+            //    聯集只會讓 alive 變多、不會變少 ⇒ 方向永遠偏保守，寧可漏殺不可誤殺。
+            const alive = new Set();
+            if (total > 0) fullMsgs.forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
+            try {
+                // 🚨 記憶體這一路必須用「記憶體自己的最後樓號」當上限，不能沿用上面那個 lastId：
+                //    lastId 是磁碟檔長度算出來的，而酒館一律「先 emit 事件、後存檔」
+                //    （script.js: emit(MESSAGE_UPDATED) → saveChatConditional()），
+                //    對帳跑的當下磁碟必定落後一則 → 上限少 1 → 最新那樓被排除在查詢範圍外
+                //    → 剛釘上的標記讀檔沒有、記憶體也沒撈到 → 尾端對不上 → 誤砍最新 patch。
+                //    （這就是「編輯訊息必跳回溯提示、刪訊息時有時無」的根因。）
+                const _memLast = await _currentLastId();
+                const _hi = _memLast >= 0 ? _memLast : lastId;
+                // role:'assistant' ＝ 只看 AI 的輪（@types.txt：ChatMessage.role），使用者樓不可能有 avs id
+                const live = await win.TavernHelper?.getChatMessages?.(`0-${_hi}`, { role: 'assistant' });
+                (live || []).forEach(m => _idsInText((m && (m.message || m.mes)) || '').forEach(id => alive.add(id)));
+            } catch (e) { console.warn('🛰️ [State Runtime] 對帳讀記憶體訊息失敗，只用讀檔結果:', e?.message || e); }
+            // 🛡️ 再單獨補掃最後一則：懶載入窗口可能讓上面兩個上限都偏小，而剛釘標記的永遠是最後一則。
+            //    getChatMessages(-1) 不受範圍算術影響 ⇒ 最新那筆 patch 一定有機會被認活。
+            try {
+                const _last = await win.TavernHelper?.getChatMessages?.(-1);
+                const _lt = _last && _last[0] && (_last[0].message || _last[0].mes);
+                _idsInText(_lt || '').forEach(id => alive.add(id));
+            } catch (e) {}
+            // 🛡️ 保命閘：一個 id 都沒掃到 → 要先分清楚是「讀不到檔」還是「讀到了、裡面真的沒標記」。
+            //    ⚠️ 舊版兩種都一律 return，於是「中途才開始抽取／舊制殘留的無標記 patch」永遠對不完帳，
+            //       卡在原地什麼都不做（2026-08-06：明明樓數讀到 4 還說殘缺）。
+            //    正確判準＝有沒有真的讀到正文：
+            //      ・讀不到任何正文（TauriTavern incomplete utf-8／懶載入空殼）→ 保護，寧可不動
+            //      ・讀到了正文卻掃不到標記 → 那就是事實，這些 patch 全是殭屍，照下面的規則辦
+            //        （非移除事件＝認養歸化重釘標記、狀態保留；真的刪樓＝回滾。兩條都是對帳該做的事）
+            //    total 的語義剛好夠用：-1 ＝ fetchFullChat 失敗（不可信）；0 ＝ 成功讀到「空聊天」（刪到空是事實，不是失敗）
+            const _chatReadOk = total >= 0;
+            const _hasBody = total === 0 || fullMsgs.some(m => String((m && (m.message || m.mes)) || '').trim().length > 0);
+            if (!alive.size && !(_chatReadOk && _hasBody)) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：聊天檔讀不到（樓數=${total}，正文全空）、卻有 ${list.length} 筆 patch → 讀取殘缺，中止不動`);
+                return;
+            }
+            if (!alive.size) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：${total === 0 ? '聊天已經是空的' : '讀到 ' + total + ' 則正文、裡面確實沒有任何 avs 標記'} → ${list.length} 筆 patch 全是殭屍（中途才開始抽取／舊制殘留／樓被刪光），交由下面處理`);
+            }
+
+            // 🔎 從最後一筆 patch 往前對 id：對不上就砍、再往前一筆；一對上就停，它前面的全部保留。
+            //    （不用「集合差集」：差集會連中間那些「id 還在、只是排序看起來怪」的也一起殺。
+            //      跑團是線性推進，尾端對得上就代表劇情線沒斷，什麼都不該動 ⇒ 誤殺機率為零。）
+            let cut = list.length;
+            while (cut > 0 && !alive.has(String(list[cut - 1].id))) cut--;
+            const dead = list.slice(cut).map(p => p.id);
+            if (!dead.length) { console.log(`🛰️ [State Runtime] 對帳(${tag})：${list.length} 筆 patch，尾端 id 對得上，無需回滾`); return; }
+
+            // ⚖️ 生死判決（2026-08-04 定案：判別器＝id 本身，不數樓、不看 msgid——樓號會因刪樓/隱藏/懶載入漂移）：
+            //    標記強制落盤（setChatMessage 立即存）後，「全檔掃不到某 id」只有兩種可能：
+            //    ─ 內容移除事件（刪樓·複核 / msg# swipe 後備）：它的 AI 樓真的被刪/被換 → 回滾。
+            //      刪用戶樓時所有標記都還在檔案裡 → dead 為空 → 上面就 return 了，根本走不到這。
+            //    ─ 非移除事件（注入前 / 開卡歸化 / 開面板）：沒刪東西卻失聯＝落盤修復前的殭屍老 patch
+            //      → 「認養」到最新 AI 樓（重釘標記＋立即落盤）＝一次性歸化，之後它跟新 patch 一樣可靠。
+            const _isRemoval = (tag === '刪樓·複核') || /^msg#/.test(tag);
+            // 認養需要一個「宿主樓」來重釘標記。聊天被刪到空 / 只剩使用者樓時根本沒有宿主，
+            // 舊版還是走認養 → 每次都 0/N 失敗、印「保留不動，下輪再試」→ 永遠卡著（刪到空還是保留）。
+            // 沒有宿主樓就代表那些 patch 確定是孤兒 → 直接走回滾清掉。
+            let lastAsstIdx = -1;
+            if (total > 0) for (let i = fullMsgs.length - 1; i >= 0; i--) { const mm = fullMsgs[i]; if (mm && !(mm.is_user || mm.role === 'user')) { lastAsstIdx = i; break; } }
+            if (!_isRemoval && lastAsstIdx < 0) {
+                console.warn(`🛰️ [State Runtime] 對帳(${tag})：聊天裡已經沒有任何 AI 樓可以認養（樓數=${total}）→ ${dead.length} 筆 patch 確定是孤兒，直接清掉`);
+            }
+            if (!_isRemoval && lastAsstIdx >= 0) {
+                let adopted = 0;
+                for (const id of dead) { try { if (await _stampAvsId(lastAsstIdx, id)) adopted++; } catch (e) {} }
+                console.log(`🛰️ [State Runtime] 對帳(${tag})：非內容移除事件卻有 ${dead.length} 筆失聯（殭屍老patch）→ 不回朔；${adopted}/${dead.length} 筆認養到 #${lastAsstIdx}（重釘標記+落盤）`);
+                if (adopted < dead.length) console.warn(`🛰️ [State Runtime] 對帳(${tag})：${dead.length - adopted} 筆認養失敗 → 保留不動，下輪再試`);
+                return;
+            }
+
+            const n = await _rollbackPatches(chatId, data, dead);
+            console.log(`🛰️ [State Runtime] 對帳(${tag}) → 清掉 ${dead.length} 筆失效 patch(${dead.join(',')})，回復 ${n} 個欄位`);
+            if (n) showToast(`狀態已回溯（${dead.length} 輪、${n} 個欄位）`, 'success');
+        } catch (e) {
+            console.warn('[State Runtime] 對帳回滾失敗:', e);
+            showToast('狀態回溯失敗，請用狀態面板「還原上一步」', 'warning');
+        }
+    }
+
+    // ✏️ 內容替換專用（只掛 MESSAGE_SWIPED；事件參數是真正的訊息號碼）
+    //    🚨 UPDATED/EDITED 已拔線（鐵則 2026-08-04）：編輯不是內容替換，標記還在就不准砍 patch。
+    async function onMessageInvalidated(msgId) {
+        try {
+            if (_selfEditing) { console.log('🛰️ [State Runtime] 開頭補救自身改寫 → 略過 patch 失效'); return; }
+            const chatId = getChatId();
+            if (!chatId || !win.OS_DB?.getStateData) return;
+            const data = await win.OS_DB.getStateData(chatId);
+            if (!data) return;
+            // 🆔 身分制：msgId 只是「哪一樓被動過」的提示，真正要砍哪筆 patch 看那樓正文裡的 avs id。
+            //    這樓被 swipe/重生 → 正文換了、標記沒了 → 交給對帳統一處理（它掃全檔，比事件參數可靠）。
+            let _hit = [];
+            try {
+                const _lm = await win.TavernHelper?.getChatMessages?.(msgId);
+                _hit = _idsInText(String((_lm && _lm[0] && (_lm[0].message || _lm[0].mes)) || ''));
+            } catch (e) {}
+            const _known = new Set(_patchList(data.patches).map(p => String(p.id)));
+            const _dead = _hit.filter(id => _known.has(id));
+            if (!_dead.length) {
+                console.log(`🛰️ [State Runtime] msg#${msgId} 正文裡沒有已登記的 avs id → 改走對帳確認`);
+                return _reconcilePatches('msg#' + msgId + ' 查無id');
+            }
+            const n = await _rollbackPatches(chatId, data, _dead);
+            console.log(`🛰️ [State Runtime] 砍 patch msg#${msgId} → 已回滾 ${n} 個欄位`);
+            if (n) showToast(`狀態已回溯（${n} 個欄位）`, 'success');
+        } catch(e) {
+            console.warn('[State Runtime] 砍 patch 失敗:', e);
+        }
+    }
+
+    // --- 對外 API ---
+    async function clearPatches() {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return;
+        const data = await win.OS_DB.getStateData(chatId);
+        if (!data) return;
+        await win.OS_DB.saveStateData(chatId, {
+            ...data,
+            patches: [],
+            base: {},
+            current: {}
+        });
+        showToast('已清空 patches，副模型即將重新初始化', 'info');
+        // 自動跑一次 extract（current 已清空 → 進初始化模式 → 重新填齊全部欄位）
+        setTimeout(() => extractOnce(), 500);
+    }
+
+    async function forceExtract() {
+        if (!isEnabled()) {
+            showToast('請先開啟「副模型抽取」開關', 'warning');
+            return;
+        }
+        showToast('立即抽取一次...', 'info');
+        await extractOnce({ force: true });   // 面板手動重抽＝無視「這樓已抽過」守門，用當下副模型重來
+        showToast('抽取完成', 'success');
+    }
+
+    // ♻️ 深度整理（狀態面板手動、低頻）：用「主模型」把整份狀態清一輪——合併重複角色(繁簡/別名)、
+    //   移除純路人、按大總結對帳修正過期欄位。日常副模型增量抽取的互補：玩個五十/百輪狀態髒了手動壓一次
+    //   （狀態系統版的「重壓大總結」）。安全網：整理前快照(可還原上一步)、AI 回傳解析不過就整單放棄絕不寫半套、
+    //   清理後重打底(base=cleaned、patches 歸零——舊補丁跟新基準已不對齊)。
+    async function deepConsolidate() {
+        const chatId = getChatId();
+        if (!chatId || !win.OS_DB?.getStateData) return { ok: false, msg: '沒有進行中的故事' };
+        if (!win.OS_API || typeof win.OS_API.chatMain !== 'function') return { ok: false, msg: '主模型不可用（先到 設置 → AI 模型 設定）' };
+        const currentState = win._AVS_ENGINE?.read?.() || {};
+        if (!Object.keys(currentState).length) return { ok: false, msg: '目前沒有狀態可整理' };
+        let summary = '';
+        try { if (win.OS_STORY_TOOLS?.getCurrentInjectionPayload) summary = (await win.OS_STORY_TOOLS.getCurrentInjectionPayload()) || ''; } catch (e) {}
+        // 最近劇情原文＝清算帳本的證據（跟抽取共用同一個讀取器）；沒證據主模型就不敢動數字（「用了主模型還是不改」的真兇）
+        let recentRaw = '';
+        try { recentRaw = (await gatherRecentMessages()).text || ''; } catch (e) {}
+
+        const sys = '你是資料整理工具。只輸出 JSON，不要任何解說、標記或程式碼圍欄。';
+        const prompt = [
+            '下面是一份跑團劇情的「狀態資料」JSON。它由小模型逐輪累積，可能有：同一角色的繁簡/別名重複條目、早該更新的過期欄位、記爛的金錢/庫存帳、無足輕重的路人條目。請整理成乾淨版本。',
+            '',
+            '規則：',
+            '1. 合併重複：同一角色的繁簡體/別名/暱稱條目合併成一條（名字保留資訊較完整的那個），數值取最新合理值。',
+            '2. 移除純路人：只有「沒有好感度/關係數值、沒有物品往來、與任務無牽扯、劇情總結也沒提到」的條目才可移除；不確定就保留。',
+            '3. 清舊任務：狀態為「已完成/已失敗/已結束」且沒有後續掛鉤的任務條目整條移除（它們已是既成事實、由劇情總結記載，不需留在狀態裡）；「進行中/可交付/未領酬勞/有未了後果」的保留。移除的任務名列進 removed。',
+            '4. 清亡者：明確已死亡或永久退場、且沒有未了牽扯（無進行中任務/債務/懸念掛在他身上）的角色條目整條移除，名字列進 removed；主角絕不移除；不確定就保留。',
+            '5. 數值總清算（所有數值欄位都要過一遍，重點任務）：',
+            '   5a. 帳本類（金錢/庫存/物品數量）：掃【劇情總結】與【最近劇情】裡明寫的金額、收支、盤點句（「還剩X」「花了Y」「得到Z枚」），逐項核對；對不上→以劇情明寫為準修正。',
+            '   5b. 狀態類（好感度/體力/HP/等級/倒計時/技能值…一切數值）：對照兩份參照裡的事件核對合理性——只修「明顯矛盾」的（例：劇情已重傷瀕死但體力還是滿值、倒計時經過了好幾天卻沒推進、關係已成戀人但好感度停在初識值、數值超出 desc 規定範圍）。',
+            '   5c. 修正紀律：每筆修正以劇情明寫或強烈依據為準、寫進 fixed 並附依據（例：「金錢 320→180，總結記載買馬花140」「體力 100→30，最近劇情重傷未癒」）；兩份參照都沒依據的數值一律保持原樣，嚴禁憑感覺調。',
+            '6. 對帳修正：對照【劇情總結】的既成事實，修正過期欄位（例如任務其實已完成/酬勞已領、關係已變化）。',
+            '7. 結構不變：保持原本的巢狀結構與欄位名，不發明新欄位、不改欄位型別、不改頂層分類。',
+            '8. 只輸出 JSON，格式：{"current":{整理後完整狀態},"merged":["被合併掉的名字"],"removed":["被移除的名字"],"fixed":["修正了什麼(短句)"]}',
+            '',
+            '【當前狀態】',
+            JSON.stringify(currentState),
+            summary ? '\n【劇情總結（唯讀參照）】\n' + summary : '',
+            recentRaw ? '\n【最近劇情（唯讀參照，帳本清算的證據）】\n' + recentRaw : '',
+        ].join('\n');
+
+        const _W = window.parent || window;
+        _W.__AURELIA_SUMMARIZING = true;   // 同大總結：整理這通別觸發抽取/生圖等 GENERATION_* 掛勾
+        let text = '';
+        try {
+            text = await new Promise((resolve, reject) => {
+                try { win.OS_API.chatMain([{ role: 'system', content: sys }, { role: 'user', content: prompt }], null, resolve, reject, { task: 'avs_design' }); }
+                catch (e) { reject(e); }
+            });
+        } catch (e) {
+            return { ok: false, msg: (e && e.message) || String(e) };
+        } finally {
+            setTimeout(function () { _W.__AURELIA_SUMMARIZING = false; }, 3000);   // 撐過事後才發的 GENERATION_ENDED
+        }
+
+        let obj = null;
+        try { const m = String(text || '').match(/\{[\s\S]*\}/); obj = JSON.parse(m ? m[0] : ''); } catch (e) {}
+        const cleaned = obj && obj.current;
+        if (!cleaned || typeof cleaned !== 'object' || Array.isArray(cleaned) || !Object.keys(cleaned).length) {
+            console.warn('[State Runtime] ♻️ 深度整理：AI 回傳解析失敗，放棄不寫入。回傳開頭：', String(text || '').slice(0, 300));
+            return { ok: false, msg: 'AI 回傳格式不對（已放棄，狀態未動）' };
+        }
+        // 防呆：整理後的頂層分類必須是原有分類的子集（模型亂發明/砍掉整個分類 → 可疑，放棄）
+        const curRoots = Object.keys(currentState);
+        if (!Object.keys(cleaned).every(k => curRoots.includes(k))) {
+            console.warn('[State Runtime] ♻️ 深度整理：頂層分類對不上原狀態，放棄不寫入', Object.keys(cleaned), curRoots);
+            return { ok: false, msg: 'AI 動了頂層分類（已放棄，狀態未動）' };
+        }
+
+        try { win._AVS_ENGINE?.snapshot?.(currentState); } catch (e) {}   // 整理前快照 → 還原上一步可撤
+        try {   // 同樣先落地再 await 引擎，避免引擎用舊資料回寫
+            const data = (await win.OS_DB.getStateData(chatId)) || {};
+            await win.OS_DB.saveStateData(chatId, { ...data, base: cleaned, patches: [], current: cleaned });
+        } catch (e) {}
+        try { await win._AVS_ENGINE?.write?.(cleaned); } catch (e) { return { ok: false, msg: '寫入失敗：' + (e?.message || e) }; }
+        const n = a => Array.isArray(a) ? a.length : 0;
+        console.log('♻️ [State Runtime] 深度整理完成', { merged: obj.merged, removed: obj.removed, fixed: obj.fixed });
+        return { ok: true, merged: n(obj.merged), removed: n(obj.removed), fixed: n(obj.fixed) };
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // 開頭設置補救：主模型偶爾漏掉開場 ChapterCard 的 [Bg]/[BGM]（換背景/音樂的關鍵）
+    //   → 腳本每輪重抓、漏一次就掉場景：章節卡空、回放/背景音樂失準。
+    //   搭「生成結束」這趟，自動 carry-forward 最近一筆補回、改寫最新這則酒館訊息。
+    //   • 只在「整則完全沒有該 tag」時補（這輪 AI 有給=可能換了場景，不去蓋）。
+    //   • 歷史也找不到可 carry → 放棄（不亂編場景）。
+    //   • 改寫用 setChatMessages({refresh:'affected'})，與 _captureAndStripRecall 同款（程式化刷新、不觸發 MESSAGE_EDITED）。
+    //   • 隱藏開關 localStorage vn_fix_opening=0 可關，預設開。
+    // ─────────────────────────────────────────────────────────────────────
+    // 純函式（酒館這支和網頁版 VN_Core 存章之前都用）：cur＝這一章原文、older＝更早的章／訊息原文（新的在前）。
+    //   回補好的整章；不用補或沒得補回 null
+    function repairOpeningText(cur, older) {
+        cur = String(cur || '');
+        // 只看最後一個 </thinking> 之後的正文段：CoT 常提到 <content>/<ChapterCard>/[Bg| 範例字樣，
+        // 閘門會被騙、補回的行還會插進思考區被剝掉 → 檢測與插入都在 tail 上做、頭尾重組寫回
+        let _tailStart = 0;
+        { const _re = /<\/think(?:ing)?>/gi; let _tm; while ((_tm = _re.exec(cur)) !== null) _tailStart = _tm.index + _tm[0].length; }
+        const _head = cur.slice(0, _tailStart), _tail = cur.slice(_tailStart);
+        if (_tail.indexOf('<content>') === -1 || _tail.indexOf('</content>') === -1) return null;  // 只動完整 VN 正文，避開半截/思考期/錯誤訊息
+
+        const hasBg  = /\[Bg\|/i.test(_tail);
+        const hasBgm = /\[BGM\|/i.test(_tail);
+        if (hasBg && hasBgm) return null;                   // 兩個都在 → 沒漏
+
+        // carry-forward：往回找最近一則含該 tag 的訊息，撈「最後一個」(=當前場景/音樂)整行原樣（'_' = 本輪已有、不用找）
+        let bgLine = hasBg ? '_' : null, bgmLine = hasBgm ? '_' : null;
+        for (let i = 0; i < (older || []).length && (bgLine === null || bgmLine === null); i++) {
+            const t = String(older[i] || '');
+            if (bgLine === null)  { const ms = t.match(/^[ \t]*\[Bg\|[^\]\n]*\]/gim);  if (ms) bgLine  = ms[ms.length - 1].trim(); }
+            if (bgmLine === null) { const ms = t.match(/^[ \t]*\[BGM\|[^\]\n]*\]/gim); if (ms) bgmLine = ms[ms.length - 1].trim(); }
+        }
+        const inject = [];
+        if (bgmLine && bgmLine !== '_') inject.push(bgmLine);   // 音樂在前
+        if (bgLine  && bgLine  !== '_') inject.push(bgLine);
+        if (!inject.length) return null;                     // 歷史也沒得 carry → 不補
+
+        // 插進開場：有 <ChapterCard> 就插它後面（Bg/BGM 本就屬卡內）、否則插 <content> 後面；各自獨立一行
+        // （在 _tail 上替換再與 _head 重組 → 絕不會插進 CoT 裡被剝掉）
+        const block = inject.join('\n');
+        const _nextTail = /<ChapterCard>/i.test(_tail)
+            ? _tail.replace(/(<ChapterCard>[^\n]*\n?)/i, `$1${block}\n`)
+            : _tail.replace(/(<content>[^\n]*\n?)/i, `$1${block}\n`);
+        if (_nextTail === _tail) return null;
+        return _head + _nextTail;
+    }
+    async function _repairOpeningSettings() {
+        try {
+            if (localStorage.getItem('vn_fix_opening') === '0') return;
+            if (!win.TavernHelper?.setChatMessages) return;
+            const ctx = win.SillyTavern?.getContext?.();
+            if (!ctx || !Array.isArray(ctx.chat) || !ctx.chat.length) return;
+            const arrIdx = ctx.chat.length - 1;                 // 用陣列索引改最新則（避開懶載真樓號越界，同 _captureAndStripRecall）
+            const msg = ctx.chat[arrIdx] || {};
+            if (msg.is_user || msg.is_system) return;           // 只修主模型回覆
+            const cur = String(msg.mes || msg.message || '');
+            const older = [];
+            for (let i = arrIdx - 1; i >= 0; i--) older.push(String(ctx.chat[i]?.mes || ctx.chat[i]?.message || ''));
+            const next = repairOpeningText(cur, older);
+            if (!next) return;
+            const inject = (next.match(/^\[(?:Bg|BGM)\|[^\]\n]*\]/gim) || []).filter(l => cur.indexOf(l) === -1);
+
+            _selfEditing = true;   // 擋自身改寫觸發 MESSAGE_UPDATED → onMessageInvalidated 誤砍本則剛存的 patch
+            try {
+                await win.TavernHelper.setChatMessages([{ message_id: arrIdx, message: next, mes: next }], { refresh: 'affected' });
+            } finally {
+                setTimeout(() => { _selfEditing = false; }, 2500);   // 事件可能 async → 留窗口再解旗標
+            }
+            console.log('🛰️ [State Runtime] 開頭設置補救：補回 ' + inject.join(' '));
+        } catch (e) { console.warn('[State Runtime] 開頭設置補救失敗:', e?.message || e); }
+    }
+
+    // --- 事件監聽 ---
+    function init() {
+        // 🧩 PWA 接線：獨立版沒有 GENERATION_ENDED（window.eventOn 是空函式、tavern_events 裡也沒有那個鍵），
+        //    所以下面那整排監聽在 PWA 等於註冊進黑洞 —— 這就是「開了『即時記錄狀態』卻永遠沒反應」的原因。
+        //    獨立版的「一章寫完」訊號＝ OS_DB.saveVnChapter 發的 VN_CHAPTER_SAVED（向量記憶與 NPC 檔案早就接這個）。
+        //    延遲比那兩支晚一點：讓它們先開跑，三通副模型不互相卡。
+        if (!_pwaWired) {
+            _pwaWired = true;
+            win.addEventListener('VN_CHAPTER_SAVED', (e) => {
+                if (!_isStandalone()) return;
+                if (win.__AURELIA_SUMMARIZING) return; // 大總結那通不算劇情推進
+                // 🎬 導演稿（10-20 補齊）：跟酒館一樣獨立於狀態系統——狀態開著由 extractOnce 搭便車（它一開跑就搶下本輪旗標），
+                //    關著或沒搭上就自己補一通；函式自己看 sp_director_on
+                clearTimeout(_directorDebounce);
+                _directorHandledThisRound = false;
+                _directorDebounce = setTimeout(() => { if (!_directorHandledThisRound) extractDirector(); }, 1200 + CONFIG.debounceMs + 1200);
+                if (!isEnabled()) return;              // 狀態面板的「即時記錄狀態」關著就不抽
+                setTimeout(() => {
+                    // skipScenes 不要寫死：開了「獨立插圖副模型」就走下面那通獨立的，
+                    // 沒開就讓插圖搭這通的便車（同酒館分工）。
+                    let _sgStandalone = false;
+                    try { _sgStandalone = !!((JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen || {}).standaloneEnabled); } catch (e) {}
+                    try { extractOnce({ skipScenes: _sgStandalone }); } catch (err) { console.warn('🛰️ [State Runtime] 章節抽取失敗:', err); }
+                    if (_sgStandalone) {
+                        try { extractScenesStandalone(); } catch (err) { console.warn('🎯 [獨立插圖] 章節觸發失敗:', err); }
+                    }
+                }, 1200);
+            });
+        }
+        if (!win.eventOn || !win.tavern_events) {
+            setTimeout(init, 1000);
+            return;
+        }
+
+        // 主模型生成完 → 防抖後抽
+        win.eventOn(win.tavern_events.GENERATION_ENDED, () => {
+            console.log('[State Runtime] 🔎 GENERATION_ENDED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷：抽取的事件是否落在旗標窗內
+            if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結的 generateRaw 也會發 GENERATION_ENDED → 別抽，否則重複 AVS/記憶/場景生圖
+            // 🖼️ 先幫 VN 開播閘門佔位：插圖副模型要 2.1 秒後才開跑，閘門 1.5 秒沒單就放行 →
+            //    不佔位的話必定「劇情先播、插圖後到」。派發完（或這輪沒插圖）由 _sceneGateRelease 降旗。
+            _sceneGateRaise();
+            // 🎯 獨立插圖副模型：獨立於狀態系統(AVS)，狀態關著也能跑 → 在 isEnabled 檢查前排程；函式自己看開關
+            clearTimeout(_sceneDebounce);
+            _sceneDebounce = setTimeout(extractScenesStandalone, CONFIG.debounceMs + 600);
+            // 開頭設置補救(Bg/BGM)：獨立於狀態系統，狀態關著也修 → 排在 isEnabled gate 前；自己看 vn_fix_opening 開關
+            clearTimeout(_repairDebounce);
+            _repairDebounce = setTimeout(() => { if (!_genStopped && !win.__AURELIA_SUMMARIZING) _repairOpeningSettings(); }, CONFIG.debounceMs + 900);
+            // 🎬 導演稿：獨立於狀態系統(AVS 關著也能跑)→ 排在 isEnabled gate 前；函式自己看 sp_director_on。
+            //    AVS 抽取有跑且搭了便車（_directorHandledThisRound）→ 這顆獨立呼叫讓路，主接口一輪只打一通
+            clearTimeout(_directorDebounce);
+            _directorHandledThisRound = false;
+            _directorDebounce = setTimeout(() => { if (!_directorHandledThisRound) extractDirector(); }, CONFIG.debounceMs + 1200);
+            if (!isEnabled()) return;
+            clearTimeout(_debounceTimer);
+            _debounceTimer = setTimeout(extractOnce, CONFIG.debounceMs);
+        });
+
+        // 主模型開始生成 → inject current 給它看（state 摘要）+ inject AVS rules（行為規範）
+        if (win.tavern_events.GENERATION_STARTED) {
+            win.eventOn(win.tavern_events.GENERATION_STARTED, (type, opts, dryRun) => {
+                if (dryRun) return;   // 🚫 dryRun=酒館試算prompt/數token的空跑、非真生成 → 別注入(once 會被空跑那趟吃掉、真生成反而沒有)
+                _genStopped = false;  // 新一輪真生成開始 → 清掉上輪的「手動停止」旗標
+                console.log('[State Runtime] 🔎 GENERATION_STARTED fired，SUMMARIZING=' + !!win.__AURELIA_SUMMARIZING);   // 診斷
+                if (win.__AURELIA_SUMMARIZING) return;   // 🚫 大總結生成不是劇情輪 → 別注入 state/rules
+                const jobs = [];
+                // state 摘要受「即時抽取總開關」控制
+                if (isEnabled()) jobs.push(injectCurrent);
+                // AVS rules 永遠評估（不受抽取開關影響；沒命中規則就不 inject）
+                jobs.push(injectRules);
+                // 缺頭像提醒（永遠評估；一個都不缺就不 inject）
+                jobs.push(injectAvatarReminder);
+                // 成就乾旱提醒（近期 VN 劇情連續零成就才 inject）
+                jobs.push(injectAchievementReminder);
+                // 🎬 導演稿（自己看 sp_director_on；沒稿就不注入）
+                jobs.push(injectDirector);
+                // 五支一起跑、把 Promise 交回去 → 酒館 emit 會等全部注入完才組 prompt；最多等 2.5 秒，免得資料庫卡住連生成一起卡
+                const all = Promise.all(jobs.map((fn) => Promise.resolve().then(fn).catch(() => {})));
+                return Promise.race([all, new Promise((r) => setTimeout(r, 2500))]);
+            });
+        }
+
+        // 手動停止生成（按下停止鈕）→ 標記本通被截：GENERATION_ENDED 仍會發、debounce 後 extractOnce/場景照排，
+        //    但兩者入口會看這旗標 return，不拿半截/思考期正文白燒副模型。下一輪 GENERATION_STARTED 自動清旗標。
+        if (win.tavern_events.GENERATION_STOPPED) {
+            win.eventOn(win.tavern_events.GENERATION_STOPPED, () => {
+                _genStopped = true;
+                console.log('🛰️ [State Runtime] 偵測到手動停止生成 → 本通副模型(AVS/記憶/場景)全部跳過');
+            });
+        }
+
+        // 訊息失效 → 砍對應 patch
+        // 🚨 MESSAGE_DELETED 的參數語意跟其他三個【不一樣】：酒館傳的是「刪完還剩幾則」而非訊息號
+        //    （script.js: emit(MESSAGE_DELETED, chat.length)）→ 不可當 patch 鍵用，走專屬的對帳回滾。
+        if (win.tavern_events.MESSAGE_DELETED) {
+            // ⏱️ 不做「立刻初判」：酒館先發事件、後存檔——事件當下讀到的必然是刪除前的舊檔，
+            //    初判永遠「全活著」→ 靜默收工，真正的死訊要等下一個事件才被發現＝判決遲到一拍
+            //    （實測：刪 AI 樓沒跳窗、7 秒後刪用戶樓卻跳窗——那是上一刀的帳）。
+            //    一律等 800ms 落定後直接複核，判決落在正確的事件上。
+            win.eventOn(win.tavern_events.MESSAGE_DELETED, () => {
+                setTimeout(() => { try { _reconcilePatches('刪樓·複核'); } catch (e) {} }, 800);
+            });
+        }
+        // ✏️ 編輯（UPDATED/EDITED）【絕不觸發回朔】（鐵則 2026-08-04）：
+        //    編輯＝改字，正文還在、avs 標記還在；舊邏輯的「直接命中」卻把這樓登記中的 patch 當失效砍掉
+        //    ＝每編輯一次就白丟一輪狀態（還不會重抽）。孤兒清理交給「注入前對帳」與刪樓/swipe——
+        //    它們只認「標記從全檔消失」，編輯只要沒把標記刪掉就永遠不會誤殺。
+        if (win.tavern_events.MESSAGE_SWIPED) {
+            win.eventOn(win.tavern_events.MESSAGE_SWIPED, (msgId) => onMessageInvalidated(msgId));
+        }
+
+        // 切聊天 → 清 inject（新 chatId 的 inject 會在下次 GENERATION_STARTED 重新跑）
+        if (win.tavern_events.CHAT_CHANGED) {
+            win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
+                // 🧬 開卡歸化：載入聊天後掃一遍，落盤修復前的殭屍老 patch（標記從未進檔案）先認養重釘，
+                //    之後任何刪樓事件的「純 id 掃描」判定就是乾淨的——不會再有殭屍在刪用戶樓時被誤殺。
+                setTimeout(() => { try { _reconcilePatches('開卡歸化'); } catch (e) {} }, 2500);
+                try { _lastInjectUninject?.(); _lastInjectUninject = null; } catch(e) {}
+                try { _lastRulesUninject?.(); _lastRulesUninject = null; } catch(e) {}
+                try { _lastAvatarUninject?.(); _lastAvatarUninject = null; } catch(e) {}
+                try { _lastAchvUninject?.(); _lastAchvUninject = null; } catch(e) {}
+                try { _lastDirectorUninject?.(); _lastDirectorUninject = null; } catch(e) {}
+            });
+        }
+
+        // chat 被酒館刪 → 把綁這個 chatId 的資料全清掉（不只 state_data）。
+        //   以前只清 state_data，其餘（追蹤檔案／UI面板／規則／大總結／向量記憶／app 資料…）全留下來變孤兒，
+        //   狀態面板的「其他檔案（N）」就是這樣愈積愈多的。聊天都刪了，那些留著也沒有主人。
+        //   全域包（chatId 空）與世界書／地圖是跨卡共用，deleteAllByChatId 不會碰。
+        //   sp_purge_on_chat_delete=0 可退回舊行為（只清 state_data）。
+        if (win.tavern_events.CHAT_DELETED) {
+            win.eventOn(win.tavern_events.CHAT_DELETED, async (chatFileName) => {
+                try {
+                    const id = normalizeChatId(chatFileName);
+                    if (!id || !win.OS_DB) return;
+                    const _full = localStorage.getItem('sp_purge_on_chat_delete') !== '0';
+                    if (_full && win.OS_DB.deleteAllByChatId) {
+                        // storyId 傳 id：酒館端向量記憶就是用 chatId 當 storyId（見 os_vector_inject._storyId）
+                        const report = await win.OS_DB.deleteAllByChatId(id, { rawChatId: chatFileName, storyId: id, vnWorld: id });
+                        console.log(`🛰️ [State Runtime] chat 被刪 → 已清掉這個聊天的所有綁定資料: ${id}`, report);
+                    } else {
+                        const data = await win.OS_DB.getStateData?.(id);
+                        if (!data) return;
+                        await win.OS_DB.deleteStateData(id);
+                        console.log(`🛰️ [State Runtime] chat 被刪 → 自動清 state_data: ${id}`);
+                    }
+                    try { win.eventEmit?.('AURELIA_STATE_DATA_REMOVED', { chatId: id }); } catch(e) {}
+                } catch(e) {
+                    console.warn('[State Runtime] CHAT_DELETED 清理失敗:', e);
+                }
+            });
+        }
+
+        console.log('🛰️ [State Runtime] Ready');
+    }
+
+    // === 跨世界資料管理 ===
+    async function listAllStateData() {
+        if (!win.OS_DB?.getAllStateData) return [];
+        const all = await win.OS_DB.getAllStateData();
+        return all.map(e => ({
+            chatId: e.id,
+            schemaCount: e.schema ? Object.keys(e.schema).length : 0,
+            patchesCount: Array.isArray(e.patches) ? e.patches.length : (e.patches ? Object.keys(e.patches).length : 0),
+            currentCount: e.current ? Object.keys(e.current).length : 0,
+            timestamp: e.timestamp || 0
+        })).sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    async function removeStateData(chatId) {
+        if (!chatId || !win.OS_DB?.deleteStateData) return false;
+        await win.OS_DB.deleteStateData(chatId);
+        try { win.eventEmit?.('AURELIA_STATE_DATA_REMOVED', { chatId }); } catch(e) {}
+        return true;
+    }
+
+    // === Migration：舊資料 key 含路徑 / .jsonl 的，搬成 cleaned key ===
+    const MIGRATION_FLAG = 'aurelia_state_migrated_v1';
+    async function runMigration() {
+        if (localStorage.getItem(MIGRATION_FLAG) === '1') return;
+        if (!win.OS_DB?.getAllStateData) return;
+        try {
+            const all = await win.OS_DB.getAllStateData();
+            let migrated = 0, skipped = 0;
+            for (const entry of all) {
+                const oldId = entry.id;
+                const newId = normalizeChatId(oldId);
+                if (!newId || oldId === newId) continue;
+                // 衝突：新 key 已存在 → 砍舊 key（保留新的）
+                const exists = await win.OS_DB.getStateData(newId);
+                if (exists) {
+                    await win.OS_DB.deleteStateData(oldId);
+                    skipped++;
+                } else {
+                    await win.OS_DB.saveStateData(newId, { ...entry, id: newId });   // 整筆搬，別只挑三個欄位
+                    await win.OS_DB.deleteStateData(oldId);
+                    migrated++;
+                }
+            }
+            localStorage.setItem(MIGRATION_FLAG, '1');
+            if (migrated || skipped) console.log(`🛰️ [State Runtime] migration：搬 ${migrated} 筆 / 衝突砍 ${skipped} 筆`);
+        } catch(e) {
+            console.warn('[State Runtime] migration 失敗:', e);
+        }
+    }
+
+    win.OS_STATE_RUNTIME = {
+        isEnabled, setEnabled,
+        // 使用者在「設置 → 圖片 → 插圖」寫的插圖規範（照現在插圖走哪個接口挑那一格）：別的地方要寫畫面提示詞時照這份寫（記憶迴廊牌面）
+        scenePrompt: function () {
+            try { return _pickScenePrompt((JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen) || {}); } catch (e) { return ''; }
+        },
+        chatId: getChatId,   // 副模型挑的表情按聊天存（VN_FREE_MODE.lookupExpr）：跟這裡記狀態用同一把
+
+        // 手機類 app（VN 手機／微信／微博）的圖片描述也用同一份登記表展開 ##角色名## / ##C1##，外觀跟劇情插圖一致
+        expandLooks: async function (str) {
+            if (!str || String(str).indexOf('##') < 0) return str;
+            const map = await _buildLooksMap(null);
+            return _expandSceneNames(str, map, null);
+        },
+        forceExtract, clearPatches, deepConsolidate,
+        injectCurrent, injectRules, extractOnce, directorBlock, repairOpeningText,
+        reconcile: _reconcilePatches,   // 對帳回滾：不靠刪除事件，任何「要用狀態」的入口都可以先叫它
+        takeKeys, putKeys,   // 🧳 整組欄位收起來／放回去（世界門：那個世界的狀態欄撤離就收走、回去再放回來）
+        // 🧩 依 patch id 回滾（PWA 的 patch id ＝章節 id）：刪章／孤兒對帳呼叫，
+        //    把那幾筆 patch 砍掉、並把它們碰過的欄位退回「base＋剩餘 patch」的值。
+        //    酒館與獨立版共用同一支，回滾語意只有一份。
+        async rollbackByIds(ids) {
+            try {
+                const cid = getChatId();
+                if (!cid || !win.OS_DB?.getStateData) return 0;
+                const list = (ids || []).map(String).filter(Boolean);
+                if (!list.length) return 0;
+                const data = await win.OS_DB.getStateData(cid);
+                if (!data) return 0;
+                return await _rollbackPatches(cid, data, list);
+            } catch (e) { console.warn('🛰️ [State Runtime] rollbackByIds 失敗:', e); return 0; }
+        },
+        // 這條故事目前記了哪些 patch id（給孤兒對帳比對章節用）
+        async listPatchIds() {
+            try {
+                const cid = getChatId();
+                if (!cid || !win.OS_DB?.getStateData) return [];
+                const data = await win.OS_DB.getStateData(cid);
+                return _patchList(data && data.patches).map(x => String(x.id));
+            } catch (e) { return []; }
+        },
+        repairOpeningSettings: _repairOpeningSettings,   // 手動補一次開頭 Bg/BGM（測試/救援用）
+        compressOldMemories,   // 🗜️ 記憶合併壓縮（治長線過載），給 os_avs_memory 整理鈕呼叫
+        recallAddendum: _recallAddendum,   // 🎬 記憶導演的說明：AVS 關著時記憶那一通（os_vector_engine.ingest）共用同一份
+        listAllStateData, removeStateData,
+        normalizeChatId,
+        getActiveSchema,   // V2：schema 從 AVS 變數包合併（給 status_panel 等外部 UI 用）
+        getLastExtract: () => _lastExtract,   // 最近一次抽取(原始輸出+updates+current) 給狀態面板診斷/複製
+        getStateDataDump: async () => { try { const cid = getChatId(); return (cid && win.OS_DB?.getStateData) ? await win.OS_DB.getStateData(cid) : null; } catch(e) { return null; } },  // 持久化的 patches/base/current 給診斷
+        // 🎬 導演模式 API（變數工坊系統區 UI 用）
+        director: {
+            isOn: directorOn,
+            setOn: setDirectorOn,
+            getText: getDirectorText,
+            saveText: saveDirectorText,
+            extractNow: extractDirector,   // 手動立刻產一份（測試/救援）
+            FOCUS: DIRECTOR_FOCUS,         // 🧭 導演重點的選項（設置 → 劇情 → 導演）
+            getFocus: getDirectorFocus,
+            setFocus: setDirectorFocus,
+            chatId: getChatId,
+        },
+        endCheck: {                         // 🔎 末尾檢查（試用，11-18；設置 → 劇情 → 導演）
+            isOn: endCheckOn,
+            setOn: setEndCheckOn,
+            list: endCheckList,
+        },
+        CONFIG
+    };
+
+    // 啟動時跑 migration（fire-and-forget）
+    runMigration();
+
+    init();
+})();

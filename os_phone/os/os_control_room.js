@@ -1,0 +1,305 @@
+// ----------------------------------------------------------------
+// [檔案] os_control_room.js
+// 職責：「控制室」手機 App — 監控/遙控 桌面控制塔（SoVITS + ComfyUI）
+//   • 每 4 秒輪詢 http://127.0.0.1:9890/status（控制塔自帶 CORS header，跨埠 OK）
+//   • 狀態燈（綠／黃／紅，CSS 畫的圓點）、GPU/VRAM、生圖佇列
+//   • 按鈕對接 /start /stop /restart /open
+// 控制塔本體：tools/aurelia_tower.ps1（桌面捷徑「奧瑞亞控制塔」）
+// ----------------------------------------------------------------
+(function() {
+    'use strict';
+    const win = window.parent || window;
+    const TOWER = 'http://127.0.0.1:9890';
+
+    const ControlRoom = {
+        _timer: null,
+        _starting: { voice: 0, comfy: 0 },   // 按下啟動後的「啟動中」黃燈窗口（timestamp）
+
+        launchApp(container) {
+            container.innerHTML = `
+                <div class="set-container cr-root">
+                    <div class="set-header sysh">
+                        <div class="set-back-btn sysh-back" id="cr-nav-home">‹</div>
+                        <div class="set-title sysh-title">本機引擎</div>
+                        <div class="set-back-btn sysh-act" id="cr-help-open" title="怎麼設定？看說明書"><i class="fa-solid fa-circle-question"></i></div>
+                    </div>
+
+                    <div class="set-content">
+                        <div id="cr-tower-down" class="cr-tower-down hidden">
+                            <span class="cr-dot" data-st="down"></span> 控制塔未啟動<br>
+                            <span class="cr-tower-hint">雙擊桌面的「奧瑞亞控制塔」捷徑，這裡就會亮起來</span>
+                        </div>
+                        <div id="cr-cards">
+                            <div class="set-group cr-card" id="cr-card-voice">
+                                <div class="set-label">
+                                    <span><span class="cr-dot" id="cr-dot-voice" data-st="down"></span> <i class="fa-solid fa-microphone"></i> 語音引擎</span>
+                                    <span class="cr-card-tag" id="cr-tag-voice">—</span>
+                                </div>
+                                <div class="cr-seg" id="cr-voice-seg">
+                                    <button class="cr-seg-btn" data-engine="index">IndexTTS</button>
+                                    <button class="cr-seg-btn" data-engine="sovits">SoVITS</button>
+                                </div>
+                                <div class="set-desc cr-card-body" id="cr-info-voice">—</div>
+                                <div class="cr-card-btns">
+                                    <button class="set-btn cr-btn" data-act="start" data-svc="voice">啟動</button>
+                                    <button class="set-btn cr-btn" data-act="restart" data-svc="voice">重啟</button>
+                                    <button class="set-btn cr-btn cr-btn-danger" data-act="stop" data-svc="voice">停止</button>
+                                </div>
+                            </div>
+                            <div class="set-group cr-card" id="cr-card-comfy">
+                                <div class="set-label">
+                                    <span><span class="cr-dot" id="cr-dot-comfy" data-st="down"></span> <i class="fa-solid fa-palette"></i> 生圖引擎</span>
+                                    <span class="cr-card-tag">ComfyUI · 8188</span>
+                                </div>
+                                <div class="set-desc cr-card-body" id="cr-info-comfy">—</div>
+                                <div class="cr-vram hidden" id="cr-vram-wrap">
+                                    <div class="cr-vram-label" id="cr-vram-label">VRAM</div>
+                                    <div class="cr-vram-track"><div class="cr-vram-bar" id="cr-vram-bar"></div></div>
+                                </div>
+                                <div class="cr-card-btns">
+                                    <button class="set-btn cr-btn" data-act="start" data-svc="comfy">啟動</button>
+                                    <button class="set-btn cr-btn" data-act="restart" data-svc="comfy">重啟</button>
+                                    <button class="set-btn cr-btn cr-btn-danger" data-act="stop" data-svc="comfy">停止</button>
+                                    <button class="set-btn cr-btn" id="cr-free-vram" title="卸載快取的模型、清空顯存（不重啟；下次生圖會重載模型，多花十幾秒）"><i class="fa-solid fa-broom"></i> 釋顯存</button>
+                                    <button class="set-btn cr-btn" id="cr-open-web">開網頁</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="cr-all-btns">
+                            <div class="btn-save cr-btn" data-act="start" data-svc="all"><i class="fa-solid fa-play"></i> 全部啟動</div>
+                            <div class="btn-test cr-btn" data-act="stop" data-svc="all">■ 全部停止</div>
+                        </div>
+                        <div class="set-status" id="cr-foot">連線中…</div>
+                    </div>
+
+                    <div class="cr-help hidden" id="cr-help">
+                        <div class="set-header sysh">
+                            <div class="set-back-btn sysh-back" id="cr-help-close">‹</div>
+                            <div class="set-title sysh-title">設定說明書</div>
+                            <div style="width:32px"></div>
+                        </div>
+                        <div class="set-content cr-help-body">
+                            <p class="cr-help-lead">這個「本機引擎」是一支遙控器，讓你電腦上的<b>語音</b>跟<b>生圖</b>縮在螢幕右下角、安靜地在背景跑，不用一直開著一堆黑色小視窗。<br><span class="cr-help-note">不需要任何帳號或會員，它只是遙控你自己電腦裡已經裝好的程式。</span></p>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">開始前，你電腦要先有這兩個</div>
+                                <p>「語音引擎」和「生圖引擎」這兩個程式要先自己裝好。<br><span class="cr-help-note">還沒裝也沒關係，劇情照樣能玩，只是暫時不能本地配音跟本地生圖。</span></p>
+                            </div>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">三步驟，設定一次就好</div>
+                                <div class="cr-step">
+                                    <span class="cr-step-no">1</span>
+                                    <div class="cr-step-txt">跟分享給你的人要兩個檔案：<b>奧瑞亞控制塔.ps1</b> 和 <b>奧瑞亞控制塔.vbs</b>。把它們放進<b>同一個資料夾</b>。</div>
+                                </div>
+                                <div class="cr-step">
+                                    <span class="cr-step-no">2</span>
+                                    <div class="cr-step-txt">在 <b>奧瑞亞控制塔.ps1</b> 上按右鍵 →「用記事本開啟」。最上面會看到兩行寫著資料夾位置的字，把它們改成<b>你自己的</b>語音、生圖資料夾位置：
+                                        <div class="cr-help-code">語音的資料夾<br>生圖的資料夾</div>
+                                        <span class="cr-help-note">只改這兩行的位置就好，其他一個字都不用動。改完存檔關掉。</span>
+                                    </div>
+                                </div>
+                                <div class="cr-step">
+                                    <span class="cr-step-no">3</span>
+                                    <div class="cr-step-txt">雙擊 <b>奧瑞亞控制塔.vbs</b>。螢幕右下角出現一個金色「亞」的小圖示，就成功了！回到這個控制室，燈就會亮綠。</div>
+                                </div>
+                            </div>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">想每次開機自動幫你開？</div>
+                                <p>對著 <b>奧瑞亞控制塔.vbs</b> 按右鍵建立捷徑，把捷徑丟進電腦的「啟動」資料夾就行。</p>
+                            </div>
+
+                            <div class="cr-help-sect">
+                                <div class="cr-help-h">燈一直是紅的怎麼辦？</div>
+                                <p>八成是這兩個原因：<br>①「亞」小圖示沒開 → 再去雙擊一次那個 <b>.vbs</b>。<br>② 第 2 步的兩行位置填錯了 → 重新確認是不是對到你自己的資料夾。</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+
+            container.querySelectorAll('.cr-btn[data-act]').forEach(btn => {
+                btn.onclick = () => this._act(btn.dataset.act, btn.dataset.svc, container);
+            });
+            container.querySelectorAll('.cr-seg-btn[data-engine]').forEach(btn => {
+                btn.onclick = () => this._switchEngine(btn.dataset.engine, container);
+            });
+            const openBtn = container.querySelector('#cr-open-web');
+            if (openBtn) openBtn.onclick = () => { this._post('/open'); };
+
+            const backBtn = container.querySelector('#cr-nav-home');
+            if (backBtn) backBtn.onclick = () => { if (win.PhoneSystem) win.PhoneSystem.goHome(); };
+
+            const help = container.querySelector('#cr-help');
+            const helpOpen = container.querySelector('#cr-help-open');
+            const helpClose = container.querySelector('#cr-help-close');
+            if (helpOpen && help) helpOpen.onclick = () => help.classList.remove('hidden');
+            if (helpClose && help) helpClose.onclick = () => help.classList.add('hidden');
+            const freeBtn = container.querySelector('#cr-free-vram');
+            if (freeBtn) freeBtn.onclick = async () => {
+                const foot = container.querySelector('#cr-foot');
+                if (foot) foot.textContent = '正在卸載模型、釋放顯存…';
+                try {
+                    const r = await fetch(TOWER + '/free', { method: 'POST' });
+                    if (r.status === 404) {
+                        // 舊版控制塔沒有 /free 端點 → 明講，別裝死
+                        if (foot) foot.textContent = '控制塔是舊版（沒有釋放端點）— 托盤右鍵「結束控制塔(服務照跑)」再雙擊桌面捷徑重開';
+                        return;
+                    }
+                    const j = await r.json().catch(() => null);
+                    if (j && j.ok === false) {
+                        if (foot) foot.textContent = '釋放失敗：' + (j.error === 'comfy not running' ? 'ComfyUI 沒在跑' : (j.error || '未知原因'));
+                        return;
+                    }
+                    if (foot) foot.textContent = '已卸載模型；下次生圖會重載（多花十幾秒）';
+                } catch (e) {
+                    if (foot) foot.textContent = '連不到控制塔';
+                }
+                setTimeout(() => this._tick(container), 1200);   // 稍等再刷，VRAM 條會看到掉下來
+            };
+
+            this._startPolling(container);
+        },
+
+        async _post(path) {
+            try { await fetch(TOWER + path, { method: 'POST' }); } catch (e) {}
+        },
+
+        async _act(act, svc, container) {
+            if (act === 'start' || act === 'restart') {
+                if (svc === 'voice' || svc === 'all') this._starting.voice = Date.now();
+                if (svc === 'comfy' || svc === 'all') this._starting.comfy = Date.now();
+            }
+            await this._post('/' + act + '?svc=' + svc);
+            this._tick(container);   // 立刻刷一次
+        },
+
+        // 顯存只夠一套語音，切換＝停掉另一套再開這套，控制塔那邊會記住選擇
+        async _switchEngine(engine, container) {
+            this._starting.voice = Date.now();
+            await this._post('/voice?engine=' + engine);
+            // 🚨 這顆以前只叫控制塔換服務，沒告訴前端一聲：服務換成 SoVITS 之後，
+            //    角色還指著另一個引擎的音色，VN_TTS 照樣去打那邊的埠，整場「服務沒開？」。
+            //    VN_TTS 每個引擎各記一套指派，切過去就是換那一套。
+            try {
+                const V = (window.parent || window).VN_TTS || window.VN_TTS;
+                V?.setLocalEngine?.(engine);
+            } catch (e) { console.warn('[控制室] 同步語音引擎失敗', e); }
+            this._tick(container);
+        },
+
+        _startPolling(container) {
+            if (this._timer) clearInterval(this._timer);
+            this._tick(container);
+            this._timer = setInterval(() => {
+                if (!container.isConnected || !container.querySelector('.cr-root')) {
+                    clearInterval(this._timer); this._timer = null; return;   // App 已關閉 → 停止輪詢
+                }
+                this._tick(container);
+            }, 4000);
+        },
+
+        async _tick(container) {
+            const $ = (id) => container.querySelector(id);
+            let st = null;
+            try {
+                const r = await fetch(TOWER + '/status', { signal: (AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined) });
+                st = await r.json();
+            } catch (e) {}
+
+            const downEl = $('#cr-tower-down');
+            const cards = $('#cr-cards');
+            if (!st || !st.tower) {
+                if (downEl) downEl.classList.remove('hidden');
+                if (cards) cards.classList.add('cr-dim');
+                const foot = $('#cr-foot'); if (foot) foot.textContent = '找不到控制塔（127.0.0.1:9890）';
+                return;
+            }
+            if (downEl) downEl.classList.add('hidden');
+            if (cards) cards.classList.remove('cr-dim');
+
+            // 啟動中＝按下啟動後兩分鐘內；燈和字都照這個判斷。
+            //   以前字只看「按過啟動」，沒起來的話燈已經熄了、字還一直寫「啟動中…」
+            const starting = (key) => !!this._starting[key] && (Date.now() - this._starting[key]) < 120000;
+            const startFailed = (key) => !!this._starting[key] && !starting(key);
+            const dot = (up, key) => {
+                if (up) { this._starting[key] = 0; return 'up'; }
+                if (starting(key)) return 'starting';
+                return 'down';
+            };
+
+            // 語音：兩套引擎共用一張卡，顯示的是「目前選中的那套」的狀態
+            const eng = st.voiceEngine === 'sovits' ? 'sovits' : 'index';
+            const isIdx = eng === 'index';
+            const cur = isIdx ? st.index : st.sovits;
+            const seg = $('#cr-voice-seg');
+            if (seg) seg.querySelectorAll('.cr-seg-btn').forEach(b =>
+                b.classList.toggle('on', b.dataset.engine === eng));
+            const tag = $('#cr-tag-voice');
+            if (tag) tag.textContent = (isIdx ? 'IndexTTS · ' : 'SoVITS · ') + (cur?.port || (isIdx ? 8881 : 9880));
+
+            const dv = $('#cr-dot-voice');
+            // IndexTTS 埠通了還要等模型載入，沒 ready 之前照樣算「啟動中」
+            const voiceUp = !!cur?.up && (!isIdx || cur.ready !== false);
+            // 載入中就是黃燈：不管是誰啟動的（控制塔自己帶起來時 _starting 是空的）
+            const voiceLoading = isIdx && !!cur?.up && cur.ready === false;
+            if (dv) dv.dataset.st = voiceLoading ? 'starting' : dot(voiceUp, 'voice');
+            const iv = $('#cr-info-voice');
+            if (iv) {
+                if (cur?.installed === false) {
+                    iv.textContent = isIdx ? '還沒安裝（跑安裝包就會出現）' : '還沒安裝';
+                } else if (isIdx && cur?.up && cur.ready === false) {
+                    iv.textContent = '載入模型中…（第一次約一分鐘）';
+                } else if (voiceUp) {
+                    iv.textContent = isIdx
+                        ? `運作中，${cur.voices || 0} 個音色隨叫隨到`
+                        : '運作中，語音隨叫隨到';
+                } else {
+                    iv.textContent = starting('voice') ? '啟動中…（載入語音模型要一陣子）'
+                        : (startFailed('voice') ? '兩分鐘了還沒起來，再按一次啟動試試' : '未啟動');
+                }
+            }
+
+            // 另一套如果還醒著就提醒，兩套一起吃顯存會撐爆
+            const other = isIdx ? st.sovits : st.index;
+            if (iv && other?.up) {
+                iv.textContent += isIdx ? '　（SoVITS 也還開著）' : '　（IndexTTS 也還開著）';
+            }
+
+            const dc = $('#cr-dot-comfy'); if (dc) dc.dataset.st = dot(st.comfy?.up, 'comfy');
+            const ic = $('#cr-info-comfy');
+            const vramWrap = $('#cr-vram-wrap');
+            if (st.comfy?.up) {
+                const run = st.comfy.queue_running || 0, pend = st.comfy.queue_pending || 0;
+                if (ic) ic.textContent = (run > 0 ? `生圖中（佇列還有 ${pend} 張排隊）` : (pend > 0 ? `排隊 ${pend} 張` : '待命中，佇列乾淨'));
+                if (vramWrap && st.comfy.vram_total) {
+                    vramWrap.classList.remove('hidden');
+                    const used = Math.max(0, st.comfy.vram_total - (st.comfy.vram_free || 0));
+                    const pct = Math.min(100, Math.round(used / st.comfy.vram_total * 100));
+                    const label = $('#cr-vram-label');
+                    if (label) label.textContent = `VRAM ${used.toFixed(1)} / ${st.comfy.vram_total} GB${st.comfy.gpu ? '　' + st.comfy.gpu : ''}`;
+                    const bar = $('#cr-vram-bar');
+                    if (bar) { bar.style.width = pct + '%'; bar.classList.toggle('cr-vram-hot', pct > 85); }
+                }
+            } else {
+                if (ic) ic.textContent = (st.comfy?.installed === false) ? '還沒安裝'
+                    : (starting('comfy') ? '啟動中…（第一次要 30~60 秒）'
+                        : (startFailed('comfy') ? '兩分鐘了還沒起來，再按一次啟動試試' : '未啟動'));
+                if (vramWrap) vramWrap.classList.add('hidden');
+            }
+
+            const foot = $('#cr-foot');
+            if (foot) foot.textContent = '控制塔連線正常 · 每 4 秒更新';
+        }
+    };
+
+    function install() {
+        if (win.PhoneSystem) {
+            win.PhoneSystem.install('控制室', '🎛️', '#0a0906', (c) => ControlRoom.launchApp(c));
+            console.log('[PhoneOS] 🎛️ 控制室已安裝');
+        } else { setTimeout(install, 1000); }
+    }
+    install();
+
+    win.OS_CONTROL_ROOM = ControlRoom;
+})();

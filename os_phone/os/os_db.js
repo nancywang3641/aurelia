@@ -1,0 +1,1518 @@
+// ----------------------------------------------------------------
+// [檔案] os_db.js (V23 - 加入狀態資料庫 state_data)
+// 路徑：os_phone/os/os_db.js
+// 職責：管理 IndexedDB 資料庫。支援酒館與獨立版雙通向。
+// ----------------------------------------------------------------
+(function() {
+    console.log('[PhoneOS] 載入系統資料庫 (System Storage V23)...');
+    const win = window.parent || window;
+
+    const DB_NAME = 'WeChat_Simulator_DB';
+    const DB_VERSION = 29; // 🔥 V29：大廳 NPC 一對一長期記憶 lobby_npc_memory（id=NPC 對話 key）
+    // 註：小劇場日誌不進 IndexedDB（改 localStorage，見 void_terminal VoidTerminal.theaterLog）→ 不動 schema、不升版、免 upgrade deadlock。
+
+    const STORE_NAME_IMAGES = 'images';
+    const STORE_NAME_CHATS = 'api_chats';
+    const STORE_NAME_WB = 'wb_posts';
+    const STORE_NAME_MAP = 'map_data';
+    const STORE_NAME_LOBBY      = 'lobby_history';
+    const STORE_NAME_ACH        = 'achievements';
+    const STORE_NAME_WORLDBOOK  = 'world_book_entries';
+    const STORE_NAME_VN_CHAPTERS = 'vn_chapters';
+    
+    const STORE_NAME_VAR_PACKS = 'var_packs';           
+    const STORE_NAME_UI_TEMPLATES = 'ui_templates';     
+    const STORE_NAME_STUDIO = 'studio_chats';
+    const STORE_NAME_STUDIO_DRAFTS = 'studio_drafts';
+    const STORE_NAME_VN_MEMORIES  = 'vn_memories';   // 🔥 V21：向量記憶庫
+    const STORE_NAME_VN_SUMMARIES = 'vn_grand_summaries'; // V22：大總結儲存
+    const STORE_NAME_STATE_DATA   = 'state_data';    // 🔥 V23：狀態資料庫（副模型抽劇情狀態，key = chatId）
+    const STORE_NAME_LOBBY_SUM_IDX = 'lobby_summary_index'; // 🔥 V24：酒館大廳跨卡總結索引（結語 + 角色名單，給瀅瀅/柴郡注 sysPrompt）
+    const STORE_NAME_PHONE_APPS = 'phone_apps'; // 🔥 V25：手機殼下載的功能型 HTML app（id,name,emoji,iconUrl,html,source,createdAt）
+    const STORE_NAME_APP_MEM = 'app_memory'; // 🔥 V26：插件通用記憶桶（角色對話型插件 st.remember 寫入；key = appId::角色名）
+    const STORE_NAME_TAVERN_SUMMARY = 'tavern_summary'; // 🔥 V27：酒館大總結（key = chatId，一卡一筆全文存檔；程式壓縮注入、不再放世界書）
+    const STORE_NAME_APP_DATA = 'app_data'; // 🔥 V28：通用 app 資料庫（創作室生的 app 用 st.dbSave/dbLoad；id = appId::scope::key）
+    const STORE_NAME_NPC_MEMORY = 'lobby_npc_memory'; // 🔥 V29：大廳 NPC 一對一長期記憶（id = NPC 對話 key）
+
+    let dbInstance = null;
+
+    // 🗑 已經拆掉的三種面板（查案、寵物、帶小孩出遊）留下的倉庫：新裝的不再建；舊的清空一次，只剩空殼。
+    //    不刪倉庫本身＝不升資料庫版本（升版會卡死整個大廳，見 onblocked 那段）。
+    function _purgeLegacyPanelStores(db) {
+        const FLAG = 'osdb_legacy_panels_purged_v1';
+        try { if (localStorage.getItem(FLAG) === '1') return; } catch (e) {}
+        try {
+            const names = ['investigation_data', 'pets', 'pet_logs', 'child_chat_history'].filter(function (n) { return db.objectStoreNames.contains(n); });
+            const done = function () { win.AUI.lsSet(FLAG, '1', '舊面板資料已清的記號'); };
+            if (!names.length) { done(); return; }
+            const tx = db.transaction(names, 'readwrite');
+            names.forEach(function (n) { tx.objectStore(n).clear(); });
+            tx.oncomplete = function () { done(); console.log('[OS_DB] 清空已拆面板的舊資料：' + names.join('、')); };
+        } catch (e) { console.warn('[OS_DB] 清舊面板資料失敗（不影響其他功能）', e); }
+    }
+
+    // 刪掉某個倉庫裡符合條件的那幾筆：用游標一筆一筆走，不先 getAll 整個倉庫。
+    //   這幾個倉庫只有 id 沒有別的索引（加索引要升版，升版會卡死大廳，所以不加），只能整個走一遍；
+    //   但游標手上一次只有一筆，向量記憶那種每筆帶一長串數字的，不會為了刪幾筆把整庫讀進記憶體
+    function _deleteWhere(db, storeName, pred) {
+        return new Promise((r, j) => {
+            try {
+                const tx = db.transaction(storeName, 'readwrite');
+                const req = tx.objectStore(storeName).openCursor();
+                req.onsuccess = () => {
+                    const cur = req.result;
+                    if (!cur) return;
+                    try { if (pred(cur.value)) cur.delete(); } catch (e) {}
+                    cur.continue();
+                };
+                tx.oncomplete = () => r(true);
+                tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+            } catch (e) { j(e); }
+        });
+    }
+
+    // 取得當前 tavern 劇情存檔 id（與 state_runtime 同款正規化）→ 給 app 紀錄蓋章做 chatId 隔離
+    // 當前劇情線的分艙鑰匙：酒館＝chatId、PWA＝storyId（PWA 沒有 SillyTavern，以前一律回 null
+    //   ＝手機資料完全不分艙，換一本書照樣看到上一本的聯絡人/微薄）。舊資料沒蓋章、讀取端一律保留。
+    const LOBBY_ID = '__lobby__';   // 🏠 常駐角色的聊天室蓋這個章（手機版大廳加的、或聊天設置打開「常駐角色」）
+    function _curTavernChatId() {
+        try {
+            const ctx = win.SillyTavern && win.SillyTavern.getContext ? win.SillyTavern.getContext() : null;
+            let cid = ctx && ctx.chatId;
+            if (cid == null && win.SillyTavern && typeof win.SillyTavern.getCurrentChatId === 'function') cid = win.SillyTavern.getCurrentChatId();
+            if (cid == null) {
+                try {
+                    const sid = win.OS_AVS_ADAPTER && win.OS_AVS_ADAPTER.isStandalone && win.OS_AVS_ADAPTER.isStandalone()
+                        ? win.OS_AVS_ADAPTER.getStoryId() : '';
+                    if (sid) return String(sid);
+                } catch (e) {}
+                return null;
+            }
+            return String(cid).replace(/^.*[\\/]/, '').replace(/\.(jsonl|json)$/i, '');
+        } catch (e) { return null; }
+    }
+
+    win.OS_DB = {
+        currentChatId: function() { return _curTavernChatId(); },
+        LOBBY_ID: LOBBY_ID,   // 聊天室的「大廳」章：常駐角色
+        init: function() {
+            return new Promise((resolve, reject) => {
+                if (dbInstance) { resolve(dbInstance); return; }
+
+                // versioned=true → 帶版本開(可 upgrade 建 store)；遇 VersionError(既有版本比程式碼高，例如曾短暫升到 V30 又退版)
+                //   → 改 versioned=false 無版本開啟，沿用既有 schema、不再 upgrade（保命：避免退版害 init 直接 reject 崩全站）。
+                const attempt = (versioned) => {
+                    const request = versioned ? indexedDB.open(DB_NAME, DB_VERSION) : indexedDB.open(DB_NAME);
+
+                    request.onupgradeneeded = (event) => {
+                        console.log(`[OS_DB] 資料庫正在升級... (V${event.oldVersion} -> V${event.newVersion})`);
+                        const db = event.target.result;
+                        const stores = [
+                            STORE_NAME_IMAGES, STORE_NAME_CHATS, STORE_NAME_WB,
+                            STORE_NAME_MAP, STORE_NAME_LOBBY, STORE_NAME_ACH,
+                            STORE_NAME_WORLDBOOK,
+                            STORE_NAME_VN_CHAPTERS, STORE_NAME_VAR_PACKS,
+                            STORE_NAME_UI_TEMPLATES, STORE_NAME_STUDIO,
+                            STORE_NAME_STUDIO_DRAFTS,
+                            STORE_NAME_VN_MEMORIES,  // 🔥 V21：向量記憶庫
+                            STORE_NAME_VN_SUMMARIES, // 🔥 V22：大總結儲存
+                            STORE_NAME_STATE_DATA,   // 🔥 V23：狀態資料庫
+                            STORE_NAME_LOBBY_SUM_IDX,// 🔥 V24：酒館大廳跨卡總結索引
+                            STORE_NAME_PHONE_APPS,   // 🔥 V25：手機殼 app 商店
+                            STORE_NAME_APP_MEM,      // 🔥 V26：插件通用記憶桶
+                            STORE_NAME_TAVERN_SUMMARY, // 🔥 V27：酒館大總結（key=chatId）
+                            STORE_NAME_APP_DATA, // 🔥 V28：通用 app 資料庫
+                            STORE_NAME_NPC_MEMORY // 🔥 V29：大廳 NPC 一對一長期記憶
+                        ];
+                        stores.forEach(name => {
+                            if (!db.objectStoreNames.contains(name)) {
+                                db.createObjectStore(name, { keyPath: 'id' });
+                                console.log(`[OS_DB] ✅ 創建倉庫成功: ${name}`);
+                            }
+                        });
+                    };
+
+                    // 🚨升版硬化：舊連線(另一分頁/iframe)不關會 onblocked→open 永不 onsuccess→init() hang。
+                    //   onversionchange 讓既有連線主動關閉，別 deadlock 擋住升級（IndexedDB 標準做法）。
+                    request.onblocked = () => { console.warn('[OS_DB] 版本升級被既有連線阻擋(onblocked)，等待舊連線關閉…'); };
+                    request.onsuccess = (event) => {
+                        dbInstance = event.target.result;
+                        dbInstance.onversionchange = () => { try { dbInstance.close(); } catch (e) {} dbInstance = null; };
+                        _purgeLegacyPanelStores(dbInstance);
+                        resolve(dbInstance);
+                    };
+                    request.onerror = (event) => {
+                        const err = event.target.error;
+                        if (versioned && err && err.name === 'VersionError') {
+                            console.warn('[OS_DB] 既有版本高於程式碼版本(VersionError)，改無版本開啟沿用現有 schema');
+                            attempt(false);   // 保命重試
+                            return;
+                        }
+                        console.error('[OS_DB] 資料庫連接失敗:', err);
+                        reject(err);
+                    };
+                };
+                attempt(true);
+            });
+        },
+
+        // ── 🎮 大廳 NPC 一對一長期記憶（V29；id = NPC 對話 key）──────────
+        getNpcMemory: async function(key) {
+            const db = await this.init();
+            return new Promise((resolve) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_NPC_MEMORY, 'readonly');
+                    const req = tx.objectStore(STORE_NAME_NPC_MEMORY).get(key);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => resolve(null);
+                } catch (e) { resolve(null); }
+            });
+        },
+        saveNpcMemory: async function(key, data) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_NPC_MEMORY, 'readwrite');
+                    tx.objectStore(STORE_NAME_NPC_MEMORY).put({
+                        id: key,
+                        name: (data && data.name) || '',
+                        summary: (data && data.summary) || '',
+                        lastCompactAt: (data && data.lastCompactAt) || 0,
+                        updatedAt: Date.now(),
+                    });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+
+        // --- 🎨 靈感創作室 (Studio) 對話快取 ---
+        saveStudioChat: async function(modeId, messages) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_STUDIO, 'readwrite');
+                    tx.objectStore(STORE_NAME_STUDIO).put({ id: modeId, messages: messages, timestamp: Date.now() });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        getStudioChat: async function(modeId) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_STUDIO, 'readonly').objectStore(STORE_NAME_STUDIO).get(modeId);
+                    req.onsuccess = () => resolve(req.result ? req.result.messages : []);
+                    req.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        clearStudioChat: async function(modeId) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_STUDIO, 'readwrite');
+                    tx.objectStore(STORE_NAME_STUDIO).delete(modeId);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+
+        // --- 📦 通用 App 資料庫（創作室生的 app 用 st.dbSave/dbLoad；id = appId::scope::key）---
+        saveAppData: async function(appId, key, value, chatId) {
+            const db = await this.init();
+            const id = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(key || '');
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_APP_DATA).put({ id: id, value: value, ts: Date.now() });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 同一個 app 的好幾筆一起寫、同一筆交易：要嘛全寫進去、要嘛全沒寫（錢包餘額＋已付記號要綁在一起，os_pt.js 用）。
+        //   entries = [{ key, value, chatId?, appId? }]（appId 不給＝用第一個參數；書咖帳戶換 PT 時兩個 app 一起寫）
+        saveAppDataMany: async function(appId, entries) {
+            const db = await this.init();
+            const list = Array.isArray(entries) ? entries : [];
+            if (!list.length) return true;
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    const st = tx.objectStore(STORE_NAME_APP_DATA);
+                    const now = Date.now();
+                    list.forEach(e => {
+                        const id = String(e.appId || appId || 'app') + '::' + (e.chatId ? ('chat:' + e.chatId) : 'global') + '::' + String(e.key || '');
+                        st.put({ id: id, value: e.value, ts: now });
+                    });
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止'));
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        getAppData: async function(appId, key, chatId) {
+            const db = await this.init();
+            const id = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(key || '');
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_APP_DATA, 'readonly').objectStore(STORE_NAME_APP_DATA).get(id);
+                    req.onsuccess = () => resolve(req.result ? req.result.value : null);
+                    req.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 刪掉一筆 app_data（10-19：以前要刪只能寫 null 進去，資料庫裡留著空殼）。
+        deleteAppData: async function(appId, key, chatId) {
+            const db = await this.init();
+            const id = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(key || '');
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_APP_DATA).delete(id);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止'));
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 刪掉某 app 底下 key 開頭是 keyPrefix 的那幾筆（小機刪整隻：經歷簿、向量一塊一塊的 <rid>:0、<rid>:1…）。
+        //   照編號範圍刪，不用整個 store 掃過去；keyPrefix 不能是空的（要整個 app 清掉用 deleteAppDataByApp）
+        deleteAppDataByPrefix: async function(appId, keyPrefix, chatId) {
+            if (!keyPrefix) throw new Error('deleteAppDataByPrefix 要給 keyPrefix');
+            const db = await this.init();
+            const pre = String(appId || 'app') + '::' + (chatId ? ('chat:' + chatId) : 'global') + '::' + String(keyPrefix);
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_APP_DATA).delete(IDBKeyRange.bound(pre, pre + '￿'));
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止'));
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 刪掉某 app 的所有 app_data（id = appId::scope::key，前綴 appId:: 全清；卸載 app 用，避免孤兒數據）。
+        // 用 '::' 當邊界 → 不會誤刪 appId 前綴相同的別的 app（app_12 不會吃到 app_123）。
+        deleteAppDataByApp: async function(appId) {
+            const db = await this.init();
+            const pre = String(appId || '') + '::';
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_DATA, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_APP_DATA).openCursor();
+                    req.onsuccess = (e) => { const cur = e.target.result; if (cur) { if (String(cur.key).indexOf(pre) === 0) cur.delete(); cur.continue(); } };
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 整批讀某 app 的 app_data（給「記憶回傳酒館」統一注入用）：回 [{key,scope,value}]，只收 global + 指定 chat。
+        getAppDataByApp: async function(appId, chatId) {
+            const db = await this.init();
+            const pre = String(appId || '') + '::';
+            const wantChat = chatId ? ('chat:' + chatId) : null;
+            return new Promise((resolve, reject) => {
+                try {
+                    const out = [];
+                    const req = db.transaction(STORE_NAME_APP_DATA, 'readonly').objectStore(STORE_NAME_APP_DATA).openCursor();
+                    req.onsuccess = (e) => {
+                        const cur = e.target.result;
+                        if (!cur) { resolve(out); return; }
+                        const id = String(cur.key);
+                        if (id.indexOf(pre) === 0) {
+                            const rest = id.slice(pre.length);              // scope::key
+                            const sep = rest.indexOf('::');
+                            const scope = sep > 0 ? rest.slice(0, sep) : '';
+                            const key = sep > 0 ? rest.slice(sep + 2) : rest;
+                            if (scope === 'global' || (wantChat && scope === wantChat)) {
+                                out.push({ key: key, scope: scope, value: (cur.value && cur.value.value) });
+                            }
+                        }
+                        cur.continue();
+                    };
+                    req.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 列出 app_data 裡所有出現過的 appId（id 取 '::' 前段），給孤兒掃描用。
+        listAppDataAppIds: async function() {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_APP_DATA, 'readonly').objectStore(STORE_NAME_APP_DATA).getAllKeys();
+                    req.onsuccess = () => { const set = {}; (req.result || []).forEach(k => { const s = String(k); const i = s.indexOf('::'); if (i > 0) set[s.slice(0, i)] = 1; }); resolve(Object.keys(set)); };
+                    req.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+        // 刪掉某 app 的所有 app_memory（id = appId::角色名，前綴 appId:: 全清）。
+        deleteAppMemoryByApp: async function(appId) {
+            const db = await this.init();
+            const pre = String(appId || '') + '::';
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_MEM, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_APP_MEM).openCursor();
+                    req.onsuccess = (e) => { const cur = e.target.result; if (cur) { if (String(cur.key).indexOf(pre) === 0) cur.delete(); cur.continue(); } };
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch (e) { reject(e); }
+            });
+        },
+
+        // --- 圖片、聊天歷史 ---
+        saveImage: async function(id, f) { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const rd = new FileReader();
+                    rd.onload = () => {
+                        const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                        tx.objectStore(STORE_NAME_IMAGES).put({id: id, data: new Blob([rd.result], {type: f.type})});
+                        tx.oncomplete = () => r(id);
+                        tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                        tx.onerror = e => j(e.target.error);
+                    };
+                    rd.readAsArrayBuffer(f);
+                } catch(e) { j(e); }
+            });
+        },
+        getImage: async function(id) { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).get(id);
+                    req.onsuccess = () => { r(req.result ? URL.createObjectURL(req.result.data) : null); };
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        // NAI 預設包縮圖：拖圖生預設時把那張圖縮成 ~256px 存這（base64 字串），
+        // naiPresets 只存引用 id → 設定檔(localStorage)不被一堆縮圖撐爆。
+        saveNaiThumb: async function(id, base64) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).put({ id: 'nai_thumb_' + id, data: base64 });
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getNaiThumb: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).get('nai_thumb_' + id);
+                    req.onsuccess = () => r(req.result ? req.result.data : null);
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteNaiThumb: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).delete('nai_thumb_' + id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        // 🎭 角色圖鑑的本地上傳：{ id:'char_img::名字::表情', name, exp, data(dataURL 或網址), kind:'file'|'url', createdAt }
+        //    跟 NAI 縮圖同一個 images store，只是鍵的前綴不同 → 不動 schema、不升版（升版會 deadlock，見記憶）。
+        //    不分故事：她放上去的圖是「這個角色長這樣」，跟立繪庫那種一個故事一份的生成圖不同。
+        saveCharImage: async function(record) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).put(record);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteCharImage: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        listCharImages: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const out = [];
+                    const range = IDBKeyRange.bound('char_img::', 'char_img::￿');
+                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).openCursor(range);
+                    req.onsuccess = (e) => { const c = e.target.result; if (c) { out.push(c.value); c.continue(); } else r(out); };
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        // NAI 氛圍轉印（Vibe Transfer）：.naiv4vibe 檔的 encoding（每顆每模型 ~65KB base64）＋縮圖，
+        // 設定檔(localStorage)只存 {id,name,strength,on} 輕引用 → 大字串一律放這。
+        saveNaiVibe: async function(id, record) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).put({ id: 'nai_vibe_' + id, data: record });
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getNaiVibe: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_IMAGES, 'readonly').objectStore(STORE_NAME_IMAGES).get('nai_vibe_' + id);
+                    req.onsuccess = () => r(req.result ? req.result.data : null);
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteNaiVibe: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_IMAGES, 'readwrite');
+                    tx.objectStore(STORE_NAME_IMAGES).delete('nai_vibe_' + id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        saveApiChat: async function(id, d) {
+            const db = await this.init();
+            // 🔒 chatId 隔離：第一次存檔時蓋上「當前劇情 id」（已有就不覆蓋）→ 注入器只注入當前劇情的對話，避免古代卡冒出現代手機數據
+            //   🏠 沒開故事時（手機版的大廳）蓋「大廳」章＝常駐角色：每個故事都看得到，之後在故事裡聊也不會被改蓋成那個故事的
+            try { if (d && typeof d === 'object' && d.tavernChatId == null) { const _c = _curTavernChatId(); d.tavernChatId = (_c != null) ? _c : LOBBY_ID; } } catch (e) {}
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_CHATS, 'readwrite');
+                    tx.objectStore(STORE_NAME_CHATS).put({id: id, chatId: id, data: d, timestamp: Date.now()});
+                    tx.oncomplete = () => r(id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getApiChat: async function(id) { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_CHATS, 'readonly').objectStore(STORE_NAME_CHATS).get(id);
+                    req.onsuccess = () => r(req.result ? req.result.data : null);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllApiChats: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_CHATS, 'readonly').objectStore(STORE_NAME_CHATS).getAll();
+                    req.onsuccess = () => {
+                        const c = {};
+                        if(req.result) req.result.forEach(i => { c[i.chatId] = i.data; });
+                        r(c);
+                    };
+                } catch(e) { j(e); }
+            });
+        },
+        // 當前劇情卡 id（正規化）對外暴露 → 給 wx 清「別卡殘留」時跟下面的濾用同一把尺
+        getCurrentCardId: function () { return _curTavernChatId(); },
+        // 只取「當前劇情卡」自己的 api_chats：按 saveApiChat 蓋的 tavernChatId 章隔離（與注入器同款），
+        // 治「古代卡開 wx 卻列出現代卡聯絡清單」。沒蓋章的舊資料一律保留可見（不弄丟）；
+        // 取不到當前卡 id 時退回全部（避免清單整個空掉）。
+        getApiChatsForCurrentCard: async function () {
+            const all = await this.getAllApiChats();
+            const cid = _curTavernChatId();
+            if (cid == null) return all;
+            const out = {};
+            for (const k in all) {
+                const d = all[k];
+                const tag = (d && typeof d === 'object') ? d.tavernChatId : null;
+                if (tag == null || tag === cid || tag === LOBBY_ID) out[k] = d;   // 沒章=舊資料保留；同卡=保留；大廳的人=每本都有；別卡=濾掉
+            }
+            return out;
+        },
+
+        // --- 🔥 V26：插件通用記憶桶 app_memory（角色對話型插件 st.remember 寫入；一筆=一個 appId×角色）---
+        saveAppMemory: async function(appId, charName, entry) {
+            const db = await this.init();
+            try { if (entry && typeof entry === 'object' && entry.tavernChatId == null) { const _c = _curTavernChatId(); if (_c != null) entry.tavernChatId = _c; } } catch (e) {}
+            const id = String(appId || 'app') + '::' + String(charName || '');
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_APP_MEM, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME_APP_MEM);
+                    const getReq = store.get(id);
+                    getReq.onsuccess = () => {
+                        const rec = getReq.result || { id: id, appId: String(appId || 'app'), charName: String(charName || ''), entries: [] };
+                        if (!Array.isArray(rec.entries)) rec.entries = [];
+                        rec.entries.push(entry);
+                        if (rec.entries.length > 50) rec.entries = rec.entries.slice(-50); // 每(app×角色)上限 50 條
+                        rec.timestamp = Date.now();
+                        store.put(rec);
+                    };
+                    tx.oncomplete = () => r(id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllAppMemory: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_APP_MEM, 'readonly').objectStore(STORE_NAME_APP_MEM).getAll();
+                    req.onsuccess = () => r(req.result || []);
+                    req.onerror = e => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteApiChat: async function(id) { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_CHATS, 'readwrite');
+                    tx.objectStore(STORE_NAME_CHATS).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        saveWbPost: async function(p) {
+            const db = await this.init();
+            // 🏠 發文的是常駐角色（通訊錄裡帶大廳記號）、或當下沒開故事 → 蓋大廳章，每個故事都看得到
+            try {
+                if (p && typeof p === 'object' && p.tavernChatId == null) {
+                    const _c = _curTavernChatId();
+                    let _lobbyAuthor = false;
+                    try { const C = win.WX_CONTACTS; _lobbyAuthor = !p.isMe && !!(C && C.getAllCustomContacts && C.getAllCustomContacts().some(function (x) { return x && x.lobby && x.name === p.user; })); } catch (e) {}
+                    p.tavernChatId = (_c == null || _lobbyAuthor) ? LOBBY_ID : _c;
+                }
+            } catch (e) {}
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_WB, 'readwrite');
+                    if(!p.timestamp) p.timestamp = Date.now();
+                    tx.objectStore(STORE_NAME_WB).put(p);
+                    tx.oncomplete = () => r(p.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getAllWbPosts: async function() { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_WB, 'readonly').objectStore(STORE_NAME_WB).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a,b) => b.timestamp - a.timestamp));
+                } catch(e) { j(e); }
+            });
+        },
+        deleteWbPost: async function(id) { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_WB, 'readwrite');
+                    tx.objectStore(STORE_NAME_WB).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        saveMapFacilityData: async function(z, f, d) { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
+                    tx.objectStore(STORE_NAME_MAP).put({id: `${z}_${f}`, zoneId: z, facilityKey: f, ...d, timestamp: Date.now()});
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getMapFacilityData: async function(z, f) { 
+            const db = await this.init(); 
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_MAP, 'readonly').objectStore(STORE_NAME_MAP).get(`${z}_${f}`);
+                    req.onsuccess = () => r(req.result || null);
+                } catch(e) { j(e); }
+            });
+        },
+        // 只清「探索快照」（各設施掃出的路人/開場語）＝ id 不帶 __world__ 前綴的設施記錄。
+        // ⚠️ 世界資料（__world__*）同住這個 store，絕不能跟著清——跑團推進一輪的過期清空走這個，別用 clearAllMapData。
+        clearMapScanSnapshots: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
+                    const store = tx.objectStore(STORE_NAME_MAP);
+                    const req = store.getAllKeys();
+                    req.onsuccess = () => {
+                        (req.result || []).forEach(k => { if (!String(k).startsWith('__world__')) store.delete(k); });
+                    };
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        // === 🌍 動態世界資料 (複用 map_data store, 用 __world__ 前綴 key) ===
+        saveWorldData: async function(worldId, data) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
+                    tx.objectStore(STORE_NAME_MAP).put({
+                        id: `__world__${worldId}`,
+                        worldId,
+                        ...data,
+                        timestamp: Date.now()
+                    });
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getWorldData: async function(worldId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_MAP, 'readonly')
+                        .objectStore(STORE_NAME_MAP).get(`__world__${worldId}`);
+                    req.onsuccess = () => r(req.result || null);
+                    req.onerror = () => j(req.error);
+                } catch(e) { j(e); }
+            });
+        },
+        listWorlds: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_MAP, 'readonly')
+                        .objectStore(STORE_NAME_MAP).getAll();
+                    req.onsuccess = () => {
+                        const all = req.result || [];
+                        r(all.filter(x => x.id && x.id.startsWith('__world__')));
+                    };
+                    req.onerror = () => j(req.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteWorldData: async function(worldId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_MAP, 'readwrite');
+                    tx.objectStore(STORE_NAME_MAP).delete(`__world__${worldId}`);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        saveLobbyHistory: async function(chatId, data) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_LOBBY, 'readwrite');
+                    tx.objectStore(STORE_NAME_LOBBY).put({ id: chatId, ...data, timestamp: Date.now() });
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getLobbyHistory: async function(chatId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_LOBBY, 'readonly').objectStore(STORE_NAME_LOBBY).get(chatId);
+                    req.onsuccess = () => r(req.result || null);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteLobbyHistory: async function(chatId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_LOBBY, 'readwrite');
+                    tx.objectStore(STORE_NAME_LOBBY).delete(chatId);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getAllLobbyHistories: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_LOBBY, 'readonly').objectStore(STORE_NAME_LOBBY).getAll();
+                    req.onsuccess = () => r(req.result || []);
+                } catch(e) { j(e); }
+            });
+        }
+    };
+
+    Object.assign(win.OS_DB, {
+        addAchievement: async function(entry) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_ACH, 'readwrite');
+                    tx.objectStore(STORE_NAME_ACH).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        updateAchievement: async function(entry) { return this.addAchievement(entry); },
+        getAchievements: async function(chatId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_ACH, 'readonly').objectStore(STORE_NAME_ACH).getAll();
+                    req.onsuccess = () => {
+                        let list = req.result || [];
+                        if (chatId) list = list.filter(a => a.chatId === chatId);
+                        r(list.sort((a, b) => a.timestamp - b.timestamp));
+                    };
+                } catch(e) { j(e); }
+            });
+        },
+        clearAchievements: async function(chatId) {
+            const db = await this.init();
+            if (chatId) return _deleteWhere(db, STORE_NAME_ACH, a => a && a.chatId === chatId);   // 只刪這一卡的：不先把整個成就庫讀出來
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_ACH, 'readwrite');
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止'));
+                    tx.objectStore(STORE_NAME_ACH).clear();
+                    tx.oncomplete = () => r(true);
+                } catch(e) { j(e); }
+            });
+        }
+    });
+
+    // --- 📖 正式世界書條目接口 ---
+    Object.assign(win.OS_DB, {
+        saveWorldbookEntry: async function(entry) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'wb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+                    entry.updatedAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_WORLDBOOK, 'readwrite');
+                    tx.objectStore(STORE_NAME_WORLDBOOK).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getAllWorldbookEntries: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_WORLDBOOK, 'readonly').objectStore(STORE_NAME_WORLDBOOK).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (a.order ?? 999) - (b.order ?? 999)));
+                } catch(e) { j(e); }
+            });
+        },
+        deleteWorldbookEntry: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_WORLDBOOK, 'readwrite');
+                    tx.objectStore(STORE_NAME_WORLDBOOK).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        clearWorldbookEntries: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_WORLDBOOK, 'readwrite');
+                    tx.objectStore(STORE_NAME_WORLDBOOK).clear();
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        }
+    });
+
+    // --- VN 與其他系統 (維持原樣) ---
+    Object.assign(win.OS_DB, {
+        // opts.silent：不發 VN_CHAPTER_SAVED。給「只改章節附帶欄位、正文沒動」的批次寫入用
+        //   （例如改/刪章之後回頭修正每章的 avsStateBefore）——不擋的話每寫一章就觸發一次
+        //   向量抽取與人物檔案建檔，重算十幾章＝十幾通副模型。
+        saveVnChapter: async function(chapter, opts) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!chapter.id) chapter.id = 'vn_ch_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+                    chapter.updatedAt = Date.now();
+                    if (!chapter.createdAt) chapter.createdAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_VN_CHAPTERS, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_CHAPTERS).put(chapter);
+                    tx.oncomplete = () => {
+                        if (!opts || !opts.silent) {
+                            win.dispatchEvent(new CustomEvent('VN_CHAPTER_SAVED', { detail: {
+                                id: chapter.id, storyId: chapter.storyId, content: chapter.content
+                            }}));
+                        }
+                        r(chapter.id);
+                    };
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止'));
+                } catch(e) { j(e); }
+            });
+        },
+        getAllVnChapters: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_VN_CHAPTERS, 'readonly').objectStore(STORE_NAME_VN_CHAPTERS).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                } catch(e) { j(e); }
+            });
+        },
+        deleteVnChapter: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VN_CHAPTERS, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_CHAPTERS).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        deleteVnChaptersByStoryId: async function(storyId) {
+            const db = await this.init();
+            return _deleteWhere(db, STORE_NAME_VN_CHAPTERS, ch => ch && ch.storyId === storyId);   // 不先 getAll 整個章節庫
+        },
+
+        // ── vn_grand_summaries：大總結 CRUD ─────────────────────────
+        saveGrandSummary: async function(entry) {
+            // entry: { id, storyId, count, content, timestamp }
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'gs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+                    if (!entry.timestamp) entry.timestamp = Date.now();
+                    const tx = db.transaction(STORE_NAME_VN_SUMMARIES, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_SUMMARIES).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getGrandSummaries: async function(storyId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_VN_SUMMARIES, 'readonly').objectStore(STORE_NAME_VN_SUMMARIES).getAll();
+                    req.onsuccess = () => {
+                        const all = (req.result || []).filter(s => (s.storyId || '') === (storyId || ''));
+                        r(all.sort((a, b) => (a.count || 0) - (b.count || 0)));
+                    };
+                } catch(e) { j(e); }
+            });
+        },
+
+        // ── lobby_summary_index：酒館大廳跨卡總結索引（V24）─────────
+        //   給故事管理（os_story_tools.js）生成大總結後寫 brief + 角色名單，供瀅瀅/柴郡 sysPrompt 注入
+        //   entry: { id, cardName, chatId, summaryCount, brief, characters: [], lorebookBook, lorebookKey, timestamp }
+        saveLobbySummaryIndex: async function(entry) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'lsi_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+                    if (!entry.timestamp) entry.timestamp = Date.now();
+                    const tx = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readwrite');
+                    tx.objectStore(STORE_NAME_LOBBY_SUM_IDX).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllLobbySummaryIndex: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_LOBBY_SUM_IDX, 'readonly').objectStore(STORE_NAME_LOBBY_SUM_IDX).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)));
+                    req.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+
+        // ── 給瀅瀅/柴郡 sysPrompt 注入用：每張卡 + 每個聊天室聚合最近 N 條結語 + 全角色名單（去重） ─────
+        //   分組維度：cardName + chatId（同卡不同 chat 算不同故事線，避免跨 chat 混在一起）
+        //   回傳：[{ cardName, chatId, storyTitle, briefs: [{ count, brief, ts }] 最新 N 條, characters: [{ name, row }] 同 chat 累積 }]
+        //   briefsLimit 預設 5
+        getLobbySummaryForPrompt: async function(briefsLimit = 5) {
+            const all = await this.getAllLobbySummaryIndex();
+            const byStory = new Map();
+            for (const r of all) {
+                const key = `${r.cardName || '(未命名)'}|||${r.chatId || ''}`;
+                if (!byStory.has(key)) byStory.set(key, {
+                    cardName: r.cardName || '(未命名)',
+                    chatId:   r.chatId || '',
+                    storyTitle: '',
+                    _recs: [],
+                    characters: [],
+                });
+                byStory.get(key)._recs.push(r);
+            }
+            const result = [];
+            for (const bundle of byStory.values()) {
+                bundle._recs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                // storyTitle 取最新一筆有值的（寫入端已沿用第一次的標題，這裡 newest 也是第一次的）
+                bundle.storyTitle = bundle._recs.find(r => r.storyTitle)?.storyTitle || '';
+                // bgCacheId 取最新一筆有值的，給封面圖去 VN bg_cache 撈用
+                bundle.bgCacheId  = bundle._recs.find(r => r.bgCacheId)?.bgCacheId || '';
+                // charHeader：角色表表頭，給日誌動態對位欄位(取最新一筆有值的)
+                bundle.charHeader = bundle._recs.find(r => r.charHeader)?.charHeader || '';
+                // 那輪玩的 USER persona 快照 + 主角（大廳 guest NPC 認得訪客用）
+                bundle.personaId   = bundle._recs.find(r => r.personaId)?.personaId   || '';
+                bundle.personaName = bundle._recs.find(r => r.personaName)?.personaName || '';
+                bundle.personaDesc = bundle._recs.find(r => r.personaDesc)?.personaDesc || '';
+                bundle.protagonist = bundle._recs.find(r => r.protagonist)?.protagonist || '';
+                bundle.worldview   = bundle._recs.find(r => r.worldview)?.worldview   || '';
+                bundle.lorebookBook = bundle._recs.find(r => r.lorebookBook)?.lorebookBook || '';   // 那張卡的世界書名（opt-in live 讀用）
+                bundle.briefs = bundle._recs.slice(0, briefsLimit).map(r => ({
+                    count: r.summaryCount || 0,
+                    brief: r.brief || '',
+                    ts:    r.timestamp || 0,
+                }));
+                // 角色卡：用「最新一筆有角色的紀錄」的完整角色表（跟著大總結去重後的結果）；不再跨筆 union，
+                //   否則大總結已合併掉的舊重複角色(如蜘蛛精各別名)會永遠賴在索引、日誌一直顯示重複卡片。
+                //   (_recs 已 newest-first 排序，find = 最新那筆)
+                const _latest = bundle._recs.find(r => Array.isArray(r.characters) && r.characters.length);
+                bundle.characters = (_latest ? _latest.characters : []).map(c => (typeof c === 'string' ? { name: c, row: c } : c));
+                delete bundle._recs;
+                result.push(bundle);
+            }
+            // 按最新一筆 brief 時間排序整個 stories 列表
+            result.sort((a, b) => (b.briefs[0]?.ts || 0) - (a.briefs[0]?.ts || 0));
+            return result;
+        },
+
+        // ── tavern_summary：酒館大總結（key=chatId，一卡一筆全文存檔；程式壓縮注入、不放世界書）─────
+        //   record: { id(=chatId), content(全文), summaryCount, lastId, title, bgCacheId, updatedAt }
+        saveTavernSummary: async function(chatId, rec) {
+            const db = await this.init();
+            const cid = String(chatId || '').trim();
+            if (!cid) throw new Error('saveTavernSummary 缺 chatId');
+            return new Promise((r, j) => {
+                try {
+                    const entry = Object.assign({}, rec, { id: cid, updatedAt: Date.now() });
+                    const tx = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readwrite');
+                    tx.objectStore(STORE_NAME_TAVERN_SUMMARY).put(entry);
+                    tx.oncomplete = () => r(cid);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => j(e.target.error);
+                } catch (e) { j(e); }
+            });
+        },
+        getTavernSummary: async function(chatId) {
+            const db = await this.init();
+            const cid = String(chatId || '').trim();
+            if (!cid) return null;
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readonly').objectStore(STORE_NAME_TAVERN_SUMMARY).get(cid);
+                    req.onsuccess = () => r(req.result || null);
+                    req.onerror = (e) => j(e.target.error);
+                } catch (e) { j(e); }
+            });
+        },
+        deleteTavernSummary: async function(chatId) {
+            const db = await this.init();
+            const cid = String(chatId || '').trim();
+            if (!cid) return true;
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_TAVERN_SUMMARY, 'readwrite');
+                    tx.objectStore(STORE_NAME_TAVERN_SUMMARY).delete(cid);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => j(e.target.error);
+                } catch (e) { j(e); }
+            });
+        },
+
+        // ── 🗑️ 一鍵清空「某 chatId」的所有綁定資料（刪聊天室不玩了用）。回報每類清了幾筆／不可清原因 ──
+        //    chatId：正規化 id（跟 tavern_summary / state_data 同款，建議用 OS_STORY_TOOLS.getChatId()）。
+        //    opts.storyId：清向量記憶 / PWA大總結(它們按 storyId 存)；沒給就跳過(回 skip)。
+        //    opts.vnWorld：VN 圖片快取的 world(=raw ctx.chatId)；交給 VN_Cache.deleteByWorld。
+        //    全域共用的世界書/地圖/變數包無 chatId、無法反查 → 不在此清（本來就不該綁單一聊天）。
+        deleteAllByChatId: async function (chatId, opts) {
+            const cid = String(chatId || '').trim();
+            const o = opts || {};
+            const report = {};
+            if (!cid) { report.error = '缺 chatId'; return report; }
+            const db = await this.init();
+            const self = this;
+            // chatId 在各 store 正規化不一致（getChatIdentifier 空白→_、normalizeChatId 不換、_curTavernChatId 不 trim）
+            //   → 收齊所有變體；key-delete 每個都刪、cursor 用集合比對，避免「含空白的 chatId」漏刪。
+            const _raw = String(o.rawChatId || chatId || '');
+            const _base = _raw.split(/[\\/]/).pop() || '';
+            const idSet = new Set([cid,
+                _base.replace(/\.jsonl?$/i, '').trim(),
+                _base.replace(/\.(jsonl|json)$/i, ''),
+                _base.replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_')
+            ].filter(Boolean));
+            const ids = Array.from(idSet);
+            const _inSet = x => x != null && idSet.has(String(x));
+            const _delEach = async (fn) => { for (const id of ids) { try { await fn(id); } catch (_) {} } return 'ok'; };
+            const _safe = async (label, fn) => { try { report[label] = await fn(); } catch (e) { report[label] = 'err:' + (e && e.message || e); } };
+            const _purge = (store, matchFn) => new Promise((res, rej) => {
+                try {
+                    let n = 0;
+                    const tx = db.transaction(store, 'readwrite');
+                    const req = tx.objectStore(store).openCursor();
+                    req.onsuccess = e => {
+                        const c = e.target.result;
+                        if (!c) return;
+                        try { if (matchFn(c.value)) { c.delete(); n++; } } catch (_) {}
+                        c.continue();
+                    };
+                    tx.oncomplete = () => res(n);
+                    tx.onabort = () => rej(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => rej(e.target.error);
+                } catch (e) { rej(e); }
+            });
+
+            // 一、key 就是 chatId 的 store → 每個 id 變體都刪（清了就回 ok）
+            await _safe('大總結', () => _delEach(id => self.deleteTavernSummary(id)));
+            await _safe('狀態(AVS)', () => _delEach(id => self.deleteStateData ? self.deleteStateData(id) : null));
+            await _safe('大廳歷史', () => _delEach(id => self.deleteLobbyHistory ? self.deleteLobbyHistory(id) : null));
+            await _safe('成就', () => _delEach(id => self.clearAchievements ? self.clearAchievements(id) : null));
+
+            // 二、有 chatId 欄位 → cursor 批量刪（用 id 變體集合比對）
+            await _safe('微信/電話', () => _purge(STORE_NAME_CHATS, v => v && v.data && _inSet(v.data.tavernChatId)));
+            await _safe('微博', () => _purge(STORE_NAME_WB, v => v && _inSet(v.tavernChatId)));
+            await _safe('大廳總結索引', () => _purge(STORE_NAME_LOBBY_SUM_IDX, v => v && _inSet(v.chatId)));
+            // app_data：id = appId::chat:<chatId>::key → 綁這個聊天的整批刪（創作室面板、主角狀態、世界門等都在這）
+            await _safe('app資料', () => _purge(STORE_NAME_APP_DATA, v => { const p = String(v && v.id || '').split('::'); return p.length >= 3 && p[1].indexOf('chat:') === 0 && _inSet(p[1].slice(5)); }));
+
+            // 三、app_memory：entries 內逐條過濾(留別卡的)；整筆空了才刪
+            await _safe('app記憶', () => new Promise((res, rej) => {
+                try {
+                    let n = 0;
+                    const tx = db.transaction(STORE_NAME_APP_MEM, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_APP_MEM).openCursor();
+                    req.onsuccess = e => {
+                        const c = e.target.result;
+                        if (!c) return;
+                        const rec = c.value;
+                        if (rec && Array.isArray(rec.entries)) {
+                            const before = rec.entries.length;
+                            const kept = rec.entries.filter(en => en && !_inSet(en.tavernChatId));
+                            if (kept.length !== before) {
+                                n += (before - kept.length);
+                                if (kept.length === 0) c.delete();
+                                else { rec.entries = kept; c.update(rec); }
+                            }
+                        }
+                        c.continue();
+                    };
+                    tx.oncomplete = () => res(n);
+                    tx.onabort = () => rej(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => rej(e.target.error);
+                } catch (e) { rej(e); }
+            }));
+
+            // 四、按 storyId 的（向量記憶 / PWA 大總結）→ 只在有給 storyId 時清
+            if (o.storyId) {
+                const sid = String(o.storyId);
+                await _safe('向量記憶', async () => { if (self.deleteVnMemoriesByStoryId) await self.deleteVnMemoriesByStoryId(sid); return 'ok'; });
+                await _safe('PWA大總結', () => _purge(STORE_NAME_VN_SUMMARIES, v => v && (v.storyId || '') === sid));
+                await _safe('章節', async () => { if (self.deleteVnChaptersByStoryId) await self.deleteVnChaptersByStoryId(sid); return 'ok'; });
+            } else {
+                report['向量記憶'] = 'skip(無storyId)';
+                report['PWA大總結'] = 'skip(無storyId)';
+                report['章節'] = 'skip(無storyId)';
+            }
+
+            // 五、變數包（＝狀態面板的「追蹤檔案」）＋ 連帶的 UI 面板與條件規則。
+            //     ⚠️ 只清「綁定這個 chatId」的包；chatId 空的是全域包(所有卡共用)，絕不能碰。
+            //     沒清這裡就是孤兒的來源：聊天刪掉了、檔案還躺在 DB 裡愈積愈多。
+            const _killedPackIds = [];
+            await _safe('追蹤檔案', () => new Promise((res, rej) => {
+                try {
+                    let n = 0;
+                    const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
+                    const req = tx.objectStore(STORE_NAME_VAR_PACKS).openCursor();
+                    req.onsuccess = e => {
+                        const c = e.target.result;
+                        if (!c) return;
+                        const v = c.value;
+                        if (v && v.chatId && _inSet(v.chatId)) { _killedPackIds.push(v.id); c.delete(); n++; }
+                        c.continue();
+                    };
+                    tx.oncomplete = () => res(n);
+                    tx.onabort = () => rej(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = e => rej(e.target.error);
+                } catch (e) { rej(e); }
+            }));
+            // UI 面板與條件規則是綁 packId 的 → 包沒了它們也是孤兒
+            await _safe('UI面板', () => _purge(STORE_NAME_UI_TEMPLATES, v => v && _killedPackIds.indexOf(v.packId) !== -1));
+            await _safe('條件規則', async () => {
+                try {
+                    const LS = win.localStorage || localStorage;
+                    const KEY = 'aurelia_rules_tavern';   // 酒館端規則(跨 chat 共用一份陣列，逐條過濾)
+                    const arr = JSON.parse(LS.getItem(KEY) || '[]');
+                    if (!Array.isArray(arr) || !arr.length) return 0;
+                    const kept = arr.filter(r => !(r && (_killedPackIds.indexOf(r.packId) !== -1 || _inSet(r.worldId))));
+                    const n = arr.length - kept.length;
+                    if (n) LS.setItem(KEY, JSON.stringify(kept));
+                    return n;
+                } catch (e) { return 'err:' + (e && e.message || e); }
+            });
+
+            // 六、創作室 app 的資料（id = appId::chat:<chatId>::key）
+            await _safe('app資料', () => _purge(STORE_NAME_APP_DATA, v => {
+                const id = String((v && v.id) || '');
+                return ids.some(x => id.indexOf('::chat:' + x + '::') !== -1);
+            }));
+
+            // 六之二、住在 localStorage 的（DB 那邊清不到）：
+            //   · AVS 當前狀態 avs_state_<id> 與回朔快照。🚨 快照的 key 是 `avs_snap_` + _avsKey()，
+            //     而 _avsKey() 本身就是 `avs_state_<id>` → 實際是 avs_snap_avs_state_<id>。
+            //     以前刪故事寫成 avs_snap_<id>，一次都沒清到（每條故事最多 10 份快照一直佔著 5MB 的格子）。舊寫法那個 key 也順手刪。
+            //   · 裝的小程式 saveData(k, v, 'chat') → aurelia_appdata_<appId>_chat_<chatId>_<k>，綁這個聊天的整批刪。
+            //     （PWA 的小程式 09-16 起綁故事＝chat_<storyId>_；以前那份 _nochat 是所有故事共用的舊資料，不是這條故事的，不碰）
+            await _safe('瀏覽器暫存', () => {
+                const LS = win.localStorage || localStorage;
+                const lsIds = ids.concat(o.storyId ? [String(o.storyId)] : []).filter((x, i, a) => x && a.indexOf(x) === i);
+                let n = 0;
+                const drop = (k) => { if (LS.getItem(k) != null) { LS.removeItem(k); n++; } };
+                lsIds.forEach(x => { drop('avs_state_' + x); drop('avs_snap_avs_state_' + x); drop('avs_snap_' + x); });
+                const all = [];
+                for (let i = 0; i < LS.length; i++) { const k = LS.key(i); if (k) all.push(k); }
+                all.forEach(k => {
+                    if (k.indexOf('aurelia_appdata_') !== 0) return;
+                    if (lsIds.some(x => k.indexOf('_chat_' + x + '_') !== -1)) { LS.removeItem(k); n++; }
+                });
+                return n;
+            });
+
+            // 七、VN 圖片快取（背景/頭像/立繪/場景/物品）走 VN_Cache（獨立 DB、world=raw chatId）
+            await _safe('圖片快取', async () => {
+                const VC = (typeof window !== 'undefined' && window.VN_Cache) || win.VN_Cache;
+                if (!VC || !VC.deleteByWorld) return 'skip(無VN_Cache)';
+                return await VC.deleteByWorld(o.vnWorld || cid);
+            });
+
+            console.log('[OS_DB] 🗑️ deleteAllByChatId(' + cid + ') 完成:', report);
+            return report;
+        },
+
+        // ── vn_memories：向量記憶條目 CRUD ──────────────────────────
+        saveVnMemory: async function(entry) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!entry.id) entry.id = 'vmem_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    if (!entry.createdAt) entry.createdAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_MEMORIES).put(entry);
+                    tx.oncomplete = () => r(entry.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getAllVnMemories: async function(storyId) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_VN_MEMORIES, 'readonly').objectStore(STORE_NAME_VN_MEMORIES).getAll();
+                    req.onsuccess = () => {
+                        const all = req.result || [];
+                        r(storyId ? all.filter(m => m.storyId === storyId) : all);
+                    };
+                } catch(e) { j(e); }
+            });
+        },
+        deleteVnMemoriesByStoryId: async function(storyId) {
+            const db = await this.init();
+            return _deleteWhere(db, STORE_NAME_VN_MEMORIES, m => m && m.storyId === storyId);   // 每筆帶向量：游標走，不整庫讀進來
+        },
+        // 刪除單筆記憶（給 AVS 📝 記憶分頁的「刪除這條」用）
+        deleteVnMemory: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VN_MEMORIES, 'readwrite');
+                    tx.objectStore(STORE_NAME_VN_MEMORIES).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        // 刪除某一則訊息/章節(chapterId)的所有記憶 —— 重 roll / 重生 / 刪訊息時自動清，讓記憶跟著現存劇情走
+        //   每存一章都會跑一次：以前先 getAll 整個記憶庫（每筆帶向量）再挑，庫大了每章都是一次記憶體尖峰 → 改游標走
+        deleteVnMemoriesByChapter: async function(chapterId, storyId) {
+            const db = await this.init();
+            return _deleteWhere(db, STORE_NAME_VN_MEMORIES, m => m && String(m.chapterId) === String(chapterId) && (!storyId || m.storyId === storyId));
+        },
+        // 把某世界的記憶「複製」到另一個世界 —— 換聊天 / 換備份檔(chatId 變了)後，把舊世界記憶搬過來。來源保留。
+        copyVnMemoriesToStory: async function(fromStoryId, toStoryId) {
+            if (!fromStoryId || !toStoryId || fromStoryId === toStoryId) return 0;
+            const all = await this.getAllVnMemories(fromStoryId);
+            let n = 0;
+            for (const m of all) {
+                const clone = Object.assign({}, m, { storyId: toStoryId });
+                delete clone.id;          // 讓 saveVnMemory 配新 id（不覆蓋來源）
+                delete clone.createdAt;
+                try { await this.saveVnMemory(clone); n++; } catch (e) {}
+            }
+            return n;
+        }
+    });
+
+    Object.assign(win.OS_DB, {
+        saveVarPack: async function(pack) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
+                    tx.objectStore(STORE_NAME_VAR_PACKS).put(pack);
+                    tx.oncomplete = () => r(pack.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        getAllVarPacks: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_VAR_PACKS, 'readonly').objectStore(STORE_NAME_VAR_PACKS).getAll();
+                    req.onsuccess = () => r(req.result || []);
+                } catch(e) { j(e); }
+            });
+        },
+        deleteVarPack: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_VAR_PACKS, 'readwrite');
+                    tx.objectStore(STORE_NAME_VAR_PACKS).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                } catch(e) { j(e); }
+            });
+        },
+        saveUITemplate: async function(templateData) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!templateData.createdAt) templateData.createdAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_UI_TEMPLATES, 'readwrite');
+                    tx.objectStore(STORE_NAME_UI_TEMPLATES).put(templateData);
+                    tx.oncomplete = () => r(templateData.id);
+                    // ⚠️ 只接 oncomplete 的話，交易一中止（配額不足等）這個 Promise 永遠不 settle
+                    //    → await 它的 handler 就這樣掛在半路，畫面既不更新也不報錯，看起來像當機
+                    tx.onerror = tx.onabort = () => j(tx.error || new Error('面板存檔失敗（資料庫交易中止）'));
+                } catch(e) { j(e); }
+            });
+        },
+        getAllUITemplates: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_UI_TEMPLATES, 'readonly').objectStore(STORE_NAME_UI_TEMPLATES).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                    req.onerror = () => j(req.error || new Error('讀取面板清單失敗'));
+                } catch(e) { j(e); }
+            });
+        },
+        deleteUITemplate: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_UI_TEMPLATES, 'readwrite');
+                    tx.objectStore(STORE_NAME_UI_TEMPLATES).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onerror = tx.onabort = () => j(tx.error || new Error('刪除面板失敗（資料庫交易中止）'));
+                } catch(e) { j(e); }
+            });
+        },
+        saveVNTagTemplate: async function(tagData) {
+            if (!tagData.id) {
+                tagData.id = 'vn_tag_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+            }
+            tagData.isVNTag = true;
+            return this.saveUITemplate(tagData);
+        },
+        getAllVNTagTemplates: async function() {
+            const allTpls = await this.getAllUITemplates();
+            return allTpls.filter(t => t.regexString || t.isBlock || t.isVNTag);
+        }
+    });
+
+    // === 🔥 V23：狀態資料庫（state_data）===
+    // key = chatId，value = { id, schema, patches, current, timestamp }
+    // 配合 state_schema.js (Stage 1 生 schema) + state_runtime.js (Stage 2 抽取 + injectPrompts)
+    Object.assign(win.OS_DB, {
+        saveStateData: async function(chatId, data) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    // 整份照存：base（修剪／深度整理折進去的舊值）、patchFmt 等欄位也要留，否則回溯時基準是空的
+                    const entry = {
+                        ...data,
+                        id: chatId,
+                        schema: data.schema || null,       // Stage 1 生成的欄位定義
+                        patches: data.patches || [],       // 身分制時序陣列 [{id, updates}]，id＝正文裡的 <!--avs:id-->
+                        current: data.current || {},       // patches 累積後的當下狀態
+                        npcLedger: data.npcLedger || null,     // 📇 NPC 登場記帳（npc_dossier.js）
+                        npcDossiers: data.npcDossiers || null, // 📇 NPC 長期人物檔案（npc_dossier.js）
+                        director: data.director || null,       // 🎬 導演稿（state_runtime 導演模式：patches=[{id,text}]）
+                        timestamp: Date.now()
+                    };
+                    const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_STATE_DATA).put(entry);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        getStateData: async function(chatId) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_STATE_DATA, 'readonly').objectStore(STORE_NAME_STATE_DATA).get(chatId);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        deleteStateData: async function(chatId) {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_STATE_DATA, 'readwrite');
+                    tx.objectStore(STORE_NAME_STATE_DATA).delete(chatId);
+                    tx.oncomplete = () => resolve(true);
+                    tx.onabort = () => reject(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        },
+        getAllStateData: async function() {
+            const db = await this.init();
+            return new Promise((resolve, reject) => {
+                try {
+                    const req = db.transaction(STORE_NAME_STATE_DATA, 'readonly').objectStore(STORE_NAME_STATE_DATA).getAll();
+                    req.onsuccess = () => resolve(req.result || []);
+                    req.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        }
+    });
+
+    // === 🔥 V25：手機殼 app 商店——已安裝的功能型 HTML app ===
+    // rec: { id, name, emoji, iconUrl, html, source:'workshop'|'import', createdAt }
+    Object.assign(win.OS_DB, {
+        savePhoneApp: async function(rec) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    if (!rec.id) rec.id = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    if (!rec.createdAt) rec.createdAt = Date.now();
+                    const tx = db.transaction(STORE_NAME_PHONE_APPS, 'readwrite');
+                    tx.objectStore(STORE_NAME_PHONE_APPS).put(rec);
+                    tx.oncomplete = () => r(rec.id);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getPhoneApp: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_PHONE_APPS, 'readonly').objectStore(STORE_NAME_PHONE_APPS).get(id);
+                    req.onsuccess = () => r(req.result || null);
+                    req.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        getAllPhoneApps: async function() {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const req = db.transaction(STORE_NAME_PHONE_APPS, 'readonly').objectStore(STORE_NAME_PHONE_APPS).getAll();
+                    req.onsuccess = () => r((req.result || []).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)));
+                    req.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        },
+        deletePhoneApp: async function(id) {
+            const db = await this.init();
+            return new Promise((r, j) => {
+                try {
+                    const tx = db.transaction(STORE_NAME_PHONE_APPS, 'readwrite');
+                    tx.objectStore(STORE_NAME_PHONE_APPS).delete(id);
+                    tx.oncomplete = () => r(true);
+                    tx.onabort = () => j(tx.error || new Error('資料庫寫入中止')); // 空間滿／升版時交易是中止收場，只接 oncomplete 會永遠等
+                    tx.onerror = (e) => j(e.target.error);
+                } catch(e) { j(e); }
+            });
+        }
+    });
+
+    Object.assign(win.OS_DB, {
+        factoryReset: async function() {
+            return new Promise((resolve, reject) => {
+                try {
+                    if (dbInstance) {
+                        dbInstance.close();
+                        dbInstance = null;
+                    }
+                    const req = indexedDB.deleteDatabase(DB_NAME);
+                    req.onsuccess = () => {
+                        console.log('[OS_DB] 💥 資料庫已徹底格式化刪除 (Factory Reset)');
+                        resolve(true);
+                    };
+                    req.onerror = (e) => reject(e.target.error);
+                } catch(e) { reject(e); }
+            });
+        }
+    });
+
+    win.WX_DB = win.OS_DB;
+})();

@@ -1,0 +1,235 @@
+/**
+ * Aurelia Service Worker v3
+ * ─────────────────────────────────────────────────────────────
+ * 策略說明：
+ *   HTML / JS / CSS  → Network-First（永遠先抓最新版，離線才用快取）
+ *   圖片 / 字型      → Cache-First  （不常變動，快取優先加快速度）
+ *
+ * ⚠️ 每次部署只需把下面 CACHE_VERSION 加 1，iOS 就會強制更新！
+ * ─────────────────────────────────────────────────────────────
+ */
+
+const CACHE_VERSION = 1292;                        // ← 每次部署 +1
+const CACHE_NAME    = `aurelia-shell-v${CACHE_VERSION}`;
+
+// App Shell 核心資源（用於離線備援）
+const SHELL_ASSETS = [
+    './',
+    './index.html',
+    './aurelia_core.css',
+    './core/void/lobby.css',
+    './core/void/lobby_stage.css',
+    // css/ 模組樣式（從各 JS 抽離後的集中區）
+    //   🚨 index.html 新加 <link> 這裡也要加一列（10-19 對帳補了 13 支：手機殼、應用商城、主題、日誌、VN 特效…）
+    './css/phone_shell.css',
+    './css/app_store.css',
+    './css/lobby_memory.css',
+    './css/os_phone_theme.css',
+    './css/os_control_room.css',
+    './css/os_journal.css',
+    './css/os_story_tools.css',
+    './css/os_exchange.css',
+    './css/os_wg_pack.css',
+    './css/vn_fx.css',
+    './css/vn_battle.css',
+    './css/vn_gallery.css',
+    './css/aurelia_theme.css',
+    './css/os_sys_chrome.css',
+    './css/story_extractor.css',
+    './css/story_entry_wizard.css',
+    './css/html_extractor.css',
+    './css/aurelia_dialog.css',
+    './css/aurelia_tilefx.css',
+    './css/os_dashboard.css',
+    './css/os_keepalive.css',
+    './css/wx_profile.css',
+    './css/wx_notebook.css',
+    './css/wx_takeout.css',
+    './css/wx_theme_pack.css',
+    './css/wx_moments.css',
+    './css/os_sims.css',
+    './css/os_photo_viewer.css',
+    './css/os_char_gallery.css',
+    './css/os_chat_tidy.css',
+    './css/os_settings.css',
+    './css/os_settings_window.css',
+    './css/os_keyrun.css',
+    './css/os_studio.css',
+    './css/os_worldbook.css',
+    './css/os_persona.css',
+    './css/os_prompts.css',
+    './css/os_avs.css',
+    './css/vn_styles.css',
+    './css/vn_end_show.css',
+    './css/vn_core.css',
+    './css/vn_tts_panel.css',
+    './css/qb_core.css',
+    './css/qb_os_404_chaos.css',
+    './css/wx_chat_settings.css',
+    './css/map_core.css',
+    './css/void_achievement.css',
+    './css/os_sn_board.css',
+    './core/aurelia_dialog.js',
+    './core/aurelia_tilefx.js',
+    './core/ui_utilities.js',
+    './core/void_terminal.js',
+    './core/control_center.js',
+    './os_phone/os/os_settings.js',
+    './os_phone/os/os_settings_page.js',
+    './os_phone/os/os_settings_backup.js',
+    './os_phone/os/os_settings_comfyui.js',
+    './os_phone/os/os_settings_voice.js',
+    './os_phone/os/os_settings_window.js',
+    './os_phone/os/os_db.js',
+    './os_phone/os/os_usage.js',
+    './os_phone/os/os_dashboard.js',
+    './os_phone/os/os_api_engine.js',
+    './os_phone/os/os_relay.js',
+    './os_phone/os/os_heartbeat.js',
+    './os_phone/os/os_app_tools.js',
+    './os_phone/os/os_phone_events.js',
+    './os_phone/os/os_keepalive.js',
+    './os_phone/os/os_avs_engine.js',
+    './os_phone/os/os_avs_rules.js',
+    './os_phone/os/os_avs.js',
+    './os_phone/os/os_worldbook.js',
+    './os_phone/os/os_builtin_lore.js',
+    './os_phone/os/os_prompts.js',
+    './os_phone/os/os_vn_rules_data.js',
+    './os_phone/os/os_vn_rules.js',
+    './os_phone/os/os_card_import.js',
+    './os_phone/os/os_card_regex.js',
+    './os_phone/os/phone_system.js',
+    './os_phone/vn_story/vn_styles.js',
+    './os_phone/vn_story/vn_settings.js',
+    './os_phone/vn_story/vn_tts.js',
+    './os_phone/vn_story/vn_tts_panel.js',
+    './os_phone/vn_story/vn_core.js',
+    './os_phone/qb/qb_bookshelf.js',
+];
+
+// ── Install：預快取（直接從網路抓最新版）──────────────────────
+self.addEventListener('install', event => {
+    event.waitUntil(
+        caches.open(CACHE_NAME).then(cache =>
+            Promise.allSettled(
+                SHELL_ASSETS.map(url =>
+                    fetch(url, { cache: 'no-store' })   // 強制繞過 HTTP 快取
+                        .then(res => {
+                            if (res && res.status === 200) cache.put(url, res);
+                        })
+                        .catch(() => {/* 靜默忽略單個失敗 */})
+                )
+            )
+        ).then(() => self.skipWaiting())  // 新 SW 立刻接管，不等舊分頁關閉
+    );
+});
+
+// ── Activate：刪除舊版殼快取，立刻接管所有分頁 ────────────
+// 🚨 只刪自己的 aurelia-shell-*。別的快取不是版本殼（例如 os_voice_input 下載的 250MB 聽寫模型），
+//    全刪的話每次部署使用者都要重新下載一次。
+self.addEventListener('activate', event => {
+    event.waitUntil(
+        caches.keys()
+            .then(keys => Promise.all(
+                keys.filter(k => k.startsWith('aurelia-shell-') && k !== CACHE_NAME).map(k => caches.delete(k))
+            ))
+            .then(() => self.clients.claim())  // 立刻接管，不等重新整理
+    );
+});
+
+// ── Fetch：依資源類型決定策略 ────────────────────────────────
+self.addEventListener('fetch', event => {
+    const url = new URL(event.request.url);
+
+    // 跳過跨域（API / CDN 字型 / catbox 圖片）
+    if (url.origin !== self.location.origin) return;
+
+    const path = url.pathname;
+    const isCodeFile = /\.(js|css|html)(\?.*)?$/.test(path) || path === '/' || path.endsWith('/');
+
+    if (isCodeFile) {
+        // ── Network-First：HTML / JS / CSS ──
+        // 每次都先抓網路最新版，成功後更新快取；
+        // 離線或網路失敗才回落到快取，確保 PWA 仍可使用。
+        event.respondWith(
+            fetch(event.request, { cache: 'no-store' })
+                .then(response => {
+                    if (response && response.status === 200) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+                    }
+                    return response;
+                })
+                .catch(() => caches.match(event.request))
+        );
+    } else {
+        // ── Cache-First：圖片 / 字型等靜態資源 ──
+        // 快取命中就直接返回（快），沒有再去抓並存入快取。
+        event.respondWith(
+            caches.match(event.request).then(cached => {
+                if (cached) return cached;
+                return fetch(event.request).then(response => {
+                    if (response && response.status === 200) {
+                        const clone = response.clone();
+                        caches.open(CACHE_NAME).then(c => c.put(event.request, clone));
+                    }
+                    return response;
+                }).catch(() => cached); // 完全離線時的最後保底
+            })
+        );
+    }
+});
+
+// ─────────────────────────────────────────────────────────────
+// 推播：丹醒來寫紙條時叮一下
+// 橫幅能顯示多少字是 iOS 決定的，這裡不強求；重點是點下去要落回自己的前端，
+// 直接開到該看的那一頁（payload 的 url），而不是丟進別人的 app。
+// ─────────────────────────────────────────────────────────────
+const PUSH_ICON = 'https://files.catbox.moe/l5hl69.png';
+
+self.addEventListener('push', event => {
+    let data = {};
+    try {
+        data = event.data ? event.data.json() : {};
+    } catch (_) {
+        // 不是 JSON 就當成純文字
+        data = { body: event.data ? event.data.text() : '' };
+    }
+    const title = data.title || '奧瑞亞';
+    event.waitUntil(
+        self.registration.showNotification(title, {
+            body: data.body || '',
+            icon: PUSH_ICON,
+            badge: PUSH_ICON,
+            tag: data.tag || 'aurelia',
+            renotify: true,
+            data: { url: data.url || './' },
+        })
+    );
+});
+
+self.addEventListener('notificationclick', event => {
+    event.notification.close();
+    const target = (event.notification.data && event.notification.data.url) || './';
+    event.waitUntil((async () => {
+        const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+        // 已經開著就直接帶過去，不要每次都開新視窗
+        let abs = new URL(target, self.registration.scope).href;
+        // 一律落在自己家：網址不在這個 PWA 底下（舊通知帶著舊家 GitHub Pages 的絕對網址）就開自己的首頁，
+        //   不然 iOS 會把它丟去瀏覽器開別人家（10-07：通知點開的不是主畫面那個 PWA，而是在手機瀏覽器開了一個新的）。
+        //   送的那邊（cc-bridge push.py）也改成相對網址了。
+        if (abs.indexOf(self.registration.scope) !== 0) abs = self.registration.scope;
+        for (const w of wins) {
+            try {
+                await w.focus();
+                // 已經停在同一頁就只聚焦：再 navigate 一次等於整個 PWA 重載，
+                // 托管跑完的通知每次都重載一遍會讓使用者等白畫面（回到前台本來就會自己收結果）
+                const same = w.url && (w.url === abs || w.url.split('#')[0] === abs.split('#')[0]);
+                if (!same && 'navigate' in w) await w.navigate(abs);
+                return;
+            } catch (_) {}
+        }
+        if (self.clients.openWindow) await self.clients.openWindow(abs);
+    })());
+});

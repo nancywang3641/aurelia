@@ -1,0 +1,320 @@
+// ----------------------------------------------------------------
+// [手機] os_heartbeat.js —— 角色主動找她（心跳）
+// 職責：每間聊天室各自設定「他會不會主動找我、多久一次、機率多少」，
+//       時間到就讓那個人自己開口，不是等她先講話。
+//   ・手機開著：這裡每分鐘掃一次，到點就生一則，直接變成未讀訊息。
+//   ・手機關著／鎖屏：她離開前把「等一下該誰開口」連同要送的那一包
+//     預約到托管伺服器（os_relay.js），到點伺服器自己跑完，
+//     **把生出來的那句話直接推到橫幅上**（只寫「某某找你」太乾）。
+//     一回到 app 就把還沒跑的預約整批取消重排——那些是拿舊情況排的。
+// 兩道門檻（抄 OVO，缺一不可）：距上次他主動夠久、而且距最後一則訊息也夠久。
+//   第二道才是「你剛聊完他不會馬上插話」。過了門檻再擲一次機率，沒中就等下一輪。
+// 設定存在那間聊天室自己的資料上（wx_chat_settings 的「他會主動找我」）：
+//   chat.hbOn（開關）、chat.hbMins（多久一次，分鐘）、chat.hbChance（機率 %）
+//   chat.hbLast（上次他主動的時間）、chat.hbAhead（離開時預約了哪幾則，回來取消後拿它把 hbLast 退回來）
+// 對外：OS_HEARTBEAT.tickNow() / scheduleAhead() / clearAhead() / defaults()
+// ----------------------------------------------------------------
+(function () {
+    const win = window.parent || window;
+    const TICK_MS = 60 * 1000;
+    const DEF = { mins: 180, chance: 60 };     // 沒設過的聊天室：三小時、六成
+    const AHEAD_HOURS = 12;                    // 離開前最多排未來幾小時
+    const PER_CHAT_MAX = 6;                    // 同一個人一次最多先排幾則（10 分鐘一次的話＝一小時份）
+    const AHEAD_MAX = 3;                       // 一次最多排幾個人（省額度、也省她被連環叫）
+    const KIND = 'heartbeat';
+    const RE_TAIL_SLASH = new RegExp(String.fromCharCode(47) + '$');
+
+    function _chats() {
+        try { return (win.wxApp && win.wxApp.GLOBAL_CHATS) || {}; } catch (e) { return {}; }
+    }
+    function cfgOf(chat) {
+        const mins = parseInt(chat && chat.hbMins, 10);
+        const chance = parseInt(chat && chat.hbChance, 10);
+        return {
+            on: !!(chat && chat.hbOn),
+            mins: (isFinite(mins) && mins > 0) ? mins : DEF.mins,
+            chance: (isFinite(chance) && chance >= 0) ? Math.min(100, chance) : DEF.chance
+        };
+    }
+    // 這間最後一則訊息的時間（她打的有 timestamp；劇情同步進來的沒有，就用同步時間退一步）
+    function lastTalkAt(chat) {
+        const ms = (chat && chat.messages) || [];
+        for (let i = ms.length - 1; i >= 0; i--) {
+            const t = ms[i] && ms[i].timestamp;
+            if (t) return t;
+        }
+        return chat && chat.hbLast ? chat.hbLast : 0;
+    }
+    // 到點了沒（兩道門檻）。回 {due, chat, gapMs}
+    // 🔒 不是好友的（她拉黑他、或他刪過／拉黑過她）照樣會醒來，只是醒來只能送好友申請；申請還掛著就不再來
+    function _notFriends(chat) { return !!(chat && (chat.wxBlocked || chat.wxBlockedByMe)); }
+    function _reqPending(chat) { return !!(chat && (chat.wxFriendReqIn || chat.wxFriendReqOut)); }
+    function dueOf(chat, now) {
+        const c = cfgOf(chat);
+        if (!c.on || !chat || chat.isGroup || chat.wxRemoved) return null;
+        if (_notFriends(chat) && _reqPending(chat)) return null;
+        const gap = c.mins * 60 * 1000;
+        const last = chat.hbLast || 0;
+        const talk = lastTalkAt(chat);
+        if (now - last < gap) return null;      // 距上次他主動不夠久
+        if (talk && now - talk < gap) return null;   // 距最後一則訊息不夠久（剛聊完不插話）
+        return { chat: chat, gap: gap, chance: c.chance, at: Math.max(last, talk) + gap };
+    }
+    function roll(chance) { return Math.random() * 100 < chance; }
+
+    // 要送出去的那一包：跟她自己按送出時同一條路（buildContext），多一段「現在是你主動開口」
+    //   opts.tools：這間有勾工具就把工具說明與查到的結果也帶上（10-01：心跳跟聊天室一樣照勾選）。
+    //     只有手機開著、當場跑的那種才帶（fire）；預約到伺服器的（scheduleAhead）一次跑完、中途停不下來查，不帶。
+    //   opts.fromTool：剛才那次叫了工具、結果回來了，接著把原本想做的事做完
+    function _hasTools(chat) { return !!(chat && Array.isArray(chat.tools) && chat.tools.length && win.WX_TOOLS); }
+    async function buildPayload(chat, nth, opts) {
+        opts = opts || {};
+        const app = win.wxApp;
+        if (!app || !win.WX_API || !win.OS_API) return null;
+        const prev = app.GLOBAL_ACTIVE_ID;
+        let messages = null;
+        try {
+            app.GLOBAL_ACTIVE_ID = chat.id;
+            messages = await win.WX_API.buildContext(null);
+        } catch (e) {
+            console.warn('[心跳] 組上下文失敗:', (e && e.message) || e);
+        } finally { app.GLOBAL_ACTIVE_ID = prev; }
+        if (!Array.isArray(messages) || !messages.length) return null;
+        // 🎯 她傳了、他一直沒回的那幾則：buildContext 現在把它們留給呼叫端排在最後面
+        //    （見 OS_API.wxPendingTurn），心跳這條要自己接回來 —— 不然他主動找她的時候，
+        //    完全不知道她上次說了什麼。導言換成心跳自己的講法，免得跟下面那句「現在是你自己的時間」打架。
+        let hasPending = false;
+        try {
+            const _me = (win.WX_ME && win.WX_ME.name && win.WX_ME.name()) || (win.OS_API.getGlobalUserName && win.OS_API.getGlobalUserName()) || '';
+            const _pend = win.OS_API.wxPendingTurn
+                ? await win.OS_API.wxPendingTurn(chat.id, _me, { lead: '【' + (_me || '她') + ' 傳了這幾則，你一直沒回】\n下面是還沒回過的，上面那些你都回過了。' })
+                : [];
+            if (_pend && _pend.length) { hasPending = true; _pend.forEach(function (m) { messages.push(m); }); }
+        } catch (e) { console.warn('[心跳] 沒回的訊息接不回來（不影響送出）:', (e && e.message) || e); }
+        // 🧰 工具：跟聊天室回話同一套（WX_TOOLS.promptBlock／resultsBlock），放在最後那句「現在是你自己的時間」前面
+        if (opts.tools && _hasTools(chat)) {
+            try {
+                const T = win.WX_TOOLS;
+                await Promise.race([T.prepare(chat), new Promise(function (r) { setTimeout(r, 8000); })]);
+                const tp = T.promptBlock(chat, chat.name); if (tp) messages.push({ role: 'system', content: tp });
+                const tr = T.resultsBlock(chat); if (tr) messages.push({ role: 'system', content: tr });
+            } catch (e) { console.warn('[心跳] 工具說明接不上（照常送出）:', (e && e.message) || e); }
+        }
+        // ⏰ 「上一次講話多久前」是現實時間 —— 跟著這一間的時間感知開關走（聊天設置）。
+        //   關著就一個字都不提：她跑去吃飯、或是在跑團，不該回來被數落隔了幾小時。
+        const idle = (chat && chat.timeAware && lastTalkAt(chat)) ? Math.round((Date.now() - lastTalkAt(chat)) / 3600000) : 0;
+        if (_notFriends(chat)) {
+            // 他拉黑她（她沒拉黑他）：拉黑的人說了算，想通就自己移出黑名單，不用申請
+            const _heBlocks = chat.wxBlocked && chat.wxBlockKind === 'blocked' && !chat.wxBlockedByMe;
+            messages.push({
+                role: 'system',
+                content: '【現在是你自己的時間，不是在回覆】\n'
+                    + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
+                    + (_heBlocks
+                        ? '你把對方拉黑了（上面有寫是怎麼回事）。想原諒就寫 <friend_unblock/>，要的話接著在 <chat> 裡傳訊息；還不想就只回 <moment_skip/>。'
+                        : '你們現在不是微信好友（上面有寫是怎麼回事），你傳不了訊息。想重新當朋友就寫 <friend_request>想說的附言</friend_request>；還不想就只回 <moment_skip/>。')
+                    + '照你的個性和你們現在的關係決定。不要提到這是安排好的。'
+            });
+            return messages;
+        }
+        messages.push({
+            role: 'system',
+            content: (opts.fromTool ? '【你剛才用工具查的結果回來了，在上面】接著把你原本想做的事做完，不要再查同一件事。\n' : '')
+                + (hasPending
+                    ? '【現在是你自己的時間】\n她上面那幾則你還沒回：想回就回，不想回也可以做別的。\n'
+                    : '【現在是你自己的時間，不是在回覆她】\n')
+                + (idle ? '你們上一次講話大約是 ' + idle + ' 小時前。\n' : '')
+                + (((nth || 0) > 0) ? '你剛剛已經找過她，她還沒有回。又過了一陣子，別重複剛才做過的事。\n' : '')
+                + '這段時間你可以傳訊息給她、發朋友圈、去朋友圈按讚或留言，做哪幾件、做不做，照你的個性和你現在在做的事決定。'
+                + '傳訊息就寫一到三則短訊息；朋友圈照上面朋友圈那段的寫法。什麼都不想做，就只回 <moment_skip/>。'
+                + '不要提到這是安排好的，也不要問她是不是在等你。'
+        });
+        return messages;
+    }
+
+    // 通知上那句（有生出聊天行時伺服器會用聊天行蓋掉；只有標籤時就推這句）
+    function notifyBody(chat) {
+        if (chat.wxBlocked && chat.wxBlockKind === 'blocked' && !chat.wxBlockedByMe) return (chat.name || '對方') + ' 找你了';
+        return (chat.name || '對方') + (_notFriends(chat) ? ' 請求添加你為朋友' : ' 在朋友圈有新動態');
+    }
+
+    // 手機開著時：真的生一則出來（走托管或手機自己跑都行，交給 WX_API.chat 決定）
+    async function fire(chat, fromTool) {
+        const app = win.wxApp;
+        if (!app) return false;
+        // 這一輪是心跳：叫了工具、查完後由 wx_core 的 _afterTools 看這個記號接著叫 followUp（她不在這間也接著做完）
+        if (!fromTool) chat._toolChain = 0;
+        const tools = _hasTools(chat);
+        if (tools) chat._hbTools = Date.now(); else delete chat._hbTools;
+        const messages = await buildPayload(chat, 0, { tools: tools, fromTool: !!fromTool });
+        if (!messages) return false;
+        chat.hbLast = Date.now();
+        let apiConfig = {};
+        try { apiConfig = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}'); } catch (e) {}
+        try { const S = win.OS_SETTINGS; if (S) { const b = S.getConfigFor ? S.getConfigFor('heartbeat') : (S.getConfig && S.getConfig()); if (b) apiConfig = Object.assign({}, b, apiConfig); } } catch (e) {}
+        console.log('[心跳] ' + (chat.name || chat.id) + ' 要主動找她了');
+        return await new Promise(function (resolve) {
+            win.WX_API.chat(messages, apiConfig, null,
+                function (text) {
+                    win.wxApp.applyIncoming(chat, text).then(function () { resolve(true); }, function (e) {
+                        console.warn('[心跳] 回覆收不進聊天室:', (e && e.message) || e);   // 沒接住的話這一輪永遠等不到結束
+                        resolve(false);
+                    });
+                },
+                function (err) { console.warn('[心跳] 生成失敗:', err); resolve(false); },
+                {
+                    task: 'heartbeat',
+                    disableTyping: true,
+                    relayJob: { app: 'wx', kind: KIND, chatId: chat.id, title: chat.name || '',
+                        notify: { title: chat.name || '微信', body: notifyBody(chat), useResult: true, url: './', tag: 'hb-' + chat.id } },
+                    onQueued: function () { resolve(true); }
+                });
+        });
+    }
+
+    // 手機開著時的掃描
+    async function tickNow() {
+        const chats = _chats();
+        const now = Date.now();
+        for (const id in chats) {
+            const d = dueOf(chats[id], now);
+            if (!d) continue;
+            if (!roll(d.chance)) { chats[id].hbLast = now; continue; }   // 沒中：這一輪跳過，重新計時
+            await fire(chats[id]);
+            // 🚨 存現在那一份：等回覆的時候使用者關掉又打開聊天 app，GLOBAL_CHATS 換成新讀的一份，回覆放在那份上（wx_core _liveCopy）；
+            //    存手上這份舊的會把剛收到的回覆蓋掉（10-01 測心跳時踩到：回覆冒出來又不見）
+            try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(id, _chats()[id] || chats[id]); } catch (e) {}
+            break;   // 一次只讓一個人開口
+        }
+    }
+
+    // 她要離開了：把接下來該開口的人連同那一包預約到伺服器
+    async function scheduleAhead() {
+        const R = win.OS_RELAY;
+        if (!R || !R.enabled()) return 0;
+        const chats = _chats();
+        const now = Date.now();
+        const cands = [];
+        for (const id in chats) {
+            const chat = chats[id];
+            const c = cfgOf(chat);
+            if (!c.on || chat.isGroup || chat.wxRemoved) continue;
+            if (_notFriends(chat) && _reqPending(chat)) continue;
+            const gap = c.mins * 60 * 1000;
+            const at = Math.max(chat.hbLast || 0, lastTalkAt(chat)) + gap;
+            if (at > now + AHEAD_HOURS * 3600 * 1000) continue;          // 太遠的不排
+            if (!roll(c.chance)) continue;                                // 機率在排的時候就擲
+            cands.push({ chat: chat, at: Math.max(at, now + 60 * 1000) });
+        }
+        cands.sort(function (a, b) { return a.at - b.at; });
+        let n = 0;
+        for (const cd of cands.slice(0, AHEAD_MAX)) {
+            let apiConfig = {};
+            try { apiConfig = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}'); } catch (e) {}
+            try { const S = win.OS_SETTINGS; if (S) { const b = S.getConfigFor ? S.getConfigFor('heartbeat') : (S.getConfig && S.getConfig()); if (b) apiConfig = Object.assign({}, b, apiConfig); } } catch (e) {}
+            if (!apiConfig.url || !apiConfig.key) continue;               // 跟著酒館的沒有 key 可以交給伺服器
+            let url = String(apiConfig.url).replace(RE_TAIL_SLASH, '');
+            if (!url.includes('/chat/completions')) url += (url.endsWith('/v1') ? '' : '/v1') + '/chat/completions';
+
+            // 一次排好接下來幾則，不是只排下一則。
+            // 🚨 以前只排一則：使用者一直待在背景，那個人就只來過一次再也沒動靜。
+            //    排到 AHEAD_HOURS 為止、每人最多 PER_CHAT_MAX 則，每一則各擲一次機率。
+            const gapMs = cfgOf(cd.chat).mins * 60 * 1000;
+            const limit = now + AHEAD_HOURS * 3600 * 1000;
+            let at = cd.at, k = 0;
+            // 不是好友的一次只排一則（排好幾則就是連送好幾次好友申請）
+            const perMax = _notFriends(cd.chat) ? 1 : PER_CHAT_MAX;
+            const prevLast = cd.chat.hbLast || 0, ats = [];
+            while (at <= limit && k < perMax) {
+                if (k > 0 && !roll(cfgOf(cd.chat).chance)) { at += gapMs; k++; continue; }
+                const messages = await buildPayload(cd.chat, k);
+                if (!messages) break;
+                const body = {
+                    model: apiConfig.model, messages: messages, stream: false,
+                    max_tokens: parseInt(apiConfig.maxTokens) || 2048,
+                    temperature: isFinite(parseFloat(apiConfig.temperature)) ? parseFloat(apiConfig.temperature) : 1
+                };
+                try {
+                    await R.submit({
+                        app: 'wx', kind: KIND, chatId: cd.chat.id, title: cd.chat.name || '',
+                        runAt: Math.round(at / 1000),
+                        upstream: { url: url, key: apiConfig.key, body: body },
+                        notify: { title: cd.chat.name || '微信', body: notifyBody(cd.chat), useResult: true, url: './', tag: 'hb-' + cd.chat.id }
+                    });
+                    cd.chat.hbLast = at;   // 排了就當它會發生，免得回來又排一次
+                    ats.push(at);
+                    n++;
+                } catch (e) { console.warn('[心跳] 預約失敗:', (e && e.message) || e); break; }
+                at += gapMs;
+                k++;
+            }
+            // 記下推之前的時間和排了哪幾則：回到 app 取消預約時要退回來（clearAhead）。
+            // 上次的還沒退（中間頁面重開過）就接著記，推之前的時間留最早那個
+            if (ats.length) {
+                const old = cd.chat.hbAhead;
+                cd.chat.hbAhead = { prev: old ? (old.prev || 0) : prevLast, ats: ((old && old.ats) || []).concat(ats) };
+            }
+            try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(cd.chat.id, cd.chat); } catch (e) {}
+        }
+        if (n) console.log('[心跳] 預約了 ' + n + ' 個人在她不在的時候開口');
+        return n;
+    }
+
+    // 回到 app：還沒跑的預約整批取消（那些是拿舊情況排的，等一下離開時會重排）
+    async function clearAhead() {
+        const R = win.OS_RELAY;
+        if (!R || !R.enabled()) return;
+        let ok = false;
+        try {
+            const r = await fetch(R.base() + '/v1/schedule/clear', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + String(R.cfg().token || ''), 'Content-Type': 'application/json' },
+                body: JSON.stringify({ kind: KIND })
+            });
+            ok = r.ok;
+            if (!ok) console.warn('[心跳] 取消預約失敗: HTTP ' + r.status);
+        } catch (e) { console.warn('[心跳] 取消預約失敗:', (e && e.message) || e); }
+        if (!ok) return;   // 沒取消成功的話伺服器那幾則照樣會跑，時間先別退，免得手機這邊又叫一次
+        if (R.dropWaiting) R.dropWaiting(KIND);   // 取消掉的那幾則不會有結果了，手上的待收清單也劃掉
+        await _restoreAhead();
+    }
+
+    // 預約時把 hbLast 推到最後一則預約的時間；取消掉之後要退回來，
+    // 不然回到 app 以後要等那個未來的時間再過一輪才會開口（排了 12 小時就沉默 12 小時以上）。
+    // 已經到點的那幾則伺服器跑過了，算他找過使用者：退到其中最晚那則，沒有就退回推之前的時間
+    async function _restoreAhead() {
+        const chats = _chats();
+        const now = Date.now();
+        for (const id in chats) {
+            const chat = chats[id];
+            const rec = chat && chat.hbAhead;
+            if (!rec) continue;
+            delete chat.hbAhead;
+            if ((chat.hbLast || 0) > now) {
+                let back = rec.prev || 0;
+                (rec.ats || []).forEach(function (t) { if (t <= now && t > back) back = t; });
+                chat.hbLast = back;
+            }
+            try { if (win.WX_DB && win.WX_DB.saveApiChat) await win.WX_DB.saveApiChat(id, chat); } catch (e) {}
+        }
+    }
+
+    let _timer = null;
+    function start() {
+        if (_timer) return;
+        _timer = setInterval(function () { tickNow().catch(function () {}); }, TICK_MS);
+    }
+    try {
+        win.document.addEventListener('visibilitychange', function () {
+            if (win.document.visibilityState === 'hidden') scheduleAhead().catch(function () {});
+            else clearAhead().catch(function () {});
+        });
+    } catch (e) {}
+    setTimeout(start, 8000);
+
+    // 心跳那次叫了工具、結果回來了：接著再叫一次，讓他把原本想做的事做完（wx_core._afterTools 叫）
+    function followUp(chat) { return fire(chat, true); }
+    win.OS_HEARTBEAT = { followUp: followUp, tickNow: tickNow, scheduleAhead: scheduleAhead, clearAhead: clearAhead, cfgOf: cfgOf, dueOf: dueOf, buildPayload: buildPayload, defaults: function () { return Object.assign({}, DEF); } };
+    if (win !== window) window.OS_HEARTBEAT = win.OS_HEARTBEAT;
+    console.log('💓 [心跳] 已載入（角色主動找她）');
+})();

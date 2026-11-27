@@ -1,0 +1,621 @@
+// ----------------------------------------------------------------
+// [手機] os_voice_input.js — 麥克風錄音 → 轉成字
+// 職責：錄一段話、交給選定的「轉字方式」、回傳文字＋情緒＋聲音事件。不畫任何畫面，誰要用誰接。
+//   ① 錄音走 MediaRecorder，錄完回原始音檔 blob（之後要做「泡泡裡是真的聲音」就存它）。
+//   ② 轉字方式是一張表 ENGINES，跟圖片設置的來源一樣可以換（設置 → 通道 → 語音轉文字）；每一種實作 transcribe(blob)。
+//      browser：手機／瀏覽器自己的聽寫（沒選過時手機有就用它）。不用下載，但聲音交給 Apple 或 Google 轉字。
+//        🚨 它只能邊錄邊聽：start() 時一起開、stop() 時把這一段聽到的字綁在那個音檔上，transcribe(blob) 再拿出來。
+//      sensevoice：SenseVoice 模型放進網頁裡跑（sherpa-onnx 的 WebAssembly 版），聲音不離開裝置。
+//   ③ sensevoice 第一次要下載約 250MB（引擎 12MB＋模型 239MB），存進瀏覽器的 Cache Storage，之後不再下載。
+//      下載與推論都在 Worker 裡，不卡畫面。模型是簡體輸出，Worker 裡用 opencc-js 轉台灣繁體。
+//   ④ 引擎檔鎖在 HuggingFace 的固定 commit：官方網頁版把模型打包在 .data 裡，我們把那段打包載入剝掉，
+//      自己把 SenseVoice 模型寫進它的虛擬檔案系統。換 commit 前要重新確認剝除的標記還在。
+// 入口：window.OS_VOICE_INPUT
+//   isSupported() / getConfig() / setConfig({engine}) / engines() 給設置頁列選項 / engineId() 現在實際用哪一種
+//   start({ onPartial }) → stop() 回 { blob, mime, durationSec }；cancel()；level() 目前音量
+//     onPartial(目前聽到的字)：邊講邊給，只有 browser 會叫（輸入框的小麥克風拿來即時填字）
+//   openMic() / closeMic()：一直開著麥克風（講電話），期間 start/stop 都借這一條
+//   prepare(onProgress) 先把目前的轉字方式準備好（sensevoice＝下載＋載入模型）
+//   transcribe(blob, { onProgress, autoPrepare }) 回 { text, lang, emotion, emotionLabel, event, eventLabel, durationSec, engine }
+//   isReady() / isDownloaded() / unload()（放掉記憶體）/ clearCache()（刪掉下載的模型）
+//   用的地方：微信輸入框麥克風的按住說話（wx_core.js holdStart；本機模型沒下載時先開 openVoiceSheet 下載頁）、
+//             電話 app 的「直接說話」（os_dialer.js _vm*）——兩個都跟著設置 → 語音 → 語音轉文字選的方式。
+//             微信「＋ → 語音」是打字寫入的小窗，不經過這裡。
+// ----------------------------------------------------------------
+(function () {
+    const win = window.parent || window;
+    if (win.OS_VOICE_INPUT) return;
+
+    const CFG_KEY = 'os_voice_input_config';
+    const DEFAULTS = { engine: '', language: '' };   // engine 空＝沒選過：手機有自己的聽寫就用它，沒有就用 sensevoice（見 engineId）
+
+    function getConfig() {
+        try { return Object.assign({}, DEFAULTS, JSON.parse(win.localStorage.getItem(CFG_KEY) || '{}')); }
+        catch (e) { return Object.assign({}, DEFAULTS); }
+    }
+    function setConfig(patch) {
+        const prev = getConfig();
+        const next = Object.assign({}, prev, patch || {});
+        if (!win.AUI.lsSet(CFG_KEY, JSON.stringify(next), '語音輸入設定')) return prev;   // 沒存成：轉字方式其實沒換，別去放掉正在用的那個
+        // 換掉本機模型：把它佔的記憶體放掉（下載的檔案留著，換回來不用重下載）
+        if (next.engine !== prev.engine) { const old = ENGINES[prev.engine]; if (old && old.unload) old.unload(); }
+        if (next.language !== prev.language && next.engine === prev.engine) {
+            const e = ENGINES[next.engine];
+            if (e && e.setLanguage) e.setLanguage(next.language).catch((err) => console.warn('[VoiceInput] 換語言失敗', err));
+        }
+        return next;
+    }
+
+    // SenseVoice 回來的標籤長這樣：<|HAPPY|>、<|Laughter|>
+    const EMOTION_LABEL = { HAPPY: '開心', SAD: '難過', ANGRY: '生氣', FEARFUL: '害怕', DISGUSTED: '嫌棄', SURPRISED: '驚訝', NEUTRAL: '', EMO_UNKNOWN: '' };
+    // 事件名寫成「聲音裡有○○」接得起來的名詞
+    const EVENT_LABEL = { Speech: '', BGM: '背景音樂', Applause: '掌聲', Laughter: '笑聲', Cry: '哭聲', Sneeze: '噴嚏聲', Breath: '呼吸聲', Cough: '咳嗽聲' };
+    const bareTag = (s) => String(s || '').replace(/<\||\|>/g, '').trim();
+
+    // ── 錄音 ─────────────────────────────────────────
+    let _rec = null;
+
+    function isSupported() {
+        const md = win.navigator && win.navigator.mediaDevices;
+        return !!(md && md.getUserMedia && win.MediaRecorder && win.WebAssembly && win.Worker);
+    }
+
+    function _pickMime() {
+        const MR = win.MediaRecorder;
+        const list = ['audio/webm;codecs=opus', 'audio/mp4', 'audio/ogg;codecs=opus', 'audio/webm'];
+        for (const m of list) { try { if (MR.isTypeSupported && MR.isTypeSupported(m)) return m; } catch (e) {} }
+        return '';
+    }
+
+    function _stopStream(stream, meter) {
+        try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+        try { if (meter) meter.ctx.close(); } catch (e) {}
+    }
+    function _release(r) {
+        if (r.held) return;   // 借用 openMic 開著的麥克風：錄完不關，等 closeMic
+        _stopStream(r.stream, r.meter);
+    }
+
+    function _getStream() {
+        return win.navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+        });
+    }
+    // 音量表：畫面看「有在收音」、通話判斷「講完了沒」都靠它；拿不到就是 0，不影響錄音
+    function _makeMeter(stream) {
+        try {
+            const AC = win.AudioContext || win.webkitAudioContext;
+            if (!AC) return null;
+            const ctx = new AC();
+            const an = ctx.createAnalyser();
+            an.fftSize = 1024;
+            ctx.createMediaStreamSource(stream).connect(an);
+            if (ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+            return { ctx, an, buf: new Float32Array(an.fftSize) };
+        } catch (e) { return null; }
+    }
+
+    // 🎙 一直開著的麥克風（講電話用）：整通電話只要一次權限，一句一句的錄音都借這一條，
+    //    不然每輪都重新要麥克風，iPhone 可能每一輪都跳權限框、狀態列的收音燈也一直閃
+    let _held = null;
+    function _heldLive() {
+        try { return !!(_held && _held.stream.getAudioTracks().some((t) => t.readyState === 'live')); } catch (e) { return false; }
+    }
+    async function openMic() {
+        if (_heldLive()) return;
+        if (_held) { _stopStream(_held.stream, _held.meter); _held = null; }
+        if (!isSupported()) throw new Error('這個瀏覽器不能錄音');
+        const stream = await _getStream();
+        _held = { stream, meter: _makeMeter(stream) };
+    }
+    function closeMic() {
+        cancel();
+        const h = _held;
+        _held = null;
+        if (h) _stopStream(h.stream, h.meter);
+    }
+
+    async function start(opts) {
+        if (_rec) throw new Error('已經在錄了');
+        if (!isSupported()) throw new Error('這個瀏覽器不能錄音');
+        let stream, meter, held = false;
+        if (_held && !_heldLive()) await openMic();   // 開著的那條被系統斷掉了（來電、切 app），重接一次
+        if (_held) { stream = _held.stream; meter = _held.meter; held = true; }
+        else { stream = await _getStream(); meter = _makeMeter(stream); }
+        const mime = _pickMime();
+        const mr = new win.MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+        const chunks = [];
+        mr.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+        mr.start();
+        _rec = { stream, mr, chunks, t0: Date.now(), mime: mr.mimeType || mime, meter, held };
+        // 邊錄邊聽的轉字方式：跟錄音同一刻開始聽
+        if (_engine().live) _rec.live = _liveStart(opts && opts.onPartial);
+    }
+
+    // 目前的音量（0～1 的 RMS，說話大約落在 0.02～0.2）；錄音中、或 openMic 開著時都讀得到
+    function level() {
+        const m = (_rec && _rec.meter) || (_held && _held.meter);
+        if (!m) return 0;
+        try {
+            m.an.getFloatTimeDomainData(m.buf);
+            let s = 0;
+            for (let i = 0; i < m.buf.length; i++) s += m.buf[i] * m.buf[i];
+            return Math.sqrt(s / m.buf.length);
+        } catch (e) { return 0; }
+    }
+
+    function stop() {
+        return new Promise((resolve, reject) => {
+            const r = _rec;
+            if (!r) { reject(new Error('沒有在錄音')); return; }
+            _rec = null;
+            const liveDone = r.live ? _liveFinish(r.live) : null;   // 請聽寫把最後一句收尾，transcribe 時再等它
+            r.mr.onstop = () => {
+                _release(r);
+                const blob = new win.Blob(r.chunks, { type: r.mime || 'audio/webm' });
+                if (liveDone) _liveOf.set(blob, liveDone);
+                resolve({ blob, mime: blob.type, durationSec: (Date.now() - r.t0) / 1000 });
+            };
+            r.mr.onerror = (e) => { _release(r); reject((e && e.error) || new Error('錄音失敗')); };
+            try { r.mr.stop(); } catch (e) { _release(r); reject(e); }
+        });
+    }
+
+    function cancel() {
+        const r = _rec;
+        _rec = null;
+        if (!r) return;
+        if (r.live) _liveAbort(r.live);
+        try { r.mr.onstop = null; r.mr.stop(); } catch (e) {}
+        _release(r);
+    }
+
+    // 任何瀏覽器錄得出來的格式都解成單聲道 PCM；取樣率照原樣交出去，引擎自己會轉成 16k
+    async function _decodeToMono(blob) {
+        const buf = await blob.arrayBuffer();
+        const OAC = win.OfflineAudioContext || win.webkitOfflineAudioContext;
+        if (!OAC) throw new Error('這個瀏覽器解不開音檔');
+        const ctx = new OAC(1, 1, 44100);
+        const ab = await new Promise((resolve, reject) => {
+            const p = ctx.decodeAudioData(buf, resolve, reject);
+            if (p && p.then) p.then(resolve, reject);
+        });
+        const n = ab.length;
+        const ch = ab.numberOfChannels;
+        let samples;
+        if (ch === 1) {
+            samples = new Float32Array(ab.getChannelData(0));
+        } else {
+            samples = new Float32Array(n);
+            for (let c = 0; c < ch; c++) {
+                const d = ab.getChannelData(c);
+                for (let i = 0; i < n; i++) samples[i] += d[i] / ch;
+            }
+        }
+        return { samples, sampleRate: ab.sampleRate, durationSec: ab.duration };
+    }
+
+    // ── SenseVoice（網頁裡跑）────────────────────────────
+    const SV = {
+        ENGINE_BASE: 'https://huggingface.co/spaces/k2-fsa/web-assembly-vad-asr-sherpa-onnx-zh-zipformer-ctc/resolve/9d5fc71d88ab1222ed1af2274fb194592af48455/',
+        // 🚨 用 2024-07-17 這包（FunAudioLLM 原版 SenseVoice）。同作者 2025-09-09 那包是粵語微調版，國語會被聽成粵語、吃掉字
+        MODEL_BASE: 'https://huggingface.co/csukuangfj/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17/resolve/2365baeacb507f821a0c8120fcee3d484dba7a07/',
+        OPENCC: 'https://cdn.jsdelivr.net/npm/opencc-js@1.4.2/dist/umd/cn2t.js',
+        CACHE: 'aurelia-voice-input-v2',
+        // 各檔大小：伺服器沒給長度時拿來算總進度
+        SIZES: { main: 95308, asr: 47391, wasm: 11722172, tokens: 315894, model: 239233841 },
+    };
+
+    // 這個函式整支被轉成字串丟進 Worker，裡面不能引用外面的任何變數
+    function _svWorkerMain() {
+        let recognizer = null;
+        let toTw = null;
+        let cfg = null;
+
+        const post = (m) => self.postMessage(m);
+
+        // language：'' 自動判斷；'zh' 國語、'yue' 粵語、'en'、'ja'、'ko'
+        function recognizerConfig(language) {
+            return {
+                featConfig: { sampleRate: 16000, featureDim: 80 },
+                modelConfig: {
+                    senseVoice: { model: './sense-voice.onnx', language: language || '', useInverseTextNormalization: 1 },
+                    tokens: './tokens.txt',
+                    numThreads: 1,
+                    provider: 'cpu',
+                    debug: 0,
+                },
+            };
+        }
+
+        async function openCache() {
+            try { return self.caches ? await caches.open(cfg.CACHE) : null; } catch (e) { return null; }
+        }
+
+        // 有快取直接拿；沒有就邊下載邊存進快取（串流寫入，不在記憶體裡多留一份）
+        async function getFile(key, url, asText) {
+            const cache = await openCache();
+            const expect = cfg.SIZES[key] || 0;
+            if (cache) {
+                const hit = await cache.match(url);
+                if (hit) {
+                    post({ type: 'progress', key, loaded: expect, total: expect, cached: true });
+                    return asText ? hit.text() : hit.arrayBuffer();
+                }
+            }
+            const res = await fetch(url);
+            if (!res.ok) throw new Error('下載失敗（' + key + '，HTTP ' + res.status + '）');
+            const total = Number(res.headers.get('content-length')) || expect;
+            let loaded = 0;
+            let last = 0;
+            const counter = new TransformStream({
+                transform(chunk, ctrl) {
+                    loaded += chunk.byteLength;
+                    const now = Date.now();
+                    if (now - last > 250) { last = now; post({ type: 'progress', key, loaded, total }); }
+                    ctrl.enqueue(chunk);
+                },
+            });
+            const counted = new Response(res.body.pipeThrough(counter), { headers: { 'content-type': res.headers.get('content-type') || '' } });
+            if (cache) {
+                try {
+                    await cache.put(url, counted);
+                    post({ type: 'progress', key, loaded: total, total });
+                    const back = await cache.match(url);
+                    if (back) return asText ? back.text() : back.arrayBuffer();
+                } catch (e) {
+                    post({ type: 'warn', msg: '存不進快取，這次直接用：' + (e && e.message) });
+                    const again = await fetch(url);
+                    return asText ? again.text() : again.arrayBuffer();
+                }
+            }
+            const out = asText ? await counted.text() : await counted.arrayBuffer();
+            post({ type: 'progress', key, loaded: total, total });
+            return out;
+        }
+
+        function runScript(src) {
+            const url = URL.createObjectURL(new Blob([src], { type: 'text/javascript' }));
+            try { importScripts(url); } finally { URL.revokeObjectURL(url); }
+        }
+
+        async function init(c) {
+            cfg = c;
+            const [mainSrc, asrSrc, wasm] = await Promise.all([
+                getFile('main', cfg.ENGINE_BASE + 'sherpa-onnx-wasm-main-vad-asr.js', true),
+                getFile('asr', cfg.ENGINE_BASE + 'sherpa-onnx-asr.js', true),
+                getFile('wasm', cfg.ENGINE_BASE + 'sherpa-onnx-wasm-main-vad-asr.wasm', false),
+            ]);
+
+            // 官方版會去抓一包 360MB 的 .data（裡面是別的模型），剝掉那段，模型我們自己放
+            const a = mainSrc.indexOf('(function(){if(Module["ENVIRONMENT_IS_PTHREAD"]');
+            const b0 = a >= 0 ? mainSrc.indexOf('"remote_package_size"', a) : -1;
+            const b = b0 >= 0 ? mainSrc.indexOf('})();', b0) : -1;
+            if (a < 0 || b < 0) throw new Error('語音引擎的檔案格式變了，載不起來');
+            const engineSrc = mainSrc.slice(0, a) + mainSrc.slice(b + 5);
+
+            await new Promise((resolve, reject) => {
+                self.Module = {
+                    wasmBinary: wasm,
+                    locateFile: (p) => p,
+                    print: () => {},
+                    printErr: (t) => { if (/error/i.test(String(t))) post({ type: 'warn', msg: String(t) }); },
+                    onRuntimeInitialized: resolve,
+                    onAbort: (why) => reject(new Error('語音引擎啟動失敗：' + why)),
+                };
+                runScript(engineSrc);
+            });
+            runScript(asrSrc + '\n;self.__SOX_OfflineRecognizer = OfflineRecognizer;');
+
+            const tokens = await getFile('tokens', cfg.MODEL_BASE + 'tokens.txt', false);
+            const model = await getFile('model', cfg.MODEL_BASE + 'model.int8.onnx', false);
+            post({ type: 'stage', stage: 'loading' });
+
+            const M = self.Module;
+            M.FS_createDataFile('/', 'tokens.txt', new Uint8Array(tokens), true, false, true);
+            M.FS_createDataFile('/', 'sense-voice.onnx', new Uint8Array(model), true, false, true);
+            recognizer = new self.__SOX_OfflineRecognizer(recognizerConfig(cfg.language), M);
+            // 模型已經讀進引擎了，檔案系統那份放掉
+            try { M.FS_unlink('/sense-voice.onnx'); } catch (e) {}
+            if (!recognizer.handle) throw new Error('聽寫模型載入失敗');
+
+            try {
+                importScripts(cfg.OPENCC);
+                toTw = self.OpenCC.Converter({ from: 'cn', to: 'twp' });
+            } catch (e) {
+                post({ type: 'warn', msg: '簡轉繁載不到，這次先給簡體：' + (e && e.message) });
+            }
+        }
+
+        function transcribe(samples, sampleRate) {
+            const stream = recognizer.createStream();
+            try {
+                stream.acceptWaveform(sampleRate, samples);
+                recognizer.decode(stream);
+                const r = recognizer.getResult(stream) || {};
+                const raw = String(r.text || '').trim();
+                return { text: toTw ? toTw(raw) : raw, rawText: raw, lang: r.lang || '', emotion: r.emotion || '', event: r.event || '' };
+            } finally {
+                stream.free();
+            }
+        }
+
+        self.onmessage = async (ev) => {
+            const { id, cmd } = ev.data || {};
+            try {
+                if (cmd === 'init') { await init(ev.data.cfg); post({ type: 'done', id }); }
+                else if (cmd === 'transcribe') {
+                    if (!recognizer) throw new Error('聽寫模型還沒載入');
+                    post({ type: 'done', id, result: transcribe(ev.data.samples, ev.data.sampleRate) });
+                }
+            } catch (e) {
+                post({ type: 'fail', id, error: String((e && e.message) || e) });
+            }
+        };
+    }
+
+    const sensevoice = {
+        id: 'sensevoice',
+        label: '本機模型',
+        downloadMB: 250,
+        supported() { return !!(win.WebAssembly && win.Worker); },
+        _worker: null,
+        _ready: false,
+        _preparing: null,
+        _seq: 0,
+        _pending: {},
+        _progress: null,
+
+        _spawn() {
+            const src = '(' + _svWorkerMain.toString() + ')();';
+            const url = win.URL.createObjectURL(new win.Blob([src], { type: 'text/javascript' }));
+            const w = new win.Worker(url);
+            win.URL.revokeObjectURL(url);
+            const loaded = {};
+            w.onmessage = (ev) => {
+                const m = ev.data || {};
+                if (m.type === 'progress') {
+                    loaded[m.key] = m.loaded;
+                    const total = Object.values(SV.SIZES).reduce((s, v) => s + v, 0);
+                    const got = Object.keys(SV.SIZES).reduce((s, k) => s + Math.min(loaded[k] || 0, SV.SIZES[k]), 0);
+                    if (this._progress) this._progress({ stage: 'download', percent: Math.round((got / total) * 100), file: m.key, cached: !!m.cached });
+                } else if (m.type === 'stage') {
+                    if (this._progress) this._progress({ stage: m.stage, percent: 100 });
+                } else if (m.type === 'warn') {
+                    console.warn('[VoiceInput]', m.msg);
+                } else if (m.type === 'done' || m.type === 'fail') {
+                    const p = this._pending[m.id];
+                    if (!p) return;
+                    delete this._pending[m.id];
+                    if (m.type === 'done') p.resolve(m.result); else p.reject(new Error(m.error));
+                }
+            };
+            w.onerror = (e) => {
+                this.unload((e && e.message) || '語音引擎當掉了');
+            };
+            return w;
+        },
+
+        _call(msg, transfer) {
+            const id = ++this._seq;
+            return new Promise((resolve, reject) => {
+                this._pending[id] = { resolve, reject };
+                this._worker.postMessage(Object.assign({ id }, msg), transfer || []);
+            });
+        },
+
+        isReady() { return this._ready; },
+
+        // 模型下載過沒（決定要不要先問她 250MB）
+        async isDownloaded() {
+            try {
+                if (!win.caches || !(await win.caches.has(SV.CACHE))) return false;   // 用 has 先看，open 會順手建一個空的
+                const c = await win.caches.open(SV.CACHE);
+                return !!(await c.match(SV.MODEL_BASE + 'model.int8.onnx'));
+            } catch (e) { return false; }
+        },
+
+        // 這版引擎沒有「載好後改設定」，換語言＝放掉，下次用到時從快取重載（約一兩秒）
+        setLanguage() {
+            this.unload();
+            return Promise.resolve();
+        },
+
+        prepare(onProgress) {
+            if (this._ready) return Promise.resolve();
+            if (onProgress) this._progress = onProgress;
+            if (this._preparing) return this._preparing;
+            // 記住這一輪是哪個 worker：準備到一半被放掉（換語言、換轉字方式）又重新 prepare 時，
+            // 舊這輪晚到的收尾不能把新的 worker 關掉、也不能清掉新的 _preparing
+            const w = this._worker = this._spawn();
+            const p = this._call({ cmd: 'init', cfg: Object.assign({}, SV, { language: getConfig().language }) })
+                .then(() => { if (this._worker !== w) throw new Error('語音引擎準備到一半被放掉了'); this._ready = true; })
+                .catch((e) => { if (this._worker === w) this.unload(); throw e; })
+                .finally(() => { if (this._preparing === p) { this._preparing = null; this._progress = null; } });
+            this._preparing = p;
+            return p;
+        },
+
+        async transcribe(blob) {
+            const pcm = await _decodeToMono(blob);
+            const r = await this._call({ cmd: 'transcribe', samples: pcm.samples, sampleRate: pcm.sampleRate }, [pcm.samples.buffer]);
+            r.durationSec = pcm.durationSec;
+            return r;
+        },
+
+        // worker 關掉後不會再回訊息：還在等的（準備中、轉字中）要一起退回，不然 prepare 永遠卡著同一個不會結束的 Promise
+        unload(reason) {
+            if (this._worker) { try { this._worker.terminate(); } catch (e) {} }
+            this._worker = null;
+            this._ready = false;
+            const pending = Object.values(this._pending);
+            this._pending = {};
+            const err = new Error(reason || '語音引擎已經放掉了，再按一次會重新載入');
+            pending.forEach((p) => p.reject(err));
+            this._preparing = null;
+            this._progress = null;
+        },
+
+        async clearCache() {
+            this.unload();
+            if (win.caches) await win.caches.delete(SV.CACHE);
+        },
+    };
+
+    // ── 手機／瀏覽器自己的聽寫（邊錄邊聽）────────────────────
+    //   iPhone 交給 Apple、Chrome 與安卓交給 Google 轉字；iPhone 第一次會另外問「語音辨識」權限（跟麥克風分開問）。
+    //   語言跟 language 設定走，沒設就台灣中文，出來直接是繁體（不用像 330 那樣聽成簡體再轉）。
+    //   安卓 Chrome 的連續模式不穩（330 也這樣判斷），一句一句聽；不管哪種，還在錄的時候它自己停了就再開一段接著聽。
+    const _liveOf = new WeakMap();   // 音檔 → 那一段聽寫收尾的 Promise
+    const LIVE_LANG = { '': 'zh-TW', zh: 'zh-TW', yue: 'zh-HK', en: 'en-US', ja: 'ja-JP', ko: 'ko-KR' };
+    const LIVE_RESTART_MAX = 60;     // 一段錄音裡最多重開幾次（它一開就停的話不要原地打轉）
+    function _SR() { return win.SpeechRecognition || win.webkitSpeechRecognition || null; }
+    function _androidChrome() { try { return /Android.*Chrome/i.test(String((win.navigator && win.navigator.userAgent) || '')); } catch (e) { return false; } }
+
+    function _liveEnd(s) {
+        if (s.ended) return;
+        s.ended = true;
+        s.waiters.splice(0).forEach((f) => f());
+    }
+    function _liveStart(onPartial) {
+        const s = { finals: '', interim: '', error: '', stopped: false, ended: false, waiters: [], sr: null, restarts: 0 };
+        const android = _androidChrome();
+        const open = () => {
+            const SR = _SR();
+            if (!SR) { s.error = 'unsupported'; _liveEnd(s); return; }
+            let sr;
+            try { sr = new SR(); } catch (e) { s.error = 'start'; _liveEnd(s); return; }
+            sr.lang = LIVE_LANG[getConfig().language] || 'zh-TW';
+            sr.continuous = !android;
+            sr.interimResults = !android;
+            sr.onresult = (ev) => {
+                let interim = '';
+                for (let i = ev.resultIndex; i < ev.results.length; i++) {
+                    const res = ev.results[i];
+                    const t = (res && res[0] && res[0].transcript) || '';
+                    if (res.isFinal) s.finals += t; else interim += t;
+                }
+                s.interim = interim;
+                if (onPartial) { try { onPartial(s.finals + s.interim); } catch (e) {} }
+            };
+            sr.onerror = (ev) => { const c = ev && ev.error; if (c && c !== 'no-speech' && c !== 'aborted') s.error = c; };
+            sr.onend = () => {
+                if (sr !== s.sr) return;
+                if (!s.stopped && !s.error && ++s.restarts <= LIVE_RESTART_MAX) {
+                    s.finals += s.interim;   // 這一段沒來得及定稿的字留著
+                    s.interim = '';
+                    open();
+                    return;
+                }
+                _liveEnd(s);
+            };
+            s.sr = sr;
+            try { sr.start(); } catch (e) { s.error = 'start'; _liveEnd(s); }
+        };
+        open();
+        return s;
+    }
+    // 停下來：請它把最後一句收尾，等它真的結束（最多幾秒，安卓比較慢），回這一段聽到的全部
+    function _liveFinish(s) {
+        return new Promise((resolve) => {
+            s.stopped = true;
+            if (s.ended) { resolve(s); return; }
+            s.waiters.push(() => resolve(s));
+            try { if (s.sr) s.sr.stop(); } catch (e) {}
+            setTimeout(() => {
+                if (s.ended) return;
+                try { if (s.sr) s.sr.abort(); } catch (e) {}
+                _liveEnd(s);
+            }, _androidChrome() ? 5000 : 3000);
+        });
+    }
+    function _liveAbort(s) {
+        s.stopped = true;
+        try { if (s.sr) s.sr.abort(); } catch (e) {}
+        _liveEnd(s);
+    }
+
+    const browser = {
+        id: 'browser',
+        label: '系統聽寫',
+        live: true,
+        supported() { return !!_SR(); },
+        isReady() { return true; },
+        async isDownloaded() { return true; },
+        prepare() { return Promise.resolve(); },
+        setLanguage() { return Promise.resolve(); },   // 每一段開始時才讀語言，不用重載
+        async transcribe(blob) {
+            const p = _liveOf.get(blob);
+            if (!p) return { text: '' };
+            const s = await p;
+            const text = String(s.finals + s.interim).trim();
+            if (!text && (s.error === 'not-allowed' || s.error === 'service-not-allowed')) throw new Error('沒有語音辨識權限，要到手機設定裡允許');
+            if (!text && s.error === 'network') throw new Error('聽寫要連網路，現在連不上');
+            return { text: text, lang: '', emotion: '', event: '' };
+        },
+        unload() {},
+    };
+
+    const ENGINES = { browser, sensevoice };
+
+    // 現在實際用哪一種：選過而且這支手機用得了就照選的；沒選過、或選的這裡用不了，手機有聽寫就用它，沒有就本機模型
+    function engineId() {
+        const want = getConfig().engine;
+        const e = ENGINES[want];
+        if (e && e.supported()) return want;
+        return browser.supported() ? 'browser' : 'sensevoice';
+    }
+    function _engine() { return ENGINES[engineId()]; }
+
+    async function transcribe(blob, opts) {
+        const o = opts || {};
+        const e = _engine();
+        if (!e.isReady()) {
+            if (!o.autoPrepare) {
+                const err = new Error('轉字方式還沒準備好');
+                err.code = 'NOT_READY';
+                throw err;
+            }
+            await e.prepare(o.onProgress);
+        }
+        const r = await e.transcribe(blob);
+        const emo = bareTag(r.emotion);
+        const evt = bareTag(r.event);
+        const emotionLabel = EMOTION_LABEL[emo] || '';
+        const eventLabel = EVENT_LABEL[evt] || '';
+        return {
+            text: r.text || '',
+            lang: bareTag(r.lang),
+            emotion: emo,
+            emotionLabel,
+            event: evt,
+            eventLabel,
+            // 給對方讀的一句語氣：平靜、只有說話聲就是空字串（微信語音與電話共用這一句）
+            tone: [emotionLabel ? '聽起來' + emotionLabel : '', eventLabel ? '聲音裡有' + eventLabel : ''].filter(Boolean).join('，'),
+            durationSec: r.durationSec || 0,
+            engine: e.id,
+        };
+    }
+
+    win.OS_VOICE_INPUT = {
+        ENGINES,
+        isSupported,
+        getConfig,
+        setConfig,
+        engineId,
+        engines: () => Object.keys(ENGINES).map((k) => ({ id: k, label: ENGINES[k].label, supported: ENGINES[k].supported() })),
+        start,
+        stop,
+        cancel,
+        isRecording: () => !!_rec,
+        level,
+        openMic,
+        closeMic,
+        prepare: (onProgress) => _engine().prepare(onProgress),
+        isReady: () => _engine().isReady(),
+        isDownloaded: () => (_engine().isDownloaded ? _engine().isDownloaded() : Promise.resolve(true)),
+        transcribe,
+        unload: () => _engine().unload(),
+        clearCache: () => (_engine().clearCache ? _engine().clearCache() : Promise.resolve()),
+    };
+})();

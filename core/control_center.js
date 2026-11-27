@@ -1,0 +1,1006 @@
+﻿/**
+ * ========================
+ * Aurelia Control Center (v4.8.3 - Dual Panel Architecture)
+ * 控制中心 - 外殼與路由核心 (雙視窗分離版，完美解決 App 遮擋與寫作狀態保留)
+ * ========================
+ */
+
+(function(AureliaControlCenter) {
+    'use strict';
+
+    const CONFIG = {
+        MODAL_ID: 'aurelia-phone-modal',
+        PHONE_FRAME_ID: 'aurelia-phone-frame',
+        PHONE_SCREEN_ID: 'aurelia-phone-screen',
+        TAB_CONTAINER_ID: 'aurelia-tab-container',
+        BOTTOM_NAV_ID: 'aurelia-bottom-nav',
+        Z_INDEX_MODAL: 999,
+    };
+
+    let phoneModal = null;
+    let phoneFrame = null;
+    let isVisible = false;
+    let isEmbedded = false;
+    let embeddedRoot = null;
+    let syncInterval = null;
+    let embedObserver = null;
+    let _hiddenChatEl = null;   // 「只在訊息區」模式下被收起的 #chat，卸載時還原
+    let _extractPeek = false;   // extractor 抓取時暫時把 #chat 拉回可見(讓 TH 煮 html 卡)，observer 這期間別強制藏
+    let _embedKind = null;      // 這次是怎麼掛的：'standalone' | 'messagesOnly' | 'sheld'，改高度時要照原掛法改
+    let syncTargetSelector = '#sheld';
+
+    // ── 酒館本體兩條 :has([style…]) 規則：奧瑞亞開著時先拿下來，關掉原樣放回 ─────
+    // 🚨 酒館 css/toggle-dependent.css 的 `.last_mes:has(> .del_checkbox[style*="display: block"])…`、
+    //    `#adaptive_p_block:has([…][style*="display: none"])…`：:has() 裡看 style 屬性＝頁面上「任何」元素的 style 一改，
+    //    整頁重查一次。9 月她的酒館 7.5 萬元素一次 5ms（當時只在後院拿掉，os_farm.js 那套）；
+    //    11-25 連進她的 TauriTavern 量：16 萬節點、一次 98ms，拿掉 5.6ms → 大廳、章節面板、劇情動畫每一格都在付。
+    //    兩條管的是「文件模式刪訊息的勾選框」「取樣器設定頁的一格」，奧瑞亞開著時用不到。網頁版沒有這兩條，什麼都不做。
+    let _hasParked = [];
+    function _parkHasStyleRules() {
+        if (_hasParked.length) return;
+        const walk = (list) => {
+            for (let i = list.length - 1; i >= 0; i--) {
+                const r = list[i];
+                if (r.cssRules && !r.selectorText) walk(r.cssRules);
+                else if (r.selectorText && r.selectorText.indexOf(':has(') >= 0 && r.selectorText.indexOf('[style') >= 0) {
+                    const owner = r.parentRule || r.parentStyleSheet;
+                    _hasParked.push({ owner, i, text: r.cssText });
+                    owner.deleteRule(i);
+                }
+            }
+        };
+        Array.prototype.forEach.call(document.styleSheets, (ss) => {
+            try { walk(ss.cssRules); } catch (e) { /* 跨網域的樣式表讀不到，本來就不是它 */ }
+        });
+    }
+    function _unparkHasStyleRules() {
+        // 拿的時候從後往前，放回去從前往後，位置才跟原本一樣
+        _hasParked.slice().reverse().forEach((x) => {
+            try { x.owner.insertRule(x.text, Math.min(x.i, x.owner.cssRules.length)); } catch (e) {}
+        });
+        _hasParked = [];
+    }
+    let _vnWasOpenBeforeTabSwitch = false;
+    let _readerWasOpenBeforeTabSwitch = false;
+
+    // ── 全屏狀態（覆蓋在 modal / embedded 之上的視覺模式） ──
+    let isFullscreen = false;
+    let _fsPrevParent = null;
+    let _fsPrevSibling = null;
+    let _fsPrevStyle = '';
+
+    function isMobileDevice() {
+        return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+            || window.innerWidth < 768;
+    }
+
+    function syncModalToChat() {
+        if (!phoneFrame || !isVisible || isEmbedded || isFullscreen) return;
+        phoneFrame.style.position = 'fixed';
+        // 📱 手機瀏覽器：#sheld 的 rect 含動態網址列後面那塊(100vh 老問題)，比可見視窗大/偏移
+        //    → 浮窗被頂到瀏覽器外面。改釘在真實可見視窗(visualViewport 優先，跟著網址列/鍵盤縮；
+        //    退 innerWidth/innerHeight)。Tauri 無動態網址列 rect 本來就準、不受影響。
+        if (isMobileDevice()) {
+            const vv = window.visualViewport;
+            phoneFrame.style.left   = (vv ? vv.offsetLeft : 0) + 'px';
+            phoneFrame.style.top    = (vv ? vv.offsetTop  : 0) + 'px';
+            phoneFrame.style.width  = (vv ? vv.width  : window.innerWidth)  + 'px';
+            phoneFrame.style.height = (vv ? vv.height : window.innerHeight) + 'px';
+            return;
+        }
+        const chatEl = document.querySelector(syncTargetSelector) || document.querySelector('#sheld') || document.querySelector('#chat');
+        if (!chatEl) return;
+        const rect = chatEl.getBoundingClientRect();
+        phoneFrame.style.top    = rect.top    + 'px';
+        phoneFrame.style.left   = rect.left   + 'px';
+        phoneFrame.style.width  = rect.width  + 'px';
+        phoneFrame.style.height = rect.height + 'px';
+    }
+
+    function startSyncing() {
+        if (syncInterval) clearInterval(syncInterval);
+        if (isEmbedded) return;
+        syncModalToChat();
+        syncInterval = setInterval(syncModalToChat, 100);
+        if (window.ResizeObserver) {
+            const ro = new ResizeObserver(() => { if (!isEmbedded) syncModalToChat(); });
+            ro.observe(document.body);
+            const syncEl = document.querySelector(syncTargetSelector) || document.querySelector('#sheld') || document.querySelector('#chat');
+            if (syncEl) ro.observe(syncEl);
+        }
+    }
+
+    function stopSyncing() {
+        if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
+    }
+
+    // ── 舊「底部/左側導覽列」(大廳 / 寫作 / 關閉) 已移除（2026-06-12）──
+    //    關閉 → 大廳 MAIN MENU 一顆 void-btn 接 AureliaControlCenter.requestClose()。
+    //    寫作工具(系統設置/變數工坊/創作室/世界書/提示詞)改成大廳手機殼(VoidPhoneShell)的 app，
+    //    寫作頁(write-tab)已整個退役。遊戲/VN/OS app 本來就各自有返回鈕，不靠這條 rail。
+
+    function switchPage(pageId) {
+        const root = isEmbedded ? embeddedRoot : phoneModal;
+        if (!root && !isEmbedded) return;
+        const container = isEmbedded ? phoneFrame : root;
+
+        // 切離大廳時暫時隱藏 VN panel；回到大廳時自動恢復
+        const vnPanel = container.querySelector('#aurelia-vn-panel');
+        if (vnPanel) {
+            if (pageId !== 'nav-home' && vnPanel.style.display !== 'none') {
+                _vnWasOpenBeforeTabSwitch = true;
+                vnPanel.style.display = 'none';
+            } else if (pageId === 'nav-home' && _vnWasOpenBeforeTabSwitch) {
+                _vnWasOpenBeforeTabSwitch = false;
+                vnPanel.style.display = 'flex';
+            }
+        }
+
+        // 同樣：切離大廳時暫時隱藏 VN_READER；回到大廳時自動恢復
+        const vnReader = document.getElementById('vn-reader-sa') || container.querySelector('#vn-reader-sa');
+        if (vnReader) {
+            if (pageId !== 'nav-home' && vnReader.style.display !== 'none') {
+                _readerWasOpenBeforeTabSwitch = true;
+                vnReader.style.display = 'none';
+            } else if (pageId === 'nav-home' && _readerWasOpenBeforeTabSwitch) {
+                _readerWasOpenBeforeTabSwitch = false;
+                vnReader.style.display = 'flex';
+            }
+        }
+
+        container.querySelectorAll('.aurelia-tab').forEach(tab => tab.style.display = 'none');
+        const target = container.querySelector('#' + pageId.replace('nav-', 'aurelia-') + '-tab');
+        if (target) target.style.display = 'flex';
+
+        if (pageId === 'nav-home') {
+            if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
+        }
+        else if (pageId === 'nav-user') {
+            if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
+            const userTab = container.querySelector('#aurelia-user-tab');
+            if (userTab && !userTab.dataset.inited) {
+                if (window.OS_PERSONA && window.OS_PERSONA.launch) {
+                    window.OS_PERSONA.launch(userTab);
+                    userTab.dataset.inited = 'true';
+                } else {
+                    userTab.innerHTML = '<div style=\"padding:20px; text-align:center; color:#e53e3e;\">人設模組 (OS_PERSONA) 未載入</div>';
+                }
+            }
+        }
+
+    }
+
+    // ── 🧱 藏書（酒館版）／章節：劇情那一格（#aurelia-vn-panel）也照大廳窗口那套切塊進出場 ──
+    //    10-13 起酒館版的藏書和章節也套。只管這兩個：從大廳按藏書、章節打開，按它們自己的關閉回大廳。
+    //    播劇情、小劇場、從書架開的照舊（那幾條各自有 loading／轉場），劇情播到一半開章節再關也不演（關掉是回劇情不是回大廳）。
+    //    進場等面板內容出來才開始拼（這一格底色是黑的，先拼會先蓋一片黑）；出場在使用者按關閉鈕那一下攔下來，
+    //    先一格格收掉、露回大廳，再交回原本的關閉（原本的關閉會先清內容，等它清完再收就只剩黑格子在退）。
+    let _vnSeq = 0;
+    const _vnTF = () => window.AURELIA_TILEFX || null;
+    function _vnBackToLobby() {
+        const pg = document.getElementById('page-game');
+        return !!(pg && pg.classList.contains('hidden'));   // 劇情頁沒在顯示＝這一關就是回大廳
+    }
+    function _vnCloseCapture(e) {
+        const btn = e.target && e.target.closest && e.target.closest('.chx-close, #se-btn-close');
+        if (!btn) return;
+        const vnPanel = e.currentTarget, TF = _vnTF();
+        if (!TF || vnPanel.style.display === 'none' || vnPanel.dataset.tileOut === '1' || !_vnBackToLobby() || !TF.canRun({ ignoreVn: true })) return;
+        e.preventDefault(); e.stopPropagation();
+        const isChapter = btn.classList.contains('chx-close');
+        vnPanel.dataset.tileOut = '1';
+        const seq = _vnSeq;
+        { const h = document.querySelector('.void-top-bar'); if (h) h.style.display = ''; }   // 收的時候底下要是完整的大廳（頂欄先回來）
+        TF.run(vnPanel, 'out', () => {
+            if (seq !== _vnSeq) return;   // 收到一半又被打開了
+            vnPanel.dataset.tileGone = '1';
+            try {
+                if (isChapter) window.VN_PLAYER?.closeChapterPanel?.();
+                else window.StoryExtractor?.hide?.();
+            } catch (err) { console.warn('[ControlCenter] 關閉失敗', err); }
+            // 原本的關閉照理會叫 hideVnPanel 把這一格收掉；沒收（例外情況）就把剪裁放掉，別讓它整格隱形卡著
+            if (vnPanel.dataset.tileGone === '1') { delete vnPanel.dataset.tileGone; delete vnPanel.dataset.tileOut; TF.clear(vnPanel); }
+        });
+    }
+
+    function showVnPanel(action) {
+        const root = isEmbedded ? embeddedRoot : phoneModal;
+        if (!root && !isEmbedded) return;
+        const container = isEmbedded ? phoneFrame : root;
+
+        const vnPanel = container.querySelector('#aurelia-vn-panel');
+        const vnContainer = container.querySelector('#aurelia-vn-app-container');
+        if (!vnPanel || !vnContainer) return;
+
+        if (window.VoidTerminal && window.VoidTerminal.suspendIdle) window.VoidTerminal.suspendIdle();
+
+        // 🧱 切塊進場（只有從大廳開藏書、章節；見上面那段）
+        const TF = _vnTF();
+        const wasHidden = vnPanel.style.display === 'none';
+        _vnSeq++;
+        delete vnPanel.dataset.tileOut; delete vnPanel.dataset.tileGone;
+        if (TF) TF.clear(vnPanel);
+        const tiles = !!(TF && wasHidden && (action === 'story' || action === 'chapter') && TF.canRun({ ignoreVn: true }));
+        if (tiles) TF.hide(vnPanel);   // 先整格藏著，內容出來再拼（3 秒沒開始拼會自己放出來）
+        let _tileStarted = false;   // 一次就好：等太久先拼了，內容出來那一下別再從頭拼一次
+        const _tileGo = () => { if (!tiles || _tileStarted || vnPanel.style.display === 'none') return; _tileStarted = true; TF.run(vnPanel, 'in'); };
+        if (!vnPanel.dataset.tileHooked) {
+            vnPanel.addEventListener('click', _vnCloseCapture, true);   // 抓在關閉鈕自己的 onclick 之前
+            vnPanel.dataset.tileHooked = '1';
+        }
+
+        function _runAction(delay) {
+            if (!action) return;
+            setTimeout(() => {
+                if (action === 'story' && window.StoryExtractor) { window.StoryExtractor.show(); _tileGo(); }
+                // 'generate' 這個動作已經沒有對應面板：生成入口統一在書架的自由劇情
+                else if (action === 'chapter' && window.VN_PLAYER) { window.VN_PLAYER.openChapterPanel(); _tileGo(); }
+                else if (action === 'autoload' && window._lobbyPendingChapter && window.VN_Core) {
+                    const p = window._lobbyPendingChapter;
+                    window._lobbyPendingChapter = null;
+                    // #page-game 模板預設 hidden，只有 switchPage 會揭開——少這行劇本會在隱藏頁裡播（面板全黑）
+                    if (window.VN_PLAYER && window.VN_PLAYER.switchPage) window.VN_PLAYER.switchPage('page-game');
+                    try { window.VN_Core.earlybirdFromText(p.content); } catch (e) {}  // 頭像早鳥：先開生
+                    // replay：這裡播的都不是剛生好的這一輪（小劇場、地圖番外、書架接著讀的那章），最新這輪還沒插的插圖別插進來
+                    window.VN_Core._startWithLoader(p.content, null, { replay: true });   // 載入→loading 等全部圖片→開播
+                }
+            }, delay);
+        }
+
+        vnPanel.style.display = 'flex';
+        // 🎬 劇情全螢幕沉浸：隱藏全域 header（hideVnPanel 時還原）
+        { const _hdr = document.querySelector('.void-top-bar'); if (_hdr) _hdr.style.display = 'none'; }
+
+        if (!vnContainer.dataset.vnInited) {
+            // 大廳章節/小劇場優先：清掉酒館殘留的暫存劇本，否則 launchApp 會改播舊卡劇本、跳過 _runAction
+            if (action === 'autoload' && window._lobbyPendingChapter) window._pendingAutoScript = null;
+            const hasPendingScript = !!window._pendingAutoScript;
+            if (window.VN_PLAYER && window.VN_PLAYER.launchApp) {
+                window.VN_PLAYER.launchApp(vnContainer);
+                vnContainer.dataset.vnInited = 'true';
+                if (!hasPendingScript) _runAction(150);
+                else _tileGo();   // 有暫存劇本要播：不會開藏書／章節，照樣把這一格拼出來
+            } else {
+                _tileGo();   // 劇情模組還沒載好要等兩秒：先把這一格拼出來，別讓她按了什麼都沒看到
+                setTimeout(() => {
+                    if (window.VN_PLAYER && window.VN_PLAYER.launchApp) {
+                        const stillPending = !!window._pendingAutoScript;
+                        window.VN_PLAYER.launchApp(vnContainer);
+                        vnContainer.dataset.vnInited = 'true';
+                        if (!stillPending) _runAction(150);
+                    }
+                }, 2000);
+            }
+        } else {
+            _runAction(50);
+        }
+    }
+
+    function hideVnPanel() {
+        const vnPanel = document.getElementById('aurelia-vn-panel');
+        if (vnPanel) {
+            vnPanel.style.display = 'none';
+            // 🧱 切塊收完才走到這裡、或中途被別的路收掉：剪裁一定清掉，下次打開才不會整格隱形
+            delete vnPanel.dataset.tileGone; delete vnPanel.dataset.tileOut;
+            const TF = _vnTF();
+            if (TF) TF.clear(vnPanel);
+        }
+
+        // ⚡ 回大廳 → 畫面特效全停。面板是 display:none 不是移除，引擎的「斷線自停」看不到，
+        //    持續型的循環音效會一路播到下一輪劇情換場才停
+        try { const _fx = window.OS_FX || (window.parent && window.parent.OS_FX); if (_fx) _fx.stopAll(); } catch (e) {}
+
+        // 🎭 剛播的是小劇場（大廳、地圖番外、小機培養室）：故事編號換回她原本那個（見 VN_Core._enterTheater）
+        try { if (window.VN_Core && window.VN_Core._leaveTheater) window.VN_Core._leaveTheater(); } catch (e) {}
+
+        // 🛟 先呼叫 StoryExtractor.hide() 把劫持的 #form_sheld 還回原位，
+        // 否則直接藏 storyExtractorContainer 會讓酒館原生輸入框跟著消失
+        if (window.StoryExtractor?.hide) {
+            try { window.StoryExtractor.hide(); } catch (_) {}
+        }
+
+        const extractorContainer = document.getElementById('aurelia-extractor-container-vn');
+        if (extractorContainer) { extractorContainer.style.display = 'none'; extractorContainer.classList.remove('show'); }
+        const storyExtractorContainer = document.getElementById('story-extractor-container-vn');
+        if (storyExtractorContainer) { storyExtractorContainer.style.display = 'none'; storyExtractorContainer.classList.remove('show'); }
+        if (window.AureliaHtmlExtractor?.hide) window.AureliaHtmlExtractor.hide();
+
+        // 強制讓所有 tab 隱藏，只顯示 home tab，並同步底部 nav 高亮
+        document.querySelectorAll('.aurelia-tab').forEach(t => { t.style.display = 'none'; });
+        const homeTab = document.getElementById('aurelia-home-tab');
+        if (homeTab) homeTab.style.display = 'flex';
+        // 🎬 離開劇情：還原全域 header
+        { const _hdr = document.querySelector('.void-top-bar'); if (_hdr) _hdr.style.display = ''; }
+
+        if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
+    }
+
+    function createTabContainer(parentDoc) {
+        const container = parentDoc.createElement('div');
+        container.id = CONFIG.TAB_CONTAINER_ID;
+        container.style.cssText = `flex: 1; position: relative; overflow: hidden; display: flex; background: #fff; flex-direction: column;`;
+
+        let homeTab;
+        if (window.VoidTerminal && window.VoidTerminal.createTab) {
+            homeTab = window.VoidTerminal.createTab(parentDoc);
+        } else {
+            homeTab = parentDoc.createElement('div');
+            homeTab.id = 'aurelia-home-tab';
+            homeTab.className = 'aurelia-tab void-tab';
+            homeTab.innerHTML = '<div style=\"color:red; padding:20px;\">[錯誤] Void Terminal 模組未載入。</div>';
+        }
+
+        const userTab = parentDoc.createElement('div');
+        userTab.id = 'aurelia-user-tab';
+        userTab.className = 'aurelia-tab';
+        userTab.style.cssText = `width:100%; height:100%; display:none; background:#f8f9fa; position: relative; flex-direction:column; overflow:hidden;`;
+
+        container.appendChild(homeTab);
+        container.appendChild(userTab);
+        return container;
+    }
+
+    function createPhoneScreen(parentDoc) {
+        const screen = parentDoc.createElement('div');
+        screen.id = CONFIG.PHONE_SCREEN_ID;
+        screen.style.cssText = `width: 100%; height: 100%; background: #f8f9fa; overflow: hidden; display: flex; flex-direction: column; position: relative;`;
+        screen.appendChild(createTabContainer(parentDoc));
+
+        // 🌟 雙層架構 2：全螢幕全域視窗 (給遊戲 Apps 使用，避開底部導覽列)
+        const slidePanel = parentDoc.createElement('div');
+        slidePanel.id = 'aurelia-panel-container';
+        slidePanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: 0; background: #EEF0F6; z-index: 50; display: none; flex-direction: column;`;
+        slidePanel.innerHTML = `<div id=\"aurelia-iframe-container\" style=\"width:100%; height:100%; background:#EEF0F6; overflow:hidden; position:relative;\"></div>`;
+        screen.appendChild(slidePanel);
+
+        // 🌟 VN 專用全螢幕 overlay（從大廳直接彈出，z-index 51 覆蓋其他 overlay）
+        const vnPanel = parentDoc.createElement('div');
+        vnPanel.id = 'aurelia-vn-panel';
+        vnPanel.style.cssText = `position: absolute; top:0; left:0; right:0; bottom: 0; background:#000; z-index: 51; display: none; flex-direction: column;`;
+
+        const vnAppContainer = parentDoc.createElement('div');
+        vnAppContainer.id = 'aurelia-vn-app-container';
+        vnAppContainer.style.cssText = 'width:100%; height:100%; overflow:hidden; position:relative;';
+        vnPanel.appendChild(vnAppContainer);
+
+        const extractorContainer = parentDoc.createElement('div');
+        extractorContainer.id = 'aurelia-extractor-container-vn';
+        extractorContainer.style.cssText = `position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; z-index: 1000; overflow: hidden; display: none; flex-direction: column;`;
+        vnPanel.appendChild(extractorContainer);
+
+        const storyExtractorContainer = parentDoc.createElement('div');
+        storyExtractorContainer.id = 'story-extractor-container-vn';
+        storyExtractorContainer.style.cssText = `position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #0a0a0a; border: 2px solid #d4af37; z-index: 1001; overflow: hidden; display: none; flex-direction: column;`;
+        vnPanel.appendChild(storyExtractorContainer);
+
+        screen.appendChild(vnPanel);
+
+        return screen;
+    }
+
+    function createPhoneFrame(parentDoc) {
+        const frame = parentDoc.createElement('div');
+        frame.id = CONFIG.PHONE_FRAME_ID;
+        frame.style.cssText = `
+            background: #fff; overflow: hidden; box-shadow: 0 0 50px rgba(0,0,0,0.2);
+            border: 1px solid #e0e5ec; pointer-events: auto;
+            position: fixed; z-index: ${CONFIG.Z_INDEX_MODAL}; display: none;
+        `;
+        frame.appendChild(createPhoneScreen(parentDoc));
+        return frame;
+    }
+
+    // 全屏按鈕的視覺 icon 由 void_terminal.js 在大廳頂部 bar 裡渲染（喇叭旁邊）；
+    // 這裡只負責同步 emoji 文字，不限定按鈕位置
+    function updateFullscreenBtnIcon() {
+        const btn = document.getElementById('aurelia-fullscreen-btn');
+        if (!btn) return;
+        btn.innerHTML = isFullscreen ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+        btn.title = isFullscreen ? '退出全屏 (ESC)' : '進入全屏';
+    }
+
+    function createPhoneModal() {
+        const parentDoc = document;
+        const modal = parentDoc.createElement('div');
+        modal.id = CONFIG.MODAL_ID;
+        modal.style.cssText = `position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: ${CONFIG.Z_INDEX_MODAL};`;
+        phoneFrame = createPhoneFrame(parentDoc);
+        modal.appendChild(phoneFrame);
+        parentDoc.body.appendChild(modal);
+        return modal;
+    }
+
+    // 「只在訊息區」收起 #chat：🚫絕不可 display:none / off-screen(left:-99999px) / visibility:hidden——
+    //   那樣 #chat 的訊息「不在視口」，ST 懶載/虛擬化就不渲染、TavernHelper 也不煮 ```html 卡 →
+    //   html_extractor 抓空(有些卡剛好已渲染沒被回收就矇對)。
+    //   ✅正解：#chat 留在「視口內」、絕對定位墊到最底層、被奧瑞亞不透明面板完全蓋住 → 懶載/TH 靠視口幾何照渲染
+    //   (不看遮擋)、視覺看不到、又移出 flex 流讓位給奧瑞亞。父層(#sheld)須 positioned 當定位錨點、inset:0 才貼合它不溢出。
+    function _applyChatHidden(el) {
+        if (!el) return;
+        if (el.dataset.aureliaPrevCss == null) el.dataset.aureliaPrevCss = el.getAttribute('style') || '';
+        const p = el.parentElement;
+        if (p && getComputedStyle(p).position === 'static') { p.style.setProperty('position', 'relative'); p.dataset.aureliaChatAnchor = '1'; }
+        el.style.setProperty('position', 'absolute', 'important');
+        el.style.setProperty('inset', '0', 'important');
+        el.style.setProperty('margin', '0', 'important');
+        el.style.setProperty('z-index', '0', 'important');
+        el.style.setProperty('pointer-events', 'none', 'important');
+    }
+    function _restoreChat(el) {
+        if (!el) return;
+        const p = el.parentElement;
+        if (p && p.dataset.aureliaChatAnchor) { p.style.removeProperty('position'); delete p.dataset.aureliaChatAnchor; }
+        if (el.dataset.aureliaPrevCss != null) { el.setAttribute('style', el.dataset.aureliaPrevCss); if (!el.getAttribute('style')) el.removeAttribute('style'); }
+        delete el.dataset.aureliaPrevCss;
+    }
+
+    // ── 面板高度（%，30–100；100＝撐滿宿主容器）────────────────────────────
+    //   上限鎖 100 就是「最高等於 #chat / #sheld、不會凸出去」，而且兩條掛法各自都出不了容器：
+    //   #sheld 那條是 absolute 貼底、height 給 %，百分比本來就相對 #sheld；
+    //   #chat 那條是 #sheld 的 flex 兄弟，flex-basis 給 % 再配 max-height:100%，撐不破 #sheld。
+    //   ⚠️ 100 時三個分支的樣式與 #chat 的處理跟改動前逐字一致——沒設過的人行為一格不變。
+    const PANEL_H_MIN = 30, PANEL_H_MAX = 100;
+    function _readPanelHeight() {
+        try {
+            const st = window.AureliaUIUtils?.getExtensionSettings?.() || null;   // 擴展設定唯一的讀法在 ui_utilities
+            const v = st && st.panelHeight;
+            if (v == null || v === '') return PANEL_H_MAX;
+            const n = Math.round(Number(v));
+            if (!isFinite(n)) return PANEL_H_MAX;
+            return Math.min(PANEL_H_MAX, Math.max(PANEL_H_MIN, n));
+        } catch (e) { return PANEL_H_MAX; }
+    }
+
+    AureliaControlCenter.mountEmbedded = function(containerEl, placement = 'bottom') {
+        if (!phoneModal) phoneModal = createPhoneModal();
+        stopSyncing();
+        isEmbedded = true;
+        
+        const isMobile = isMobileDevice();
+        // 🌟 判斷當前是否處於獨立全螢幕模式 (index.html)
+        const isStandalone = containerEl && containerEl.id === 'aurelia-standalone-root';
+        // 「只在訊息區」模式：選到 #chat。#chat 是會捲動 + 酒館不斷塞訊息的容器，
+        //   不能鑽進去（會跟著捲走、被清空）。改當 #sheld 的 flex 兄弟、佔訊息區的位置、
+        //   把 #chat 收起，輸入框 #form_sheld 留在底部照常可用。
+        const messagesOnly = !isStandalone && containerEl && containerEl.id === 'chat';
+        const sheld = messagesOnly ? (containerEl.closest('#sheld') || containerEl.parentElement) : null;
+        const heightPct = _readPanelHeight();
+        _embedKind = isStandalone ? 'standalone' : (messagesOnly ? 'messagesOnly' : 'sheld');
+
+        if (!embeddedRoot) {
+            embeddedRoot = document.createElement('div');
+            embeddedRoot.id = 'aurelia-embedded-root';
+        }
+        // 每次掛載依模式重設樣式，避免切換模式殘留舊定位
+        if (isStandalone) {
+            // 獨立全螢幕模式：height: 100% 繼承父元素
+            embeddedRoot.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%; z-index: 100; overflow: hidden;
+            `;
+        } else if (messagesOnly) {
+            // flex 兄弟：吃滿訊息區空間，輸入框留在下方。窗調矮時這一格不縮——它是那個「框」，
+            //   縮的是框裡的 phoneFrame，靠 justify-content 置中（見下方 phoneFrame 那段）
+            embeddedRoot.style.cssText = `
+                position: relative; flex: 1 1 auto; min-height: 0; width: 100%;
+                z-index: 999;
+                display: flex; flex-direction: column; justify-content: center;
+                pointer-events: none;
+                overflow: hidden;
+            `;
+        } else if (isMobile) {
+            // 用 absolute 占滿 #sheld 整個區域，z-index 蓋過 form_sheld (z-index:30)
+            embeddedRoot.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%;
+                z-index: 999;
+                display: flex; flex-direction: column; justify-content: center;
+                pointer-events: none;
+                overflow: hidden;
+            `;
+        } else {
+            // desktop：跟 mobile 一樣 absolute 占滿 #sheld，z-index 蓋過 form_sheld
+            embeddedRoot.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                width: 100%;
+                z-index: 999;
+                display: flex; flex-direction: column; justify-content: center;
+                pointer-events: none;
+                overflow: hidden;
+            `;
+        }
+
+        // 嵌入模式下 embeddedRoot 是「吃滿宿主可用區的透明定位框」，phoneFrame 才是看得到的那扇窗——
+        //   所以背景/圓角/陰影掛在 phoneFrame 上。窗調矮時框不縮，由框的 justify-content:center
+        //   把窗留在正中間；調矮不該讓它掉到底下去。框不吃指標事件、窗吃，窗以外那圈透明區域
+        //   點得到、捲得到底下的東西（#sheld 那條的聊天就在下面）。
+        //   ⚠️ 獨立(PWA)全螢幕那條不走這裡的置中：它本來就是滿版，沒有「窗多高」這回事。
+        if (isStandalone) {
+            phoneFrame.style.cssText = `
+                position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+                border: none; border-radius: 0; padding: 0;
+                box-shadow: none; display: block; background: #fff;
+            `;
+        } else {
+            const _radius = isMobile && !messagesOnly ? '12px' : '8px';
+            const _shadow = isMobile && !messagesOnly ? '0 -4px 15px rgba(0,0,0,0.12)' : '0 4px 15px rgba(0,0,0,0.08)';
+            phoneFrame.style.cssText = `
+                position: relative; width: 100%;
+                height: ${heightPct}%; flex: 0 0 ${heightPct}%;
+                border: none; padding: 0; display: block; background: #fff;
+                border-radius: ${_radius}; box-shadow: ${_shadow};
+                pointer-events: auto;
+            `;
+        }
+        embeddedRoot.appendChild(phoneFrame);
+
+        if (messagesOnly) {
+            // 收起 #chat（off-screen 隱藏、保 layout 給 extractor 讀），把奧瑞亞插在輸入框前面。
+            //   置中要靠「框吃滿訊息區、窗在框裡置中」，#chat 得整個讓位，所以調矮時也照收——
+            //   窗上下那兩截露出來的是收起後墊在底下的 #chat，看得到但捲不動（它 pointer-events:none）。
+            //   那個 none 不能拿掉：#chat 收起時是 absolute inset:0、連輸入框那塊也蓋著，
+            //   放開就會擋住 #form_sheld 的點擊。要能捲得選「整個對話框」那條。
+            _hiddenChatEl = containerEl;
+            _applyChatHidden(containerEl);
+            const form = sheld.querySelector('#form_sheld');
+            if (form) sheld.insertBefore(embeddedRoot, form);
+            else sheld.appendChild(embeddedRoot);
+
+            if (embedObserver) embedObserver.disconnect();
+            embedObserver = new MutationObserver(() => {
+                if (!isEmbedded || !embeddedRoot) return;
+                // 酒館重繪時保證 #chat 維持收起（絕對定位墊底）、奧瑞亞還在 #sheld 內
+                if (_hiddenChatEl && _hiddenChatEl.style.position !== 'absolute') _applyChatHidden(_hiddenChatEl);
+                if (embeddedRoot.parentNode !== sheld) {
+                    const f = sheld.querySelector('#form_sheld');
+                    if (f) sheld.insertBefore(embeddedRoot, f); else sheld.appendChild(embeddedRoot);
+                }
+            });
+            embedObserver.observe(sheld, { childList: true });
+        } else {
+            // 用 absolute 必須有定位錨點：containerEl 若是 static 就強制改 relative
+            if (!isStandalone && containerEl && getComputedStyle(containerEl).position === 'static') {
+                containerEl.style.position = 'relative';
+                containerEl.dataset.aureliaPosForced = '1';
+            }
+
+            if (placement === 'top') {
+                containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+            } else {
+                containerEl.appendChild(embeddedRoot);
+            }
+            if (embedObserver) embedObserver.disconnect();
+            embedObserver = new MutationObserver(() => {
+                if (!isEmbedded || !embeddedRoot || !embeddedRoot.parentNode) return;
+                if (placement === 'bottom' && containerEl.lastElementChild !== embeddedRoot) {
+                    containerEl.appendChild(embeddedRoot);
+                    containerEl.scrollTop = containerEl.scrollHeight;
+                } else if (placement === 'top' && containerEl.firstElementChild !== embeddedRoot) {
+                    containerEl.insertBefore(embeddedRoot, containerEl.firstChild);
+                }
+            });
+            embedObserver.observe(containerEl, { childList: true });
+        }
+
+        // ── 獨立模式：JS 強制把 tab 容器填滿整個視口（底部 rail 已移除）──
+        // CSS 快取保險層：即使舊版 CSS 還留著「讓 55px 給 rail」的 bottom，也用 inline !important 蓋掉。
+        if (isStandalone) {
+            function applyTabFix() {
+                const tabCont = document.getElementById('aurelia-tab-container');
+                if (!tabCont) return false;
+
+                // tab 容器：position:absolute 填滿整個視口，一路鋪到底
+                // ⚠️ bottom 不要縮 home indicator 安全區（原本會讀 env 再縮）。縮了就是在畫面最底
+                //    留一條沒人畫的縫，只剩 html/body 底色塗得到；而且這裡是 inline !important、
+                //    每次 resize 重套，CSS 那邊怎麼改都會被這行蓋回去。安全區由貼底的控制項自己讓。
+                tabCont.style.setProperty('position', 'absolute', 'important');
+                tabCont.style.setProperty('top',    '0px',        'important');
+                tabCont.style.setProperty('left',   '0px',        'important');
+                tabCont.style.setProperty('right',  '0px',        'important');
+                tabCont.style.setProperty('bottom', '0px',        'important');
+                tabCont.style.setProperty('flex',   'none',       'important');
+                tabCont.style.setProperty('height', 'auto',       'important');
+                return true;
+            }
+
+            // 初始修正：tab 容器可能尚未掛載，重試直到成功（找到即停，不會空轉）
+            requestAnimationFrame(function _fixTab() {
+                if (!applyTabFix()) requestAnimationFrame(_fixTab);
+            });
+
+            // 螢幕旋轉時 safe-area-inset 會改變，重新套用
+            window.addEventListener('orientationchange', function() {
+                setTimeout(applyTabFix, 300);
+            });
+            window.addEventListener('resize', function() {
+                applyTabFix();
+            });
+        }
+
+        isVisible = true;
+        _parkHasStyleRules();
+        if (window.VoidTerminal && window.VoidTerminal.onShow) window.VoidTerminal.onShow();
+    };
+
+    AureliaControlCenter.unmountEmbedded = function() {
+        if (!isEmbedded || !embeddedRoot) return;
+
+        // 還原 mount 時被強制改成 relative 的 containerEl
+        document.querySelectorAll('[data-aurelia-pos-forced]').forEach(el => {
+            el.style.position = '';
+            delete el.dataset.aureliaPosForced;
+        });
+
+        if (embedObserver) { embedObserver.disconnect(); embedObserver = null; }
+
+        // 還原「只在訊息區」模式收起的 #chat
+        if (_hiddenChatEl) {
+            _restoreChat(_hiddenChatEl);
+            _hiddenChatEl = null;
+        }
+
+        if (phoneModal) {
+            phoneModal.appendChild(phoneFrame);
+            phoneFrame.style.position = 'fixed';
+            phoneFrame.style.display = 'none';
+        }
+        if (embeddedRoot.parentNode) embeddedRoot.parentNode.removeChild(embeddedRoot);
+        embeddedRoot = null;
+        isEmbedded = false;
+        isVisible = false;
+        _unparkHasStyleRules();
+        if (window.VoidTerminal && window.VoidTerminal.onHide) window.VoidTerminal.onHide();
+    };
+
+    // ── 真全螢幕（Fullscreen API：連瀏覽器網址列、工作列都消失） ──
+    // 注意：必須由使用者手勢（click / keydown）觸發，programmatic 呼叫會被瀏覽器拒絕
+    AureliaControlCenter.enterFullscreen = function() {
+        if (!phoneFrame || isFullscreen) return;
+        if (!isVisible) AureliaControlCenter.show();
+
+        _fsPrevParent = phoneFrame.parentNode;
+        _fsPrevSibling = phoneFrame.nextSibling;
+        _fsPrevStyle = phoneFrame.style.cssText;
+
+        stopSyncing();
+
+        document.body.appendChild(phoneFrame);
+        phoneFrame.style.cssText = `
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            width: 100vw; height: 100vh;
+            background: #fff;
+            border: none; border-radius: 0;
+            box-shadow: none;
+            z-index: 100000;
+            display: block;
+            pointer-events: auto;
+        `;
+
+        isFullscreen = true;
+        updateFullscreenBtnIcon();
+
+        // 嘗試進入瀏覽器原生全螢幕（連網址列 / 工作列都消失）
+        const reqFs = phoneFrame.requestFullscreen
+                   || phoneFrame.webkitRequestFullscreen
+                   || phoneFrame.mozRequestFullScreen
+                   || phoneFrame.msRequestFullscreen;
+        if (reqFs) {
+            const result = reqFs.call(phoneFrame);
+            if (result && typeof result.catch === 'function') {
+                result.catch(err => {
+                    console.warn('[Aurelia] 瀏覽器全螢幕被拒（仍維持視窗級全屏）:', err?.message || err);
+                });
+            }
+        }
+    };
+
+    AureliaControlCenter.exitFullscreen = function() {
+        if (!phoneFrame || !isFullscreen) return;
+
+        // 先退出瀏覽器原生全螢幕（若處於該狀態）
+        const fsEl = document.fullscreenElement
+                  || document.webkitFullscreenElement
+                  || document.mozFullScreenElement
+                  || document.msFullscreenElement;
+        if (fsEl) {
+            const exitFs = document.exitFullscreen
+                        || document.webkitExitFullscreen
+                        || document.mozCancelFullScreen
+                        || document.msExitFullscreen;
+            if (exitFs) {
+                try {
+                    const result = exitFs.call(document);
+                    if (result && typeof result.catch === 'function') result.catch(() => {});
+                } catch (e) {}
+            }
+        }
+
+        if (_fsPrevParent) {
+            if (_fsPrevSibling && _fsPrevSibling.parentNode === _fsPrevParent) {
+                _fsPrevParent.insertBefore(phoneFrame, _fsPrevSibling);
+            } else {
+                _fsPrevParent.appendChild(phoneFrame);
+            }
+        }
+
+        phoneFrame.style.cssText = _fsPrevStyle;
+
+        _fsPrevParent = null;
+        _fsPrevSibling = null;
+        _fsPrevStyle = '';
+        isFullscreen = false;
+
+        if (!isEmbedded && isVisible) startSyncing();
+
+        updateFullscreenBtnIcon();
+    };
+
+    AureliaControlCenter.toggleFullscreen = function() {
+        if (isFullscreen) AureliaControlCenter.exitFullscreen();
+        else AureliaControlCenter.enterFullscreen();
+    };
+
+    AureliaControlCenter.show = function() {
+        if (isVisible && phoneModal) return;
+        if (!phoneModal) phoneModal = createPhoneModal();
+        if (isEmbedded) {
+            if (phoneFrame) phoneFrame.style.display = 'block';
+        } else {
+            phoneModal.style.display = 'block';
+            phoneFrame.style.display = 'block';
+            startSyncing();
+        }
+        isVisible = true;
+        _parkHasStyleRules();
+        if (window.VoidTerminal && window.VoidTerminal.onShow) window.VoidTerminal.onShow();
+    };
+
+    AureliaControlCenter.hide = function() {
+        // 🛟 任何關閉路徑（🏰 toggle / smartToggle / 切面板 / requestClose）都先把
+        // html_extractor / StoryExtractor 劫持的 #form_sheld 還回原位，否則 overlay 被藏起來時
+        // 酒館原生輸入框會跟著一起被孤兒化消失。放在唯一咽喉 hide()，避免個別呼叫點漏還原。
+        try { if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) window.AureliaHtmlExtractor.hide(); } catch (_) {}
+        try { if (window.StoryExtractor && window.StoryExtractor.isVisible) window.StoryExtractor.hide(); } catch (_) {}
+
+        if (!isVisible) return;
+        if (isFullscreen) AureliaControlCenter.exitFullscreen();
+        if (isEmbedded) AureliaControlCenter.unmountEmbedded();
+        else {
+            stopSyncing();
+            if (phoneFrame) phoneFrame.style.display = 'none';
+        }
+        isVisible = false;
+        _unparkHasStyleRules();
+        if (window.VoidTerminal && window.VoidTerminal.onHide) window.VoidTerminal.onHide();
+    };
+
+    AureliaControlCenter.toggle = () => isVisible ? AureliaControlCenter.hide() : AureliaControlCenter.show();
+    AureliaControlCenter.isVisible = () => isVisible;
+    // 設定頁改了高度時當場重套：只改窗的高，不重跑 mountEmbedded——
+    //   重跑會把 phoneFrame 再 appendChild 一次，iframe 一被重新插進 DOM 就整個重載，
+    //   她正開著的那頁會被打回首頁。框不動、置中是框的 justify-content 在管，所以這裡改高就夠了。
+    AureliaControlCenter.applyEmbeddedHeight = function () {
+        if (!isEmbedded || !embeddedRoot || !phoneFrame || _embedKind === 'standalone') return false;
+        const pct = _readPanelHeight();
+        phoneFrame.style.height = `${pct}%`;
+        phoneFrame.style.flex   = `0 0 ${pct}%`;
+        return true;
+    };
+
+    AureliaControlCenter.isEmbeddedMounted = () => isEmbedded;
+    AureliaControlCenter.isFullscreen = () => isFullscreen;
+    AureliaControlCenter.switchPage = switchPage;
+    AureliaControlCenter.showVnPanel = showVnPanel;
+    AureliaControlCenter.hideVnPanel = hideVnPanel;
+
+    // 收掉整個奧瑞亞（大廳 MAIN MENU 的「關閉」走這條）。
+    // #form_sheld 的還原已統一收進 hide()，這裡直接委派即可。
+    // 🚨 PWA（standalone）後面沒有酒館可以回去，收掉就只剩一片白 → 不動作；那兩顆鈕在 PWA 也藏起來了（lobby.css）。
+    AureliaControlCenter.requestClose = function() {
+        if (_embedKind === 'standalone') return;
+        AureliaControlCenter.hide();
+    };
+
+    AureliaControlCenter.setChatTitle = function(title) {
+        const homeEl = document.getElementById('home-chat-title');
+        if (homeEl) { homeEl.textContent = `[Session] ${title}`; homeEl.title = title; }
+    };
+
+    // ── 🧱 全螢幕窗口（大廳上那一整格 #aurelia-panel-container）的切塊進出場 ──
+    //    10-13 起大廳開的全螢幕窗口都一樣——地圖（出門）、後院、房產、日曆、設置…打開時從中間往外一格格蓋到大廳上，
+    //    關時一格格收掉露回大廳。引擎在 core/aurelia_tilefx.js；演不演它自己判斷（演出動畫開關、電腦寬、劇情層沒開著）。
+    //    故事日誌自己演（它多了開書闔書，切塊要配書的時間），這裡跳過。
+    let _panelSeq = 0;   // 每開一次窗口 +1：收到一半又開了別的窗口，舊的那趟收完不准把新的藏掉
+    function _panelOpening(panel) {
+        _panelSeq++;
+        delete panel.dataset.tileOut;
+        panel.style.transform = '';   // 保險：舊的 goHome 曾把整格推出畫面（translateX(100%)），留著的話新開的窗口會看不見
+        const TF = window.AURELIA_TILEFX;
+        if (TF) TF.clear(panel);   // 上一個窗口收到一半就換人：先清乾淨（要在新 app 自己藏窗口之前）
+    }
+    function _panelShown(panel, selfAnimated) {
+        const TF = window.AURELIA_TILEFX;
+        if (!TF || selfAnimated || !TF.canRun()) return;
+        TF.run(panel, 'in');   // 這一下同步就先剪成全藏，所以不會先閃一整格再開始拼
+    }
+    function _panelHideNow(panel) {
+        delete panel.dataset.tileOut;
+        panel.style.display = 'none';
+        const TF = window.AURELIA_TILEFX;
+        if (TF) TF.clear(panel);   // 清掉剪裁，下一個開在這格的 app 才不會被剪
+        if (window.VoidTerminal && window.VoidTerminal.resumeLobbyActivity) window.VoidTerminal.resumeLobbyActivity();
+    }
+    // 關窗口：要演就一格格收掉再藏；selfAnimated＝那個 app 自己已經演完了（故事日誌），直接藏
+    function _panelClosing(panel, selfAnimated) {
+        if (!panel) return;
+        const TF = window.AURELIA_TILEFX;
+        if (selfAnimated || !TF || panel.style.display === 'none' || !TF.canRun()) { _panelHideNow(panel); return; }
+        if (panel.dataset.tileOut === '1') return;   // 已經在收了（連按兩下關閉）
+        panel.dataset.tileOut = '1';
+        const seq = _panelSeq;
+        TF.run(panel, 'out', () => {
+            if (seq !== _panelSeq) return;   // 收到一半又開了別的窗口：不要藏
+            _panelHideNow(panel);
+        });
+    }
+
+    // 大廳那一整格窗口（地圖、房產、後院、日曆…）開著沒、把它收掉：Esc 和右側欄「換一個開」用
+    function _openPanel() {
+        const p = document.getElementById('aurelia-panel-container');
+        return (p && p.style.display !== 'none' && p.dataset.tileOut !== '1' && p.getClientRects().length) ? p : null;
+    }
+    AureliaControlCenter.panelOpen = function () { return !!_openPanel(); };   // 測試用：現在有沒有開著的窗口
+    AureliaControlCenter.closePanel = function () {
+        const p = _openPanel();
+        if (!p) return false;
+        _panelClosing(p, false);
+        return true;
+    };
+    // 這一格的 app 多半只有「返回」沒有關閉鈕，Esc 找不到可按的，在這裡登記怎麼關
+    if (window.AUI && window.AUI.escLayer) window.AUI.escLayer(_openPanel, AureliaControlCenter.closePanel);
+
+    AureliaControlCenter.launchGameApp = function(key) {
+        const GAME_APP_MAP = {
+            map:        () => window.OS_MAP?.launchApp,
+            worldbook:  () => window.OS_WORLDBOOK?.launch,
+            journal:    () => window.OS_JOURNAL?.launch,
+            calendar:   () => window.OS_CALENDAR?.launch,   // 📅 VN 末尾的「日曆」鍵（手機殼的日曆 app 照留）
+            landlord:   () => window.OS_LANDLORD?.launch,
+            farm:       () => window.OS_FARM?.launch,   // 🌱 後院（農場＋牧場）：手機殼「後院」app 開進來，全螢幕
+        };
+        const getFn = GAME_APP_MAP[key];
+        if (!getFn) return;
+        const launchFn = getFn();
+        if (typeof launchFn !== 'function') return;
+        
+        const root = phoneFrame;
+        if (!root) return;
+        
+        // 🌟 遊戲類一律使用全域視窗，確保不會被 Tab 切換遮擋
+        const appContainer = root.querySelector('#aurelia-iframe-container');
+        const panel = root.querySelector('#aurelia-panel-container');
+        if (!appContainer || !panel) return;
+
+        _panelOpening(panel);
+        appContainer.innerHTML = '';
+        const div = document.createElement('div');
+        div.style.cssText = 'position:relative; width:100%; height:100%; overflow:auto;';
+        appContainer.appendChild(div);
+
+        const selfAnimated = key === 'journal';   // 故事日誌自己演切塊（配開書闔書）
+        const doClose = () => _panelClosing(panel, selfAnimated);
+
+        if (window.PhoneSystem) window.PhoneSystem.goHome = doClose;
+
+        div.addEventListener('click', (e) => {
+            const btn = e.target.closest('[onclick]');
+            if (!btn) return;
+            const attr = btn.getAttribute('onclick') || '';
+            if (attr.includes('goHome')) { e.preventDefault(); e.stopPropagation(); doClose(); }
+        }, true);
+
+        launchFn(div);
+        panel.style.display = 'flex';
+        _panelShown(panel, selfAnimated);
+        if (window.VoidTerminal && window.VoidTerminal.suspendLobbyActivity) window.VoidTerminal.suspendLobbyActivity();
+    };
+
+    AureliaControlCenter.showOsApp = function(appName) {
+        // ⚙️ 設置（11-17）：三個設置合成一個「設置」窗口（os_phone/os/os_settings_window.js），不再開這一整格的舊設置頁
+        if (appName === '設置' && window.OS_SETTINGS_WINDOW && window.OS_SETTINGS_WINDOW.open) {
+            if (!isVisible) AureliaControlCenter.show();
+            window.OS_SETTINGS_WINDOW.open('home');
+            return;
+        }
+        if (!isVisible) AureliaControlCenter.show();
+        const root = phoneFrame;
+        if (!root) return;
+
+        // 寫作頁已退役（2026-06-12）：所有 App 統一走全域 overlay；寫作工具改從手機殼開。
+        // showOsApp 仍保留給 index.js / persona / phone_system shim 等外部呼叫者。
+        const containerId = '#aurelia-iframe-container';
+        const panelId = '#aurelia-panel-container';
+
+        const container = root.querySelector(containerId);
+        const panel = root.querySelector(panelId);
+
+        if (panel) _panelOpening(panel);
+        if (container) {
+            container.innerHTML = '';
+            const div = document.createElement('div');
+            div.style.cssText = 'width: 100%; height: 100%; overflow: auto; background: #EEF0F6;';
+            container.appendChild(div);
+
+            const map = {
+                '世界書': window.OS_WORLDBOOK || window.OS_LOREBOOK,
+                'worldbook': window.OS_WORLDBOOK || window.OS_LOREBOOK,
+                '提示詞': window.OS_PROMPTS,
+                'avs': window.OS_AVS,
+                '變數工坊': window.OS_AVS,
+                '地圖': window.OS_MAP,
+                'map': window.OS_MAP,
+                // wx/wb (phone_system shim 已將它們存入 __PHONE_APPS)
+                '微信':    { launch: (c) => window.__PHONE_APPS?.['微信']?.(c) },
+                '微博':    { launch: (c) => window.__PHONE_APPS?.['微博']?.(c) },
+            };
+
+            const _panelClose = () => _panelClosing(panel, false);
+            if (window.PhoneSystem) window.PhoneSystem.goHome = _panelClose;
+
+            const originalLaunchApp = map[appName]?.launchApp || map[appName]?.launch;
+            if (originalLaunchApp) {
+                originalLaunchApp(div);
+                setTimeout(() => {
+                    const selectors = ['#nav-home', '#pm-nav-home', '.set-back-btn', '.pm-back-btn', '.am-btn-icon', '#avs-nav-home', '[onclick*=\"goHome\"]'];
+                    selectors.forEach(selector => {
+                        div.querySelectorAll(selector).forEach(btn => {
+                            const onclickAttr = btn.getAttribute('onclick');
+                            const shouldHijack = selector === '[onclick*=\"goHome\"]' || selector === '#nav-home' || selector.includes('back-btn') || selector === '#avs-nav-home' || (onclickAttr && onclickAttr.includes('goHome'));
+                            if (shouldHijack) {
+                                btn.removeAttribute('onclick');
+                                btn.onclick = (e) => {
+                                    e.preventDefault(); e.stopPropagation();
+                                    _panelClosing(panel, false);   // 一格格收掉再藏（會順便叫大廳醒來）
+                                };
+                            }
+                        });
+                    });
+                }, 200);
+            } else {
+                div.innerHTML = `<div style=\"color:#e06060;padding:20px;\">App 未就緒 (${appName})</div>`;
+            }
+        }
+        if (panel) { panel.style.display = 'flex'; _panelShown(panel, false); }
+        if (window.VoidTerminal && window.VoidTerminal.suspendLobbyActivity) window.VoidTerminal.suspendLobbyActivity();
+    };
+
+    setTimeout(() => { if (!phoneModal) phoneModal = createPhoneModal(); }, 0);
+
+    // ── 全屏事件監聽（瀏覽器級 + 視窗級雙保險） ──
+    // 1. fullscreenchange：使用者在瀏覽器原生全螢幕下按 ESC / F11 退出時觸發 → 同步狀態
+    function onFsChange() {
+        const fsEl = document.fullscreenElement
+                  || document.webkitFullscreenElement
+                  || document.mozFullScreenElement
+                  || document.msFullscreenElement;
+        if (!fsEl && isFullscreen) {
+            AureliaControlCenter.exitFullscreen();
+        }
+    }
+    document.addEventListener('fullscreenchange', onFsChange);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    document.addEventListener('mozfullscreenchange', onFsChange);
+    document.addEventListener('MSFullscreenChange', onFsChange);
+
+    // 2. keydown ESC：當瀏覽器原生全螢幕被拒、僅 CSS 假全屏時的 fallback
+    //    有窗口開著時 Esc 先關窗口（AUI 的 Esc 會關），不退出全螢幕
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && isFullscreen && !e.defaultPrevented && !(window.AUI && window.AUI.escTarget && window.AUI.escTarget())) {
+            e.preventDefault();
+            AureliaControlCenter.exitFullscreen();
+        }
+    });
+
+    console.log('✅ 控制中心模組 (v4.8.3 - 雙視窗路由架構) 已加載');
+
+})(window.AureliaControlCenter = window.AureliaControlCenter || {});

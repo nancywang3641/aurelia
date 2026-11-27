@@ -1,0 +1,4766 @@
+﻿// ----------------------------------------------------------------
+// [檔案] os_studio.js (通用靈感創作室 Studio - V2.5 移動端 UX 終極優化)
+// 職責：優化移動端體驗，預覽區置頂、輸入區置底，加入點擊外部關閉與 Toggle 切換。
+// ----------------------------------------------------------------
+(function() {
+    const win = window.parent || window;
+    console.log('[PhoneOS] 啟動通用靈感創作室 (Creator Studio V2.5)...');
+
+
+    // 直接編輯原碼 modal（抽成常數：完整創作室 studioHTML 與獨立 VN組件區都用同一份，免得獨立區沒這 modal→編輯原碼按鈕死掉）
+    const RAW_EDIT_MODAL_HTML = `
+        <div id="studio-raw-edit-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
+            <div style="max-width:900px; width:100%; max-height:90vh; background:#EEF0F6; border:1px solid #9b59b6; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:12px; margin:auto; box-shadow:0 0 50px rgba(155,89,182,0.25);">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(155,89,182,0.3);">
+                    <strong style="font-size:15px; color:#c39bf2;"><i class="fa-solid fa-code"></i> 直接編輯原碼 · <span id="raw-edit-tagid" style="color:#1A1C28;">?</span></strong>
+                    <div style="color:#c39bf2; cursor:pointer; font-size:20px;" id="raw-edit-close"><i class="fa-solid fa-xmark"></i></div>
+                </div>
+                <div style="font-size:11px; color:rgba(195,155,242,0.6); line-height:1.5;">
+                    完整 JSON 結構（含 tagId / html / css / js / usageDesc / demoFormat 等）。直接編輯後按「儲存」會覆寫這個面板。改壞了可以按「重置」拿回原本內容。
+                </div>
+                <textarea id="raw-edit-textarea" style="flex:1; min-height:50vh; max-height:65vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
+                <div id="raw-edit-status" style="font-size:11px; color:rgba(255,255,255,0.5); min-height:14px;"></div>
+                <div style="display:flex; gap:10px;">
+                    <button class="avs-btn" id="raw-edit-save" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#2ecc71; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+                    <button class="avs-btn" id="raw-edit-reset" style="flex:0 0 100px; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-arrow-rotate-left"></i> 重置</button>
+                    <button class="avs-btn" id="raw-edit-cancel" style="flex:0 0 100px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.2); color:#aaa; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
+                </div>
+            </div>
+        </div>`;
+    const studioHTML = `
+        <div class="studio-container">
+            <div class="studio-header">
+                <div class="studio-title">
+                    <div class="studio-back-btn" id="studio-back-btn" title="返回大廳"><i class="fa-solid fa-chevron-left"></i></div>
+                    <i class="fa-solid fa-palette"></i> 創作室
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <!-- 還原舊版：對整輪作品的動作，跟清空放一起（以前是輸入框上方一顆淡淡的鈕、點了原地展開一大塊） -->
+                    <button class="studio-icon-btn" id="vn-studio-history-btn" hidden title="每次修改前會自動存一份舊版，可以還原到任一個"><i class="fa-solid fa-clock-rotate-left"></i> <span>還原舊版 <span id="vn-studio-history-count">0</span></span></button>
+                    <button class="studio-icon-btn studio-preview-toggle" id="studio-header-preview-btn" title="預覽面板"><i class="fa-solid fa-eye"></i> <span>預覽</span></button>
+                    <button class="studio-icon-btn danger" id="studio-clear-btn" title="清空當前頻道的對話紀錄"><i class="fa-solid fa-trash"></i> <span>清空</span></button>
+                </div>
+            </div>
+
+            <div class="studio-body">
+                <div id="studio-drawer-backdrop" class="studio-drawer-backdrop"></div>
+
+                <!-- 創作室首頁(今天要做什麼)已移除：功能全整併進「應用商城」工坊首頁，這裡不再有落地首頁 -->
+
+                <!-- ② 聊天區 -->
+                <div class="studio-left">
+                    <!-- 設定列：只顯示「現在選了什麼」，要改點「設定」換頁（只 vn_ui 顯示）。
+                         🚨 以前面板類型、誰來做、一整排要求 chip 全攤在輸入框上方，看不出哪個是什麼、怎麼調 -->
+                    <div class="studio-set-bar" id="studio-set-bar">
+                        <span class="studio-set-pill" id="studio-set-type">純展示</span>
+                        <button class="studio-set-open" id="studio-set-open" type="button"><i class="fa-solid fa-sliders"></i> 設定 <i class="fa-solid fa-chevron-right"></i></button>
+                    </div>
+
+                    <div class="studio-chat-history" id="studio-chat-history"></div>
+                    <button id="studio-preview-fab" class="studio-preview-fab" style="display:none;">
+                        <span><i class="fa-solid fa-eye"></i></span><span id="studio-fab-label">查看預覽</span>
+                    </button>
+
+                    <!-- 設定頁：蓋住左半邊（聊天那一欄），右邊作品照樣看得到。換頁不是展開 -->
+                    <div class="studio-set-page" id="studio-set-page" hidden>
+                        <div class="studio-set-hd">
+                            <button class="studio-set-back" id="studio-set-back" type="button" aria-label="返回"><i class="fa-solid fa-chevron-left"></i></button>
+                            <span>設定</span>
+                        </div>
+                        <div class="studio-set-body">
+                            <div class="studio-set-sec">面板類型</div>
+                            <div class="studio-type-row" id="studio-type-row">
+                                <button class="studio-type active" data-type="純展示" type="button"><b>純展示</b><span>把劇情資料漂亮顯示出來</span></button>
+                                <button class="studio-type" data-type="純應用" type="button"><b>純應用</b><span>按一下就生成內容或圖</span></button>
+                                <button class="studio-type" data-type="共用" type="button"><b>共用</b><span>既顯示資料，又能生成</span></button>
+                                <button class="studio-type" data-type="主畫面組件" type="button"><b>主畫面組件</b><span>擺在手機主畫面上的一小塊</span></button>
+                            </div>
+                            <div class="studio-set-sec">自動修正<button type="button" class="aui-help" data-help="st_autofix" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
+                            <div class="studio-feat-list">
+                                <button class="studio-feat" id="studio-autofix" type="button"><i class="fa-solid fa-wand-magic-sparkles"></i><span>檢查到問題自動叫它修</span><span class="studio-feat-sw" aria-hidden="true"></span></button>
+                            </div>
+                            <div class="studio-set-sec">要求<button type="button" class="aui-help" data-help="st_chips" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
+                            <div class="studio-chips-row" id="studio-chips-row"></div>
+                            <div class="studio-set-sec">功能<button type="button" class="aui-help" data-help="st_feats" title="說明"><i class="fa-regular fa-circle-question"></i></button></div>
+                            <div class="studio-feat-list" id="studio-feat-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="studio-input-wrap">
+                        <!-- 已選的要求與開著的功能：可以直接按 × 拿掉（只 vn_ui、有選才出現）-->
+                        <div class="studio-picked" id="studio-picked"></div>
+
+                        <!-- 待發送的圖片縮圖列（有圖才顯示） -->
+                        <div class="studio-pending-images" id="studio-pending-images"></div>
+
+                        <div class="studio-input-area">
+                            <input type="file" id="studio-image-input" accept="image/*" multiple style="display:none;">
+                            <button class="studio-attach-btn" id="studio-attach-btn" title="附加參考圖（最多保留最近 2 張在上下文中）"><i class="fa-solid fa-paperclip"></i></button>
+                            <textarea class="studio-textarea" id="studio-input" placeholder="告訴 AI 你的點子...（Shift+Enter 換行 / Enter 發送）"></textarea>
+                            <button class="studio-send-btn" id="studio-send-btn">發送</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ③ 預覽區 -->
+                <div class="studio-right">
+                    <div class="studio-drawer-handle" id="studio-drawer-handle"></div>
+                    <div class="studio-right-header">
+                        <div class="studio-tab active" data-tab="preview"><i class="fa-solid fa-eye"></i> 畫布預覽</div>
+                        <!-- 格式與說明：標籤、給劇本 AI 的說明、資料格式。以前疊在預覽上面，把作品推到下面去 -->
+                        <div class="studio-tab" data-tab="info" id="studio-tab-info" hidden><i class="fa-solid fa-file-lines"></i> 格式與說明</div>
+                        <div class="studio-tab" data-tab="gallery" id="studio-tab-gallery" style="display:none;"><i class="fa-solid fa-puzzle-piece"></i> VN組件</div>
+                    </div>
+                    <div class="studio-preview-content" id="studio-preview-content">
+                        <div id="studio-preview-main" class="studio-preview-main">
+                            <div class="studio-empty">尚未生成任何內容。<br><br>請輸入您的點子，讓 AI 為您創作。</div>
+                        </div>
+                    </div>
+                    <div class="studio-info-content" id="studio-info-content" hidden></div>
+                    <div class="studio-source-content" id="studio-source-content"></div>
+                    <div id="studio-gallery-content" style="display:none; flex:1; overflow-y:auto; padding:20px;">
+                        <div id="studio-gallery-toolbar" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+                            <button id="studio-spec-copy-btn" style="flex:1; min-width:190px; background:rgba(46,204,113,0.12); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-clipboard"></i> 複製創建說明書</button>
+                            <button id="studio-import-btn" style="flex:1; min-width:150px; background:rgba(155,89,182,0.12); border:1px solid #9b59b6; color:#7d3cae; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;"><i class="fa-solid fa-file-import"></i> 匯入面板</button>
+                            <button id="studio-import-pack-btn" class="studio-pack-btn import"><i class="fa-solid fa-box-archive"></i> 匯入包</button>
+                            <input type="file" id="studio-import-pack-file" accept=".json" hidden>
+                        </div>
+                        <div class="studio-gallery-list" id="studio-gallery-list"></div>
+                    </div>
+                    <div class="studio-action-area">
+                        <button class="studio-export-btn" id="studio-export-btn"><i class="fa-solid fa-check"></i> 確定創建</button>
+                        <button class="studio-export-btn" id="studio-publish-btn" style="background:linear-gradient(135deg,#e67e22,#d35400); border-color:#d35400; margin-left:10px; display:none;"><i class="fa-solid fa-rocket"></i> 發布至世界書</button>
+                    </div>
+                </div>
+                <!-- 還原舊版：清單開在彈窗裡（以前在輸入框上方原地展開，把聊天擠掉一大塊）。
+                     #vn-studio-history-area 由 os_studio_diff_engine.js 的 renderVNHistoryArea 畫 -->
+                <div class="studio-hist-modal" id="studio-hist-modal" hidden>
+                    <div class="studio-hist-card">
+                        <div class="studio-hist-hd"><span><i class="fa-solid fa-clock-rotate-left"></i> 還原舊版</span>
+                            <button class="studio-hist-x" id="studio-hist-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>
+                        <div id="vn-studio-history-area"></div>
+                    </div>
+                </div>
+                <!-- 🎨 劇情面板主題 view（頂層 mode，獨立全區，由 .top-theme 控制顯示） -->
+                <div id="studio-theme-content" class="studio-theme-pane"></div>
+                <div id="studio-worldbook-content" class="studio-worldbook-pane"></div>
+                <div id="studio-persona-content" class="studio-persona-pane"></div>
+            </div>
+        </div>
+
+        <!-- 📝 直接編輯原碼 modal（進階用戶繞過 AI 對話改 tpl JSON）-->
+        ${RAW_EDIT_MODAL_HTML}
+
+        <!-- 📥 匯入面板 modal（貼朋友自己的 AI 照「創建說明書」產的 <json> → 載入預覽 → 上面按💾存進展廳）-->
+        <div id="studio-import-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.88); backdrop-filter:blur(6px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
+            <div style="max-width:900px; width:100%; max-height:90vh; background:#EEF0F6; border:1px solid #9b59b6; border-radius:10px; padding:18px; display:flex; flex-direction:column; gap:12px; margin:auto; box-shadow:0 0 50px rgba(155,89,182,0.25);">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding-bottom:10px; border-bottom:1px solid rgba(155,89,182,0.3);">
+                    <strong style="font-size:15px; color:#7d3cae;"><i class="fa-solid fa-file-import"></i> 匯入面板</strong>
+                    <div style="color:#9b59b6; cursor:pointer; font-size:20px;" id="studio-import-close"><i class="fa-solid fa-xmark"></i></div>
+                </div>
+                <div style="font-size:11px; color:rgba(125,60,174,0.85); line-height:1.6;">
+                    把你的 AI 照「創建說明書」產出的 <strong>&lt;json&gt;…&lt;/json&gt;</strong> 整段貼進來，按「載入預覽」檢查；OK 後到上方按「確定創建」存起來（純展示→VN組件、應用/共用→我的應用、主畫面組件→手機主畫面的「組件」），就能用了。
+                </div>
+                <textarea id="studio-import-textarea" placeholder="&lt;json&gt;{ ... }&lt;/json&gt;" style="flex:1; min-height:46vh; max-height:62vh; background:rgba(0,0,0,0.6); border:1px solid rgba(155,89,182,0.4); color:#e9d5ff; padding:12px; border-radius:6px; font-family:monospace; font-size:12px; line-height:1.5; outline:none; resize:vertical; white-space:pre; overflow:auto;"></textarea>
+                <div id="studio-import-status" style="font-size:11px; color:rgba(26,28,40,0.6); min-height:14px;"></div>
+                <div style="display:flex; gap:10px;">
+                    <button class="avs-btn" id="studio-import-load" style="flex:1; background:rgba(46,204,113,0.15); border:1px solid #2ecc71; color:#1a8f4f; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">載入預覽</button>
+                    <button class="avs-btn" id="studio-import-cancel" style="flex:0 0 100px; background:rgba(26,28,40,0.05); border:1px solid rgba(26,28,40,0.25); color:#1A1C28; padding:10px; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">取消</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ⚡ 組件快捷管理 modal（新增/刪除自訂快捷話術）-->
+        <div class="studio-chip-modal" id="studio-chip-modal">
+            <div class="studio-chip-box">
+                <div class="studio-chip-mhead"><span><i class="fa-solid fa-bolt"></i> 快捷話術</span><button class="studio-chip-x" id="studio-chip-close"><i class="fa-solid fa-xmark"></i></button></div>
+                <input class="studio-chip-input" id="studio-chip-label" placeholder="標籤（例：兩層結構）" maxlength="12">
+                <textarea class="studio-chip-ta" id="studio-chip-text" placeholder="補充說明（選填，留空就只送名字）"></textarea>
+                <button class="studio-chip-savebtn" id="studio-chip-save"><i class="fa-solid fa-plus"></i> 新增這個快捷</button>
+                <div class="studio-chip-mlist" id="studio-chip-list"></div>
+            </div>
+        </div>
+    `;
+
+    let activePreviewData = null;
+
+    const MODES = {
+        'vn_ui': {
+            name: 'VN UI 煉丹',
+            prompt: `你是 UI 工程師，替一個視覺小說引擎做「面板」。你看不到引擎的程式碼，你能用的東西全部寫在這份說明裡；沒寫的就是沒有。
+
+使用者每則訊息開頭會標【類型：X】，X 是 純展示／純應用／共用／主畫面組件 之一。四種類型的規則各自完整寫在第 2 節，照那一段做，別問；沒標＝純展示。
+
+## 1. 做事方式
+- 使用者要什麼就做什麼。主題、風格、結構、元素以使用者描述為準；要 A 給 A，別換成你覺得更好的 B。真有更好的點子，做完之後一兩句附帶提。
+- 直接動手，不開場白、不說教、不勸退。資訊不足就用合理預設先出第一版，JSON 後面一行問「哪裡要調」。使用者明說「先討論」才討論，最多兩輪出稿。
+- 視覺跟當前故事的世界觀走，沒有固定個人美學；使用者沒指定就依世界觀判斷，別每個面板同一個味道。
+- 修改時做最小改動，不重排使用者沒提的部分。
+
+## 2. 三種類型（每型自足，只讀你那一型）
+
+### 2a. 純展示：嵌進劇情正文、蓋在遮罩上的一個主體
+- 落點：劇情播到 <tagId> 區塊時，主體蓋在畫面正中央的暗色遮罩上。
+- 版型：一個限寬置中的主體。加 max-width（約 520~760）和 max-height，絕不吃滿外框。三種外框寬都不破版：手機約 390、桌面中間約 1000、桌面全屏約 1920。長內容在主體內捲。
+- 主體自己寫 width:100% 再配 max-width：外框是把主體擺在正中間的，主體沒寫寬度就只會跟裡面的字一樣寬。
+- 主體是什麼，看這次要展示的東西，兩種都是對的，選錯才是錯：
+  ① 要看的是**上面寫了什麼**（說明、清單、記錄、多筆並列的東西）→ 主體是一張卡或一塊板，資訊排在它裡面。
+  ② 要看的是**它長什麼樣、它在動**（一個看得見的東西，或那個東西自己的動作）→ 主體就是那個東西本身，它的輪廓就是面板的輪廓，外面不再包一層卡片、標題列或說明區；動作可以超出它的邊界。
+  分不出來就問自己這一句：使用者盯著看的是文字，還是那個東西。
+- 資料：只來自這一次區塊裡的行，用 st.parse() 拿。不持久化、不讀劇情、不叫 AI。
+- 互動：只做純前端（展開、切換、排序）。禁 st.callAI、st.setImage。
+- 出口：一顆綁 onComplete 的鈕，讓使用者看完離開。鈕上的字與造型跟主體一體（主體是什麼，這顆鈕就是那個東西上會有的東西），別用「返回」這種手機 App 的介面詞——這裡不是 App。
+- 外層容器 .vn-dynamic-panel-<tagId> 的位置與寬高由引擎寫死，改它的 margin 或 width 沒用；只調主體內部。
+
+### 2b. 純應用：裝在手機桌面的一個 App
+- 落點：使用者從手機桌面點圖標打開，跑在手機框裡（寬約 390），跟劇情正文無關。
+- 版型：手機 App，不是卡片。根容器 width:100%、min-height:100%、display:flex、flex-direction:column；頂部標題列，中間內容區 flex:1 撐開，底部操作列。內容再少也要撐滿手機框，下方不能留一大片空白。不做置中小卡、不做三尺寸響應式。
+- 資料：App 自己存。小量設定用 st.saveData／st.loadData；會累積的清單（日記、記錄）用 st.dbSave／st.dbLoad。跟當前故事有關的資料 scope 一律 'chat'；純個人工具（記事本、計算機）用全域。init 一進來先把存的讀回來畫出來；記錄型 App 只能 append、絕不整份覆蓋。
+- 生成：可以用 st.callAI 生文字、st.setImage 生圖，只在使用者按了「生成」類按鈕時跑。
+- 「我」的身分：用 st.user()，見第 4 節。
+- 返回：標題列固定一顆返回鈕綁 onComplete（回手機主畫面）。
+
+### 2c. 共用：同一個面板，劇情裡會跳出來、也裝成手機 App
+- 落點：兩邊都跑。劇情播到 <tagId> 區塊時，套一支手機殼跳出來，殼裡的螢幕跟手機 App 一樣大（寬約 390、高度固定，內容多了在螢幕裡捲）；使用者也能從手機桌面打開它（填滿手機框）。兩邊都是手機螢幕，只照手機 App 設計一版。
+- 版型：跟 2b 一樣做成 App 版型（根容器 width:100% + min-height:100% + flex 直向撐滿），兩種落點都填滿不留白。
+- isBlock 必須 true、必須有 demoFormat（第 5 節），劇本 AI 才知道怎麼在正文寫這個區塊。
+- 資料有兩條進料，缺一不可：
+  ① 正文那條：劇本 AI 在正文 <tagId> 區塊裡寫的，劇情演到相關內容時自然出現。
+  ② 應用那條：使用者在 App 裡按「生成」鈕，面板自己叫 st.callAI 產出的外圍內容（劇情沒演到這個主題也能生：路人貼文、新聞、榜單、留言）。
+  兩條都由引擎合併成一份，面板從 st.feed() 拿。**沒有②的共用面板就是做錯了。**
+- 資料規則（整型最重要的一條）：面板不自己存清單。init 只做一件事：const rows = await st.feed(); 然後照順序畫。rows 每筆 { id, src, tag, fields, floor }，src 是 'story' 或 'app'，順序引擎排好了：不要自己排序、不要自己去重、不要自己存一份。禁 st.saveData／st.dbSave／st.dbLoad 存清單（會累積、會混到別的聊天）；那幾個只准放跟清單無關的小設定（篩選條件、展開狀態）。禁 st.getStory 撈歷史塞清單。禁 st.remember。
+- 使用者在 App 裡新增／回覆／留言：await st.feedAdd('標籤名', [欄…])；改：await st.feedUpdate(id, [欄…])；刪：await st.feedRemove(id)。只有 src 'app' 的能改能刪，src 'story' 的來自正文、面板動不了。做完重新 await st.feed() 重畫。作者一律用 st.user() 的暱稱與頭像。
+- 生成鈕（必須有）：App 裡至少一顆會叫 AI 產「新的」內容的按鈕。名字與造型跟面板主題走，使用者這次叫它什麼就是什麼。使用者要求「加一顆按鈕來調用生成／叫 API」就是指它，別做成只重畫或重新讀取的按鈕。按下後固定流程：
+  ① st.loading(按鈕或清單, true, '生成中…')
+  ② const rows = await st.feed()，把「使用者自己發的（src 'app'）全部」＋「最近幾筆」原樣列進提示，明講「這是面板上已經有的內容，使用者剛發的在最後，新內容要接著這些寫、該回應的要回應、不要重複」。st.callAI 只自動帶角色卡與最近劇情，不會帶面板內容，這一步不能省。
+  ③ const text = await st.callAI(提示)。提示還要講清楚面板主題、要幾筆、輸出格式嚴格照 demoFormat 那幾行 [標籤|欄…]、一行一筆、除此之外不輸出任何字。
+  ④ const recs = st.parseText(text)；for (const r of recs) await st.feedAdd(r.tag, r.fields)
+  ⑤ st.loading(…, false)；重新 await st.feed() 重畫
+  生成出來的東西只進 st.feed，不送進劇情、不進記憶。除了 st.onWake 登記的那段，只有使用者按了才生。
+- 返回：標題列固定一顆返回鈕綁 onComplete。
+
+### 2d. 主畫面組件：擺在手機主畫面上的一小塊
+- 落點：手機主畫面，跟應用圖標並排的一格。它不嵌進劇情正文，也不是點開來用的 App。
+- 大小由使用者自己選（兩欄寬的方塊、整排、整排加高，三種），所以版面要能縮放：用相對單位排，不要寫死寬度。內容超出那一格會被裁掉，重要的東西不要放在邊緣。
+- 只做「看一眼就知道」的東西。不要按鈕、輸入框、分頁、捲軸、彈窗——要動手的東西請做成 App。
+- 拿不到劇情資料，也不要呼叫任何 st.*：這一類只取畫面與樣式，那段程式不會被執行。js 給空字串。
+- 不要出口鈕：它不是開起來的東西，沒有要關。
+- 那一格很小，字級與間距都要比平常大一階；寧可少放一點，不要擠成一團。
+- isBlock 給 false，不需要 demoFormat。
+
+## 3. 所有類型都要守的鐵律
+- 不自動花錢：st.callAI、st.setImage 只能在使用者明確點了「生成／刷新／發送」類按鈕時跑；唯一例外是 st.onWake 登記的那段（見第 4 節「自己動」，是使用者自己在設定裡打開的）。面板載入、換頁、切 TAB、進第二層詳情，都只是顯示已有的東西，絕不能因此自動生成一次（兩層結構被誤解成每層各生成一次，是最常犯的錯）。載入時只准做讀取：st.feed、st.parse、st.loadData、st.dbLoad、st.getCurrentChars、st.getContacts、st.wbLoad、st.user、st.getStory、st.clock、st.balance。
+- 每個面板都必須自帶一顆綁 onComplete 的出口鈕，純展示／純應用／共用都一樣（主畫面組件沒有出口鈕，見 2d）。造型跟主題一體（封蠟、鎖扣、艙門、標題列的 ‹ 都行），位置固定在標題列或卡角，一眼看得到，flex-shrink:0 不被內容擠走。別幾秒自動消失、別靠手機殼的橫槓代替。少了這顆使用者回不去主畫面。
+- 捲動與溢出：只有「會變長的那一個內容區」給 flex:1; min-height:0; overflow-y:auto；標題、圖示、裝飾、按鈕一律 flex-shrink:0；父容器 display:flex; flex-direction:column，卡本體 overflow:hidden。否則內容一多，固定元素被擠出去。同一個盒子不能又要內部捲動裁切又要讓某元素溢出邊緣；真要溢出裝飾就拆兩層：外層 overflow:visible 放 position:absolute 的裝飾，內層 overflow:hidden 負責捲動。
+- CSS 只能寫在 .vn-dynamic-panel-<tagId> 前綴底下。禁 position:fixed、禁 position:absolute 配 top/left 自定位、禁 100vw、100vh、禁在 body／html 設樣式、禁寫死固定像素寬。
+- 主題化：外形跟面板用途綁定（寶箱、卷軸、通訊終端、檔案夾、契約書、地圖板、懸賞令，依用途挑、別每次同一個）；資訊融進主體結構（鎖孔、封蠟、寶石槽、紙頁、銘牌），不是另開方塊貼上去；至少一個 SVG 或 CSS 造型當視覺主體；按鈕像拉桿、封印、鑰匙孔這種跟主體一體的互動件。
+- 禁無聊網頁感：卡中卡、header+content+footer 堆疊、普通圓角矩形列表、只靠漸層加陰影。
+- 禁在按鈕或標籤文字加 ASCII 裝飾（[ ]、<< >>、» «）。禁左側色條（border-left 當 accent）、禁 Markdown 引用（行首大於號會被 st.md 畫成左邊一條槓）。
+- js 裡禁止出現字串字面 $1（引擎的正則層會當成 capture group 切掉、整段 js 炸）。自寫 regex 替換用 callback：.replace(rx, function(_, p1){ return '<b>' + p1 + '</b>'; })。
+- 解析資料只用 st.parse() 或 st.parseText()，禁自己對 lines 用 regex 切、禁 JSON.parse。渲染含標籤的字串用 innerHTML。文字塞進畫面前先過一手：短的（名字、標籤、單欄欄位）用 st.esc()；整段文章（st.callAI 回來的、或資料裡那種會換行分段的長內容）用 st.md()，它會把換行、段落、粗體排好。長內容直接 textContent 或只 st.esc()，整段會擠成沒有段落的一坨。
+- 貼進輸入框或插一則訊息進對話只准用 st.toChat／st.toSystem（要用得先點功能 chip 把用法帶進來）；沒帶那個 chip 就不做這件事。讓劇情知道使用者在 App 裡做了什麼用 st.toStory，不需要 chip。絕對禁止 createChatMessages、TavernHelper、generateRaw、直接操作 #send_textarea。
+
+## 4. st：你唯一能用的 API（封閉清單）
+st 只有下面這些，一個不多。沒列的一律不存在，不准自己發明或猜（沒有 st.char、st.player、st.getUser、st.user.name、st.data、st.save）。寫成 xxx() 的是函式，要加括號；標「Promise」的要 await。
+
+執行環境：你的 js 被 new Function('container', 'lines', 'onComplete', 'st', 你的js) 包起來跑。
+- container：面板根節點。找子元素用 container.querySelector('.cls')，禁 document.getElementById（多實例會撞）。
+- lines：這次區塊裡的純文字行，通常不直接碰，交給 st.parse()。
+- onComplete()：關閉面板。必須綁在那顆出口鈕上。
+
+讀資料
+- st.parse() → { 標籤名: [[欄1, 欄2…], …] }。把 lines 拆成資料。
+- st.parseText(文字) → [{ tag, fields }]。把一段文字（通常是 st.callAI 回來的）照同一套規則拆。
+- st.feed() → Promise<[{ id, src:'story'|'app', tag, fields, floor }]>。共用面板的全部資料，已排好序。傳 { tag: '標籤名' } 只拿某一種。
+- st.feedAdd(tag, fields) → Promise<row>；st.feedUpdate(id, fields) → Promise；st.feedRemove(id) → Promise。共用面板在 App 裡新增／改／刪，只動 src 'app' 的。
+- st.wbSave(標題, 內容[, 關鍵字陣列]) → Promise<布林>。把一段設定寫進當前世界書（酒館是角色卡的世界書，手機是手機世界書正在用的那本），寫正文的模型之後就讀得到：同標題就改那一條、沒有就新建。不給關鍵字＝每輪都送；給了＝對話提到其中一個才送。回 false 表示沒存成（多半是角色卡沒綁世界書），用 st.toast 告訴使用者。只在使用者按了保存／寫入類的按鈕時呼叫。
+- st.wbLoad(標題) → Promise<文字>。讀回當前世界書裡這個標題的內容，沒有就是空字串。
+- st.saveData(key, value[, 'chat']) / st.loadData(key[, 'chat'])：純應用的小量持久化。scope 'chat' 綁當前聊天、不填全域。
+- st.dbSave(key, value[, 'chat']) → Promise / st.dbLoad(key[, 'chat']) → Promise：純應用的大量持久化，存資料庫不怕爆。
+- st.getStory(n) → 最近 n 條劇情 [{ name, text }]，預設 30。純應用要讀劇情時用；純展示、共用不用。
+- st.getCurrentChars() → Promise<[{ name, count }]>。當前聊天出現過的角色，做角色選單用。
+- st.getContacts() → Promise<[{ id, name, desc, avatar, isGroup, persona }]>。手機微信通訊錄裡的人和群（當前故事那本），做「選一個聯絡人」的清單用。isGroup 為 true 是群聊；使用者本人不在裡面；desc、avatar、persona 可能是空字串，avatar 空的就畫首字圓框。劇情還沒演到、但微信裡已經加過的人也在這裡。persona 是使用者替這個人設的人設（群聊是群的備註）：App 要讓 AI 寫到某個人（替他發文、留言、回話）時，把他的 persona 一起放進 st.callAI 的提示，不要只給名字。
+- st.clock() → Promise<{ date, time, upcoming:[{ date, time, title }] }>。故事裡現在的日期（例如 6/20）與時間（例如 18:30），upcoming 是接下來幾天跟使用者約好的事（time 是幾點，例如 18:00，或只說了時段：早上／中午／下午／晚上／深夜，沒說就是空字串）。故事還沒有時間時 date、time 是空字串；要顯示今天幾號、排行程、算倒數用它，不要自己猜或拿現實時間。
+- st.getChatId() → 當前聊天 id 字串。
+- st.user() → Promise<{ name, nickname, avatar, signature, desc }>。使用者本人。寫法固定：const me = await st.user(); 之後用 me.nickname、me.avatar。面板裡凡是「我」發的東西（留言、貼文、發言、簽到）作者一律用它：顯示名用 nickname、沒有再用 name；頭像用 avatar、空的就畫首字圓框。禁寫死 User、我、匿名；禁做登入或選身分頁面。
+
+生成
+- st.pickPhoto() → Promise<圖片 data 網址，取消是空字串>。讓使用者選一張自己的照片（手機會跳相機／相簿），已經縮好，可以直接放進 <img src>、也可以存起來。只在使用者按了「上傳／選照片」類按鈕時叫。
+- st.callAI(提示, { images: [圖, …] }) → 要 AI 看圖時把圖（st.pickPhoto 拿到的那種）放進 images，最多 6 張；AI 看不看得到、怎麼看，照使用者的設定走，面板不用管。沒有圖就只寫 st.callAI(提示)。
+- st.callAI(系統提示) → Promise<文字>。自動帶角色卡、最近劇情、世界書，不必重述背景；不會帶面板內容。await 包 try/catch，生成中顯示 st.loading。
+- st.setImage(img元素, 英文提示, 類型, 來源)：生圖。用法不常駐，使用者點了「生圖」功能 chip 才會把完整用法帶進來；沒帶就別用。
+
+介面
+- st.md(文字) → HTML。Markdown 轉換，內建、免疫 $1。
+- st.esc(文字) → 安全的 HTML 字串。
+- st.toast(訊息[, { type:'error' 或 color:'#xxx' }])：短暫提示。別自己做 toast。
+- st.confirm(訊息[, { danger:true, okText, cancelText }]) → Promise<布林>。危險動作先問；別用 window.confirm。
+- st.loading(元素或選擇器, true/false[, '生成中…'])：轉圈遮罩。
+
+錢包與分享
+- st.balance() → Promise<數字>。使用者手機錢包現在有多少錢（跟微信紅包、轉帳同一個錢包）。
+- st.pay(金額, 用途) → Promise<布林>。從手機錢包扣錢；錢不夠回 false、一毛都不扣，這時用 st.toast 告訴使用者。扣成功劇情會知道這筆錢花在哪，不用再另外 st.toStory。只在使用者按了付款／購買類按鈕、畫面上看得到金額之後呼叫。
+- st.share(聯絡人id, 標題, 內容) → Promise<布林>。以使用者的身分把一張分享卡片送進某個微信聊天室（id 從 st.getContacts 拿，先讓使用者選人）。只在使用者按了分享鈕、選好人之後呼叫；成功後 st.toast 提示一下。
+
+自己動（App 自己產生新東西、通知使用者）
+- st.onWake(async () => { … })：登記「被叫醒時要做的事」。使用者在這個 App 的設定裡打開「自己動」後，時間到了程式會在背景把 App 開起來跑這一段，跑完就關掉；平常使用者自己打開 App 時這段不會跑。裡面通常是：讀現有資料、st.callAI 生幾筆新內容、存起來（st.feedAdd 或 st.dbSave）、st.badge 亮紅點、st.notify 發一句通知。被叫醒時沒有人在看畫面：不要等使用者點按鈕、不要跳 st.confirm、不要依賴畫面上的元素。這段整個寫成一個 async 函式，做完才 return。只有內容會隨時間自己增加的 App 才寫，工具類 App 不要寫。
+- st.badge(數字)：桌面圖標右上角的紅點，0 清掉。使用者打開 App 時會自動清掉，App 不用自己清。
+- st.notify(一句話) → Promise：發一則手機通知，一句話講清楚誰做了什麼。使用者沒開通知就不會出現，不影響其他事。
+
+交給劇情
+- st.toStory(一句話) → Promise<布林>。使用者在 App 裡做完一件劇情該知道的事，就記一筆；下次劇情接著寫時會帶到，只帶一次，不會出現在對話裡。只在使用者按了會完成某件事的按鈕之後呼叫；載入、瀏覽、切頁不記，生成鈕產出的內容也不記。一句話寫清楚是使用者做的、做了什麼，不要寫成給劇本 AI 的指示。
+
+送進對話（要先點功能 chip 帶用法）
+- st.toChat(文字[, opts])：貼回輸入框，使用者自己送。
+- st.toSystem(文字)：直接插一則 system 訊息進聊天。
+
+## 5. demoFormat（isBlock 為 true 時的資料模板）
+demoFormat 是給劇本 AI 看的範本，它會照抄格式在正文寫資料。只寫結構、不寫內容。
+- 每行 [標籤名|{欄1}|{欄2}…]，| 分隔。要填的欄位一律用 {中文佔位}：中文加花括號。
+  對：[Item|{物品名稱}|{物品描述}]
+  錯：[Item|長劍|鋒利鐵劍]（具體名詞會被劇本 AI 永遠照搬）；[Item|name|desc]（英文佔位也算錯）；[Item|<物品名>|<描述>]（角括號會被 HTML 吃掉）
+  例外：第一格標籤名（Item、Post、Comment）是 schema，不包。
+- 需要圖就最後一格寫 {圖片英文Prompt}。
+- 只能放 js 裡有對應處理的資料行。禁自創 [XxxFormat|…]、[Style|…]、[Template|…] 這種偽標籤，js 不認會整行消失。排版與樣式一律寫在 js 裡。
+- 內容用 Markdown 不用 HTML。渲染時用 st.md()。
+
+## 6. 輸出格式
+第一次回覆必須含完整 <json>…</json>，八鍵齊全（keywords 選填）。不可只回對話、不可省 JSON、不可缺鍵。沒有完整 JSON，後續所有微調都會崩。
+<json>
+{
+  "tagId": "英文標籤名",
+  "title": "繁體中文顯示名，最多四個字；裝成手機應用時就是桌面上的名字",
+  "isBlock": true 或 false,
+  "html": "骨架 HTML，不填資料，由 js 渲染",
+  "css": "全部 CSS，含 .vn-dynamic-panel-xxx 前綴",
+  "js": "互動邏輯",
+  "usageDesc": "給劇本 AI 的一句話說明，附『依格式填寫，只在 <content> 內穿插此標籤』",
+  "demoFormat": "資料結構，只說明結構、不寫內容",
+  "keywords": ["選填，3~5 個觸發詞：正文出現這些詞代表需要這個面板。依本面板主題想直接相關的名詞或動詞，別用泛詞；想不到給 []"]
+}
+</json>
+JSON 字串值裡禁止出現真實換行字元，換行用跳脫寫法（反斜線加 n）。
+說明文字用 zh-CN，程式碼例外。`,
+            onSave: async (data) => {
+                if(!data.tagId || !data.html) throw new Error("缺少 tagId 或 html");
+                // 面板沒綁返回／關閉鈕（onComplete）＝存了會回不去主畫面；擋一下讓使用者叫 AI 補，不是默默存
+                if (!/onComplete/.test(String(data.js || ''))) {
+                    if (!await AUI.confirm('這個面板沒有返回／關閉鈕（程式裡沒綁 onComplete），存了會回不去主畫面。\n建議先叫 AI 補上再存。還是要直接存？')) throw Object.assign(new Error('沒有返回鈕'), { silent: true });
+                }
+                if (win.OS_DB && win.OS_DB.saveVNTagTemplate) {
+                    if (!data.id) data.id = 'tpl_' + Date.now();
+                    data.isActive = true;
+                    // AI 順手吐的觸發關鍵字 → 正規化成乾淨字串陣列（給設定頁預填、省得手動想）；注入方式預設「常駐」(不設 injectMode)，要省 token 再到設定頁切「關鍵字觸發」
+                    data.keywords = (Array.isArray(data.keywords) ? data.keywords : []).map(function (k) { return String(k || '').trim(); }).filter(Boolean).slice(0, 8);
+                    // caps 自動標：js 有用 st.callAI/st.setImage = 能生成；有用 lines/container = 能展示
+                    (function () {
+                        var js = String(data.js || '');
+                        var canGen = /st\.callAI\s*\(|st\.setImage\s*\(/.test(js);
+                        var canShow = /\blines\b/.test(js) || /container/.test(js);
+                        data.caps = (canGen && canShow) ? 'both' : (canGen ? 'gen' : 'display');
+                    })();
+                    // 記下「你開頭明確選的型別」——VN組件 vs 我的應用 的歸屬以這個為準，不靠 caps 亂猜
+                    data.panelType = _vnPanelType;
+                    // 一律存一份可編輯底稿(模板)；應用/共用 之後靠 srcTplId 找回它編輯
+                    await win.OS_DB.saveVNTagTemplate(data);
+                    await syncActiveTagsToLocal();
+                    // 🔀 按開頭選的型別分流：純展示→只進 VN組件；純應用→只裝手機 app；共用→兩邊都要（劇情渲染＋裝成 app，讀同一份資料）
+                    let _aid = null;
+                    // 🧩 主畫面組件走自己那條：它不嵌進劇情正文、也不是點開來用的應用，
+                    //    是擺在手機主畫面上的一小塊。跟 VN 組件放一起會搞混——
+                    //    會，所以現在開頭就分清楚，做出來直接進「組件」、不會跑到 VN 組件那邊。
+                    if (_vnPanelType === '主畫面組件') {
+                        const _w = _installTemplateAsHomeWidget(data);
+                        AUI.alert(_w
+                            ? ('「' + _w.name + '」做好了，已經放上手機主畫面。想換大小或拿下來，到手機的「組件」。')
+                            : '做好了，但放上主畫面失敗——到手機的「組件」看看。');
+                        return;
+                    }
+                    if (_vnPanelType !== '純展示') {
+                        _aid = await _installTemplateAsPhoneApp(data);   // 先裝 app，下面 init 才抓得到它的 id 建「模板→app」對照
+                    }
+                    // init 放在裝 app 之後：重建「模板 → app id」對照表（共用面板的 dbSave 小設定兩邊才對到同一桶；清單資料走 VN_PANEL_FEED 不經此）
+                    if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
+                    if (_vnPanelType === '純展示') {
+                        AUI.alert(`[${data.tagId}] 已建立！已存進「VN組件」。`);
+                        document.getElementById('studio-tab-gallery')?.click();
+                    } else if (_vnPanelType === '共用') {
+                        AUI.alert(`[${data.tagId}] 已建立（共用）！劇情裡會自動跳出渲染、也裝進手機「應用工坊 · 我的應用」、並在「VN組件」可見，兩邊讀同一份資料。` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                    } else {
+                        AUI.alert(`[${data.tagId}] 已建立，並裝進手機 →「應用工坊 · 我的應用」！` + (_aid ? '' : '\n(裝機未完成，可到我的應用重試)'));
+                    }
+                }
+            }
+        },
+        'var_pack': {
+            name: '變數包設計',
+            prompt: `你是 AVS (Aurelia Variable System) 的「動態變數架構師」。請採取漸進式討論。
+前期請純聊天，只有在確認變數清單後，才輸出被 <json> 標籤包裹的純 JSON。
+格式: {"id": "xxx", "name": "xxx", "vars": [{"key":"HP", "type":"number", "default": 100}]}
+
+🎯【給用戶做關鍵抉擇時，請用 <choices> 標籤】
+⚠️ <choices> 是「關鍵抉擇」工具，不是「省事回答」工具。每幾輪對話頂多用一次，**使用前必須先寫充分的分析鋪墊**，禁止省略討論直接丟選項。
+格式：\`<choices>選項1的完整描述|選項2的完整描述|......</choices>\`（選項數量自定）
+規則：
+- 用 \`|\` 分隔，每個選項至少 1-2 句完整描述（禁止單詞）
+- 選項內容根據當下對話脈絡生成，不要套用預設主題
+- UI 自帶「✏️ 其他想法...」不用你提供
+- ✅ 用：到了關鍵抉擇點　❌ 不用：純介紹 / 細節討論 / 還沒鋪墊夠`,
+            onSave: async (data) => {
+                if(!data.id || !data.name || !Array.isArray(data.vars)) throw new Error("格式錯誤");
+                if (win.OS_DB && win.OS_DB.saveVarPack) {
+                    await win.OS_DB.saveVarPack(data);
+                    AUI.alert(`🎉 變數包 [${data.name}] 儲存成功！`);
+                }
+            }
+        },
+        'fx': {
+            name: '特效工坊',
+            prompt: `你是視覺小說的「畫面特效配方師」。用戶描述想要的畫面效果（例如下雪、受傷閃紅、雷光一閃），你把它翻譯成一份 JSON「配方」。你只輸出配方、不寫任何程式碼——特效由固定引擎照配方播放，配方以外的東西一律無效。
+
+【輸出格式】需求清楚後，輸出被 <json> 標籤包裹的單一 JSON 物件：
+{"fxId":"...","name":"...","desc":"...","kind":"...","steps":[...]}
+- fxId：fx- 開頭、只能小寫英文/數字/連字號，取有意義的英文短詞
+- name：中文名，6 字內
+- desc：一句話寫「什麼劇情時觸發」——劇情 AI 全靠這句決定何時用，要寫得像挑選指南
+- kind：once＝瞬發（打擊/閃光類，播完自動消失）；loop＝持續（天氣/氛圍類，掛著直到換場）
+
+【可用積木（steps 的元素，只准用這些，別發明新欄位）】
+1. 粒子 {"block":"particles","preset":"見下","count":數量,"size":像素,"speed":速度,"color":"CSS顏色"}
+   preset 只准八選一：snow(飄雪)、rain(雨絲)、drip(頂端滲液下滑)、petal(花瓣旋落)、ember(火星上升)、burst(中心爆散)、bubble(氣泡上升)、sparkle(原地閃爍)
+   範圍：count 1-300、size 1-40、speed 5-1200（雨類 700 以上、飄落類 40-80、上升類 60-150）
+2. 閃色 {"block":"flash","color":"顏色","times":閃幾下1-6}
+3. 震動 {"block":"shake","strength":力度1-24}（只准用在 once）
+4. 邊緣滲色 {"block":"edge","color":"顏色"}（畫面四周暈影：受傷/中毒/瀕死/回憶）
+5. 光軌 {"block":"streak","color":"顏色","angle":角度0-360,"width":粗細1-12}（一道光掃過：斬擊/流星；只准 once）
+6. 罩色 {"block":"tint","color":"顏色","alpha":0.02-0.45}（整屏染色氛圍）
+7. 閃電 {"block":"bolt","color":"顏色","width":粗細1-12}（鋸齒閃電劈下、帶分枝與頻閃：雷擊/魔法/衝擊；只准 once，常配 flash+shake）
+8. 簡易圖形 {"block":"svg","svg":"<svg viewBox=\\"0 0 寬 高\\">...</svg>","anim":"動畫","pos":"位置","size":寬度百分比8-100}
+   這塊是你「自己畫」：漫畫符號類（怒氣井字/汗滴/驚嘆號/問號/集中線/星星/音符…）用扁平簡約風 SVG 畫出來——幾何形狀+粗線條+單純配色，不要寫實漸層
+   規矩：必須帶 viewBox；只准純圖形（path/circle/rect/line/g 這類），script/外部圖片/連結一律會被引擎剝掉；只准 once
+   anim 五選一：pop(彈出)、drop(砸下)、rise(飄升淡出)、pulse(脈衝跳動)、burst(擴散消失)；pos 四選一：center/top/bottom/full(鋪滿全屏，集中線用這個)
+9. 自訂繪製 {"block":"code","js":"每幀執行的繪製程式碼"}
+   上面積木都做不出來的效果，才用這塊「自己寫」。js 是一段函式體，引擎每幀呼叫，可用參數：
+   - ctx：canvas 2D context，只在它上面畫，不准碰 DOM/window/計時器/事件
+   - p：進度 0到1（once=播放進度；loop=平常 1、收尾淡出時降到 0——把它乘進透明度）
+   - dt：這幀經過秒數（所有移動量都要乘 dt，否則不同裝置速度不一）
+   - t：開播至今的秒數（做週期動畫用）
+   - w、h：畫布寬高（座標一律按 w/h 比例算，別寫死像素）
+   - state：跨幀保存資料的空物件（粒子陣列、初始化旗標放這裡，首幀 if(!state.init){...;state.init=true} 建立）
+   規矩：自己畫的粒子/元素總數 200 以內；不要 shadowBlur 大面積濫用（手機會卡）；不留殘影就每幀畫新的（畫布由引擎清）；程式碼連續出錯 3 次引擎會停用這個特效
+
+【時間軸】kind=once 時每個積木都要加 "at":開始毫秒 和 "dur":持續毫秒（總長 8000 內）；kind=loop 不用 at/dur，且只准用 particles/tint/edge/code。
+
+【設計原則】
+- 積木優先：現成積木能組出來的就用積木（穩、省），組不出來才上自訂繪製 code
+- 寧少勿多：2-4 個積木就能做出好特效，堆太多會亂
+- 顏色配合效果的情緒（血用暗紅、雷用青白、治癒用暖金這類直覺）
+- 用戶描述不清楚就先用一兩句話確認，別亂猜
+- 輸出 <json> 前先用一句話講設計思路`,
+            onSave: async (data) => {
+                const fxEngine = window.OS_FX || win.OS_FX;
+                const norm = fxEngine && fxEngine.validate ? fxEngine.validate(data) : null;
+                if (!norm) throw new Error('配方格式不對，請叫 AI 重新輸出一次');
+                if (!win.OS_DB || !win.OS_DB.saveUITemplate) throw new Error('資料庫不可用');
+                // 同 fxId 視為改版 → 覆蓋舊檔，不疊重複條目
+                let existing = null;
+                try {
+                    const all = await win.OS_DB.getAllUITemplates();
+                    existing = (all || []).find(t => t && t.isFX && t.fxRecipe && String(t.fxRecipe.fxId || '').toLowerCase() === norm.fxId);
+                } catch (e) {}
+                await win.OS_DB.saveUITemplate({
+                    id: existing ? existing.id : ('fx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                    title: norm.name,
+                    isFX: true,
+                    panelType: '特效',
+                    fxRecipe: norm,
+                    createdAt: existing ? existing.createdAt : Date.now(),
+                });
+                try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
+                AUI.alert(`特效「${norm.name}」已存好！劇情 AI 之後就會在合適時機用它`);
+            }
+        }
+    };
+
+    let currentMode = 'vn_ui';
+    let _studioTop = 'vn_ui';  // 頂層導覽：vn_ui | theme | worldbook | persona（創作室首頁已移除，全從工坊帶 landMode 進）
+    let _landedDirect = false; // (保留兼容) launch 仍會設；返回鈕已統一直接退出，不再讀它
+    let chatMessages = [];
+    let _vnPanelType = '純展示';   // 面板類型：純展示 / 純應用 / 共用（開頭就選，注入生成訊息）
+    let _pendingLaunchType = '';   // 從外面帶著類型進來（主畫面「組件」那張卡）：等對話載好再套，不跟存檔搶
+    // 🚨 類型要跟對話一起記：以前只在記憶體，視窗重開／PWA 重載就回到純展示，下一則開頭自動標成【類型：純展示】，
+    //    AI 看到跟上一輪不一樣就「順便幫使用者改回純展示」。
+    const _panelTypeKey = (chatId) => 'studio_panel_type_' + chatId;
+    // 重開時該用哪個類型：外面帶進來的 → 這個對話存過的 → 舊對話沒存過就從最後一則使用者送的訊息開頭的【類型：X】推回來 → 都沒有就維持現在的
+    function _studioPickPanelType(chatId, history) {
+        if (_pendingLaunchType) { const t = _pendingLaunchType; _pendingLaunchType = ''; return t; }
+        let saved = '';
+        try { saved = localStorage.getItem(_panelTypeKey(chatId)) || ''; } catch (e) {}
+        if (saved) return saved;
+        const list = Array.isArray(history) ? history : [];
+        for (let i = list.length - 1; i >= 0; i--) {
+            const m = list[i];
+            if (!m || m.role !== 'user') continue;
+            const c = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content.find(p => p && p.type === 'text') || {}).text || '' : '');
+            const mm = /^【類型：([^】]+)】/.exec(String(c || ''));
+            if (mm) return mm[1].trim();
+        }
+        return _vnPanelType;
+    }
+    let _pvLastJsError = null;     // 預覽層跑面板 js 時抓到的同步錯誤（自檢引擎 os_studio_selfcheck.js 過橋讀）
+    let _lastParseError = null;    // 最近一次 <json> 解析失敗的原因（自檢用來叫模型重出）
+    let _autoFixRound = 0;         // 自檢自動修正輪數：使用者每送一次歸零，程式最多自動追加一輪，不無限循環
+    // 自動修正開關（設定頁）：關著就不自動追加那一輪，檢查結果只列在聊天裡。預設開，跟以前一樣
+    let _studioAutoFix = (function () { try { return localStorage.getItem('studio_autofix') !== '0'; } catch (e) { return true; } })();
+    let currentParsedData = null;
+    let _studioAbortCtrl = null;
+    let pendingImages = []; // [{ dataUrl, mime, sizeKB }] — 用戶選好還沒發送的圖
+    const KEEP_RECENT_IMAGES = 2; // 上下文中只保留最近 N 張圖（其他圖訊息中圖會被剝掉、只留文字 + 占位）
+    const IMG_MAX_SIDE = 1024;    // 壓縮後最大邊長
+    const IMG_QUALITY = 0.82;     // JPEG 品質
+    const IMG_MAX_RAW_MB = 10;    // 單張原始檔案上限
+
+    function togglePreviewDrawer(forceOpen) {
+        const appEl = document.getElementById('os_studio_app');
+        if (!appEl) return;
+        const rightEl   = appEl.querySelector('.studio-right');
+        const backdropEl = document.getElementById('studio-drawer-backdrop');
+        const fabLabel   = document.getElementById('studio-fab-label');
+        if (!rightEl) return;
+
+        const willOpen = (forceOpen !== undefined) ? forceOpen : !rightEl.classList.contains('drawer-open');
+        rightEl.classList.toggle('drawer-open', willOpen);
+        if (backdropEl) backdropEl.classList.toggle('active', willOpen);
+        if (fabLabel) fabLabel.textContent = willOpen ? '收起預覽' : '查看預覽';
+        // 手機模式：開預覽時連 header 一起蓋掉(真．填滿整個創作室)，關閉再還原；用頂部握把關
+        const contEl = appEl.querySelector('.studio-container');
+        const isMob = (contEl && contEl.classList.contains('studio-mobile')) || (window.innerWidth || 9999) <= 768;
+        const headerEl = appEl.querySelector('.studio-header');
+        if (headerEl) headerEl.style.display = (willOpen && isMob) ? 'none' : '';
+    }
+
+    function getChatSessionId() { return currentMode; }
+
+    function launch(container, landMode, panelType) {
+        _landedDirect = !!landMode;   // 帶 landMode＝工坊直接入場，返回要一步退回工坊（別再落到孤兒首頁）
+        const root = container || document.getElementById('aurelia-tab-container') || document.getElementById('aurelia-phone-screen') || document.body;
+        try { syncActiveTagsToLocal(); } catch (e) {}   // 開創作室即用最新格式重組啟用組件說明（給注入器讀）
+        let existing = document.getElementById('os_studio_app');
+        if (existing) existing.remove();
+
+
+        const appDiv = document.createElement('div');
+        appDiv.id = 'os_studio_app';
+        appDiv.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; z-index:9000; background: #EEF0F6;';
+        appDiv.innerHTML = studioHTML;
+        root.appendChild(appDiv);
+
+        // 手機版佈局偵測：手機殼是「窄容器擺在寬視窗裡」，viewport media query 失效。
+        // 優先用 DOM 祖先判斷（在手機殼內＝必手機版），再用實際容器寬度當後備，掛 .studio-mobile。
+        try {
+            const _cont = appDiv.querySelector('.studio-container');
+            // 🎩 開門那一下先標成組件類：創作室預設落在「製作互動面板」，
+            //    等使用者切到世界書或我的角色，switchTopMode 會把這顆拿掉、換回米黃。
+            if (_cont && landMode !== 'worldbook' && landMode !== 'persona') _cont.classList.add('craft-skin');
+            // 🧩 從手機「組件」那張卡進來的，開頭就把型別定成主畫面組件 ——
+            //    不然使用者會落在 VN 組件那一種，做出來的是嵌進劇情正文的東西。
+            _pendingLaunchType = panelType || '';   // 對話載好之後由 _studioPickPanelType 套（見 switchChatSession）
+            // 🚨 只認「手機殼的 app 內容區」(#aps-app-body/.aps-app)。
+            //    不能認 #aurelia-phone-screen——那是整個擴展的螢幕，大廳也在它底下，
+            //    認了就變成「在大廳開的創作室一律當手機版」，再寬也是單欄＋👁 抽屜（2026-08-26 抓到）。
+            const _inPhone = !!(root && root.closest && root.closest('#aps-app-body, .aps-app'));
+            const _applyMobile = () => {
+                if (!_cont) return;
+                const w = (root && root.getBoundingClientRect ? root.getBoundingClientRect().width : 0) || appDiv.offsetWidth || 0;
+                _cont.classList.toggle('studio-mobile', _inPhone || (w > 0 && w <= 768));
+            };
+            _applyMobile();
+            if (window.requestAnimationFrame) requestAnimationFrame(_applyMobile);
+            if (window.ResizeObserver) { try { new ResizeObserver(_applyMobile).observe(root || appDiv); } catch (e) {} }
+        } catch (e) {}
+
+        bindEvents();
+        loadMode(currentMode);     // 先把 vn_ui 工作區建好（先藏在首頁下）
+        switchTopMode(landMode || 'vn_ui');     // 有指定就落該工作；沒帶就落製作面板(vn_ui)——不再有「今天要做什麼」死首頁
+    }
+
+    // ── 📋 創建說明書：給朋友自己的 Claude／GPT 看的「對外」規格書，照它產出 <json> 就能匯入回來 ──
+    const STUDIO_CREATION_SPEC =
+`你要幫我做一個「奧瑞亞」視覺小說(VN)系統用的 UI 面板。它會在劇情進行時被一個標籤叫出來、嵌進故事畫面裡，用來顯示資料（例如狀態欄、角色卡、好感度、物品欄、獎勵結算等）。
+
+【最終輸出格式｜務必照這個，否則匯入不進去】
+只輸出一個 <json>…</json> 區塊，裡面是一個 JSON 物件，含這幾個鍵：
+- tagId：面板的英文標籤名（英數底線、簡短，例如 status_panel、reward_box）
+- isBlock：true=多行區塊資料、false=單行
+- html：面板 HTML 結構（字串）
+- css：面板 CSS（字串；所有選擇器父層用 .custom-status-panel 包住，避免污染外部）
+- js：互動 JS（字串，沒有就空字串 ""）
+- usageDesc：給「劇本 AI」的一句極簡用途說明
+- demoFormat：給「劇本 AI」填資料的格式範本（用佔位符、不要寫死真實內容）
+⚠️ JSON 字串值內的換行寫成 \\n、雙引號轉義成 \\"，不要直接斷行。
+
+【資料怎麼進面板｜重要，別寫死數值】
+面板顯示動態資料，用 {{欄位名}} 當佔位符，奧瑞亞跑劇情時會把真實值填進去：
+- 單一欄位：{{血量}}、{{金幣}}
+- 多筆（多角色／多物品）用迴圈：{{#each 列表名}} …單筆HTML… {{/each}}；迴圈內 {{@key}}=名稱、{{@avatar}}=頭像URL、{{欄位名}}=該筆的值。
+demoFormat 就是告訴劇本 AI「要填哪些欄位、什麼結構」，用明顯佔位符風格（例如 {名稱}／{數值}），★絕對不要塞真實內容範例（劇本 AI 會照抄）。
+
+【三種顯示寬度｜一定響應式、不破版】
+面板會被放進三種外框：手機約 390px／桌面中間約 1000px／桌面全屏約 1920px。
+一律 width:100% / max-width / flex / grid / clamp() / 百分比，絕不寫死會破版的大固定像素寬。三種寬度都要排版正常、不溢出、不擠壞。根容器給合理 min-height，別讓內容少時塌成一條。
+
+【🚫 別做無聊面板｜這條最重要】
+禁止普通網頁卡片式 UI：禁止卡片套卡片、禁止單純 header+content+footer 堆疊、禁止普通圓角矩形列表、禁止只靠漸層陰影假高級。
+必須做成「主題化遊戲組件」：
+- 外形跟「這個面板的用途／主題」綁定（例如寶箱、卷軸、通訊終端、檔案夾、契約書、塔羅牌…依實際用途挑、別每次同一個）。
+- 資訊區融入主體結構（鎖孔、紙頁、機械螢幕、銘牌…），不要另開一個方塊貼上去。
+- 至少一個 SVG / CSS 造型元素當「視覺主體」（不是只當小圖示）。
+- 按鈕要像拉桿／封印／鑰匙孔／啟動核心這種跟主體一體成形的互動件。
+- 桌面版橫向展開用足空間，手機版再收窄；不要一開始就做成窄卡片。
+
+【按鈕文字】純內容就好，不要加 [ ] < > >> 之類 ASCII 裝飾，裝飾效果用 CSS 做。
+
+【你要做的】
+1. 先跟我確認：這個面板要顯示什麼資料、什麼主題、純展示還是要有互動。
+2. 照上面規則設計，最後給我那個 <json>…</json> 區塊（只要這一段，別包 markdown 圍欄）。
+3. 我會把它複製、貼回奧瑞亞創作室的「📥 匯入面板」→ 載入 → 儲存，就能在劇情裡用了。
+
+現在開始：先問我這個面板要做什麼。`;
+
+    function _fallbackCopy(text, done) {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.focus({ preventScroll: true }); ta.select();
+            document.execCommand('copy'); document.body.removeChild(ta);
+            done && done();
+        } catch (e) { AUI.alert('複製失敗，請手動全選複製。'); }
+    }
+    function _copyCreationSpec() {
+        const btn = document.getElementById('studio-spec-copy-btn');
+        const done = () => { if (btn) { const t = btn.dataset._t || btn.textContent; btn.dataset._t = t; btn.textContent = '已複製！貼進你的 Claude／GPT'; setTimeout(() => { btn.textContent = btn.dataset._t; }, 1900); } };
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(STUDIO_CREATION_SPEC).then(done, () => _fallbackCopy(STUDIO_CREATION_SPEC, done));
+            } else { _fallbackCopy(STUDIO_CREATION_SPEC, done); }
+        } catch (e) { _fallbackCopy(STUDIO_CREATION_SPEC, done); }
+    }
+    function _doImportLoad() {
+        const ta = document.getElementById('studio-import-textarea');
+        const status = document.getElementById('studio-import-status');
+        const raw = (ta && ta.value || '').trim();
+        if (!raw) { if (status) status.textContent = '先把 <json> 內容貼進來'; return; }
+        currentParsedData = null;   // 匯入是「新面板」，別繼承上一個的 history
+        const ok = extractAndParseJson(raw);   // 解析成功會 set currentParsedData + 跑 renderPreviewPanel
+        if (ok && currentParsedData && !Array.isArray(currentParsedData) && currentParsedData.tagId && currentParsedData.html) {
+            if (status) status.textContent = '已載入！這視窗會自動關 → 上方切「預覽」檢查 → 按「確定創建」存起來。';
+            try { document.querySelector('.studio-tab[data-tab="preview"]') && document.querySelector('.studio-tab[data-tab="preview"]').click(); } catch (e) {}
+            setTimeout(() => { const m = document.getElementById('studio-import-modal'); if (m) m.style.display = 'none'; }, 1000);
+        } else {
+            if (status) status.textContent = '解析失敗或缺 tagId／html。確認貼的是完整 <json>{…}</json>（含七個鍵），再試一次。';
+        }
+    }
+    function _setupImportEvents() {
+        const specBtn = document.getElementById('studio-spec-copy-btn');
+        if (specBtn) specBtn.onclick = _copyCreationSpec;
+        const impBtn = document.getElementById('studio-import-btn');
+        if (impBtn) impBtn.onclick = () => {
+            const m = document.getElementById('studio-import-modal');
+            const ta = document.getElementById('studio-import-textarea');
+            const st = document.getElementById('studio-import-status');
+            if (ta) ta.value = ''; if (st) st.textContent = '';
+            if (m) m.style.display = 'flex';
+        };
+        const closeImp = () => { const m = document.getElementById('studio-import-modal'); if (m) m.style.display = 'none'; };
+        const c1 = document.getElementById('studio-import-close'); if (c1) c1.onclick = closeImp;
+        const c2 = document.getElementById('studio-import-cancel'); if (c2) c2.onclick = closeImp;
+        const md = document.getElementById('studio-import-modal'); if (md) md.onclick = (e) => { if (e.target && e.target.id === 'studio-import-modal') closeImp(); };
+        const ld = document.getElementById('studio-import-load'); if (ld) ld.onclick = _doImportLoad;
+    }
+
+    // ❔ 設定頁問號點開的說明（AUI.helpBtn 同一種按鈕），面板上不掛說明文字
+    (function _regStudioHelp(n) {
+        const A = window.AUI || (window.parent && window.parent.AUI);
+        if (A && A.registerHelp) {
+            A.registerHelp({
+                st_autofix: { title: '自動修正', body: '開著：做完檢查到問題會自己再送一次修正，多花一次額度。\n關著：只送一次，問題列在聊天裡，要修再自己說。' },
+                st_chips:   { title: '要求', body: '點了會跟著你下一句一起送出去，送完就取消。' },
+                st_feats:   { title: '功能', body: '開著的每一輪都會帶上，關掉才不帶。' }
+            });
+            return;
+        }
+        if (n > 0) setTimeout(function () { _regStudioHelp(n - 1); }, 500);
+    })(20);
+    function _enterSends(e) {
+        const A = window.AUI || (window.parent && window.parent.AUI);
+        if (A && A.enterSends) return A.enterSends(e);
+        return !!(e && e.key === 'Enter' && !e.shiftKey && !e.isComposing);
+    }
+    // ⚡ 組件快捷：常用 UI 元素 chip。點一下＝選取（不碰輸入框），送出時接在使用者文字後面一行「[用戶指定元素] A、B」，送完自動清掉。
+    //    內建的只有名字（AI 看得懂 TAB 分頁是什麼，不用解釋）；使用者自存的 chip 有填話術就送話術、沒填就送名字。
+    const STUDIO_CHIP_BUILTIN = [
+        { label: '兩層結構' },
+        { label: 'TAB 分頁' },
+        { label: '固定標題' },
+        { label: '卡片列表' },
+        { label: '深色主題' },
+        { label: '生圖', feature: true, key: 'img', text: '【生圖功能】用 st.setImage(el, prompt, type, provider) 給 <img> 設圖（type: char／item／pet／scene；provider 可選 novelai／tavern_sd／comfyui_direct／custom_api，用戶有指定才填、否則不傳，不傳就照使用者在設置裡選的來源。使用者口中的名字對照設置頁：NovelAI＝novelai、酒館原生＝tavern_sd、ComfyUI 直連＝comfyui_direct、自訂接口＝custom_api）。生圖前 st.loading(el,true)、完 st.loading(el,false)。紀律：只給 FOCUS／重要對象（主角、焦點角色、重要物品/場景）生圖；路人／NPC／頭像縮圖／大量小圖一律不生圖，改用名字首字色塊頭像（純 CSS：首字放圓形 div、背景用名字 hash 出 hsl）。自己塞 url 的 img 都加 onerror 退回佔位／首字頭像，不要破圖。' },
+        { label: '回傳對話框', feature: true, key: 'tochat', text: '【回傳對話框功能】兩種回傳法，依需求選一個：\n① st.toChat(文字, opts)＝貼回「輸入框（送出框）」：預設只貼、使用者自己按送出；傳 {send:true} 直接幫送。用在「要讓使用者挑一條、可再編輯後送進劇情當輸入／指令」（例：隨機事件生 5 條、選 1 條 toChat）。\n② st.toSystem(文字)＝不經輸入框，直接把文字當「system 訊息」插進聊天室成最新一則（旁白/系統公告式，不用再按送出）。用在「app 的結果要直接顯示在劇情流裡」（例：擲骰結果、系統宣告、事件觸發）。' }
+    ];
+    // 功能 chip（feature:true）＝toggle 啟用：用法在送出時併進請求(apiPayload 的 system)、不貼輸入框；話術 chip 照舊貼輸入框
+    const _studioActiveFeatures = new Set();
+    function _studioLoadActiveFeatures() { try { (JSON.parse(localStorage.getItem('studio_active_features') || '[]') || []).forEach(k => _studioActiveFeatures.add(k)); } catch (e) {} }
+    function _studioSaveActiveFeatures() { win.AUI.lsSet('studio_active_features', JSON.stringify([..._studioActiveFeatures]), '創作室啟用的功能'); }
+    _studioLoadActiveFeatures();
+    function _studioInjectActiveFeatures(apiPayload) {
+        try {
+            const txt = STUDIO_CHIP_BUILTIN.filter(c => c.feature && _studioActiveFeatures.has(c.key)).map(c => c.text).join('\n\n');
+            if (txt) apiPayload.unshift({ role: 'system', content: '【使用者已啟用的進階功能：照下列用法使用；沒列在這裡的進階功能（生圖／回傳對話框等）一律不要用、也別自己瞎掰 API】\n' + txt });
+        } catch (e) {}
+    }
+    function _studioLoadChips() { try { return JSON.parse(localStorage.getItem('studio_quick_chips') || '[]') || []; } catch (e) { return []; } }
+    function _studioSaveChips(list) { return win.AUI.lsSet('studio_quick_chips', JSON.stringify(list), '自訂的要求'); }
+    // 元素 chip 的選取狀態（一次性：送出即清）；存的是要送給 AI 的字
+    const _studioSelectedChips = new Set();
+    function _studioTakeSelectedChips() {
+        const list = [..._studioSelectedChips];
+        _studioSelectedChips.clear();
+        return list.length ? ('[用戶指定元素] ' + list.join('、')) : '';
+    }
+    // 設定頁裡分兩區：「要求」＝元素 chip（這一輪有效，送出即清）、「功能」＝開關（跨輪記住）。
+    // 輸入框上方只放「已選的」，每個有 × 可以直接拿掉——主畫面不再攤開整排 chip。
+    // 🚨 以前兩種混在同一排、長一樣，看不出哪個點了會一直開著、哪個送一次就沒了。
+    const _chipLabel = c => String(c.label || '').replace(/^[^\p{L}\p{N}]+/u, '').trim();   // 內建功能名前面有 emoji，畫面上用 FA 圖示
+    const _chipSendText = c => (c.text && String(c.text).trim()) || c.label;
+    const _FEAT_ICON = { img: 'fa-image', tochat: 'fa-share-from-square' };
+    function renderStudioChips() {
+        const row = document.getElementById('studio-chips-row');
+        const feats = document.getElementById('studio-feat-list');
+        const elems = STUDIO_CHIP_BUILTIN.filter(c => !c.feature).concat(_studioLoadChips());
+        const featList = STUDIO_CHIP_BUILTIN.filter(c => c.feature);
+        if (row) {
+            row.innerHTML = elems.map((c, i) =>
+                `<button class="studio-chip${_studioSelectedChips.has(_chipSendText(c)) ? ' active' : ''}" type="button" data-ei="${i}">${_sgcEsc(_chipLabel(c))}</button>`).join('')
+                + '<button class="studio-chip studio-chip-manage" id="studio-chip-manage" type="button"><i class="fa-solid fa-plus"></i> 自訂</button>';
+            row.querySelectorAll('[data-ei]').forEach(b => b.onclick = () => {
+                const c = elems[parseInt(b.getAttribute('data-ei'), 10)];
+                if (!c) return;
+                const k = _chipSendText(c);
+                if (_studioSelectedChips.has(k)) _studioSelectedChips.delete(k); else _studioSelectedChips.add(k);
+                renderStudioChips();
+            });
+            const mg = row.querySelector('#studio-chip-manage');
+            if (mg) mg.onclick = _studioOpenChipModal;
+        }
+        if (feats) {
+            feats.innerHTML = featList.map(c => {
+                const on = _studioActiveFeatures.has(c.key);
+                return `<button class="studio-feat${on ? ' on' : ''}" type="button" data-fk="${_sgcEsc(c.key)}">`
+                    + `<i class="fa-solid ${_FEAT_ICON[c.key] || 'fa-bolt'}"></i><span>${_sgcEsc(_chipLabel(c))}</span>`
+                    + `<span class="studio-feat-sw" aria-hidden="true"></span></button>`;
+            }).join('');
+            feats.querySelectorAll('[data-fk]').forEach(b => b.onclick = () => {
+                const k = b.getAttribute('data-fk');
+                if (_studioActiveFeatures.has(k)) _studioActiveFeatures.delete(k); else _studioActiveFeatures.add(k);
+                _studioSaveActiveFeatures();
+                renderStudioChips();
+            });
+        }
+        _studioRenderPicked(elems, featList);
+    }
+    function _studioRenderPicked(elems, featList) {
+        const box = document.getElementById('studio-picked');
+        if (!box) return;
+        const picked = elems.filter(c => _studioSelectedChips.has(_chipSendText(c))).map(c => ({ kind: 'e', key: _chipSendText(c), label: _chipLabel(c) }))
+            .concat(featList.filter(c => _studioActiveFeatures.has(c.key)).map(c => ({ kind: 'f', key: c.key, label: _chipLabel(c), icon: _FEAT_ICON[c.key] })));
+        box.innerHTML = picked.map((p, i) =>
+            `<span class="studio-picked-tag${p.kind === 'f' ? ' is-feat' : ''}">`
+            + (p.icon ? `<i class="fa-solid ${p.icon}"></i>` : '') + `<span>${_sgcEsc(p.label)}</span>`
+            + `<button type="button" data-pi="${i}" aria-label="拿掉"><i class="fa-solid fa-xmark"></i></button></span>`).join('');
+        box.querySelectorAll('[data-pi]').forEach(b => b.onclick = () => {
+            const p = picked[parseInt(b.getAttribute('data-pi'), 10)];
+            if (!p) return;
+            if (p.kind === 'e') _studioSelectedChips.delete(p.key);
+            else { _studioActiveFeatures.delete(p.key); _studioSaveActiveFeatures(); }
+            renderStudioChips();
+        });
+    }
+    // 設定列上的標籤＝現在選了什麼
+    function _studioSyncSetBar() {
+        const t = document.getElementById('studio-set-type');
+        if (t) t.textContent = _vnPanelType;
+    }
+    function _studioSetPage(open) {
+        const pg = document.getElementById('studio-set-page');
+        if (pg) pg.hidden = !open;
+        if (open) renderStudioChips();
+    }
+    function _studioOpenChipModal() {
+        const m = document.getElementById('studio-chip-modal'); if (!m) return;
+        m.classList.add('show');
+        const lab = document.getElementById('studio-chip-label'); if (lab) lab.value = '';
+        const txt = document.getElementById('studio-chip-text'); if (txt) txt.value = '';
+        _studioRenderChipList();
+    }
+    function _studioRenderChipList() {
+        const list = document.getElementById('studio-chip-list'); if (!list) return;
+        const user = _studioLoadChips();
+        if (!user.length) { list.innerHTML = '<div class="studio-chip-empty">還沒有自訂的要求。上面填一個存起來，就會出現在設定頁的「要求」裡。</div>'; return; }
+        list.innerHTML = user.map((c, i) => `<div class="studio-chip-litem">
+            <span class="studio-chip-litem-label">${_sgcEsc(c.label)}</span>
+            <span class="studio-chip-litem-text">${_sgcEsc(c.text)}</span>
+            <button class="studio-chip-del" data-di="${i}" aria-label="刪除"><i class="fa-solid fa-trash"></i></button>
+        </div>`).join('');
+        list.querySelectorAll('[data-di]').forEach(b => b.onclick = () => {
+            const u = _studioLoadChips(); u.splice(parseInt(b.getAttribute('data-di'), 10), 1); _studioSaveChips(u);
+            _studioRenderChipList(); renderStudioChips();
+        });
+    }
+    function _studioSaveNewChip() {
+        const labEl = document.getElementById('studio-chip-label'), txtEl = document.getElementById('studio-chip-text');
+        const lab = ((labEl && labEl.value) || '').trim(), txt = ((txtEl && txtEl.value) || '').trim();
+        if (!lab) { AUI.alert('要有名字'); return; }
+        const u = _studioLoadChips(); u.push({ label: lab.slice(0, 12), text: txt });   // 說明留空＝送出時只送名字
+        if (!_studioSaveChips(u)) return;   // 沒存下來就別清掉使用者打的字
+        if (labEl) labEl.value = ''; if (txtEl) txtEl.value = '';
+        _studioRenderChipList(); renderStudioChips();
+    }
+
+    function bindEvents() {
+        document.getElementById('studio-back-btn').onclick = () => {
+            // 已無創作室首頁：頂層返回一律直接退出創作室、回到應用商城工坊（各模式的內部返回由該模式自己處理）
+            const app = document.getElementById('os_studio_app'); if (app) app.remove();
+        };
+        _setupRawEditModalEvents();
+        _setupImportEvents();
+        renderStudioChips();
+        { const cc = document.getElementById('studio-chip-close'); if (cc) cc.onclick = () => { const m = document.getElementById('studio-chip-modal'); if (m) m.classList.remove('show'); }; }
+        { const cs = document.getElementById('studio-chip-save'); if (cs) cs.onclick = _studioSaveNewChip; }
+        { const cm = document.getElementById('studio-chip-modal'); if (cm) cm.onclick = (e) => { if (e.target === cm) cm.classList.remove('show'); }; }
+
+        const previewFab     = document.getElementById('studio-preview-fab');
+        const drawerBackdrop = document.getElementById('studio-drawer-backdrop');
+        const drawerHandle   = document.getElementById('studio-drawer-handle');
+        if (previewFab)     previewFab.addEventListener('click', () => togglePreviewDrawer());
+        const headerPreviewBtn = document.getElementById('studio-header-preview-btn');
+        if (headerPreviewBtn) headerPreviewBtn.addEventListener('click', () => togglePreviewDrawer());
+        if (drawerBackdrop) drawerBackdrop.addEventListener('click', () => togglePreviewDrawer(false));
+        if (drawerHandle)   drawerHandle.addEventListener('click', () => togglePreviewDrawer(false));
+
+        _armOnce(document.getElementById('studio-clear-btn'),
+            '<i class="fa-solid fa-trash"></i> <span>再按一次</span>', () => {
+            // 主題頁有自己的聊天室與版本堆疊，清的是那一份
+            const cont = document.querySelector('#os_studio_app .studio-container');
+            if (cont && cont.classList.contains('top-theme')) { try { _themeClear && _themeClear(); } catch (e) {} return; }
+            const chatId = getChatSessionId();
+            // chatMessages 重置時也順便砍掉 latest panel marker（雖然 chatMessages 整個被重設了）
+            chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
+            currentParsedData = null;
+            // 預覽畫的是「剛生成的」或「正在看的那份」：兩份都要清，不然預覽還掛著上一件，要退出再進來才空（09-20）
+            activePreviewData = null;
+            // 清空 IDB
+            if (win.OS_DB && win.OS_DB.clearStudioChat) {
+                win.OS_DB.clearStudioChat(chatId).catch(e=>e);
+            }
+            // 清空 localStorage 備份（聊天歷史 + 預覽狀態快照）
+            localStorage.removeItem(`os_studio_chat_${chatId}`);
+            _clearParsedCache(chatId);
+            renderChatHistory();
+            renderPreviewPanel();
+        });
+
+        const inputEl = document.getElementById('studio-input');
+        const sendBtn = document.getElementById('studio-send-btn');
+        sendBtn.onclick = handleSend;
+        // Enter 發送、Shift+Enter 換行（恢復原邏輯）
+        // 電腦 Enter 送出、Shift+Enter 換行；手機螢幕鍵盤的 Enter 是換行，送出按送出鍵（使用者在 iPhone 按換行就被送出去）
+        inputEl.onkeydown = (e) => { if (_enterSends(e)) { e.preventDefault(); handleSend(); } };
+
+        // 面板類型選擇器（純展示 / 純應用 / 共用）——在設定頁裡；設定列那顆標籤跟著換
+        document.querySelectorAll('#studio-type-row .studio-type').forEach(b => b.onclick = () => {
+            _setPanelType(b.dataset.type);
+        });
+        // 自動修正開關
+        const afBtn = document.getElementById('studio-autofix');
+        if (afBtn) {
+            afBtn.classList.toggle('on', _studioAutoFix);
+            afBtn.onclick = () => {
+                _studioAutoFix = !_studioAutoFix;
+                win.AUI.lsSet('studio_autofix', _studioAutoFix ? '1' : '0', '「檢查到問題自動叫它修」開關');
+                afBtn.classList.toggle('on', _studioAutoFix);
+            };
+        }
+        _studioSyncSetBar();
+        // 設定頁：設定列的「設定 ›」進去、左上 ‹ 回來（換頁，不是原地展開）
+        { const so = document.getElementById('studio-set-open'); if (so) so.onclick = () => _studioSetPage(true); }
+        { const sb = document.getElementById('studio-set-back'); if (sb) sb.onclick = () => _studioSetPage(false); }
+        // 自適應高度：先 reset height=auto 讓瀏覽器算對 scrollHeight，再 set 新高（min 50 / max 200，超出走內部 scroll）
+        const autosizeTextarea = () => {
+            inputEl.style.height = 'auto';
+            const target = Math.min(Math.max(inputEl.scrollHeight, 50), 200);
+            inputEl.style.height = target + 'px';
+        };
+        inputEl.addEventListener('input', autosizeTextarea);
+        // Shift+Enter 換行的 input 事件偶爾 timing 不對，補 keyup 保險
+        inputEl.addEventListener('keyup', autosizeTextarea);
+
+        // === 📎 圖片上傳 ===
+        // 📋 截完直接在輸入框貼上就附進去，不用先存檔再按迴紋針去選。只有剪貼簿裡真的是圖才攔，貼文字照舊
+        const pasteInput = document.getElementById('studio-input');
+        if (pasteInput) {
+            pasteInput.addEventListener('paste', async (e) => {
+                const items = Array.from((e.clipboardData && e.clipboardData.items) || []);
+                const files = items.filter(it => it.kind === 'file' && /^image\//.test(it.type)).map(it => it.getAsFile()).filter(Boolean);
+                if (!files.length) return;
+                e.preventDefault();
+                for (const f of files) {
+                    try { _pushPendingDataUrl(await _resizeImageToDataUrl(f, IMG_MAX_SIDE, IMG_QUALITY)); }
+                    catch (err) { console.warn('[Studio] 貼上的圖處理失敗:', err); _studioToast('貼上的圖讀不了', 'warning', '截圖'); }
+                }
+            });
+        }
+        const attachBtn = document.getElementById('studio-attach-btn');
+        const fileInput = document.getElementById('studio-image-input');
+        if (attachBtn && fileInput) {
+            attachBtn.onclick = () => fileInput.click();
+            fileInput.onchange = async (e) => {
+                const files = Array.from(e.target.files || []);
+                fileInput.value = ''; // 清空以允許再選同檔
+                for (const f of files) {
+                    if (!f.type.startsWith('image/')) { AUI.alert(`「${f.name}」不是圖片，跳過`); continue; }
+                    if (f.size > IMG_MAX_RAW_MB * 1024 * 1024) {
+                        AUI.alert(`「${f.name}」超過 ${IMG_MAX_RAW_MB}MB，請先縮小再上傳`);
+                        continue;
+                    }
+                    try {
+                        const dataUrl = await _resizeImageToDataUrl(f, IMG_MAX_SIDE, IMG_QUALITY);
+                        const sizeKB = Math.round(dataUrl.length * 0.75 / 1024); // base64 → byte 比例 ~0.75
+                        pendingImages.push({ dataUrl, mime: 'image/jpeg', sizeKB });
+                    } catch (err) {
+                        console.warn('[Studio] 圖片處理失敗:', err);
+                        AUI.alert(`「${f.name}」處理失敗：${err.message || err}`);
+                    }
+                }
+                renderPendingImages();
+            };
+        }
+
+        // === VN 工具列：還原舊版按鈕（重新設計按鈕已移除：大改現在直接打字發送、diff 路徑會自動整包重做、不用重發）===
+        // 還原舊版：標題列那顆 → 彈窗（以前在輸入框上方原地展開，把聊天擠掉一大塊）
+        const vnHistBtn = document.getElementById('vn-studio-history-btn');
+        const histModal = document.getElementById('studio-hist-modal');
+        const closeHist = () => { if (histModal) histModal.hidden = true; };
+        if (vnHistBtn && histModal) {
+            vnHistBtn.onclick = () => {
+                win.OS_STUDIO_DIFF?.renderVNHistoryArea();   // 拆檔：os_studio_diff_engine.js
+                histModal.hidden = false;
+            };
+            histModal.onclick = (e) => { if (e.target === histModal) closeHist(); };
+            const hx = document.getElementById('studio-hist-x'); if (hx) hx.onclick = closeHist;
+        }
+
+        const tabs = document.querySelectorAll('.studio-tab');
+        tabs.forEach(tab => {
+            tab.onclick = () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('studio-preview-content').style.display  = tab.dataset.tab === 'preview' ? 'flex'   : 'none';
+                document.getElementById('studio-source-content').style.display   = tab.dataset.tab === 'source'  ? 'block'  : 'none';
+                document.getElementById('studio-gallery-content').style.display  = tab.dataset.tab === 'gallery' ? 'block'  : 'none';
+                { const _ic = document.getElementById('studio-info-content'); if (_ic) _ic.hidden = tab.dataset.tab !== 'info'; }
+                // 「✅ 確定創建」footer 只在「預覽」分頁顯示（原碼/VN組件 不該看到）
+                { const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = tab.dataset.tab === 'preview' ? 'flex' : 'none'; }
+                if (tab.dataset.tab === 'gallery') {
+                    if (currentMode === 'fx') _renderFxLibrary(document.getElementById('studio-gallery-content'));
+                    else win.OS_STUDIO_VC?.loadStudioGallery();   // 展廳拆檔：os_studio_vn_gallery.js
+                }
+            };
+        });
+
+        document.getElementById('studio-export-btn').onclick = async () => {
+            let dataToSave = currentParsedData || activePreviewData;
+            if (!dataToSave) return AUI.alert('沒有可儲存的資料！');
+            try {
+                await MODES[currentMode].onSave(dataToSave);
+                currentParsedData = null; 
+                renderPreviewPanel();
+            } catch (err) { if (!err || !err.silent) AUI.alert('儲存失敗: ' + (err && err.message)); }
+        };
+
+        const publishBtn = document.getElementById('studio-publish-btn');
+        if (publishBtn) {
+            // 發布至世界書功能已隨「世界觀草稿」模式退役；按鈕永遠隱藏，保留元素避免其他程式抓不到。
+            publishBtn.onclick = () => {};
+        }
+    }
+
+    // ── 統一存檔（IDB + localStorage 雙重備份，只存 user/assistant，不存龐大的 system prompt）
+    //   例外：[LATEST_PANEL_STATE] 那則（_isLatestPanel）也是 system，但它就是為了「快取不見時從聊天記錄撈回最新版」才塞的，
+    //   以前跟著被濾掉 → 快取一不見，撈回來的永遠是初版，之前的修改全部退回去
+    function _studioSave(chatId) {
+        const toSave = chatMessages.filter(m => m.role !== 'system' || m._isLatestPanel === true);
+        // IDB 主存
+        if (win.OS_DB && win.OS_DB.saveStudioChat) {
+            win.OS_DB.saveStudioChat(chatId, toSave).catch(e => console.warn('[Studio] IDB存檔失敗:', e));
+        }
+        // localStorage 備份（防 IDB 失效）
+        try {
+            localStorage.setItem(`os_studio_chat_${chatId}`, JSON.stringify(toSave));
+        } catch(e) { console.warn('[Studio] localStorage備份失敗:', e); }
+    }
+
+    // ── 預覽狀態存檔：diff refine 後修改記憶體中的 currentParsedData，必須持久化否則重整就丟
+    // 聊天歷史存的是摘要不是 JSON，重整時 extractLatestJsonFromHistory 只能撈到最早的版本
+    // 所以額外用 localStorage 存「當前修改後的 currentParsedData 完整快照」
+    function _saveParsedCache(chatId) {
+        try {
+            if (currentParsedData) {
+                localStorage.setItem(`os_studio_parsed_${chatId}`, JSON.stringify(currentParsedData));
+            }
+            // ⚠️ currentParsedData 為 null（如存檔後 line654 會清空）時「不動快取」，保留「最後一版」當耐久底。
+            //   以前這裡 removeItem → 存檔後快取被砍 → 下次編輯撈不到 → 退聊天歷史 → 當時 [LATEST_PANEL_STATE] 是
+            //   system 訊息、存檔時被濾掉 → 只撈到初版 → 把之前所有 diff 修改全還原（「上次修改又彈回」bug）。
+            //   （現在 _studioSave 會把那則一起存進 IDB，這份快取寫不進去時聊天記錄還撈得回最新版）
+            //   真要清空走「清空對話」鈕的 _clearParsedCache。
+        } catch(e) { console.warn('[Studio] 預覽狀態存檔失敗:', e); }
+    }
+    function _clearParsedCache(chatId) {
+        try { localStorage.removeItem(`os_studio_parsed_${chatId}`); } catch(e) {}
+    }
+    function _loadParsedCache(chatId) {
+        try {
+            const raw = localStorage.getItem(`os_studio_parsed_${chatId}`);
+            if (!raw) return null;
+            return JSON.parse(raw);
+        } catch(e) { return null; }
+    }
+
+    // 把當前 currentParsedData 偷偷塞進 chatMessages 一條隱藏 system 訊息
+    // 用途：cache 失蹤時的最後保險，從聊天記錄也能撈回最新版
+    // 不顯示在 UI（renderChatHistory 跳過 system role），但跟著 chatMessages 一起進 IndexedDB
+    const LATEST_PANEL_MARKER = '[LATEST_PANEL_STATE]';
+    function _saveLatestPanelToHistory() {
+        if (!currentParsedData) return;
+        if (Array.isArray(currentParsedData)) return;
+        try {
+            const jsonStr = JSON.stringify(currentParsedData);
+            // 移除舊的 latest panel marker 訊息
+            chatMessages = chatMessages.filter(m => !(m._isLatestPanel === true));
+            // 推新的
+            chatMessages.push({
+                role: 'system',
+                content: `${LATEST_PANEL_MARKER}\n<json>${jsonStr}</json>`,
+                _isLatestPanel: true
+            });
+            _studioSave(getChatSessionId());
+        } catch(e) { console.warn('[Studio] 寫入最新面板狀態到聊天記錄失敗:', e); }
+    }
+
+    // ============================================================
+    // === 📎 圖片上傳：壓縮、預覽、組 content、歷史修剪 ===
+    // ============================================================
+
+    // 用 Canvas 壓縮圖片到 maxSide 邊長 + JPEG quality
+    function _resizeImageToDataUrl(file, maxSide, quality) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            const url = URL.createObjectURL(file);
+            img.onload = () => {
+                try {
+                    let { width, height } = img;
+                    if (width > maxSide || height > maxSide) {
+                        if (width >= height) { height = Math.round(height * maxSide / width); width = maxSide; }
+                        else { width = Math.round(width * maxSide / height); height = maxSide; }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    URL.revokeObjectURL(url);
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                } catch (e) { URL.revokeObjectURL(url); reject(e); }
+            };
+            img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('圖片載入失敗')); };
+            img.src = url;
+        });
+    }
+
+    // 📸 使用者看到哪裡不對，最省力的講法就是「截給它看」——使用者不會前端的詞，只會說「左上那顆往旁邊一點」。
+    //    手機沒有 Win+Shift+S，所以截圖由程式做：只截右邊那張預覽（不是整個視窗），放進待送圖片，
+    //    跟使用者自己按迴紋針附的圖走同一條路。不會自動截、不會每輪送，只有使用者按下去那一次。
+    //    🚨 程式截的是「重畫一份」不是螢幕像素：毛玻璃、遮罩這類效果可能畫得跟使用者看到的不一樣。
+    //       指「哪裡疊到、哪裡跑版」夠用；要看質感還是請使用者用自己的截圖附上來。
+    const SHOT_LIB = 'https://cdn.jsdelivr.net/npm/modern-screenshot@4.6.6/dist/index.js';
+    let _shotLibP = null;
+    function _loadShotLib() {
+        if (window.modernScreenshot && window.modernScreenshot.domToJpeg) return Promise.resolve(window.modernScreenshot);
+        if (_shotLibP) return _shotLibP;
+        _shotLibP = new Promise((resolve, reject) => {
+            const sc = document.createElement('script');
+            sc.src = SHOT_LIB;
+            sc.onload = () => (window.modernScreenshot && window.modernScreenshot.domToJpeg) ? resolve(window.modernScreenshot) : reject(new Error('截圖工具沒有載好'));
+            sc.onerror = () => reject(new Error('截圖工具下載不到'));
+            document.head.appendChild(sc);
+        }).catch(e => { _shotLibP = null; throw e; });   // 失敗不要把壞掉的 promise 留著，下次按還能再試
+        return _shotLibP;
+    }
+    function _pushPendingDataUrl(dataUrl) {
+        const sizeKB = Math.round(dataUrl.length * 0.75 / 1024);
+        pendingImages.push({ dataUrl, mime: 'image/jpeg', sizeKB });
+        renderPendingImages();
+    }
+    async function _capturePreviewToPending(btn) {
+        const box = document.getElementById('studio-pv-box');
+        if (!box) return;
+        if (btn) btn.disabled = true;
+        try {
+            const lib = await _loadShotLib();
+            // 預覽框是用真實外框尺寸畫、再整個縮小塞進右欄的：截的時候拿掉縮放，截它原本的大小
+            const w = parseInt(box.style.width, 10) || box.offsetWidth;
+            const h = parseInt(box.style.height, 10) || box.offsetHeight;
+            const scale = Math.min(1, IMG_MAX_SIDE / Math.max(w, h, 1));
+            const dataUrl = await lib.domToJpeg(box, {
+                width: w, height: h, scale, quality: IMG_QUALITY,
+                backgroundColor: '#000', timeout: 8000,
+                style: { transform: 'none' }
+            });
+            if (!dataUrl || dataUrl.length < 200) throw new Error('截出來是空的');
+            _pushPendingDataUrl(dataUrl);
+            // 手機上預覽是蓋住整個創作室的抽屜：收起來，使用者才看得到圖已經放進輸入框上面
+            try { togglePreviewDrawer(false); } catch (e) {}
+            const inputEl = document.getElementById('studio-input');
+            if (inputEl) inputEl.focus({ preventScroll: true });   // 抽屜正在收，別讓它把外層捲歪
+            _studioToast('截好了，打一句哪裡不對再送出', 'success', '截圖');
+        } catch (e) {
+            console.warn('[Studio] 截預覽失敗:', e);
+            _studioToast('這張截不下來（' + ((e && e.message) || e) + '）。可以用手機或電腦自己截，再按迴紋針附上。', 'warning', '截圖');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    function renderPendingImages() {
+        const wrap = document.getElementById('studio-pending-images');
+        if (!wrap) return;
+        wrap.innerHTML = '';
+        if (pendingImages.length === 0) { wrap.classList.remove('active'); return; }
+        wrap.classList.add('active');
+        pendingImages.forEach((img, idx) => {
+            const chip = document.createElement('div');
+            chip.className = 'studio-pending-img';
+            chip.innerHTML = `
+                <img src="${img.dataUrl}" alt="參考圖">
+                <div class="pi-size">${img.sizeKB}KB</div>
+                <div class="pi-del" title="移除"><i class="fa-solid fa-xmark"></i></div>
+            `;
+            chip.querySelector('.pi-del').onclick = () => {
+                pendingImages.splice(idx, 1);
+                renderPendingImages();
+            };
+            wrap.appendChild(chip);
+        });
+    }
+
+    // 構建 user message 的 content：純文字或 multimodal 陣列
+    function buildUserMessageContent(text, images) {
+        if (!images || images.length === 0) return text || '';
+        const parts = [];
+        if (text) parts.push({ type: 'text', text });
+        images.forEach(img => parts.push({
+            type: 'image_url',
+            image_url: { url: img.dataUrl }
+        }));
+        return parts;
+    }
+
+    // message.content 是字串 → 直接回；是陣列 → 抽 text 部分串起來（給 console / token 估算 / 純文字解析用）
+    function messageContentToString(content) {
+        if (typeof content === 'string') return content;
+        if (Array.isArray(content)) {
+            return content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
+        }
+        return '';
+    }
+
+    // 👁 附圖照設置「看圖」那格送（OS_PHONE_IMAGE）：
+    //   聊天模型自己看＝原樣帶圖；由看圖模型讀圖＝送出前先讓它看、描述存在那則訊息的 _imgDesc，之後每輪送描述；關閉＝只送文字（提示一次）
+    //   以前創作室不管那格，一律把圖丟給聊天模型：看不了圖的模型（DeepSeek）圖白送或直接報錯。
+    function _studioPI() { return win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE || null; }
+    function _studioVisionMode() { const PI = _studioPI(); return (PI && PI.visionMode) ? PI.visionMode() : 'main'; }
+    async function _studioDescribeFor(msg) {
+        const PI = _studioPI();
+        if (!msg || !Array.isArray(msg.content) || _studioVisionMode() !== 'helper' || !PI || !PI.describeImages) return;
+        if (Array.isArray(msg._imgDesc)) return;
+        const urls = msg.content.filter(p => p && p.type === 'image_url').map(p => p.image_url && p.image_url.url).filter(Boolean);
+        if (!urls.length) return;
+        let descs = [];
+        try { descs = await PI.describeImages(urls, '這是使用者在做介面時附上的參考圖，描述時多寫版面、配色、字型、元件長相。'); } catch (e) { PI.visionFailed(e); }
+        msg._imgDesc = urls.map((_, i) => descs[i] || '');
+    }
+    function _studioApplyVision(payload) {
+        const mode = _studioVisionMode();
+        if (mode === 'main') return payload;
+        let hidden = 0;
+        payload.forEach(m => {
+            if (!Array.isArray(m.content) || !m.content.some(p => p && p.type === 'image_url')) return;
+            const text = messageContentToString(m.content);
+            const n = m.content.filter(p => p && p.type === 'image_url').length;
+            if (mode === 'helper' && Array.isArray(m._imgDesc) && m._imgDesc.some(Boolean)) {
+                m.content = text + '\n\n（附了 ' + n + ' 張參考圖，下面是替你看過後寫的描述）\n' + m._imgDesc.map((d, i) => '圖 ' + (i + 1) + '：' + (d || '（沒看成）')).join('\n');
+            } else {
+                m.content = text + '\n\n（附了 ' + n + ' 張參考圖，但這次看不到內容。）';
+                hidden++;
+            }
+        });
+        if (hidden && mode === 'off') { const PI = _studioPI(); if (PI && PI._visionOffNotice) PI._visionOffNotice(); }
+        return payload;
+    }
+
+    function messageHasImage(content) {
+        return Array.isArray(content) && content.some(p => p && p.type === 'image_url');
+    }
+
+    // 修剪 apiPayload：只保留最近 N 條帶圖訊息（其他帶圖訊息 → 圖被剝掉、只留文字 + 占位）
+    function pruneImagesFromHistory(payload) {
+        let kept = 0;
+        for (let i = payload.length - 1; i >= 0; i--) {
+            const m = payload[i];
+            if (!messageHasImage(m.content)) continue;
+            if (kept < KEEP_RECENT_IMAGES) { kept++; continue; }
+            // 剝掉圖、只留文字
+            const text = messageContentToString(m.content);
+            m.content = (text ? text + '\n' : '') + '[早期附圖已隱藏節省 context]';
+        }
+        return payload;
+    }
+
+    async function switchChatSession() {
+        chatMessages = [];
+        document.getElementById('studio-input').value = '';
+        const chatId = getChatSessionId();
+
+        // 1. 嘗試從 IDB 讀取（只存 user/assistant，system 不持久化）
+        let history = null;
+        if (win.OS_DB && win.OS_DB.getStudioChat) {
+            try { history = await win.OS_DB.getStudioChat(chatId); } catch(e) { history = null; }
+        }
+        // 2. IDB 為空時改讀 localStorage 備份
+        if (!history || !history.length) {
+            try {
+                const lsRaw = localStorage.getItem(`os_studio_chat_${chatId}`);
+                if (lsRaw) history = JSON.parse(lsRaw);
+            } catch(e) { history = null; }
+        }
+        // 3. 永遠補上最新 system prompt（不依賴舊的存檔版本）；最新面板那則照留（見 _studioSave）
+        const sysMsg = { role: 'system', content: MODES[currentMode].prompt };
+        chatMessages = (history && history.length > 0)
+            ? [sysMsg, ...history.filter(m => m.role !== 'system' || m._isLatestPanel === true)]
+            : [sysMsg];
+
+        // 類型跟對話一起回來（畫面上那三顆與設定列的標籤也跟著切，HTML 裡寫死的 active 只是初始）
+        try { _setPanelType(_studioPickPanelType(chatId, history)); } catch (e) {}
+        renderChatHistory();
+
+        // 優先讀 diff refine 後存的「最新修改快照」；沒有才回退到聊天歷史抽 JSON
+        const cached = _loadParsedCache(chatId);
+        if (cached) {
+            currentParsedData = cached;
+            activePreviewData = Array.isArray(currentParsedData) ? currentParsedData[0] : currentParsedData;
+            const cssLen = (cached.css || '').length;
+            const htmlLen = (cached.html || '').length;
+            console.log(`[Studio] ✅ 預覽 cache 命中 (chatId=${chatId}): tagId=${cached.tagId || '?'}, css=${cssLen}字, html=${htmlLen}字`);
+        } else {
+            console.warn(`[Studio] ⚠️ 預覽 cache 未命中 (chatId=${chatId})，退回從聊天歷史抽 JSON（會抽到最早的版本，不是最新修改！）`);
+            extractLatestJsonFromHistory();
+        }
+        renderPreviewPanel();
+    }
+
+    // 頂層 mode 切換：vn_ui=煉丹創作器、theme=主題編輯器（獨立全區，靠 .top-theme class 切顯示）
+    function switchTopMode(mode) {
+        const cont = document.querySelector('#os_studio_app .studio-container');
+        if (cont) cont.classList.remove('top-theme', 'top-worldbook', 'top-persona', 'top-home');
+        _studioTop = mode;
+        if (mode === 'theme') {
+            if (cont) cont.classList.add('top-theme');
+            renderThemePanel();
+        } else if (mode === 'worldbook') {
+            if (cont) cont.classList.add('top-worldbook');
+            win.OS_STUDIO_WB?.renderWorldbookPanel?.();   // 世界書設計師已拆檔 → os_studio_worldbook.js（懶解析）
+        } else if (mode === 'persona') {
+            if (cont) cont.classList.add('top-persona');
+            win.OS_STUDIO_MC?.renderPersonaPanel?.();   // 我的角色已拆檔 → os_studio_persona.js（懶解析）
+        } else {
+            loadMode(mode);
+        }
+        // 🎩 米黃只留給文書那兩間（世界書、我的角色）；其他一律帽匠皮。
+        //    皮本身在 os_studio.css 最後面那一整段，靠這顆 craft-skin 認。
+        if (cont) cont.classList.toggle('craft-skin', mode !== 'worldbook' && mode !== 'persona');
+        _updateStudioHeader();
+    }
+    // 主題頁掛上來的「清空這一輪」：header 那顆清空鈕按當前分頁分流，不必各自長一顆
+    let _themeClear = null;
+    // header 的 👁️預覽 只在「製作互動面板」(vn_ui) 有意義；🗑清空 只要那一頁有聊天室就該有
+    function _updateStudioHeader() {
+        const cont = document.querySelector('#os_studio_app .studio-container');
+        // vn_ui＝沒有任何 top-* class（首頁/主題/世界書各有 top-home/theme/worldbook）。讀 DOM 不靠變數，防 desync。
+        const vnui = !!cont && !cont.classList.contains('top-home') && !cont.classList.contains('top-theme') && !cont.classList.contains('top-worldbook') && !cont.classList.contains('top-persona');
+        const clearBtn = document.getElementById('studio-clear-btn');
+        const prevBtn = document.getElementById('studio-header-preview-btn');
+        const theme = !!cont && cont.classList.contains('top-theme');
+        // 🚨主題頁也是一個聊天室（跟 AI 講風格），它一樣要能整輪清掉。
+        //   藏著這顆的時候，那一頁只好自己長一顆「清空對話」浮在中間——跟其他創作室完全不像。
+        if (clearBtn) clearBtn.style.display = (vnui || theme) ? '' : 'none';
+        if (prevBtn) prevBtn.style.display = vnui ? '' : 'none';   // '' = 交回 CSS（手機才顯示）
+    }
+
+    async function loadMode(modeId) {
+        currentMode = modeId;
+        currentParsedData = null;
+        activePreviewData = null;
+        document.getElementById('os_studio_app').setAttribute('data-mode', modeId);
+
+        // 根據 mode 動態切換 tab 顯示
+        // vn_ui: preview | source | gallery
+        const galleryTab = document.getElementById('studio-tab-gallery');
+        if (galleryTab) {
+            // 同一個第二 tab 兩用：vn_ui=VN組件展廳、fx=特效庫（照指定的雙 tab 版型）
+            galleryTab.style.display = (modeId === 'vn_ui' || modeId === 'fx') ? '' : 'none';
+            galleryTab.innerHTML = modeId === 'fx'
+                ? '<i class="fa-solid fa-wand-magic-sparkles"></i> 特效庫'
+                : '<i class="fa-solid fa-puzzle-piece"></i> VN組件';
+        }
+        // 設定列、已選要求、格式與說明分頁：只有「製作互動面板」(vn_ui) 有這些東西
+        { const sbar = document.getElementById('studio-set-bar'); if (sbar) sbar.hidden = modeId !== 'vn_ui'; }
+        { const pk = document.getElementById('studio-picked'); if (pk) pk.hidden = modeId !== 'vn_ui'; }
+        { const it = document.getElementById('studio-tab-info'); if (it) it.hidden = modeId !== 'vn_ui'; }
+        { const ic = document.getElementById('studio-info-content'); if (ic) ic.hidden = true; }
+        _studioSetPage(false);
+        { const hm = document.getElementById('studio-hist-modal'); if (hm) hm.hidden = true; }
+
+        // 切 mode 一律重置到 preview tab
+        document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.studio-tab[data-tab="preview"]')?.classList.add('active');
+        document.getElementById('studio-preview-content').style.display  = 'flex';
+        document.getElementById('studio-source-content').style.display   = 'none';
+        document.getElementById('studio-gallery-content').style.display  = 'none';
+        { const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = 'flex'; }   // 預覽 tab → 顯示確定創建 footer
+
+        await switchChatSession();
+    }
+
+    // VN 對話框 CSS 生成 prompt（給 AI 副模型）
+    const VTH_AI_PROMPT = `你是 VN（視覺小說）面板的 UI 設計師。根據用戶描述的風格，生成一段純 CSS，重新設計 VN 介面這幾個元素（只有這些，其他一律別碰）。創意火力集中在「對話框」——它是主力、是主視覺；其餘元素只配合主題重新上色/造型，「位置一律不動」。
+
+【你在設計什麼 — 先看懂這個畫面】
+這是一款視覺小說的遊戲畫面，全螢幕。玩家眼前是這樣一幕：
+一張場景背景圖鋪滿整個畫面，每一章都不一樣——可能是黃昏的舊巷、雨夜的碼頭、燈火通明的宴會廳。你碰不到它，但你設計的每一樣東西都會疊在它上面，而且它明亮又雜亂。
+左上角有一塊小牌子，寫著現在的時間與地點。
+右上角三顆功能鍵：回主選單、開設定、打開遊戲裡的手機。
+畫面正下方橫著一條對話框，貼著底、佔畫面寬度的八成多。玩家點一下跳一句話，就這樣一句一句把整個故事讀完——幾百輪都在看這一條。
+對話框的左上角掛著一塊名牌，寫著現在是誰在說話；輪到旁白時它會自己隱形。
+對話框的上緣浮著三顆小鈕：翻對話紀錄、跳過、還有一顆漢堡；按漢堡會往上浮出一小疊其他功能。
+每一章開頭，畫面中央會浮出一張章節卡：故事名、第幾章、章名、一段引言、幾格資訊、一顆「開始閱讀」；玩家按了才進正文。
+一章讀完，對話框會收起來，畫面中央直排浮出一組收尾鈕：最上面一顆大的「資料中心」，底下四顆同寬的「CTX」「日誌」「地圖」「重新生成」；右上三顆功能鍵還在。玩家從這裡決定下一步。
+按右上的「設定」，整個畫面暗下來，中央浮出一扇設定視窗：上面一條標題列帶關閉鈕，底下是可以往下捲的內容——一段一段的小標，每段裡有滑桿列（左邊名稱、中間滑桿、右邊數值）、一排排可點選的小籤、幾格選顏色的色塊，最底一顆重置鈕。
+你要做的是把這一整套變成「同一個世界裡真的會有的介面」——那個世界的材質、工藝、時代、階級都該看得出來，而不是在遊戲上套一層皮。
+
+【畫面的結構 — 誰包著誰，這決定了什麼能做什麼不能做】
+你只會拿到這一份說明，看不到畫面，所以結構先講清楚（縮排＝父子關係）：
+  #game-bg ................. 全螢幕背景圖層（劇情圖蓋在這，你不准碰）
+  #top-badge ............... 左上的時間地點小牌
+  #btn-home / #btn-settings / #btn-phone ... 右上三顆功能鍵
+  #text-panel-wrapper ...... 貼在畫面底部、水平置中，寬約畫面的 88%、上限 560px
+    #vn-panel-controls ..... 浮在對話框「上緣外側」的一排小鈕：LOG／SKIP／☰
+      .vn-panel-btn .......... 這三顆
+      #vn-more-menu .......... 按 ☰ 往上浮出的小選單，裡面也是 .vn-panel-btn（COT／CTX／↺TTS）
+    #text-panel ............ 對話框本體。它身上一定帶三個 class 之一：
+                             .char-mode（有人說話）／.nar-mode（旁白）／.inner-mode（內心獨白）
+                             同一個框換 class，不是三個不同的框
+      #speaker-name ........ 名牌。⚠️它是 #text-panel 的「子元素」，而且絕對定位在
+                             框的左上、往上突出約 18px 到框外——所以只要 #text-panel
+                             身上有 clip-path 或 overflow:hidden，名牌就會被切掉半個
+      #dialogue-text ....... 內文
+  #vn-chapter-card ......... 章節卡遮罩，只在每章開頭出現
+    #vncc-box .............. 卡片本體（內含 #vncc-story／#vncc-num／#vncc-title／
+                             #vncc-rule／#vncc-preface／.vncc-cell 三格／#vncc-enter）
+  #vn-end-overlay .......... 章末才出現的全螢幕層（本身透明、不擋點擊）
+    #vn-end-basic .......... 章末簡報卡，平常身上掛著 .vne-brief（電腦置中一張卡、手機貼在下半部）：
+      .vne-head ............ 上方：.vne-kicker 章號、.vne-title 章名、.vne-meta 時間地點、.vne-divider 分隔
+      .vne-sum ............. 「這一章」：.vne-sec 小標＋.vne-points 三句（前面的 I II III 是 li::before）
+      .vne-tiles ........... 小牌子一兩塊：.vne-tile（.vne-orb 圓圖示、.vne-badge 紅數字、.vne-tile-k 小字、.vne-tile-v 內容）
+      #vn-end-btn-go ....... 「繼續」主鈕
+      .vne-ents ............ 一排五個入口：#vn-end-btn-data／#vn-end-btn-journal／#vn-end-btn-threads／#vn-end-btn-map／#vn-end-btn-ctx，
+                             每顆裡面是 .vne-ring 圓圈（CTX 那圈是用量條）＋ .vne-lb 字
+      .vne-foot ............ 右下角：#vn-end-btn-regen 重新生成
+      （有自己章末面板的世界會拿掉 .vne-brief，只把面板漏做的幾顆照舊直排補上來）
+    #vn-end-panel .......... 有些世界會在這裡換上它專屬的收尾面板（另外生成的，不歸你管）
+  #game-settings-overlay ... 設定視窗的暗幕（按了設定才出現）
+    #game-settings-window .. 視窗本體：直排，標題列在上、內容區在下可捲動
+      #gs-titlebar ......... 標題列：.gs-title 標題字、.gs-close 關閉鈕
+      #gs-body ............. 內容區
+        .gs-section-title .. 每一段的小標
+        .gs-row ............ 滑桿列：.gs-label 名稱、.gs-slider 滑桿、.gs-val 數值
+        .gs-sub ............ 小籤上方的小字
+        .gs-chips .......... 一排小籤，裡面每顆是 .gs-chip（.gs-chip.on 是選中）
+        .gs-color-row ...... 顏色列：.gs-color-label 名稱、.gs-color-input 色塊
+        .gs-divider ........ 段落之間的分隔
+        .gs-reset-btn ...... 最底的重置鈕
+
+【你的 CSS 會被怎麼使用 — 現況與限制】
+- 現在的預設長相：深色半透明對話框、細金線、襯線字，整體偏古典。你寫的 CSS 會「接在這份預設後面」，
+  不是取代它——同名屬性靠後寫覆蓋，特異性不夠就蓋不掉（例如三態的背景寫在 #text-panel.char-mode 上，
+  只寫 #text-panel 蓋不過去）。沒被你覆蓋的部分會維持預設。
+- 沒有外部圖片可用：所有圖案只能用漸層、內聯 SVG 的 data URI，或 CSS 畫。字體用 @import 從 Google Fonts 載。
+- 同一份 CSS 手機和桌機都會用。手機約 390px 寬，對話框會變窄、字級不變；別讓造型在窄畫面擠成一團。
+
+【這個框是拿來讀字的 — 先懂用途，再談造型】
+對話框存在的唯一理由，是讓玩家把中間那段字讀完。它疊在一張明亮、雜亂、每一章都不同的背景圖上，玩家會一句一句點著看好幾百輪。造型與裝飾都是為了讓那段字更好讀、更有氣氛，不是為了自己好看。
+- 中間有內容，不可以遮住：#dialogue-text 佔的那塊矩形是文字區。任何造型、裝飾、線條、圖案、光暈、放射、噴濺「都不准出現在那塊範圍裡」——不是壓在下層、也不是調低透明度，是不要畫到那裡去。造型往邊緣、往角落、往框外做。
+- 名牌壓著的那一小塊也算內容：#speaker-name 底下不要有會讓字看不清的東西。
+- 分層固定成這樣：底板與裝飾 z-index 0（或更低），#dialogue-text 與 #speaker-name z-index 1。::after 拿來做造型時同樣壓在 0 或更低，並且只佔框的邊緣。
+
+可設計的元素：
+- #text-panel：對話框外框，整個畫面的「主視覺、主力，你要重點發揮的地方」。⚠️它一定帶三狀態 class 之一：.char-mode（角色說話，最常見）/ .nar-mode（旁白）/ .inner-mode（內心）。預設已分別對 #text-panel.char-mode、.nar-mode、.inner-mode 設了背景，特異性比純 #text-panel 高，所以換背景/邊框「必須」分別寫這三條，否則沒效果。三態都要做。背景、邊框、外框、圓角、clip-path 造型、::before/::after 裝飾、材質紋理、字體、陰影、動畫……都大膽用，做出有記憶點的設計，別只是換顏色。唯一限制：它要維持在「畫面底部、水平置中」，別用 position/transform 把 #text-panel 或外層 #text-panel-wrapper 搬走。
+- #dialogue-text：對話內文（字體 / 字色 / 行距），配合對話框設計。⚠️文字對齊保持預設靠左，不要置中（見下方鐵則）。⚠️字色跟對話框背景一樣：預設已分別對 #text-panel.char-mode #dialogue-text、.nar-mode、.inner-mode 底下的內文設了字色，特異性比純 #dialogue-text 高，所以字色要三態各寫一條，只寫 #dialogue-text 蓋不過去，有人說話時字會變回預設的淺色。內文裡的粗體（#dialogue-text strong）預設是白字、強調（#dialogue-text em）預設是金色，底色換亮的話這兩個也要一起改。
+- #speaker-name：角色名牌（固定浮在對話框左上，旁白時自動隱藏）。只重新設計它的外觀（底色/邊框/圓角/字體/造型）配合對話框，「位置不要動」。
+- #top-badge：左上角的「場景牌」，顯示當前時間・地點（例如「黃昏 南城舊巷」，文字兩側有金色短線裝飾，那是 ::before / ::after）。可重新設計它的外觀（底色/漸隱/邊框/圓角/字體/裝飾線）配合主題，但「位置不要動」（固定左上）。註：直播模式時同樣內容會改顯示在 #stream-scene-row（內含 #stream-scene-label），請一併配合上色。
+- #vn-panel-controls 與 .vn-panel-btn：對話框上緣那排小鈕。外面只有三顆：LOG（翻對話紀錄）、SKIP（跳過）、☰（其他功能）；按 ☰ 會往上浮出 #vn-more-menu，裡面是同款的 .vn-panel-btn。你只要把 .vn-panel-btn 設計好，浮窗裡的鈕自動跟著。（.vn-panel-btn.active 為啟用態。）「位置不要動」，只重新上色/造型配合主題。
+- #btn-home、#btn-settings、#btn-phone：畫面右上角的頂部按鈕（返回 / 設定 / 應用）。「位置不要動」，只重新統一它們的外觀配合主題。
+- #vn-chapter-card 與 #vncc-box：章節卡（每一章開頭浮出來的那張卡：故事名 #vncc-story、章號 #vncc-num、章名 #vncc-title、分隔線 #vncc-rule、引言 #vncc-preface、資訊格 .vncc-cell/.vncc-cell-k/.vncc-cell-v、開始閱讀鈕 #vncc-enter）。⚠️這張卡預設會「抄對話框當下的皮」，所以你只寫對話框它也會跟著變；要單獨設計它，對 #vncc-box 的宣告一律加 !important 才蓋得過去。版型維持置中單欄，只重新設計外觀。
+- #vn-end-basic.vne-brief（章末簡報卡）與裡面的 .vne-head／.vne-points／.vne-tile／#vn-end-btn-go／.vne-ring／#vn-end-btn-regen：這是一章的句點，玩家在這裡看一眼這章發生什麼、按「繼續」接著玩——做成那個世界裡「一章結束時會出現的東西」（一張卷宗、一封信、一塊終端機螢幕…），跟對話框同一套語言。「繼續」要一眼看得出是主鈕，五個入口同款，重新生成要低調。外觀全部開放（卡片的底、邊框、角花、字體、圓圈、clip-path、::before/::after 都可以）；🚨 這組的預設樣式是兩層 id 寫的，你的選擇器要照同樣寫法才蓋得過：卡片本身寫 #vn-end-basic.vne-brief，裡面的東西寫成 #vn-end-basic.vne-brief #vn-end-btn-go、#vn-end-basic.vne-brief .vne-ring 這樣；只寫單層 #vn-end-btn-go 會被預設蓋掉。排列不動（不改 display／grid／flex、不改卡片位置與寬度），字級、內距、圓圈大小可以調。卡片底下沒有對話框墊著，直接疊在明亮雜亂的背景圖上，卡片的底要實心或 alpha ≥ 0.8。
+- #game-settings-window 與裡面的 #gs-titlebar／#gs-body／.gs-*：設定視窗。它跟對話框一樣要是那個世界裡的一件實體物件，標題列、小標、滑桿（.gs-slider 的軌道，與 .gs-slider::-webkit-slider-thumb 滑塊）、小籤（.gs-chip 與選中的 .gs-chip.on）、色塊外框、重置鈕都要跟著換，不要只換視窗外框、裡面還是預設金黑。這扇窗是拿來讀和調的：視窗底要實心或 alpha ≥ 0.9，名稱與數值跟底強對比，選中的小籤要一眼跟沒選中的分得出來。版型不動：視窗置中、標題列在上、內容區捲動、滑桿列左名稱右數值；內距可以調，視窗寬度別比原本寬（原本是畫面寬扣 30px、上限 410px）。滑桿的原生外觀已經關掉了，軌道直接畫在 .gs-slider 本身（高度、底色），滑塊畫在 .gs-slider::-webkit-slider-thumb。色塊 .gs-color-input 只改外框，裡面那格顏色是玩家選的，別蓋。暗幕 #game-settings-overlay 只准改顏色與模糊程度。
+
+【版面骨架 — 先寫下來，再動手寫 CSS】
+先輸出一段 <版面骨架>…</版面骨架>，80~120 字，講清楚：這次的對話框是那個世界裡的什麼實體物件、名牌是掛在它上面的什麼東西、那三顆控制鈕與右上三顆功能鍵在那個世界裡各是什麼、章末那組收尾鈕與設定視窗又各是什麼、對話框的邊界是怎麼來的、左右內距哪一側寬而那一側被什麼佔住、三態靠什麼結構差異分開。
+每個元件都要有現實對應物再動手——講不出「它是什麼」，畫出來就會是三個灰方塊配一個圓角矩形。想過跟寫下來是兩回事，寫下來才會照著做。寫完才開始寫 CSS。
+
+【骨架 — 這一區是關係、不是建議，每一條都要能在你寫的 CSS 裡驗出來】
+- 對話框的輪廓至少有一條邊界不是水平也不是垂直。做法是把那個形狀畫在 #text-panel::before 的底板上、或用漸層／border-image 畫出邊界——**不要裁 #text-panel 本身**（見下面那條）。
+- 左右內距不可以相等，寬的那側至少是窄側的 1.6 倍，而且那一側要被東西佔住，不能是空白。佔用物的寬度不超過對話框寬度的一成，而且不可以壓在文字上：它是骨架的一部分，不是來跟內文搶地方的。
+- 三態的差別不可以只有顏色：至少一態的輪廓、或某一條邊的厚度，跟另外兩態差三倍以上。
+- 名牌跟對話框的接合方式要選定一種並貫徹到底：嵌進框內、掛在框外、或切進框上的缺口。
+- 這一區不給例外、不給「不是非這樣不可」。長相隨你，形狀關係照這裡走。
+
+【底板 — 對話框的「形狀」由它決定。這幾行照抄，不然底板不存在，框會變成透明的空殼】
+#text-panel{position:relative;}
+#text-panel::before{content:'';position:absolute;z-index:0;pointer-events:none;}
+#dialogue-text{position:relative;z-index:1;}
+（名牌不必也不可以碰：它本來就是絕對定位、層級已經在底板之上。給它 position:relative 會讓它掉回文件流，位置就飛了。）
+- 底板的 inset「不要寫 0」：inset:0 等於一塊跟框一樣大的矩形，那就是每次都長一樣的原因。
+  它可以四邊各給不同的值、可以是負的讓它溢出框外、可以只從某一邊探出去。
+- 底板不會裁到任何子元素（名牌是 #text-panel 的孩子，不是底板的），所以它身上「隨便你怎麼裁」：
+  clip-path 任意多邊形、border-radius 四角各不同、transform 旋轉或傾斜、border-image、
+  conic/repeating 漸層畫出的鋸齒與斜紋邊界——全部合法。
+- ::after 是第二塊造型，跟底板不同層次：可以是探出上緣的簷、掛在某一角的牌、貫穿一側的直欄。
+- ⚠️ 底板承擔了背景，就要真的把背景畫在底板上；不要把 #text-panel 三態的 background 設成 transparent 之後，底板卻只畫了一條邊——那樣文字底下什麼都沒有，字直接壓在背景圖上。
+- 「文字底下那一層必須不透明」這條算在底板頭上：不管底是寫在 #text-panel 三態還是 ::before，文字覆蓋的範圍內一定要有實心色或 alpha ≥ 0.82 的底。
+
+【形狀 — 位置固定，不代表長相要一樣】
+- 「配件不准移動」講的是位置，不是形狀。名牌、控制鈕、頂部鈕待在原地，但它們各自「長什麼樣」完全開放：
+  #speaker-name、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone、#top-badge 這些元素
+  「自己」用 clip-path 是安全的——它裁的是自己，不會影響別人，鼓勵用來做非矩形的牌、籤、標、章。
+  它們也各自有 ::before / ::after 可以長出缺角、缺口、缺齒、掛耳。
+- 不安全的只有一個：#text-panel 本身（名牌浮在它的框外，裁它就等於裁名牌）。它的形狀交給底板。
+- 這一份裡，對話框的輪廓與名牌的輪廓不可以都是四個直角的矩形。
+
+【骨架的護欄 — 比骨架本身更優先，違反了整份就算壞的】
+- #text-panel「本身」不准 clip-path，也不准 overflow:hidden。名牌是它的子元素、而且刻意浮在框的上緣外面，框一被裁，名牌就跟著被切掉半個。造型一律畫在上面那塊底板上，框本身保持完整。
+- 頂部鈕（返回／設定／應用）與控制鈕（SKIP／LOG／AUTO）上的字一律維持單行。改完 padding 或字級自己檢查一次：字被擠成直排、或被截掉，就是壞的。
+- 內文的可用寬度不可以被裝飾吃掉：對話框內、文字實際能佔的寬度至少要有整個框的八成。
+
+【版位是契約 — 這幾個屬性一個字都不准寫在那些選擇器上】
+下列選擇器的規則裡，「絕對不可以出現」position / top / left / right / bottom / display / float / flex 這些屬性
+（transform 只准出現在 :hover / :active 這種互動狀態裡）：
+  #btn-home、#btn-settings、#btn-phone、#top-badge、#stream-scene-row、
+  #speaker-name、#vn-panel-controls、.vn-panel-btn、#text-panel-wrapper
+它們的位置是底稿用絕對定位釘好的。你只要寫了其中任何一個屬性——哪怕是 position:relative——
+就會把那份定位打掉，元素會掉回文件流、整排疊到畫面中間。這不是「移動」，是「毀掉版位」。
+唯一的例外是 #text-panel 自己可以寫 position:relative（底板需要它當定位錨點），別的位移屬性一樣不准。
+收尾鈕與設定視窗也一樣：下面這些選擇器「本身」不准寫 position / top / left / right / bottom / display / float / flex——
+  #vn-end-overlay、#vn-end-basic、#vn-end-btn-data 等七顆收尾鈕（含「繼續」#vn-end-btn-go）、.vne-ents、.vne-tiles、
+  #game-settings-overlay、#game-settings-window、#gs-titlebar、#gs-body、.gs-row、.gs-chips、.gs-color-row
+它們是靠 flex 排成直排、置中、左右兩欄的，一寫就散。
+它們、以及 .gs-chip、.gs-reset-btn、.gs-close，本身都已經是定位錨點：掛在它們身上的 ::before / ::after 直接寫 content + position:absolute 就會貼著它們長，不受這條限制。
+（按鈕自己用了 clip-path 的話，它的 ::before / ::after 探出按鈕外的部分會一起被切掉；要往外探的裝飾，那顆按鈕的輪廓就改用 border-image 或漸層畫。）
+#vn-end-overlay（章末那層透明底，要讓背景圖露出來，別給它上底色）與 #game-settings-overlay（設定的暗幕）另外不准寫 opacity / pointer-events / visibility：它們平常是隱形、不擋點擊的，靠這幾個屬性開關；寫了就會一直蓋在畫面上、點什麼都沒反應。
+
+【最重要的鐵則 — 配件一律不准移動】
+- 除了對話框維持在底部置中之外，名牌、場景牌、控制鈕、頂部鈕「全部保持原本位置」。「絕對不要」對 #speaker-name、#top-badge、#stream-scene-row、#vn-panel-controls、.vn-panel-btn、#btn-home、#btn-settings、#btn-phone 用 position / top / left / right / bottom / transform 去移動它們——它們各自有固定擺放區，一移動就會飛出主視覺窗口被切掉。你只能改它們的「外觀」（顏色/邊框/圓角/字體/陰影/材質），不能改位置。
+- 不能移動，但要接得起來：配件與對話框之間至少有一處形狀是互相呼應的——同一個切角、同一種邊界語言、或同一組厚度比例。位置固定不等於各做各的。
+
+【可讀性 — 最優先】
+- 對話框「文字所在那層」的底必須夠不透明：實心色，或 alpha ≥ 0.82。要玻璃感就把透明留外緣，文字正下方壓一層實底，確保字不被背景圖洗掉。
+- #dialogue-text 字色跟對話框底色要「強對比」：深底配亮字、亮底配深字；不要半透明字、不要相近色。
+- 名牌固定在對話框左上、會略往框內凹約 20px，所以 #text-panel 的 padding-top 要 ≥ 32px，別讓名牌蓋住第一行內文。
+- 三態 .char-mode / .nar-mode / .inner-mode 各自都要顧到。
+
+【完成度 — 成套，不准半吊子】
+- 所有元素用「同一套設計語言」做成完整一組，不可以對話框做得很炫、名牌和按鈕卻還停在預設黑。控制鈕、頂部鈕、章末收尾鈕、設定視窗也要呼應對話框的主風格與質感。
+
+【裝飾技法 — 鼓勵大膽用，讓設計有記憶點】
+- 善用 ::before / ::after 偽元素在對話框上做「偽容器」裝飾：底部花邊條、四角紋飾、貼紙、徽章、圖標、雙層描邊都可以。可用內聯 SVG（background-image:url("data:image/svg+xml,...")）做 pattern 或圖示，或用 repeating-linear-gradient / radial-gradient 做斜紋、網點、掃描線等紋理。
+- 但所有裝飾「一律加 pointer-events:none」（對話框是點一下繼續劇情的，裝飾蓋住會擋住推進）。
+- 而且裝飾「不可以出現在文字區裡」——放在下層也不行：底下有花紋，字一樣難讀。裝飾的位置只有三種：框的邊緣帶、四個角、或框外。中間那塊留給字。
+- 每個元素只有 ::before / ::after 兩個偽元素；需要更多層次就在同一 background 疊多張漸層/圖，或借用 #speaker-name、#top-badge 的偽元素。
+
+規則：
+1. 可用 @import 載字體、用 ::before/::after 加裝飾、用 @keyframes 做動畫。
+2. 「絕對不要」對 #game-char / #game-char-container（角色立繪）或 #game-bg（全螢幕背景圖層，會被劇情背景圖蓋掉、改了也看不到）寫任何樣式——它們不歸主題管。#vn-end-panel 與它裡面的東西也一樣別寫：那是某些世界自己生成的收尾面板，有它自己的樣式。
+3. 對話框背景務必分別寫 #text-panel.char-mode / .nar-mode / .inner-mode 三條。
+4. #dialogue-text（含三態）一律保持預設的「靠左」對齊，「絕對不要」設 text-align:center 或任何置中——劇情有逐字打字機效果，置中會讓字從中間往兩邊跑，既難看又難讀。
+5. 輸出前自檢一次：把你的設計想成一張圖，用手遮住文字那一塊——遮住的地方如果有你畫的東西（線條、圖案、放射、噴濺、光暈），就是錯的，移到邊緣去。再把整張疊在一張明亮、雜亂的背景圖上——文字一眼可讀嗎？有沒有元素跑出畫面或互相遮住？有沒有不小心把內文置中？另外逐項確認：對話框與名牌的輪廓，是不是又都退回四個直角的矩形了（底板的 inset 還是 0、身上沒有任何 clip-path／不對稱圓角／border-image）？文字底下那一層真的有底嗎（三態的 background，或 ::before 底板上實際畫了背景）——只有一條邊、中間透空就是壞的？#text-panel 身上有沒有 clip-path 或 overflow:hidden（有就是名牌會被切掉）？頂部鈕與控制鈕的字還是單行嗎？內文的可用寬度還有八成嗎？章末收尾鈕和設定視窗（連滑桿、小籤、重置鈕）都換上同一套了嗎，還是停在預設金黑？有問題就修好再輸出。
+6. 先輸出 <版面骨架>…</版面骨架>，接著才是 CSS，CSS 用 \`\`\`css 包起來。骨架那段之外不要別的解釋文字。
+用戶想要的風格：`;
+
+    // ── 🎨 劇情面板主題工坊（生成 → 即時預覽 → 主題庫收藏；像 VN UI 那套）──
+    // 預覽用：複刻 VN 介面預設外觀（對話框/名牌/背景容器/控制鈕/頂部鈕），讓主題 CSS 疊上去效果跟真實 VN 一致。立繪不在範圍內。
+    const VTH_PREVIEW_BASE = `
+:root{--gold:#d4af37;--gold-light:#f3e5ab;--gold-dark:#997a00;--em-color:#d4af37;--text-color:#dcd8d0;--name-color:#d4af37;--font-classic:'Playfair Display','Noto Serif TC',serif;--font-sans:system-ui,'Noto Sans TC',sans-serif;}
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;}
+body{font-family:var(--font-classic);position:relative;min-height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;padding:14px;}
+/* 預覽用唯讀示意背景圖（不是可編輯的主題目標，僅模擬真實劇情背景圖、偏亮偏雜，用來檢驗文字可讀性） */
+#game-bg{position:absolute;inset:0;background-color:#050505;background-image:linear-gradient(160deg, rgba(0,0,0,0) 55%, rgba(0,0,0,0.45) 100%), linear-gradient(135deg, #4a6b8a 0%, #7a6a8c 38%, #c89a6a 72%, #e8cf9e 100%);background-size:cover;background-position:center;z-index:1;}
+#top-badge{position:absolute;top:14px;left:14px;z-index:10;border:none;box-shadow:none;border-radius:0;background:linear-gradient(to right,transparent 0%,rgba(0,0,0,0.55) 12%,rgba(0,0,0,0.55) 88%,transparent 100%);color:#f0e8d0;display:inline-block;padding:7px 28px;font-weight:700;font-size:0.88rem;letter-spacing:2.5px;line-height:1.5;text-shadow:0 0 4px rgba(0,0,0,1),0 0 10px rgba(0,0,0,0.9);}
+#top-badge::before{content:'';display:inline-block;vertical-align:middle;width:16px;height:1px;background:linear-gradient(to right,transparent,#c8a96e);margin-right:10px;margin-bottom:2px;}
+#top-badge::after{content:'';display:inline-block;vertical-align:middle;width:16px;height:1px;background:linear-gradient(to left,transparent,#c8a96e);margin-left:10px;margin-bottom:2px;}
+#btn-home,#btn-settings,#btn-phone{position:absolute;z-index:15;background:rgba(10,10,12,0.6);backdrop-filter:blur(5px);-webkit-backdrop-filter:blur(5px);border:1px solid rgba(212,175,55,0.3);color:var(--gold-dark);padding:6px 12px;cursor:pointer;font-size:0.7rem;font-family:var(--font-classic);letter-spacing:1px;border-radius:2px;text-transform:uppercase;}
+#btn-phone{top:12px;right:12px;padding:6px 10px;}
+#btn-settings{top:12px;right:70px;}
+#btn-home{top:12px;right:144px;}
+#text-panel-wrapper{position:relative;z-index:5;width:88%;max-width:560px;margin:0 auto;}
+#text-panel{position:relative;padding:26px 30px;min-height:96px;border-radius:4px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);}
+#text-panel.nar-mode{background:linear-gradient(180deg,rgba(12,12,16,0.88),rgba(4,4,6,0.95));border:1px solid rgba(255,255,255,0.08);border-top:1px dashed rgba(255,255,255,0.15);box-shadow:0 20px 50px rgba(0,0,0,0.9);}
+#text-panel.char-mode{background:rgba(4,4,6,0.92);border:none;border-top:1px solid rgba(212,175,55,0.18);box-shadow:0 20px 50px rgba(0,0,0,0.9);border-radius:0;}
+/* 🚨內心態一定要有自己的底：#text-panel 基底只有 blur 沒有背景，少了這條框就是全透明的（跟真實 VN 同步補上） */
+#text-panel.inner-mode{background:var(--vn-dialog-bg-inner,linear-gradient(180deg,rgba(10,10,14,0.72) 0%,rgba(4,4,6,0.88) 100%));border:1px solid rgba(255,255,255,0.06);box-shadow:0 20px 50px rgba(0,0,0,0.85);}
+#text-panel::after{content:'\\2727';position:absolute;bottom:12px;right:16px;color:var(--gold-dark);font-size:1.1rem;font-family:var(--font-classic);}
+#speaker-name{position:absolute;top:-18px;left:26px;background:var(--vn-name-bg,#050505);border:1px solid var(--gold);color:var(--name-color);font-family:var(--font-classic);font-size:1rem;padding:5px 22px;display:inline-block;letter-spacing:2px;z-index:12;box-shadow:0 5px 15px rgba(0,0,0,0.8);border-radius:2px;}
+.nar-mode #speaker-name{opacity:0;}
+#vn-panel-controls{position:absolute;top:-16px;right:15px;display:flex;gap:8px;z-index:12;}
+#vn-more-menu{display:none;position:absolute;right:0;bottom:calc(100% + 8px);flex-direction:column;gap:6px;z-index:14;}
+#vn-more-menu.show{display:flex;}
+#vn-more-menu .vn-panel-btn{justify-content:flex-end;min-width:96px;}
+.vn-panel-btn{background:#0a0a0c;border:1px solid rgba(255,255,255,0.2);color:#aaa;padding:0 13px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:0.7rem;font-family:var(--font-sans);border-radius:4px;letter-spacing:1px;}
+.vn-panel-btn.active{background:rgba(212,175,55,0.1);color:var(--gold);border-color:var(--gold);}
+#dialogue-text{font-family:var(--font-classic);font-size:1.05rem;line-height:1.75;letter-spacing:1px;color:var(--text-color);font-weight:300;}
+.nar-mode #dialogue-text{font-style:normal;color:#b8b4ac;letter-spacing:1.5px;}
+.char-mode #dialogue-text{color:#e8e2d8;font-style:normal;}
+.inner-mode #dialogue-text{color:var(--em-color);font-style:italic;letter-spacing:1px;}
+#dialogue-text em{font-style:italic;color:var(--em-color);}
+#dialogue-text strong{font-weight:bold;color:#fff;}
+/* 📱 手機尺寸(預覽 phone vp = 390px 寬)：頂部鈕改直排靠右，對齊真實 VN css/vn_styles.css 的 @media(max-width:480px) 版型；中間/全屏(≥600px)不受影響、維持橫排 */
+@media(max-width:480px){
+#btn-home{top:10px;right:8px;padding:6px 12px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
+#btn-settings{top:48px;right:8px;padding:6px 12px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
+#btn-phone{top:86px;right:8px;padding:6px 10px;font-size:0.78rem;min-width:56px;box-sizing:border-box;text-align:center;}
+}
+/* 📖 章節卡（跟 css/vn_styles.css 那份同一套數值；卡片的皮預設是開卡前抄對話框的，見 _vthSkinCard） */
+#vn-chapter-card{position:absolute;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(0,0,0,0.55);-webkit-backdrop-filter:blur(3px);backdrop-filter:blur(3px);}
+#vn-chapter-card.hidden{display:none;}
+#vncc-box{width:100%;max-width:520px;box-sizing:border-box;padding:38px 42px 32px;text-align:center;border-radius:4px;background:var(--vn-dialog-bg, linear-gradient(180deg, rgba(12,12,16,0.88) 0%, rgba(4,4,6,0.95) 100%));border:1px solid rgba(255,255,255,0.08);box-shadow:0 20px 50px rgba(0,0,0,0.9);-webkit-backdrop-filter:blur(15px);backdrop-filter:blur(15px);}
+#vncc-story{font-family:var(--font-classic);font-size:0.8rem;letter-spacing:4px;color:var(--text-color,#b8b4ac);opacity:0.55;margin-bottom:22px;}
+#vncc-num{font-family:var(--font-classic);font-size:0.82rem;letter-spacing:5px;color:var(--gold,#d4af37);text-transform:uppercase;margin-bottom:10px;}
+#vncc-title{font-family:var(--font-classic);font-size:2rem;font-weight:700;letter-spacing:4px;color:var(--text-color,#f0e8d0);line-height:1.3;}
+#vncc-rule{width:46px;height:1px;margin:20px auto;background:var(--gold,#d4af37);opacity:0.5;}
+#vncc-preface{font-size:0.95rem;font-style:italic;line-height:1.9;color:var(--text-color,#b8b4ac);opacity:0.78;margin-bottom:26px;}
+#vncc-meta{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-bottom:28px;}
+.vncc-cell{min-width:92px;padding:9px 14px;border:1px solid rgba(255,255,255,0.10);border-radius:3px;background:rgba(255,255,255,0.03);}
+.vncc-cell-k{display:block;font-family:var(--font-classic);font-size:0.6rem;letter-spacing:2px;text-transform:uppercase;color:var(--text-color,#b8b4ac);opacity:0.45;margin-bottom:4px;}
+.vncc-cell-v{display:block;font-size:0.85rem;color:var(--text-color,#e8e4dc);}
+#vncc-enter{padding:12px 42px;cursor:pointer;font-family:var(--font-classic);font-size:0.9rem;letter-spacing:3px;color:var(--gold,#d4af37);background:transparent;border:1px solid var(--gold,#d4af37);border-radius:2px;}
+@media(max-width:600px){
+#vncc-box{padding:30px 24px 26px;}
+#vncc-title{font-size:1.6rem;letter-spacing:3px;}
+#vncc-preface{font-size:0.9rem;}
+.vncc-cell{min-width:80px;padding:8px 12px;}
+}
+/* 🏁 章末收尾鈕（跟 css/vn_styles.css 同一套數值；真實 VN 章末會收掉對話框） */
+#text-panel-wrapper.vth-off{display:none;}
+#vn-end-overlay{position:absolute;inset:0;display:none;z-index:15;pointer-events:none;}
+#vn-end-overlay.active{display:block;}
+#vn-end-basic{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;}
+#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-threads,#vn-end-btn-map,#vn-end-btn-regen{box-sizing:border-box;width:200px;text-align:center;pointer-events:auto;cursor:pointer;border:1px solid var(--gold);color:var(--gold);font-family:var(--font-classic);}
+#vn-end-btn-data{padding:14px 44px;background:rgba(5,5,8,0.92);font-size:1rem;letter-spacing:4px;box-shadow:0 0 20px rgba(212,175,55,0.25),0 8px 32px rgba(0,0,0,0.8);text-shadow:0 0 8px rgba(212,175,55,0.5);}
+#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-threads,#vn-end-btn-map,#vn-end-btn-regen{padding:10px 28px;background:rgba(5,5,8,0.88);font-size:0.85rem;letter-spacing:2px;box-shadow:0 0 14px rgba(212,175,55,0.2),0 6px 24px rgba(0,0,0,0.8);text-shadow:0 0 8px rgba(212,175,55,0.45);}
+/* ⚙ 設定視窗（同上，跟真實 VN 同一套數值；預覽沒有開合動畫，直接顯示） */
+#game-settings-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.85);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);z-index:60;display:flex;justify-content:center;align-items:center;opacity:0;pointer-events:none;}
+#game-settings-overlay.active{opacity:1;pointer-events:auto;}
+#game-settings-window{width:calc(100% - 30px);max-width:410px;max-height:calc(100% - 40px);background:linear-gradient(135deg,#111 0%,#050505 100%);border:1px solid var(--glass-border,rgba(212,175,55,0.3));border-radius:2px;box-shadow:0 20px 60px rgba(0,0,0,0.9);display:flex;flex-direction:column;overflow:hidden;}
+#gs-titlebar{background:rgba(10,10,10,0.8);border-bottom:1px solid var(--gold-dark);padding:15px 20px;display:flex;align-items:center;justify-content:space-between;}
+#gs-titlebar .gs-title{color:var(--gold);font-family:var(--font-classic);font-size:1.2rem;letter-spacing:4px;}
+#gs-titlebar .gs-close{width:32px;height:32px;background:transparent;border:1px solid transparent;color:var(--gold-dark);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+#gs-body{padding:30px 25px;overflow-y:auto;flex:1;}
+.gs-section-title{color:var(--gold);font-size:0.9rem;font-family:var(--font-classic);letter-spacing:3px;margin-bottom:25px;border-bottom:1px solid rgba(212,175,55,0.2);padding-bottom:8px;}
+.gs-row{display:flex;align-items:center;gap:15px;margin-bottom:22px;}
+.gs-label{color:#aaa;font-size:0.9rem;white-space:nowrap;flex-shrink:0;min-width:80px;}
+.gs-val{color:var(--gold-light);font-size:0.85rem;font-family:monospace;min-width:45px;text-align:right;flex-shrink:0;}
+.gs-slider{-webkit-appearance:none;appearance:none;flex:1;height:2px;background:rgba(255,255,255,0.2);outline:none;cursor:pointer;}
+.gs-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--gold);cursor:pointer;border:2px solid #000;}
+.gs-color-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;border-bottom:1px dashed rgba(255,255,255,0.05);padding-bottom:10px;}
+.gs-color-label{color:#aaa;font-size:0.9rem;}
+.gs-color-input{width:40px;height:24px;border:1px solid #555;cursor:pointer;background:none;padding:1px;}
+.gs-divider{border:none;margin:25px 0;}
+.gs-reset-btn{width:100%;background:transparent;border:1px solid var(--gold-dark);color:var(--gold-dark);padding:12px;font-size:0.9rem;cursor:pointer;letter-spacing:2px;font-family:var(--font-classic);text-transform:uppercase;}
+.gs-chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+.gs-chip{background:transparent;border:1px solid rgba(212,175,55,0.35);color:#aaa;padding:7px 12px;font-size:0.85rem;cursor:pointer;letter-spacing:1px;font-family:var(--font-classic);}
+.gs-chip.on{background:rgba(212,175,55,0.16);border-color:var(--gold);color:var(--gold-light);}
+.gs-sub{color:#888;font-size:0.8rem;letter-spacing:2px;margin:4px 0 8px;}
+#vn-end-btn-data,#vn-end-btn-ctx,#vn-end-btn-journal,#vn-end-btn-threads,#vn-end-btn-map,#vn-end-btn-regen,#game-settings-window,#gs-titlebar,#gs-body,.gs-row,.gs-chips,.gs-color-row,.gs-chip,.gs-reset-btn,#gs-titlebar .gs-close{position:relative;}
+@media(max-width:480px){
+#game-settings-window{width:93vw;}
+#gs-titlebar .gs-title{font-size:1rem;letter-spacing:2px;}
+#gs-body{padding:20px 18px;}
+.gs-section-title{letter-spacing:1px;font-size:0.85rem;}
+.gs-label{font-size:0.82rem;min-width:65px;}
+}
+`;
+    let _vthMode = 'char-mode';
+
+    // 📜 章末簡報卡（11-08）的樣式不在上面抄一份：直接從頁面上已經載入的 css/vn_styles.css 撈「章末簡報」那幾條，
+    //   兩邊永遠同一套數值（上面那份手抄的是對話框、名牌這些老東西，簡報卡一百多行再抄一次一定會漂）。
+    //   撈得到才記住；VN 的樣式還沒載進來時回空字串，下次再撈。
+    let _vthBriefCache = '';
+    function _vthBriefCss() {
+        if (_vthBriefCache) return _vthBriefCache;
+        let out = '';
+        const docs = [document, win.document].filter((d, i, a) => d && a.indexOf(d) === i);
+        for (const d of docs) {
+            for (const sh of Array.from(d.styleSheets || [])) {
+                let rules = null;
+                try { rules = sh.cssRules; } catch (e) { continue; }   // 跨網域的表讀不到，跳過
+                if (!rules) continue;
+                for (const r of Array.from(rules)) {
+                    const t = r.cssText || '';
+                    if (/vne-|vneo|#vn-end-btn-go/.test(t)) out += t + '\n';
+                }
+            }
+            if (out) break;
+        }
+        if (out) _vthBriefCache = '/* 📜 章末簡報卡（從 css/vn_styles.css 撈的） */\n' + out;
+        return out ? _vthBriefCache : '';
+    }
+
+    function _vthBuildSrcdoc(css, mode, thumb) {
+        const m = mode || _vthMode;
+        const card = m === 'chapter';   // 📖 章節卡：卡片浮在對話框上（真實 VN 也是這個疊法）
+        const end = m === 'end';        // 🏁 章末：真實 VN 會把對話框收掉，只剩收尾鈕組與右上三顆
+        const gs = m === 'settings';    // ⚙ 設定視窗：暗幕蓋在整個畫面上
+        const layout = thumb ? 'body{justify-content:flex-start;padding:14px 14px 6px;}#btn-home,#btn-settings,#btn-phone,#vn-panel-controls,#top-badge{display:none;}' : '';
+        // 主題 CSS 是模型或小機寫的：帶 </style> 會跳出 <style> 長出標籤（小機截圖那個 iframe 沒關沙盒）→ 先拆掉
+        return `<!DOCTYPE html><html><head><meta charset="UTF-8"><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"><style>${VTH_PREVIEW_BASE}\n${_vthBriefCss()}\n${layout}\n/* ====== 主題 CSS ====== */\n${String(css || '').replace(/<\/style/gi, '<\\/style')}</style></head><body>
+<div id="game-bg"></div>
+<div id="top-badge">黃昏 南城舊巷</div>
+<button id="btn-home">⌂ 返回</button>
+<button id="btn-settings">設定</button>
+<button id="btn-phone">📱</button>
+<div id="vn-chapter-card"${card ? '' : ' class="hidden"'}>
+<div id="vncc-box">
+<div id="vncc-story">霧港無眠</div>
+<div id="vncc-num">CHAPTER 03</div>
+<div id="vncc-title">霧散之後</div>
+<div id="vncc-rule"></div>
+<div id="vncc-preface">雨停了，碼頭的燈一盞一盞亮起來，像有人在替這座城數著還剩幾個夜晚。</div>
+<div id="vncc-meta"><div class="vncc-cell"><span class="vncc-cell-k">地點</span><span class="vncc-cell-v">南城舊巷</span></div><div class="vncc-cell"><span class="vncc-cell-k">時間</span><span class="vncc-cell-v">黃昏</span></div><div class="vncc-cell"><span class="vncc-cell-k">同行</span><span class="vncc-cell-v">兩人</span></div></div>
+<button id="vncc-enter" type="button">開始閱讀</button>
+</div>
+</div>
+<div id="vn-end-overlay"${end ? ' class="active"' : ''}>
+<div id="vn-end-basic" class="vne-brief vne-has-new">
+<span class="vne-cn vne-tl"></span><span class="vne-cn vne-tr"></span><span class="vne-cn vne-bl"></span><span class="vne-cn vne-br"></span>
+<div class="vne-crest"><b></b><i></i><b></b></div>
+<div class="vne-head"><div class="vne-kicker">Chapter 03</div><div class="vne-title">霧港無眠</div><div class="vne-meta"><span><i class="fa-regular fa-clock"></i>3/14 19:20</span><span><i class="fa-solid fa-location-dot"></i>南城舊巷</span></div><div class="vne-divider"><span></span></div></div>
+<div class="vne-sum"><div class="vne-sec">這一章</div><ol class="vne-points"><li>在碼頭等到了遲到的委託人</li><li>對方留下一張寫著地址的收據</li><li>店長提醒今晚十點後別再出門</li></ol></div>
+<div class="vne-tiles"><button type="button" class="vne-tile"><span class="vne-orb"><i class="fa-solid fa-diagram-project"></i><span class="vne-badge">2</span></span><span class="vne-tile-txt"><span class="vne-tile-k">新線索</span><span class="vne-tile-v">2 條還沒看</span></span><i class="fa-solid fa-chevron-right"></i></button><button type="button" class="vne-tile"><span class="vne-orb"><i class="fa-regular fa-calendar"></i></span><span class="vne-tile-txt"><span class="vne-tile-k">下一件行程</span><span class="vne-tile-v">明天 09:00・開店</span></span><i class="fa-solid fa-chevron-right"></i></button></div>
+<button id="vn-end-btn-go" type="button">繼續<i class="fa-solid fa-play"></i></button>
+<div class="vne-ents">
+<button id="vn-end-btn-data" type="button"><span class="vne-ring"><i class="fa-solid fa-box-archive"></i></span><span class="vne-lb">資料中心</span></button>
+<button id="vn-end-btn-journal" type="button"><span class="vne-ring"><i class="fa-solid fa-book-open"></i></span><span class="vne-lb">日誌</span></button>
+<button id="vn-end-btn-threads" type="button"><span class="vne-ring"><i class="fa-solid fa-diagram-project"></i><span class="vne-dot"></span></span><span class="vne-lb">線索</span></button>
+<button id="vn-end-btn-map" type="button"><span class="vne-ring"><i class="fa-solid fa-map-location-dot"></i></span><span class="vne-lb">地圖</span></button>
+<button id="vn-end-btn-ctx" type="button"><span class="vne-ring vne-ctx vne-ctx-on" style="--vne-pct:56"><i class="fa-solid fa-layer-group"></i></span><span class="vne-lb">CTX</span><small class="vne-pct">56%</small></button>
+</div>
+<div class="vne-foot"><button id="vn-end-btn-regen" type="button"><i class="fa-solid fa-rotate"></i> 重新生成</button></div>
+</div>
+</div>
+<div id="game-settings-overlay"${gs ? ' class="active"' : ''}>
+<div id="game-settings-window">
+<div id="gs-titlebar"><span class="gs-title">設定</span><button class="gs-close" type="button">✕</button></div>
+<div id="gs-body">
+<div class="gs-section-title">基礎設置</div>
+<div class="gs-row"><span class="gs-label">字體大小</span><input type="range" class="gs-slider" min="12" max="24" value="19"><span class="gs-val">19px</span></div>
+<div class="gs-row"><span class="gs-label">打字速度</span><input type="range" class="gs-slider" min="10" max="100" value="30"><span class="gs-val">30ms</span></div>
+<div class="gs-row"><span class="gs-label">BGM 音量</span><input type="range" class="gs-slider" min="0" max="100" value="60"><span class="gs-val">60%</span></div>
+<hr class="gs-divider">
+<div class="gs-section-title">世界題材</div>
+<div class="gs-chips"><button class="gs-chip on" type="button">都市</button><button class="gs-chip" type="button">奇幻</button><button class="gs-chip" type="button">懸疑</button></div>
+<div class="gs-sub">BGM</div>
+<div class="gs-chips"><button class="gs-chip" type="button">預設</button><button class="gs-chip on" type="button">夜曲</button></div>
+<hr class="gs-divider">
+<div class="gs-section-title">字體顏色設置</div>
+<div class="gs-color-row"><span class="gs-color-label">文章字體顏色</span><input type="color" class="gs-color-input" value="#dcd8d0"></div>
+<div class="gs-color-row"><span class="gs-color-label">名稱標籤字體顏色</span><input type="color" class="gs-color-input" value="#d4af37"></div>
+<hr class="gs-divider">
+<button class="gs-reset-btn" type="button">重置為默認顏色</button>
+</div>
+</div>
+</div>
+<div id="text-panel-wrapper"${end ? ' class="vth-off"' : ''}>
+<div id="vn-panel-controls"><div class="vn-panel-btn">LOG</div><div class="vn-panel-btn">SKIP</div><div class="vn-panel-btn">☰</div>
+<div id="vn-more-menu"><div class="vn-panel-btn">COT</div><div class="vn-panel-btn">CTX</div></div></div>
+<div id="text-panel" class="${card ? 'nar-mode' : m}">
+<div id="speaker-name">角色</div>
+<div id="dialogue-text">範例對白，用來預覽主題的字體、顏色與框線。<em>斜體強調</em>與<strong>粗體重點</strong>也會跟著套用。</div>
+</div>
+</div>
+</body></html>`;
+    }
+
+    // 📖 章節卡在真實 VN 裡是「開卡前把對話框當下算出來的皮抄過來」（vn_core._ccSkin），
+    //    預覽必須做同一件事，否則主題只改了對話框、預覽裡的卡片還是預設皮＝看了會誤判。
+    //    iframe 沒有 allow-scripts，所以由這邊在 load 之後伸進去抄（同源可讀）。
+    function _vthSkinCard(doc) {
+        try {
+            const panel = doc.getElementById('text-panel');
+            const box = doc.getElementById('vncc-box');
+            if (!panel || !box) return;
+            const had = panel.className;
+            panel.className = 'nar-mode';                  // 卡片借的是旁白態（跟真實 VN 一致）
+            const cs = doc.defaultView.getComputedStyle(panel);
+            const bgImg = cs.backgroundImage, bgColor = cs.backgroundColor;
+            const border = cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor;
+            const radius = cs.borderRadius, shadow = cs.boxShadow, color = cs.color;
+            const font = cs.fontFamily, blur = cs.backdropFilter;
+            panel.className = had;
+            if (bgImg && bgImg !== 'none') box.style.backgroundImage = bgImg;
+            if (bgColor) box.style.backgroundColor = bgColor;
+            if (border && !/^0px/.test(border)) box.style.border = border;
+            if (radius) box.style.borderRadius = radius;
+            if (shadow && shadow !== 'none') box.style.boxShadow = shadow;
+            if (color) box.style.setProperty('--text-color', color);   // 卡片內每個字都吃這顆變數
+            if (font) box.style.fontFamily = font;
+            if (blur && blur !== 'none') box.style.backdropFilter = blur;
+        } catch (e) { /* 抄不到就用預設皮，不影響預覽 */ }
+    }
+
+    // 💬 對話式主題：規則沿用上面那份（元素清單、鐵則、可讀性），只換掉「一次性生成」那個前提。
+    const VTH_AI_CHAT = VTH_AI_PROMPT.replace('用戶想要的風格：', '') + `
+【這是一段對話，不是一次性生成】
+- 每次回覆都要輸出「完整的最新 CSS」（不是片段、不是 diff、不要只給改動的那幾條），用 \`\`\`css 包起來；使用者會直接拿去套用。
+- 只改使用者這次講的地方，沒被提到的部分「原封不動」保留，不要順手重做。
+- CSS 之外可以用一兩句話說你改了什麼，不要長篇解釋。
+- 如果使用者問的是問題、或你需要先確認才知道怎麼改，就「只回話、不要輸出 CSS」。
+- 微調時不必再寫 <版面骨架>——除非這次要改的就是版面結構本身（輪廓、內距配置、三態的分法、名牌的接合方式），那就重寫一次再改。
+`;
+
+    // 🚨從 AI 回覆裡挑出 CSS。舊寫法只認「成對的 ```」，漏掉兩種很常見的情況：
+    //   ① 回覆被輸出上限截斷 → 只有開頭那個 ```，收尾那個永遠等不到
+    //   ② 模型直接吐純 CSS，一個 ``` 都沒有
+    //   兩種都會讓 newCss 變成空字串 → 主題沒被套用，而整包 CSS 被當成「說明文字」
+    //   原封不動貼進對話泡泡（使用者只看到一大串看不懂的代碼）。
+    function _vthPickCss(raw) {
+        const s0 = String(raw || '');
+        const looksCss = (t) => /\{[\s\S]*?\}/.test(t) && (t.match(/\}/g) || []).length >= 2;
+        // 骨架宣告是寫給人看的設計說明，標籤本身不必露出來
+        const clean = (t) => String(t || '').replace(/<\/?版面骨架>/g, '').trim();
+        let m = s0.match(/```(?:css)?\s*([\s\S]*?)```/i);
+        if (m) return { css: m[1].trim(), note: clean(s0.replace(/```[\s\S]*?```/g, '')), cut: false };
+        m = s0.match(/```(?:css)?\s*([\s\S]*)$/i);
+        if (m && looksCss(m[1])) return { css: m[1].trim(), note: clean(s0.slice(0, m.index)), cut: true };
+        // 完全沒有圍欄時：骨架宣告那段要先撕下來當說明，剩下的才可能是 CSS
+        //   （它在 CSS 裡是無效選擇器，混進去會把緊接著的第一條規則一起吃掉）
+        const bm = s0.match(/<版面骨架>([\s\S]*?)<\/版面骨架>/);
+        const body = bm ? s0.replace(bm[0], '').trim() : s0;
+        if (looksCss(body)) return { css: body, note: bm ? clean(bm[1]) : '', cut: false };
+        return { css: '', note: clean(s0), cut: false };
+    }
+    // 用了卻沒定義的自訂變數：模型偶爾會在微調時把 :root 那段整個漏掉，
+    //   var() 讀不到值 → 顏色與字體整組失效，畫面看起來就是「主題壞了」。
+    //   預覽底稿本來就有的那幾顆不算缺。
+    const VTH_BASE_VARS = ['--gold', '--gold-light', '--gold-dark', '--em-color', '--text-color',
+        '--name-color', '--font-classic', '--font-sans', '--vn-name-bg', '--vn-dialog-bg'];
+    function _vthMissingVars(css) {
+        const t = String(css || '');
+        const used = [...new Set((t.match(/var\(\s*--[\w-]+/g) || []).map(x => x.replace(/var\(\s*/, '')))];
+        const def = new Set((t.match(/--[\w-]+\s*:/g) || []).map(x => x.replace(/\s*:$/, '').trim()));
+        return used.filter(v => !def.has(v) && VTH_BASE_VARS.indexOf(v) < 0);
+    }
+
+    // 會把配件切掉的寫法：光靠 prompt 講不夠，套用時直接掃出來講給使用者聽。
+    //   名牌 #speaker-name 是 #text-panel 的子元素、而且刻意浮在框的上緣外面，
+    //   框上只要有 clip-path 或 overflow:hidden，名牌就被切掉半個（實機撞過）。
+    // 整份都沒有任何塑形宣告 ＝ 又退回「同一個矩形換顏色」。這條不是錯誤，是提醒。
+    function _vthFlat(css) {
+        const t = String(css || '');
+        const hasClip = /clip-path\s*:\s*(?!none)/i.test(t);
+        const hasBorderImage = /border-image\s*:/i.test(t);
+        // 四角不同、或明顯不是「小圓角」的 border-radius 才算塑形
+        const hasShapeRadius = /border-radius\s*:\s*[^;}]*(?:\d{2,}(?:px|%)[^;}]*){2,}/i.test(t)
+            || /border-radius\s*:\s*[^;}]*\/[^;}]*/i.test(t);
+        const hasMask = /-webkit-mask|(?:^|[^-])mask(?:-image)?\s*:/i.test(t);
+        const plateFlat = /#text-panel\s*::?before[^{}]*\{[^}]*inset\s*:\s*0(?:px)?\s*[;}]/i.test(t);
+        const out = [];
+        if (!hasClip && !hasBorderImage && !hasShapeRadius && !hasMask) out.push('整份沒有任何塑形：輪廓還是四個直角的矩形');
+        else if (plateFlat) out.push('底板的 inset 還是 0：那塊底跟框一樣大、一樣方');
+        return out;
+    }
+    // 版位契約：底稿用絕對定位把配件釘在各自的角落，主題只要碰到 position/top/... 就會把它們
+    //   打回文件流、整排疊到畫面中間（實機撞過三顆功能鍵飄到對話框上面）。
+    //   這種是硬約束，講不聽就直接剝掉——留著它畫面一定壞。
+    const VTH_LOCKED = ['#btn-home', '#btn-settings', '#btn-phone', '#top-badge', '#stream-scene-row',
+        '#speaker-name', '#vn-panel-controls', '#vn-more-menu', '.vn-panel-btn', '#text-panel-wrapper'];
+    const VTH_LOCK_PROPS = /(^|;)\s*(position|top|left|right|bottom|display|float|flex(?:-[a-z]+)?)\s*:[^;}]*/gi;
+    // 章末收尾鈕與設定視窗：外殼靠 flex 排成直排置中／視窗置中／左右兩欄，碰到 display 或 position 就散。
+    //   這組只認「選擇器最後那一節」是不是它們：掛在它們身上的 ::before/::after 裝飾、
+    //   或它們裡面別的元素（例如 #gs-body .gs-section-title）照樣自由發揮。
+    const VTH_LOCKED_SUBJECT = ['#vn-end-overlay', '#vn-end-basic', '#vn-end-btn-', '.vne-ents', '.vne-tiles',
+        '#game-settings-overlay', '#game-settings-window', '#gs-titlebar', '#gs-body', '.gs-row', '.gs-chips', '.gs-color-row'];
+    // 兩層暗幕平常是隱形、不擋點擊的，靠這幾個屬性開關；寫了就會一直蓋在畫面上、什麼都點不到
+    const VTH_VEILS = ['#vn-end-overlay', '#game-settings-overlay'];
+    const VTH_VEIL_PROPS = /(^|;)\s*(opacity|pointer-events|visibility)\s*:[^;}]*/gi;
+    function _vthSubjects(sel) {
+        return sel.split(',').map(s => {
+            const parts = s.trim().split(/[\s>+~]+/);
+            return parts[parts.length - 1] || '';
+        }).filter(c => c.indexOf('::') < 0);
+    }
+    function _vthStripLayout(css) {
+        let hit = 0;
+        const strip = (body, re) => body.replace(re, (m, p1) => { hit++; return p1 || ''; });
+        const out = String(css || '').replace(/([^{}]+)\{([^}]*)\}/g, (whole, sel, body) => {
+            const sl = sel.trim();
+            if (/:hover|:active|:focus/.test(sl)) return whole;            // 互動狀態不碰
+            const subj = _vthSubjects(sl);
+            const locked = VTH_LOCKED.some(k => sl.indexOf(k) >= 0)
+                || subj.some(c => VTH_LOCKED_SUBJECT.some(k => c.indexOf(k) >= 0));
+            const veil = subj.some(c => VTH_VEILS.some(k => c.indexOf(k) >= 0));
+            if (!locked && !veil) return whole;                             // 不在契約名單裡的自由發揮
+            let nb = body;
+            if (locked) nb = strip(nb, VTH_LOCK_PROPS);
+            if (veil) nb = strip(nb, VTH_VEIL_PROPS);
+            return sel + '{' + nb + '}';
+        });
+        return { css: hit ? out : String(css || ''), hit };
+    }
+    // 內文字色只寫在純 #dialogue-text 上：預設那三條（.char-mode／.nar-mode／.inner-mode #dialogue-text）特異性比它高，
+    //   哪一態沒自己寫字色，那一態就退回預設淺色字——亮底的主題整句看不見（10-28 世界門實測 Opus 撞過：旁白、內心寫了，說話那態漏了）。
+    //   模型的意思很清楚（就是要這個字色），所以照它寫的那個顏色把缺的那幾態補上，不另外猜顏色。
+    function _vthFixTextColor(css) {
+        const t = String(css || '');
+        const bare = t.replace(/\/\*[\s\S]*?\*\//g, '');   // 註解會黏在選擇器前面（/* 內文 */ #dialogue-text），先拿掉再認
+        let base = '';
+        bare.replace(/([^{}]+)\{([^}]*)\}/g, (w, sel, body) => {
+            if (sel.split(',').some(x => x.trim() === '#dialogue-text')) {
+                const m = /(?:^|[;{\s])color\s*:\s*([^;}]+)/i.exec(body);
+                if (m) base = m[1].trim();
+            }
+            return w;
+        });
+        if (!base) return { css: t, hit: 0 };
+        const add = ['char', 'nar', 'inner'].filter(md =>
+            !new RegExp('\\.' + md + '-mode\\s+#dialogue-text[^{]*\\{(?:[^}]*[;\\s])?color\\s*:', 'i').test(bare));
+        const lines = add.map(md => '#text-panel.' + md + '-mode #dialogue-text{color:' + base + ';}');
+        // 粗體預設寫死白字（vn_styles.css）：主題換了內文字色卻沒管粗體，亮底上粗體那幾個字整串不見 → 跟著內文字色走（照樣是粗的）
+        if (!/#dialogue-text\s+strong[^{]*\{(?:[^}]*[;\s])?color\s*:/i.test(bare)) lines.push('#dialogue-text strong{color:inherit;}');
+        if (!lines.length) return { css: t, hit: 0 };
+        return { css: t + '\n' + lines.join('\n'), hit: lines.length };
+    }
+    function _vthRisky(css) {
+        const out = [];
+        // 分層寫反：裝飾層騎到文字上面。文字區被蓋住是最傷的一種壞法（實機撞過放射狀線條蓋住整句）
+        try {
+            const t = String(css || '');
+            const deco = /#text-panel\s*::?(?:before|after)[^{}]*\{([^}]*)\}/gi;
+            let d;
+            while ((d = deco.exec(t))) {
+                const z = /z-index\s*:\s*(-?\d+)/i.exec(d[1]);
+                if (z && Number(z[1]) >= 1) { out.push('對話框的裝飾層 z-index 比文字高，會蓋住內文'); break; }
+            }
+        } catch (e) {}
+        // 框沒有底：三態的背景被設成透明、底板又沒真的畫背景 → 文字直接壓在背景圖上
+        try {
+            const t = String(css || '');
+            const clear = /#text-panel\s*(?:\.(?:char|nar|inner)-mode)?[^{}]*\{[^}]*background\s*:\s*(?:none|transparent|rgba\([^)]*,\s*0(?:\.0*)?\s*\))/i.test(t);
+            // 底板可以三態各畫一塊（#text-panel.char-mode::before…），那也算有底（10-28 世界門實測 Sonnet 這樣寫被誤報）
+            const plateHasBg = /#text-panel(?:\.(?:char|nar|inner)-mode)?\s*::?before[^{}]*\{[^}]*background/i.test(t);
+            if (clear && !plateHasBg) out.push('對話框沒有底（三態的背景被設成透明，底板也沒畫背景）');
+        } catch (e) {}
+        const re = /(?:^|\})\s*([^{}]*#text-panel[^{},]*)\{([^}]*)\}/g;
+        let m;
+        while ((m = re.exec(String(css || '')))) {
+            const sel = m[1], body = m[2];
+            if (/::\s*(before|after)/.test(sel)) continue;   // 畫在偽元素底板上是對的做法，不算
+            if (/clip-path\s*:/i.test(body) && !/clip-path\s*:\s*none/i.test(body)) out.push('對話框本身用了 clip-path');
+            if (/overflow\s*:\s*hidden/i.test(body)) out.push('對話框本身用了 overflow:hidden');
+        }
+        return [...new Set(out)];
+    }
+
+    // 對話紀錄與版本備份都按世界分開存（改 A 世界的主題不該影響 B 世界）
+    function _vthChatKey(w) { return 'vn_theme_chat::' + (w || 'lobby_default'); }
+    function _vthChatLoad(w) { try { return JSON.parse(localStorage.getItem(_vthChatKey(w)) || '[]'); } catch (e) { return []; } }
+    function _vthChatSave(w, arr) { return win.AUI.lsSet(_vthChatKey(w), JSON.stringify((arr || []).slice(-40)), '主題對話紀錄'); }
+    function _vthUndoKey(w) { return 'vn_theme_undo::' + (w || 'lobby_default'); }
+    function _vthUndoLoad(w) { try { return JSON.parse(localStorage.getItem(_vthUndoKey(w)) || '[]'); } catch (e) { return []; } }
+    function _vthUndoSave(w, arr) { return win.AUI.lsSet(_vthUndoKey(w), JSON.stringify((arr || []).slice(-10)), '主題的還原版本'); }
+
+    function _vthGalleryLoad() { try { return JSON.parse(localStorage.getItem('vn_theme_gallery') || '[]'); } catch (e) { return []; } }
+    function _vthGallerySave(arr) { return win.AUI.lsSet('vn_theme_gallery', JSON.stringify(arr || []), '主題收藏'); }
+
+    // ══════════════════════════════════════════════════════════════
+    // 🌍 世界書 tab 已拆檔 → os/os_studio_worldbook.js（2026-07-16）
+    //   面板入口走 win.OS_STUDIO_WB?.renderWorldbookPanel()（懶解析，見 switchTopMode）。
+    //   _wbTH/_wbToast 留核心：經 _b 橋供子模組（世界書/我的角色）取用。
+    // ══════════════════════════════════════════════════════════════
+    // 🚨 window.confirm 在 Tauri 會被攔掉：對話框根本不彈，函式直接回 false，
+    //   使用者看到的就是「按了完全沒反應」（實測創作室的『清空』）。
+    //   一律改兩段式：第一下把按鈕換成「再按一次」，第二下才真的做；4 秒沒動作自己解除，
+    //   免得按了一下走開、下次回來誤觸。
+    function _armOnce(btn, armedHtml, fn) {
+        if (!btn) return;
+        const orig = btn.innerHTML;
+        let armed = false, timer = 0;
+        const reset = () => { armed = false; clearTimeout(timer); btn.innerHTML = orig; btn.classList.remove('is-arm'); };
+        btn.onclick = async () => {
+            if (!armed) {
+                armed = true;
+                btn.innerHTML = armedHtml;
+                btn.classList.add('is-arm');
+                timer = setTimeout(reset, 4000);
+                return;
+            }
+            reset();
+            try { await fn(); } catch (e) { console.warn('[Studio] 兩段式動作失敗', e); }
+        };
+    }
+
+    const _wbTH = () => (window.parent || window).TavernHelper || window.TavernHelper;
+    function _wbToast(msg) { try { const w = (window.parent || window); AUI.toastr && AUI.toastr.success(msg); } catch (e) {} }
+
+    // ══════════════════════════════════════════════════════════════
+    // 🧑 我的角色（人設寫作）已拆檔 → os/os_studio_persona.js（2026-07-16）
+    //   面板入口走 win.OS_STUDIO_MC?.renderPersonaPanel()（懶解析，見 switchTopMode）。
+    // ══════════════════════════════════════════════════════════════
+
+    function renderThemePanel() {
+        const host = document.getElementById('studio-theme-content'); if (!host) return;
+        const VT = (window.parent || window).VN_Theme || window.VN_Theme;
+        const VC = (window.parent || window).VN_Cache || window.VN_Cache;
+        if (!VT) { host.innerHTML = '<div style="color:#fc8181;padding:10px;">VN_Theme 未載入，請先進 VN 一次再回來</div>'; return; }
+        // 先問 VN_Theme：人在有自己主題的視差世界裡時它回那個世界，這裡改的就是世界那份（它自己會退回 VN_Cache 那個）
+        const chatId = VT.getCurrentWorld ? VT.getCurrentWorld() : ((VC && VC.getCurrentWorld) ? VC.getCurrentWorld() : '');
+        const css = VT.getCss(chatId);
+        const esc = _sgcEsc;   // 也會放進 placeholder="…"、data-id="…"，引號要一起轉
+        const ph = '手寫 / 貼上，或用上面的「AI 生成」。上方會即時預覽。\n範圍內選擇器：\n#text-panel.char-mode / .nar-mode / .inner-mode（三狀態對話框）\n#dialogue-text（內文）  #speaker-name（名牌）  #top-badge（左上時間地點場景牌）\n#vn-panel-controls / .vn-panel-btn（SKIP/LOG/AUTO）  #btn-home / #btn-settings / #btn-phone（右上頂部鈕）\n#vn-chapter-card / #vncc-box（章節卡；預設抄對話框的皮，要單獨設計就對 #vncc-box 寫規則加 !important）\n  #vncc-story #vncc-num #vncc-title #vncc-rule #vncc-preface｜.vncc-cell .vncc-cell-k .vncc-cell-v｜#vncc-enter（開始閱讀鈕）\n（配件位置固定只配色；立繪 #game-char、背景圖層 #game-bg 不歸主題管）';
+        host.innerHTML = `<div class="vth-wrap">
+            <div class="vth-col-work">
+            <!-- 🚨版面照其他創作室排：左欄＝聊天室＋輸入列，右欄＝分頁＋內容＋右下動作列。
+                 清紀錄走 header 那顆垃圾桶（跟別的分頁同一顆），這裡不再自己長一顆浮在中間；
+                 套用／移除是「對這個世界動手」的動作，收到右下角，同其他創作室的「確定創建」。 -->
+            <div class="vth-css-bar">
+                <span class="vth-css-world"><i class="fa-solid fa-globe"></i> ${esc(chatId || '(未知，先進 VN 一次)')}</span>
+            </div>
+            <div class="vth-chat" id="vth-chat"></div>
+            <div class="vth-undo-row" id="vth-undo-row">
+                <button class="vth-mini" id="vth-undo"><i class="fa-solid fa-clock-rotate-left"></i> 還原上一版 (<span id="vth-undo-n">0</span>)</button>
+            </div>
+            <div class="studio-input-area vth-say-wrap">
+                <textarea class="studio-textarea" id="vth-say" placeholder="想要什麼風格、或哪裡要改，直接說（例：章節卡的標題再大一點、對話框換成暗紅燙金）"></textarea>
+                <button class="studio-send-btn" id="vth-send">送出</button>
+            </div>
+            </div>
+            <div class="vth-col-prev">
+            <div class="vth-ptabs">
+                <button class="vth-ptab active" data-pane="prev"><i class="fa-solid fa-eye"></i> 即時預覽</button>
+                <button class="vth-ptab" data-pane="css"><i class="fa-solid fa-code"></i> CSS</button>
+                <button class="vth-ptab" data-pane="gal"><i class="fa-solid fa-swatchbook"></i> 主題庫</button>
+            </div>
+            <div class="vth-pane vth-pane-prev on">
+                <div class="vth-prev-head">
+                    <div class="vth-vp-tabs">
+                        <button class="vth-vp active" data-vp="phone" title="手機端">手機</button>
+                        <button class="vth-vp" data-vp="center" title="桌面·中間聊天區">中間</button>
+                        <button class="vth-vp" data-vp="full" title="桌面·全屏（奧瑞亞擴大模式）">全屏</button>
+                        <input id="vth-vp-w" class="vth-vp-w" type="number" min="600" max="2560" step="20" title="中間聊天區寬度＝你嵌入奧瑞亞的實際寬度（約 900~1100）">
+                    </div>
+                    <div class="vth-mode-tabs">
+                        <button class="vth-mode active" data-mode="char-mode">角色對話</button>
+                        <button class="vth-mode" data-mode="nar-mode">旁白</button>
+                        <button class="vth-mode" data-mode="inner-mode">內心</button>
+                        <button class="vth-mode" data-mode="chapter">章節卡</button>
+                        <button class="vth-mode" data-mode="end">章末</button>
+                        <button class="vth-mode" data-mode="settings">設定</button>
+                    </div>
+                </div>
+                <div class="vth-preview-wrap" id="vth-preview-wrap"><div class="vth-preview-box" id="vth-preview-box"><iframe id="vth-preview" class="vth-preview" sandbox="allow-same-origin"></iframe></div></div>
+            </div>
+            <div class="vth-pane vth-pane-css">
+                <textarea id="vth-css-area" class="vth-css-area" spellcheck="false" placeholder="${esc(ph)}">${esc(css)}</textarea>
+                <div class="vth-css-hint">左邊跟 AI 講、或直接在這裡改，右邊即時預覽。AI 每次回的是完整的最新 CSS，會自動套進當前世界；改壞了按「還原上一版」。主題是設計工作，用「寫作→API 設置」的主模型。</div>
+            </div>
+            <div class="vth-pane vth-pane-gal">
+                <div class="vth-gal">
+                    <div class="vth-gal-head">
+                        <span class="vth-gal-label"><i class="fa-solid fa-swatchbook"></i> 我的主題庫</span>
+                        <div class="vth-gal-save">
+                            <input id="vth-gal-name" class="vth-gal-name" placeholder="主題命名…">
+                            <button class="vth-mini primary" id="vth-gal-add"><i class="fa-solid fa-bookmark"></i> 收藏目前</button>
+                        </div>
+                    </div>
+                    <div class="vth-gal-list" id="vth-gal-list"></div>
+                </div>
+            </div>
+            <div class="vth-act-bar">
+                <button class="vth-mini" id="vth-css-clear">移除主題</button>
+                <button class="vth-mini primary" id="vth-css-apply"><i class="fa-solid fa-floppy-disk"></i> 套用到此世界</button>
+            </div>
+            </div>
+        </div>`;
+
+        const area = host.querySelector('#vth-css-area');
+        const frame = host.querySelector('#vth-preview');
+        const previewWrap = host.querySelector('#vth-preview-wrap');
+        const previewBox  = host.querySelector('#vth-preview-box');
+        const wInput      = host.querySelector('#vth-vp-w');
+        let _curVp = 'phone';
+        // 對應奧瑞亞三種顯示情境：手機端 / 桌面·中間聊天區 / 桌面·全屏（奧瑞亞擴大模式）。
+        //   都「用真實解析度渲染 → transform:scale 等比縮小 → 外層裁切」比例才正確。
+        //   中間聊天區寬可調(嵌入欄通常 900~1100)，存 localStorage；全屏抓真實螢幕尺寸。
+        let _deskW = Math.max(600, Math.min(2560, parseInt(localStorage.getItem('vth_desk_w')) || 1000));
+        if (wInput) wInput.value = _deskW;
+        const applyVp = () => {
+            if (!previewBox || !frame || !previewWrap) return;
+            if (wInput) wInput.style.display = (_curVp === 'center') ? '' : 'none';
+            const avail = previewWrap.clientWidth || 320;
+            let RW, RH, s;
+            if (_curVp === 'full') {
+                RW = (window.screen && screen.width)  || 1920;
+                RH = (window.screen && screen.height) || 1080;
+                s = avail / RW;
+            } else if (_curVp === 'center') {
+                RW = _deskW; RH = Math.round(_deskW * 0.66);
+                s = avail / RW;
+            } else {
+                RW = 390; RH = 844;
+                s = Math.min(avail / RW, 430 / RH);   // 限高 430，避免直式手機太長
+            }
+            frame.style.width = RW + 'px';
+            frame.style.height = RH + 'px';
+            frame.style.transformOrigin = 'top left';
+            frame.style.transform = 'scale(' + s + ')';
+            previewBox.style.width  = Math.round(RW * s) + 'px';
+            previewBox.style.height = Math.round(RH * s) + 'px';
+        };
+        if (wInput) wInput.onchange = () => {
+            _deskW = Math.max(600, Math.min(2560, parseInt(wInput.value) || 1000));
+            wInput.value = _deskW;
+            win.AUI.lsSet('vth_desk_w', String(_deskW), '預覽的中間寬度');
+            if (_curVp === 'center') applyVp();
+        };
+        let _t = null;
+        const refreshPreview = () => {
+            try {
+                frame.srcdoc = _vthBuildSrcdoc(area.value);
+                // 章節卡要等 iframe 畫完才抄得到對話框的皮（同 vn_core 開卡前那一步）
+                frame.onload = () => { if (_vthMode === 'chapter') _vthSkinCard(frame.contentDocument); };
+            } catch (e) {}
+        };
+        refreshPreview();
+        applyVp();
+        area.oninput = () => { if (_t) clearTimeout(_t); _t = setTimeout(refreshPreview, 250); };
+
+        host.querySelectorAll('.vth-ptab').forEach(b => b.onclick = () => {
+            host.querySelectorAll('.vth-ptab').forEach(x => x.classList.toggle('active', x === b));
+            host.querySelectorAll('.vth-pane').forEach(p2 => p2.classList.remove('on'));
+            host.querySelector('.vth-pane-' + b.dataset.pane).classList.add('on');
+            if (b.dataset.pane === 'prev') applyVp();   // 分頁藏著時量不到寬,切回來要重算縮放
+        });
+
+        host.querySelectorAll('.vth-vp').forEach(b => b.onclick = () => {
+            _curVp = b.dataset.vp;
+            host.querySelectorAll('.vth-vp').forEach(x => x.classList.toggle('active', x === b));
+            applyVp();
+        });
+
+        host.querySelectorAll('.vth-mode').forEach(b => b.onclick = () => {
+            _vthMode = b.dataset.mode;
+            host.querySelectorAll('.vth-mode').forEach(x => x.classList.toggle('active', x === b));
+            refreshPreview();
+        });
+
+        host.querySelector('#vth-css-apply').onclick = () => {
+            VT.setCss(chatId, area.value);
+            const b = host.querySelector('#vth-css-apply'); const o = b.textContent; b.textContent = '✓ 已套用'; setTimeout(() => { b.textContent = o; }, 1200);
+        };
+        // 這顆跟聊天室無關：把這個世界身上已經套著的主題拿掉，畫面回到預設外觀
+        _armOnce(host.querySelector('#vth-css-clear'), '再按一次移除', () => {
+            VT.clear(chatId); area.value = ''; refreshPreview();
+        });
+
+        // ── 💬 對話式修改（照 VN 組件那套的體感：講一句改一次，改壞了還原上一版）──
+        const chatBox = host.querySelector('#vth-chat');
+        const sayEl   = host.querySelector('#vth-say');
+        const sendBtn = host.querySelector('#vth-send');
+        const undoRow = host.querySelector('#vth-undo-row');
+        const undoBtn = host.querySelector('#vth-undo');
+        const undoN   = host.querySelector('#vth-undo-n');
+        let chatLog = _vthChatLoad(chatId);      // [{role:'user'|'ai', text}]
+        let undoLog = _vthUndoLoad(chatId);      // 每次 AI 改動前的舊 CSS
+
+        // 這一列只管 CSS 的版本回退；清紀錄走 header 那顆垃圾桶
+        const syncUndo = () => {
+            undoN.textContent = String(undoLog.length);
+            // 用 class 不用 style：CSS 預設就是 none,設成 '' 會退回 none
+            undoRow.classList.toggle('on', undoLog.length > 0);
+        };
+        const addBubble = (role, text, animate) => {
+            const b = document.createElement('div');
+            b.className = 'studio-bubble ' + (role === 'user' ? 'user' : 'ai') + (animate ? ' studio-bubble-enter' : '');
+            b.innerHTML = role === 'user' ? esc(text).replace(/\n/g, '<br>') : renderMarkdown(text);
+            chatBox.appendChild(b);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return b;
+        };
+        const renderChat = () => {
+            chatBox.innerHTML = '';
+            if (!chatLog.length) {
+                chatBox.innerHTML = '<div class="vth-chat-empty">跟 AI 說你要什麼風格，他會出一整套主題；之後想改哪裡就再說一句，' +
+                    '例如「章節卡的標題再大一點」「名牌換成燙金」。改壞了按上面的還原上一版。</div>';
+                return;
+            }
+            chatLog.forEach(m => addBubble(m.role, m.text, false));
+        };
+        renderChat(); syncUndo();
+
+        const applyCss = (newCss) => {
+            undoLog.push(area.value || '');
+            _vthUndoSave(chatId, undoLog); syncUndo();
+            area.value = newCss;
+            refreshPreview();
+            VT.setCss(chatId, newCss);   // 對話式＝邊講邊套，不用再按一次套用
+        };
+
+        let _sending = false;
+        const send = () => {
+            const text = (sayEl.value || '').trim();
+            if (!text || _sending) return;
+            const api = (window.parent || window).OS_API || window.OS_API;
+            // 🚨主題走「主模型」：這是設計工作，不是照規格填欄位。
+            //   這個 repo 的分工本來就寫在世界門那支的註解裡——旅人的身分卡走副模型（填欄位），
+            //   世界檔案留給主模型（整個世界的地基，後面所有東西都長在它上面）。
+            //   VN 主題是整個畫面的視覺地基，同一個道理；副模型做這個做不出設計，
+            //   出來就是「同一個矩形換顏色」。慢一點貴一點，換的是它真的會設計。
+            const chat = (typeof api?.chatMain === 'function') ? api.chatMain.bind(api)
+                : (typeof api?.chatSecondary === 'function') ? api.chatSecondary.bind(api) : null;
+            if (!chat) { AUI.alert('AI 不可用，請先到「寫作 → API 設置」設好主模型'); return; }
+            sayEl.value = '';
+            if (!chatLog.length) chatBox.innerHTML = '';
+            chatLog.push({ role: 'user', text });
+            _vthChatSave(chatId, chatLog);
+            addBubble('user', text, true);
+
+            _sending = true; sendBtn.disabled = true;
+            const wait = document.createElement('div');
+            wait.className = 'studio-bubble ai studio-bubble-enter';
+            wait.innerHTML = '<div class="studio-typing-wrap"><span class="studio-typing-dot"></span><span class="studio-typing-dot"></span><span class="studio-typing-dot"></span></div>';
+            chatBox.appendChild(wait); chatBox.scrollTop = chatBox.scrollHeight;
+
+            // 上下文：規則 + 最近幾輪 + 這次要改（附當前 CSS）。
+            // 舊的 AI 回覆只留一句摘要——完整 CSS 每輪都會重新附在最後，留著舊的只是浪費上下文。
+            const msgs = [{ role: 'user', content: VTH_AI_CHAT }];
+            chatLog.slice(-9, -1).forEach(m => msgs.push(m.role === 'user'
+                ? { role: 'user', content: m.text }
+                : { role: 'assistant', content: '（已更新主題 CSS）' }));
+            msgs.push({ role: 'user', content: '【目前的 CSS】\n```css\n' + (area.value || '(還沒有，這是第一版)') + '\n```\n\n【這次要改】' + text });
+
+            const done = (full) => {
+                _sending = false; sendBtn.disabled = false;
+                wait.remove();
+                const bad = _studioBadReply(String(full || ''));
+                if (bad.bad) { _studioConfirmRetry(bad.reason, () => { sayEl.value = text; send(); }, () => { sayEl.value = text; }); return; }
+                const raw = String(full || '');
+                const got = _vthPickCss(raw);
+                // 版位契約先過一遍：碰到那幾個屬性就地剝掉，別讓它把配件甩到畫面中間
+                const _lk = _vthStripLayout(got.css);
+                const newCss = _lk.css;
+                const warn = [];
+                if (_lk.hit) warn.push('（它動了配件的位置屬性 ' + _lk.hit + ' 處，已經幫你拿掉——那幾顆的位置是釘死的，改了會整排掉到畫面中間。）');
+                if (newCss && got.cut) warn.push('（這次的回覆看起來被截斷了，主題可能不完整——不對就按還原上一版，再讓他重寫一次。）');
+                if (newCss) {
+                    const miss = _vthMissingVars(newCss);
+                    if (miss.length) warn.push('（這份用到 ' + miss.slice(0, 4).join('、') + ' 卻沒有定義，那幾處的顏色或字體會失效。跟他說「補上變數定義」就好。）');
+                    const risky = _vthRisky(newCss);
+                    if (risky.length) warn.push('（' + risky.join('、') + '。跟他說「底板要 position:absolute 並把背景畫在它身上，框本身不要裁」。）');
+                    const flat = _vthFlat(newCss);
+                    if (flat.length) warn.push('（' + flat.join('、') + '。跟他說「對話框的形狀畫在 ::before 底板上，inset 別給 0，底板可以裁成任何輪廓；名牌自己也可以 clip-path」。）');
+                }
+                const say = [got.note, newCss ? '' : null, warn.join('\n')].filter(x => x).join('\n')
+                    || (newCss ? '好了，右邊看看。' : raw.trim());
+                chatLog.push({ role: 'ai', text: say });
+                _vthChatSave(chatId, chatLog);
+                addBubble('ai', say, true);
+                if (newCss) applyCss(newCss);
+            };
+            chat(msgs, () => {}, done,
+                (err) => {
+                    _sending = false; sendBtn.disabled = false; wait.remove();
+                    _studioConfirmRetry((err && err.message) || err, () => { sayEl.value = text; send(); }, () => { sayEl.value = text; });
+                }, { task: 'studio', label: 'VN 主題' });   // 名冊上算「創作室」（預設主模型，跟上面 chatMain 同一條）
+        };
+        sendBtn.onclick = send;
+        sayEl.onkeydown = (e) => { if (_enterSends(e)) { e.preventDefault(); send(); } };
+        // 🚨「清空」＝這一輪整個重來：對話紀錄與還原版本一起清（定案）。
+        //   還原堆疊是「這一輪 AI 每次改動前的備份」，跟對話同生同滅；留著它等於清了一半。
+        //   它不動已經套用的 CSS——那是這個世界的成品，要拿掉走右下角的「移除主題」。
+        _themeClear = () => {
+            chatLog = [];
+            undoLog = [];
+            _vthChatSave(chatId, chatLog);
+            _vthUndoSave(chatId, undoLog);
+            renderChat();
+            syncUndo();
+        };
+        undoBtn.onclick = () => {
+            if (!undoLog.length) return;
+            const prev = undoLog.pop();
+            _vthUndoSave(chatId, undoLog); syncUndo();
+            area.value = prev; refreshPreview(); VT.setCss(chatId, prev);
+        };
+
+        // ── 主題庫（跨世界重用，像 VN UI 展廳）──
+        const renderGal = () => {
+            const list = host.querySelector('#vth-gal-list');
+            const arr = _vthGalleryLoad();
+            if (!arr.length) { list.innerHTML = '<div class="vth-gal-empty">還沒收藏。調好一個主題後按「<i class="fa-solid fa-floppy-disk"></i> 收藏目前」存起來，之後任何世界都能一鍵套用。</div>'; return; }
+            list.innerHTML = arr.map(t => `<div class="vth-gal-card" data-id="${esc(t.id)}">
+                <div class="vth-gal-thumb-wrap"><iframe class="vth-gal-thumb" sandbox="allow-same-origin" scrolling="no"></iframe></div>
+                <div class="vth-gal-name-row"><span class="vth-gal-cname">${esc(t.name)}</span></div>
+                <div class="vth-gal-acts">
+                    <button class="vth-mini primary" data-act="apply">套用</button>
+                    <button class="vth-mini" data-act="edit">編輯</button>
+                    <button class="vth-mini danger" data-act="del">刪</button>
+                </div>
+            </div>`).join('');
+            arr.forEach(t => {
+                const card = list.querySelector('.vth-gal-card[data-id="' + (window.CSS && CSS.escape ? CSS.escape(t.id) : t.id) + '"]');
+                if (!card) return;
+                try { card.querySelector('.vth-gal-thumb').srcdoc = _vthBuildSrcdoc(t.css, 'char-mode', true); } catch (e) {}
+                card.querySelector('[data-act="apply"]').onclick = () => {
+                    area.value = t.css || ''; refreshPreview(); VT.setCss(chatId, t.css || '');
+                    const bb = card.querySelector('[data-act="apply"]'); const oo = bb.textContent; bb.textContent = '✓'; setTimeout(() => { bb.textContent = oo; }, 1000);
+                };
+                card.querySelector('[data-act="edit"]').onclick = () => { area.value = t.css || ''; refreshPreview(); _scrollInBox(area, 'center', 'smooth'); };
+                _armOnce(card.querySelector('[data-act="del"]'), '再按一次', () => {
+                    _vthGallerySave(_vthGalleryLoad().filter(x => x.id !== t.id)); renderGal();
+                });
+            });
+        };
+        host.querySelector('#vth-gal-add').onclick = () => {
+            const nameEl = host.querySelector('#vth-gal-name');
+            const name = (nameEl.value || '').trim();
+            if (!name) { AUI.alert('幫主題取個名字'); nameEl.focus({ preventScroll: true }); return; }
+            if (!area.value.trim()) { AUI.alert('CSS 是空的，先生成或貼一段再收藏'); return; }
+            const arr = _vthGalleryLoad();
+            arr.unshift({ id: 'th_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36), name: name, css: area.value });
+            if (!_vthGallerySave(arr)) return;   // 沒收進去就留著名字，別清掉
+            nameEl.value = '';
+            renderGal();
+        };
+        renderGal();
+    }
+
+    // 把「沒包 <json> 的面板資料」整段換成那張已生成卡片。
+    // 為什麼不用正則：面板的 css/js 欄位裡本來就有大量 { }，非貪婪會停在第一個 }、貪婪又會吃掉後面
+    // 使用者真正想看的話。這裡改成從物件開頭走括號計數，而且認得字串與跳脫字元（"a { b }" 裡的括號不算），
+    // 所以不管 css 有幾層巢狀、js 裡有沒有樣板字面，都能切在真正的結尾。
+    // 前後若被 ``` 圍欄包著，圍欄一起收掉；沒收完（回覆被截斷）就收到結尾，行為同 <json> 那條。
+    function _hideLoosePanelJson(s, hiddenUI) {
+        const KEYS = /^\s*[\[\{]\s*(?:\{\s*)?"(?:category|tagId|id)"\s*:/;
+        let out = '', i = 0;
+        while (i < s.length) {
+            const ch = s[i];
+            if (ch !== '{' && ch !== '[') { out += ch; i++; continue; }
+            // 這個括號是不是面板資料的開頭？看它後面緊接著是不是那幾個特徵鍵
+            if (!KEYS.test(s.slice(i, i + 120))) { out += ch; i++; continue; }
+            const end = _scanBalanced(s, i);
+            // 連同前後的 ``` 圍欄一起吃掉，不然圍欄會單獨留在畫面上
+            let from = i, to = (end === -1) ? s.length : end;
+            const beforeFence = out.match(/```[a-zA-Z]*[ \t]*\n?[ \t]*$/);
+            if (beforeFence) out = out.slice(0, out.length - beforeFence[0].length);
+            const afterFence = s.slice(to).match(/^[ \t]*\n?[ \t]*```/);
+            if (afterFence) to += afterFence[0].length;
+            out += hiddenUI;
+            i = to;
+        }
+        return out;
+    }
+
+    // 從 s[start] 的 { 或 [ 走到配對的收尾，回傳收尾的下一個位置；沒收完回 -1。
+    // 認字串與跳脫：JSON 字串裡的括號不算數（面板的 css 全靠這個才切得對）。
+    function _scanBalanced(s, start) {
+        let depth = 0, inStr = false, esc = false;
+        for (let k = start; k < s.length; k++) {
+            const c = s[k];
+            if (inStr) {
+                if (esc) { esc = false; continue; }
+                if (c === '\\') { esc = true; continue; }
+                if (c === '"') inStr = false;
+                continue;
+            }
+            if (c === '"') { inStr = true; continue; }
+            if (c === '{' || c === '[') depth++;
+            else if (c === '}' || c === ']') { depth--; if (depth === 0) return k + 1; }
+        }
+        return -1;
+    }
+
+    function renderMarkdown(raw) {
+        if (!raw) return '';
+        let s = raw;
+        s = s.replace(/<(script|iframe|object|embed|meta|link)[^>]*>[\s\S]*?<\/\1>/gi, '');
+        s = s.replace(/<(script|iframe|object|embed|meta|link)[^>]*\/?>/gi, '');
+        
+        const hiddenUI = '<div class="studio-hidden-ui"><img src="https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/wax-seal.png" alt=""><span>已生成，點上方 <i class="fa-solid fa-eye"></i> 預覽查看</span></div>';
+        
+        // 原本的 <json> 攔截
+        s = s.replace(/<json>[\s\S]*?(<\/json>|$)/gi, hiddenUI);
+        // 裸奔的面板資料（模型沒包 <json>、改用 ```json 圍欄或什麼都沒包）→ 用括號計數收乾淨。
+        // 🚨 這裡以前是非貪婪正則，而面板 JSON 的 css/js 裡有一大堆大括號，
+        //    正則會停在第一個 }，後面整段原始碼就漏進聊天室變成一大片文字（09-09 回報）。
+        s = _hideLoosePanelJson(s, hiddenUI);
+        
+        s = s.replace(/^---+$/gm, '<hr>');
+        s = s.replace(/^###\s+(.*)/gm, (_, t) => `<h3>${t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</h3>`);
+        s = s.replace(/^##\s+(.*)/gm,  (_, t) => `<h2>${t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</h2>`);
+        s = s.replace(/^#\s+(.*)/gm,   (_, t) => `<h1>${t.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>')}</h1>`);
+        s = s.replace(/^>\s*(.*)/gm, '<blockquote>$1</blockquote>');
+        s = s.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+        s = s.replace(/^[*-]\s+(.*)/gm, '<li>$1</li>');
+        s = s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+        s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        s = s.replace(/\n/g, '<br>');
+        s = s.replace(/(<br>\s*){3,}/g, '<br><br>');
+        return _studioSafe(s);   // 上面只拿掉 <script> 那幾種，<img onerror>、<svg onload>、javascript: 連結照樣會跑 → 最後整段過消毒（粗體換行照留）
+    }
+    // 模型寫的、匯入的 HTML 要照格式顯示時一律過這支（AUI.safeHtml：會跑的拿掉、格式留著）；沒有 AUI（不該發生）就整段當純文字
+    function _studioSafe(html) {
+        const A = win.AUI || window.AUI;
+        return (A && A.safeHtml) ? A.safeHtml(html) : _sgcEsc(html);
+    }
+
+    // ── 多泡泡解析器 ─────────────────────────────────────────────────
+    // 將 AI 回應切成 segments：text / render / genimg
+    function parseSegments(text) {
+        if (!text) return [];
+        const segments = [];
+        const tagReg = /<(render|genimg|choices)>([\s\S]*?)<\/\1>/gi;
+        let lastIndex = 0, match;
+
+        while ((match = tagReg.exec(text)) !== null) {
+            const before = text.slice(lastIndex, match.index);
+            if (before.trim()) {
+                before.split(/\n\n+/).forEach(chunk => {
+                    const c = chunk.trim();
+                    if (c) segments.push({ type: 'text', content: c });
+                });
+            }
+            segments.push({ type: match[1], content: match[2].trim() });
+            lastIndex = match.index + match[0].length;
+        }
+
+        const tail = text.slice(lastIndex);
+        if (tail.trim()) {
+            tail.split(/\n\n+/).forEach(chunk => {
+                const c = chunk.trim();
+                if (c) segments.push({ type: 'text', content: c });
+            });
+        }
+
+        return segments.length ? segments : [{ type: 'text', content: text }];
+    }
+
+    // 根據 segment 建立對應的 bubble DOM
+    // options.selectedLabel：choices segment 已被選的內容（重整後直接渲染「已選展示」）
+    function createSegmentBubble(seg, animate = true, options = {}) {
+        const bubble = document.createElement('div');
+        bubble.className = 'studio-bubble ai' + (animate ? ' studio-bubble-enter' : '');
+
+        if (seg.type === 'text') {
+            bubble.innerHTML = renderMarkdown(seg.content);
+
+        } else if (seg.type === 'render') {
+            bubble.classList.add('render-bubble');
+            // 建立隔離容器，防止樣式外洩
+            const wrap = document.createElement('div');
+            wrap.className = 'studio-render-wrap';
+            // 只允許顯示用 HTML，過濾 script/iframe
+            const safeHtml = seg.content
+                .replace(/<(script|iframe|object|embed|meta|link)[^>]*>[\s\S]*?<\/\1>/gi, '')
+                .replace(/<(script|iframe|object|embed|meta|link)[^>]*\/?>/gi, '');
+            wrap.innerHTML = _studioSafe(safeHtml);   // 上面的正則擋不住 <img onerror> 這類，最後再過一次消毒
+            bubble.appendChild(wrap);
+
+        } else if (seg.type === 'genimg') {
+            bubble.classList.add('genimg-bubble');
+            bubble.innerHTML = `<div style="display:flex;align-items:center;gap:8px;">
+                <div class="os-studio-spinner"></div>
+                <span style="color:rgba(26,28,40,0.72);font-size:12px;">生成圖片中… ${_sgcEsc(seg.content.slice(0,40))}</span>
+            </div>`;
+            // 非同步生圖，完成後替換內容
+            (async () => {
+                try {
+                    const imgMgr = win.OS_IMAGE_MANAGER;
+                    if (!imgMgr?.generate) throw new Error('找不到圖片引擎');
+                    const url = await imgMgr.generate(seg.content, 'scene', { use: 'app' });
+                    if (url) {
+                        bubble.innerHTML = `<img src="${_sgcEsc(url)}" alt="generated" />
+                            <div style="font-size:10px;color:rgba(26,28,40,0.72);margin-top:4px;padding:0 4px;">${_sgcEsc(seg.content.slice(0,60))}</div>`;
+                    } else {
+                        bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> 圖片生成失敗</span>`;
+                    }
+                } catch(e) {
+                    bubble.innerHTML = `<span style="color:#fc8181;font-size:12px;"><i class="fa-solid fa-triangle-exclamation"></i> ${_sgcEsc(e && e.message)}</span>`;
+                }
+            })();
+
+        } else if (seg.type === 'choices') {
+            // 解析 | 分隔的選項，渲染成按鈕列（支援 markdown）
+            bubble.classList.add('choices-bubble');
+            const items = seg.content.split('|').map(s => s.trim()).filter(Boolean);
+
+            // 變換成「已選展示」狀態：清掉所有按鈕、只顯示選中項
+            const collapseToSelected = (label) => {
+                bubble.classList.add('selected');
+                bubble.innerHTML = `
+                    <div class="studio-choices-hint">✓ 你選擇了：</div>
+                    <div class="studio-choice-selected">${renderMarkdown(label)}</div>
+                `;
+            };
+
+            // 重整後若該 choices 已被選過，直接渲染「已選展示」（不顯示按鈕）
+            if (options.selectedLabel) {
+                collapseToSelected(options.selectedLabel);
+                return bubble;
+            }
+
+            bubble.innerHTML = '<div class="studio-choices-hint">你的選擇：</div>';
+            const btnRow = document.createElement('div');
+            btnRow.className = 'studio-choices-row';
+
+            items.forEach((label) => {
+                const btn = document.createElement('button');
+                btn.className = 'studio-choice-btn';
+                btn.innerHTML = renderMarkdown(label); // 改用 innerHTML 渲染 markdown
+                btn.onclick = () => {
+                    collapseToSelected(label);
+                    const inputEl = document.getElementById('studio-input');
+                    if (!inputEl) return;
+                    inputEl.value = label;
+                    inputEl.dispatchEvent(new Event('input')); // 觸發 autosize
+                    // 標記下一條 user 訊息來自 choice 點擊（重整後可恢復「已選」狀態）
+                    window.__nextUserMsgFromChoice = true;
+                    handleSend();
+                };
+                btnRow.appendChild(btn);
+            });
+            // 加「✏️ 其他...」按鈕
+            const otherBtn = document.createElement('button');
+            otherBtn.className = 'studio-choice-btn studio-choice-other';
+            otherBtn.textContent = '其他想法...';
+            otherBtn.onclick = () => {
+                collapseToSelected('自己輸入');
+                const inputEl = document.getElementById('studio-input');
+                if (inputEl) {
+                    inputEl.focus({ preventScroll: true });
+                    _scrollInBox(inputEl, 'nearest', 'smooth');
+                }
+            };
+            btnRow.appendChild(otherBtn);
+            bubble.appendChild(btnRow);
+        }
+
+        return bubble;
+    }
+
+    // 🎩 在帽匠的工坊裡打開時（外面包著 .lws），AI 的每一輪回話前面掛「頭像＋帽匠」：
+    //    帽匠還在陪你做，但是當聊天裡的協作者，不是站在面板旁邊的一條窄立繪。手機殼那份創作室不掛。
+    function _studioAppendWho(container) {
+        const app = document.getElementById('os_studio_app');
+        if (!container || !app || !app.closest('.lws')) return;
+        const s = (win.LobbyNpcs || window.LobbyNpcs)?.staff?.('hatter');
+        const el = document.createElement('div');
+        el.className = 'studio-ai-who';
+        const ava = document.createElement('span');
+        ava.className = 'studio-ai-ava';
+        if (s && s.portrait) ava.style.backgroundImage = 'url("' + s.portrait + '")';   // 動態 URL，只能直接設
+        el.appendChild(ava);
+        el.appendChild(document.createTextNode((s && s.name) || '帽匠'));
+        container.appendChild(el);
+    }
+
+    // 將 AI 回應爆成多個泡泡，依序錯開出現
+    function appendSegmentBubbles(container, text, delayBase = 0) {
+        const segs = parseSegments(text);
+        segs.forEach((seg, i) => {
+            setTimeout(() => {
+                container.appendChild(createSegmentBubble(seg, true));
+                container.scrollTop = container.scrollHeight;
+            }, delayBase + i * 160);
+        });
+        return segs.length;
+    }
+
+    // autoText 是字串＝自檢引擎自動追加的修正輪（不讀輸入框、泡泡標成自動檢查）；按鈕點來的是事件物件，照舊讀輸入框
+    async function handleSend(autoText) {
+        const inputEl = document.getElementById('studio-input');
+        const isAuto = (typeof autoText === 'string');
+        if (!isAuto) _autoFixRound = 0;   // 使用者親手送＝新一輪，自動修正額度歸零
+        let text = isAuto ? autoText.trim() : inputEl.value.trim();
+        // 選起來的元素 chip 接在使用者文字後面一行送出（VN 組件模式才有這排），送完 chip 自動清掉
+        if (currentMode === 'vn_ui' && !isAuto) {
+            const chipLine = _studioTakeSelectedChips();
+            if (chipLine) { text = text ? (text + '\n' + chipLine) : chipLine; try { renderStudioChips(); } catch (e) {} }
+        }
+        if (!text && pendingImages.length === 0) return;
+
+        // === VN 模式：發送前 currentParsedData 空（存檔後 / 重整 / parse 失敗）→ 救回，才能走 diff 不還原 ===
+        // 先試「耐久快取」(存最新 diff 結果、跨存檔/重整都在)；撈不到才退聊天歷史(可能只剩初版→會還原 diff)。
+        if (currentMode === 'vn_ui' && !currentParsedData) {
+            const _cached = _loadParsedCache(getChatSessionId());
+            if (_cached && !Array.isArray(_cached)) {
+                currentParsedData = _cached;
+                activePreviewData = _cached;
+                console.log('[Studio] 🛟 currentParsedData 空 → 從耐久快取救回「最新版」面板，走 diff 路徑');
+            } else {
+                extractLatestJsonFromHistory();
+                if (currentParsedData) console.log('[Studio] 🛟 currentParsedData 空 → 退聊天歷史救回（可能初版），走 diff 路徑');
+            }
+        }
+
+        // === VN 模式：已有面板時，走 diff-based refine（AI 給 find/replace pair，前端套用） ===
+        // 用戶完全不接觸技術術語；AI 沒指定的原文物理上動不到 → 真正做到「只改改的、保留沒改的」
+        if (currentMode === 'vn_ui' && currentParsedData && !Array.isArray(currentParsedData)) {
+            return handleDiffVNRefine(text, isAuto);
+        }
+
+        // full 生成路徑（只剩「還沒有 currentParsedData 的首次生成」會到這；大改已由 diff 路徑的整包 <json> 處理）
+        if (currentMode === 'vn_ui' && currentParsedData) {
+            win.OS_STUDIO_DIFF?.snapshotCurrentVNState(text, 'all');   // 拆檔：os_studio_diff_engine.js
+            win.OS_STUDIO_DIFF?.renderVNHistoryArea();
+        }
+
+        const sendBtn = document.getElementById('studio-send-btn');
+        if (!isAuto) { inputEl.value = ''; inputEl.style.height = '50px'; }   // 自動輪不動使用者打到一半的字
+        inputEl.disabled = true;
+        sendBtn.disabled = false;
+        sendBtn.innerText = '停止';
+        sendBtn.onclick = () => { if (_studioAbortCtrl) _studioAbortCtrl.abort(); };
+        _studioAbortCtrl = new AbortController();
+
+        // VN UI 生成：在訊息開頭標【類型：X】，AI 第一輪就知道要做純展示/純應用/共用（不用每次費口舌）
+        const genText = (currentMode === 'vn_ui')
+            ? ('【類型：' + _vnPanelType + '】' + (_vnPanelType === '共用' ? '（共用＝正文 <tagId> 餵資料 ＋ app 內「生成」鈕叫 st.callAI 產外圍內容，兩條都走 st.feed；生成鈕必須有）' : '') + (_vnPanelType === '主畫面組件' ? '' : '（面板必須自帶一顆綁 onComplete 的出口鈕；鈕上的字與造型照這個面板的內容取，別沿用這句話裡的字）') + (text || '（依此類型先做一版）'))
+            : text;
+        // 帶圖時 content 變陣列；不帶圖時還是字串（向後兼容既有清洗 / parse 邏輯）
+        const userContent = buildUserMessageContent(genText, pendingImages);
+        const userMsg = { role: 'user', content: userContent };
+        if (isAuto) userMsg._auto = true;   // 自檢自動追加的修正輪：泡泡畫成「自動檢查」而不是使用者說的話
+        // 標記是否來自選項按鈕點擊（重整後可恢復「已選展示」狀態）
+        if (window.__nextUserMsgFromChoice) {
+            userMsg._fromChoice = true;
+            window.__nextUserMsgFromChoice = false;
+        }
+        chatMessages.push(userMsg);
+        pendingImages = [];
+        renderPendingImages();
+        _studioSave(getChatSessionId()); // 用戶發送時先存一次，防 AI 失敗後訊息遺失
+        renderChatHistory();
+
+        const container = document.getElementById('studio-chat-history');
+        const aiBubble = document.createElement('div');
+        aiBubble.className = 'studio-bubble ai';
+        // 一建立就放打字三點，不等 API 第一個 chunk（避免空泡泡尷尬幾秒）
+        aiBubble._typingSet = true;
+        aiBubble.innerHTML = `<div class="studio-typing-wrap">
+            <span class="studio-typing-dot"></span>
+            <span class="studio-typing-dot"></span>
+            <span class="studio-typing-dot"></span>
+        </div>`;
+        _studioAppendWho(container);   // 打字三點上面就先掛名字：泡泡換成回話時名字留著
+        container.appendChild(aiBubble);
+        container.scrollTop = container.scrollHeight;
+
+        try {
+            const apiEngine = win.OS_API || window.OS_API;
+            if (!apiEngine || !apiEngine.chat) throw new Error("找不到 API 引擎");
+
+            let baseConfig = win.OS_SETTINGS?.getConfig?.() || JSON.parse(localStorage.getItem('os_global_config') || '{}');
+            // 創作室生應用不需要超大輸出；夾到 32768 以下避免 gemini/vertex「maxOutputTokens 超過上限」報錯（主模型那邊若也太大要另調）
+            const _capTok = Math.min(parseInt(baseConfig.maxTokens) || 8192, 32768);
+            const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.7, maxTokens: _capTok };
+
+            // 👁 由看圖模型讀圖時，這一輪附的圖先讓它看（描述存在那則訊息上，之後每輪只送描述；打字三點已經在轉）
+            if (Array.isArray(userMsg.content) && !Array.isArray(userMsg._imgDesc) && _studioVisionMode() === 'helper') {
+                await _studioDescribeFor(userMsg);
+                _studioSave(getChatSessionId());
+            }
+            // 過濾：content 是字串時要 trim、陣列時要有內容；跳過已壓縮的原始對話（_isCompressed）
+            let apiPayload = JSON.parse(JSON.stringify(chatMessages.filter(m => {
+                if (m._isCompressed) return false; // 已壓縮 → 不再送
+                if (typeof m.content === 'string') return m.content.trim();
+                if (Array.isArray(m.content)) return m.content.length > 0;
+                return false;
+            })));
+
+            // 摘要訊息：role 改成 system 送上去（AI 把它當系統提示讀，不會誤當對話）
+            apiPayload.forEach(m => {
+                if (m._isSummary) {
+                    m.role = 'system';
+                    m.content = `【📌 早期對話摘要 #${m._summaryNum}（壓縮自 ${m._compressedCount} 條對話）】\n${typeof m.content === 'string' ? m.content : messageContentToString(m.content)}`;
+                }
+            });
+
+            // 🛟 把當前最新面板資料注入到 apiPayload（永遠保證 AI 看得到最新版面板）
+            // 這條注入的是 currentParsedData（含 diff 修改後的最新 JSON），不依賴聊天歷史
+            if (currentMode === 'vn_ui' && currentParsedData && !Array.isArray(currentParsedData)) {
+                try {
+                    apiPayload.unshift({
+                        role: 'system',
+                        content: `【當前面板狀態（最新版，請以此為基準回應；用戶說「改 X」就是針對這份資料動 X）】\n<json>${JSON.stringify(currentParsedData)}</json>`
+                    });
+                } catch(e) { console.warn('[Studio] 注入當前面板狀態失敗:', e); }
+            }
+
+            // 啟用的「功能 chip」用法 → 併進請求(system)，不貼輸入框
+            _studioInjectActiveFeatures(apiPayload);
+
+            // 圖片修剪：只保留最近 N 張圖在 context 中，其他帶圖訊息圖被剝掉只留文字 + 占位
+            pruneImagesFromHistory(apiPayload);
+            _studioApplyVision(apiPayload);   // 👁 照設置「看圖」那格送
+
+            // 找出「最新一條含面板 JSON 的訊息索引」—— 這條不清洗，其他舊版照清
+            let latestPanelMsgIdx = -1;
+            for (let i = apiPayload.length - 1; i >= 0; i--) {
+                const m = apiPayload[i];
+                const text = typeof m.content === 'string' ? m.content : messageContentToString(m.content);
+                if (/<json>[\s\S]*?<\/json>/i.test(text) || /\{\s*"(?:tagId|id|category)"[\s\S]*"(?:html|content|vars)"/i.test(text)) {
+                    latestPanelMsgIdx = i;
+                    break;
+                }
+            }
+
+            // 清洗舊版面板資料（跳過 latestPanelMsgIdx 保留最新版）
+            apiPayload.forEach((m, idx) => {
+                if (idx === latestPanelMsgIdx) return; // 🛡️ 最新面板資料絕對不清
+                if (m.role !== 'assistant' || !m.content) return;
+                const hideMsg = '[系統紀錄: ✅ 此為舊版資料，已被更新版本取代，自動隱藏節省 Context]';
+                const applyCleanup = (s) => {
+                    if (typeof s !== 'string') return s;
+                    s = s.replace(/<json>[\s\S]*?<\/json>/gi, hideMsg);
+                    s = s.replace(/\[\s*\{[\s\S]*?"(?:category|tagId|id)"[\s\S]*\}\s*\]/g, hideMsg);
+                    s = s.replace(/\{\s*"(?:category|tagId|id)"[\s\S]*?\}/g, hideMsg);
+                    s = s.replace(/<scope>[\s\S]*?<\/scope>/gi, '');
+                    s = s.replace(/<(css|js|html|demoFormat|usageDesc)>[\s\S]*?<\/\1>/gi, hideMsg);
+                    return s;
+                };
+                if (typeof m.content === 'string') {
+                    m.content = applyCleanup(m.content);
+                } else if (Array.isArray(m.content)) {
+                    m.content.forEach(part => {
+                        if (part && part.type === 'text') part.text = applyCleanup(part.text || '');
+                    });
+                }
+            });
+
+            if (currentParsedData && apiPayload.length > 0) {
+                const lastUserMsg = apiPayload.pop();
+                apiPayload.push({
+                    role: 'system',
+                    content: `【當前最新已生成的資料狀態 (僅供參考與修改)】\n<json>\n${JSON.stringify(currentParsedData)}\n</json>`
+                });
+                apiPayload.push(lastUserMsg);
+            }
+
+            const useRealStream = !pureConfig.useSystemApi && !!pureConfig.url && !!pureConfig.key;
+
+            await new Promise((resolve, reject) => {
+                (win.OS_API || window.OS_API).chat(apiPayload, pureConfig,
+                    () => {
+                        if (!aiBubble._typingSet) {
+                            aiBubble._typingSet = true;
+                            aiBubble.innerHTML = `<div class="studio-typing-wrap">
+                                <span class="studio-typing-dot"></span>
+                                <span class="studio-typing-dot"></span>
+                                <span class="studio-typing-dot"></span>
+                            </div>`;
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    },
+                    (finalText) => {
+                        const lockedChatId = getChatSessionId();
+                        const _bad = _studioBadReply(finalText);
+                        if (_bad.bad) {
+                            // API 表面成功、實則錯誤/空/截斷 → 轉重試泡泡，別把垃圾 push 進歷史（保住重試能找到上次 user 訊息）
+                            _renderErrorBubble(aiBubble, { message: _bad.reason }, () => _retryLastSend(aiBubble));
+                            resolve();
+                            return;
+                        }
+                        aiBubble.remove();
+                        chatMessages.push({ role: 'assistant', content: finalText });
+                        _studioSave(lockedChatId);
+                        appendSegmentBubbles(container, finalText);
+                        const parsedOk = extractAndParseJson(finalText);
+                        resolve();
+                        // 做完自己驗一輪（VN 組件模式）：預覽畫出來後檢查，有問題自動追加一輪修正
+                        if (currentMode === 'vn_ui') _studioAfterGenerate(finalText, parsedOk);
+                    },
+                    reject,
+                    { task: 'studio', useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
+                );
+            });
+
+        } catch (err) {
+            if (err.name === 'AbortError' || err.message?.includes('abort')) {
+                // 使用者主動停止：保留打字泡泡改成已停止提示
+                aiBubble.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>';
+            } else {
+                _renderErrorBubble(aiBubble, err, () => _retryLastSend(aiBubble));
+            }
+        } finally {
+            _studioAbortCtrl = null;
+            inputEl.disabled = false;
+            sendBtn.disabled = false;
+            sendBtn.innerText = '發送';
+            sendBtn.onclick = handleSend; // 恢復發送功能
+            inputEl.focus({ preventScroll: true });
+        }
+    }
+
+    // ── 做完自己驗一輪（VN 組件模式）─────────────────────────────
+    // 模型吐完面板、預覽畫出來之後，交給自檢引擎（os_studio_selfcheck.js）跑一組檢查。
+    // 有問題：自動再送一通（走原本的 diff 路徑；沒面板時走整包重出），泡泡畫成「自動檢查」。
+    // 最多自動追加一輪：修完再驗一次，還有剩就寫在聊天裡告訴使用者，不再自己跑第二輪。
+    // 使用者看到的還是一次發送、一個結果；背後最多兩通。
+    function _studioAfterGenerate(finalText, parsedOk) {
+        const CK = win.OS_STUDIO_CHECK;
+        if (!CK || currentMode !== 'vn_ui') return;
+        const isAutoRound = _autoFixRound > 0;
+        const chatIdAtStart = getChatSessionId();
+        const stillHere = () => (currentMode === 'vn_ui' && getChatSessionId() === chatIdAtStart && !_studioAbortCtrl);
+
+        // 有 <json> 卻解析不了：叫模型重出一份完整的（沒 <json> 的回覆是它在講話，不算錯）
+        if (!parsedOk) {
+            if (!/<json>/i.test(String(finalText || ''))) return;
+            const why = _lastParseError || '格式不合法';
+            if (isAutoRound) { _autoFixRound = 0; _studioNoteBubble('自動檢查：重出了一次還是解析不了（' + why + '）。你可以叫它「重新輸出完整 JSON」。'); return; }
+            if (!_studioAutoFix) { _studioNoteBubble('自動檢查：回覆裡的面板資料解析不了（' + why + '）。自動修正關著，你可以叫它「重新輸出完整 JSON」。'); return; }
+            _autoFixRound = 1;
+            _studioNoteBubble('自動檢查：回覆裡的面板資料解析不了（' + why + '），正在叫它重出一份。');
+            setTimeout(() => { if (stillHere()) handleSend('上一則回覆裡的 <json> 無法解析（JSON.parse 錯誤：' + why + '）。請重新輸出一份完整、合法的 <json>，內容照原本的設計，不要改設計。'); }, 80);
+            return;
+        }
+
+        CK.run({ data: currentParsedData, panelType: _vnPanelType, previewRoot: document.getElementById('studio-preview-main') })
+            .then(rep => {
+                if (!stillHere()) return;
+                const issues = (rep && rep.issues) || [];
+                if (issues.length === 0) {
+                    if (isAutoRound) _studioNoteBubble('自動檢查：修好了，這一輪通過。');
+                    else _studioCheckOkLine();
+                    _autoFixRound = 0;
+                    return;
+                }
+                if (isAutoRound) {
+                    _autoFixRound = 0;
+                    _studioNoteBubble('自動檢查：修過一輪還剩下這些，你可以直接叫它改：\n' + issues.map((it, i) => (i + 1) + '. ' + it.msg).join('\n'));
+                    return;
+                }
+                if (!_studioAutoFix) {
+                    _studioNoteBubble('自動檢查發現這些問題（自動修正關著，要修就直接叫它改）：\n' + issues.map((it, i) => (i + 1) + '. ' + it.msg).join('\n'));
+                    return;
+                }
+                _autoFixRound = 1;
+                console.log('[Studio] 🔍 自檢發現 ' + issues.length + ' 個問題，自動追加一輪修正', issues);
+                handleSend(CK.describe(issues));
+            })
+            .catch(e => console.warn('[Studio] 自檢失敗:', e));
+    }
+
+    // 自檢的說明泡泡：進聊天歷史（重整還在、模型下一輪也看得到），畫成檢查單樣式
+    function _studioNoteBubble(text) {
+        const container = document.getElementById('studio-chat-history');
+        chatMessages.push({ role: 'assistant', content: text, _note: true });
+        _studioSave(getChatSessionId());
+        if (!container) return;
+        const b = document.createElement('div');
+        b.className = 'studio-bubble auto studio-bubble-enter';
+        b.textContent = text;
+        container.appendChild(b);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // 首次就通過：只給一行小字，不進歷史
+    function _studioCheckOkLine() {
+        const container = document.getElementById('studio-chat-history');
+        if (!container) return;
+        const line = document.createElement('div');
+        line.className = 'studio-check-ok';
+        line.innerHTML = '<i class="fa-solid fa-check"></i> 自動檢查通過';
+        container.appendChild(line);
+        container.scrollTop = container.scrollHeight;
+    }
+
+    // 渲染錯誤泡泡 + 重試按鈕
+    function _renderErrorBubble(bubble, err, onRetry) {
+        bubble.classList.add('studio-error-bubble');
+        bubble.innerHTML = `
+            <div class="studio-error-msg"><i class="fa-solid fa-circle-xmark"></i> 錯誤：${(err.message || err || '未知錯誤').replace(/</g, '&lt;')}</div>
+            <button class="studio-retry-btn"><i class="fa-solid fa-rotate"></i> 重試</button>
+        `;
+        bubble.querySelector('.studio-retry-btn').onclick = onRetry;
+    }
+
+    // 一次性 AI 流程（匯入整理/對標世界/換皮/主題生成）的統一壞回覆處置：問一聲就能重試，不用重走整個入口
+    //（聊天流不用這個——世界書/人設聊天各自有錯誤泡泡＋重試鈕）
+    // 同一個地方連續重試幾次了（key＝重試函式的原始碼：同一個呼叫點每次傳進來的閉包原始碼都一樣）
+    const _studioRetryStreak = new Map();
+    const STUDIO_AUTO_RETRY_MAX = 2;
+    function _studioConfirmRetry(reason, retryFn, fallbackFn) {
+        // 🚨 confirm 在 Tauri 不會彈、直接回 false → 這裡原本等於「永遠走 else」：
+        //   主題那條沒有傳 fallbackFn，於是送出失敗後什麼都不做，連打的字都不見了，
+        //   看起來就是按了沒反應。這裡沒有按鈕可掛兩段式，改成講一聲然後自己重試。
+        // 🚨 自動重試有上限、有間隔：金鑰錯、斷網、上游一直 5xx 時錯誤不會自己消失，
+        //    以前是立刻無限重送（一直燒額度），沒填網址時還會同步遞迴到當掉
+        const why = String(reason || '未知錯誤').slice(0, 80);
+        const key = typeof retryFn === 'function' ? String(retryFn) : '';
+        const now = Date.now();
+        const st = _studioRetryStreak.get(key);
+        const n = (st && now - st.at < 120000) ? st.n + 1 : 1;
+        if (typeof retryFn === 'function' && n <= STUDIO_AUTO_RETRY_MAX) {
+            _studioRetryStreak.set(key, { n: n, at: now });
+            try { AUI.toastr?.warning('AI 回覆有問題（' + why + '），正在重試…'); } catch (e) {}
+            setTimeout(retryFn, 1500 * n);
+            return;
+        }
+        _studioRetryStreak.delete(key);
+        try { AUI.toastr?.error('重試了還是不行：' + why + '。檢查一下連線或金鑰再試。'); } catch (e) {}
+        if (typeof fallbackFn === 'function') fallbackFn();
+    }
+
+    // 判斷 API「表面成功、實則錯誤/空/截斷」的回應：OS_API 只在「完全空」才 throw，
+    // 上游回非空錯誤頁(如 504 gateway / Custom OpenAI endpoint failed with status 5xx)會被當正常文字 → 這裡攔下來給重試
+    function _studioBadReply(t) {
+        const s = (t == null) ? '' : String(t);
+        if (!s.trim()) return { bad: true, reason: '回應是空的（可能逾時或被中斷）' };
+        const head = s.slice(0, 400);
+        if (/^\s*\[\s*API\s*錯誤\s*\]/.test(s)) return { bad: true, reason: s.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) };
+        if (/(endpoint|request)\s+failed\s+with\s+status\s+\d{3}/i.test(head)) return { bad: true, reason: head.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) };
+        if (s.length < 1500 && /gateway timeout|bad gateway|service unavailable|the request could not be satisfied|we can'?t connect to the server/i.test(s)) return { bad: true, reason: 'API 回了錯誤頁（如 504 逾時），不是正常內容' };
+        if (/<json>/i.test(s) && !/<\/json>/i.test(s)) return { bad: true, reason: '回應好像被截斷了（內容沒收尾）' };
+        return { bad: false };
+    }
+
+    // 重試 handleSend：抽出最後一條 user 訊息、清掉錯誤泡泡、重新呼叫
+    function _retryLastSend(errBubble) {
+        // 找最後一條未壓縮的 user 訊息
+        let lastUserIdx = -1;
+        for (let i = chatMessages.length - 1; i >= 0; i--) {
+            const m = chatMessages[i];
+            if (m._isCompressed || m._isSummary) continue;
+            if (m.role === 'user') { lastUserIdx = i; break; }
+        }
+        if (lastUserIdx === -1) { AUI.alert('找不到上次的訊息，請重新輸入'); return; }
+        const lastUserMsg = chatMessages[lastUserIdx];
+        const textOnly = messageContentToString(lastUserMsg.content);
+        // 復原圖片（如果有）
+        if (Array.isArray(lastUserMsg.content)) {
+            pendingImages = lastUserMsg.content
+                .filter(p => p.type === 'image_url')
+                .map(p => ({ dataUrl: p.image_url?.url || '', mime: 'image/jpeg', sizeKB: 0 }));
+            renderPendingImages();
+        }
+        // 從 chatMessages 移除這條 user（handleSend 會再 push 一條新的）
+        chatMessages.splice(lastUserIdx, 1);
+        // 砍錯誤泡泡
+        errBubble.remove();
+        if (lastUserMsg._auto) { _autoFixRound = 1; handleSend(textOnly); return; }   // 重試的是自檢那輪：不填輸入框、身分照舊、額度照舊
+        // 填回輸入框 + 重新發送
+        const inputEl = document.getElementById('studio-input');
+        if (inputEl) {
+            inputEl.value = textOnly;
+            handleSend();
+        }
+    }
+
+    function renderChatHistory() {
+        const container = document.getElementById('studio-chat-history');
+        container.innerHTML = '';
+        chatMessages.forEach((msg, idx) => {
+            if (msg.role === 'system') return;
+            // 已被壓縮的原始對話：不渲染（記憶在摘要泡泡裡）
+            if (msg._isCompressed) return;
+            // 摘要泡泡：特殊樣式渲染
+            if (msg._isSummary) {
+                const bubble = document.createElement('div');
+                bubble.className = 'studio-bubble studio-summary-bubble';
+                const headerText = `摘要 #${msg._summaryNum}　·　壓縮了 ${msg._compressedCount} 條早期對話`;
+                bubble.innerHTML = `
+                    <div class="summary-header">${headerText}</div>
+                    <div class="summary-content">${renderMarkdown(messageContentToString(msg.content))}</div>
+                    <div class="summary-foot">↑ 此區為 AI 的長線記憶，會永久保留作為上下文。原始對話已從 context 移除（節省 token）。</div>
+                `;
+                container.appendChild(bubble);
+                return;
+            }
+            if (msg.role === 'user') {
+                const bubble = document.createElement('div');
+                bubble.className = msg._auto ? 'studio-bubble auto' : 'studio-bubble user';   // 自檢自動追加的修正輪：畫成檢查單，不冒充使用者說的話
+                // 兼容 multimodal content（陣列）→ 文字 + 圖片縮圖一起渲染
+                if (Array.isArray(msg.content)) {
+                    const textPart = msg.content.filter(p => p && p.type === 'text').map(p => p.text || '').join('\n');
+                    if (textPart) {
+                        const span = document.createElement('div');
+                        span.textContent = textPart;
+                        bubble.appendChild(span);
+                    }
+                    const imgs = msg.content.filter(p => p && p.type === 'image_url');
+                    if (imgs.length > 0) {
+                        const row = document.createElement('div');
+                        row.style.cssText = 'display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;';
+                        imgs.forEach(p => {
+                            const im = document.createElement('img');
+                            im.src = p.image_url?.url || '';
+                            im.style.cssText = 'max-width:120px;max-height:120px;border-radius:6px;border:1px solid rgba(26,28,40,0.15);cursor:pointer;';
+                            im.onclick = () => window.open(p.image_url?.url, '_blank');
+                            row.appendChild(im);
+                        });
+                        bubble.appendChild(row);
+                    }
+                } else {
+                    bubble.textContent = msg.content || '';
+                }
+                container.appendChild(bubble);
+            } else if (msg._note) {
+                // 自檢的說明泡泡：檢查單樣式、不走 segment 解析
+                const bubble = document.createElement('div');
+                bubble.className = 'studio-bubble auto';
+                bubble.textContent = messageContentToString(msg.content);
+                container.appendChild(bubble);
+            } else {
+                // AI 訊息：解析成多泡泡，歷史重建不帶入場動畫
+                // lookahead 下一條 user 訊息：如果它是來自 choice 點擊（_fromChoice），把它的內容當作「已選 label」傳給 choices bubble
+                let selectedLabel = null;
+                for (let i = idx + 1; i < chatMessages.length; i++) {
+                    const next = chatMessages[i];
+                    if (next._isCompressed || next._isSummary || next.role === 'system') continue;
+                    if (next.role === 'user') {
+                        if (next._fromChoice) selectedLabel = messageContentToString(next.content);
+                        break;
+                    }
+                    if (next.role === 'assistant') break;
+                }
+                _studioAppendWho(container);
+                parseSegments(messageContentToString(msg.content)).forEach(seg => {
+                    container.appendChild(createSegmentBubble(seg, false, { selectedLabel }));
+                });
+            }
+        });
+        container.scrollTop = container.scrollHeight;
+    }
+
+    function extractLatestJsonFromHistory() {
+        // 🥇 第一順位：找 [LATEST_PANEL_STATE] 標記訊息（diff 修改後存進的最新版本）
+        for (let i = chatMessages.length - 1; i >= 0; i--) {
+            const m = chatMessages[i];
+            const text = messageContentToString(m.content);
+            if (m._isLatestPanel === true || (typeof text === 'string' && text.includes(LATEST_PANEL_MARKER))) {
+                if (extractAndParseJson(text)) {
+                    console.log('[Studio] 🥇 從聊天記錄撈到「最新版」面板狀態');
+                    return;
+                }
+            }
+        }
+        // 🥈 退回找最新的 assistant 訊息（通常只能撈到初版）
+        for (let i = chatMessages.length - 1; i >= 0; i--) {
+            if (chatMessages[i].role === 'assistant') {
+                if (extractAndParseJson(messageContentToString(chatMessages[i].content))) {
+                    console.warn('[Studio] 🥈 沒找到最新版標記，退回抽 assistant 訊息（可能是初版）');
+                    return;
+                }
+            }
+        }
+    }
+
+    // 小機的一次產生器用：從回覆裡挑出 <json> 那個物件（不碰創作室的 currentParsedData／currentMode）
+    function _pickJsonObj(text) {
+        const s = String(text || '');
+        const m = s.match(/<json>([\s\S]*?)<\/json>/i);
+        const area = m ? m[1] : s;
+        const i = area.indexOf('{'), j = area.lastIndexOf('}');
+        if (i < 0 || j <= i) return null;
+        const t = area.slice(i, j + 1)
+            .replace(/[\u0000-\u0009\u000B-\u001F]+/g, '')
+            .replace(/(\\+)`/g, (mm, b) => (b.length % 2 ? b + '\\' + '`' : mm));
+        const W = win.WX_TOOLS || window.WX_TOOLS;
+        if (W && W.parseArgs) return W.parseArgs(t, null, true);   // 字串裡的真換行補成跳脫再試
+        try { return JSON.parse(t); } catch (e) { return null; }
+    }
+    // 跟創作室製作面板同一組連線（純設定：不帶預設條目、不開思考、輸出夾到 32768 以下）
+    function _studioPureConfig(temp) {
+        const base = win.OS_SETTINGS?.getConfig?.() || JSON.parse(localStorage.getItem('os_global_config') || '{}');
+        return { ...base, usePresetPrompts: false, enableThinking: false, temperature: temp, maxTokens: Math.min(parseInt(base.maxTokens) || 8192, 32768) };
+    }
+    // via：別人指定這一通走哪條接口（小機做大件走它自己的，os_xiaoji.js 的 viaFor）；沒給照舊走創作室的設定
+    function _studioOnce(messages, label, temp, via) {
+        if (typeof via === 'function') return Promise.resolve(via(messages, { label: label, temperature: temp })).then(function (t) { return String(t || ''); });
+        return new Promise(function (resolve, reject) {
+            const api = win.OS_API || window.OS_API;
+            if (!api || !api.chat) { reject(new Error('找不到 API 引擎')); return; }
+            api.chat(messages, _studioPureConfig(temp), null,
+                function (full) { resolve(String(full || '')); },
+                function (e) { reject(e instanceof Error ? e : new Error(String((e && e.message) || e || '沒有回應'))); },
+                { task: 'studio', label: label, keepCodeFences: true, stream: true });
+        });
+    }
+
+    function extractAndParseJson(text) {
+        if (!text) return false;
+        let cleanStr = "";
+        
+        // 1. 先定位目標區域：優先找 <json> 標籤，找不到就找全文
+        const xmlMatch = text.match(/<json>([\s\S]*?)<\/json>/i);
+        const targetArea = xmlMatch ? xmlMatch[1] : text;
+
+        // 2. 利用貪婪正則直接捕捉最外層的 {} 或 [] 
+        // 這樣能自動且完美地過濾掉開頭的 ```json、結尾的 ``` 以及任何 AI 夾帶的廢話
+        const objMatch = targetArea.match(/\{[\s\S]*\}/);
+        const arrMatch = targetArea.match(/\[[\s\S]*\]/);
+
+        // 判斷哪個結構先出現 (防呆機制)
+        if (objMatch && arrMatch) {
+            cleanStr = objMatch.index < arrMatch.index ? objMatch[0] : arrMatch[0];
+        } else if (objMatch) {
+            cleanStr = objMatch[0];
+        } else if (arrMatch) {
+            cleanStr = arrMatch[0];
+        }
+
+        if (cleanStr) {
+            try {
+                // 清除可能導致解析失敗的隱藏控制字符 (保留你原本的邏輯)
+                cleanStr = cleanStr.replace(/[\u0000-\u0009\u000B-\u001F]+/g, "");
+                // 修復 AI 常見的非法跳脫：JSON 不允許 \`(反斜線+反引號)，但模型在面板 js 的模板字面裡塞「字面三反引號」時，
+                // 為逸出反引號會寫 \`，轉成外層 JSON 卻忘了把反斜線再跳脫成 \\` → 整份 JSON.parse 直接 Bad escaped character。
+                // 反引號在 JSON 本就不用跳脫；奇數個反斜線+反引號＝最後那個是誤escape→補一個反斜線(parse 後得到合法 JS 逸出反引號 \`)。
+                cleanStr = cleanStr.replace(/(\\+)`/g, (m, s) => (s.length % 2 ? s + '\\' + '`' : m));
+                const parsed = JSON.parse(cleanStr);
+                _lastParseError = null;
+
+                // 🔪 VN 模式：保留 history（本地 metadata，AI 不該動到）
+                if (currentMode === 'vn_ui' && currentParsedData && currentParsedData.history && !Array.isArray(parsed)) {
+                    parsed.history = currentParsedData.history;
+                }
+                currentParsedData = parsed;
+
+                activePreviewData = Array.isArray(currentParsedData) ? currentParsedData[0] : currentParsedData;
+
+                renderPreviewPanel();
+                return true;
+            } catch (e) {
+                _lastParseError = String((e && e.message) || e);
+                console.warn('[Studio] JSON 解析失敗，這傢伙可能連括號都沒閉合：', e);
+                return false;
+            }
+        }
+        return false;
+    }
+
+    // ── st helper builder（給「預覽器」「展廳」兩處共用；酒館 wrapper 內另有一份） ──
+    function _buildPreviewSt(lines) {
+        const imgManager = window.OS_IMAGE_MANAGER || (window.parent && window.parent.OS_IMAGE_MANAGER);
+        // 📖 資料接口（預覽版）：正文那份＝預覽貼進來的 lines；新增的只留在記憶體、不落地
+        const _pvFeed = () => window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED) || null;
+        const _pvAdded = [];
+        return {
+            feed: async function (o) {
+                const F = _pvFeed();
+                const recs = (F ? F.parseRecords(lines) : []).map((r, i) => ({ id: 's:0:' + i, src: 'story', tag: r.tag, fields: r.fields, floor: 0 }));
+                const all = recs.concat(_pvAdded);
+                return (o && o.tag) ? all.filter(r => r.tag === o.tag) : all;
+            },
+            parseText: function (text) { const F = _pvFeed(); return F ? F.parseRecords(String(text || '').split('\n')) : []; },
+            user: (function () { const fn = async function () { const F = _pvFeed(); return F ? F.user() : { name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }; }; try { const F = _pvFeed(); if (F && F.userSync) Object.assign(fn, F.userSync()); } catch (e) {} return fn; })(),
+            feedAdd: async function (tag, fields) { const rec = { id: 'a:pv:' + _pvAdded.length, src: 'app', tag: String(tag || ''), fields: (fields || []).map(x => String(x == null ? '' : x)), floor: 0, ts: Date.now() }; _pvAdded.push(rec); return rec; },
+            feedUpdate: async function (id, fields) { const rec = _pvAdded.find(r => r.id === id); if (!rec) return false; rec.fields = (fields || []).map(x => String(x == null ? '' : x)); return true; },
+            feedRemove: async function (id) { const i = _pvAdded.findIndex(r => r.id === id); if (i < 0) return false; _pvAdded.splice(i, 1); return true; },
+            md(text) {
+                if (!text) return '';
+                text = String(text).replace(/\\n/g, '\n');   // AI 常寫「字面 \n」當換行：先轉真換行（劇情裡、手機 app 裡那兩份都有這步，預覽漏了）
+                // 轉出來的 HTML 一律過 AUI.safeHtml（它有 DOMPurify 會先過）：手機版網頁沒載 DOMPurify，以前沒 showdown 那條更是原樣回傳
+                const _A = (window.parent && window.parent.AUI) || window.AUI;
+                const _clean = (h) => (_A && _A.safeHtml) ? _A.safeHtml(h) : h;
+                try {
+                    const P = window.parent, S = (P && P.showdown) || window.showdown;
+                    if (S) {
+                        const h = new S.Converter({ simpleLineBreaks: true, tables: true, strikethrough: true }).makeHtml(text);
+                        const D = (P && P.DOMPurify) || window.DOMPurify;
+                        return (_A && _A.safeHtml) ? _A.safeHtml(h) : (D ? D.sanitize(h) : h);
+                    }
+                } catch (e) {}
+                // 沒有 showdown（手機版網頁沒載）：照劇情裡那份（vn_dynamic_parser 的 st.md），換行要變 <br>，不然整段擠成一行
+                return _clean(text
+                    .replace(new RegExp('[*][*](.+?)[*][*]', 'g'), (_, p1) => '<b>' + p1 + '</b>')
+                    .replace(new RegExp('[*](.+?)[*]', 'g'), (_, p1) => '<i>' + p1 + '</i>')
+                    .replace(new RegExp('[`](.+?)[`]', 'g'), (_, p1) => '<code>' + p1 + '</code>')
+                    .replace(/\n/g, '<br>')
+                    .replace(/(<br>\s*){3,}/g, '<br><br>'));
+            },
+            parse() {
+                // 跟劇情裡那份（vn_dynamic_parser 的 st.parse）同一套：AI 把一筆 [Tag|…] 拆成好幾段時先縫回一行，忘了收尾的 ] 幫它補上
+                const result = {};
+                const stitched = [];
+                let buf = null;
+                (lines || []).forEach(raw => {
+                    const line = String(raw || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');   // 容錯：全形分隔符/方括號→半形
+                    if (!line) return;
+                    if (buf !== null) {
+                        buf += '\n\n' + line;
+                        if (line.charAt(line.length - 1) === ']') { stitched.push(buf); buf = null; }
+                        return;
+                    }
+                    if (/^\[[A-Za-z0-9_一-鿿-]+\|/.test(line) && line.charAt(line.length - 1) !== ']') { buf = line; return; }
+                    stitched.push(line);
+                });
+                if (buf !== null) stitched.push(buf + ']');
+                stitched.forEach(line => {
+                    if (line.charAt(0) !== '[' || line.charAt(line.length - 1) !== ']') return;
+                    const parts = line.slice(1, -1).split('|');
+                    const tag = parts[0];
+                    if (!result[tag]) result[tag] = [];
+                    result[tag].push(parts.slice(1));
+                });
+                return result;
+            },
+            async setImage(el, prompt, type, provider) {
+                if (!el || !prompt) return;
+                type = type || 'scene';
+                try {
+                    const url = window.__IS_PREVIEW
+                        ? ('https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt))
+                        : (imgManager ? await imgManager.generate(prompt, type, { provider: provider, use: 'app' }) : '');
+                    if (url) el.src = url;
+                } catch(e) {
+                    console.error('[preview] setImage 失敗:', e);
+                }
+            },
+            // 選一張照片（手機跳相機／相簿）→ 縮好的 data 網址；取消回空字串
+            async pickPhoto(o) {
+                const PI = window.OS_PHONE_IMAGE || (window.parent && window.parent.OS_PHONE_IMAGE);
+                try { return (PI && PI.pickPhoto) ? await PI.pickPhoto(o) : ''; } catch (e) { return ''; }
+            },
+            async callAI(systemPrompt, opts) {
+                // 預覽不燒額度：給固定示範字串
+                if (window.__IS_PREVIEW) {
+                    return '（預覽模式示範回覆）這是 AI 生成的內容會出現的位置。';
+                }
+                try {
+                    const OS = window.OS_API || (window.parent && window.parent.OS_API);
+                    if (!OS || !OS.chat) throw new Error('OS_API 不可用');
+                    const S = window.OS_SETTINGS || (window.parent && window.parent.OS_SETTINGS);
+                    let cfg = (S && S.getConfig && S.getConfig()) || {};
+                    // 同創作室主對話：夾住 maxTokens，避免 gemini/vertex「maxOutputTokens 超過上限」
+                    cfg = Object.assign({}, cfg, { usePresetPrompts: false, maxTokens: Math.min(Math.max(parseInt(cfg.maxTokens) || 0, 8192), 32768) });   // 思考照主模型設定走；字數上限保底 8192 同正文那條
+                    let _ctx = '';   // PWA：任務前面接背景（同 vn_dynamic_parser／app_runtime）；酒館裡引擎回空
+                    try { if (OS.appContextBlock) _ctx = await OS.appContextBlock(); } catch (e) {}
+                    const _msgs = [];   // 背景一則 system、任務一則 user（同 app_runtime／vn_dynamic_parser）；借正文整包那版退掉
+                    if (_ctx) _msgs.push({ role: 'system', content: _ctx + '----\n上面是背景參考；這次要做的事在下面那則訊息裡，請嚴格照它做。' });
+                    // 附圖（opts.images）照設置「看圖」那格送（OS_PHONE_IMAGE.withImages）
+                    const _PI = window.OS_PHONE_IMAGE || (window.parent && window.parent.OS_PHONE_IMAGE);
+                    const _imgs = (opts && Array.isArray(opts.images)) ? opts.images : [];
+                    _msgs.push({ role: 'user', content: (_imgs.length && _PI && _PI.withImages) ? await _PI.withImages(String(systemPrompt || ''), _imgs, '這是使用者在 app 裡附上的圖片。') : String(systemPrompt || '') });   // 同 app_runtime：引擎不標，由 app 的指令自己寫清楚
+                    return await new Promise((res, rej) => {
+                        OS.chat(_msgs, cfg, null,
+                            t => res(typeof t === 'string' ? t : (t && t.message) || ''), rej,
+                            { task: 'apps', disableTyping: true });
+                    });
+                } catch (e) { console.error('[st.callAI]', e); return ''; }
+            },
+            remember() { /* 預覽不寫真實記憶 */ },
+            toStory() { return Promise.resolve(false); },   // 預覽不記進事件簿
+            // 手機 app、注入酒館那兩份都有這兩支，預覽以前漏了：面板一呼叫就報「不是函式」，預覽整個停在那裡
+            toChat() { try { AUI.toast('預覽不會真的貼進輸入框'); } catch (e) {} return false; },
+            toSystem() { try { AUI.toast('預覽不會真的插進對話'); } catch (e) {} return false; },
+            // 手機本身的東西：讀的照真的讀；會動到東西的（分享、扣錢、紅點、通知）預覽只提示不做
+            clock() { const T = window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS); return T ? T.clock() : Promise.resolve({ date: '', time: '', upcoming: [] }); },
+            balance() { const T = window.OS_APP_TOOLS || (window.parent && window.parent.OS_APP_TOOLS); return T ? T.balance() : Promise.resolve(0); },
+            share() { try { AUI.toast('預覽不會真的分享'); } catch (e) {} return Promise.resolve(true); },
+            pay() { try { AUI.toast('預覽不會真的扣錢'); } catch (e) {} return Promise.resolve(true); },
+            badge() {},
+            notify() { return Promise.resolve(false); },
+            onWake() {},   // 預覽不會被叫醒
+            getCurrentChars() {   // 當前聊天室出現過的角色 [{name,count}]，做角色選單用
+                const R = window.VN_READER || (window.parent && window.parent.VN_READER);
+                return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
+            },
+            getContacts() {   // 微信通訊錄（當前故事）[{id,name,desc,avatar,isGroup}]，做選聯絡人清單用
+                const F = window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED);
+                return (F && F.contacts) ? F.contacts() : Promise.resolve([]);
+            },
+            wbSave() {   // 預覽不寫真的世界書
+                try { AUI.toast('預覽不會寫進世界書'); } catch (e) {}
+                return Promise.resolve(true);
+            },
+            wbLoad(title) {
+                const F = window.VN_PANEL_FEED || (window.parent && window.parent.VN_PANEL_FEED);
+                return (F && F.wbLoad) ? F.wbLoad(title) : Promise.resolve('');
+            },
+            getStory(n) { try { const R = window.VN_READER || (window.parent && window.parent.VN_READER); return (R && R.getStory) ? R.getStory(n) : []; } catch (e) { return []; } },
+            esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
+            // 提示條／確認窗走全站同一套（core/aurelia_dialog.js），跟系統其他地方長一樣
+            toast(msg, opts) { try { return AUI.toast(msg, opts); } catch (e) {} },
+            confirm(msg, opts) { try { return AUI.confirm(msg, opts); } catch (e) { return Promise.resolve(false); } },
+            loading(target, on, text) {
+                try {
+                    const host = (typeof target === 'string') ? document.querySelector(target) : (target || document.body);
+                    if (!host) return;
+                    if (on === false) { if (host.__stLoad) { host.__stLoad.remove(); host.__stLoad = null; } return; }
+                    if (host.__stLoad) return;
+                    if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+                    const ov = document.createElement('div');
+                    ov.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(0,0,0,0.25);z-index:50;';
+                    const sp = document.createElement('div');
+                    sp.style.cssText = 'width:28px;height:28px;border:3px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:__stspin .8s linear infinite;';
+                    ov.appendChild(sp);
+                    if (text) { const t = document.createElement('div'); t.textContent = text; t.style.cssText = 'color:#fff;font-size:12px;'; ov.appendChild(t); }
+                    if (!document.getElementById('__stspin_kf')) { const k = document.createElement('style'); k.id = '__stspin_kf'; k.textContent = '@keyframes __stspin{to{transform:rotate(360deg)}}'; document.head.appendChild(k); }
+                    host.__stLoad = ov; host.appendChild(ov);
+                } catch (e) {}
+            },
+            // 預覽用 localStorage stub（裝成 app 後由 app_runtime 的 window.saveData 接管真持久化）；scope 用 tplId 隔離
+            saveData(k, v, scope) { try { win.AUI.lsSet('aurelia_studio_preview_' + (scope === 'chat' ? 'chat_' : '') + k, JSON.stringify(v), '預覽裡面板存的資料'); } catch (e) {} },
+            loadData(k, scope) { try { const s = localStorage.getItem('aurelia_studio_preview_' + (scope === 'chat' ? 'chat_' : '') + k); return s == null ? null : JSON.parse(s); } catch (e) { return null; } },
+            async dbSave(k, v, scope) { try { const DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.saveAppData) return false; return await DB.saveAppData('studio_preview', k, v, scope === 'chat' ? this.getChatId() : null); } catch (e) { return false; } },
+            async dbLoad(k, scope) { try { const DB = window.OS_DB || (window.parent && window.parent.OS_DB); if (!DB || !DB.getAppData) return null; return await DB.getAppData('studio_preview', k, scope === 'chat' ? this.getChatId() : null); } catch (e) { return null; } },
+            getChatId() { try { const ST = window.parent && window.parent.SillyTavern; if (ST && ST.getCurrentChatId) { const id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } } catch (e) {} return ''; }
+        };
+    }
+
+    // ── 展廳模板 → 手機 iframe HTML adapter ──────────────────────────
+    // 把展廳模板包成可在手機 iframe 跑的完整 HTML
+    // window.callAI / genImg / goBack 由手機 iframe 橋接（app_runtime.js mountAppIframe）注入
+    function _templateToPhoneHtml(tpl) {
+        var css  = String(tpl.css  || '');
+        var html = String(tpl.html || '');
+        var js   = String(tpl.js   || '');
+        // 🚨組件 CSS 全是 .vn-dynamic-panel-<tagId> 前綴：App 這層必須也帶這個 class 當作用域根，否則選擇器全不命中→掉樣式(VN 預覽/劇情都有包這層才有樣式)
+        var safeTagId = String(tpl.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        return '<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">'
+            + '<style>html,body{margin:0;padding:0;height:100%;}#app-root{box-sizing:border-box;width:100%;min-height:100%;}'
+            + css + '</style></head><body><div id="app-root" class="vn-dynamic-panel-' + safeTagId + '">' + html + '</div>'
+            + '<scr' + 'ipt>(function(){'
+            + 'var container=document.getElementById("app-root");var lines=[];'
+            + 'var st={'
+            +   'md:function(t){if(!t)return "";t=String(t).replace(/\\\\n/g,"\\n");var A=null;try{A=(window.parent&&window.parent.AUI)||window.AUI;}catch(e){}var C=function(h){return (A&&A.safeHtml)?A.safeHtml(h):h;};try{var P=window.parent,S=(P&&P.showdown)||window.showdown;if(S){var h=new S.Converter({simpleLineBreaks:true,tables:true,strikethrough:true}).makeHtml(String(t));var D=(P&&P.DOMPurify)||window.DOMPurify;return (A&&A.safeHtml)?A.safeHtml(h):(D?D.sanitize(h):h);}}catch(e){}return C(String(t).replace(new RegExp("[*][*](.+?)[*][*]","g"),function(_,p){return "<b>"+p+"</b>";}).replace(new RegExp("[*](.+?)[*]","g"),function(_,p){return "<i>"+p+"</i>";}).replace(new RegExp("[`](.+?)[`]","g"),function(_,p){return "<code>"+p+"</code>";}).replace(/\\n/g,"<br>").replace(/(<br>\\s*){3,}/g,"<br><br>"));},'   // 沒有 showdown（手機版網頁）時照劇情裡那份：換行→<br>；兩條都過上層的 AUI.safeHtml（手機版沒 DOMPurify）
+            +   'parse:function(){return {};},'
+            +   'setImage:async function(el,p,type,provider){if(!el||!p)return;el.src="https://api.dicebear.com/7.x/shapes/svg?seed="+encodeURIComponent(p);try{if(window.genImg){var u=await window.genImg(p,type||"scene",provider);if(u)el.src=u;}}catch(e){}},'
+            +   'callAI:async function(s,o){try{return window.callAI?await window.callAI(s,o):"";}catch(e){return "";}},'
+            +   'pickPhoto:async function(o){try{return window.stPickPhoto?await window.stPickPhoto(o):"";}catch(e){return "";}},'
+            +   'remember:function(c,sp,t){try{if(window.remember)window.remember(c,sp,t);}catch(e){}},'
+            +   'getCurrentChars:async function(){try{return window.getCurrentChars?await window.getCurrentChars():[];}catch(e){return [];}},'
+            +   'getContacts:async function(){try{return window.getContacts?await window.getContacts():[];}catch(e){return [];}},'
+            +   'wbSave:async function(t,c,k){try{return window.wbSave?await window.wbSave(t,c,k):false;}catch(e){return false;}},'
+            +   'wbLoad:async function(t){try{return window.wbLoad?await window.wbLoad(t):"";}catch(e){return "";}},'
+            +   'getStory:function(n){try{return window.getStory?window.getStory(n):[];}catch(e){return [];}},'
+            +   'esc:function(s){try{return window.stEsc?window.stEsc(s):String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}catch(e){return "";}},'
+            +   'toast:function(m,o){try{if(window.stToast)window.stToast(m,o);}catch(e){}},'
+            +   'confirm:function(m,o){try{return window.stConfirm?window.stConfirm(m,o):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'loading:function(t,on,x){try{if(window.stLoading)window.stLoading(t,on,x);}catch(e){}},'
+            +   'saveData:function(k,v,s){try{if(window.saveData)window.saveData(k,v,s);}catch(e){}},'
+            +   'loadData:function(k,s){try{return window.loadData?window.loadData(k,s):null;}catch(e){return null;}},'
+            +   'dbSave:function(k,v,s){try{return window.dbSave?window.dbSave(k,v,s):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'dbLoad:function(k,s){try{return window.dbLoad?window.dbLoad(k,s):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
+            +   'getChatId:function(){try{return window.getChatId?window.getChatId():"";}catch(e){return "";}},'
+            // 📖 資料接口（共用面板）：走上層 VN_PANEL_FEED，跟劇情彈出那邊讀同一份
+            +   'feed:function(o){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.feed(' + JSON.stringify(String(tpl.tagId || '')) + ',o||{}):Promise.resolve([]);}catch(e){return Promise.resolve([]);}},'
+            +   'parseText:function(x){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.parseRecords(String(x==null?"":x).split("\\n")):[];}catch(e){return [];}},'
+            +   'user:(function(){var f=function(){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.user():Promise.resolve({name:"User",nickname:"User",avatar:"",signature:"",desc:""});}catch(e){return Promise.resolve({name:"User",nickname:"User",avatar:"",signature:"",desc:""});}};try{var F=(window.parent||window).VN_PANEL_FEED;if(F&&F.userSync){var u=F.userSync();for(var k in u)f[k]=u[k];}}catch(e){}return f;})(),'
+            +   'feedAdd:function(t,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.add(' + JSON.stringify(String(tpl.tagId || '')) + ',t,fl):Promise.resolve(null);}catch(e){return Promise.resolve(null);}},'
+            +   'feedUpdate:function(id,fl){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.update(' + JSON.stringify(String(tpl.tagId || '')) + ',id,fl):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'feedRemove:function(id){try{var F=(window.parent||window).VN_PANEL_FEED;return F?F.remove(' + JSON.stringify(String(tpl.tagId || '')) + ',id):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'toChat:function(t,o){try{return window.toChat?window.toChat(t,o):false;}catch(e){return false;}},'
+            +   'toSystem:function(t){try{return window.toSystem?window.toSystem(t):false;}catch(e){return false;}},'
+            +   'toStory:function(t){try{return window.toStory?window.toStory(t):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'clock:function(){try{return window.stClock?window.stClock():Promise.resolve({date:"",time:"",upcoming:[]});}catch(e){return Promise.resolve({date:"",time:"",upcoming:[]});}},'
+            +   'share:function(id,t,x){try{return window.stShare?window.stShare(id,t,x):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'balance:function(){try{return window.stBalance?window.stBalance():Promise.resolve(0);}catch(e){return Promise.resolve(0);}},'
+            +   'pay:function(a,w){try{return window.stPay?window.stPay(a,w):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'badge:function(n){try{if(window.stBadge)window.stBadge(n);}catch(e){}},'
+            +   'notify:function(t){try{return window.stNotify?window.stNotify(t):Promise.resolve(false);}catch(e){return Promise.resolve(false);}},'
+            +   'onWake:function(f){try{if(window.stOnWake)window.stOnWake(f);}catch(e){}},'
+            + '};'
+            + 'var onComplete=function(){if(window.goBack)window.goBack();};'
+            + '(async function(){try{' + js + '}catch(e){console.error("[phone tpl]",e);}})();'
+            + '})();</' + 'scr' + 'ipt></body></html>';
+    }
+
+    // ── VN 展廳 ──────────────────────────────────────────────────────
+
+    async function syncActiveTagsToLocal() {
+        const db = win.OS_DB || window.OS_DB;
+        if (!db || typeof db.getAllVNTagTemplates !== 'function') return;
+        try {
+            const templates = await db.getAllVNTagTemplates();
+            // 純應用只是手機 app、不是 VN 組件 → 絕不注入給劇情 AI（否則 AI 會被教著在正文寫 app-only 標籤）
+            const activeTags = templates.filter(t => t.isActive && t.demoFormat && t.panelType !== '純應用');
+            const titleOf = t => (t.title && String(t.title).trim()) || t.tagId || '面板';
+            // 單個組件的教學片段（中文標題＋使用說明＋正確 tag 格式）。區塊一律寫 <tagId>…</tagId>，
+            //   demoFormat 可能自帶外殼 → 先剝再補一層，永遠剛好一層（防 <Bestiary> 開兩次）。
+            const snippetOf = (t) => {
+                if (t.isBlock) {
+                    const df = String(t.demoFormat || '').trim()
+                        .replace(new RegExp('^<' + t.tagId + '>\\s*', 'i'), '')
+                        .replace(new RegExp('\\s*</' + t.tagId + '>$', 'i'), '').trim();
+                    return `### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n<${t.tagId}>\n${df}\n</${t.tagId}>\n`;
+                }
+                return `### ${titleOf(t)}\n使用說明: 💡 ${t.usageDesc || '無說明'}\n${t.demoFormat}\n`;
+            };
+            // 注入方式：injectMode==='keyword' 且有關鍵字 → 關鍵字觸發（注入器每輪比對命中才注）；其餘 → 常駐（每輪都注）。
+            const isKw = t => t.injectMode === 'keyword' && Array.isArray(t.keywords) && t.keywords.filter(Boolean).length > 0;
+            const constants = activeTags.filter(t => !isKw(t));
+            const keywords  = activeTags.filter(t => isKw(t));
+
+            // 常駐 blob → os_vn_extra_tags_prompt（酒館 injectVnTags + PWA os_prompts 兩條都讀）
+            if (!constants.length) {
+                localStorage.removeItem('os_vn_extra_tags_prompt');
+            } else {
+                const cS = constants.filter(t => !t.isBlock), cB = constants.filter(t => t.isBlock);
+                let p = `# [📱模式｜VN組件] 清單\n使用場景: 可在正文內穿插的特殊 TAG。依下列格式填寫，{…} 佔位符換成實際內容、不可照抄佔位符字面。\n`;
+                if (cS.length) { p += `\n## 單行標籤格式（直接穿插在對話內，無須換行）\n`; cS.forEach(t => { p += `\n${snippetOf(t)}`; }); }
+                if (cB.length) { p += `\n## 區塊標籤格式（整段獨立輸出，與 <content> 並列；只在區塊內穿插，不可掉出區塊）\n`; cB.forEach(t => { p += `\n${snippetOf(t)}`; }); }
+                win.AUI.lsSet('os_vn_extra_tags_prompt', p, '給劇情 AI 的組件清單');
+            }
+
+            // 關鍵字組件 → 結構化存 os_vn_tags_keyword（注入器每輪抓最近正文+使用者輸入、命中才注入這幾個，省 token）
+            if (!keywords.length) {
+                localStorage.removeItem('os_vn_tags_keyword');
+            } else {
+                const arr = keywords.map(t => ({ tagId: t.tagId, isBlock: !!t.isBlock, keywords: t.keywords.filter(Boolean), snippet: snippetOf(t) }));
+                win.AUI.lsSet('os_vn_tags_keyword', JSON.stringify(arr), '給劇情 AI 的組件清單');
+            }
+        } catch(e) { console.warn('[Studio] syncActiveTagsToLocal 失敗', e); }
+    }
+    // 暴露成全域，（統一走這份「常駐/關鍵字」拆分邏輯）
+    try { win.__AURELIA_SYNC_VN_TAGS = syncActiveTagsToLocal; } catch (e) {}
+
+    // ============================================================
+    // === 注入酒館正則 + 主世界書（從舊的 VN 標籤煉丹爐搬過來整合；那支檔 11-19 已刪）===
+    // 把展廳中的 VN UI 面板一鍵寫入酒館全局正則 + 折疊進主世界書當綠燈觸發
+    // ============================================================
+    function generateRegexReplacement(data) {
+        if (!data || !data.tagId) return '';
+        const safeTagId = data.tagId.replace(/[^a-zA-Z0-9_-]/g, '');
+        let htmlContent = (data.html || '').replace(/\{\{(\d+)\}\}/g, '$$$$$1');
+
+        // 完整 HTML 結構（DOCTYPE + html + head + body）— srcdoc 才能正確走 standards mode
+        let fullHtml = `<!DOCTYPE html>\n<html>\n<head>\n<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n<style>\n${data.css || ''}\n</style>\n</head>\n<body>\n`;
+        // 容器不寫 hardcoded id —— 多實例時 id 會撞，document.getElementById 抓錯
+        fullHtml += `<div class="vn-dynamic-panel-${safeTagId}">\n${htmlContent}\n</div>\n`;
+
+        if (data.js) {
+            let safeJs = data.js.trim().replace(/^\x60\x60\x60(?:javascript|js|html|css)?\s*/i, '').replace(/\s*\x60\x60\x60\s*$/, '').trim();
+            const safeJsForPlainScript = safeJs.replace(/<\/script>/gi, '<\\/script>');
+            // 兄弟節點順序：<div>(container) ← <textarea>(rawtext) ← <script type=text/plain>(userJs) ← <script>(執行端)
+            // 執行端用 document.currentScript.previousElementSibling 鏈式找上層 — 完全廢棄 id 機制
+            fullHtml += `\n<textarea style="display:none;">$1</textarea>\n`;
+            fullHtml += `<script type="text/plain">${safeJsForPlainScript}</script>\n`;
+            fullHtml += `<script>
+(async function(){
+  try {
+    const _script = document.currentScript;
+    const userJsEl = _script ? _script.previousElementSibling : null;
+    const rawTextEl = userJsEl ? userJsEl.previousElementSibling : null;
+    const container = rawTextEl ? rawTextEl.previousElementSibling : null;
+    if (!container) { console.error('[${safeTagId}] 找不到 DOM 容器'); return; }
+    const ctx = window.parent || window;
+    const imgManager = ctx.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+    const rawText = rawTextEl ? rawTextEl.value : '';
+    const lines = rawText.split('\\n').map(function(l){return l.trim();}).filter(Boolean);
+    let __userJs = userJsEl ? userJsEl.textContent : '';
+    __userJs = __userJs.replace(/[\\u2028\\u2029]/g, '\\n');
+    window.__IS_PREVIEW = false;
+    // ===== st helper：AI 寫面板只用這個 API，免疫所有出錯雷區 =====
+    const st = {
+      md: function(text){
+        if (!text) return '';
+        var rxBold = new RegExp('[*][*](.+?)[*][*]', 'g');
+        var rxItalic = new RegExp('[*](.+?)[*]', 'g');
+        var rxCode = new RegExp('[\`](.+?)[\`]', 'g');
+        var out = String(text)
+          .replace(/\\\\n/g, '\\n')   // 字面換行符 → 真換行（對齊 story st.md；此註解勿寫反斜線,這是模板字串、會變真換行斬斷註解）
+          .replace(rxBold, function(_, p1){ return '<b>' + p1 + '</b>'; })
+          .replace(rxItalic, function(_, p1){ return '<i>' + p1 + '</i>'; })
+          .replace(rxCode, function(_, p1){ return '<code>' + p1 + '</code>'; })
+          .replace(/\\n/g, '<br>')
+          .replace(/(<br>\\s*){3,}/g, '<br><br>');
+        // 傳進來的是劇情或模型寫的字：照格式顯示、會跑的拿掉（奧瑞亞的 AUI.safeHtml；沒有就退回酒館的 DOMPurify）
+        var A = null, D = null;
+        try { A = ctx.AUI; D = ctx.DOMPurify; } catch(e){}
+        return (A && A.safeHtml) ? A.safeHtml(out) : ((D && D.sanitize) ? D.sanitize(out) : out);
+      },
+      parse: function(){
+        // 跟劇情裡那份同一套：一筆記錄被 AI 拆成好幾段時先縫回一行，忘了收尾的右方括號幫它補上
+        var result = {};
+        var stitched = [];
+        var buf = null;
+        lines.forEach(function(raw){
+          var line = String(raw || '').trim().replace(/[｜]/g, '|').replace(/[［]/g, '[').replace(/[］]/g, ']');
+          if (!line) return;
+          if (buf !== null) {
+            buf += '\\n\\n' + line;
+            if (line.charAt(line.length - 1) === ']') { stitched.push(buf); buf = null; }
+            return;
+          }
+          if (/^\\[[A-Za-z0-9_一-鿿-]+\\|/.test(line) && line.charAt(line.length - 1) !== ']') { buf = line; return; }
+          stitched.push(line);
+        });
+        if (buf !== null) stitched.push(buf + ']');
+        stitched.forEach(function(line){
+          if (line.charAt(0) !== '[' || line.charAt(line.length - 1) !== ']') return;
+          var parts = line.slice(1, -1).split('|');
+          var tag = parts[0];
+          if (!result[tag]) result[tag] = [];
+          result[tag].push(parts.slice(1));
+        });
+        return result;
+      },
+      setImage: async function(el, prompt, type, provider){
+        if (!el || !prompt) return;
+        type = type || 'scene';
+        var ph = 'https://api.dicebear.com/7.x/shapes/svg?seed=' + encodeURIComponent(prompt);
+        el.src = ph;   // 先放佔位（不破圖），成功再換真圖
+        if (window.__IS_PREVIEW) return;
+        try {
+          var url = imgManager ? await imgManager.generate(prompt, type, { provider: provider, use: 'app' }) : '';
+          if (url) el.src = url;
+        } catch(e) {
+          console.error('[${safeTagId}] setImage 失敗(保留佔位):', e);
+        }
+      },
+      getCurrentChars: function(){
+        var R = window.VN_READER || (window.parent && window.parent.VN_READER);
+        return (R && R.getCurrentChars) ? R.getCurrentChars() : Promise.resolve([]);
+      },
+      getContacts: function(){ try { var F = ctx.VN_PANEL_FEED; return (F && F.contacts) ? F.contacts() : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
+      wbSave: function(t, c, k){ if (window.__IS_PREVIEW) return Promise.resolve(true); try { var F = ctx.VN_PANEL_FEED; return (F && F.wbSave) ? F.wbSave(t, c, k) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      wbLoad: function(t){ try { var F = ctx.VN_PANEL_FEED; return (F && F.wbLoad) ? F.wbLoad(t) : Promise.resolve(''); } catch(e){ return Promise.resolve(''); } },
+      feed: function(o){ try { var F = ctx.VN_PANEL_FEED; var mid = null; try { var mes = window.frameElement && window.frameElement.closest ? window.frameElement.closest('.mes') : null; mid = mes ? mes.getAttribute('mesid') : null; } catch(e2){} return F ? F.feed(${JSON.stringify(String(data.tagId || ''))}, Object.assign({ lines: lines, at: { lines: lines, floor: mid } }, o || {})) : Promise.resolve([]); } catch(e){ return Promise.resolve([]); } },
+      parseText: function(x){ try { var F = ctx.VN_PANEL_FEED; return F ? F.parseRecords(String(x == null ? '' : x).split('\\n')) : []; } catch(e){ return []; } },
+      user: (function(){ var f = function(){ try { var F = ctx.VN_PANEL_FEED; return F ? F.user() : Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } catch(e){ return Promise.resolve({ name: 'User', nickname: 'User', avatar: '', signature: '', desc: '' }); } }; try { var F = ctx.VN_PANEL_FEED; if (F && F.userSync) { var u = F.userSync(); for (var k in u) f[k] = u[k]; } } catch(e){} return f; })(),
+      feedAdd: function(t, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.add(${JSON.stringify(String(data.tagId || ''))}, t, fl) : Promise.resolve(null); } catch(e){ return Promise.resolve(null); } },
+      feedUpdate: function(id, fl){ try { var F = ctx.VN_PANEL_FEED; return F ? F.update(${JSON.stringify(String(data.tagId || ''))}, id, fl) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      feedRemove: function(id){ try { var F = ctx.VN_PANEL_FEED; return F ? F.remove(${JSON.stringify(String(data.tagId || ''))}, id) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      saveData: function(k, v){ try { if (window.saveData) window.saveData(k, v); } catch(e){} },
+      loadData: function(k){ try { return window.loadData ? window.loadData(k) : null; } catch(e){ return null; } },
+      toStory: function(t){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var B = ctx.OS_PHONE_EVENTS; t = String(t == null ? '' : t).trim(); return (B && B.record && t) ? B.record({ room: ${JSON.stringify(String(data.tagId || ''))} || '手機', line: t }) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      // 手機本身的東西（OS_APP_TOOLS）；劇情裡的面板沒有桌面圖標、不會被叫醒，紅點／通知／自己動不做事
+      clock: function(){ try { var T = ctx.OS_APP_TOOLS; return T ? T.clock() : Promise.resolve({ date: '', time: '', upcoming: [] }); } catch(e){ return Promise.resolve({ date: '', time: '', upcoming: [] }); } },
+      balance: function(){ try { var T = ctx.OS_APP_TOOLS; return T ? T.balance() : Promise.resolve(0); } catch(e){ return Promise.resolve(0); } },
+      share: function(id, t, x){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var T = ctx.OS_APP_TOOLS; return T ? T.share(${JSON.stringify(String(data.tagId || ''))}, id, t, x) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      pay: function(a, w){ try { if (window.__IS_PREVIEW) return Promise.resolve(false); var T = ctx.OS_APP_TOOLS; return T ? T.pay(${JSON.stringify(String(data.tagId || ''))}, a, w) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      badge: function(){},
+      notify: function(){ return Promise.resolve(false); },
+      onWake: function(){},
+      // 🚨 以下以前酒館版漏了：預覽和手機 app 裡都有，面板用到（說明書要求文字一律過 st.esc）一注入酒館就報「不是函式」
+      esc: function(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); },
+      toast: function(m, o){ try { var A = ctx.AUI || window.AUI; return A && A.toast ? A.toast(m, o) : undefined; } catch(e){} },
+      confirm: function(m, o){ try { var A = ctx.AUI || window.AUI; return A && A.confirm ? A.confirm(m, o) : Promise.resolve(false); } catch(e){ return Promise.resolve(false); } },
+      loading: function(target, on, text){
+        try {
+          var host = (typeof target === 'string') ? document.querySelector(target) : (target || container);
+          if (!host) return;
+          if (on === false) { if (host.__stLoad) { host.__stLoad.remove(); host.__stLoad = null; } return; }
+          if (host.__stLoad) return;
+          if (getComputedStyle(host).position === 'static') host.style.position = 'relative';
+          var ov = document.createElement('div');
+          ov.style.cssText = 'position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:rgba(0,0,0,0.25);z-index:50;';
+          var sp = document.createElement('div');
+          sp.style.cssText = 'width:28px;height:28px;border:3px solid rgba(255,255,255,0.3);border-top-color:#fff;border-radius:50%;animation:__stspin .8s linear infinite;';
+          ov.appendChild(sp);
+          if (text) { var t = document.createElement('div'); t.textContent = text; t.style.cssText = 'color:#fff;font-size:12px;'; ov.appendChild(t); }
+          if (!document.getElementById('__stspin_kf')) { var k = document.createElement('style'); k.id = '__stspin_kf'; k.textContent = '@keyframes __stspin{to{transform:rotate(360deg)}}'; document.head.appendChild(k); }
+          host.__stLoad = ov; host.appendChild(ov);
+        } catch(e){}
+      },
+      pickPhoto: async function(o){ try { var PI = ctx.OS_PHONE_IMAGE; return (PI && PI.pickPhoto) ? await PI.pickPhoto(o) : ''; } catch(e){ return ''; } },
+      callAI: async function(sysPrompt, opts){
+        try {
+          var OS = ctx.OS_API; if (!OS || !OS.chat) return '';
+          var S = ctx.OS_SETTINGS;
+          var cfg = Object.assign({}, (S && S.getConfig && S.getConfig()) || {});
+          cfg.usePresetPrompts = false; cfg.maxTokens = Math.min(Math.max(parseInt(cfg.maxTokens) || 0, 8192), 32768);   // 同預覽那份：上限夾在 32768，免得某些接口報「輸出上限超過」
+          var msgs = [];
+          var PI = ctx.OS_PHONE_IMAGE;
+          var imgs = (opts && Array.isArray(opts.images)) ? opts.images : [];
+          msgs.push({ role: 'user', content: (imgs.length && PI && PI.withImages) ? await PI.withImages(String(sysPrompt || ''), imgs, '這是使用者在 app 裡附上的圖片。') : String(sysPrompt || '') });
+          return await new Promise(function(res, rej){ OS.chat(msgs, cfg, null, function(t){ res(typeof t === 'string' ? t : (t && t.message) || ''); }, rej, { task: 'apps', disableTyping: true }); });
+        } catch(e){ console.error('[${safeTagId}] st.callAI', e); return ''; }
+      },
+      getStory: function(n){
+        try {
+          var ST = ctx.SillyTavern; var c = ST && ST.getContext && ST.getContext();
+          if (!c || !Array.isArray(c.chat)) return [];
+          var R = ctx.VN_READER; var CL = (R && R.clean) ? R.clean : function(x){ return x || ''; };
+          return c.chat.filter(function(m){ return m && !m.is_system; }).slice(-(n || 30))
+            .map(function(m){ return { name: String(m.name || (m.is_user ? '我' : '')), text: CL(m.mes || '') }; })
+            .filter(function(o){ return o.text && o.text.trim(); });
+        } catch(e){ return []; }
+      },
+      getChatId: function(){ try { var ST = ctx.SillyTavern; var id = ST && ST.getCurrentChatId ? ST.getCurrentChatId() : ''; return id == null ? '' : String(id); } catch(e){ return ''; } },
+      dbSave: async function(k, v, scope){ try { var DB = ctx.OS_DB; if (!DB || !DB.saveAppData) return false; return await DB.saveAppData(${JSON.stringify('vnpanel:' + String(data.tagId || ''))}, k, v, scope === 'chat' ? (this.getChatId() || null) : null); } catch(e){ return false; } },
+      dbLoad: async function(k, scope){ try { var DB = ctx.OS_DB; if (!DB || !DB.getAppData) return null; return await DB.getAppData(${JSON.stringify('vnpanel:' + String(data.tagId || ''))}, k, scope === 'chat' ? (this.getChatId() || null) : null); } catch(e){ return null; } },
+      // 手機 app 才有的（傳進聊天室、系統提示、寫記憶）：聊天裡的面板不做事，但要有這個名字，不然一呼叫就壞
+      toChat: function(){ return false; },
+      toSystem: function(){ return false; },
+      remember: function(){}
+    };
+    // ============================================================
+    const __onComplete = function(){};
+    try {
+      const __fn = new Function('container', 'lines', 'onComplete', 'st', __userJs);
+      __fn(container, lines, __onComplete, st);
+    } catch(jsErr) {
+      console.error('[${safeTagId}] JS 執行錯誤:', jsErr.message);
+      console.error('[${safeTagId}] JS stack:', jsErr.stack);
+      const errBox = document.createElement('div');
+      errBox.style.cssText = 'color:#fc8181;padding:10px;background:rgba(252,129,129,0.1);border:1px dashed #fc8181;border-radius:6px;margin:10px;font-size:12px;font-family:monospace;';
+      errBox.textContent = '⚠️ 面板腳本錯誤: ' + jsErr.message + '\\n（HTML 還是會顯示，但動態效果失效）';
+      container.appendChild(errBox);
+    }
+  } catch(e) {
+    console.error('${safeTagId} 外層錯誤:', e);
+  }
+})();
+</script>
+`;
+        }
+        fullHtml += `</body>\n</html>`;
+        return "```\n" + fullHtml + "\n```";
+    }
+
+    // 🧹 舊制殘留清理：以前「注入酒館」會把使用說明寫成主世界書條目 [VN面板] X——
+    //    使用說明已改走自動注入（os_app_memory_inject 常駐/關鍵字），條目不再創建；
+    //    這裡負責把舊條目掃掉（注入時順手清 + 刪組件時清，兩邊共用）。
+    async function _deleteWbUsageEntry(th, safeTagId) {
+        try {
+            const wbInfo = th.getCharWorldbookNames ? th.getCharWorldbookNames('current') : null;
+            const wb = wbInfo && wbInfo.primary;
+            if (!wb || !th.getWorldbook || !th.deleteLorebookEntries) return false;
+            const sn = `[VN面板] ${safeTagId}`;
+            const ents = await th.getWorldbook(wb);
+            const hit = (ents || []).filter(e => e && e.name === sn);
+            if (hit.length) { await th.deleteLorebookEntries(wb, hit.map(e => e.uid)); return true; }
+            return false;
+        } catch (e) { console.warn('[Studio] 清舊制世界書說明條目失敗', e); return false; }
+    }
+
+    // 酒館正則找哪一段（匯入和小機改標籤共用一份）。
+    // 向下兼容：開合標籤角括號 <XXX></XXX> 或方括號 [XXX][/XXX] 都收（AI 常被其他 tag 帶歪吐方括號）。
+    // 用字元類 [<\[] / [>\]] 保持單一 capture group（$1=內容），渲染替換邏輯零影響。
+    function _vnFindRegex(safeTagId) {
+        return `/[<\\[]${safeTagId}[>\\]]([\\s\\S]*?)[<\\[]\\/${safeTagId}[>\\]]/gi`;
+    }
+
+    // 一鍵寫入酒館全局正則 + 同步至主世界書
+    async function importToSillyTavern(data) {
+        const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
+        if (!th) {
+            AUI.alert('找不到酒館（TavernHelper）。需要在酒館環境內 + 已安裝酒館助手腳本才能用這個功能。\n\nPWA 獨立模式不支援此功能。');
+            return;
+        }
+
+        if (!data || !data.tagId) return;
+
+        const safeTagId = data.tagId.replace(/[^a-zA-Z0-9_-]/g, '');
+        const searchRegex = _vnFindRegex(safeTagId);
+        const replacement = generateRegexReplacement(data);
+
+        const regexObj = {
+            id: th.uuidv4 ? th.uuidv4() : ('vn_tag_' + Date.now()),
+            script_name: `[VN面板] ${safeTagId}`,
+            enabled: true,
+            find_regex: searchRegex,
+            replace_string: replacement,
+            trim_strings: [],
+            source: { user_input: false, ai_output: true, slash_command: false, world_info: false },
+            destination: { display: true, prompt: false },
+            run_on_edit: true,
+            min_depth: null,
+            max_depth: null,
+            markdownOnly: true,
+            promptOnly: false,
+            substituteRegex: 0
+        };
+
+        try {
+            await th.updateTavernRegexesWith(regexes => {
+                const filtered = regexes.filter(r => r.script_name !== regexObj.script_name);
+                filtered.push(regexObj);
+                return filtered;
+            }, { type: 'global' });
+
+            // 使用說明走自動注入、不再寫世界書條目；順手掃掉舊制殘留的同名條目
+            let wbMsg = "";
+            try { if (await _deleteWbUsageEntry(th, safeTagId)) wbMsg = "\n已清掉舊版留在世界書的使用說明條目（說明現在自動注入、不佔世界書）。"; } catch (e) {}
+
+            AUI.alert(`匯入成功！已將標籤 [${safeTagId}] 寫入酒館全局正則。${wbMsg}\n\n請發送新訊息或重新載入聊天查看效果。`);
+        } catch (err) {
+            console.error('[Studio] 酒館正則匯入失敗:', err);
+            AUI.alert('匯入失敗: ' + err.message);
+        }
+    }
+
+    // 刪除 VN 組件時，連「注入酒館」留下的殘留一起清：全域正則 [VN面板]<tagId> + 角色主世界書同名條目。
+    // （沒注入過酒館就無事；沒 TavernHelper／PWA 也安靜跳過。）解「刪了組件、酒館裡舊面板還在」的孤兒。
+    async function _removeTavernPanelArtifacts(tagId) {
+        const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
+        if (!th) return;
+        const safeTagId = String(tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        if (!safeTagId) return;
+        const sn = `[VN面板] ${safeTagId}`;
+        try {
+            if (th.updateTavernRegexesWith) {
+                await th.updateTavernRegexesWith(rx => (rx || []).filter(r => r && r.script_name !== sn), { type: 'global' });
+            }
+        } catch (e) { console.warn('[Studio] 清酒館正則殘留失敗', e); }
+        await _deleteWbUsageEntry(th, safeTagId);
+    }
+
+    // 刪除 VN 組件時，連它對應的手機 app（srcTplId 反查）＋ app 的四桶資料一起清。
+    // 共用＝一個東西：從展廳刪＝整個面板移除（app 那側也清乾淨，不留我的應用孤兒）。
+    async function _purgeLinkedPhoneApp(tplId, tagId) {
+        try { if (tagId && win.VN_PANEL_FEED && win.VN_PANEL_FEED.purgeTag) await win.VN_PANEL_FEED.purgeTag(tagId); } catch (e) {}   // 📖 面板自己的資料桶（所有聊天）
+        try {
+            const apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? (await win.OS_DB.getAllPhoneApps()) : [];
+            const rec = (apps || []).find(a => a && a.srcTplId === tplId);
+            if (!rec) return;
+            const aid = rec.id;
+            try { if (win.OS_DB.deletePhoneApp) await win.OS_DB.deletePhoneApp(aid); } catch (e) {}
+            try { if (win.OS_DB.deleteAppDataByApp) await win.OS_DB.deleteAppDataByApp(aid); } catch (e) {}
+            try { if (win.OS_DB.deleteAppMemoryByApp) await win.OS_DB.deleteAppMemoryByApp(aid); } catch (e) {}
+            try { if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(aid); } catch (e) {}
+            try {
+                const pre = 'aurelia_appdata_' + aid + '_';
+                const kill = [];
+                for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.indexOf(pre) === 0) kill.push(k); }
+                kill.forEach(k => localStorage.removeItem(k));
+                localStorage.removeItem('os_app_mem_plugin_' + aid);
+                const L = JSON.parse(localStorage.getItem('aurelia_phone_apps') || '[]') || [];
+                win.AUI.lsSet('aurelia_phone_apps', JSON.stringify(L.filter(m => m && m.id !== aid)), '手機 app 清單');
+            } catch (e) {}
+        } catch (e) { console.warn('[Studio] 清連結手機 app 失敗', e); }
+    }
+
+    // ============================================================
+    // === 📝 直接編輯原碼 modal（給進階用戶繞過 AI 對話改 tpl JSON）===
+    // ============================================================
+    let _rawEditingTplId = null;
+    let _rawEditingOriginal = null;
+
+    // 缺 modal 就補建(獨立 VN組件區沒掛完整 studioHTML)：注入 body + wire 事件，讓「編輯原碼」任何情境都能用
+    function _ensureRawEditModal() {
+        if (document.getElementById('studio-raw-edit-modal')) return;
+        const tmp = document.createElement('div');
+        tmp.innerHTML = RAW_EDIT_MODAL_HTML;
+        const el = tmp.firstElementChild;
+        if (el) { document.body.appendChild(el); _setupRawEditModalEvents(); }
+    }
+    function openRawEditModal(tpl) {
+        _ensureRawEditModal();
+        const modal = document.getElementById('studio-raw-edit-modal');
+        const textarea = document.getElementById('raw-edit-textarea');
+        const tagIdEl = document.getElementById('raw-edit-tagid');
+        const statusEl = document.getElementById('raw-edit-status');
+        if (!modal || !textarea) return;
+
+        _rawEditingTplId = tpl.id;
+        _rawEditingOriginal = JSON.stringify(tpl, null, 2);
+
+        if (tagIdEl) tagIdEl.textContent = tpl.tagId || tpl.id;
+        textarea.value = _rawEditingOriginal;
+        if (statusEl) statusEl.textContent = '';
+        modal.style.display = 'flex';
+        // 點空白關閉
+        modal.onclick = (e) => { if (e.target === modal) modal.style.display = 'none'; };
+    }
+
+    function _setupRawEditModalEvents() {
+        const modal = document.getElementById('studio-raw-edit-modal');
+        if (!modal) return;
+        const textarea = document.getElementById('raw-edit-textarea');
+        const statusEl = document.getElementById('raw-edit-status');
+        const saveBtn = document.getElementById('raw-edit-save');
+        const resetBtn = document.getElementById('raw-edit-reset');
+        const cancelBtn = document.getElementById('raw-edit-cancel');
+        const closeBtn = document.getElementById('raw-edit-close');
+
+        if (closeBtn) closeBtn.onclick = () => { modal.style.display = 'none'; };
+        if (cancelBtn) cancelBtn.onclick = () => { modal.style.display = 'none'; };
+        if (resetBtn) resetBtn.onclick = () => {
+            if (textarea && _rawEditingOriginal) {
+                textarea.value = _rawEditingOriginal;
+                if (statusEl) statusEl.textContent = '↺ 已重置為原本內容（尚未儲存）';
+            }
+        };
+        if (saveBtn) saveBtn.onclick = async () => {
+            if (!textarea || !_rawEditingTplId) return;
+            let parsed;
+            try {
+                parsed = JSON.parse(textarea.value);
+            } catch(e) {
+                if (statusEl) statusEl.textContent = 'JSON 格式錯誤：' + e.message;
+                return;
+            }
+            if (!parsed.tagId) {
+                if (statusEl) statusEl.textContent = '缺少 tagId 欄位';
+                return;
+            }
+            // 保留原本 id（避免改 id 製造孤兒）
+            parsed.id = _rawEditingTplId;
+            try {
+                await win.OS_DB.saveVNTagTemplate(parsed);
+                if (typeof syncActiveTagsToLocal === 'function') await syncActiveTagsToLocal();
+                if (win.VN_DynamicParser) await win.VN_DynamicParser.init();
+                if (statusEl) statusEl.textContent = '已儲存';
+                setTimeout(() => {
+                    modal.style.display = 'none';
+                    win.OS_STUDIO_VC?.loadStudioGallery();   // 展廳拆檔：os_studio_vn_gallery.js
+                }, 600);
+            } catch(e) {
+                if (statusEl) statusEl.textContent = '儲存失敗：' + e.message;
+            }
+        };
+    }
+
+    // 手機 app 的名字＝模板的中文顯示名（title，最多四個字）；沒有才退回標籤 tagId。
+    // 🚨 以前一律拿 tagId：它是劇本裡的標籤（<CampusForum>）與 CSS 前綴，只能是英文，
+    //    於是每個應用裝進手機都叫英文，得自己一個個改。title 欄位規格裡早就有，只是從沒被用上。
+    function _appNameOf(tpl) {
+        const t = String((tpl && tpl.title) || '').trim();
+        if (t) return Array.from(t).slice(0, 4).join('');   // Array.from：不把 emoji／罕用字切成半個
+        return (tpl && tpl.tagId) || '面板';
+    }
+
+    // 把一個「應用/共用」模板裝成手機 app（進「應用工坊·我的應用」+ 桌面圖標）。
+    // 以 srcTplId 去重：已裝過就更新內容(編輯後重存會更新)，沒裝過才新增。回傳 app id。
+    // 🧩 把做好的東西放上手機主畫面（見 os_widgets.js）。
+    //   只取畫面與樣式，不帶那段程式：組件是擺著看的，要跑程式的東西該做成應用。
+    //   🚨 樣式的選擇器全都帶 .vn-dynamic-panel-<標籤> 前綴，所以那層外殼一定要包上去，
+    //      否則選擇器一條都不命中、整塊掉樣式（跟裝成應用那邊同一個道理）。
+    function _installTemplateAsHomeWidget(tpl) {
+        const W = win.OS_WIDGETS;
+        if (!W || !tpl) return null;
+        try {
+            const safeTagId = String(tpl.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+            const css = String(tpl.css || '').trim();
+            const body = '<div class="vn-dynamic-panel-' + safeTagId + '">'
+                       + (css ? '<style>' + css + '</style>' : '')
+                       + String(tpl.html || '') + '</div>';
+            const rec = W.save({ name: _appNameOf(tpl), size: 's', html: body, hint: tpl.title || '' });
+            if (rec) { try { win.VoidPhoneShell.unhideWidget(rec.id); } catch (e) {} }   // 做好就直接上主畫面
+            return rec;
+        } catch (e) { console.warn('[studio] 放上主畫面失敗', e); return null; }
+    }
+
+    // 這次要做哪一種：點那排按鈕會走這裡，從別的地方帶著型別開創作室也走這裡（同一支，免得兩邊漂）
+    // 修改（diff）那條路要帶的說明書片段：第 3 節鐵律、第 4 節 st API 封閉清單、加上目前類型那一小節（2a～2d）。
+    //   以前 diff 提示只有「保守原則＋目前程式碼＋使用者的要求」，AI 改東西時根本沒看過 API 清單，找不到函式就自己發明。
+    //   從 MODES.vn_ui.prompt 切，同一份來源，說明書改了這裡自動跟上。
+    function _studioSpecForRefine() {
+        const P = String((MODES.vn_ui && MODES.vn_ui.prompt) || '');
+        const between = (from, to) => {
+            const i = P.indexOf(from); if (i < 0) return '';
+            const j = to ? P.indexOf(to, i + from.length) : -1;
+            return (j < 0 ? P.slice(i) : P.slice(i, j)).trim();
+        };
+        const typeHead = { '純展示': '### 2a.', '純應用': '### 2b.', '共用': '### 2c.', '主畫面組件': '### 2d.' }[_vnPanelType] || '';
+        let typeSec = '';
+        if (typeHead) {
+            const i = P.indexOf(typeHead);
+            if (i >= 0) { const rest = P.slice(i); const m = /\n(?=### 2|## 3\.)/.exec(rest.slice(typeHead.length)); typeSec = (m ? rest.slice(0, typeHead.length + m.index) : rest).trim(); }
+        }
+        return [typeSec, between('## 3.', '## 4.'), between('## 4.', '## 5.')].filter(Boolean).join('\n\n');
+    }
+
+    function _setPanelType(t) {
+        if (!t) return;
+        _vnPanelType = t;
+        win.AUI.lsSet(_panelTypeKey(getChatSessionId()), t, '這個對話選的面板類型');   // 跟這個對話一起記，重開讀回來
+        document.querySelectorAll('#studio-type-row .studio-type').forEach(function (x) {
+            x.classList.toggle('active', x.dataset.type === t);
+        });
+        try { _studioSyncSetBar(); } catch (e) {}
+    }
+
+    async function _installTemplateAsPhoneApp(tpl) {
+        if (!tpl || !(win.OS_DB && win.OS_DB.savePhoneApp)) return null;
+        try {
+            let apps = [];
+            try { apps = (win.OS_DB.getAllPhoneApps ? (await win.OS_DB.getAllPhoneApps()) : []) || []; } catch (e) {}
+            const existing = apps.find(a => a && a.srcTplId === tpl.id);
+            const rec = existing
+                ? { ...existing }
+                : { name: _appNameOf(tpl), emoji: '', icon: 'fa-puzzle-piece', iconUrl: '', source: 'studio', srcTplId: tpl.id };
+            // 已裝過、名字還是當初的英文標籤（沒被使用者改過）→ 重存時換成中文名；使用者自己改過的名字不動
+            if (existing && existing.name === tpl.tagId && tpl.title) rec.name = _appNameOf(tpl);
+            rec.html = _templateToPhoneHtml(tpl);   // 內容一律更新（編輯後重存即同步）
+            const newId = await win.OS_DB.savePhoneApp(rec);
+            try {
+                if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) {
+                    // addApp 遇到同 id 不會更新 → 名字換了要先拿掉再放回，桌面圖標才會跟著改名
+                    if (existing && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(newId);
+                    win.VoidPhoneShell.addApp({ id: newId, name: rec.name, emoji: rec.emoji, icon: rec.icon || '', iconUrl: rec.iconUrl || '' });
+                }
+            } catch (e) {}
+            return newId;
+        } catch (e) { console.warn('[studio] 裝成手機 app 失敗', e); return null; }
+    }
+
+    // 把一個模板載回創作室「編輯模式」（VN組件「繼續編輯」 + 我的應用「✏️編輯」共用）
+    function _enterEditMode(tpl) {
+        try { currentMode = 'vn_ui'; } catch (e) {}
+        currentParsedData = JSON.parse(JSON.stringify(tpl));
+        activePreviewData = currentParsedData;
+        const chatId = getChatSessionId();
+        chatMessages = [{ role: 'system', content: MODES[currentMode].prompt }];
+        chatMessages.push({
+            role: 'assistant',
+            content: `已載入面板 [${tpl.tagId || '未命名'}] 進入編輯模式。\n\n告訴我要改什麼（例如「字改紅色」、「按鈕加大」、「背景深一點」），我會用最小幅度修改。\n要整個換風格也行——直接描述新風格、發送就會自動整包重做，不用按任何按鈕、不用重發。`
+        });
+        _studioSave(chatId);
+        document.querySelectorAll('.studio-tab').forEach(t => t.classList.remove('active'));
+        document.querySelector('.studio-tab[data-tab="preview"]')?.classList.add('active');
+        const _pc = document.getElementById('studio-preview-content'); if (_pc) _pc.style.display = 'flex';
+        const _sc = document.getElementById('studio-source-content'); if (_sc) _sc.style.display = 'none';
+        const _gc = document.getElementById('studio-gallery-content'); if (_gc) _gc.style.display = 'none';
+        const _aa = document.querySelector('.studio-action-area'); if (_aa) _aa.style.display = 'flex';   // 編輯模式進預覽 → 顯示確定創建 footer
+        renderChatHistory();
+        renderPreviewPanel();
+    }
+
+    // 依 id 撈回模板（給 OS_STUDIO 對外方法用：我的應用的按鈕靠 srcTplId 找底稿）
+    async function _getTplById(id) {
+        try {
+            const tpls = (win.OS_DB && win.OS_DB.getAllVNTagTemplates) ? (await win.OS_DB.getAllVNTagTemplates()) : [];
+            return (tpls || []).find(t => t && t.id === id) || null;
+        } catch (e) { return null; }
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // VN 組件展廳（四頁換頁/群組chip/複製/設置/關鍵字注入/打包匯出入/孤兒清理/縮圖懶載/_activatePreview）
+    // 已拆到 os_studio_vn_gallery.js（win.OS_STUDIO_VC；靠下面 _b 橋）。
+    // 核心以 win.OS_STUDIO_VC?.loadStudioGallery()/openVnComponents()/exportOneVnUiTemplate()/toggleAppLobby() 懶解析呼叫。
+    // ────────────────────────────────────────────────────────────────
+    // HTML 轉義（核心＋全拆檔子模組共用；_b 橋成員）
+    function _sgcEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    // 只捲它自己那格：scrollIntoView 會連外層每一層一起捲（滑進來到一半的面板會卡在兩頁中間，overflow:hidden 的父層也會被程式捲歪）。
+    //   找最近一層真的捲得動的祖先，只動它的 scrollTop；block 照 scrollIntoView 的 start／center／end／nearest 算
+    function _scrollInBox(el, block, behavior) {
+        if (!el) return;
+        let box = el.parentElement;
+        while (box && box !== document.body && box !== document.documentElement) {
+            const oy = getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box || box === document.body || box === document.documentElement) return;
+        const er = el.getBoundingClientRect(), br = box.getBoundingClientRect();
+        const off = er.top - br.top - box.clientTop;   // 目標上緣離這格可視區頂端多遠
+        let top;
+        if (block === 'center') top = box.scrollTop + off - (box.clientHeight - er.height) / 2;
+        else if (block === 'end') top = box.scrollTop + off - (box.clientHeight - er.height);
+        else if (block === 'nearest') {
+            if (off >= 0 && off + er.height <= box.clientHeight) return;   // 已經整個看得到
+            top = (off < 0 || er.height > box.clientHeight) ? box.scrollTop + off : box.scrollTop + off - (box.clientHeight - er.height);
+        } else top = box.scrollTop + off;
+        box.scrollTo({ top: Math.max(0, top), behavior: behavior || 'auto' });
+    }
+    // 視覺回饋：走全站提示條（core/aurelia_dialog.js）。
+    // TauriTavern 下載會直接存本機、但「不彈任何通知」→ 一定要自己給可見回饋。
+    function _studioToast(msg, type) {
+        const t = AUI.toastr;
+        (typeof t[type] === 'function' ? t[type] : t.info)(msg);
+    }
+
+    // ────────────────────────────────────────────────────────────────
+    // VN 煉丹：Diff-based refine 引擎（diff prompt 組裝/patch 解析套用/摘要/humanizeScopeKeys）
+    // 已拆到 os_studio_diff_engine.js（win.OS_STUDIO_DIFF；靠檔尾 _b 橋的 currentParsedData getter 等）。
+    // 核心以 win.OS_STUDIO_DIFF?.buildDiffRefinePrompt/applyDiffPatches/summarizeDiffResults/
+    //   extractConversationalText/snapshotCurrentVNState/renderVNHistoryArea(...) 懶解析呼叫；
+    // 主聊天送出鏈薄呼叫層（handleDiffVNRefine/_retryLastDiffRefine）留在下面、不搬。
+    // ────────────────────────────────────────────────────────────────
+
+    async function handleDiffVNRefine(refineMsg, isAuto) {
+        const inputEl = document.getElementById('studio-input');
+        const sendBtn = document.getElementById('studio-send-btn');
+        const container = document.getElementById('studio-chat-history');
+        isAuto = !!isAuto;   // 自檢引擎自動追加的修正輪
+
+        // 診斷 log：發送 diff 前印當前面板狀態（重整 / cache miss 的問題可從這裡看出來）
+        const _d = currentParsedData || {};
+        console.log(`[Studio] 🔧 diff refine 觸發: tagId=${_d.tagId || '?'}, css=${(_d.css||'').length}字, html=${(_d.html||'').length}字, 用戶建議="${refineMsg.slice(0,50)}", 附圖=${pendingImages.length}張`);
+
+        // 修改前先拍快照（防 AI 改壞可還原）
+        win.OS_STUDIO_DIFF?.snapshotCurrentVNState(refineMsg, 'diff');   // 拆檔：os_studio_diff_engine.js
+        win.OS_STUDIO_DIFF?.renderVNHistoryArea();
+
+        if (!isAuto) { inputEl.value = ''; inputEl.style.height = '50px'; }   // 自動輪不動使用者打到一半的字
+        inputEl.disabled = true;
+        sendBtn.disabled = false;
+        sendBtn.innerText = '停止';
+        sendBtn.onclick = () => { if (_studioAbortCtrl) _studioAbortCtrl.abort(); };
+        _studioAbortCtrl = new AbortController();
+
+        // 帶圖時 content 變陣列；同時把圖也塞給 AI 看
+        const userContent = buildUserMessageContent(refineMsg, pendingImages);
+        const imagesForAI = pendingImages.slice(); // diff prompt 是單條 user message，圖片直接帶上
+        const _userMsg = { role: 'user', content: userContent };
+        if (isAuto) _userMsg._auto = true;
+        chatMessages.push(_userMsg);
+        pendingImages = [];
+        renderPendingImages();
+        _studioSave(getChatSessionId());
+        renderChatHistory();
+
+        const aiBubble = document.createElement('div');
+        aiBubble.className = 'studio-bubble ai';
+        // 一建立就放打字三點，不等 API 第一個 chunk（避免空泡泡尷尬幾秒）
+        aiBubble._typingSet = true;
+        aiBubble.innerHTML = `<div class="studio-typing-wrap">
+            <span class="studio-typing-dot"></span>
+            <span class="studio-typing-dot"></span>
+            <span class="studio-typing-dot"></span>
+        </div>`;
+        _studioAppendWho(container);   // 打字三點上面就先掛名字：泡泡換成回話時名字留著
+        container.appendChild(aiBubble);
+        container.scrollTop = container.scrollHeight;
+
+        try {
+            const apiEngine = win.OS_API || window.OS_API;
+            if (!apiEngine || !apiEngine.chat) throw new Error("找不到 API 引擎");
+
+            let baseConfig = win.OS_SETTINGS?.getConfig?.() || JSON.parse(localStorage.getItem('os_global_config') || '{}');
+            // diff 路徑也要夾 maxTokens（patch 輸出更短、本就用不到大值），避免 gemini/vertex「maxOutputTokens 超過上限」
+            const pureConfig = { ...baseConfig, usePresetPrompts: false, enableThinking: false, temperature: 0.2, maxTokens: Math.min(parseInt(baseConfig.maxTokens) || 8192, 32768) };
+
+            const diffPrompt = win.OS_STUDIO_DIFF?.buildDiffRefinePrompt(refineMsg);   // 拆檔：os_studio_diff_engine.js
+            // 如有附圖：把圖跟 prompt 一起送（diff 路徑 apiPayload 只有單條 user message）
+            const _PI = _studioPI();
+            const promptContent = imagesForAI.length > 0
+                ? ((_PI && _PI.withImages) ? await _PI.withImages(diffPrompt, imagesForAI, '這是使用者在改介面時附上的參考圖，描述時多寫版面、配色、字型、元件長相。') : buildUserMessageContent(diffPrompt, imagesForAI))
+                : diffPrompt;
+            const apiPayload = [{ role: 'user', content: promptContent }];
+            // 啟用的「功能 chip」用法 → 併進請求(system)，不貼輸入框（diff 修改路徑同樣帶上）
+            _studioInjectActiveFeatures(apiPayload);
+
+            const useRealStream = !pureConfig.useSystemApi && !!pureConfig.url && !!pureConfig.key;
+
+            await new Promise((resolve, reject) => {
+                (win.OS_API || window.OS_API).chat(apiPayload, pureConfig,
+                    () => {
+                        if (!aiBubble._typingSet) {
+                            aiBubble._typingSet = true;
+                            aiBubble.innerHTML = `<div class="studio-typing-wrap">
+                                <span class="studio-typing-dot"></span>
+                                <span class="studio-typing-dot"></span>
+                                <span class="studio-typing-dot"></span>
+                            </div>`;
+                            container.scrollTop = container.scrollHeight;
+                        }
+                    },
+                    (finalText) => {
+                        const lockedChatId = getChatSessionId();
+                        const _bad = _studioBadReply(finalText);
+                        if (_bad.bad) {
+                            // 編輯路徑同樣攔截錯誤頁/空/截斷 → 重試（面板沒被動到、snapshot 已拍可還原）
+                            _renderErrorBubble(aiBubble, { message: _bad.reason }, () => _retryLastDiffRefine(aiBubble));
+                            resolve();
+                            return;
+                        }
+                        aiBubble.remove();
+
+                        // 🆘 大改：AI 直接在這同一通給整包新面板 <json>（取代舊的「喊太大→叫你按重新設計重發」）
+                        //    → 直接換上新面板，舊版進入前已拍進歷史快照可還原，用戶不用重發、不浪費第二次調用。
+                        if (/<json>[\s\S]*?<\/json>/i.test(finalText)) {
+                            const _oldTag = (currentParsedData && currentParsedData.tagId) || '';
+                            const _oldBlock = currentParsedData ? currentParsedData.isBlock : undefined;
+                            if (extractAndParseJson(finalText) && currentParsedData && !Array.isArray(currentParsedData)) {
+                                // AI 偶爾漏 tagId/isBlock → 用舊面板的補回，避免面板認不出來
+                                if (!currentParsedData.tagId && _oldTag) currentParsedData.tagId = _oldTag;
+                                if (currentParsedData.isBlock === undefined && _oldBlock !== undefined) currentParsedData.isBlock = _oldBlock;
+                                activePreviewData = currentParsedData;
+                                renderPreviewPanel();
+                                win.OS_STUDIO_DIFF?.renderVNHistoryArea();
+                                const conv = win.OS_STUDIO_DIFF?.extractConversationalText(finalText);
+                                const msg = '這次改動較大，已直接幫你整個重做（沒用小修補）。舊版已存進「還原舊版」，不滿意可一鍵還原——你不用重發。' + (conv ? '\n\n' + conv : '');
+                                chatMessages.push({ role: 'assistant', content: msg });
+                                _studioSave(lockedChatId);
+                                const fb = document.createElement('div');
+                                fb.className = 'studio-bubble ai studio-bubble-enter';
+                                fb.style.cssText = 'background:rgba(52,152,219,0.08); border-color:rgba(52,152,219,0.4); color:#1A1C28;';
+                                fb.textContent = msg;
+                                container.appendChild(fb);
+                                container.scrollTop = container.scrollHeight;
+                                resolve();
+                                _studioAfterGenerate(finalText, true);   // 整包重做完也驗一輪
+                                return;
+                            }
+                            // 整包解析失敗 → 落回下面的 diff 流程當保底
+                        }
+
+                        // 套用 diff patches（AI 沒指定的內容物理上動不到）
+                        // applyDiffPatches 回傳：陣列（每條 patch 結果）/ {status:'too_big'}（AI 主動逃生 or 前端全局長度檢查 abort）
+                        const results = win.OS_STUDIO_DIFF?.applyDiffPatches(finalText);
+                        const summary = win.OS_STUDIO_DIFF?.summarizeDiffResults(results);
+
+                        // 套用：陣列且 summary 未 failed 才更新預覽（too_big 物件返回 failed=true，預覽不動，原本面板保留）
+                        if (Array.isArray(results) && !summary.failed) {
+                            activePreviewData = currentParsedData;
+                            renderPreviewPanel();
+                        }
+
+                        // 聊天歷史只存摘要、不存原始 <patch> 標籤回覆
+                        chatMessages.push({ role: 'assistant', content: summary.text });
+                        _studioSave(lockedChatId);
+
+                        const summaryBubble = document.createElement('div');
+                        summaryBubble.className = 'studio-bubble ai studio-bubble-enter';
+                        const style = summary.failed
+                            ? 'background:rgba(230,126,34,0.08); border-color:rgba(230,126,34,0.4); color:#f5b07d;'
+                            : 'background:rgba(228,232,245,0.6); border-color:rgba(26,28,40,0.20); color:#1A1C28;';
+                        summaryBubble.style.cssText = style;
+                        summaryBubble.textContent = summary.text;
+                        container.appendChild(summaryBubble);
+                        container.scrollTop = container.scrollHeight;
+
+                        resolve();
+                        // 修補套上去了才驗；套失敗（too_big／find 不唯一）面板沒動，沒東西好驗
+                        if (Array.isArray(results) && !summary.failed) _studioAfterGenerate(null, true);
+                    },
+                    reject,
+                    { task: 'studio', useRealStream, disableTyping: useRealStream, signal: _studioAbortCtrl.signal, keepCodeFences: true, stream: true }   // stream: 🍎/跟隨酒館路徑也開串流——整包面板HTML是長輸出，非串流會撞閘道逾時504
+                );
+            });
+        } catch (err) {
+            if (err.name === 'AbortError' || err.message?.includes('abort')) {
+                aiBubble.innerHTML = '<span style="color:rgba(26,28,40,0.72); font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>';
+            } else {
+                _renderErrorBubble(aiBubble, err, () => _retryLastDiffRefine(aiBubble));
+            }
+        } finally {
+            _studioAbortCtrl = null;
+            inputEl.disabled = false;
+            sendBtn.disabled = false;
+            sendBtn.innerText = '發送';
+            sendBtn.onclick = handleSend;
+            inputEl.focus({ preventScroll: true });
+        }
+    }
+
+    // 重試 VN diff refine：抽出最後 user 訊息、重新呼叫 handleDiffVNRefine
+    function _retryLastDiffRefine(errBubble) {
+        let lastUserIdx = -1;
+        for (let i = chatMessages.length - 1; i >= 0; i--) {
+            const m = chatMessages[i];
+            if (m._isCompressed || m._isSummary) continue;
+            if (m.role === 'user') { lastUserIdx = i; break; }
+        }
+        if (lastUserIdx === -1) { AUI.alert('找不到上次的訊息'); return; }
+        const lastUserMsg = chatMessages[lastUserIdx];
+        const textOnly = messageContentToString(lastUserMsg.content);
+        if (Array.isArray(lastUserMsg.content)) {
+            pendingImages = lastUserMsg.content
+                .filter(p => p.type === 'image_url')
+                .map(p => ({ dataUrl: p.image_url?.url || '', mime: 'image/jpeg', sizeKB: 0 }));
+            renderPendingImages();
+        }
+        chatMessages.splice(lastUserIdx, 1);
+        errBubble.remove();
+        if (lastUserMsg._auto) { _autoFixRound = 1; handleDiffVNRefine(textOnly, true); return; }   // 重試的是自檢那輪：身分照舊、額度照舊
+        handleDiffVNRefine(textOnly);
+    }
+
+    // 歷史快照（snapshotCurrentVNState/restoreFromVNSnapshot/formatSnapTime/renderVNHistoryArea）
+    // → 已拆到 os_studio_diff_engine.js（win.OS_STUDIO_DIFF）
+
+    // 還原舊版那顆（在標題列）：有作品才出現；清單內容開彈窗時才畫，這裡只更新數字
+    function updateVNToolbarVisibility() {
+        const btn = document.getElementById('vn-studio-history-btn');
+        if (!btn) return;
+        const shouldShow = currentMode === 'vn_ui' && !!currentParsedData && !Array.isArray(currentParsedData);
+        btn.hidden = !shouldShow;
+        if (shouldShow) win.OS_STUDIO_DIFF?.renderVNHistoryArea();   // 拆檔：os_studio_diff_engine.js（順便更新數字）
+        else { const hm = document.getElementById('studio-hist-modal'); if (hm) hm.hidden = true; }
+    }
+
+    // 展示尺寸縮放器（畫布預覽 / 展廳卡共用）：手機390 / 中間1000 / 全屏=螢幕寬。
+    //   用真實外框寬渲染卡片 → transform:scale 等比縮小 → 外層裁切；ResizeObserver 校正高度。看面板在各尺寸 reflow。
+    function _attachVpScaler(tabsEl, wrapEl, boxEl) {
+        if (!tabsEl || !wrapEl || !boxEl) return;
+        wrapEl.style.overflow = 'hidden';
+        wrapEl.style.minHeight = '0';
+        boxEl.style.transformOrigin = 'top left';
+        boxEl.style.overflow = 'hidden';
+        // 用「固定螢幕框比例」當外框（跟主題預覽一致），卡片放進框裡——不再讓框去貼合卡片高度(比例會怪)
+        const FRAMES = {
+            phone:  { w: 390,  h: 844 },
+            center: { w: 1000, h: 660 },
+            full:   { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080 }
+        };
+        let vp = 'phone';
+        const dv = (boxEl.ownerDocument && boxEl.ownerDocument.defaultView) || window;   // 預覽可能在手機殼的 iframe 裡
+        const apply = () => {
+            const f = FRAMES[vp] || FRAMES.phone;
+            // 🚨可用寬要扣掉 padding：clientWidth 是「內容寬＋padding」，直接拿它當分母會把縮放比算大，
+            //   卡片右緣就被 wrap 的 overflow:hidden 裁掉。煉丹爐的框有 10px padding、創作室的沒有
+            //   → 同一支縮放器在兩邊表現不同，長年只有煉丹爐那邊「手機預覽歪一邊」。
+            //   手機模式最明顯是因為 390 跟框寬接近，那 20px 佔比大；中間/全屏縮得很小所以看不太出來。
+            const cs = dv.getComputedStyle(wrapEl);
+            const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+            const padY = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+            const avail = Math.max(1, (wrapEl.clientWidth || 320) - padX);
+            const s = Math.min(avail / f.w, 1);
+            boxEl.style.width = f.w + 'px';
+            boxEl.style.height = f.h + 'px';
+            boxEl.style.transform = 'scale(' + s + ')';
+            // box-sizing 是 border-box 時 height 會把 padding 吃進去 → 卡片下緣同樣被切一截
+            wrapEl.style.height = Math.round(f.h * s + (cs.boxSizing === 'border-box' ? padY : 0)) + 'px';
+            tabsEl.querySelectorAll('[data-pv]').forEach(b => b.classList.toggle('active', b.dataset.pv === vp));
+        };
+        tabsEl.querySelectorAll('[data-pv]').forEach(b => b.onclick = () => { vp = b.dataset.pv; apply(); });
+        apply();
+        setTimeout(apply, 80);   // 等面板 JS / 圖片渲染後再套一次
+        // 框寬會變（手機殼開闔、面板展開、視窗縮放）→ 只在建構時量兩次的話，之後全部算錯
+        try {
+            const ro = new dv.ResizeObserver(() => { if (wrapEl.isConnected) apply(); });
+            ro.observe(wrapEl);
+        } catch (e) {}
+    }
+
+    // ⚡ 特效庫：群組chip篩選 + 真開關(關=AI白名單剔除+不播) + 就地試播 + 自製可刪（照VN組件的組別/開關體感）
+    let _fxLibGroup = '全部';
+    async function _renderFxLibrary(container) {
+        const fxEngine = window.OS_FX || win.OS_FX;
+        if (!fxEngine) { container.innerHTML = '<div class="studio-empty">特效引擎還沒載入，稍等幾秒再進來</div>'; return; }
+        try { await fxEngine.reloadSaved(); } catch (e) {}
+        const _esc = _sgcEsc;   // 分組名會放進 data-fx-chip="…"：& 和引號都要轉，不然名字帶引號時屬性被截斷、篩選對不上
+        let saved = [];
+        try {
+            const all = await win.OS_DB.getAllUITemplates();
+            saved = (all || []).filter(t => t && t.isFX && t.fxRecipe);
+        } catch (e) {}
+        const dbIdByFx = {};
+        saved.forEach(t => { dbIdByFx[String(t.fxRecipe.fxId || '').toLowerCase()] = t.id; });
+        const rows = fxEngine.listAll().map(r => ({ recipe: r, dbId: dbIdByFx[r.fxId] || null, mine: !!dbIdByFx[r.fxId] }));
+        const groups = Array.from(new Set(rows.map(x => x.recipe.group).filter(Boolean)));
+        if (_fxLibGroup !== '全部' && groups.indexOf(_fxLibGroup) === -1) _fxLibGroup = '全部';   // 群組被清空就退回全部
+        const shown = rows.filter(x => _fxLibGroup === '全部' || x.recipe.group === _fxLibGroup);
+
+        container.innerHTML = `
+            <div class="studio-card">
+                <div class="studio-card-title">特效庫</div>
+                <div class="fx-pv-desc">劇情 AI 會在合適時機自動觸發「開著」的特效；關掉的不會再用。點特效名旁的小標籤可以分組。</div>
+                <div class="fx-lib-actions">
+                    <button class="fx-lib-act" data-fx-export="1" type="button"><i class="fa-solid fa-file-export"></i> 匯出自製</button>
+                    <button class="fx-lib-act" data-fx-import="1" type="button"><i class="fa-solid fa-file-import"></i> 匯入</button>
+                    <button class="fx-lib-act danger" data-fx-clear="1" type="button"><i class="fa-solid fa-trash"></i> 清空自製</button>
+                    <input type="file" id="fx-lib-import-file" accept=".json,application/json" class="fx-file-hidden">
+                </div>
+                ${groups.length ? `<div class="fx-grp-row">
+                    ${['全部'].concat(groups).map(g => `<button class="fx-grp-chip${g === _fxLibGroup ? ' active' : ''}" data-fx-chip="${_esc(g)}" type="button">${_esc(g)}</button>`).join('')}
+                    ${_fxLibGroup !== '全部' ? `<button class="fx-grp-batch" data-fx-batch="1" type="button">這組全開</button><button class="fx-grp-batch" data-fx-batch="0" type="button">這組全關</button>` : ''}
+                </div>` : ''}
+                <div class="fx-lib-list">${shown.map((row, i) => `
+                    <div class="fx-lib-row${row.recipe.enabled ? '' : ' fx-off'}">
+                        <div class="fx-lib-info">
+                            <div class="fx-lib-name">${_esc(row.recipe.name)} <span class="fx-lib-kind">${row.recipe.kind === 'loop' ? '持續氛圍' : '瞬間效果'}</span>${row.mine ? '' : ' <span class="fx-lib-kind fx-lib-builtin">內建</span>'} <button class="fx-lib-grp" data-fx-grp="${i}" type="button">${row.recipe.group ? _esc(row.recipe.group) : '＋分組'}</button></div>
+                            <div class="fx-lib-desc">${_esc(row.recipe.desc || '')}</div>
+                        </div>
+                        <label class="fx-switch" title="開著=劇情AI會用"><input type="checkbox" data-fx-on="${i}" ${row.recipe.enabled ? 'checked' : ''}><span class="fx-sw-knob"></span></label>
+                        <button class="fx-lib-btn" data-fx-play="${i}" type="button" title="試播"><i class="fa-solid fa-play"></i></button>
+                        ${row.mine ? `<button class="fx-lib-btn danger" data-fx-del="${i}" type="button" title="刪除"><i class="fa-solid fa-trash"></i></button>` : ''}
+                    </div>`).join('')}
+                </div>
+            </div>`;
+
+        // 群組chip篩選
+        container.querySelectorAll('[data-fx-chip]').forEach(btn => {
+            btn.onclick = () => { _fxLibGroup = btn.dataset.fxChip; _renderFxLibrary(container); };
+        });
+        // 批次：目前篩選那組全開/全關
+        container.querySelectorAll('[data-fx-batch]').forEach(btn => {
+            btn.onclick = () => {
+                const on = btn.dataset.fxBatch === '1';
+                shown.forEach(x => fxEngine.setEnabled(x.recipe.fxId, on));
+                _renderFxLibrary(container);
+            };
+        });
+        // 單顆開關（就地改樣式、不重繪，保住滾動位置）
+        container.querySelectorAll('[data-fx-on]').forEach(sw => {
+            sw.onchange = () => {
+                const row = shown[Number(sw.dataset.fxOn)];
+                fxEngine.setEnabled(row.recipe.fxId, sw.checked);
+                sw.closest('.fx-lib-row').classList.toggle('fx-off', !sw.checked);
+            };
+        });
+        // 分組標籤：點了輸入組名（留空=取消分組）
+        container.querySelectorAll('[data-fx-grp]').forEach(btn => {
+            btn.onclick = async () => {
+                const row = shown[Number(btn.dataset.fxGrp)];
+                const cur = row.recipe.group || '';
+                const g = await AUI.prompt(`「${row.recipe.name}」歸到哪一組？\n（留空＝不分組；輸入新名字＝建新組）`, cur);
+                if (g === null) return;
+                fxEngine.setGroup(row.recipe.fxId, g.trim());
+                _renderFxLibrary(container);
+            };
+        });
+        // 就地試播：預覽台展開在被點那一列的正下方（滾到哪播到哪、不用回頂上看）
+        container.querySelectorAll('[data-fx-play]').forEach(btn => {
+            btn.onclick = () => {
+                try {
+                    container.querySelectorAll('.fx-lib-row-stage').forEach(n => n.remove());   // 收掉別列展開的台
+                    const rowEl = btn.closest('.fx-lib-row');
+                    const stage = document.createElement('div');
+                    stage.className = 'vn-fx-preview-stage fx-lib-row-stage';
+                    rowEl.insertAdjacentElement('afterend', stage);
+                    fxEngine.preview(shown[Number(btn.dataset.fxPlay)].recipe, stage);
+                } catch (e) { console.warn('[Studio] 特效試播失敗:', e); }
+            };
+        });
+        container.querySelectorAll('[data-fx-del]').forEach(btn => {
+            const row = shown[Number(btn.dataset.fxDel)];
+            if (!row || !row.dbId) return;
+            _armOnce(btn, '再按一次', async () => {
+                try {
+                    await win.OS_DB.deleteUITemplate(row.dbId);
+                    try { await fxEngine.reloadSaved(); } catch (e) {}
+                    _renderFxLibrary(container);
+                } catch (e) { _studioToast('刪除失敗：' + ((e && e.message) || e), 'error', '特效'); }
+            });
+        });
+        // ⚡ 匯出／匯入／清空「自製」特效（內建的不動）；匯入同 fxId 覆蓋、新的新增（fxId 穩定→PC轉手機不重複）
+        const _expBtn = container.querySelector('[data-fx-export]');
+        if (_expBtn) _expBtn.onclick = () => _exportFxPack();
+        const _clrBtn = container.querySelector('[data-fx-clear]');
+        _armOnce(_clrBtn, '再按一次清空', () => _clearAllFx(container));
+        const _impBtn = container.querySelector('[data-fx-import]');
+        const _impFile = container.querySelector('#fx-lib-import-file');
+        if (_impBtn && _impFile) {
+            _impBtn.onclick = () => { _impFile.value = ''; _impFile.click(); };
+            _impFile.onchange = () => { const f = _impFile.files && _impFile.files[0]; if (f) _importFxPack(f, container); };
+        }
+    }
+
+    // ⚡ 特效匯出：只打包「自製」特效（isFX UITemplate 的 fxRecipe）；內建的引擎自帶不用匯
+    async function _exportFxPack() {
+        try {
+            const all = await win.OS_DB.getAllUITemplates();
+            const mine = (all || []).filter(t => t && t.isFX && t.fxRecipe);
+            if (!mine.length) { _studioToast('還沒有自製特效可以匯出（內建的不用匯）。', 'warning', '匯出'); return; }
+            const pack = { type: 'aurelia-fx-pack', version: 1, exportedAt: new Date().toISOString(), count: mine.length, recipes: mine.map(t => t.fxRecipe) };
+            const blob = new Blob([JSON.stringify(pack, null, 2)], { type: 'application/json' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            const d = new Date();
+            a.download = 'aurelia-特效包_' + d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '.json';
+            document.body.appendChild(a); a.click();
+            setTimeout(() => { try { URL.revokeObjectURL(a.href); } catch (e) {} a.remove(); }, 0);
+            _studioToast(`已匯出 ${mine.length} 個自製特效，已下載到本機。`, 'success', '匯出');
+        } catch (e) { _studioToast('匯出失敗：' + ((e && e.message) || e), 'error', '匯出'); }
+    }
+
+    // ⚡ 特效匯入：讀 recipes（或整包 templates 內的 fxRecipe）→ validate → 存 UITemplate，同 fxId 覆蓋
+    async function _importFxPack(file, container) {
+        const fxEngine = window.OS_FX || win.OS_FX;
+        try {
+            const text = await file.text();
+            const data = JSON.parse(text);
+            const list = Array.isArray(data) ? data
+                : (Array.isArray(data.recipes) ? data.recipes
+                : (Array.isArray(data.templates) ? data.templates.map(t => t && t.fxRecipe).filter(Boolean) : null));
+            if (!list || !list.length) { _studioToast('這個檔案裡找不到特效資料，不是有效的特效包。', 'warning', '匯入'); return; }
+            const all = await win.OS_DB.getAllUITemplates();
+            const byFx = {};
+            (all || []).forEach(t => { if (t && t.isFX && t.fxRecipe) byFx[String(t.fxRecipe.fxId || '').toLowerCase()] = t; });
+            let added = 0, updated = 0, bad = 0;
+            for (const raw of list) {
+                const norm = (fxEngine && fxEngine.validate) ? fxEngine.validate(raw) : raw;
+                if (!norm || !norm.fxId) { bad++; continue; }
+                const hit = byFx[String(norm.fxId).toLowerCase()];
+                await win.OS_DB.saveUITemplate({
+                    id: hit ? hit.id : ('fx_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                    title: norm.name, isFX: true, panelType: '特效', fxRecipe: norm,
+                    createdAt: hit ? hit.createdAt : Date.now()
+                });
+                if (hit) updated++; else added++;
+            }
+            try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
+            _renderFxLibrary(container);
+            _studioToast(`匯入完成：新增 ${added} 個、覆蓋更新 ${updated} 個` + (bad ? `（${bad} 個格式不對跳過）` : '') + '。', 'success', '匯入');
+        } catch (e) { _studioToast('匯入失敗：' + ((e && e.message) || e), 'error', '匯入'); }
+    }
+
+    // ⚡ 清空「自製」特效（內建不動）→ 即時刪 DB（同單顆刪除，不用另按保存）
+    async function _clearAllFx(container) {
+        try {
+            const all = await win.OS_DB.getAllUITemplates();
+            const mine = (all || []).filter(t => t && t.isFX && t.fxRecipe);
+            if (!mine.length) { _studioToast('沒有自製特效可以清空（內建的不受影響）。', 'warning', '清空'); return; }
+            // 把關在呼叫這支的按鈕上（兩段式）：window.confirm 在 Tauri 會被攔掉，不能靠它
+            for (const t of mine) { try { await win.OS_DB.deleteUITemplate(t.id); } catch (e) {} }
+            const fxEngine = window.OS_FX || win.OS_FX;
+            try { if (fxEngine && fxEngine.reloadSaved) await fxEngine.reloadSaved(); } catch (e) {}
+            _renderFxLibrary(container);
+            _studioToast(`已清空 ${mine.length} 個自製特效。`, 'success', '清空');
+        } catch (e) { _studioToast('清空失敗：' + ((e && e.message) || e), 'error', '清空'); }
+    }
+
+    function renderPreviewPanel() {
+        const previewMain = document.getElementById('studio-preview-main');
+        const sourceEl = document.getElementById('studio-source-content');
+        const exportBtn = document.getElementById('studio-export-btn');
+        const publishBtn = document.getElementById('studio-publish-btn');
+
+        let displayData = currentParsedData || activePreviewData;
+        // 格式與說明分頁：先清成空狀態，有作品時下面 vn_ui 那段會填上
+        { const _ie = document.getElementById('studio-info-content'); if (_ie) _ie.innerHTML = '<div class="studio-empty">還沒有作品。做好之後，這裡會列出它的標籤、給劇本 AI 的說明和資料格式。</div>'; }
+
+        const fabEl = document.getElementById('studio-preview-fab');
+        if (fabEl) fabEl.style.display = 'none';   // 浮動 FAB 退役：改用 header 的 👁️ 預覽鈕
+
+        if (!displayData) {
+            if (currentMode === 'fx') {   // ⚡ 特效工坊空狀態：導去特效庫 tab
+                sourceEl.textContent = '';
+                exportBtn.style.display = 'none';
+                if (publishBtn) publishBtn.style.display = 'none';
+                previewMain.innerHTML = `<div class="studio-empty">描述你想要的畫面特效，讓 AI 做給你。<br><br>已有的特效在上方「特效庫」分頁。</div>`;
+                return;
+            }
+            previewMain.innerHTML = `<div class="studio-empty">尚未生成任何內容。<br><br>請輸入點子讓 AI 創作。</div>`;
+            sourceEl.textContent = '';
+            exportBtn.style.display = 'none';
+            if (publishBtn) publishBtn.style.display = 'none';
+            togglePreviewDrawer(false);
+            return;
+        }
+
+        // 預覽改由 header 👁️ 預覽鈕開（固定位置、不綁資料），不自動彈、不掛聊天卡片
+
+        const isUnsaved = !!currentParsedData;
+        exportBtn.style.display = isUnsaved ? 'block' : 'none';
+        
+        if (publishBtn) {
+            publishBtn.style.display = 'none';
+        }
+
+        sourceEl.textContent = JSON.stringify(displayData, null, 2);
+        previewMain.innerHTML = '';
+
+        if (currentMode === 'fx') {   // ⚡ 特效配方預覽：試播台 + 播放鈕
+            const _r = displayData;
+            const _esc = _sgcEsc;
+            previewMain.innerHTML = `
+                <div class="studio-card">
+                    <div class="studio-card-title">${_esc(_r.name || _r.fxId || '特效')} <span class="fx-lib-kind">${_r.kind === 'loop' ? '持續氛圍' : '瞬間效果'}</span></div>
+                    <div class="fx-pv-desc">${_esc(_r.desc || '')}</div>
+                    <div class="vn-fx-preview-stage" id="fx-pv-stage"></div>
+                    <button class="fx-lib-btn fx-pv-play" id="fx-pv-play" type="button"><i class="fa-solid fa-play"></i> 再播一次</button>
+                </div>`;
+            const _stage = previewMain.querySelector('#fx-pv-stage');
+            const _play = () => { try { if (window.OS_FX && _stage) window.OS_FX.preview(_r, _stage); } catch (e) { console.warn('[Studio] 特效試播失敗:', e); } };
+            const _btn = previewMain.querySelector('#fx-pv-play');
+            if (_btn) _btn.onclick = _play;
+            setTimeout(_play, 250);   // 生成完自動播一次
+            return;
+        }
+
+        if (currentMode === 'vn_ui') {
+            const data = displayData;
+            const safeFormat = (data.demoFormat || '無結構定義').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            const safeTagId = (data.tagId || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '');
+
+            // 標籤／給劇本 AI 的說明／資料格式 → 「格式與說明」分頁。
+            // 🚨 以前疊在預覽卡最上面，作品本人被推到下面去，一打開預覽先看到的是一堆格式字
+            const infoEl = document.getElementById('studio-info-content');
+            if (infoEl) {
+                const _e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                infoEl.innerHTML = `
+                    <div class="studio-info-sec"><div class="studio-info-k">標籤</div><div class="studio-info-v studio-info-mono">[${_e(data.tagId || '未命名')}]</div></div>
+                    <div class="studio-info-sec"><div class="studio-info-k">給劇本 AI 的使用說明</div><div class="studio-info-v">${_e(data.usageDesc || '無特別說明')}</div></div>
+                    <div class="studio-info-sec"><div class="studio-info-k">資料格式</div><pre class="studio-info-v studio-info-mono">${safeFormat}</pre></div>`;
+            }
+            previewMain.innerHTML = `
+                <div class="studio-card">
+                    <div class="studio-pv-tabs">
+                        <button class="studio-pv active" data-pv="phone" title="手機端（外框約 390）">手機</button>
+                        <button class="studio-pv" data-pv="center" title="桌面·中間聊天區（外框約 1000）">中間</button>
+                        <button class="studio-pv" data-pv="full" title="桌面·全屏（外框＝螢幕寬）">全屏</button>
+                        <button class="studio-pv studio-pv-shot" id="studio-pv-shot" title="把現在這張預覽截下來，附在你下一句話裡"><i class="fa-solid fa-camera"></i> 截圖</button>
+                    </div>
+                    <div class="studio-pv-wrap" id="studio-pv-wrap">
+                        <div class="studio-pv-box" id="studio-pv-box">
+                            <style>${data.css || ''}</style>
+                            ${_vnStageHtml(safeTagId, (data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B'), { panelType: data.panelType || _vnPanelType, isBlock: data.isBlock })}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            _attachVpScaler(previewMain.querySelector('.studio-pv-tabs'), previewMain.querySelector('#studio-pv-wrap'), previewMain.querySelector('#studio-pv-box'));
+            const _shotBtn = previewMain.querySelector('#studio-pv-shot');
+            if (_shotBtn) _shotBtn.onclick = () => _capturePreviewToPending(_shotBtn);
+
+            if (data.isBlock && data.js) {
+                setTimeout(() => {
+                    try {
+                        const rawLines = (data.demoFormat || '').split('\n').map(l => l.trim()).filter(Boolean);
+                        const lines = rawLines.filter(l => !l.startsWith('<') && !l.startsWith('</'));
+                        const container = previewMain.querySelector(`.vn-dynamic-panel-${safeTagId}`);
+                        if (!container) return;
+                        
+                        let safeJs = data.js || '';
+                        safeJs = safeJs.trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js|html|css)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '').trim();
+                        
+                        const onComplete = () => { 
+                            const msg = document.createElement('div');
+                            msg.style.cssText = 'position:absolute; top:5px; right:5px; background:rgba(46,204,113,0.8); color:white; padding:4px 8px; font-size:12px; border-radius:4px; z-index:999;';
+                            msg.innerText = '腳本已觸發 onComplete()';
+                            container.parentElement.appendChild(msg);
+                        };
+
+                        // 🛡️ 注入預覽隔離標記
+                        window.__IS_PREVIEW = true;
+                        const st = _buildPreviewSt(lines);
+                        const runMicroApp = new Function('container', 'lines', 'onComplete', 'st', safeJs);
+                        _pvLastJsError = null;
+                        runMicroApp(container, lines, onComplete, st);
+                    } catch (e) {
+                        _pvLastJsError = String((e && e.message) || e);
+                        console.warn('[Studio 預覽錯誤] JS 執行失敗:', e);
+                        const errBox = document.createElement('div');
+                        errBox.style.cssText = 'color:#fc8181; font-size:12px; margin-top:10px; padding:10px; background:rgba(252,129,129,0.1); border-radius: 4px;';
+                        errBox.innerText = `預覽腳本錯誤: ${e.message}`;
+                        previewMain.appendChild(errBox);
+                    }
+                }, 50); 
+            }
+        } 
+        else if (currentMode === 'var_pack') {
+            const data = displayData;
+            const varsHtml = (data.vars || []).map(v => `
+                <div style="display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid rgba(255,255,255,0.05);">
+                    <span style="color:#1A1C28; font-weight:bold;">${_sgcEsc(v.key)}</span>
+                    <span style="color:rgba(26,28,40,0.72); font-size:11px;">類型: ${_sgcEsc(v.type)} | 預設: ${_sgcEsc(v.default)}</span>
+                </div>
+            `).join('');
+
+            previewMain.innerHTML = `
+                <div class="studio-card">
+                    <div class="studio-card-title"><i class="fa-solid fa-dice"></i> [${_sgcEsc(data.id || '未知ID')}] ${_sgcEsc(data.name || '未命名變數包')}</div>
+                    <div style="font-size:13px; color:#1A1C28;">${varsHtml}</div>
+                </div>
+            `;
+        }
+
+        // 🔪 同步 VN 工具列顯示狀態（vn_ui 模式有資料 → 顯示；其他模式 → 隱藏）
+        updateVNToolbarVisibility();
+
+        // 🔪 持久化當前預覽狀態：雙重保險
+        // 1. localStorage cache（快、輕量）
+        // 2. 聊天記錄內隱藏 system 訊息（重整後 localStorage 被清也救得回）
+        try { _saveParsedCache(getChatSessionId()); } catch(e) {}
+        try { _saveLatestPanelToHistory(); } catch(e) {}
+    }
+
+    // ===== 預覽照故事畫面的排法包（09-30：創作室的預覽也一起改）=====
+    // 故事裡跳出來那一型（純展示）在故事裡是這樣排的（vn_dynamic_parser.js）：暗色遮罩吃滿畫面、把外框擺正中間，
+    //   外框 .vn-dynamic-panel-<tag> 吃滿、padding 20、再把主體置中（區塊用直排 _renderBlock、單行標籤用橫排 _showDomBlock）。
+    //   以前創作室、展廳、單子的預覽都讓主體自動撐滿，預覽看起來對、進故事主體沒寫寬度就縮成只剩字寬（克語 09-30 待修 #260）。
+    //   其他型（應用、共用、主畫面組件）不是這樣排的，照舊。外面那層要是定位過、有高度的框（studio-pv-box 由縮放器給高）。
+    function _vnStageHtml(safeTagId, innerHtml, tpl, extraCls) {
+        const type = (tpl && tpl.panelType) || '純展示';
+        const cls = 'vn-dynamic-panel-' + safeTagId + (extraCls ? ' ' + extraCls : '');
+        if (type !== '純展示') return '<div class="' + cls + '" style="position:relative; width:100%; height:auto; display:flex; flex-direction:column;">' + innerHtml + '</div>';
+        const panel = (tpl && tpl.isBlock === false)
+            ? 'position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; overflow:hidden; box-sizing:border-box; padding:20px;'
+            : 'position:relative; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; overflow:auto; box-sizing:border-box; padding:20px;';
+        return '<div class="vn-pv-stage" style="position:absolute;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;">'
+            + '<div class="' + cls + '" style="' + panel + '">' + innerHtml + '</div></div>';
+    }
+
+    // ===== 給小機的「改 VN 組件」（os_aurelia_vn.js）用的三個出口（09-30）=====
+    // 說明書：同一份 MODES.vn_ui.prompt，切出某一型那節＋鐵律＋st API＋demoFormat（跟 diff 那條同一招，說明書改了自動跟上）
+    function _vnSpecFor(type) {
+        const P = String((MODES.vn_ui && MODES.vn_ui.prompt) || '');
+        const sec = (head, stop) => {
+            const i = P.indexOf(head); if (i < 0) return '';
+            const rest = P.slice(i + head.length);
+            const m = stop.exec(rest);
+            return (head + (m ? rest.slice(0, m.index) : rest)).trim();
+        };
+        const typeHead = { '純展示': '### 2a.', '純應用': '### 2b.', '共用': '### 2c.', '主畫面組件': '### 2d.' }[type || '純展示'] || '### 2a.';
+        return [sec(typeHead, /\n(?=### 2|## 3\.)/), sec('## 3.', /\n(?=## 4\.)/), sec('## 4.', /\n(?=## 5\.)/), sec('## 5.', /\n(?=## 6\.)/)].filter(Boolean).join('\n\n');
+    }
+    // 預覽：畫進一個 iframe（單子上改前、改後是同一個標籤名，樣式要隔開，不能像創作室直接畫在頁面上）。
+    //   跟 renderPreviewPanel 同一套：{{1}}{{2}} 換成參數A／B、demoFormat 當示範資料、預覽版 st（不叫模型、不寫東西）。
+    //   上面一排手機／中間／全螢幕（尺寸同 _attachVpScaler），iframe 真的開成那麼寬再縮放放進來，面板看到的寬度就是那一種；
+    //   同一頁的幾張預覽一起切（改前改後對照），選的記著、預設中間（09-30：以前單子上的預覽沒法切，模型常寫成手機款式）。
+    //   回 Promise<{ error }>：面板 js 當場炸了或 0.9 秒內丟出錯誤就帶回來，單子上寫出來。
+    const _VN_PV = [];   // 還在畫面上的預覽：切尺寸時一起套
+    function _vnPvFrames() {
+        return {
+            phone: { w: 390, h: 844, lab: '手機' },
+            center: { w: 1000, h: 660, lab: '中間' },
+            full: { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080, lab: '全螢幕' },
+        };
+    }
+    function _vnPvGet() { try { const v = localStorage.getItem('vn_pv_vp'); return _vnPvFrames()[v] ? v : 'center'; } catch (e) { return 'center'; } }
+    function _vnPvApplyAll() {
+        for (let i = _VN_PV.length - 1; i >= 0; i--) { if (!_VN_PV[i].wrap.isConnected) _VN_PV.splice(i, 1); else _VN_PV[i].apply(); }
+    }
+    function _vnPreviewInto(host, data) {
+        return new Promise(function (done) {
+            if (!host || !data) { done({ error: '' }); return; }
+            const safeTagId = String(data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+            const F = _vnPvFrames();
+            const tabs = document.createElement('div');
+            tabs.className = 'vn-pv-tabs';
+            tabs.innerHTML = Object.keys(F).map(function (k) { return '<button type="button" class="vn-pv-tab" data-vp="' + k + '">' + F[k].lab + '</button>'; }).join('');
+            const wrap = document.createElement('div');
+            wrap.className = 'vn-pv-wrap';
+            const fr = document.createElement('iframe');
+            fr.className = 'vn-pv-frame';
+            fr.setAttribute('title', '預覽');
+            wrap.appendChild(fr);
+            host.appendChild(tabs);
+            host.appendChild(wrap);
+            const one = { wrap: wrap, apply: function () {
+                const vp = _vnPvGet(), f = F[vp];
+                const s = Math.min(1, Math.max(1, wrap.clientWidth || 320) / f.w);
+                fr.style.width = f.w + 'px';
+                fr.style.height = f.h + 'px';
+                fr.style.transform = 'scale(' + s + ')';
+                wrap.style.height = Math.round(f.h * s) + 'px';
+                tabs.querySelectorAll('[data-vp]').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-vp') === vp); });
+            } };
+            _VN_PV.push(one);
+            tabs.addEventListener('click', function (e) {
+                const b = e.target.closest('[data-vp]');
+                if (!b) return;
+                win.AUI.lsSet('vn_pv_vp', b.getAttribute('data-vp'), '預覽尺寸');
+                _vnPvApplyAll();
+            });
+            one.apply();
+            try { const ro = new ResizeObserver(function () { if (wrap.isConnected) one.apply(); }); ro.observe(wrap); } catch (e) {}
+            const run = _vnFill(fr, data);
+            setTimeout(function () { one.apply(); done({ error: run.err() }); }, 900);
+        });
+    }
+    // 把一個組件畫進 iframe 並跑它的 js（單子預覽與截圖共用）。回 { err() }：到目前為止抓到的錯誤
+    function _vnFill(fr, data) {
+        const safeTagId = String(data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+        const d = fr.contentDocument;
+        // Font Awesome 那幾支樣式表跟著帶進去，圖示才畫得出來
+        const fa = Array.prototype.slice.call(win.document.querySelectorAll('link[rel="stylesheet"]'))
+            .filter(function (l) { return /font-?awesome|fontawesome/i.test(l.href || ''); })
+            .map(function (l) { return '<link rel="stylesheet" href="' + _sgcEsc(l.href) + '">'; }).join('');
+        // 外面兩層照故事畫面真的那樣包（vn_dynamic_parser.js 的 _renderBlock：暗色遮罩把外框擺正中間，
+        //   外框吃滿、自己再把主體置中、padding 20）——以前這裡讓主體自動撐滿，預覽看起來對、進故事卻縮成只剩字寬（克語 09-30 待修 #260）
+        d.open();
+        d.write('<!doctype html><html><head><meta charset="utf-8">' + fa
+            + '<style>html,body{margin:0;height:100%;background:#2a2630;color:#eee;font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;}</style>'
+            + '<style>' + String(data.css || '').replace(/<\/style/gi, '<\\/style') + '</style></head><body>'
+            + _vnStageHtml(safeTagId, String(data.html || '').replace(/\{\{1\}\}/g, '參數A').replace(/\{\{2\}\}/g, '參數B'), { panelType: '純展示', isBlock: data.isBlock })
+            + '</body></html>');
+        d.close();
+        let err = '';
+        const w = fr.contentWindow;
+        try { w.addEventListener('error', function (e) { if (!err) err = String((e && (e.message || (e.error && e.error.message))) || '執行時出錯'); }); } catch (e) {}
+        try { w.addEventListener('unhandledrejection', function (e) { if (!err) err = String((e && e.reason && (e.reason.message || e.reason)) || '執行時出錯'); }); } catch (e) {}
+        if (data.isBlock && data.js) {
+            try {
+                const lines = String(data.demoFormat || '').split('\n').map(function (l) { return l.trim(); }).filter(function (l) { return l && !l.startsWith('<'); });
+                const container = d.querySelector('.vn-dynamic-panel-' + safeTagId);
+                let js = String(data.js).trim().replace(new RegExp('^\\x60\\x60\\x60(?:javascript|js)?\\s*', 'i'), '').replace(new RegExp('\\s*\\x60\\x60\\x60\\s*$'), '');
+                window.__IS_PREVIEW = true;   // 預覽版 st 看這個：不叫模型、生圖給假圖
+                new w.Function('container', 'lines', 'onComplete', 'st', js)(container, lines, function () {}, _buildPreviewSt(lines));
+            } catch (e) { err = String((e && e.message) || e); }
+        }
+        return { err: function () { return err; } };
+    }
+    // 截圖：照某一種外框大小（phone／center／full）在畫面外畫一次、截下來，順便量尺寸。
+    //   給小機「提單子之前先看看」用（09-30：截圖預覽，小機先看過、准了再提交）。
+    //   回 { vp, w, h, dataUrl, error, shotError, m:{ docW, docH, bodyW, bodyH, bodyX, bodyY } }；截不下來 dataUrl 是空的，量到的照給。
+    async function _vnShot(data, vp) {
+        const F = _vnPvFrames(), f = F[vp] || F.center;
+        const host = document.createElement('div');
+        host.className = 'vn-shot-host';
+        host.style.cssText = 'position:fixed;left:-30000px;top:0;pointer-events:none;';
+        const fr = document.createElement('iframe');
+        fr.style.cssText = 'display:block;border:0;width:' + f.w + 'px;height:' + f.h + 'px;';
+        host.appendChild(fr);
+        document.body.appendChild(host);
+        const out = { vp: F[vp] ? vp : 'center', w: f.w, h: f.h, dataUrl: '', error: '', shotError: '', m: null };
+        try {
+            const run = _vnFill(fr, data);
+            await new Promise(function (r) { setTimeout(r, 900); });
+            out.error = run.err();
+            const d = fr.contentDocument;
+            const root = d.querySelector('.vn-dynamic-panel-' + String(data.tagId || '').replace(/[^a-zA-Z0-9_-]/g, ''));
+            // 面板主體＝容器裡最大的那塊（容器本身吃滿外框，量它沒意義）
+            let body = null, area = 0;
+            if (root) Array.prototype.forEach.call(root.children, function (c) { const r = c.getBoundingClientRect(); if (r.width * r.height > area) { area = r.width * r.height; body = r; } });
+            // 超出＝外框裡被撐出捲軸（外框跟故事畫面一樣會自己捲，所以量它裡面，不量整頁）
+            out.m = { overX: root ? Math.max(0, root.scrollWidth - root.clientWidth) : 0, overY: root ? Math.max(0, root.scrollHeight - root.clientHeight) : 0,
+                bodyW: body ? Math.round(body.width) : 0, bodyH: body ? Math.round(body.height) : 0, bodyX: body ? Math.round(body.left) : 0, bodyY: body ? Math.round(body.top) : 0 };
+            try {
+                const lib = await _loadShotLib();
+                const scale = Math.min(1, IMG_MAX_SIDE / Math.max(f.w, f.h));
+                out.dataUrl = await lib.domToJpeg(d.documentElement, { width: f.w, height: f.h, scale: scale, quality: IMG_QUALITY, backgroundColor: '#1d1b22', timeout: 8000 });
+            } catch (e) { out.shotError = String((e && e.message) || e); }
+        } finally { host.remove(); }
+        return out;
+    }
+    // 酒館正則：使用者匯入過（有 [VN面板] <tagId> 那條）才照新內容重寫一次，沒匯入過不動；不跳視窗
+    //   fromTag＝換標籤前的名字（小機改標籤）：舊名字那條匯入過＝改名、改找新標籤、換新內容，開關和其他設定照舊；
+    //   新名字底下如果還留著一條舊殘留，讓舊名字那條接手、殘留拿掉。舊制世界書說明條目順手清。
+    async function _vnRefreshTavernRegex(data, fromTag) {
+        const th = win.TavernHelper || (window.parent && window.parent.TavernHelper);
+        if (!th || !th.updateTavernRegexesWith || !data || !data.tagId) return false;
+        const safe = function (s) { return String(s || '').replace(/[^a-zA-Z0-9_-]/g, ''); };
+        const nt = safe(data.tagId), ot = safe(fromTag) || nt;
+        const sn = '[VN面板] ' + nt, osn = '[VN面板] ' + ot;
+        let hit = false;
+        try {
+            await th.updateTavernRegexesWith(function (regexes) {
+                const renaming = ot !== nt && regexes.some(function (r) { return r.script_name === osn; });
+                const out = [];
+                regexes.forEach(function (r) {
+                    if (renaming && r.script_name === sn) return;
+                    if (r.script_name !== (renaming ? osn : sn)) { out.push(r); return; }
+                    hit = true;
+                    out.push(Object.assign({}, r, { script_name: sn, find_regex: _vnFindRegex(nt), replace_string: generateRegexReplacement(data) }));
+                });
+                return out;
+            }, { type: 'global' });
+        } catch (e) { return false; }
+        if (ot !== nt) { try { await _deleteWbUsageEntry(th, ot); } catch (e) {} }
+        return hit;
+    }
+
+    // ===== 預設模板安裝器 =====
+    win.OS_STUDIO = {
+        vnSpec: _vnSpecFor, vnPreview: _vnPreviewInto, vnShot: _vnShot, refreshTavernRegex: _vnRefreshTavernRegex,
+        fxSpec: function () { return String((MODES.fx && MODES.fx.prompt) || ''); },   // 特效工坊的說明書（小機的「改特效」）
+        // 小機的「做組件／做特效」（os_xiaoji_make.js）：一次做好、不開畫面、不存。cur＝要改的那一件現在的內容（文字）
+        vnGenerate: async function (want, cur, via) {
+            const sys = String((MODES.vn_ui && MODES.vn_ui.prompt) || '');
+            const user = '【類型：純展示】' + want + (cur ? '\n\n照下面這一份改（只改要改的地方，八個鍵整份交回）：\n' + cur : '');
+            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], 'VN 組件（小機）', 0.7, via));
+            if (!j || !j.tagId || !j.html) throw new Error('它沒有交出完整的組件（<json> 裡要有 tagId 和 html）');
+            return j;
+        },
+        fxGenerate: async function (want, cur, via) {
+            const sys = String((MODES.fx && MODES.fx.prompt) || '');
+            const user = want + (cur ? '\n\n照下面這份配方改（fxId 不變）：\n' + cur : '') + '\n\n需求就這些，不用再問，直接照輸出格式交配方。';
+            const j = _pickJsonObj(await _studioOnce([{ role: 'system', content: sys }, { role: 'user', content: user }], '特效（小機）', 0.7, via));
+            if (!j || !j.fxId) throw new Error('它沒有交出配方（<json> 裡要有 fxId）');
+            return j;
+        },
+        // 截一個元素（創作室截圖那支，長邊壓到 1024）：給小機的「看看畫出來的樣子」用（改主題也用）
+        shotNode: async function (node, w, h, bg) {
+            const lib = await _loadShotLib();
+            const scale = Math.min(1, IMG_MAX_SIDE / Math.max(w || 1, h || 1));
+            return lib.domToJpeg(node, { width: w, height: h, scale: scale, quality: IMG_QUALITY, backgroundColor: bg || '#111', timeout: 8000 });
+        },
+        vnFrames: _vnPvFrames,
+        // 劇情主題給小機的「改主題」（os_aurelia_theme.js）用：說明書、假 VN 畫面、套用前的防呆、藏櫃（09-30）
+        vnTheme: {
+            spec: function () { return VTH_AI_PROMPT.replace('用戶想要的風格：', '').trim(); },
+            // 小機的「做主題」劇情那種：新做＝VTH_AI_PROMPT＋想要的風格；改＝對話版說明＋目前的 CSS＋這次要改
+            generate: async function (want, cur, via) {
+                const msgs = cur
+                    ? [{ role: 'user', content: VTH_AI_CHAT }, { role: 'user', content: '【目前的 CSS】\n```css\n' + cur + '\n```\n\n【這次要改】' + want }]
+                    : [{ role: 'user', content: VTH_AI_PROMPT + want }];
+                const got = _vthPickCss(await _studioOnce(msgs, '劇情主題（小機）', 0.7, via));
+                if (!got.css) throw new Error('它沒有交出 CSS');
+                return { css: got.css, note: got.note, cut: got.cut };
+            },
+            pick: _vthPickCss,   // 世界門生結束畫面時一起生的那份也要從回覆裡挑 CSS（被切斷的會標 cut）
+            doc: function (css, mode) { return _vthBuildSrcdoc(css, mode || 'char-mode', false); },
+            skinCard: _vthSkinCard,   // 章節卡：畫完之後把對話框的皮抄到卡上（同編輯器的 frame.onload）
+            // 尺寸同主題編輯器：手機 390×844；中間＝使用者在編輯器填的嵌入寬（vth_desk_w，預設 1000）×0.66；全屏＝螢幕
+            frames: function () {
+                const dw = Math.max(600, Math.min(2560, parseInt(localStorage.getItem('vth_desk_w')) || 1000));
+                return { phone: { w: 390, h: 844, lab: '手機' }, center: { w: dw, h: Math.round(dw * 0.66), lab: '中間' },
+                    full: { w: (window.screen && screen.width) || 1920, h: (window.screen && screen.height) || 1080, lab: '全屏' } };
+            },
+            strip: _vthStripLayout, risky: _vthRisky, flat: _vthFlat, missingVars: _vthMissingVars, fixText: _vthFixTextColor,
+            gallery: _vthGalleryLoad, saveGallery: _vthGallerySave,
+        },
+        launch, attachVpScaler: _attachVpScaler,
+        // 展廳拆檔（os_studio_vn_gallery.js）：對外契約不變，懶委派到 win.OS_STUDIO_VC
+        openVnComponents: function (c) { return win.OS_STUDIO_VC?.openVnComponents(c); },
+        // ── _b 橋：專供拆檔子模組（os_studio_worldbook.js / os_studio_persona.js / os_studio_vn_gallery.js / os_studio_diff_engine.js）取用核心內部工具，外部勿碰 ──
+        //   穩定函式引用（function 宣告/const，不會被重新賦值）直接放；核心可變 let 走 getter/setter 即時取回寫。
+        _b: {
+            _sgcEsc, renderMarkdown, _studioBadReply, _wbTH, _wbToast, _studioConfirmRetry,
+            // ↓ 展廳（os_studio_vn_gallery.js）用
+            _studioToast, syncActiveTagsToLocal, _templateToPhoneHtml, _appNameOf, _buildPreviewSt, _attachVpScaler, _vnStageHtml,
+            importToSillyTavern, openRawEditModal, _removeTavernPanelArtifacts, _purgeLinkedPhoneApp,
+            _enterEditMode, _getTplById, launch,
+            // ↓ 煉丹 Diff-refine 引擎（os_studio_diff_engine.js）用
+            renderPreviewPanel,
+            get currentParsedData() { return currentParsedData; },   // 可變 let → getter 即時取
+            specForRefine: _studioSpecForRefine,   // 說明書第 3、4 節＋目前類型那節（diff 提示要帶）
+            set activePreviewData(v) { activePreviewData = v; },     // 可變 let → setter 回寫（restoreFromVNSnapshot 用）
+            // ↓ 自檢引擎（os_studio_selfcheck.js）用：預覽層跑面板 js 抓到的同步錯誤
+            get lastPreviewJsError() { return _pvLastJsError; },
+        },
+        // 給「應用工坊 · 我的應用」的管理按鈕用：靠 srcTplId 操作該 app 的可編輯底稿
+        openEditApp: async function (tplId, c) {
+            try { if (c) launch(c, 'vn_ui'); } catch (e) {}   // 直接落製作面板編輯器，不經死首頁
+            const tpl = await _getTplById(tplId);
+            if (!tpl) { AUI.alert('找不到這個應用的可編輯底稿（可能是舊資料，重新生成一次即可）'); return; }
+            setTimeout(function () { try { _enterEditMode(tpl); } catch (e) { console.warn('[OS_STUDIO] openEditApp', e); } }, 60);
+        },
+        injectAppToTavern: async function (tplId) {
+            const tpl = await _getTplById(tplId);
+            if (!tpl) { AUI.alert('找不到底稿'); return; }
+            try { importToSillyTavern(tpl); } catch (e) { AUI.alert('載入酒館失敗：' + ((e && e.message) || e)); }
+        },
+        exportApp: async function (tplId) {
+            const tpl = await _getTplById(tplId);
+            if (!tpl) { AUI.alert('找不到底稿'); return; }
+            try { win.OS_STUDIO_VC?.exportOneVnUiTemplate(tpl); } catch (e) {}   // 展廳拆檔：os_studio_vn_gallery.js
+        },
+        // 展廳拆檔（os_studio_vn_gallery.js）：群組資料（vn_component_groups/g_lobby）歸展廳管，懶委派
+        toggleAppLobby: async function (tplId) {
+            const vc = win.OS_STUDIO_VC;
+            return (vc && vc.toggleAppLobby) ? vc.toggleAppLobby(tplId) : null;
+        },
+        // 給「我的應用」卸載用：共用＝一個東西（VN組件＋app），卸載 app 時連它的 VN 組件模板＋酒館殘留一起清。
+        // 只清模板側（app 那側由 app_store 自己刪）→ 卸載＝整個面板消失，不留 VN 組件孤兒。
+        purgeTemplateFully: async function (tplId) {
+            if (!tplId) return;
+            try {
+                const tpl = await _getTplById(tplId);
+                try { await win.OS_DB.deleteUITemplate(tplId); } catch (e) {}
+                try { await syncActiveTagsToLocal(); } catch (e) {}
+                if (win.VN_DynamicParser) { try { await win.VN_DynamicParser.init(); } catch (e) {} }
+                if (tpl && tpl.tagId) { try { await _removeTavernPanelArtifacts(tpl.tagId); } catch (e) {} }
+                if (tpl && tpl.tagId) { try { if (win.VN_PANEL_FEED && win.VN_PANEL_FEED.purgeTag) await win.VN_PANEL_FEED.purgeTag(tpl.tagId); } catch (e) {} }   // 📖 面板自己的資料桶
+            } catch (e) { console.warn('[OS_STUDIO] purgeTemplateFully', e); }
+        }
+    };
+})();

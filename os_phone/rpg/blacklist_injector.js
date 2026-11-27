@@ -1,0 +1,110 @@
+// ----------------------------------------------------------------
+// [檔案] blacklist_injector.js (V1)
+// 路徑：os_phone/rpg/blacklist_injector.js
+// 職責：每輪主模型生成前，把當前 chatId 對應的黑名單條目
+//       用 injectPrompts({once:true}) 注入 system prompt，
+//       避免世界書條目因 keys 觸發機制（要對話提到名字才激活）
+//       而漏掉，導致 AI 忘記黑名單。
+//
+// 儲存層不動：黑名單由故事日誌 → 故事管理（os_story_tools.js，原 RPG 面板 2026-09-15 刪掉時搬去）寫世界書條目
+//   `[當前永不出現名單-黑名單角色] - <chatId>`
+// 本檔只負責「讀條目 → 每輪 inject」。
+//
+// 🔀 這支刻意只做酒館版：獨立版的世界書條目「沒填關鍵字＝常駐」，組 context 時本來就每輪直送
+//    （黑名單存的是「不准出現的名字」，靠關鍵字觸發本來就不可能命中，這正是本檔存在的理由）。
+//    PWA 那邊故事管理把條目寫進 VN 正在用的書包、keys 留空 → 不需要再補一支注入器。
+// ----------------------------------------------------------------
+(function() {
+    console.log('🚫 [Blacklist Injector] V1 載入');
+    const win = window.parent || window;
+
+    const INJECT_ID = 'aurelia_blacklist';
+    let _lastUninject = null;
+
+    function normalizeChatId(raw) {
+        if (!raw) return '';
+        let s = String(raw).split(/[\\/]/).pop() || '';
+        s = s.replace(/\.jsonl?$/i, '');
+        return s.trim();
+    }
+
+    function getChatId() {
+        try {
+            const ctx = win.SillyTavern?.getContext?.();
+            return normalizeChatId(ctx?.chatId);
+        } catch(e) { return ''; }
+    }
+
+    async function getBlacklistContent() {
+        try {
+            if (!win.TavernHelper?.getLorebookEntries) return '';
+            const bookName = win.TavernHelper.getCurrentCharPrimaryLorebook?.()
+                || win.TavernHelper.getCharWorldbookNames?.('current')?.primary
+                || '';
+            if (!bookName) return '';
+            const chatId = getChatId();
+            if (!chatId) return '';
+
+            // 🚨 寫入端（os_story_tools getChatIdentifier）把空白換成底線，這裡要照同一把鑰匙找；
+            //    沒換底線的舊標題也認
+            const targets = [`[當前永不出現名單-黑名單角色] - ${chatId.replace(/\s+/g, '_')}`, `[當前永不出現名單-黑名單角色] - ${chatId}`];
+            const entries = await win.TavernHelper.getLorebookEntries(bookName);
+            const entry = entries.find(e => targets.includes(e.comment));
+            if (!entry) return '';
+            // 兼容 enabled 欄位可能是 false / 0 / undefined
+            if (entry.enabled === false) return '';
+            const content = (entry.content || '').trim();
+            return content || '';
+        } catch(e) {
+            console.warn('[Blacklist Injector] 讀世界書失敗:', e?.message || e);
+            return '';
+        }
+    }
+
+    async function injectBlacklist() {
+        try {
+            // 撤上次的（避免疊加 / 切 chat 後殘留）
+            try { _lastUninject?.(); } catch(e) {}
+            _lastUninject = null;
+
+            if (!win.TavernHelper?.injectPrompts) return;
+            const content = await getBlacklistContent();
+            if (!content) return;
+
+            const finalContent = `[黑名單 / 永不出現名單]\n${content}\n\n[嚴格規則] 上述名單中的角色禁止出現於本輪劇情、不可被提及、不可被互動，視為「不存在」。`;
+
+            const result = win.TavernHelper.injectPrompts([{
+                id: INJECT_ID,
+                content: finalContent,
+                position: 'in_chat',
+                depth: 1,
+                role: 'system'
+            }], { once: true });
+            _lastUninject = result?.uninject || null;
+        } catch(e) {
+            console.warn('[Blacklist Injector] inject 失敗:', e?.message || e);
+        }
+    }
+
+    // 監聽器把 Promise 交回去 → 酒館 emit 會等注入完才組 prompt；最多等 2.5 秒，免得資料庫卡住連生成一起卡
+    const WAIT_MS = 2500;
+    function _waitFor(fn) { return Promise.race([Promise.resolve().then(fn).catch(function () {}), new Promise(function (r) { setTimeout(r, WAIT_MS); })]); }
+
+    function init() {
+        if (!win.eventOn || !win.tavern_events) {
+            setTimeout(init, 1000);
+            return;
+        }
+        if (win.tavern_events.GENERATION_STARTED) {
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectBlacklist); });   // dryRun 空跑不注入
+        }
+        if (win.tavern_events.CHAT_CHANGED) {
+            win.eventOn(win.tavern_events.CHAT_CHANGED, () => {
+                try { _lastUninject?.(); _lastUninject = null; } catch(e) {}
+            });
+        }
+        console.log('🚫 [Blacklist Injector] Ready');
+    }
+
+    init();
+})();

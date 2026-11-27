@@ -1,0 +1,143 @@
+/* ================================================================
+   wx_profile.css —— 微信個人檔案卡（點頭像／標題／通訊錄頭像開出來）
+   一整屏：背景鋪滿、頭像與名字壓在中間偏下、底下兩顆動作。
+   ================================================================ */
+
+.wxpf-root {
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    background: linear-gradient(160deg, #4a5a7a 0%, #2b3550 55%, #1b2236 100%);
+    animation: wxpf-in .22s ease;
+}
+@keyframes wxpf-in { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: none; } }
+
+.wxpf-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0;
+    transition: opacity .3s;
+}
+.wxpf-root.has-bg .wxpf-bg { opacity: 1; }
+/* 沒有聊天背景時拿頭像當底：放大、模糊、壓暗，才不會跟前面那顆圓頭像打架 */
+.wxpf-root.bg-from-avatar .wxpf-bg { filter: blur(18px) brightness(.72); transform: scale(1.25); }
+
+/* 上面留一點暗、下面壓重，名字與那一句話才讀得到 */
+.wxpf-scrim {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(10, 14, 24, .45) 0%, rgba(10, 14, 24, .06) 34%, rgba(10, 14, 24, .62) 74%, rgba(10, 14, 24, .86) 100%);
+}
+
+.wxpf-x {
+    position: absolute;
+    top: 14px; left: 14px;
+    width: 34px; height: 34px;
+    border: none; border-radius: 50%;
+    background: rgba(0, 0, 0, .34);
+    color: #fff; font-size: 16px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; z-index: 3;
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.wxpf-x:active { transform: scale(.94); }
+
+.wxpf-main {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 0 24px 4px;
+    text-align: center;
+}
+/* 外圈只佔位子、不畫任何東西；白圈、陰影、形狀全畫在頭像那一層。
+   以前外圈自己一個圓、頭像自己一個圓，主題只改到其中一層 → 方頭像後面露一個圓、圓頭像外面套方框（09-19：總是圈套圈）。 */
+.wxpf-ring {
+    width: 104px; height: 104px;
+    margin-bottom: 6px;
+}
+.wxpf-avatar {
+    width: 100%; height: 100%;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, .55);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, .4);
+    background: #dfe3ec center/cover no-repeat;
+    background-clip: padding-box;
+}
+.wxpf-name {
+    font-size: 23px;
+    font-weight: 700;
+    color: #fff;   /* 疊在背景照片（加暗層）上，不是疊在重點色上：固定白字配陰影。以前借 --wx-on-accent，亮色重點的主題把它設深 → 名字看不見（09-19） */
+    letter-spacing: .04em;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, .6);
+    word-break: break-word;
+    max-width: 100%;
+}
+.wxpf-bio {
+    font-size: 13px;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, .88);
+    text-shadow: 0 1px 5px rgba(0, 0, 0, .65);
+    max-width: 100%;
+    /* 一句話就好：超過三行收起來，免得一段長 bio 把按鈕擠出畫面 */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    word-break: break-word;
+}
+
+.wxpf-acts {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    padding: 22px 20px calc(26px + env(safe-area-inset-bottom, 0px));
+}
+.wxpf-act {
+    border: none;
+    background: none;
+    color: #fff;   /* 同名字：疊在照片上，固定白字 */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    text-shadow: 0 1px 4px rgba(0, 0, 0, .6);
+    padding: 0;
+    border-radius: 50%;   /* 沒有底色看不出來；裡面的圓圈跟著它，主題把整顆改方的，圓圈也一起方（以前內部圓外部方） */
+}
+.wxpf-act i {
+    width: 46px; height: 46px;
+    border-radius: inherit;
+    background: rgba(255, 255, 255, .18);
+    border: 1px solid rgba(255, 255, 255, .34);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 17px;
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+    text-shadow: none;   /* 陰影是給疊在照片上的字用的；符號在自己的格子裡，主題把格子換成亮底時陰影會糊成一團 */
+}
+.wxpf-act:active i { background: rgba(255, 255, 255, .3); }
+
+/* 矮螢幕：頭像縮一點，按鈕不要被擠掉 */
+@media (max-height: 620px) {
+    .wxpf-ring { width: 84px; height: 84px; }
+    .wxpf-name { font-size: 20px; }
+    .wxpf-acts { gap: 32px; padding-top: 16px; }
+}
+
+/* 聊天室標題的名字點得下去（跟頭像同一個入口） */
+.wx-header-title-tap { cursor: pointer; }

@@ -1,0 +1,5127 @@
+// ----------------------------------------------------------------
+// [檔案] vn_core.js (V8.6 - 模組化重構版 + SFX 音效防重疊與5秒限制 + 世界書頭像擴展 + 主頁背景音樂)
+// 路徑：os_phone/vn_story/vn_core.js
+// 職責：VN 視覺小說播放器 - 核心功能與主邏輯
+// ⚠️ 依賴 vn_styles.js 與 vn_phone.js，必須在其之後載入
+// ----------------------------------------------------------------
+(function () {
+    console.log('[PhoneOS] 載入 VN 視覺小說播放器 (V8.6 - 核心模組化 + SFX優化 + 世界書頭像 + 主頁BGM)...');
+    const win = window.parent || window;
+
+
+    // === 從子模組取出 short-name 別名（vn_cache/vn_config/vn_monitor/vn_summary/
+    //     vn_sticker/vn_panels/vn_generator 必須在本檔之前載入） ===
+    const VN_Cache       = window.VN_Cache;
+    const VN_Config      = window.VN_Config;
+    const VN_BgmIndex    = win.VN_BgmIndex;
+    const VN_Image       = window.VN_Image;
+    const VN_CtxMonitor  = window.VN_CtxMonitor;
+    const VN_Summary     = win.VN_Summary;
+    const VN_Sticker     = window.VN_Sticker;
+    const VN_Settings    = window.VN_Settings;
+
+    // panel 函式（vn_panels.js）
+    const {
+        openGameSettings, closeGameSettings,
+        openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg,
+        loadAvatarManager, loadBgManager, loadSpriteManager,
+        openChapterPanel, closeChapterPanel
+    } = window.VN_Panels;
+
+    // 生成器函式（vn_generator.js）
+    //  生成面板已移除：以前這裡還匯入 openGeneratePanel/closeGeneratePanel/diveSelectedCard，
+    //  那三支的工作（開 UI、用 dataset 傳參數、監看按鈕判斷完成）已經拆進 runCardDive / runFreeDive。
+    const { generateStory, runCardDive, runFreeDive } = window.VN_Generator;
+
+    // 🎭 小劇場（大廳、地圖番外、小機培養室）是借 VN 播放器播的一場戲：播的時候換成它自己的故事編號，
+    //   播放中的抽取、快取才不會記到她正在玩的那個故事頭上。🚨 回大廳要換回原本那個——以前沒換回：
+    //   手機版故事中途看一場小劇場，之後記憶、手機資料都寫進小劇場那一格，「繼續」也找不到原本的故事。
+    //   原本那個記在 localStorage（播到一半重整也換得回來：載入時看到還停在小劇場就先換回去）
+    // 📋 借 VN 播的戲一種一列（11-26：統一隔離成一條管線，以後更多借 VN 面板的功能都不影響主線）。
+    //   主題、結束畫面、COT、CTX、播放中改不改主線的狀態，全部只看這張表；以後多一種要借 VN 播的，加一列就好。
+    //   theme：'base'＝預設黑金（不吃這本故事、也不吃視差世界的）／'story'＝跟主線同一套
+    //   end：'home'＝演完直接回大廳／'own'＝演完交給它自己（__AURELIA_SIDE_STORY_END）／'story'＝主線那套結束畫面，
+    //        但「重新生成」「繼續」拿掉（那兩顆動的是酒館主聊天最新那則），也不問世界門要不要進門撤離
+    //   official：舞台用大廳官方立繪（記憶迴廊演的是使用者故事裡的人，不用）
+    //   COT、CTX 一律看控制台裡寫這場戲的那一通（_sideRec），不看酒館主聊天
+    //   播放中的 [Date|]／[HP|]／[Buff|]／[Event|] 一律不寫進主線（小劇場不推主角的時鐘、不加約定）
+    const SIDE_PLAYS = {
+        lobby_theater:  { name: '大廳小劇場', theme: 'base',  end: 'home',  official: true },   // 書咖、偷窺、送餐、小機培養室重看
+        memory_theater: { name: '記憶迴廊',   theme: 'base',  end: 'own' },                     // 紫薇的吧檯（lobby_memory.js）
+        map_theater:    { name: '地圖小劇場', theme: 'story', end: 'story', official: true },   // 地圖設施的多視角：主線的分支
+    };
+    const THEATER_ID = { test: (id) => Object.prototype.hasOwnProperty.call(SIDE_PLAYS, String(id || '')) };
+    const OFFICIAL_THEATER = { test: (id) => !!(THEATER_ID.test(id) && SIDE_PLAYS[id].official) };
+    const THEATER_PREV = 'vn_story_before_theater';
+    (function _theaterBootRestore() {
+        try {
+            const cur = localStorage.getItem('vn_current_story_id') || '';
+            const prev = JSON.parse(localStorage.getItem(THEATER_PREV) || 'null');
+            if (prev && THEATER_ID.test(cur)) {
+                win.AUI.lsSet('vn_current_story_id', prev.id || '', '換回原本的故事');
+                win.AUI.lsSet('vn_current_story_title', prev.title || '', '換回原本的故事');
+            }
+            if (prev) localStorage.removeItem(THEATER_PREV);
+        } catch (e) {}
+    })();
+
+    // === 3. 核心腳本邏輯 ===
+    const VN_Core = {
+        script: [], index: -1, avatars: {}, charVoices: {}, currentName: '', currentExp: '', mode: 'vn',
+        _lastBgCacheId: '', // 跨章節持久，存 cacheId 而非 URL（blob 會被 resetState 撤銷）
+        _bgMemCache: {},
+        _bgInflight: {},   // 進行中的背景生成(cacheId→promise)：去重，避免預熱+現場對同一場景各生一張(競態→重開不同圖)
+        _bgFailed: {},     // 同 _sceneFailed：背景生圖失敗的 cacheId → 不自動重打(治「背景重複生成兩次」白燒額度)；切新背景=新 cacheId 不受影響
+        _sceneMemCache: {},
+        _sceneInflight: {}, // 進行中的場景CG生成(cacheId→promise)：同 _bgInflight，防預熱+現場重複生成
+        _sceneFailed: {},   // 生圖失敗過的 cacheId(→ts)：in-flight 解析後就清、防不住「預熱+插入+渲染序列重打」→ 記失敗、同 cacheId 不再自動重生(白燒額度/被風控)；按 🔄 重生會清掉
+        _sceneCgLinger: 0,  // 鋪底式場景插圖剩餘停留句數（3→0 淡出）；0=沒在顯示
+        _sceneCgCur: null,  // 當前鋪底插圖的 {cacheId, prompt}，給「🔄 重生」鈕重打用（不碰 LLM）
+        _sceneCgHold: false,    // 失敗佔位 hold：true=不淡出(停在佔位卡讓玩家手動重生)；成功才解除
+        _sceneCgFailLinger: 0,  // 失敗佔位寬限句數(3→0)：玩家沒手動重生也會自己淡掉、不永遠卡著
+        _sceneGenBackoff: 0,    // 本輪插圖退避：撞失敗(拼車 NAI 429)後設時戳→後續插圖不再自動猛打；手動重生/新一輪清
+        _itemMemCache: {},
+        _itemInflight: {},  // 進行中的道具圖生成(itemName→promise)：同 _bgInflight
+        _itemCutOk: {},     // 道具圖去背成功與否(itemName→bool)：彈窗照這個決定「裸物件浮空」還是「退成羽化遮罩」
+        _currentWorldTag: '',   // 這一輪 [World|現代] 那一格；none 路人合成立繪 prompt 時當時代感用
+        _avatarMemCache: {},
+        _faceMemCache: {},  // 三合一生成切出來的自拍頭像（名字→圖）：舞台用 _avatarMemCache 的立繪，聊天 app／通話／大廳這些「頭像」位置先看這裡
+        _pendingAvatars: {},
+        _decodedImgs: {},
+        _twTimer: null, _twEl: null, _twFull: '', _twSpeed: 30,
+        _autoTimer: null,
+        isSkip: false, skipDelay: 200, logHistory: [],
+        // 故事分支識別（storyTitle_timestamp，每次新開場白產生新 ID）
+        _currentStoryId:    localStorage.getItem('vn_current_story_id')    || '',
+        _currentStoryTitle: localStorage.getItem('vn_current_story_title') || '',
+        _extractStoryTitle: function(fullText) {
+            const m = fullText.match(/\[Story\|([^\]]+)\]/i);
+            return m ? m[1].trim() : '';
+        },
+        _setStoryId: function(storyId, storyTitle) {
+            this._currentStoryId    = storyId;
+            this._currentStoryTitle = storyTitle || '';
+            // 寫不進去時記憶體這份照用（這一局能玩），提示會說沒存下來；回傳成不成功給要確認的呼叫端
+            const _okId    = win.AUI.lsSet('vn_current_story_id',    storyId    || '', '目前在玩哪個故事');
+            const _okTitle = win.AUI.lsSet('vn_current_story_title', storyTitle || '', '目前在玩哪個故事');
+            // 大廳左上角顯示「現在在玩哪一條」。酒館那條線在 index.js（讀 SillyTavern 的 chatId），
+            //   PWA 根本沒載那支 → 標題一直停在預設字串。獨立版由這裡餵，換篇章就跟著換。
+            try {
+                if (win.OS_API?.isStandalone?.() && storyTitle) {
+                    win.AureliaControlCenter?.setChatTitle?.(storyTitle);
+                }
+            } catch (e) {}
+            return _okId && _okTitle;
+        },
+        // 播小劇場前叫：記下她原本的故事再換成小劇場的（連播兩場也只記第一次那個真的故事）
+        _enterTheater: function(storyId, storyTitle) {
+            if (!THEATER_ID.test(this._currentStoryId || '')) {
+                win.AUI.lsSet(THEATER_PREV, JSON.stringify({ id: this._currentStoryId || '', title: this._currentStoryTitle || '' }), '看小劇場前在玩的故事');
+            }
+            this._setStoryId(storyId, storyTitle);
+            this._sideRecCache = null;
+            try { if (window.VN_Theme) window.VN_Theme.apply(); } catch (e) {}
+        },
+        // 回大廳時叫（control_center 的 hideVnPanel）：還停在小劇場就換回原本那個。
+        //   播完她在 VN 裡自己開了別的故事（編號已經不是小劇場）就只清記號、不動
+        _leaveTheater: function() {
+            let prev = null;
+            try { prev = JSON.parse(localStorage.getItem(THEATER_PREV) || 'null'); localStorage.removeItem(THEATER_PREV); } catch (e) { prev = null; }
+            if (prev && THEATER_ID.test(this._currentStoryId || '')) this._setStoryId(prev.id || '', prev.title || '');
+            this._sideRecCache = null;
+            try { if (window.VN_Theme) window.VN_Theme.apply(); } catch (e) {}
+        },
+        // 現在播的是哪一種借 VN 播的戲（表裡那一列，多帶一個 id）；在播主線＝null
+        sidePlay: function() {
+            const id = this._currentStoryId || '';
+            return THEATER_ID.test(id) ? Object.assign({ id }, SIDE_PLAYS[id]) : null;
+        },
+        // 寫這場戲的那一通（控制台「記錄」頁那一筆）：拿現在這份劇本的幾行台詞去對每一筆回來的原文，從最新的找。
+        //   不靠各入口傳編號：三種戲各自怎麼叫模型都不用改，記憶迴廊一幕一通也自動對到正在演的那一幕。
+        //   控制台記錄只留這次開機的最近 120 通：重看很久以前存的那種（展示櫃、小機培養室）會找不到，回 null
+        _sideRec: function() {
+            if (!this.sidePlay()) return null;
+            const raw = String(this._scriptRawText || '');
+            if (this._sideRecCache && this._sideRecCache.raw === raw) return this._sideRecCache.rec;
+            const body = (raw.match(/<content>([\s\S]*?)(?:<\/content>|$)/i) || [, raw])[1];
+            const probes = body.split('\n').map(s => s.trim()).filter(s => s.length >= 12 && !/^<\/?[a-z]/i.test(s))
+                .sort((a, b) => b.length - a.length).slice(0, 4).map(s => s.slice(0, 80));
+            let rec = null;
+            if (probes.length) {
+                let log = [];
+                try { log = win.AURELIA_API_LOG || window.AURELIA_API_LOG || []; } catch (e) {}
+                for (let i = log.length - 1; i >= 0 && !rec; i--) {
+                    const r = log[i], txt = r && r.ok ? String(r.raw || '') : '';
+                    if (txt && probes.some(p => txt.indexOf(p) >= 0)) rec = r;
+                }
+            }
+            this._sideRecCache = { raw, rec };
+            return rec;
+        },
+        // COT／CTX 底下那顆「到控制台看這一通」：送了什麼、回來的原文都在控制台記錄頁，這裡不另做一份
+        _sideLogLinkHtml: function(rec) {
+            const id = Number(rec && rec.id) || 0;
+            if (!id) return '';
+            return '<button type="button" class="vn-side-log-btn" onclick="window.VN_Core.openSideLog(' + id + '); event.stopPropagation();">'
+                + '<i class="fa-solid fa-scroll"></i> 到控制台看這一通送了什麼</button>';
+        },
+        openSideLog: function(id) {
+            const D = win.OS_DASHBOARD || window.OS_DASHBOARD;
+            if (D && typeof D.openLog === 'function') D.openLog(id);
+            else if (D && typeof D.open === 'function') D.open();
+        },
+        // 🔒 小劇場裡的管理員／SN 住民：奧瑞亞官方立繪（大廳那張，名冊在 LobbyNpcs.official）。舞台排第一、有它就不生圖。
+        //   只在小劇場：使用者的故事卡也可能有叫愛麗絲、柴郡的別人（10-06 定：只用在奧瑞亞自己的場景）。
+        _officialSprite: function(name) {
+            if (!OFFICIAL_THEATER.test(this._currentStoryId || '')) return '';
+            try {
+                const N = win.LobbyNpcs || window.LobbyNpcs;
+                const o = N && N.officialOf && N.officialOf(name);
+                return (o && o.portrait) || '';
+            } catch (e) { return ''; }
+        },
+
+        // 🆕 開一條新故事線 —— 對應酒館「建立聊天室就產生 chatId」那一刻。
+        //   酒館的 chatId 是 角色卡-建立時間，聊天室建好時就存在、內容還是空的；
+        //   同一張卡可以開很多間＝重複遊玩。PWA 以前是「等 AI 生成成功才生 id」，
+        //   中間那段空窗掛著 '__new_story__' 這個假鑰匙，凡是按 storyId 分艙的東西
+        //   （數值、記憶、人物檔案、手機資料）在那段時間全部寫錯桶。
+        //   → 改成踏入故事的當下就生，之後只換標題、**id 永不變**（跟 chatId 一樣，
+        //     劇情改名不該讓存檔換身分）。
+        newStoryId: function(title, worldId) {
+            const t  = String(title || '').trim() || '未命名故事';
+            const id = `${t}_${Date.now()}`;
+            this._setStoryId(id, t);
+            try {
+                const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
+                idx[id] = {
+                    worldId: worldId || localStorage.getItem('vn_current_world_id') || '',
+                    title: t, createdAt: Date.now()
+                };
+                win.AUI.lsSet('vn_story_index', JSON.stringify(idx), '故事清單');
+            } catch (e) { console.warn('[VN] 故事清單讀不出來，這條沒登記進去:', e); }
+            console.log(`[VN] 新故事線 ${id}（書：${worldId || '(自由劇情)'}）`);
+            return id;
+        },
+        // 🗑️ 刪掉一整條故事線（一個 storyId 底下的全部東西）。
+        //    書架的「歷史篇章」與 VN 的章節管理都走這支 —— 以前兩邊各清各的，
+        //    章節管理刪完沒清 vn_story_index，書架就還列著那條已經沒有內容的幽靈篇章。
+        //    優先用 OS_DB.deleteAllByChatId（章節/向量記憶/大總結/狀態/追蹤檔案/手機資料一次清，
+        //    PWA 的 chatId 就是 storyId）；拿不到那支才退回逐項刪。
+        deleteStoryLine: async function (sid) {
+            const id = String(sid || '').trim();
+            if (!id) return false;
+            const DB = win.OS_DB || window.OS_DB;
+            if (DB && typeof DB.deleteAllByChatId === 'function') {
+                try { await DB.deleteAllByChatId(id, { storyId: id }); }
+                catch (e) { console.warn('[VN] 整批清理失敗，改逐項刪:', e); }
+            } else {
+                try { await DB?.deleteVnChaptersByStoryId?.(id); } catch (e) { console.warn('[VN] 刪章節失敗:', e); }
+                try { await DB?.deleteVnMemoriesByStoryId?.(id); } catch (e) { console.warn('[VN] 清向量記憶失敗:', e); }
+                try { await DB?.deleteStateData?.(id); } catch (e) { console.warn('[VN] 清人物檔案失敗:', e); }
+            }
+            // AVS 的即時狀態與回朔快照住在 localStorage（deleteAllByChatId 也會清，這裡是它不在時的保底）。
+            //   🚨 快照 key 是 avs_snap_ + _avsKey()＝avs_snap_avs_state_<id>，以前只刪 avs_snap_<id> 從來沒清到
+            try { localStorage.removeItem('avs_state_' + id); localStorage.removeItem('avs_snap_avs_state_' + id); localStorage.removeItem('avs_snap_' + id); } catch (e) {}
+            // 書架「歷史篇章」的清單來源
+            try {
+                const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
+                if (idx[id]) { delete idx[id]; win.AUI.lsSet('vn_story_index', JSON.stringify(idx), '故事清單'); }
+            } catch (e) { console.warn('[VN] 故事清單讀不出來，沒從清單拿掉:', e); }
+            // 刪的就是正在玩的這條 → 放掉當前指標，免得下一輪寫進已經不存在的桶
+            if (this._currentStoryId === id) this._setStoryId('', '');
+            console.log(`[VN] 🗑️ 已刪除故事線：${id}`);
+            return true;
+        },
+
+        // 正文吐出 [Story|標題] 之後只改顯示用的標題，id 不動
+        renameStory: function(title) {
+            const t = String(title || '').trim();
+            if (!t || !this._currentStoryId) return;
+            this._setStoryId(this._currentStoryId, t);
+            try {
+                const idx = JSON.parse(localStorage.getItem('vn_story_index') || '{}');
+                if (idx[this._currentStoryId]) { idx[this._currentStoryId].title = t; win.AUI.lsSet('vn_story_index', JSON.stringify(idx), '故事清單'); }
+            } catch (e) { console.warn('[VN] 故事清單讀不出來，標題沒更新:', e); }
+        },
+        
+        // 音效管理參數
+        _currentSfxAudio: null,
+        _sfxTimer: null,
+
+        // 世界書頭像管理
+        _lorebookAvatarCache: {},
+        _lorebookExpCache: {},      // 【素材-角色表情立繪】名字_表情 → URL（重構前的世界書圖庫第一層，2026-08-26 接回）
+        _lorebookSpriteCache: {},   // 【素材-角色預設立繪素材】名字 → URL（同上第二層）
+        _lorebookLoaded: false,
+
+        _loadLorebookAvatars: async function() {
+            // 網頁版（10-20 補齊）：沒有酒館助手，讀「常駐書包＋這本故事掛的書包」（角色圖鑑「世界書」那塊寫的就是這裡）
+            const _pwaLb = (win.OS_API?.isStandalone?.() && win.OS_WORLDBOOK?.lorebookApi) ? win.OS_WORLDBOOK.lorebookApi : null;
+            const LB = _pwaLb || win.TavernHelper;
+            if (!LB) return;
+            this._lorebookAvatarCache = {};
+            this._lorebookExpCache = {};
+            this._lorebookSpriteCache = {};
+            try {
+                const lbs = new Set();
+                if (_pwaLb) {
+                    try { (_pwaLb.getGlobalWorldbookNames ? _pwaLb.getGlobalWorldbookNames() : []).forEach(lb => lbs.add(lb)); } catch (e) {}
+                    try { ((win.OS_WORLDBOOK.getActivePacks && win.OS_WORLDBOOK.getActivePacks()) || []).forEach(lb => lbs.add(lb)); } catch (e) {}
+                } else {
+                    const settings = win.TavernHelper.getLorebookSettings();
+                    if (settings && settings.selected_global_lorebooks) {
+                        settings.selected_global_lorebooks.forEach(lb => lbs.add(lb));
+                    }
+                    const charLbs = win.TavernHelper.getCharLorebooks();
+                    if (charLbs && charLbs.primary) lbs.add(charLbs.primary);
+                    if (charLbs && charLbs.additional) charLbs.additional.forEach(lb => lbs.add(lb));
+                }
+
+                for (const lb of lbs) {
+                    if (!lb) continue;
+                    try {
+                        const entries = await LB.getLorebookEntries(lb);
+                        for (const entry of entries) {
+                            const cm = entry.comment;
+                            const isAvatar = (cm === '【素材-角色頭像素材】' || cm === '【素材-隨機頭像素材】');
+                            const isExp    = (cm === '【素材-角色表情立繪】');
+                            const isPreset = (cm === '【素材-角色預設立繪素材】');
+                            if (!isAvatar && !isExp && !isPreset) continue;
+                            const lines = (entry.content || '').split('\n');
+                            for (const line of lines) {
+                                const trimmed = line.trim();
+                                if (!trimmed || trimmed.startsWith('//')) continue;
+                                const match = trimmed.match(/^([^:]+):([^|]+)(?:\|(.*))?$/);
+                                if (!match) continue;
+                                const mainName = match[1].trim();
+                                const url = match[2].trim();
+                                const aliases = match[3] ? match[3].split(',').map(a => a.trim()).filter(Boolean) : [];
+                                if (isExp) {
+                                    // 主鍵是「名字_表情」；別名欄只給名字，掛回同一個表情
+                                    const exp = mainName.split('_').pop();
+                                    this._lorebookExpCache[mainName] = url;
+                                    aliases.forEach(a => { this._lorebookExpCache[`${a}_${exp}`] = url; });
+                                } else if (isPreset) {
+                                    this._lorebookSpriteCache[mainName] = url;
+                                    aliases.forEach(a => { this._lorebookSpriteCache[a] = url; });
+                                } else {
+                                    this._lorebookAvatarCache[mainName] = url;
+                                    aliases.forEach(a => { this._lorebookAvatarCache[a] = url; });
+                                }
+                            }
+                        }
+                    } catch(e) {
+                        console.warn(`[VN_Core] 無法讀取世界書: ${lb}`, e);
+                    }
+                }
+                console.log('[VN_Core] 成功載入世界書頭像映射:', this._lorebookAvatarCache);
+            } catch (e) {
+                console.warn('[VN_Core] 載入世界書頭像失敗:', e);
+            }
+        },
+
+        // ── 備份頭像快取 → 角色卡主世界書（手動，圖片設置按鈕觸發）──────────────
+        // 目的：IDB 本地頭像快取萬一丟失，至少能從酒館「角色世界書」找回。
+        // 寫進當前角色卡主世界書 getCharLorebooks().primary（★非聊天世界書），
+        // 條目 comment 對齊 _loadLorebookAvatars 會讀的【素材-角色頭像素材】、格式「名字:圖」，
+        // 條目設 enabled:false + 不觸發 keys → 純倉庫、絕不注入 AI／不燒 token。
+        // 合併制：既有條目保留、當前世界頭像覆蓋同名 → 備份只增不減。
+        backupAvatarsToCharLorebook: async function() {
+            const TH = win.TavernHelper;
+            if (!TH || !TH.getCharLorebooks || !TH.getLorebookEntries) return { ok:false, msg:'TavernHelper 世界書 API 不可用' };
+            let lb = '';
+            try { const c = TH.getCharLorebooks(); lb = c && c.primary; } catch(e) {}
+            if (!lb) return { ok:false, msg:'當前角色卡沒有綁定「角色世界書」（主世界書），無法備份' };
+
+            // 收集當前世界的頭像（只取持久的 dataURL；blob 不可重用→跳過）
+            // 清單不讀圖；圖只撈當前世界那幾張、一張一張讀（整庫頭像一次進記憶體會 OOM）
+            const all = await VN_Cache.getAllMeta('avatar_cache');
+            const curWorld = VN_Cache.getCurrentWorld();
+            const cur = {};   // 名字 → dataURL
+            for (const e of (all || [])) {
+                if (!e || !e.hasUrl) continue;
+                if (VN_Cache.worldOf(e) !== curWorld) continue;
+                const k = String(e.key || '');
+                const sep = k.indexOf('::');
+                const name = sep >= 0 ? k.slice(sep + 2) : k;
+                if (!name) continue;
+                const full = await VN_Cache.getRaw('avatar_cache', e.key);
+                if (full && full.url && full.url.indexOf('data:') === 0) cur[name] = full.url;
+            }
+            if (!Object.keys(cur).length) return { ok:false, msg:'當前世界沒有可備份的頭像快取' };
+
+            // 讀既有條目→合併（保留舊備份與別名，當前世界覆蓋同名）
+            const COMMENT = '【素材-角色頭像素材】';
+            const entries = await TH.getLorebookEntries(lb);
+            const existing = (entries || []).find(en => en.comment === COMMENT);
+            const merged = {};
+            if (existing && existing.content) {
+                existing.content.split('\n').forEach(line => {
+                    const t = line.trim();
+                    if (!t || t.startsWith('//')) return;
+                    const i = t.indexOf(':');
+                    if (i > 0) merged[t.slice(0, i).trim()] = t.slice(i + 1);   // 保留 URL（含 |別名）
+                });
+            }
+            let added = 0;
+            for (const n of Object.keys(cur)) { if (!(n in merged)) added++; merged[n] = cur[n]; }
+            const content = Object.keys(merged).map(n => `${n}:${merged[n]}`).join('\n');
+
+            if (existing) {
+                await TH.setLorebookEntries(lb, [{ uid: existing.uid, content }]);
+            } else {
+                await TH.createLorebookEntries(lb, [{
+                    comment: COMMENT, content, enabled: false,
+                    keys: ['頭像素材_倉庫_請勿觸發_DO_NOT_TRIGGER'],
+                }]);
+            }
+            return { ok:true, msg:`已備份 ${Object.keys(cur).length} 個頭像到角色世界書「${lb}」（新增 ${added}）`, count: Object.keys(cur).length, lorebook: lb };
+        },
+
+        resetState: function() {
+            this.clearTimers();
+            this._twTimer = null;
+            this._autoTimer = null;
+            this._twEl = null;
+            this._twFull = '';
+            this.script = [];
+            this.index = -1;
+            this._pendingLeave = [];   // 清掉上一份劇本殘留的 |Leave 待離場
+            this._endingAtEnd = null;  // 🎬 上一章播到結局記號、還沒演到章末就換章了：片尾作廢（沒記 shown，下次播到還會演）
+            this._diveAtEnd = null;    // 🚪 上一章播到 [Dive|…]：章末不給選項那個記號作廢（進不進門由世界門自己記）
+            this._jevStage = null;    // 🎭 上一章 Jev 排的收立繪時間表作廢（晚到的也不收：看 _jevStageSeq）
+            this._jevSfx = null;       // 🎵 上一章 Jev 排的音效／音樂時間表作廢（同一個序號）
+            this._jevSfxNow = null;
+            this._jevSfxWait = false;  // 🎵 Jev 的時間表還在路上（這段期間 AI 寫的 [BGM|] 先扣著，見 [BGM| 那段）
+            this._aiBgmHeld = null;
+            this._jevStageSeq = (this._jevStageSeq || 0) + 1;
+            this.avatars = {};
+            this.charVoices = {};   // [Avatar|名|聲線|外觀] 宣告的固定聲線（名→聲線）；[Char] 不再每行帶
+            // 清除殘留彈幕 DOM 並重置跑道
+            const dc = document.getElementById('danmu-container');
+            if (dc) dc.innerHTML = '';
+            this._danmuLaneTs = [0,0,0,0,0,0,0];
+            // 隱藏直播 header 與粉絲榜
+            const sh = document.getElementById('stream-header');
+            if (sh) sh.classList.add('hidden');
+            const srp = document.getElementById('stream-rank-panel');
+            if (srp) srp.classList.add('hidden');
+            const ssr = document.getElementById('stream-scene-row');
+            if (ssr) ssr.classList.add('hidden');
+
+            this._lorebookAvatarCache = {};
+            this._lorebookExpCache = {};
+            this._lorebookSpriteCache = {};
+            this._lorebookLoaded = false;
+            this._domBlockCursor = 0;     // 第幾個自訂 DOM block（每次 loadScript 歸零）
+            this._currentMessageId = null; // 當前訊息 ID，供從 .mes_text 抓 DOM
+            // 重置動態 Parser 狀態 + 清除殘留 overlay（防止舊面板的 onComplete 汙染新章節）
+            if (window.VN_DynamicParser) {
+                window.VN_DynamicParser._inBlockId = null;
+                window.VN_DynamicParser._blockLines = [];
+            }
+            document.querySelectorAll('.vn-dyn-overlay').forEach(el => el.remove());
+            // 📖 章節卡：換章節時把上一張收掉（她可能還沒按「開始閱讀」就切走了）
+            //    連對話框的接管旗標一起解除，不然上一章沒按「開始閱讀」就切走時，
+            //    這旗標留著＝下一章的對話框被 hideOverlays 的守衛擋住，整章都不出來。
+            this._ccOpen = false; this._ccData = null; this._ccPanelHidden = false;
+            this._sceneName = '';   // 📜 上一章的場景名別帶到這章的章末簡報卡
+            // 📜 上一章沒用掉的選項別留到這章（簡報卡的「繼續」看到有選項就開選項頁）
+            try { if (window.VN_StandaloneArchive) { window.VN_StandaloneArchive._pendingChoices = null; } } catch (e) {}
+            { const _cc = document.getElementById('vn-chapter-card'); if (_cc) _cc.classList.add('hidden'); }
+
+            for (const url of Object.values(this._bgMemCache)) {
+                if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+            }
+            this._bgMemCache = {};
+            for (const url of Object.values(this._sceneMemCache)) {
+                if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+            }
+            this._sceneMemCache = {};
+            for (const url of Object.values(this._itemMemCache)) {
+                if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+            }
+            this._itemMemCache = {};
+            this._itemCutOk = {};
+            // ⚠️ avatars / _avatarMemCache 跨章節保留，不歸零
+            // 原因：AI 上下文長了必然重複輸出同角色 profile，用程式碼去重比靠 prompt 規則可靠
+            // 完整清除只在 stopGame() / 頁面重新整理時執行
+            this._pendingAvatars = {};
+            this._decodedImgs = {};
+            this.currentName = '';
+            this.currentExp = '';
+            this.mode = 'vn';
+            this.logHistory = [];
+            this.isSkip = false;
+
+            if (win.VN_Phone) win.VN_Phone.resetState();
+            if (win.VN_Browser) win.VN_Browser.resetState();
+            if (win.VN_Nav) win.VN_Nav.resetState();
+            if (win.VN_Moments) win.VN_Moments.resetState();
+
+            this.updateControlUI();
+
+            const elsToClear = {
+                'chat-body': '',
+                'vn-log-content': '',
+                'dialogue-text': '',   // 不放「讀取中...」裸字——等待狀態一律由全黑 loading 面板呈現
+                'call-sub-text': '',
+                'call-sub-name': '',
+                'top-badge': ''
+            };
+            for(let id in elsToClear) {
+                const el = document.getElementById(id);
+                if(el) el.innerHTML = elsToClear[id];
+            }
+
+            const hides = ['speaker-name', 'game-char', 'game-char-2', 'char-portrait', 'top-badge'];
+            hides.forEach(id => {
+                const el = document.getElementById(id);
+                if(el) { el.style.display = 'none'; if (el.classList) el.classList.remove('vn-dim', 'vn-active', 'vn-solo', 'vn-avatar'); }
+            });
+            this._stage = [null, null]; this._stageTick = 0;   // 重置雙格舞台
+
+            // 清除場景插圖 overlay（防止跨章節殘留）
+            const sceneCgOverlay = document.getElementById('scene-cg-overlay');
+            if (sceneCgOverlay) sceneCgOverlay.classList.remove('active', 'scene-cg-failed');
+            const sceneCgImg = document.getElementById('scene-cg-img');
+            if (sceneCgImg) sceneCgImg.src = '';
+            this._sceneCgLinger = 0;
+            this._sceneCgHold = false;
+            this._sceneCgFailLinger = 0;
+            this._sceneGenBackoff = 0;   // 新章節/新一輪：解除插圖退避，重新嘗試生圖
+
+            const bg = document.getElementById('game-bg');
+            if (bg) {
+                if (this._lastBgCacheId) {
+                    // 有上一章背景：cacheId 存活，從 IDB 重新取 URL（blob 已被 resetState 撤銷）
+                    this._setBgImage(bg, '');
+                    const _cid = this._lastBgCacheId;
+                    (async () => {
+                        const cached = await VN_Cache.get('bg_cache', _cid);
+                        console.log('[VN_Core🔎] 背景持久還原 cid=' + _cid + ' → IDB ' + (cached && cached.url ? '命中' : '撈空(上輪生成沒寫進IDB)'));
+                        if (cached && cached.url && bg) {
+                            const objUrl = await this._toObjectUrl(cached.url).catch(() => null);
+                            let finalUrl = objUrl || cached.url;
+                            if (cached.fallback && !String(finalUrl).includes('#fallback')) finalUrl += '#fallback';
+                            this._setBgImage(bg, finalUrl);
+                        }
+                    })();
+                } else {
+                    console.log('[VN_Core🔎] 背景持久：_lastBgCacheId 為空 → 不還原(上輪沒成功背景，或 VN_Core 被重建)');
+                    this._setBgImage(bg, '');
+                }
+            }
+
+            ['sys-overlay', 'trans-overlay', 'item-overlay', 'phone-overlay', 'scene-cg-overlay'].forEach(id => {
+                const el = document.getElementById(id);
+                if(el) el.classList.remove('active');
+            });
+
+            const vnPanel = document.getElementById('text-panel-wrapper');
+            if(vnPanel) vnPanel.style.display = 'block';
+
+            const endOverlay = document.getElementById('vn-end-overlay');
+            if(endOverlay) endOverlay.classList.remove('active');
+            // 🎴 世界活動面板一併拆掉：底圖常常是 dataURL，留著等於整章都掛在畫面上
+            try { window.VN_EndPanel?.clear(); } catch(e) {}
+        },
+
+        stopSFX: function() {
+            if (this._currentSfxAudio) {
+                this._currentSfxAudio.pause();
+                this._currentSfxAudio.currentTime = 0;
+                this._currentSfxAudio = null;
+            }
+            if (this._sfxTimer) {
+                clearTimeout(this._sfxTimer);
+                this._sfxTimer = null;
+            }
+        },
+
+        clearTimers: function() {
+            if(this._twTimer) clearTimeout(this._twTimer);
+            if(this._autoTimer) clearTimeout(this._autoTimer);
+            // 當前進到下一句話，或重置狀態時，停止所有正在播放的音效
+            this.stopSFX();
+        },
+
+        // ── [Avatar] 宣告的固定聲線：按 chatId 持久化（localStorage 同步、loadScript 能直接讀）──
+        //   不存就只在「有 [Avatar] 那則」有效，之後的回合/大總結壓掉舊訊息/重載 → 聲線丟失。
+        _charVoicesKey: function() {
+            let cid = '';
+            try { const w = window.parent || window; const ctx = w.SillyTavern && w.SillyTavern.getContext && w.SillyTavern.getContext(); if (ctx && ctx.chatId) cid = String(ctx.chatId); } catch(e){}
+            if (!cid) { try { const w = window.parent || window; if (w.VoidTerminal && w.VoidTerminal.getChatId) cid = String(w.VoidTerminal.getChatId() || ''); } catch(e){} }
+            return 'vn_charvoices::' + (cid || 'lobby_default');
+        },
+        _loadCharVoices: function() {
+            try { const raw = localStorage.getItem(this._charVoicesKey()); if (raw) { const o = JSON.parse(raw); if (o && typeof o === 'object') return o; } } catch(e){}
+            return {};
+        },
+        _saveCharVoices: function() {
+            win.AUI.lsSet(this._charVoicesKey(), JSON.stringify(this.charVoices || {}), '角色的固定聲線');
+        },
+
+        // opts.replay：從章節選擇重看舊章。最新這輪的副模型插圖（VN_SceneInsert.applyLatestFresh）看到它就不插進這份
+        loadScript: function (txt, messageId, opts) {
+            // 新一輪劇本載入時，自動關閉檔案庫面板
+            if (window.AureliaHtmlExtractor && window.AureliaHtmlExtractor.isVisible) {
+                window.AureliaHtmlExtractor.hide();
+            }
+            this.resetState();
+            this._currentMessageId = messageId || null; // resetState 後覆寫，確保拿到正確 ID
+            this._scriptIsReplay = !!(opts && opts.replay);
+            // 🕰 主角狀態：每則訊息處理前存快照、讓效果倒數一回合；同一則再進來（swipe／重生）先退回快照。
+            //    她自己那套 <os_status> 區塊也在這裡整塊撈給狀態模組（動作都排隊，一定在下面的標籤之前跑），
+            //    然後從劇本剝掉——不然會被當旁白念出來、或被未知區塊過濾器吃掉。
+            try {
+                const _S = win.OS_MC_STATUS || window.OS_MC_STATUS;
+                if (_S) {
+                    // 重看舊章（處理過的內容、或比最新那則還舊的樓）→ onMessage 回 replay，這章的狀態欄一律不套：
+                    //   以前照套，時鐘就被拉回那章的日期、約定又變成還沒到（09-24：約定演完了隔天又提）。
+                    const _raw = String(txt || '');
+                    _S.onMessage(messageId, _raw).then(function (r) {
+                        _S.renderHud();
+                        if (r && r.replay) return;
+                        const _blocks = _raw.match(/<os_status>[\s\S]*?<\/os_status>/gi);
+                        if (_blocks) _blocks.forEach(function (b) { _S.applyStatusBlock(b, messageId); });
+                        // 標籤寫法也在這裡撈：AI 常把 [Date|][HP|][Buff|] 放在 </content> 之後（回覆末尾），
+                        //   劇本只取 <content> 裡面的行，放外面的就永遠讀不到 → 不管寫在哪都認，撈完從原文剝掉。
+                        const _noCot = _raw.replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+                        const _tagLines = _noCot.match(/^[ \t]*\[(?:Date|HP|Buff|Debuff|Event)\|[^\]\n]*\][ \t]*$/gim);
+                        if (_tagLines) _tagLines.forEach(function (ln) {
+                            const _in = ln.trim().slice(1, -1).split('|');
+                            const _tag = (_in[0] || '').trim().toLowerCase();
+                            const _a = (_in[1] || '').trim(), _b = _in.slice(2).join('|').trim();
+                            if (_tag === 'date') _S.setDate(_a, _b);
+                            else if (_tag === 'hp') _S.setHp(_a);
+                            else if (_tag === 'buff' || _tag === 'debuff') _S.setBuff(_a, _b);
+                            else if (_tag === 'event') _S.addEvent(_a, _b, '', 'ai', messageId);
+                        });
+                    }).catch(function () {});
+                }
+            } catch (e) {}
+            // 🪙 起始金額 [Wallet|金額]：錢包還沒設過的故事，VN 指令會叫正文 AI 在章節卡寫這一行（wx_wallet.seedFromStory 只在錢包是空的時候設）
+            try {
+                const _wm = String(txt || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '').match(/^[ \t]*\[Wallet\|\s*([^\]\n]*)\][ \t]*$/im);
+                const _WW = win.WX_WALLET || window.WX_WALLET;
+                if (_wm && _WW && _WW.seedFromStory) {
+                    const _amt = parseFloat(String(_wm[1]).replace(/[^0-9.]/g, ''));
+                    if (_amt > 0) _WW.seedFromStory(_amt);
+                }
+            } catch (e) {}
+            txt = String(txt || '')
+                .replace(/^[ \t]*\[Wallet\|[^\]\n]*\][ \t]*\r?\n?/gim, '')
+                .replace(/<os_status>[\s\S]*?<\/os_status>\s*/gi, '')
+                .replace(/^[ \t]*\[(?:Date|HP|Buff|Debuff|Event)\|[^\]\n]*\][ \t]*\r?\n?/gim, '');
+            // 這份劇本的原文：區塊內容等一下會被「未知 XML 區塊過濾器」刪掉，
+            //   彈卡片時要回原文撈整顆 <tag>…</tag>（PWA 沒有酒館訊息可讀，只能靠這份）。
+            this._scriptRawText = String(txt || '');
+            this._sceneIdPlayed = Object.create(null);  // 本份劇本已播過的插圖 ID（同一份裡重複的只播第一次，見 [Scene| handler）
+            this.charVoices = this._loadCharVoices();   // 先載入本卡持久化的固定聲線（跨訊息/大總結/重載留存），下面解析 [Avatar] 再合併
+            // 🔄 學 PWA：重抓創作室（展廳）已啟用模板，確保跨視窗新增/啟用的 tag 生效。
+            //    ⚠️ 不可 await（呼叫端是 loadScript()→next() 同步契約，await 會讓 next() 在空腳本上跑→劇情跳過）。
+            //    fire-and-forget：本次載入吃現有快取，刷新供後續播放/下次開播用。
+            try { if (window.VN_DynamicParser && window.VN_DynamicParser.init) window.VN_DynamicParser.init(); } catch (e) {}
+            // 🎨 套用此世界(chatId)的自訂 VN 面板 CSS
+            try { if (window.VN_Theme) window.VN_Theme.apply(); } catch (e) {}
+            // 🌍 人在有自己劇情介面的視差世界裡＝換成那個世界的（世界門查完自己重畫；不 await，同上面同步契約）
+            try { const _WG = win.OS_WORLDGATE || window.OS_WORLDGATE; if (_WG && _WG.syncTheme) _WG.syncTheme(); } catch (e) {}
+            // ⚠️ 先剝 CoT 再取正文：<thinking> 裡常「提到」<content>（格式自檢清單），直接抓會從思考區開抓、把 CoT 包進正文
+            const _txtNoCot = String(txt).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+            const contentMatch = _txtNoCot.match(/<content>([\s\S]*?)<\/content>/i);
+            let storyText = contentMatch ? contentMatch[1] : _txtNoCot;
+            // 卡自帶「AI 直出裸 HTML 美化卡」(無正則參與、無自訂 tag 包裹)：先整塊收走，
+            // 免得下面按行切割把 <div style=…> 拆成碎旁白（美化卡整個散架）
+            storyText = this._extractRawHtmlCards(storyText);
+
+            // 解析 <branches> 區塊（位於 <content> 外，作為一次性選擇，不進入 AI 上下文）；同樣避開 CoT 裡的假 branches
+            const branchesMatch = _txtNoCot.match(/<branches>([\s\S]*?)<\/branches>/i);
+            // 🚨<branches> 裡不是只有選項:選項插圖卡的 <panels>(角色外觀設計行＋每格分鏡)也包在裡面。
+            //   以前逐行轉 [Choice|]，等於把「traveler: chibi boy, black-haired…」這種外觀資料當成選項灌進劇本。
+            //   先把成對的子區塊整個切掉，再把殘留的標籤行濾掉，只留真正給玩家點的那幾行。
+            const _branchRaw = branchesMatch
+                ? branchesMatch[1]
+                    .replace(/<panels>[\s\S]*?<\/panels>/gi, '')
+                    // ⚠️ 這個 <summary> 是 <details><summary>剧情分支</summary> 的 HTML 標籤，
+                    //   不是章節摘要 → 這行不可以改成 VN_READER.sumStrip，它要剝的是別的東西。
+                    .replace(/<summary>[\s\S]*?<\/summary>/gi, '')
+                : '';
+            const _branchLines = branchesMatch
+                ? _branchRaw.split('\n')
+                    .map(l => l.trim())
+                    .filter(Boolean)                                   // 空行
+                    .filter(l => !/^<\/?[A-Za-z][\w-]*[^>]*>$/.test(l)) // 整行只有一個標籤(<details>、</panels> 之類)
+                    .map(l => l.replace(/<br\s*\/?>/gi, '').trim())     // 選項行尾常帶 <br>
+                    .filter(Boolean)
+                    .map(l => {
+                        // 向下相容：如果 AI 還是輸出了舊格式，就直接保留
+                        if (l.startsWith('[Choice|')) return l;
+                        // 智能轉換：將 "A. 探險" 或 "1. 探險" 或 "- 探險" 自動轉成系統讀得懂的 [Choice|探險]
+                        const cleanLine = l.replace(/^([A-Za-z]\.|[0-9]+\.|-)\s*/, '');
+                        return `[Choice|${cleanLine}]`;
+                    })
+                : [];
+
+            this.script = storyText.split('\n').map(l=>l.trim()).filter(l=>l!=='');
+            // 移除 HTML 註解行（如作者思維鏈 <!-- 分析內容 --> 等），含跨行註解
+            this.script = this.script.join('\n').replace(/<!--[\s\S]*?-->/g, '').split('\n').map(l=>l.trim()).filter(l=>l!=='');
+            this.script = this.script.map(l => l.replace(/<\/?status>/g, '').replace(/<\/?content>/g, ''));
+            // 切割：AI 常把旁白和 [Char|...] 擠在同一行（旁白混進對話泡）→ 拆成獨立行，
+            //   每個 [Char|...] 自成一行、中間/前後的旁白各自一行，下游照常渲染對話泡/旁白。
+            //   不靠 AI 守排版規範，腳本端硬切（同 WX 拆 [图片:] 的思路）。
+            this.script = this.script.flatMap(l => {
+                if (l.indexOf('[Char|') === -1) return [l];
+                const re = /\[Char\|[^\]]*\]/g;
+                const out = []; let last = 0, m;
+                while ((m = re.exec(l)) !== null) {
+                    if (m.index > last) { const before = l.slice(last, m.index).trim(); if (before) out.push(before); }
+                    out.push(m[0]);
+                    last = re.lastIndex;
+                }
+                const tail = l.slice(last).trim(); if (tail) out.push(tail);
+                return out.length ? out : [l];
+            });
+            // 容錯：AI 被其他 TAG 格式污染時會把 <call> 寫成方括號版
+            // （[Call character="X"] / [/Call]，大小寫、單雙引號、無引號都見過）→ 正規化回標準標籤，
+            // 統一成雙引號讓 VN_Phone.initCall 的 character="..." 解析吃得到
+            this.script = this.script.map(l => {
+                const mOpen = l.match(/^\[call\s+character\s*=\s*["']?([^"'\]]+?)["']?\s*\]$/i);
+                if (mOpen) return `<call character="${mOpen[1]}">`;
+                if (/^\[\/call\s*\]$/i.test(l)) return '</call>';
+                // 瀏覽器同一套容錯：[Browser query="X"] / [/Browser]
+                const mBr = l.match(/^\[browser\s+(?:query|q|search|url)\s*=\s*["']?([^"'\]]+?)["']?\s*\]$/i);
+                if (mBr) return `<browser query="${mBr[1]}">`;
+                if (/^\[\/browser\s*\]$/i.test(l)) return '</browser>';
+                // 導航同一套：[Nav to="X" from="Y"] / [/Nav]
+                const mNv = l.match(/^\[nav\s+([^\]]*?)\]$/i);
+                if (mNv && /\bto\s*=/i.test(mNv[1])) return `<nav ${mNv[1].trim()}>`;
+                if (/^\[\/nav\s*\]$/i.test(l)) return '</nav>';
+                return l;
+            });
+
+            // 預處理：移除外部作者區塊標籤內的原始文字行
+            // 這些行的內容由 DOM 渲染版本呈現（_showDomBlock），原文不需出現在對話框
+            {
+                const _skipSys = ['content','call','chat','browser','nav','moments','status','summary','avatar','scene',
+                    // 🚨 章節卡：prompt 規定每輪必出，裡面裝的是 [Story|/[Chapter|/[BGM|/[Bg|/[Avatar|。
+                    //    不列白名單的話會被下面的「未知 XML 區塊過濾器」當成作者的 HTML 美化區塊，
+                    //    整塊內容刪光 → 背景/BGM/左上角場景 tag 全沒（立繪還在，因為早鳥直接掃原文）。
+                    //    列進來＝內容原樣保留，標籤行留給 VN 組件收走做章節卡片；沒做組件時由 next() 跳過。
+                    'chaptercard',
+                    // ⚙️ 系統框區塊版：同上，內容要原樣留給 next() 的攔截收走。
+                    //    不列白名單＝<system> 到 </system> 之間整塊被當作者的 HTML 刪掉，框永遠是空的。
+                    'system',
+                    'battlestart',   // ⚔️ 戰鬥設定區塊：內容要完整留給播放時的攔截收走；不加的話這裡會把 [Foe|…] 全刪光，攔截收到空區塊靜默跳過＝戰鬥永遠不開
+                    'p','div','span','br','hr','b','i','em','strong','a','img',
+                    'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
+                    'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
+
+                // 🌟 神奇魔法：動態抓取煉丹爐已啟用的區塊標籤
+                if (window.VN_DynamicParser && window.VN_DynamicParser.activeTemplates) {
+                    window.VN_DynamicParser.activeTemplates.forEach(tpl => {
+                        if (tpl.isBlock && tpl.tagId) _skipSys.push(tpl.tagId.toLowerCase());
+                    });
+                }
+
+                // _inDynBlock：追蹤「動態 Parser 區塊」（煉丹爐標籤，如 <StellarFeed>）
+                // 這類區塊的內容必須完整保留，讓 vn_dynamic_parser 的 processLine 自行收集；
+                // 不能讓格式B過濾器（[Timeline]、[Hot] 等節區標記）誤判為 DOM Block 並刪除後續內容。
+                let _inBlock = false, _bCloseTag = '';
+                let _inDynBlock = false, _dynCloseTag = '';
+                // 🚨 沒有對應結尾的標籤絕不能進區塊模式：以前 [Arrive]、[撤回] 這種整行單一標籤一出現，
+                //    後面整份劇本會被當「區塊內原始文字」刪光（</nav>、台詞、旁白全沒），關窗就直接跳到末尾。
+                const _scriptAll = this.script;
+                const _hasCloseAfter = (fromIdx, closeTag) => {
+                    const want = String(closeTag).toLowerCase();
+                    for (let k = fromIdx + 1; k < _scriptAll.length; k++) if (String(_scriptAll[k]).trim().toLowerCase() === want) return true;
+                    return false;
+                };
+                this.script = this.script.filter((l, _li) => {
+                    // ── 優先：動態 Parser 區塊保護層 ──────────────────────────
+                    if (_inDynBlock) {
+                        if (l.toLowerCase() === _dynCloseTag.toLowerCase()) { _inDynBlock = false; _dynCloseTag = ''; }
+                        return true; // 區塊內所有行（含節區標記與結束標籤）一律保留
+                    }
+
+                    if (!_inBlock) {
+                        // 格式A 開頭 <XXX>；帶屬性的白名單容器（<chat chatroom=…>、<call character=…>、<nav to=…>、<browser query=…>）也算
+                        const _oA = l.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
+                        const _oAttr = _oA ? null : l.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\s[^>]*>$/);
+                        if (_oAttr && _skipSys.includes(_oAttr[1].toLowerCase())) {
+                            _inDynBlock = true; _dynCloseTag = `</${_oAttr[1]}>`;
+                            return true;
+                        }
+                        if (_oA) {
+                            if (_skipSys.includes(_oA[1].toLowerCase())) {
+                                // 這是已知的動態 Parser 區塊 → 切換到保護模式，完整保留
+                                _inDynBlock = true; _dynCloseTag = `</${_oA[1]}>`;
+                                return true;
+                            } else if (_hasCloseAfter(_li, `</${_oA[1]}>`)) {
+                                // 未知 XML 區塊而且真的有結尾 → 走原本的 DOM Block 過濾
+                                _inBlock = true; _bCloseTag = `</${_oA[1]}>`;
+                                return true; // 保留開頭標籤行
+                            }
+                            return true; // 沒結尾＝不是區塊，當普通行留著（播放時 next() 會自己跳過）
+                        }
+                        // 格式B 開頭 [XXX]（僅在非動態區塊時觸發，而且要真的有 [/XXX]）
+                        const _oB = l.match(/^\[([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\]$/);
+                        if (_oB && _hasCloseAfter(_li, `[/${_oB[1]}]`)) {
+                            _inBlock = true; _bCloseTag = `[/${_oB[1]}]`;
+                            return true; // 保留開頭標籤行
+                        }
+                        return true; // 正常 VN 行，保留
+                    } else {
+                        if (l.toLowerCase() === _bCloseTag.toLowerCase()) { _inBlock = false; _bCloseTag = ''; return true; } // 保留閉合標籤
+                        return false; // 區塊內的原始文字，過濾掉
+                    }
+                });
+            }
+
+            const txtString = txt;
+
+            // 1. 舊式 <avatar> 區塊（向下相容）
+            const reg = /<avatar>([\s\S]*?)<\/avatar>/g; let m;
+            while ((m = reg.exec(txtString)) !== null) {
+                m[1].split('\n').forEach(l => { if(l.includes(':')) { const [n, d] = l.split(':'); this.avatars[n.trim()] = d.trim(); } });
+            }
+
+            // 2. 新式 [Avatar|名|外觀] 或 [Avatar|名|聲線|外觀]（聲線宣告一次、跟著角色走；描述/外觀內禁含 |）
+            const regAvNew = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
+            while ((m = regAvNew.exec(txtString)) !== null) {
+                const _an = m[1].trim();
+                const _rest = m[2].split('|').map(s => s.trim());
+                const _voice = _rest.length >= 2 ? _rest[0] : '';
+                const _ad = this._avatarDescOf(_rest);
+                if (_an && _ad) this.avatars[_an] = this._safeOutfit(_ad);
+                if (_an && _voice) this.charVoices[_an] = _voice;
+            }
+            this._saveCharVoices();   // 本則新宣告的聲線寫回持久化（合併制，只增不洗）
+
+            // [World|現代] —— ChapterCard 本來就會吐這一格，以前沒人收。
+            //   路人立繪要靠它判斷時代感（現代/奇幻/武俠），不然只能生一身現代便服。
+            {
+                const _wm = txtString.match(/\[World\|([^\]\n|]+)\]/i);
+                this._currentWorldTag = _wm ? _wm[1].trim() : '';
+            }
+            // [Avatar|...] 是生成指令不是劇情行：從劇本剔除（卡片與對話框都不該顯示原始行）
+            this.script = this.script.filter(l => !/^\[Avatar\|/i.test(l));
+
+            // 將 <branches> 選項附加到 script 末尾（由現有 [Choice|] 機制驅動顯示）
+            if (_branchLines.length) {
+                this.script.push(..._branchLines);
+            }
+
+            this._hoistSceneDirectivesFromDynBlocks();  // 卡片區塊內的 [BGM]/[Bg] 提副本到區塊前，讓引擎照常播
+            // 副模型場景插圖：把「最新這輪」剛排隊的 scenes splice 進剛載入的劇本（在預熱前，讓它也被預熱）。
+            //   ★不靠 ID 撈 _pending(窗口號每輪都撞 key→回放舊章節會誤撈最新圖)，改用 _latest(最新這輪、用完即清)。
+            //   回放舊章節時 _latest 是 null → 不會誤插；舊章節的圖由 vn_panels 的 applyChapterScenes(存檔 scenes) 負責。
+            console.log('[VN_Core🔎] loadScript 完成 msg#' + this._currentMessageId + ' script長=' + (Array.isArray(this.script) ? this.script.length : 'N/A') + ' → 試插最新這輪場景');
+            try { if (window.VN_SceneInsert) window.VN_SceneInsert.applyLatestFresh(); } catch (e) {}
+            this._prewarmBgs();
+            this._prewarmScenes();
+            this._prewarmItems();
+            this._prewarmAvatars();
+            this._deferVoicePrewarm();   // 語音延後：等圖片預熱清空才開跑（圖片優先進顯卡）
+            this._startImgGate = true;   // 開場閘門上膛：第一行劇情文本渲染前檢查圖片（卡片/指令不受影響）
+            // 🎭 立繪什麼時候收交給 Jev（os_jev_stage.js）：不 await，排好時間表回來才生效（_jevStageHit／_jevStageCatchUp）。
+            //    這章 Jev 有回答 → 整章聽 Jev（AI 的 Leave／[Exit]／幾行沒開口自動收都停）；沒回答 → 照舊聽 AI 的。
+            try {
+                const _JS = win.OS_JEV_STAGE || window.OS_JEV_STAGE;
+                if (_JS) {
+                    const _self = this, _seq = this._jevStageSeq;
+                    _JS.plan(this.script.slice(), this._currentMessageId).then(function (pl) {
+                        if (!pl || _self._jevStageSeq !== _seq) return;
+                        _self._jevStage = pl;
+                        _self._jevStageCatchUp();
+                    }).catch(function () {});
+                }
+            } catch (e) {}
+            // 🎵 音效和音樂交給 Jev（os_jev_sfx.js）：大多在正文 AI 寫的時候就問好了，這裡只補問剩下的、排成時間表。
+            //    這章有時間表 → AI 寫的 #音效# 和 [BGM|] 都不理；沒有 → 照舊。
+            try {
+                const _JX = win.OS_JEV_SFX || window.OS_JEV_SFX;
+                if (_JX && _JX.active && _JX.active()) {
+                    const _self = this, _seq = this._jevStageSeq;
+                    // 🚨 時間表是非同步回來的。以前回來之前 AI 寫的 [BGM|] 照播 —— 章節卡片那行一定比時間表早，
+                    //    於是卡片放 AI 選的歌、關掉卡片 Jev 的歌進來又換一首，每章都這樣（09-24：章節卡片有 BGM，
+                    //    關掉後又換一首）。現在等的這段 AI 的先扣著；Jev 沒回答（這章照舊）才把扣著的那首放出來。
+                    this._jevSfxWait = true;
+                    const _giveBack = function () {
+                        if (_self._jevStageSeq !== _seq) return;
+                        _self._jevSfxWait = false;
+                        const held = _self._aiBgmHeld; _self._aiBgmHeld = null;
+                        if (!held) { _self._bgmResumeLast(); return; }   // Jev 整章都沒問到、AI 也沒寫 → 接著放上一首
+                        if (_self._ccOpen) { _self._playBgm(held.split('|')[1].replace(']', '').trim().replace(/\.[^.]+$/, '')); return; }   // 卡片開著在等她按：現在就放
+                        if (Array.isArray(_self.script)) _self.script.splice(_self.index + 1, 0, held);   // 下一次推進就播
+                    };
+                    _JX.plan(this.script.slice(), this._currentMessageId).then(function (pl) {
+                        if (_self._jevStageSeq !== _seq) return;
+                        if (!pl) { _giveBack(); return; }
+                        _self._jevSfxWait = false;
+                        _self._aiBgmHeld = null;
+                        _self._jevSfx = pl;
+                        _self._jevSfxCatchUp();
+                    }).catch(_giveBack);
+                }
+            } catch (e) {}
+        },
+
+        // 語音預熱延後啟動：圖片（頭像/背景/場景/道具）全部清空才放語音佇列進場。
+        // 「進劇情前圖片全到位」的另一半——loading 擋播放、這裡擋語音，兩邊都讓圖片先吃滿 GPU。
+        // 上限 5 分鐘保險：圖片端有 180 秒逾時，正常不會撞到這個底線。
+        _deferVoicePrewarm: function() {
+            const self = this;
+            (async () => {
+                await new Promise(r => setTimeout(r, 2000));   // 給各圖片預熱把生成單排進來的時間
+                const t0 = Date.now();
+                let idle = 0;
+                while (Date.now() - t0 < 300000) {
+                    if (self.imgPendingStatus().pending === 0) { if (++idle >= 3) break; }   // 連續 ~1.5 秒沒單＝清空
+                    else idle = 0;
+                    await new Promise(r => setTimeout(r, 500));
+                }
+                self._prewarmSoVITS();
+            })();
+        },
+
+        /**
+         * 獨立版場景插圖：先送副模型分析，拿到增強版文本後再 loadScript + next
+         * 若未啟用或非獨立模式，直接走原本流程
+         * @param {string}   text      原始劇情文本
+         * @param {string|null} msgId  訊息 ID（獨立版通常為 null）
+         */
+        _loadWithSceneAnalysis: function(text, msgId) {
+            // 獨立版場景分析已退役（2026-06-13）：直接載入；場景插圖改走 主模型 [Scene|] tag / 副模型版(接記憶)
+            this.loadScript(text, msgId);
+            this.next();
+        },
+
+        /**
+         * 統一啟動程序（2026-06-11）：載入劇本（圖片預熱全開、語音延後）→ 立刻開播。
+         * 章節卡片/開場指令照常顯示（卡片就是天然等待室）；
+         * 「第一行劇情文本」要渲染時若圖片還沒全好，next() 內建的開場閘門才會彈 loading 攔住。
+         */
+        _startWithLoader: function(text, msgId, opts) {
+            // 獨立版場景分析已退役（2026-06-13）：直接載入開播；場景插圖走 主模型 [Scene|] tag / 副模型版(接記憶)
+            this.loadScript(text, msgId, opts);
+            this.next();
+        },
+
+        /**
+         * 顯示 loading bar，滿後執行 onDone（預設啟動 VN）
+         * 給外部插件預留注入時間（如圖片生成插件）
+         */
+        // 確保 loader 殼存在（樣式＋DOM），回傳元素；開場 loading 與「故事撰寫中」幕布共用
+        _ensureStartLoaderEl: function() {
+            const gamePage = document.getElementById('page-game');
+            if (!gamePage) return null;
+
+            if (!document.getElementById('vn-sl-style')) {
+                const s = document.createElement('style');
+                s.id = 'vn-sl-style';
+                // 校準艙掛不上時的純色退路：配色跟艙的預設一致（深色）
+                s.textContent = '#vn-start-loader{position:absolute;inset:0;z-index:900;background:#050402;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}' +
+                    '#vn-start-loader-track{width:60%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}' +
+                    '#vn-start-loader-bar{height:100%;width:0%;background:#d4af37;border-radius:2px;transition:width linear}' +
+                    '#vn-start-loader-label{font-size:10px;letter-spacing:3px;color:rgba(212,175,55,0.5);text-transform:uppercase}' +
+                    '#vn-start-loader-skip{display:none;margin-top:6px;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.18);border-radius:4px;padding:6px 18px;cursor:pointer;background:transparent}' +
+                    '#vn-start-loader-skip:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.4)}';
+                document.head.appendChild(s);
+            }
+
+            let el = document.getElementById('vn-start-loader');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'vn-start-loader';
+                el.innerHTML = '<div id="vn-start-loader-track"><div id="vn-start-loader-bar"></div></div><div id="vn-start-loader-label">Loading</div><button id="vn-start-loader-skip" type="button">跳過等待</button>';
+                gamePage.appendChild(el);
+            }
+            // 🛰 視差校準艙：把氣氛層鋪進這個殼（透視框／資料碎片／HUD／管理員待機動畫）。
+            //    上面那三個原件（track/label/skip）會被搬進艙內的 UI 區，id 不變，
+            //    所以 _showStartLoader 既有的進度與跳過邏輯完全不用動。
+            try { win.VN_LoaderChamber?.mount(el); } catch (e) { console.warn('[VN] 校準艙掛載失敗，退純色 loading', e); }
+            return el;
+        },
+
+        // 「故事撰寫中」幕布：等 AI 收尾期間蓋住劇情頁（重用 loader 殼；無進度、無跳過）。
+        // 劇本落地後開場閘門的 _showStartLoader 會無縫接手換成「圖片繪製中 N/M」。
+        _writerCurtain: false,
+        _showWriterCurtain: function() {
+            const el = this._ensureStartLoaderEl();
+            if (!el) return;
+            // 🔥 ComfyUI 暖機：AI 寫稿要好幾十秒，正好夠把模型＋LoRA 先拉上顯卡（冷啟動 20 秒藏進這段）。
+            //    交給它的是開場接著要畫的那幾列（照先後：角色圖→插圖→背景；開了立繪的話角色圖走「立繪」那列），
+            //    它挑第一個實際走 ComfyUI 的列、用那列選的包暖；都不走 ComfyUI 是 no-op；十分鐘內生過圖也不會重複暖。
+            try { win.OS_IMAGE_MANAGER?.warmup?.([VN_Config.data.spriteDirect === true ? 'sprite' : 'avatar', 'scene', 'bg']); } catch (e) {}
+            this._writerCurtain = true;
+            el.style.display = 'flex';
+            try { win.VN_LoaderChamber?.start(); win.VN_LoaderChamber?.phase('text'); } catch (e) {}
+            const label = el.querySelector('#vn-start-loader-label');
+            if (label) label.textContent = '故事撰寫中…';
+            const skip = el.querySelector('#vn-start-loader-skip');
+            if (skip) skip.style.display = 'none';
+            const bar = el.querySelector('#vn-start-loader-bar');
+            if (bar) { bar.style.transition = 'width 2000ms linear'; bar.style.width = '15%'; }
+        },
+        _hideWriterCurtain: function() {
+            if (!this._writerCurtain) return;
+            this._writerCurtain = false;
+            const el = document.getElementById('vn-start-loader');
+            if (el) el.style.display = 'none';
+            try { win.VN_LoaderChamber?.stop(); } catch (e) {}   // 藏起來≠停止：rAF 不收會一直空轉
+        },
+
+        _showStartLoader: function(ms, onDone) {
+            const el = this._ensureStartLoaderEl();
+            if (!el) { if (onDone) onDone(); return; }
+            this._writerCurtain = false;        // 幕布交棒給正式 loading
+            el.style.display = 'flex';          // ⚠️ 重用必須重新打開（之前少這行→第二次起永遠隱形）
+            try { win.VN_LoaderChamber?.start(); win.VN_LoaderChamber?.phase('wait'); } catch (e) {}
+
+            const bar = el.querySelector('#vn-start-loader-bar');
+            bar.style.transition = 'none';
+            bar.style.width = '0%';
+            void bar.offsetWidth;
+            bar.style.transition = 'width ' + ms + 'ms linear';
+            bar.style.width = '100%';
+
+            // 基本進度條跑完後：轉入「等全部圖片」階段（頭像＋背景＋場景＋道具）。
+            // 圖片預熱的快取檢查是非同步的，剛開始可能還沒排單 → 用 idle-streak（連續 ~1.5 秒沒單）判定清空，
+            // 不能「當下沒單就放行」。顯示真實進度、5 分鐘上限保險、點擊直接跳過（沒好的生完自己浮現）。
+            const self = this;
+            const skipBtn = el.querySelector('#vn-start-loader-skip');
+            const finish = function() {
+                el.style.display = 'none';
+                if (skipBtn) { skipBtn.style.display = 'none'; skipBtn.onclick = null; }
+                try { win.VN_LoaderChamber?.stop(); } catch (e) {}   // 收 loading＝收 rAF 與影片，別留背景空轉
+                if (onDone) onDone();
+            };
+            setTimeout(function() {
+                if (ms === 0) { finish(); return; }   // ms=0 是「只建 DOM、立即隱藏」的舊契約（vn_inspect 用），不進等待階段
+                const label = el.querySelector('#vn-start-loader-label');
+                const CAP = 300000, t0 = Date.now();
+                let closed = false, idle = 0;
+                const stop = function() {
+                    if (closed) return; closed = true;
+                    clearInterval(tick);
+                    self._chamberImgPhase = 0;
+                    // 所有層瞬間重合＋一次很短的銀藍閃光，閃完才切回劇情
+                    try { win.VN_LoaderChamber?.phase('done'); } catch (e) {}
+                    setTimeout(finish, 460);
+                };
+                // 跳過＝明確按鈕。整面可點的舊設計會被「VN 玩家手不停點」誤觸秒跳（2026-06-11 實測）
+                if (skipBtn) {
+                    skipBtn.style.display = 'inline-block';
+                    skipBtn.onclick = function(ev) { ev.stopPropagation(); stop(); };
+                }
+                const tick = setInterval(function() {
+                    const s2 = (typeof self.imgPendingStatus === 'function') ? self.imgPendingStatus() : { done: 0, total: 0, pending: 0 };
+                    if (s2.total > 0) {
+                        if (label) label.textContent = '圖片繪製中 ' + s2.done + '/' + s2.total;
+                        // 進到繪圖階段才切一次（碎片向外炸開再聚合）；每輪都切會一直在爆
+                        if (!self._chamberImgPhase) { self._chamberImgPhase = 1; try { win.VN_LoaderChamber?.phase('img'); } catch (e) {} }
+                        bar.style.transition = 'none';
+                        bar.style.width = Math.min(100, Math.round(s2.done / Math.max(1, s2.total) * 100)) + '%';
+                    } else if (s2.pending > 0 && label) {
+                        label.textContent = '整理素材中…';
+                    }
+                    if (s2.pending === 0) { if (++idle >= 3) stop(); }
+                    else idle = 0;
+                    if ((Date.now() - t0) > CAP) stop();
+                }, 500);
+            }, ms);
+        },
+
+        /**
+         * 顯示第 N 個自訂 DOM block（與 html_extractor「其他擴展與物件」相同邏輯）
+         * 由 next() 偵測到外部標籤時呼叫，對應計數器 _domBlockCursor
+         */
+        // tagHint：觸發此次 DOM block 的 VN 標籤名（可選）
+        // 用於排除 ST 渲染後與 VN 標籤同名的 HTML 元素（避免把 AI 的 <news> 當作注入內容計數）
+        // 拿一段文字（整顆區塊）去酒館正則對照表找「卡片型」規則，命中就用 replace_string 渲染成卡片 HTML。
+        // 支援任意格式的區塊（<tag>…</tag>、【…|…】 等），因為是拿整段去比對 find_regex，不靠 tag 名。
+        // 回傳：完整 HTML 文件→包成 iframe；一般 HTML→直接回傳；沒命中→ ''。
+        // ── 裸 HTML 美化卡兼容 ─────────────────────────────────────────
+        // 有些卡讓 AI 直接在正文吐 <div style=…> 小型展示卡（沒有酒館正則、也不是自訂 tag 區塊）。
+        // loadScript 按行切割會把它拆成碎旁白 → 這裡在切割前先掃出「行首起頭、同名標籤配對閉合」的
+        // 整塊 HTML，收進 _rawHtmlCards、原位換成一行 [HtmlCard|i]；播放到該行用彈窗展示
+        // （顯示時過 DOMPurify 消毒＝純展示不跑 script，AI 直出的卡幾乎都是純樣式）。
+        _rawHtmlCards: [],
+        _extractRawHtmlCards: function(text) {
+            try {
+                this._rawHtmlCards = [];
+                if (!text || text.indexOf('<') < 0) return text;
+                const ROOT = /^<(div|table|section|aside|center|figure|details|blockquote|article)\b[^>]*>/i;
+                const lines = String(text).split('\n');
+                const out = [];
+                for (let i = 0; i < lines.length; i++) {
+                    const t = lines[i].trim();
+                    const m = t.match(ROOT);
+                    if (!m) { out.push(lines[i]); continue; }
+                    const tag = m[1].toLowerCase();
+                    const openRe = new RegExp('<' + tag + '\\b', 'gi');
+                    const closeRe = new RegExp('</' + tag + '\\s*>', 'gi');
+                    let depth = 0, j = i;
+                    const chunk = [];
+                    for (; j < lines.length && j - i < 200; j++) {   // 200 行保險：不平衡就放棄別掃到天邊
+                        chunk.push(lines[j]);
+                        depth += (lines[j].match(openRe) || []).length;
+                        depth -= (lines[j].match(closeRe) || []).length;
+                        if (depth <= 0) break;
+                    }
+                    if (depth > 0) { out.push(lines[i]); continue; }   // 沒配對閉合 → 不當卡、原樣照舊
+                    this._rawHtmlCards.push(chunk.join('\n'));
+                    out.push('[HtmlCard|' + (this._rawHtmlCards.length - 1) + ']');
+                    i = j;
+                }
+                return out.join('\n');
+            } catch (e) { return text; }
+        },
+
+        // 🧼 外來的卡片 HTML（AI 直出的美化卡、角色卡正則套出來的面板）→ 照樣式顯示（卡片自帶的 <style> 也留）、但什麼都不准跑
+        _safeCard: function(html) {
+            const s = String(html == null ? '' : html);
+            const A = (win && win.AUI) || window.AUI;
+            if (A && typeof A.safeHtml === 'function') return A.safeHtml(s);
+            return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');   // 沒有 AUI（不該發生）：整段當純文字
+        },
+        // 角色卡正則的結果：整份 HTML 文件會被包成 <iframe class="vn-regex-card" srcdoc="…">（卡片自帶的前端程式本來就要跑，
+        //   沙盒屬性另外交給她決定，這裡不動）；只認程式自己包的那一種原樣放行，其餘的片段一律消毒。
+        _REGEX_CARD_FRAME: /^<iframe class="vn-regex-card" scrolling="no" srcdoc="[^"]*"><\/iframe>$/,
+        _safeRegexCard: function(html) {
+            const s = String(html == null ? '' : html);
+            return this._REGEX_CARD_FRAME.test(s) ? s : this._safeCard(s);
+        },
+
+        _grabRegexCardHtml: function(blockText) {
+            if (!blockText) return '';
+            // 🔥 學 PWA：先吃創作室（展廳）已啟用模板，沒命中才去酒館正則。
+            //    酒館正則只是給「別人角色卡自帶的卡片」用；自己在創作室建/啟用的 tag 不該被迫複製去酒館正則。
+            try {
+                const _dp = window.VN_DynamicParser;
+                if (_dp && Array.isArray(_dp.activeTemplates) && _dp.activeTemplates.length) {
+                    const _tm = String(blockText).match(/<\s*([A-Za-z0-9_-]+)[\s>]/);
+                    if (_tm) {
+                        const _tpl = _dp.activeTemplates.find(t => t.tagId && t.html &&
+                            t.tagId.toLowerCase() === _tm[1].toLowerCase());
+                        if (_tpl) {
+                            // 注入該模板 CSS（同一 tag 只注入一次）
+                            if (_tpl.css) {
+                                const _cid = 'vn-dyn-tpl-' + _tpl.tagId.toLowerCase();
+                                if (!document.getElementById(_cid)) {
+                                    const _s = document.createElement('style');
+                                    _s.id = _cid; _s.textContent = _tpl.css;
+                                    document.head.appendChild(_s);
+                                }
+                            }
+                            let _h = _tpl.html;
+                            // 正則型：用 regexString 抓 {{1}}、{{2}} 佔位（與 _renderInline 同邏輯）
+                            //   模板是她做的、抓到的字是模型寫的 → 填進去之前照 _phVal 轉（粗體換行照留，會跑的不留）
+                            if (_tpl.regexString) {
+                                try {
+                                    const _rs = String(_tpl.regexString).replace(/^\^/, '').replace(/\$$/, '');
+                                    const _m = String(blockText).match(new RegExp(_rs, 'i'));
+                                    const _pv = (typeof _dp._phVal === 'function') ? (v) => _dp._phVal(v)
+                                        : (v) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                    if (_m) for (let i = 1; i < _m.length; i++) _h = _h.split('{{' + i + '}}').join(_pv((_m[i] || '').trim()));
+                                } catch (e) {}
+                            }
+                            return _h;
+                        }
+                    }
+                }
+            } catch (e) {}
+            // 🎴 角色卡自帶的正則（PWA 來源）：匯入角色卡時收進正則庫，這裡當第二順位問它。
+            //    酒館那邊這些正則由 TavernHelper 供應；PWA 沒有酒館可問 → 不接這一條的話，
+            //    卡片作者做的美化面板（<标题栏>、<播放器>…）在 PWA 全部變成裸文字。
+            //    順序在「自訂組件」之後：她自己做的組件永遠贏過卡片作者的版型。
+            try {
+                const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+                if (_CR && typeof _CR.cardHtmlFor === 'function') {
+                    const _cardHtml = _CR.cardHtmlFor(blockText);
+                    if (_cardHtml) return this._safeRegexCard(_cardHtml);   // 卡片作者的版型＋模型寫的字：片段消毒，整份文件的 iframe 原樣
+                }
+            } catch (e) {}
+            const _win = window.parent || window;
+            const _th = (_win && _win.TavernHelper) || window.TavernHelper;
+            if (!_th || typeof _th.getTavernRegexes !== 'function') return '';
+            // 把 "/pattern/flags" 字串轉成 RegExp（酒館 find_regex 是這個格式）
+            const _parseRegex = (str) => {
+                if (!str) return null;
+                try {
+                    const m = String(str).match(/^\/([\s\S]*)\/([a-z]*)$/i);
+                    if (m) return new RegExp(m[1], (m[2] || '').replace(/g/g, ''));
+                    return new RegExp(str, 'i');
+                } catch (e) { return null; }
+            };
+            let _regexes = [];
+            try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'global' }) || []); } catch (e) {}
+            try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'character', name: 'current' }) || []); } catch (e) {}
+            try { _regexes = _regexes.concat(_th.getTavernRegexes({ type: 'preset', name: 'in_use' }) || []); } catch (e) {}
+            for (const r of _regexes) {
+                if (!r || r.enabled === false || !r.find_regex) continue;
+                const _rs = r.replace_string || '';
+                // 只認「卡片型」規則（取代內容含任何 HTML 標籤），避免純文字替換或一般旁白被誤判成卡片
+                if (!/<[a-z!\/]/i.test(_rs)) continue;
+                const _fr = _parseRegex(r.find_regex);
+                if (!_fr || !_fr.test(blockText)) continue;
+                _fr.lastIndex = 0;
+                let _card = String(blockText).replace(_fr, _rs);
+                // 去掉 ```html 圍欄
+                _card = _card.replace(/^\s*```html\s*/i, '').replace(/```\s*$/, '').trim();
+                // 完整 HTML 文件 → 包成 iframe（讓內嵌 <script> / 完整文件正常渲染，等同酒館做法）
+                if (/<!DOCTYPE|<html[\s>]|<body[\s>]/i.test(_card)) {
+                    const _esc = _card.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+                    return '<iframe class="vn-regex-card" scrolling="no" srcdoc="' + _esc + '"></iframe>';
+                }
+                // 片段（不是整份文件）：酒館畫在聊天裡時也會先消毒，這裡照做，免得模型寫的字裡夾的 onerror 在彈窗裡跑起來
+                return this._safeCard(_card);
+            }
+            return '';
+        },
+
+        // tagHint：觸發的 <tag> 名（會去原始訊息撈整顆 <tag>…</tag> 來比對）
+        // rawBlockOverride：直接給整段區塊文字（如 【…】 這種非 tag 形式）
+        // precomputedHtml：偵測階段已算好的卡片 HTML（避免重複掃描正則）
+        // ⚔️ 開一場戰鬥：截掉 AI 沒等結果就寫好的戰果 → 讀玩家現況 → 開面板 → 結果寫回正文 → 推進劇情
+        _runBattle: async function (raw) {
+            const self = this;
+            const _th = (win && win.TavernHelper) || window.TavernHelper;
+            const mid = this._currentMessageId;
+
+            // 這行之後的段落是 AI 自己把仗打完寫的：劇本層不播、歷史層也剪掉。
+            //   留著的話下一輪它讀到自己寫的「主角贏了」，會跟真實戰果打架，而畫面上看不出異常。
+            const _tail = this.script.slice(this.index + 1);
+            this.script.length = this.index + 1;
+            if (_tail.some(l => /<\/content>/i.test(l))) this.script.push('</content>');   // VN 靠這行收尾渲染
+
+            // 每一步都出聲：這條鏈四步（讀訊息→剪續寫→開打→寫回），之前只在 throw 才警告，
+            //   條件不成立的靜默路一個 log 都沒有，斷在哪一步完全查不到。
+            // 獨立版沒有聊天樓：等價的載體是「這場戰鬥所屬的那一章」，讀寫走 OS_DB。
+            const _sa = (win.OS_API?.isStandalone?.() ?? false);
+            let msgRaw = '';
+            let _saCh = null;          // 獨立版：這場戰鬥寫回的目標章節
+            if (_sa) {
+                try {
+                    _saCh = await this._battleFindChapter(raw);
+                    if (!_saCh) console.warn('[VN_Battle] 找不到這場戰鬥所屬的章節，結果將無法寫回');
+                    else {
+                        msgRaw = _saCh.content || '';
+                        const _c = window.VN_Battle.cut(msgRaw);
+                        msgRaw = _c.text;
+                        if (_c.cut) {
+                            // silent：只是剪掉 AI 自己寫的戰果，記憶／AVS／插圖不必為此再跑一輪
+                            await win.OS_DB.saveVnChapter(Object.assign({}, _saCh, { content: _c.text }), { silent: true });
+                            console.log('[VN_Battle] 已剪掉續寫戰果 ' + _c.cut.length + ' 字（章節 ' + _saCh.id + '）');
+                        } else console.log('[VN_Battle] 章節裡沒有待剪的續寫段');
+                    }
+                } catch (e) { console.warn('[VN_Battle] 剪掉續寫戰果失敗:', e); }
+            }
+            try {
+                if (_sa) { /* 上面那段已經處理，酒館這條跳過 */ }
+                else if (!_th) console.warn('[VN_Battle] TavernHelper 不在，結果將無法寫回');
+                else if (mid == null) console.warn('[VN_Battle] _currentMessageId 是空的，結果將無法寫回');
+                if (!_sa && _th && mid != null && _th.getChatMessages) {
+                    const _m = await _th.getChatMessages(mid);
+                    msgRaw = (_m && _m[0] && _m[0].message) || '';
+                    if (!msgRaw) console.warn('[VN_Battle] 讀不到 msg#' + mid + ' 的正文，結果將無法寫回');
+                    if (msgRaw) {
+                        const _c = window.VN_Battle.cut(msgRaw);
+                        msgRaw = _c.text;
+                        // refresh:'none' —— 重渲染會打斷正在播的 VN
+                        if (_c.cut && _th.setChatMessages) {
+                            await _th.setChatMessages([{ message_id: mid, message: _c.text }], { refresh: 'none' });
+                            console.log('[VN_Battle] 已剪掉續寫戰果 ' + _c.cut.length + ' 字（msg#' + mid + '）');
+                        } else console.log('[VN_Battle] 訊息裡沒有待剪的續寫段');
+                    }
+                }
+            } catch (e) { console.warn('[VN_Battle] 剪掉續寫戰果失敗:', e); }
+
+            const player = await this._battlePlayerStats();
+            // ⚔️ 已入隊的旅人跟著上場（引擎與酒館零耦合,名單由這裡撈了傳進去;撈不到=照舊單人）
+            let mates = [];
+            try {
+                const WG = window.OS_WORLDGATE;
+                if (WG && WG.getBattleAllies) mates = (await WG.getBattleAllies()) || [];
+            } catch (e) { console.warn('[VN_Battle] 讀隊友名單失敗，單人應戰', e); }
+            console.log('[VN_Battle] 開戰 msg#' + mid + '，玩家現況:', JSON.stringify(player),
+                mates.length ? ('隊友:' + mates.map(m => m.name).join('、')) : '（無隊友）');
+            const host = document.getElementById('page-game') || document.body;
+            window.VN_Battle.start({ host: host, raw: raw, player: player, allies: mates }, async function (result) {
+                console.log('[VN_Battle] 戰鬥結束:', result ? result.outcome + ' hp:' + result.hp + '/' + result.maxHp : '（無結果）');
+                try {
+                    if (_sa) {
+                        if (result && msgRaw && _saCh) {
+                            const _newTxt = window.VN_Battle.writeResult(msgRaw, result);
+                            // silent 同上：正文只多了系統戰果那兩行，<vars> 一個字沒動
+                            await win.OS_DB.saveVnChapter(Object.assign({}, _saCh, { content: _newTxt }), { silent: true });
+                            console.log('[VN_Battle] 結果已寫回章節 ' + _saCh.id + '：' + window.VN_Battle.toTag(result));
+                        } else console.warn('[VN_Battle] 結果沒寫回（result:' + !!result + ' msgRaw:' + !!msgRaw + ' 章節:' + !!_saCh + '）');
+                    }
+                    else if (result && msgRaw && _th && mid != null && _th.setChatMessages) {
+                        // 這次要 refresh:'affected'：開打前那次剪除在播放中途、不能重渲染，但打完這裡戰鬥已收場，
+                        //   不刷的話資料寫進去了、聊天畫面還是舊的——看起來就像結果沒寫回，要開編輯窗才現形
+                        await _th.setChatMessages([{ message_id: mid, message: window.VN_Battle.writeResult(msgRaw, result) }], { refresh: 'affected' });
+                        console.log('[VN_Battle] 結果已寫回 msg#' + mid + '：' + window.VN_Battle.toTag(result));
+                    } else console.warn('[VN_Battle] 結果沒寫回（result:' + !!result + ' msgRaw:' + !!msgRaw + ' mid:' + mid + '）');
+                } catch (e) { console.warn('[VN_Battle] 結果寫回失敗:', e); }
+                self.next();
+            });
+        },
+
+        // 獨立版：這場戰鬥所屬的章節。沒有聊天樓可指，改用「正文裡含這段 <BattleStart> 區塊」來認 ——
+        //   raw 是這一場獨有的（敵人數值＋場地），比「拿最新一章」準：
+        //   從章節選擇回放舊章時遇到的戰鬥，也會寫回它自己那一章，不會誤蓋到最新章。
+        _battleFindChapter: async function (raw) {
+            try {
+                if (!win.OS_DB?.getAllVnChapters) return null;
+                const sid = win.OS_AVS_ADAPTER?.getStoryId?.() || this._currentStoryId
+                         || localStorage.getItem('vn_current_story_id') || '';
+                const all = (await win.OS_DB.getAllVnChapters()) || [];
+                const mine = all.filter(c => c && (!sid || c.storyId === sid));
+                // 比對用的特徵：區塊內容去掉空白（正文裡的換行/縮排可能跟劇本層不同）
+                const key = String(raw || '').replace(/\s+/g, '');
+                if (!key) return null;
+                const hit = mine.filter(c => String(c.content || '').replace(/\s+/g, '').includes(key));
+                if (!hit.length) return null;
+                return hit.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))[0];
+            } catch (e) { console.warn('[VN_Battle] 找章節失敗:', e); return null; }
+        },
+
+        // 玩家戰鬥數值：往回找最後一個 [BattleResult|…hp:x/y]。不另存 DB —— 刪樓重玩時記錄跟著沒，狀態自動退回。
+        _battlePlayerStats: async function () {
+            const out = {};
+            // 獨立版：同一條規則、換資料來源 —— 掃當前故事最近 30 章的正文（章節＝酒館的樓）
+            if (win.OS_API?.isStandalone?.() ?? false) {
+                try {
+                    const sid = win.OS_AVS_ADAPTER?.getStoryId?.() || this._currentStoryId
+                             || localStorage.getItem('vn_current_story_id') || '';
+                    const all = (await win.OS_DB?.getAllVnChapters?.()) || [];   // 已按 createdAt 新→舊
+                    const mine = all.filter(c => c && (!sid || c.storyId === sid)).slice(0, 30);
+                    for (const c of mine) {
+                        const m = /\[BattleResult\|[^\]]*hp:(\d+)\/(\d+)/i.exec(c.content || '');
+                        if (!m) continue;
+                        const hp = parseInt(m[1], 10), maxHp = parseInt(m[2], 10);
+                        out.maxHp = maxHp;
+                        // 上一場被打倒(hp 0)→這場不要用 1 滴血開打；跟酒館分支同一條規則
+                        out.hp = hp > 0 ? hp : maxHp;
+                        break;
+                    }
+                } catch (e) { console.warn('[VN_Battle] 讀戰鬥數值失敗，用預設值開打:', e); }
+                return out;
+            }
+            try {
+                const _th = (win && win.TavernHelper) || window.TavernHelper;
+                if (!_th || !_th.getLastMessageId || !_th.getChatMessages) return out;
+                const last = await _th.getLastMessageId();
+                const msgs = (await _th.getChatMessages(Math.max(0, (last || 0) - 30) + '-' + last)) || [];
+                for (let i = msgs.length - 1; i >= 0; i--) {
+                    const m = /\[BattleResult\|[^\]]*hp:(\d+)\/(\d+)/i.exec((msgs[i] && msgs[i].message) || '');
+                    if (!m) continue;
+                    const hp = parseInt(m[1], 10), maxHp = parseInt(m[2], 10);
+                    out.maxHp = maxHp;
+                    // 上一場是被打倒(hp 0)→這場不要用 1 滴血開打(必死循環)。戰敗後劇情通常會有休息/被救，給滿血。
+                    out.hp = hp > 0 ? hp : maxHp;
+                    break;
+                }
+            } catch (e) {}
+            return out;
+        },
+
+        _showDomBlock: function(tagHint, rawBlockOverride, precomputedHtml) {
+            this._domBlockAfter = null;   // 上一張留下的「收起來之後改做什麼」不能帶到這張（見 _hideDomBlock）
+            const _win = window.parent || window;
+            const _doc = _win.document || document;
+
+            // 🔥 彈窗後「抓正則」(取代「抓 DOM」)：找配得上這段區塊的正則，用 replace_string 渲染；不靠 live DOM。
+            let _regexCardHtml = precomputedHtml || '';
+            if (!_regexCardHtml) {
+                let _block = rawBlockOverride || '';
+                if (!_block && tagHint) {
+                    // 整顆 <tag>…</tag> 的比對式。
+                    //   🚨 不能用 \b 收尾：JS 的 \b 只認 [A-Za-z0-9_]，中文 tag（<标题栏>）在「栏」與「>」
+                    //      之間根本沒有邊界 → 整條比對永遠不成立，卡片作者用中文標籤做的面板一律抓不到。
+                    //      改成「後面要嘛直接收尾、要嘛接一個空白再帶屬性」，對 ASCII tag 一樣不會誤吃 <calls>。
+                    const _blockRe = new RegExp('<' + tagHint + '(?:\\s[^>]*)?>[\\s\\S]*?<\\/' + tagHint + '>', 'i');
+                    const _th = (_win && _win.TavernHelper) || window.TavernHelper;
+                    if (_th && typeof _th.getChatMessages === 'function') {
+                        try {
+                            const _mid = (this._currentMessageId != null) ? this._currentMessageId : -1;
+                            const _msg = _th.getChatMessages(_mid)[0];
+                            const _raw = (_msg && _msg.message) || '';
+                            const _bm = _raw.match(_blockRe);
+                            if (_bm) _block = _bm[0];
+                        } catch (e) {}
+                    }
+                    // PWA 沒有酒館訊息可撈（getChatMessages 回空陣列）→ 用這份劇本的原文。
+                    //   區塊內容在 loadScript 就被「未知 XML 區塊過濾器」刪掉了，只剩頭尾兩行，
+                    //   所以一定要回原文撈，不能從 this.script 拼。
+                    if (!_block) {
+                        try {
+                            const _rawSelf = this._scriptRawText || this._lastRawText || '';
+                            const _bm2 = _rawSelf && _rawSelf.match(_blockRe);
+                            if (_bm2) _block = _bm2[0];
+                        } catch (e) {}
+                    }
+                }
+                if (_block) _regexCardHtml = this._grabRegexCardHtml(_block);
+            }
+
+            // 退路：override(【…】等非 tag) 沒命中 → 不彈窗，當普通行繼續；tag 模式沒命中 → 抓 DOM
+            let chatNode = null;
+            if (!_regexCardHtml) {
+                if (rawBlockOverride) { this.next(); return; }
+                chatNode = this._currentMessageId
+                    ? _doc.querySelector(`.mes[mesid="${this._currentMessageId}"] .mes_text`)
+                    : _doc.querySelector('#chat .mes.last_mes .mes_text');
+                if (!chatNode) {
+                    chatNode = this._currentMessageId
+                        ? _doc.querySelector(`.mes[mesid="${this._currentMessageId}"]`)
+                        : _doc.querySelector('#chat .mes.last_mes');
+                }
+                if (!chatNode) { this.next(); return; }
+            }
+
+            // 🔊 組件登場音效：卡片確定要彈出了 → 查該 tag 的模板 appearSfx（沒設就不播）。
+            // 音效來源＝素材設定的「音效目錄」(playSFX 走 VN_Config.data.sfx 基底)；留空＝無聲、不預設。
+            // 🔤 面板字體槽：同一次查模板順便拿 appearFont，蓋過卡片自帶字體（治繁簡混排有細有粗）。
+            // overlay 是重複使用的 → 字體 style 每次彈卡先清再掛，換到沒設字體的組件不殘留。
+            try {
+                const _oldFont = document.getElementById('vn-dbo-font');
+                if (_oldFont) _oldFont.remove();
+                if (tagHint) {
+                    const _dp = window.VN_DynamicParser;   // ⚠️掛在 VN 播放器自己的 window(非 parent)，全檔一致；用 win 會抓不到
+                    const _tpl = _dp && Array.isArray(_dp.activeTemplates)
+                        && _dp.activeTemplates.find(t => t.tagId && t.tagId.toLowerCase() === String(tagHint).toLowerCase());
+                    if (_tpl && _tpl.appearSfx) this.playSFX(_tpl.appearSfx);
+                    if (_tpl && _tpl.appearFont) {
+                        const _fs = document.createElement('style');
+                        _fs.id = 'vn-dbo-font';
+                        _fs.textContent = '#vn-dom-block-body, #vn-dom-block-body *{font-family:' + _tpl.appearFont + ' !important}';
+                        document.head.appendChild(_fs);
+                    }
+                }
+            } catch (e) {}
+
+            const tmpDiv = _doc.createElement('div');
+            tmpDiv.innerHTML = _regexCardHtml || chatNode.innerHTML;
+
+            // ▼▼▼ 暴力拆解法：無情斬斷 <content> 之前的所有內容 ▼▼▼
+            const contentNode = tmpDiv.querySelector('content');
+            if (contentNode) {
+                // 1. 順藤摸瓜：從 <content> 往上找，直到找到 tmpDiv 的「第一層子節點」
+                let topNode = contentNode;
+                while (topNode.parentNode && topNode.parentNode !== tmpDiv) {
+                    topNode = topNode.parentNode;
+                }
+                
+                // 2. 斷頭台：把這個節點「上面」的所有兄弟節點（包含文字、標籤）全部物理抹殺
+                let prev = topNode.previousSibling;
+                while (prev) {
+                    let trash = prev;
+                    prev = prev.previousSibling;
+                    trash.remove();
+                }
+                
+                // 順手清掉防呆：如果 <content> 裡面剛好有包著 <think> (防 AI 發神經)
+                tmpDiv.querySelectorAll('think, profile, status, branches').forEach(el => {
+                    // 只殺掉在 content 外面，或是確定是無用裝飾的節點
+                    if(!contentNode.contains(el)) el.remove(); 
+                });
+            }
+            // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+            tmpDiv.querySelectorAll('img[src], video[src], source[src]').forEach(el => {
+                try { if (el.src) el.setAttribute('src', el.src); } catch(e) {}
+            });
+            tmpDiv.querySelectorAll('a[href]').forEach(el => {
+                try { if (el.href && !el.href.startsWith('javascript:')) el.setAttribute('href', el.href); } catch(e) {}
+            });
+
+            const _BT = ['DIV','TABLE','IFRAME','ASIDE','SECTION','DETAILS','UL','OL'];
+            Array.from(tmpDiv.querySelectorAll('p')).forEach(p => {
+                Array.from(p.children).forEach(ch => {
+                    if (_BT.includes(ch.tagName.toUpperCase())) p.parentNode.insertBefore(ch, p);
+                });
+                if (!p.textContent.trim() && !p.children.length) p.remove();
+            });
+            // 原始邏輯：_BT 元素 或 有 class 的元素
+            // 新增：非標準 HTML 標籤（如 <weverse_live_idol>）也視為 block
+            const _STD = new Set(['A','ABBR','ADDRESS','ARTICLE','ASIDE','AUDIO','B','BLOCKQUOTE','BR',
+                'BUTTON','CANVAS','CAPTION','CITE','CODE','COL','COLGROUP','DD','DEL','DETAILS','DFN',
+                'DIALOG','DIV','DL','DT','EM','EMBED','FIELDSET','FIGCAPTION','FIGURE','FOOTER','FORM',
+                'H1','H2','H3','H4','H5','H6','HEADER','HR','I','IFRAME','IMG','INPUT','INS','KBD',
+                'LABEL','LEGEND','LI','MAIN','MAP','MARK','MENU','METER','NAV','OL','OPTGROUP','OPTION',
+                'OUTPUT','P','PICTURE','PRE','PROGRESS','Q','RP','RT','RUBY','S','SAMP','SECTION',
+                'SELECT','SMALL','SOURCE','SPAN','STRONG','SUB','SUMMARY','SUP','TABLE','TBODY','TD',
+                'TEXTAREA','TFOOT','TH','THEAD','TIME','TR','TRACK','U','UL','VAR','VIDEO','WBR']);
+            const _tagHintUp = tagHint ? tagHint.toUpperCase() : null;
+            const blocks = Array.from(tmpDiv.children).filter(el => {
+                const tag = el.tagName.toUpperCase();
+                // 跳過與 VN 觸發標籤同名的元素（ST 渲染 AI 原始 XML 標籤後的殘影，不是插件注入的內容）
+                if (_tagHintUp && tag === _tagHintUp) return false;
+                return _BT.includes(tag) || (el.className && el.className.trim()) || !_STD.has(tag);
+            });
+            // 正則路徑：tmpDiv 只有目標那一顆卡，直接取，不動 _domBlockCursor（cursor 是給「抓 DOM」整則訊息計數用的）
+            const domEl = _regexCardHtml
+                ? (blocks[0] || tmpDiv.firstElementChild)
+                : blocks[this._domBlockCursor++];
+            if (!domEl) { this.next(); return; }
+
+            // 注入樣式（只做一次）
+            if (!document.getElementById('vn-dbo-style')) {
+                const _s = document.createElement('style');
+                _s.id = 'vn-dbo-style';
+                _s.textContent = [
+                    '#vn-dom-block-overlay{position:absolute;inset:0;z-index:600;background:rgba(5,4,2,0.93);',
+                    'display:flex;flex-direction:column;justify-content:center;padding:20px 16px 14px;',
+                    'transform:translateY(100%);transition:transform .35s cubic-bezier(.22,1,.36,1);overflow:hidden}',
+                    '#vn-dom-block-overlay.active{transform:translateY(0)}',
+                    '#vn-dom-block-body{max-height:calc(100% - 60px);overflow-y:auto;overflow-x:hidden;color:#e8dfc8;',
+                    /* 卡片自己帶了寬度上限又沒寫置中（AI 現場寫的美化卡幾乎都這樣）→ 會貼在左邊。由外框負責置中，卡片不用管 */
+                    'display:flex;flex-direction:column;align-items:center}',
+                    '#vn-dom-block-body>*{flex-shrink:0}',
+                    '#vn-dom-block-body::-webkit-scrollbar{width:3px}',
+                    '#vn-dom-block-body::-webkit-scrollbar-thumb{background:rgba(212,175,55,.3);border-radius:2px}',
+                    /* 確保圖片（如 SD 插件的 sd-ui-image）在缺少原插件 CSS 時仍可見 */
+                    '#vn-dom-block-body img{max-width:100%;height:auto;display:block;margin:0 auto;border-radius:6px}',
+                    '#vn-dom-block-body>div,#vn-dom-block-body>section,#vn-dom-block-body>article{display:block;width:100%}',
+                    '.vn-regex-card{width:100%;border:0;display:block;background:transparent}',
+                    '#vn-dom-block-hint{flex-shrink:0;margin-top:16px;text-align:center;',
+                    'color:rgba(180,180,180,0.45);font-size:11px;letter-spacing:1px;pointer-events:none;',
+                    'opacity:0;transition:opacity .25s}'
+                ].join('');
+                document.head.appendChild(_s);
+            }
+
+            // 建立 overlay（只做一次，之後重複使用）
+            let overlay = document.getElementById('vn-dom-block-overlay');
+            if (!overlay) {
+                overlay = document.createElement('div');
+                overlay.id = 'vn-dom-block-overlay';
+                overlay.innerHTML = '<div id="vn-dom-block-body"></div><div id="vn-dom-block-hint">再點一次關閉</div>';
+                // 背景點擊＝兩段式（組件/裸卡統一）：第一下只浮出「再點一次關閉」提示，短窗內再點才真的關。
+                // 手殘單擊不會誤跳過，也免掉右上✕；卡片自帶按鈕的點擊落在卡上、不會打到 overlay 本體。
+                overlay.onclick = (e) => {
+                    if (e.target !== overlay) return;
+                    const _hint = overlay.querySelector('#vn-dom-block-hint');
+                    if (this._bgCloseArmed) {
+                        clearTimeout(this._bgCloseTimer);
+                        this._bgCloseArmed = false;
+                        this._hideDomBlock();
+                        return;
+                    }
+                    this._bgCloseArmed = true;
+                    if (_hint) _hint.style.opacity = '1';
+                    clearTimeout(this._bgCloseTimer);
+                    this._bgCloseTimer = setTimeout(() => {
+                        this._bgCloseArmed = false;
+                        if (_hint) _hint.style.opacity = '0';
+                    }, 1600);
+                };
+                const gamePage = document.getElementById('page-game');
+                if (!gamePage) { this.next(); return; }
+                gamePage.appendChild(overlay);
+            }
+
+            // 注入關聯 <style> 標籤（作者透過正則編輯器同時注入了 CSS 和 HTML 面板）
+            // <style> 被 blocks 過濾器排除，需要手動取出並寫入 VN iframe 的 document.head
+            tmpDiv.querySelectorAll('style').forEach(styleEl => {
+                const css = styleEl.textContent.trim();
+                if (!css) return;
+                // 用 CSS 內容哈希做 ID，同一份樣式只注入一次
+                const _id = 'vn-dbo-ext-' + Math.abs(css.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0));
+                if (!document.getElementById(_id)) {
+                    const _s = document.createElement('style');
+                    _s.id = _id;
+                    _s.textContent = css;
+                    document.head.appendChild(_s);
+                }
+            });
+
+            document.getElementById('vn-dom-block-body').innerHTML = domEl.outerHTML;
+            // 正則卡片(iframe)依內容自動撐高：避免固定高度留白，也免掉 iframe 內建醜滾動條（真的太高時溢出交給外層美化捲軸）
+            const _vBody = document.getElementById('vn-dom-block-body');
+            const _CRfit = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+            if (_CRfit && _CRfit.fitCardFrames) {
+                // 共用那支：順手展開收起來的 <details>（不展開的話面板只剩一條標題，看起來像被切掉），
+                //   並盯著內容變動重量（卡片面板會切分頁/換配色/自己收合）。
+                _CRfit.fitCardFrames(_vBody);
+            } else {
+                const _vCardFrame = _vBody.querySelector('iframe.vn-regex-card');
+                if (_vCardFrame) {
+                    const _fitFrame = () => {
+                        try {
+                            const _fd = _vCardFrame.contentDocument;
+                            const _h = Math.max(_fd.body ? _fd.body.scrollHeight : 0, _fd.documentElement ? _fd.documentElement.scrollHeight : 0);
+                            if (_h) _vCardFrame.style.height = _h + 'px';
+                        } catch (e) { _vCardFrame.style.height = '70vh'; }
+                    };
+                    _vCardFrame.addEventListener('load', () => { _fitFrame(); setTimeout(_fitFrame, 400); });
+                    setTimeout(_fitFrame, 50);
+                }
+            }
+            // 每次彈卡重置兩段式關閉狀態：上一張卡點過一下的「待確認」不能帶到這張
+            this._bgCloseArmed = false;
+            clearTimeout(this._bgCloseTimer);
+            const _hintEl2 = document.getElementById('vn-dom-block-hint');
+            if (_hintEl2) _hintEl2.style.opacity = '0';
+            void overlay.offsetWidth; // 強制 reflow 確保 transition 生效
+            overlay.classList.add('active');
+        },
+
+        // [QrPay|方向|對方|金額|買了什麼|單號] → { dir, who, amount, what, txnId }；方向認不得或金額不是正數回 null。
+        //   聊天 app 的跑團同步用同一支拆（錢在那邊算），兩邊對同一行的理解才不會漂掉。
+        _parseQrPay: function(line) {
+            const m = String(line || '').trim().match(/^\[\s*QrPay\s*\|([^\]]*)\]/i);
+            if (!m) return null;
+            const p = m[1].split('|').map(x => x.trim());
+            const d = String(p[0] || '').toLowerCase();
+            const dir = d === 'out' ? 'out' : (d === 'in' ? 'in' : (d === 'other' ? 'other' : ''));
+            const amount = parseFloat(String(p[2] || '').replace(/[^0-9.]/g, ''));
+            if (!dir || !(amount > 0)) return null;
+            return { dir: dir, who: p[1] || '', amount: amount, what: p[3] || '', txnId: p[4] || '' };
+        },
+
+        _hideDomBlock: function() {
+            this._bgCloseArmed = false;
+            clearTimeout(this._bgCloseTimer);
+            const _hint = document.getElementById('vn-dom-block-hint');
+            if (_hint) _hint.style.opacity = '0';
+            const overlay = document.getElementById('vn-dom-block-overlay');
+            if (overlay) overlay.classList.remove('active');
+            // 🔇 卡片面板常自帶 BGM（<audio autoplay> 包在 iframe 裡）。收起來只是拿掉 .active，
+            //    iframe 還活著 → 音樂會一路放到下一張卡把它換掉為止。
+            //    先靜音（淡出中面板還看得到，不能立刻拆），淡完再把 iframe 整個拆掉才算真的斷。
+            const _body = document.getElementById('vn-dom-block-body');
+            const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+            if (_body && _CR && _CR.stopMedia) {
+                _CR.stopMedia(_body, false);
+                setTimeout(() => {
+                    // 這段時間內又彈了新的一張 → 別動它
+                    const _ov = document.getElementById('vn-dom-block-overlay');
+                    if (_ov && _ov.classList.contains('active')) return;
+                    try { _CR.stopMedia(_body, true); _body.innerHTML = ''; } catch (e) {}
+                }, 420);
+            }
+            // 收起來之後通常直接播下一句；這張卡有交代別的事（委託收款單→先跳委託完成卡）就換成做那件事，由它負責接著播
+            const _after = this._domBlockAfter;
+            this._domBlockAfter = null;
+            if (typeof _after === 'function') { _after(); return; }
+            this.next();
+        },
+
+        // === 獨立模式：選擇按鈕 ===
+        // 🚪 [Dive|世界名]：主角戴上頸環上線（世界門「通知主角」那條；next() 播到、略過鍵掃到都走這裡）。
+        //   重看舊章不算。世界門說真的有開著的門 → 記成「這章章末進門」：網頁版的選項會擋在章末前面，選項就不給了
+        _seeDive: function(line) {
+            const _dn = ((String(line).match(/^\[Dive\|\s*([^|\]]*)/i) || [])[1] || '').trim();
+            this.addLog('上線', _dn || '視差');
+            if (this._scriptIsReplay) return;
+            const _wgd = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            if (_wgd && _wgd.diveSeen && _wgd.diveSeen(_dn)) this._diveAtEnd = true;
+        },
+
+        _showStandaloneChoices: function(line) {
+            // 支援兩種格式：
+            //   舊格式（向下相容）：[Choice|選項A|選項B|選項C]  ← 一行多選用 | 分隔
+            //   新格式（推薦）：    [Choice|選項A]              ← 每條獨立一行，可寫完整句子
+            //                     [Choice|選項B]
+            //                     [Choice|選項C]
+            const content = line.slice(8, -1);  // 去掉 [Choice| 和 ]
+            let options = [];
+
+            if (content.includes('|')) {
+                // 舊格式：內容有 | → 直接 split
+                options = content.split('|').map(s => s.trim()).filter(Boolean);
+            } else {
+                // 新格式：收集從當前行開始的所有連續 [Choice|...] 行
+                if (content.trim()) options.push(content.trim());
+                let nxt = this.index + 1;
+                while (nxt < this.script.length && this.script[nxt].startsWith('[Choice|')) {
+                    const opt = this.script[nxt].slice(8, -1).trim();
+                    if (opt) options.push(opt);
+                    nxt++;
+                }
+                this.index = nxt - 1;  // index 跳到最後一個 Choice 行
+            }
+
+            if (!options.length) { this.next(); return; }
+            // 把選擇存入 Archive。📜 11-08 起先停在章末簡報卡（這一章、新線索、下一件行程），按「繼續」才打開選項頁
+            //   （有世界面板的世界照舊直接打開，見章末那段的 _settle）。選項後面的行本來就不播（選了就生下一章），直接跳到末尾
+            VN_StandaloneArchive._pendingChoices = options;
+            VN_StandaloneArchive._choiceCallback = (text) => this._sendChoiceAndContinue(text);
+            this.index = this.script.length - 1;
+            this.next();
+        },
+
+        // 「AI 生成中」進度畫面：選項框送出、卡片面板送出一句話都用這支（原本寫在 vn_inspect 的 doSend 裡）
+        _showSendingLoader: function() {
+            const gamePage = document.getElementById('page-game');
+            // 若 loader DOM 不存在，呼叫一次建立它（_showStartLoader(0) 會排 setTimeout(0) 隱藏，下面用 rAF 在它之後再亮）
+            if (!document.getElementById('vn-start-loader') && gamePage) this._showStartLoader(0);
+            requestAnimationFrame(() => {
+                const loaderEl  = document.getElementById('vn-start-loader');
+                const loaderBar = document.getElementById('vn-start-loader-bar');
+                const loaderLbl = document.getElementById('vn-start-loader-label');
+                if (!loaderEl) return;
+                loaderEl.style.display = 'flex';
+                if (loaderBar) {
+                    loaderBar.style.transition = 'none';
+                    loaderBar.style.width = '0%';
+                    void loaderBar.offsetWidth;           // 強制 reflow
+                    loaderBar.style.transition = 'width 30s cubic-bezier(0.1,0.5,0.5,1)';
+                    loaderBar.style.width = '90%';
+                }
+                if (loaderLbl) loaderLbl.textContent = 'AI 生成中...';
+            });
+        },
+
+        // 🔁 末尾「重新生成」：這一章不滿意 → 丟掉重寫。
+        //   2026-09-16 加：不滿意就能重來的按鈕——以前酒館版只能關奧瑞亞、刪樓或 swipe。
+        //   酒館：跟截斷橫幅的「重新生成」同一條（/regenerate），數值回朔照酒館原本刪樓／重生的規矩走。
+        //   PWA：最新這章走 VN_READER.deleteChapter（數值退回這章開始前、記憶與人物檔案對帳；刪章一律走它），
+        //        再用這章記下的那句話重送；第一章沒有上一章可接 → 用當初開故事那段請求重跑生成器；
+        //        角色卡原文開場白（沒叫過 AI）沒有可以重來的。
+        regenerateLatest: async function() {
+            if (this._regenBusy) return;
+            const standalone = win.OS_API?.isStandalone?.() ?? false;
+            if (!standalone) {
+                if (typeof this._tavernRegenerate !== 'function') {
+                    try { AUI.toastr.warning('找不到酒館助手，請回酒館手動重新生成'); } catch (e) {}
+                    return;
+                }
+                if (!await AUI.confirm('重新生成這一章？\n\n最新這則 AI 回覆會換成重新寫的一版。')) return;
+                this._leaveEndScreen();
+                this._tavernRegenerate();
+                return;
+            }
+            const sid = this._currentStoryId || localStorage.getItem('vn_current_story_id') || '';
+            let chs = [];
+            try {
+                chs = ((await win.OS_DB?.getAllVnChapters?.()) || [])
+                    .filter(c => sid ? c.storyId === sid : !c.storyId)
+                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+            } catch (e) {}
+            const last = chs[chs.length - 1];
+            if (!last) { AUI.alert('找不到這一章的紀錄，沒辦法重新生成。'); return; }
+            const isFirst = chs.length === 1;
+            const req = String(last.request || '').trim();
+            if (isFirst && (!req || req === '角色卡開場白')) {
+                AUI.alert('這一章是角色卡原本寫好的開場白，沒有請 AI 寫過，沒有可以重來的。');
+                return;
+            }
+            if (!req) { AUI.alert('這一章沒有記下當初送出的那句話，沒辦法用同樣的內容重來。'); return; }
+            const config = (win.OS_SETTINGS?.getConfig?.()) || {};
+            if (!win.OS_API || (!config.url && !config.useSystemApi)) { AUI.alert('還沒設定 API，沒辦法重新生成。'); return; }
+            if (!await AUI.confirm('重新生成這一章？\n\n這一章會刪掉（數值退回這章開始前、這章的記憶一起清掉），再用同樣的內容請 AI 重寫一次。')) return;
+            this._regenBusy = true;
+            try {
+                const r = await win.VN_READER?.deleteChapter?.(last.id);
+                if (!r || !r.ok) { AUI.alert('刪不掉這一章：' + ((r && r.why) || '閱讀器沒有載入')); return; }
+                this._leaveEndScreen();
+                if (isFirst) {
+                    this._showWriterCurtain();
+                    const self = this;
+                    win.VN_Generator?.generateStory?.({
+                        title: last.storyTitle || this._currentStoryTitle || '',
+                        request: req,
+                        _phoneRedo: true,
+                        onStatus: function (text, cls) { if (cls === 'err') { self._hideWriterCurtain(); try { AUI.alert(text); } catch (e) {} } },
+                    });
+                } else {
+                    this._showSendingLoader();
+                    this._sendChoiceAndContinue(req, { _phoneRedo: true });   // 重寫這一章：手機上的事送上一次那一批
+                }
+            } finally {
+                this._regenBusy = false;
+            }
+        },
+        // 離開末尾畫面（重新生成時用）：世界活動面板與基本鍵一起收
+        _leaveEndScreen: function() {
+            try { window.VN_EndPanel?.clear?.(); } catch (e) {}
+            const ov = document.getElementById('vn-end-overlay');
+            if (ov) ov.classList.remove('active');
+        },
+
+        // 🧩 卡片美化面板上「送出一句話」的按鈕（酒館是 /send 那句|/trigger）＝那句當成玩家說的話送出、AI 接著寫。
+        //   跟選項框打字送出同一件事（2026-09-16 定：直接送出）。正在寫這一段時再按不重送。
+        sendPlayerLine: function(text) {
+            const val = String(text || '').trim();
+            if (!val) return false;
+            const ld = document.getElementById('vn-start-loader');
+            if (ld && ld.style.display === 'flex') return false;
+            const arc = window.VN_StandaloneArchive;
+            if (arc) {
+                arc._pendingChoices = null;
+                const ov = document.getElementById('aurelia-extractor-phone-overlay');
+                if (ov && ov.classList.contains('show')) arc.hide();   // 選項框開著就收掉，跟它自己送出一樣
+            }
+            this._showSendingLoader();
+            this._sendChoiceAndContinue(val);
+            return true;
+        },
+
+        // opts._continueFrom：這一通是「接續截斷正文」，回來要先跟半截接合再驗貨
+        // opts._origChoice ：續寫時 choice 已被換成系統指令，存檔的 request 要留原本那個選項
+        _sendChoiceAndContinue: async function(choice, opts) {
+            const config = (win.OS_SETTINGS?.getConfig?.()) || {};
+            if (!win.OS_API || (!config.url && !config.useSystemApi)) return;
+
+            // 📮 網頁版：地圖接了還收著的委託、「搭話」那句，接在她這句前面一起送（存檔的 request 也是併好的，重寫這章照樣帶著）。
+            //   酒館那邊在 MESSAGE_SENT 併（os_app_memory_inject 的 mergeHeldMission），所以只有網頁版走這裡；續寫那通不併。
+            if (!opts?._continueFrom && win.OS_API?.isStandalone?.()) {
+                try {
+                    const _merged = await win.AUREALIS_MAP?.missionMergeHeld?.(choice);
+                    if (_merged) { choice = _merged; console.log('📮 [VN_Choice] 收著的委託／搭話併進這一句送出'); }
+                } catch (e) { console.warn('[VN_Choice] 併委託失敗:', e); }
+            }
+
+            // loader 已由 doSend 在 Archive 關閉前就顯示好，這裡只確保 label 正確
+            const _chkLbl = document.getElementById('vn-start-loader-label');
+            if (_chkLbl) _chkLbl.textContent = 'AI 生成中...';
+
+            try {
+                if (win.OS_THINK) win.OS_THINK.setContext({ panel: 'VN 選項選擇', userInput: choice });
+                const avsStateBefore = win._AVS_ENGINE?.read?.() || {};
+                const messages = await win.OS_API.buildContext(choice, 'vn_story', { phone: opts?._continueFrom ? 'skip' : (opts?._phoneRedo ? 'redo' : '') });
+                await new Promise((resolve, reject) => {
+                    win.OS_API.chat(messages, config, null, async (fullText) => {
+                        // 續寫回來的片段先接回半截正文，再一起驗貨（驗的是接完的完整章節，不是那個片段）
+                        if (opts?._continueFrom) fullText = win.VN_Generator?.stitchContinuation?.(opts._continueFrom, fullText) ?? fullText;
+                        // 🚨 先驗貨再落地：截斷／API 錯誤頁一律不存章節。
+                        //    以前這條路（點選項推進劇情）根本沒有這道守門 —— 橫幅只裝在 vn_generator
+                        //    那條（開新故事／自由輸入），而玩起來大部分推進都走這裡：
+                        //    半截正文照樣 saveVnChapter，還連帶餵給 AVS／記憶／插圖，畫面上只是「這章怪怪的」。
+                        const _bad = win.VN_Generator?.checkReply?.(fullText);
+                        if (_bad?.bad) {
+                            console.warn('[VN_Choice] ⚠️ 這輪回覆有問題（' + _bad.kind + '）：' + _bad.reason);
+                            const _ld = document.getElementById('vn-start-loader');
+                            if (_ld) _ld.style.display = 'none';
+                            const _origChoice = opts?._origChoice || choice;
+                            win.VN_Generator.showBadBanner(_bad, {
+                                onRegen: () => this._sendChoiceAndContinue(_origChoice),
+                                // 續寫的底本是「接到目前為止的整份」→ 可以連續續好幾次，不會退回最初那半截
+                                onContinue: () => this._sendChoiceAndContinue(
+                                    win.VN_Generator.continueRequest(fullText),
+                                    { _continueFrom: fullText, _origChoice }
+                                ),
+                            });
+                            resolve();   // 不當成 throw：橫幅已經接手，別再彈一次「API 生成失敗」
+                            return;
+                        }
+                        // 🎬 開頭設置補救（網頁版，10-20 補齊）：這章漏了 [Bg]／[BGM] 就從前面幾章帶過來，存檔和這次播放都是補好的版本
+                        //   （酒館那支在生成結束後改寫最新一樓；網頁版在這裡改，免得先播一次沒背景的）。vn_fix_opening=0 關
+                        if (win.OS_API?.isStandalone?.() && localStorage.getItem('vn_fix_opening') !== '0' && win.OS_STATE_RUNTIME?.repairOpeningText) {
+                            try {
+                                const _sid0 = window.VN_Core._currentStoryId || '';
+                                const _older = ((await win.OS_DB?.getAllVnChapters?.()) || []).filter(c => c.storyId === _sid0).map(c => c.content || '');   // 新的在前
+                                const _fixed = win.OS_STATE_RUNTIME.repairOpeningText(fullText, _older);
+                                if (_fixed) { fullText = _fixed; console.log('🛰️ [VN_Choice] 開頭設置補救：這章漏的背景／音樂從前面帶過來了'); }
+                            } catch (e) {}
+                        }
+                        // 存檔（含思考鏈，沿用當前 storyId）
+                        try {
+                            const tm = fullText.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i) || fullText.match(/\[Story\|([^\]]+)\]/i);
+                            let _thinking = win.OS_THINK?.getLatest()?.content?.trim() || '';
+                            // 酒館模式 OS_THINK 抓不到 → 讀酒館原生 reasoning（extra.reasoning）
+                            if (!_thinking) _thinking = (win.AureliaAPI || window.AureliaAPI)?.getLatestReasoning?.() || '';
+                            const _storyId    = window.VN_Core._currentStoryId    || '';
+                            const _storyTitle = window.VN_Core._currentStoryTitle || '';
+                            // 續寫回來的那通，choice 是系統指令 → 標題與 request 都要記原本點的那個選項
+                            const _reqChoice = opts?._origChoice || choice;
+                            await win.OS_DB?.saveVnChapter({ title: tm ? tm[1].trim() : `選擇: ${_reqChoice}`, storyId: _storyId, storyTitle: _storyTitle, content: fullText, request: _reqChoice, thinking: _thinking, createdAt: Date.now(), avsStateBefore });
+                        } catch(e) {}
+                        try { await win.OS_PHONE_EVENTS?.commit?.(); } catch (e) {}   // 章節存好了：手機上剛發生的那批記成送過
+                        
+                        window.VN_Core._lastRawText = fullText;
+
+                        // 2. 生成完畢，進度條衝到 100% 後關閉；場景分析（若啟用）在此期間完成
+                        const loaderEl = document.getElementById('vn-start-loader');
+                        const loaderBar = document.getElementById('vn-start-loader-bar');
+                        if (loaderBar) {
+                            loaderBar.style.transition = 'width 0.4s ease-out';
+                            loaderBar.style.width = '100%';
+                        }
+                        setTimeout(() => {
+                            if (loaderEl) loaderEl.style.display = 'none';
+                            window.VN_Core._loadWithSceneAnalysis(fullText, null);
+                        }, 500);
+                        
+                        resolve();
+                    }, (err) => reject(err), { task: 'story', disableTyping: true });
+                });
+            } catch(err) {
+                console.error('[VN_Choice] 生成失敗:', err);
+                const loaderEl = document.getElementById('vn-start-loader');
+                if (loaderEl) loaderEl.style.display = 'none';
+                this.renderVN('', `*API 生成失敗，請檢查連線或設定。*\n\n錯誤訊息: ${err.message}`);
+            }
+        },
+
+        // ── 🖼️ 背景/場景CG/道具 AI 生圖管線 → 已拆至 vn_core_images.js（Object.assign 掛回本物件；載入順序必須在本檔之後）──
+        //    含：_toDataUrl/_toObjectUrl/testFallback/_setBgImage/_buildFallbackKeywords/_pixabayFallback/_loremFlickrFallback/
+        //        _bgGenPrompt/_itemGenPrompt/_safeFetchBg/_doFetchBg/_preloadImg/_isDynBlockTag/_linesOutsideDynBlocks/
+        //        _hoistSceneDirectivesFromDynBlocks/_prewarmBgs/_prewarmItems/_safeFetchItem/_doFetchItem/_parseSceneBlock/
+        //        _prewarmScenes/_saveSceneToDisk/_safeFetchScene/retrySceneCg/_setSceneCgFailed/_doFetchScene
+
+        _prewarmAvatars: function() {
+            // ⭐ 不再因 spriteBase 整批跳過（靜態立繪只是 fallback 第一層）；改為下方逐角色探靜態圖、缺的才生。
+            const names = Object.keys(this.avatars);
+            // 把 persona 名字也納入預熱
+            try {
+                const uName = win.OS_PERSONA?.getName?.() || win.OS_API?.getGlobalUserName?.();
+                if (uName && !this.avatars[uName] && !names.includes(uName)) names.push(uName);
+            } catch(e) {}
+            if (!names.length) return;
+
+            (async () => {
+                this._imgScanStart();   // 盤點階段也算忙碌：讀世界書/逐一查 IDB 期間沒有生成單，別讓 loading 誤判完成
+                try {
+                if (!this._lorebookLoaded) {
+                    await this._loadLorebookAvatars();
+                    this._lorebookLoaded = true;
+                }
+
+                // 第一輪：IDB / 世界書快取（同步快，先全跑完）
+                const needGen = [];
+                for (const name of names) {
+                    await this._refreshGuessedLook(name);   // 🧾 大總結猜的長相 → 換成劇情這章寫的（放在最前面：她自己放了圖的角色也要換，插圖讀的是這段描述）
+                    if (this._avatarMemCache[name]) continue;
+                    const _sf = this._spriteFirst(name);   // 開了跳過頭像、這個人有外觀可生：頭像那兩種（世界書頭像素材、人設頭像）不搶在立繪前面
+                    const lbUrl = _sf ? null : (this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])]);
+                    if (lbUrl) { this._avatarMemCache[name] = lbUrl; console.log(`[VN] 頭像使用世界書素材：${name}`); continue; }
+                    const cached = await VN_Cache.get('avatar_cache', name);
+                    if (cached && cached.url && !cached.url.startsWith('blob:')) {
+                        const objUrl = await this._toObjectUrl(cached.url);
+                        this._avatarMemCache[name] = objUrl || cached.url;
+                        if (cached.face) this._faceMemCache[name] = cached.face;
+                        console.log(`[VN] 頭像從 IDB 載入：${name}`); continue;
+                    }
+                    if (cached?.url?.startsWith('blob:')) await VN_Cache.delete('avatar_cache', name);
+                    // persona 橋接：名字是主角且自己設了頭像圖 → 直接用那張。
+                    // 🚫 沒圖就跟其他沒外觀的角色一樣走剪影：不拿人設 desc 去生圖（那是給 AI 讀的長文，不是外觀詞）
+                    const pf = _sf ? null : this._getPersonaFallback(name);
+                    if (pf?.url) { this._avatarMemCache[name] = pf.url; console.log(`[VN] 頭像使用 Persona URL：${name}`); continue; }
+                    // 自備靜態立繪/預設圖存在 → 播放時直接讀，不必生
+                    if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像使用自備靜態圖：${name}`); continue; }
+                    if (win.OS_IMAGE_MANAGER) needGen.push(name);
+                }
+
+                if (!needGen.length) { console.log('[VN] 所有頭像預熱完成（全部快取命中）'); return; }
+
+                // 第二輪：生成。雲端(NAI/Poll)維持並行；本機(ComfyUI直連/酒館SD)改串行——
+                // ComfyUI 端本來就一張一張跑，串行零損失，還讓「語音紅綠燈」插得進空檔
+                const _svc = (typeof win.OS_IMAGE_MANAGER?.serviceForUse === 'function') ? win.OS_IMAGE_MANAGER.serviceForUse((window.VN_Config && window.VN_Config.data && window.VN_Config.data.spriteDirect === true) ? 'sprite' : 'avatar') : (typeof win.OS_IMAGE_MANAGER?.serviceFor === 'function') ? win.OS_IMAGE_MANAGER.serviceFor('char') : (win.OS_IMAGE_MANAGER?.config?.service || '');
+                const _localGpu = (_svc === 'comfyui_direct' || _svc === 'tavern_sd');
+                // 📱 手機也串行：雲端一次全部回來＝每張大圖同時解碼、切格、排去背，iPhone 撐不住就被 Safari 整頁重開
+                //   （10-14：奧瑞亞那本第一章出場的人多，跑圖時會中途重整）
+                const _serial = _localGpu || this._lowMemDevice();
+                console.log(`[VN] ${_serial ? '串行' : '並行'}生成 ${needGen.length} 個頭像...`);
+                if (_serial) {
+                    for (const name of needGen) { await this._genAvatarToCache(name); }
+                } else {
+                    await Promise.all(needGen.map(name => this._genAvatarToCache(name)));
+                }
+                console.log('[VN] 所有頭像預熱完成');
+                } finally { this._imgScanEnd(); }
+            })();
+        },
+
+        // 🧾 大總結補的頭像（avatar_cache 那筆帶 src:'summary'）：那段外觀是副模型照角色表推的，不一定對
+        //   （11-06：角色明明戴眼鏡，補出來的外觀卻完全不同，之後每張插圖都照它畫）。
+        //   劇情 AI 正式寫了這個人的 [Avatar] → 存著的那段描述換成劇情寫的、拿掉記號（插圖的外觀登記表讀這一段）。
+        //   圖不重畫、不花錢；要換圖她自己在頭像快取按重生。她按過重生的那筆沒有記號，不會被換
+        _refreshGuessedLook: async function (name) {
+            try {
+                const d = this.avatars && this.avatars[name];
+                if (!d || /^none$/i.test(String(d).trim())) return;
+                const rec = await VN_Cache.get('avatar_cache', name);
+                if (!rec || rec.src !== 'summary' || rec.prompt === d) return;
+                const nrec = Object.assign({}, rec, { prompt: d });
+                delete nrec.src;
+                await VN_Cache.set('avatar_cache', name, nrec);
+                console.log(`[VN] ${name} 的頭像是大總結補的 → 外觀描述換成劇情這章寫的（圖不重畫）`);
+            } catch (e) {}
+        },
+
+        // ── 頭像生成共用管線（loadScript 預熱 / 早鳥監聽 共用；立繪模式也走這條，只在 _makeCharImage 換生成）──
+        // in-flight 去重：同名頭像不論從哪條路觸發，同時只生一張（頭像/立繪共用此管線）
+        _avatarInflight: {},
+        // ── 圖片預熱總進度（頭像＋背景＋場景CG＋道具全算；開場 loading 與語音延後都看這個）──
+        // scanning＝「盤點中」：預熱在讀世界書/查快取、還沒把生成單排進來的階段。
+        // 沒有它會有盤點空窗（inflight=0 但工作沒做完）→ loading 誤判完成提早放行（2026-06-11 實測踩過）
+        _imgJobs: { done: 0, total: 0, inflight: 0, scanning: 0 },
+        _imgJobStart: function() {
+            const j = this._imgJobs;
+            if (!j.inflight && j.done >= j.total) { j.done = 0; j.total = 0; }   // 上一批清空 → 進度歸零重計
+            j.total++; j.inflight++;
+        },
+        _imgJobEnd: function() { const j = this._imgJobs; j.inflight = Math.max(0, j.inflight - 1); j.done++; },
+        _imgScanStart: function() { this._imgJobs.scanning++; },
+        _imgScanEnd: function() { const j = this._imgJobs; j.scanning = Math.max(0, j.scanning - 1); },
+        imgPendingStatus: function() {
+            const j = this._imgJobs;
+            return { done: j.done, total: j.total, pending: j.inflight + j.scanning };
+        },
+        // 快取不分頭像/立繪模式＝刻意設計（2026-07-07 定案）：切拉桿不重生舊圖、不燒額度——
+        // 舊頭像照用，要立繪她自己按 studio「一鍵生立繪」。真正的「開了拉桿還生頭像」bug 是
+        // VN_Config.load 時序（vn_config.js 已自讀修掉），別再往快取加模式判定。
+        _genAvatarToCache: function(name) {
+            if (this._avatarMemCache[name]) return Promise.resolve(this._avatarMemCache[name]);
+            if (this._avatarInflight[name]) return this._avatarInflight[name];
+            if (this._pendingAvatars[name]) return this._pendingAvatars[name];   // 晚路徑（開口時）正在生這張 → 等它、別重發（雙向去重，本機 GPU 不排兩次）
+            const self = this;
+            const job = (async () => {
+                try {
+                    let d = self._resolveAvatarPrompt(name);
+                    // none 路人（有聲線無外觀）：只有立繪模式才合成 prompt 生全身；一般頭像模式維持剪影不生成
+                    if (!d && VN_Config.data.spriteDirect === true && self._isNoneChar(name)) d = await self._buildNonePrompt(name);
+                    if (!d) return '';   // 沒外觀（含 none 非立繪模式）→ 絕不用空 prompt 生圖（會出裸圖），交給剪影
+                    const img = await self._makeCharImage(d, 'Neutral');   // 立繪模式由 _makeCharImage 內部換立繪 prompt + 去背
+                    if (!img) { console.warn(`[VN] 角色圖生成失敗：${name}`); return ''; }
+                    self._avatarMemCache[name] = img.objUrl;
+                    if (img.face) self._faceMemCache[name] = img.face;
+                    // 單一 avatar_cache（切拉桿不重生舊圖＝定案，別再往快取加模式判定）；spriteDirect 生的是立繪→只加 isSprite 標記供相簿分類，不換 store
+                    if (img.dataUrl) { try { await VN_Cache.set('avatar_cache', name, self._charRec(d, img)); } catch(e) {} }
+                    console.log(`[VN] 角色圖生成完成：${name}`);
+                    return img.objUrl;
+                } catch(e) { console.warn(`[VN] 角色圖生成例外：${name}`, e); return ''; }
+            })();
+            this._avatarInflight[name] = job;
+            this._imgJobStart();
+            job.finally(() => { delete self._avatarInflight[name]; self._imgJobEnd(); });
+            return job;
+        },
+
+        // ── 生成「一張角色圖」的共用咽喉（頭像 or 立繪，看 spriteDirect）──
+        //   立繪模式＝唯二差別：① getSprite 模板取代 getAvatar ② AI 去背。整條 gate/解析/快取/去重由呼叫端
+        //   (頭像管線：_genAvatarToCache / fallbackToAI) 共用，這裡只負責「生成那一步」。回 { objUrl, dataUrl }，失敗回 null。
+        _makeCharImage: async function(prompt, exp, force) {
+            // 🎴 立繪模式 ＋ 三合一生成：一張三格圖切成立繪、頭像、Q版（vn_core_images 的 _makeTrio）。
+            //    跟「每次生成角色數」不一起用：一張圖只放一個角色。
+            if (this._trioOn()) return await this._makeTrio(prompt, force);
+            // 🎯 立繪模式 ＋ 她設了一次生幾個 ＋ 來源是官方那顆 → 進排隊，湊幾個角色一張寬圖一起生。
+            //    force（相簿的「重生」）要的是立刻重畫這一張，不排隊。
+            if (!force && this._spriteBatchSize() > 1) return await this._sheetEnqueue(prompt);
+            return await this._makeCharImageOne(prompt, exp, force);
+        },
+        _trioOn: function () { return VN_Config.data.spriteDirect === true && VN_Config.data.spriteTrio === true; },
+        // 存進 avatar_cache 的那一筆（四個寫入點共用：預熱、開口時、相簿重生、角色中心「他的長相」的照這段重畫）。
+        //   三合一生成的 face／chibi（Q版畫成三面時多 chibiSide／chibiBack）跟著存；沒有就是 undefined——重生成單張時舊的自拍、Q版跟新立繪對不上，不留。
+        _charRec: function (prompt, img, base) {
+            const rec = Object.assign({}, base || {}, { prompt: prompt, url: img.dataUrl, face: img.face || undefined, chibi: img.chibi || undefined, chibiSide: img.chibiSide || undefined, chibiBack: img.chibiBack || undefined });
+            if (VN_Config.data.spriteDirect === true) rec.isSprite = true;
+            return rec;
+        },
+        _makeCharImageOne: async function(prompt, exp, force) {
+            const sprite = (VN_Config.data.spriteDirect === true);
+            // force：相簿的「重生」要繞過 generate() 的記憶體快取，否則同 prompt 會吐回同一張舊圖
+            const raw = await (sprite ? VN_Image.getSprite(prompt, force) : VN_Image.getAvatar(prompt, exp, force));
+            if (!raw) return null;
+            let blob = null;
+            try { blob = await (await fetch(raw)).blob(); }
+            catch (e) { try { const du = await this._toDataUrl(raw); if (du) blob = await (await fetch(du)).blob(); } catch (e2) {} }
+            if (!blob) { const du = await this._toDataUrl(raw); return du ? { objUrl: du, dataUrl: du } : null; }
+            if (sprite) {   // 立繪去背：跟典籍「一鍵生立繪」同款，直接 AI 去背(isnet，吃任何背景)；失敗退原圖
+                // （舊版先跑純色 flood-fill 求快，但容差會滲進淺色角色把中心挖破 → 已砍，全走 AI）
+                let cut = null;
+                try { cut = await this._stripSpriteBgAI(blob); } catch (e) {}
+                if (cut) blob = cut;
+                else console.warn('[VN] ⚠️ 立繪去背失敗 → 先用帶背景原圖上台。若立繪總是沒去背，往上找「AI 去背失敗」的錯誤原因（多半是去背模型下載不了）');
+            }
+            const objUrl = URL.createObjectURL(blob);
+            let dataUrl = '';
+            try { dataUrl = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(rd.result); rd.onerror = () => r(''); rd.readAsDataURL(blob); }); } catch (e) {}
+            return { objUrl, dataUrl };
+        },
+
+        // ── 👕 Avatar 那一格的穿著保險：裸露的詞不准進去 ──────────────────────────
+        //   那一行是「這個角色的長期立繪」，只寫一次、之後每一幕都用同一張（引擎看到快取就不重生）。
+        //   所以只要它第一次登場剛好在床上、在浴室、在沙灘，那個樣子就被存成永久的
+        //   —— 之後每張圖都照那個樣子畫（例如永遠穿泳裝）。
+        //   指令那邊已經講明「寫平常的樣子、禁裸體泳裝」，但那是請求；這裡是保險：
+        //   詞進到快取之前先換成中性穿著，模型不聽話也還是穿著衣服。
+        //   🚨 只管這一格。插圖、場景、劇情那些一個字都不碰 —— 那邊該怎麼演就怎麼演。
+        _OUTFIT_BAD: [
+            /\b(fully\s+)?nudes?\b/gi, /\bnaked\b/gi, /\bnudity\b/gi, /\btopless\b/gi, /\bbottomless\b/gi,
+            /\bbikini\b/gi, /\bswim(suit|wear)\b/gi, /\blingerie\b/gi, /\bunderwear\b/gi,
+            /\bpanties\b/gi, /\bthong\b/gi, /\bbra\b/gi, /\btowel\b/gi, /\bnsfw\b/gi,
+            /全裸|半裸|裸體|裸体|赤裸|比基尼|泳裝|泳衣|內衣|内衣|內褲|内裤|胸罩|浴巾/g,
+        ],
+        // ── [Avatar|名|…] 名字後面那幾格 → 存進頭像快取的那一串 ──────────────────────
+        //   新格式 名|聲線|長相|這張頭像的穿著表情背景：後一格收進括號接在長相後面。
+        //   括號組是插圖那邊（state_runtime 的 _stripAvatarFraming）認的「只給頭像用」記號，整組剝掉，
+        //   插圖就只拿到長相；立繪那邊保留括號裡的衣服、只剝背景。頭像本身照整串畫。
+        //   以前靠模型自己在長相後面加括號，一半的時候沒加，衣服和「modern city」就黏進每一張插圖。
+        //   後一格裡的括號先拿掉：巢狀括號會讓插圖那邊的剝除對不齊。
+        //   舊格式 名|聲線|外觀、名|外觀 照舊整格當外觀。
+        _avatarDescOf: function (rest) {
+            const f = (rest || []).map(s => String(s || '').trim());
+            if (f.length >= 3) {
+                const look = f[1];
+                const extra = f.slice(2).filter(Boolean).join(', ').replace(/[()（）]/g, '').trim();
+                if (!extra) return look;
+                return look ? look + ', (' + extra + ')' : extra;
+            }
+            return f.length === 2 ? f[1] : (f[0] || '');
+        },
+        _safeOutfit: function (desc) {
+            let d = String(desc || '');
+            let hit = false;
+            this._OUTFIT_BAD.forEach(function (rx) { if (rx.test(d)) { hit = true; d = d.replace(rx, ''); } });
+            if (!hit) return d;
+            // 洗掉之後常留下「, ,」或開頭結尾的逗號 → 收乾淨，免得接成怪字串（同 getSprite 那邊接縫補逗號的教訓）
+            d = d.replace(/\s*,\s*(,\s*)+/g, ', ').replace(/^[\s,]+|[\s,]+$/g, '');
+            d = d ? (d + ', fully clothed, everyday casual outfit') : 'fully clothed, everyday casual outfit';
+            console.warn('[VN] Avatar 那一格出現裸露/泳裝的詞，已換成中性穿著（那一行是長期立繪，會跟著角色一輩子）');
+            return d;
+        },
+
+        // ── 🎯 幾個角色擠一張寬圖一起生（設置 → 圖片 → 頭像 → 每次生成角色數）──────────
+        //   為什麼插在 _makeCharImage 這一層：早路徑（掃描時）跟晚路徑（角色開口時）兩條都經過它，
+        //   插在這裡兩條自動都吃得到，快取、去重、上台那些邏輯一行都不用改。
+        //   排隊的理由：劇情一次冒出幾個角色時把它們湊成一張寬圖送一次；只冒一個就不等、照舊單獨生。
+        _sheetQueue: [],
+        _sheetTimer: 0,
+        _sheetWaitMs: 1200,        // 湊人的等待窗口：這段時間內再來的角色算同一批
+        _spriteBatchSize: function () {
+            try {
+                if (VN_Config.data.spriteDirect !== true) return 1;
+                const n = parseInt(VN_Config.data.spriteBatch, 10);
+                if (!(n > 1)) return 1;
+                // 🚨🚨 這裡不准再加「來源是不是官方」的判斷：設置那格拿掉了，執行期也不准偷偷擋。
+                //    使用者選了幾個就是幾個——猜錯接口而把功能靜靜停掉，比畫壞一張圖難查得多。
+                return Math.min(3, n);
+            } catch (e) { return 1; }
+        },
+        _sheetEnqueue: function (prompt) {
+            const self = this;
+            return new Promise(function (resolve) {
+                self._sheetQueue.push({ prompt: prompt, resolve: resolve });
+                if (self._sheetQueue.length >= self._spriteBatchSize()) { self._sheetFlush(); return; }
+                if (self._sheetTimer) clearTimeout(self._sheetTimer);
+                self._sheetTimer = setTimeout(function () { self._sheetFlush(); }, self._sheetWaitMs);
+            });
+        },
+        _sheetFlush: async function () {
+            if (this._sheetTimer) { clearTimeout(this._sheetTimer); this._sheetTimer = 0; }
+            const batch = this._sheetQueue.splice(0, this._spriteBatchSize());
+            if (!batch.length) return;
+            // 只湊到一個人＝沒省到任何東西，照原本那條單張路走（也避免一個人被硬塞進寬圖裡縮成一小條）
+            if (batch.length === 1) {
+                let one = null;
+                try { one = await this._makeCharImageOne(batch[0].prompt, 'Neutral'); } catch (e) {}
+                batch[0].resolve(one);
+                return;
+            }
+            let parts = null;
+            try {
+                const raw = await VN_Image.getSpriteSheet(batch.map(function (b) { return b.prompt; }), true);
+                if (raw) parts = await this._sliceSheet(raw, batch.length);
+            } catch (e) { console.warn('[VN] 立繪合圖失敗，退回逐一生成', e); }
+            for (let i = 0; i < batch.length; i++) {
+                const blob = parts && parts[i];
+                if (!blob) {
+                    // 切不出這一格＝那個角色照舊單獨生，不是丟著不管（不然她會看到少一個人的剪影）
+                    let one = null;
+                    try { one = await this._makeCharImageOne(batch[i].prompt, 'Neutral'); } catch (e) {}
+                    batch[i].resolve(one);
+                    continue;
+                }
+                let out = blob;
+                try { const cut = await this._stripSpriteBgAI(blob); if (cut) out = cut; } catch (e) {}
+                let dataUrl = '';
+                try { dataUrl = await new Promise(function (r) { const rd = new FileReader(); rd.onload = function () { r(rd.result); }; rd.onerror = function () { r(''); }; rd.readAsDataURL(out); }); } catch (e) {}
+                batch[i].resolve({ objUrl: URL.createObjectURL(out), dataUrl: dataUrl });
+            }
+            if (this._sheetQueue.length) this._sheetFlush();   // 一次來超過一批：剩下的接著跑
+        },
+        // 把寬圖切成幾塊。🚨 不照「除以格數」下刀：模型不保證切線在那裡，差幾像素每格邊緣就黏到隔壁一條。
+        //   改成去找它畫的那條分隔帶（整條由上到下都同一個顏色的直欄），照帶子的位置切。
+        //   找不到帶子（它沒照畫）才退回平均分，並且各往內縮一點避開接縫。
+        _sliceSheet: async function (url, n) {
+            const doc = win.document;
+            const img = await new Promise(function (res, rej) {
+                const im = new Image(); im.crossOrigin = 'anonymous';
+                im.onload = function () { res(im); }; im.onerror = rej; im.src = url;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            const cv = doc.createElement('canvas'); cv.width = W; cv.height = H;
+            const cx = cv.getContext('2d', { willReadFrequently: true });
+            cx.drawImage(img, 0, 0);
+            let data = null;
+            try { data = cx.getImageData(0, 0, W, H).data; } catch (e) { data = null; }   // 跨網域拿不到像素＝退平均分
+            const bars = [];
+            if (data) {
+                const isSep = function (x) {
+                    const step = Math.max(1, Math.floor(H / 60));
+                    let hit = 0, tot = 0;
+                    for (let y = 0; y < H; y += step) {
+                        const i = (y * W + x) * 4;
+                        tot++;
+                        if (data[i + 1] > 150 && data[i] < 120 && data[i + 2] < 120) hit++;
+                    }
+                    return tot && (hit / tot) > 0.85;
+                };
+                // 🚨 分隔帶一定是「窄的」：不設上限的話，一個穿綠衣服的角色、或整格綠色的背景
+                //    會被整欄判成分隔帶（我用綠色測試圖時就把第三格整個當成帶子吃掉了）。
+                //    真正的帶子只有二十幾像素，這裡放寬到「一格寬的一半」都還算窄。
+                const maxBar = Math.max(8, Math.floor(W / (n * 2)));
+                const take = function (r) { if (r && r.b - r.a >= 3 && r.b - r.a <= maxBar) bars.push(r); };
+                let run = null;
+                for (let x = 0; x < W; x++) {
+                    if (isSep(x)) { if (!run) run = { a: x, b: x }; else run.b = x; }
+                    else if (run) { take(run); run = null; }
+                }
+                take(run);
+            }
+            const cuts = [];
+            if (bars.length === n - 1) {
+                let left = 0;
+                bars.forEach(function (bar) { cuts.push([left, bar.a - 1]); left = bar.b + 1; });
+                cuts.push([left, W - 1]);
+            } else {
+                const w = W / n, pad = Math.round(w * 0.02);   // 沒找到帶子：平均分，兩邊各縮一點避開接縫
+                for (let i = 0; i < n; i++) cuts.push([Math.round(i * w) + (i ? pad : 0), Math.round((i + 1) * w) - 1 - (i < n - 1 ? pad : 0)]);
+            }
+            const out = [];
+            for (let i = 0; i < cuts.length; i++) {
+                const a = Math.max(0, cuts[i][0]), b = Math.min(W - 1, cuts[i][1]);
+                const w = Math.max(1, b - a + 1);
+                const c2 = doc.createElement('canvas'); c2.width = w; c2.height = H;
+                c2.getContext('2d').drawImage(cv, a, 0, w, H, 0, 0, w, H);
+                out.push(await new Promise(function (r) { c2.toBlob(function (bl) { r(bl); }, 'image/png'); }));
+                VN_Core._freeCanvas(c2);
+            }
+            VN_Core._freeCanvas(cv);
+            return out;
+        },
+
+        // 🤖 AI 去背（ISNet 模型，靠 AI 認人形、吃任何背景）：立繪、物品、一鍵生立繪、立繪工作室全走這一支。
+        //   首次下載約 84MB 模型（fp16，之後從瀏覽器快取讀）＋執行環境（用顯卡的 23MB、只跑 CPU 的 12MB）。失敗回 null。
+        //   11-06 起在「去背工人」（背景執行緒）裡跑、做完就收掉，見下面 _bgWorker 那段。
+        //   🎮 10-07 改用顯卡（device:'gpu'＝WebGPU）：大總結生成的立繪一疊送去給小模型去背，整頁卡到不能用。
+        //   以前是 CPU 跑在跟畫面同一條線上，預覽實測一張 12.5 秒、其中 11.4 秒整頁卡死；用顯卡一張 1.4 秒、最多頓 0.13 秒，品質一樣
+        //   （tmp/bg_remove_compare.html）。沒有顯卡可用時套件自己退回 CPU；顯卡起得來卻失敗就記下來，之後改走 CPU。
+        //   🚨 不要加 proxyToWorker：onnxruntime 的背景工人在這裡起不來（worker not ready），而且會連帶把同一頁之後的去背全弄壞。
+        //   🚨 畫布 flood-fill 去背試過：白髮白裙白背景時光環中間整塊白色留著、頭髮一圈白邊，別換回去。
+        // 📱 記憶體小的裝置（iPhone／iPad，或瀏覽器自己報 4GB 以下）：生圖改一張一張來
+        _lowMemDevice: function() {
+            try {
+                const ua = navigator.userAgent || '';
+                if (/iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) return true;
+                return !!(navigator.deviceMemory && navigator.deviceMemory <= 4);
+            } catch (e) { return false; }
+        },
+        // 畫布用完就把它縮成 0：iPhone 的 Safari 要等很久才還畫布的記憶體，一次切好幾張大圖就會被整頁重開
+        _freeCanvas: function() {
+            for (let i = 0; i < arguments.length; i++) { const c = arguments[i]; if (c) { try { c.width = 0; c.height = 0; } catch (e) {} } }
+        },
+        // 🧷 跑圖記號：切圖、去背這種吃記憶體的步驟開始前記一筆、全部做完才擦掉。
+        //   手機被 Safari 整頁重開時程式來不及說話，下次打開還看到這筆＝上次是在這一步斷掉的（10-14 iPhone 跑圖時會中途重整，要查是哪一步）
+        _heavyOps: 0,
+        _heavyBgN: 0,
+        _heavyBegin: function(step, how) {
+            this._heavyOps++;
+            if (step === 'bg') this._heavyBgN++;
+            win.AUI.lsSet('vn_heavy_step', JSON.stringify({ step: step, bg: this._heavyBgN, how: how || '', at: Date.now() }), '跑圖進度記號');
+        },
+        _heavyEnd: function() {
+            this._heavyOps = Math.max(0, this._heavyOps - 1);
+            if (!this._heavyOps) { try { localStorage.removeItem('vn_heavy_step'); } catch (e) {} }
+        },
+        _heavyReport: function() {
+            let m = null;
+            try { m = JSON.parse(localStorage.getItem('vn_heavy_step') || 'null'); } catch (e) {}
+            // 🚨 這一筆是「這次打開之後」才記的＝現在正在跑的那一張，不是上次留下來的：不報、也不擦（擦了那張做到一半的記號就沒了）。
+            //   這支是打開後 5 秒才看；5 秒內就開始去背（一打開就按生成）以前會被當成上次斷掉的，跳一句假的。
+            let born = 0;
+            try { born = Date.now() - performance.now(); } catch (e) {}
+            if (m && m.at && born && m.at >= born - 1000) return;
+            try { localStorage.removeItem('vn_heavy_step'); } catch (e) {}
+            if (!m || !m.at || Date.now() - m.at > 30 * 60 * 1000) return;
+            const what = m.step === 'trio' ? '把三合一生成的圖切成三格' : '幫立繪去背';
+            // how：去背用顯卡還是 CPU、在不在背景工人裡（11-06 起記；看截圖就知道是哪一種跑法撐不住）
+            const how = { gpu: '，用顯卡', cpu: '，用 CPU', 'gpu-w': '，在背景用顯卡', 'cpu-w': '，在背景用 CPU' }[m.how] || '';
+            const msg = '上次畫面關掉或重開的時候，還在' + what + '（那次打開之後的第 ' + (m.bg || 0) + ' 張去背' + how + '）。';
+            console.warn('[VN] 🧷 ' + msg);
+            try { const A = win.AUI || window.AUI; if (A && A.alert) A.alert(msg); } catch (e) {}
+        },
+        // ✂️ 去背（11-26 換掉 @imgly/background-removal：那個套件是 AGPL，跟「免費、禁止販售」的聲明放不在一起）
+        //   模型沒換：同一顆 ISNet（fp16、84MB），拿的是原作者另外用 MIT 放在 huggingface 的那份（imgly/isnet-general-onnx，鎖 commit）；
+        //   推論引擎 onnxruntime-web 1.21.0（MIT）也是舊套件用的同一版。自己寫的只有：縮成 1024×1024 餵進去、遮罩拉回原圖大小當透明度。
+        //   跟舊的比過（本機 tmp/bg_swap/run.cjs，四張立繪、CPU 和顯卡各一輪）：透明度平均差 0.2～0.7／255，差超過 8 的像素不到 1%（縮放內插不同的邊緣）。
+        //   模型下載一次就存進瀏覽器快取（caches 'aurelia-bg-model-v1'），工人收掉再開不用重抓。整段程式在 _bgWorkerCode。
+        _bgRemoverFn: null,
+        _bgDropFn: null,
+        _bgGpuBroken: false,
+        _bgRemoveChain: Promise.resolve(),   // 去背序列化鏈（同 NAI _naiQueue 思路）：一張一張跑，顯卡記憶體與 CPU 都不互搶
+        // 📱 記憶體小的裝置（_lowMemDevice：iPhone／iPad／4GB 以下）去背用 CPU（11-06 量過，tmp/bg_mem/run.cjs）：
+        //   顯卡那條光模型自己就要同時佔 690MB 顯卡記憶體（實驗把 onnxruntime 的暫存池關掉也還是這麼多，是 1024×1024 整張算的份量），
+        //   加暫存池約 900MB，整台瀏覽器一張去背最高約 2.0GB；CPU 那條最高約 1.1GB。iPhone 上顯卡記憶體算在網頁頭上。
+        //   CPU 比較慢（這台電腦一張約 12 秒，顯卡不到 1 秒），但在去背工人裡跑不會卡住畫面，去背結果一模一樣。
+        _bgDevice: function () { return (this._bgGpuBroken || this._lowMemDevice()) ? 'cpu' : 'gpu'; },
+        _bgRemoveOpts: function(extra) {
+            return Object.assign({ device: this._bgDevice() }, extra || {});
+        },
+        // 🧵 去背工人（11-06：PWA 去背時一直整頁重刷，沒辦法玩）
+        //   量過（tmp/bg_mem/run.cjs，headless 跑真的這幾支）：模型跑過一次，顯卡那邊就一直留著約 880MB——onnxruntime 把用過的
+        //   顯卡暫存全部留著重用，整頁活著就不還；網頁本身另外留 300～400MB（CPU 那條是執行環境的 480MB）。
+        //   iPhone 上顯卡用的記憶體也算在網頁頭上，這些一直不還、再疊上劇情畫面，Safari 就整頁重開。
+        //   改成在背景執行緒（Worker）裡跑：排著的去背做完、一陣子沒有新的，就把工人整個收掉，模型、執行環境、顯卡暫存一次全還。
+        //   同一顆模型、同一版引擎、同樣設定，去背結果一模一樣；CPU 那條也不會再卡住畫面。
+        //   工人起不來（網站規則擋背景執行緒、瀏覽器太舊）才照以前在畫面這條線上跑（_bgRunHere）。
+        _bgWorker: null,          // 開著的工人；收掉＝null，下一張再開新的
+        _bgWorkerJobs: null,      // 送進工人還沒回來的：id → { resolve, progress }
+        _bgWorkerSeq: 0,
+        _bgWorkerOk: false,       // 這頁有工人真的去背成功過（之後的失敗＝那張圖的問題，不是工人的問題）
+        _bgWorkerOff: false,      // 工人在這裡起不來 → 這頁之後都在畫面這條線上跑
+        _bgIdleTimer: 0,
+        _bgIdleMs: 6000,          // 排著的去背做完、這麼久沒有新的就收工人
+        // 去背程式本體（一段模組）：開成背景工人用，工人起不來時 _bgRunHere 在畫面這條線上 import 同一段。
+        //   🚨 改這段先改本機 tmp/bg_swap/bg_module.js、跑 tmp/bg_swap/run.cjs 對過，再用 tmp/bg_swap/embed.py 換進來（它整段重產，別手改下面的字）。
+        _bgWorkerCode: function () {
+            return [
+                'const ORT_BASE = \'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/\';',
+                'const MODEL_URL = \'https://huggingface.co/imgly/isnet-general-onnx/resolve/440dea96dd4a3b06bbbf5abec3e26569dd7ec49f/onnx/model_fp16.onnx\';',
+                'const MODEL_BYTES = 88152708;',
+                'const CACHE_NAME = \'aurelia-bg-model-v1\';',
+                'const S = 1024;',
+                'let ort = null, sess = null, sessDev = \'\';',
+                'async function loadOrt(dev) {',
+                '  if (ort) return ort;',
+                '  ort = await import(ORT_BASE + (dev === \'gpu\' ? \'ort.webgpu.bundle.min.mjs\' : \'ort.wasm.bundle.min.mjs\'));',
+                '  ort.env.wasm.wasmPaths = ORT_BASE;',
+                '  return ort;',
+                '}',
+                'async function modelBytes(progress) {',
+                '  let cache = null;',
+                '  try { cache = await caches.open(CACHE_NAME); } catch (e) {}',
+                '  if (cache) { try { const hit = await cache.match(MODEL_URL); if (hit) return await hit.arrayBuffer(); } catch (e) {} }',
+                '  const res = await fetch(MODEL_URL);',
+                '  if (!res.ok) throw new Error(\'去背模型下載失敗（\' + res.status + \'）\');',
+                '  const total = +res.headers.get(\'content-length\') || MODEL_BYTES;',
+                '  let buf = new Uint8Array(total), got = 0;',
+                '  const reader = res.body.getReader();',
+                '  for (;;) {',
+                '    const r = await reader.read();',
+                '    if (r.done) break;',
+                '    if (got + r.value.length > buf.length) { const b = new Uint8Array(Math.max(buf.length * 2, got + r.value.length)); b.set(buf.subarray(0, got)); buf = b; }',
+                '    buf.set(r.value, got); got += r.value.length;',
+                '    if (progress) progress(\'下載去背模型\', got, total);',
+                '  }',
+                '  if (got !== buf.length) buf = buf.slice(0, got);',
+                '  if (cache) { try { await cache.put(MODEL_URL, new Response(buf, { headers: { \'content-type\': \'application/octet-stream\' } })); } catch (e) {} }',
+                '  return buf.buffer;',
+                '}',
+                'let gpuOk = null;',
+                'async function hasGpu() {',
+                '  if (gpuOk != null) return gpuOk;',
+                '  try { gpuOk = !!(typeof navigator !== \'undefined\' && navigator.gpu && await navigator.gpu.requestAdapter()); } catch (e) { gpuOk = false; }',
+                '  return gpuOk;',
+                '}',
+                'async function dropSession() { const s = sess; sess = null; sessDev = \'\'; if (s) { try { await s.release(); } catch (e) {} } }',
+                'async function getSession(dev, progress) {',
+                '  if (sess && sessDev === dev) return sess;',
+                '  const o = await loadOrt(dev);',
+                '  const bytes = await modelBytes(progress);',
+                '  await dropSession();',
+                '  sess = await o.InferenceSession.create(bytes, { executionProviders: [dev === \'gpu\' ? \'webgpu\' : \'wasm\'], graphOptimizationLevel: \'all\' });',
+                '  sessDev = dev;',
+                '  return sess;',
+                '}',
+                'function halfToFloat(h) {',
+                '  const out = new Float32Array(h.length);',
+                '  for (let i = 0; i < h.length; i++) {',
+                '    const v = h[i], e = (v >> 10) & 31, f = v & 1023;',
+                '    const x = e === 0 ? f * 5.960464477539063e-8 : e === 31 ? (f ? NaN : Infinity) : (1 + f / 1024) * Math.pow(2, e - 15);',
+                '    out[i] = (v & 32768) ? -x : x;',
+                '  }',
+                '  return out;',
+                '}',
+                'function mkCanvas(w, h) {',
+                '  if (typeof OffscreenCanvas !== \'undefined\') return new OffscreenCanvas(w, h);',
+                '  const c = document.createElement(\'canvas\'); c.width = w; c.height = h; return c;',
+                '}',
+                'function toPng(c) {',
+                '  if (c.convertToBlob) return c.convertToBlob({ type: \'image/png\' });',
+                '  return new Promise((ok, no) => c.toBlob(b => b ? ok(b) : no(new Error(\'存不成 PNG\')), \'image/png\'));',
+                '}',
+                'async function removeBg(blob, opts, progress, onStage) {',
+                '  opts = opts || {};',
+                '  const dev = (opts.device === \'gpu\' && await hasGpu()) ? \'gpu\' : \'cpu\';',
+                '  const s = await getSession(dev, progress);',
+                '  if (onStage) onStage(\'run\');',
+                '  const bmp = await createImageBitmap(blob);',
+                '  const W = bmp.width, H = bmp.height, N = S * S;',
+                '  const c1 = mkCanvas(S, S), x1 = c1.getContext(\'2d\', { willReadFrequently: true });',
+                '  let c2 = null;',
+                '  try {',
+                '    x1.drawImage(bmp, 0, 0, S, S);',
+                '    const px = x1.getImageData(0, 0, S, S).data;',
+                '    const inp = new Float32Array(3 * N);',
+                '    for (let i = 0, p = 0; i < N; i++, p += 4) { inp[i] = (px[p] - 128) / 256; inp[N + i] = (px[p + 1] - 128) / 256; inp[2 * N + i] = (px[p + 2] - 128) / 256; }',
+                '    const feeds = {}; feeds[s.inputNames[0]] = new ort.Tensor(\'float32\', inp, [1, 3, S, S]);',
+                '    const res = await s.run(feeds);',
+                '    const t = res[s.outputNames[0]];',
+                '    let m = t.data;',
+                '    if (!(m instanceof Float32Array)) m = (typeof Float16Array !== \'undefined\' && m instanceof Float16Array) ? Float32Array.from(m) : halfToFloat(m);',
+                '    const mi = x1.createImageData(S, S), md = mi.data;',
+                '    for (let i = 0, p = 0; i < N; i++, p += 4) { const v = m[i] <= 0 ? 0 : m[i] >= 1 ? 255 : Math.round(m[i] * 255); md[p] = md[p + 1] = md[p + 2] = v; md[p + 3] = 255; }',
+                '    x1.putImageData(mi, 0, 0);',
+                '    for (const k in res) { try { res[k].dispose && res[k].dispose(); } catch (e) {} }',
+                '    c2 = mkCanvas(W, H);',
+                '    const x2 = c2.getContext(\'2d\', { willReadFrequently: true });',
+                '    x2.drawImage(c1, 0, 0, W, H);',
+                '    const mk = x2.getImageData(0, 0, W, H).data;',
+                '    x2.clearRect(0, 0, W, H);',
+                '    x2.drawImage(bmp, 0, 0);',
+                '    const im = x2.getImageData(0, 0, W, H), d = im.data;',
+                '    for (let p = 0; p < d.length; p += 4) d[p + 3] = Math.round(d[p + 3] * mk[p] / 255);   // 原圖自己透明的地方照乘',
+                '    x2.putImageData(im, 0, 0);',
+                '    return await toPng(c2);',
+                '  } finally {',
+                '    try { bmp.close && bmp.close(); } catch (e) {}',
+                '    c1.width = c1.height = 0; if (c2) c2.width = c2.height = 0;',
+                '  }',
+                '}',
+                'if (typeof WorkerGlobalScope !== \'undefined\' && self instanceof WorkerGlobalScope) {',
+                '  let gpuBroken = false;',
+                '  self.onmessage = async function (ev) {',
+                '    const d = ev.data || {}, id = d.id, opts = d.opts || {};',
+                '    const prog = d.wantProgress ? function (k, c, t) { self.postMessage({ id: id, progress: [k, c, t] }); } : null;',
+                '    let stage = \'load\';',
+                '    const st = function (x) { stage = x; };',
+                '    try {',
+                '      if (gpuBroken) opts.device = \'cpu\';',
+                '      let out;',
+                '      try { out = await removeBg(d.blob, opts, prog, st); }',
+                '      catch (e) {',
+                '        if (opts.device !== \'gpu\' || !(self.navigator && self.navigator.gpu)) throw e;',
+                '        gpuBroken = true; opts.device = \'cpu\'; stage = \'load\';',
+                '        self.postMessage({ id: id, gpuBroken: String((e && e.message) || e) });',
+                '        await dropSession();',
+                '        out = await removeBg(d.blob, opts, prog, st);',
+                '      }',
+                '      self.postMessage({ id: id, out: out });',
+                '    } catch (e) { self.postMessage({ id: id, err: String((e && e.message) || e), stage: stage }); }',
+                '  };',
+                '  self.postMessage({ ready: true, gpu: !!(self.navigator && self.navigator.gpu) });',
+                '}',
+                'export { removeBg, dropSession };',
+            ].join('\n');
+        },
+        // 收工人：還在等的單一律回「要在畫面這條線上重跑」（fallback）或失敗
+        _bgRelease: function (why, fallback) {
+            if (this._bgIdleTimer) { clearTimeout(this._bgIdleTimer); this._bgIdleTimer = 0; }
+            const w = this._bgWorker, jobs = this._bgWorkerJobs || {};
+            this._bgWorker = null; this._bgWorkerJobs = null;
+            if (!w) return;
+            try { w.terminate(); } catch (e) {}
+            try { URL.revokeObjectURL(w._vnUrl); } catch (e) {}
+            Object.keys(jobs).forEach(function (id) { jobs[id].resolve({ err: why || '去背工人收掉了', fallback: !!fallback }); });
+            if (why === 'idle') console.log('[VN] 去背工人收工：模型、執行環境、顯卡暫存都還回去了');
+        },
+        _bgIdleRelease: function () {
+            const self = this;
+            if (this._bgIdleTimer) clearTimeout(this._bgIdleTimer);
+            this._bgIdleTimer = setTimeout(function () {
+                self._bgIdleTimer = 0;
+                if (self._bgWorkerJobs && Object.keys(self._bgWorkerJobs).length) return;
+                self._bgRelease('idle');
+            }, this._bgIdleMs);
+        },
+        _bgWorkerGet: function () {
+            if (this._bgWorker) return this._bgWorker;
+            const self = this;
+            const url = URL.createObjectURL(new Blob([this._bgWorkerCode()], { type: 'text/javascript' }));
+            let w;
+            try { w = new Worker(url, { type: 'module' }); }
+            catch (e) { try { URL.revokeObjectURL(url); } catch (e2) {} throw e; }
+            w._vnUrl = url;
+            this._bgWorker = w; this._bgWorkerJobs = {};
+            // 一直沒說「好了」＝這裡跑不起來（被擋、或瀏覽器不收這種寫法）
+            const readyT = setTimeout(function () { if (self._bgWorker === w && !w._vnReady) self._bgRelease('去背工人一直沒起來', !self._bgWorkerOk); }, 20000);
+            w.onmessage = function (ev) {
+                const d = ev.data || {};
+                if (d.ready) {
+                    w._vnReady = true; clearTimeout(readyT);
+                    console.log('[VN] 去背工人起來了（' + (self._bgDevice() === 'cpu' ? '用 CPU' : d.gpu ? '用顯卡' : '背景裡沒有顯卡可用，用 CPU') + '）');
+                    return;
+                }
+                const job = self._bgWorker === w && self._bgWorkerJobs && self._bgWorkerJobs[d.id];
+                if (!job) return;
+                if (d.progress) { try { if (job.progress) job.progress.apply(null, d.progress); } catch (e) {} return; }
+                if (d.gpuBroken) { console.warn('[VN] 顯卡去背失敗，之後改用 CPU:', d.gpuBroken); self._bgGpuBroken = true; return; }
+                delete self._bgWorkerJobs[d.id];
+                if (d.out) { self._bgWorkerOk = true; job.resolve({ out: d.out }); }
+                // 這頁的工人還沒成功過一次就失敗 → 這張先在畫面這條線上再試，分得出是不是工人的問題
+                else job.resolve({ err: d.err || '去背沒成功', fallback: !self._bgWorkerOk, stage: d.stage });
+                if (!Object.keys(self._bgWorkerJobs).length) self._bgIdleRelease();
+            };
+            w.onerror = function (ev) {
+                try { ev.preventDefault(); } catch (e) {}
+                clearTimeout(readyT);
+                if (self._bgWorker === w) self._bgRelease('去背工人出錯：' + ((ev && ev.message) || '起不來'), !self._bgWorkerOk);
+            };
+            return w;
+        },
+        _bgRunInWorker: function (blob, opts, progress) {
+            const self = this;
+            return new Promise(function (resolve) {
+                let w;
+                try { w = self._bgWorkerGet(); }
+                catch (e) { resolve({ err: '開不了去背工人：' + ((e && e.message) || e), fallback: true, noWorker: true }); return; }
+                if (self._bgIdleTimer) { clearTimeout(self._bgIdleTimer); self._bgIdleTimer = 0; }
+                const id = ++self._bgWorkerSeq;
+                self._bgWorkerJobs[id] = { resolve: resolve, progress: progress };
+                try { w.postMessage({ id: id, blob: blob, opts: opts, wantProgress: !!progress }); }
+                catch (e) { delete self._bgWorkerJobs[id]; resolve({ err: '送不進去背工人：' + ((e && e.message) || e), fallback: true }); }
+            });
+        },
+        // 以前的跑法：在畫面這條線上跑（模型留在這頁、不會還）。只在工人起不來時用
+        _bgRunHere: async function (blob, extra) {
+            if (!this._bgRemoverFn) {
+                const url = URL.createObjectURL(new Blob([this._bgWorkerCode()], { type: 'text/javascript' }));
+                const m = await import(url);
+                this._bgRemoverFn = m.removeBg; this._bgDropFn = m.dropSession;
+            }
+            const opts = this._bgRemoveOpts(extra);
+            const progress = (typeof opts.progress === 'function') ? opts.progress : null;
+            delete opts.progress;
+            try { return await this._bgRemoverFn(blob, opts, progress); }
+            catch (e) {
+                if (this._bgGpuBroken || opts.device !== 'gpu') throw e;
+                console.warn('[VN] 顯卡去背失敗，之後改用 CPU:', e?.message || e);
+                this._bgGpuBroken = true;
+                try { await this._bgDropFn(); } catch (e2) {}
+                return await this._bgRemoverFn(blob, Object.assign(opts, { device: 'cpu' }), progress);
+            }
+        },
+        _stripSpriteBgAI: function(blob, extra) {
+            // 不管上游生成是並行還是串行，去背永遠一張跑完才下一張；模型在同一個工人裡只載一次。
+            const self = this;
+            const run = async () => {
+                self._heavyBegin('bg', self._bgDevice() + (self._bgWorkerOff ? '' : '-w'));
+                try {
+                    if (!self._bgWorkerOff) {
+                        const opts = self._bgRemoveOpts(extra);
+                        const progress = (typeof opts.progress === 'function') ? opts.progress : null;
+                        delete opts.progress;   // 函式送不進工人；進度由工人一格一格回報
+                        const r = await self._bgRunInWorker(blob, opts, progress);
+                        if (r.out) return r.out;
+                        if (!r.fallback) { console.warn('[VN] AI 去背失敗:', r.err); return null; }
+                        console.warn('[VN] 去背工人這次沒成功，這張改在畫面這條線上跑:', r.err);
+                        const here = await self._bgRunHere(blob, extra);
+                        // 畫面這條線跑得動、工人不行＝這裡的工人有問題 → 這頁之後都不開工人
+                        if (here && !self._bgWorkerOk) { self._bgWorkerOff = true; self._bgRelease('工人在這裡不能用'); }
+                        return here;
+                    }
+                    return await self._bgRunHere(blob, extra);
+                } catch (e) { console.warn('[VN] AI 去背失敗:', e?.message || e); return null; }
+                finally { self._heavyEnd(); }
+            };
+            const next = self._bgRemoveChain.then(run, run);   // 前一個成敗都接著跑
+            self._bgRemoveChain = next.catch(() => {});          // 鏈不因單張失敗而斷
+            return next;
+        },
+
+        // ── 早鳥入口：搶在 VN 載入前提早登記＋生成頭像＋背景（vn_avatar_earlybird / 面板啟動路呼叫）──
+        // 從任意文本掃 [Avatar|名|描述] 與 [Bg|...]。★序列化、不併發：先頭像(逐位)、再背景(逐張)，全程 await 串接。
+        //   順序「頭像先」是不回退頭像時序；背景之後接上，仍比純惰性早、且 loadScript 預熱仍墊底。
+        earlybirdFromText: async function(text) {
+            try {
+                if (!text) return;
+                // 1) 頭像（[Avatar|名|外觀] 或 [Avatar|名|聲線|外觀]；外觀取最後段，聲線存 charVoices）
+                const pairs = [];
+                const reAv = /^\s*\[Avatar\|([^|\]\n]+)\|([^\]\n]+)\]\s*$/gmi;
+                let m;
+                while ((m = reAv.exec(text)) !== null) {
+                    const n = m[1].trim();
+                    const rest = m[2].split('|').map(s => s.trim());
+                    if (rest.length >= 2 && rest[0]) this.charVoices[n] = rest[0];
+                    const d = this._avatarDescOf(rest);
+                    // 🚨 穿著保險要在這裡也套一次：早鳥比 loadScript 早，它生完就進快取，
+                    //    只修 loadScript 那條等於沒修（下次讀到的是早鳥存的那張裸圖）。
+                    if (n && d && !pairs.some(p => p.name === n)) pairs.push({ name: n, desc: this._safeOutfit(d) });
+                }
+                if (pairs.length) {
+                    console.log(`[VN] 頭像早鳥：收到 ${pairs.length} 位（${pairs.map(p => p.name).join('、')}）`);
+                    await this._earlybirdAvatars(pairs);
+                }
+                // 2) 背景（接在頭像後，逐張序列，與頭像不併發）— 解析對齊 _prewarmBgs：cacheId=parts[1]、_bgGenPrompt
+                const bgs = [];
+                const seen = new Set();
+                const reBg = /\[Bg\|([^\]\n]*)\]/g;
+                while ((m = reBg.exec(text)) !== null) {
+                    const parts = m[1].split('|');
+                    const cacheId = parts[1];
+                    const prompt = this._bgGenPrompt(parts);
+                    if (!cacheId || !prompt || seen.has(cacheId)) continue;
+                    seen.add(cacheId);
+                    bgs.push({ cacheId, prompt });
+                }
+                if (bgs.length) {
+                    console.log(`[VN] 背景早鳥：收到 ${bgs.length} 張（${bgs.map(b => b.cacheId).join('、')}）`);
+                    await this._earlybirdBgs(bgs);
+                }
+            } catch(e) {}
+        },
+        // 背景早鳥：逐張序列生成（不併發），走 _safeFetchBg 與現場/預熱共用 _bgInflight 去重，登場直接讀
+        _earlybirdBgs: async function(tasks) {
+            if (!tasks || !tasks.length) return;
+            if (!this._imgEngineReady()) {
+                const _ok = await this._waitForImageManager(180000);
+                if (!_ok) return;
+            }
+            this._imgScanStart();
+            try {
+                for (const { cacheId, prompt } of tasks) {
+                    if (this._bgMemCache[cacheId] || this._bgInflight[cacheId] || this._bgFailed[cacheId]) continue;
+                    console.log(`[VN] 背景早鳥：${cacheId} → 提前生成`);
+                    this._imgJobStart();
+                    try { await this._safeFetchBg(cacheId, prompt); } finally { this._imgJobEnd(); }
+                }
+            } finally { this._imgScanEnd(); }
+        },
+        // 生圖引擎就緒判定：vn_core 的 win=window.parent，但再注入時序下 OS_IMAGE_MANAGER 可能先掛在
+        // window 或 window.parent。任一個有就算就緒——實際生成走 VN_Image.getAvatar，會用對的那個 win。
+        _imgEngineReady: function() {
+            try { if (win && win.OS_IMAGE_MANAGER) return true; } catch(e) {}
+            try { if (window.OS_IMAGE_MANAGER) return true; } catch(e) {}
+            try { if (window.parent && window.parent.OS_IMAGE_MANAGER) return true; } catch(e) {}
+            return false;
+        },
+        _waitForImageManager: function(timeoutMs) {
+            const self = this;
+            if (self._imgEngineReady()) return Promise.resolve(true);
+            return new Promise(function(resolve) {
+                const t0 = Date.now();
+                const iv = setInterval(function() {
+                    if (self._imgEngineReady()) { clearInterval(iv); resolve(true); }
+                    else if (Date.now() - t0 > (timeoutMs || 180000)) { clearInterval(iv); resolve(false); }
+                }, 400);
+            });
+        },
+        // 探「使用者自備的靜態立繪/預設圖」在不在（對齊 _renderSlot/handleImgError 的 fallback 鏈：表情立繪條目→spriteBase→預設立繪條目→charDefaultBase）。
+        // 在＝播放時直接讀靜態檔、不用生；不在（AI 臨時編的 NPC）＝該角色 fallback 會走到「生成」，早鳥/預熱要提前生。
+        _staticAvatarExists: async function(name) {
+            if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
+            const urls = [];
+            const off = this._officialSprite(name);   // 小劇場的管理員有官方立繪 → 算自備圖，預熱／早鳥都不生
+            if (off) urls.push(off);
+            this._nameVariants(name).forEach(v => {
+                const e = this._lorebookExpCache[`${v}_Neutral`]; if (e) urls.push(e);
+                const s = this._lorebookSpriteCache[v]; if (s) urls.push(s);
+            });
+            if (VN_Config.data.spriteBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.spriteBase}${v}_Neutral.png`));
+            if (VN_Config.data.charDefaultBase) this._nameVariants(name).forEach(v => urls.push(`${VN_Config.data.charDefaultBase}${v}_presets.png`));
+            if (!urls.length) return Promise.resolve(false);
+            return new Promise(resolve => {
+                let i = 0;
+                (function probe() {
+                    if (i >= urls.length) return resolve(false);
+                    const url = urls[i++];
+                    const im = new Image();
+                    let settled = false;
+                    const to = setTimeout(() => { if (!settled) { settled = true; probe(); } }, 5000);
+                    im.onload  = () => { if (!settled) { settled = true; clearTimeout(to); resolve(true); } };
+                    im.onerror = () => { if (!settled) { settled = true; clearTimeout(to); probe(); } };
+                    im.src = url;
+                })();
+            });
+        },
+        _earlybirdAvatars: async function(pairs) {
+            if (!pairs || !pairs.length) return;
+            // ⭐ 不再因 spriteBase 就整批跳過：靜態立繪只是 fallback 第一層，沒自備圖的角色（AI 臨時 NPC）
+            //    最終會走到「生成」那層 → 必須提前生，否則登場才生＝卡 3-4 秒。改為逐角色探靜態圖在不在。
+            // ⭐ 引擎就緒走 _imgEngineReady（win/window/window.parent 任一），避免 iframe 跨-win 落差整批丟。
+            if (!this._imgEngineReady()) {
+                const _ok = await this._waitForImageManager(180000);
+                if (!_ok) { console.warn('[VN] 頭像早鳥：等 OS_IMAGE_MANAGER 逾時，放棄預生（退回對話時生成）'); return; }
+            }
+            this._imgScanStart();   // 整批處理期間舉「忙碌」牌：查快取的空檔不算完成
+            try {
+            for (const p of pairs) {
+                const name = p.name, desc = p.desc;
+                if (!name || !desc) continue;
+                if (!this.avatars[name]) this.avatars[name] = desc;   // 先登記，loadScript 再解析到也只是覆寫同值
+                await this._refreshGuessedLook(name);   // 🧾 同預熱：大總結猜的長相換成劇情寫的
+                if (this._avatarMemCache[name] || this._avatarInflight[name]) continue;
+                try {
+                    // 與預熱第一輪同序的快速快取檢查：世界書素材 → IDB → persona URL，命中就不生
+                    if (!this._lorebookLoaded) { await this._loadLorebookAvatars(); this._lorebookLoaded = true; }
+                    const _sf = this._spriteFirst(name);   // 同預熱：開了跳過頭像、有外觀可生，頭像那兩種不算現成來源
+                    const lbUrl = _sf ? null : (this._lorebookAvatarCache[name] || this._lorebookAvatarCache[this._nameVariants(name).find(v => this._lorebookAvatarCache[v])]);
+                    if (lbUrl) continue;
+                    const cached = await VN_Cache.get('avatar_cache', name);
+                    if (cached?.url && !cached.url.startsWith('blob:')) continue;
+                    if (!_sf && this._getPersonaFallback(name)?.url) continue;
+                    // 自備靜態立繪/預設圖存在 → 播放時直接讀靜態檔，不用生
+                    if (await this._staticAvatarExists(name)) { console.log(`[VN] 頭像早鳥：${name} 有自備靜態圖，跳過生成`); continue; }
+                } catch(e) {}
+                // 串行生成（≤10 張；本機讓路交給語音紅綠燈在生圖層處理）
+                console.log(`[VN] 頭像早鳥：${name} 無現成來源 → 提前生成`);
+                await this._genAvatarToCache(name);
+            }
+            } finally { this._imgScanEnd(); }
+        },
+
+        // 🍔 浮窗開著時，點對話框只把它收起來，不推進劇情（不然點一下就跳句、選單也沒了）
+        handlePanelClick: function() {
+            if (this.closeMore()) return;
+            if (this.isSkip) this.toggleSkip();
+            this.next();
+        },
+
+        playSFX: function(sfxId) {
+            // ⚡ fx- 開頭 = 畫面特效（AI 偶爾會塞進尾格 SFX 欄）→ 轉交 OS_FX，別當音效檔去 404
+            if (sfxId && /^fx-/i.test(String(sfxId).trim())) {
+                try { if (window.OS_FX) window.OS_FX.play(String(sfxId).trim()); } catch (e) {}
+                return;
+            }
+            // 「兩格狀態」制：音效活過「自己那格＋下一格」，第二次推進才收。
+            // 快速點字不掐頭（舊版每行推進都先 stopSFX＝音效總死在開頭）；也不放任沒切片的長音效裸奔（5 秒上限仍是天花板）。
+            if (!sfxId || sfxId === 'NA' || sfxId.trim() === '') {
+                if (this._currentSfxAudio && --this._sfxLives <= 0) this.stopSFX();   // 沒音效的行＝過一格、扣一條命
+                return;
+            }
+
+            // 切換新音效前，確保先停止上一個音效避免重疊
+            this.stopSFX();
+            this._sfxLives = 2;   // 自己那格 + 下一格
+            const sfxPath = VN_Config.data.sfx || '';
+            let sfxVol = VN_Settings.data.sfxVolume !== undefined ? VN_Settings.data.sfxVolume : 50;
+            const vol = parseInt(sfxVol) / 100;
+
+            const audio = new Audio();
+            audio.volume = vol;
+            audio.src = sfxPath + sfxId + '.mp3';
+            
+            // 綁定到當前音效變數
+            this._currentSfxAudio = audio;
+
+            const playWithLimit = (audioObj) => {
+                audioObj.play().then(() => {
+                    // 播放成功後，啟動 5 秒計時器，時間到強制停止
+                    this._sfxTimer = setTimeout(() => {
+                        this.stopSFX();
+                    }, 5000);
+                }).catch(err => { console.log('[VN_Core] SFX 播放失敗:', err); });
+            };
+
+            audio.play().then(() => {
+                this._sfxTimer = setTimeout(() => {
+                    this.stopSFX();
+                }, 5000);
+            }).catch(e => {
+                // 退回 .wav 播放
+                const audioWav = new Audio();
+                audioWav.volume = vol;
+                audioWav.src = sfxPath + sfxId + '.wav';
+                this._currentSfxAudio = audioWav;
+                playWithLimit(audioWav);
+            });
+        },
+
+        // 🎲 表情格容錯（自由模式常駐）：[Char|名|「台詞」|Stay] 三欄制沒有表情格——
+        //   表情恆為純英文字，第二格不是純英文字＝它其實是台詞 → 補 Neutral 佔位，三欄四欄都吃。
+        //   固定模式下 AI 偶爾漏寫表情也順便救（不再整行死掉）。
+        // 台詞長相：總綱兩版都明訂「凡『』與 *…* 必屬 [Char]」，所以台詞一定有這個開頭。
+        _looksLikeDialogue: function(s) {
+            s = String(s || '').trim();
+            if (!s) return false;
+            if (/^[「『（(*“”"']/.test(s)) return true;   // 台詞／內心的慣例開頭
+            return /[。！？…]/.test(s);                    // 沒帶開頭符號但有句子標點 → 還是當台詞
+        },
+        // [Char] 欄位對齊。🚨不能只數總格數：固定模式是 名|表情|台詞、自由模式是 名|台詞，
+        //   加上選填的 SFX 格與必填的 Stay/Leave，兩種模式的總格數本來就會撞在一起。
+        //   舊寫法改看「第二格是不是純英文」來猜有沒有表情格，但 AI 偶爾把表情寫成自己壓縮出來的
+        //   中文標籤——那格明明佔著表情位，卻被判成台詞，於是硬插一格 Neutral 把整行往右推：
+        //   真正的台詞被擠到 SFX 位、中文標籤反而黏在台詞前面一起顯示出來（總格數完全沒變，
+        //   所以看起來像「格數對了卻還是壞」）。
+        //   改成問「第二格是不是台詞」：認台詞有明訂的長相，比認表情可靠得多。不是台詞就當它是
+        //   表情格、寫成什麼都不管——認不得的表情本來就會退到預設圖／生成，不會壞。
+        _normCharParts: function(p) {
+            if (!Array.isArray(p) || p.length < 2) return p;
+            // 🚨 第五欄的站位狀態 Stay/Leave 不算內容欄，得先扣掉再數格數。
+            //    自由模式寫的是 [Char|名|台詞|Stay]，扣掉站位其實只有「名＋台詞」兩格、沒有表情格；
+            //    以前直接用 p.length 去數就變成三格，於是不補表情格，slice(2) 只剩 ["Stay"] ——
+            //    而剝站位那支有「只剩一格就不剝」的守衛，Stay 就這樣變成台詞本身，
+            //    通話紀錄裡那筆的內容整個變成 Stay。四欄舊格式的判斷完全不受影響。
+            const last = String(p[p.length - 1] == null ? '' : p[p.length - 1]).trim().toLowerCase();
+            const eff = (last === 'stay' || last === 'leave') ? p.length - 1 : p.length;
+            // 名字後面只剩一格＝那格一定是台詞（沒有表情格）；兩格以上才需要分辨第二格是哪個
+            //   🎭 沒寫表情時先問副模型有沒有替這句挑過（表情交給副模型那個選項，VN_FREE_MODE.lookupExpr），沒有才 Neutral
+            if (eff <= 2 || this._looksLikeDialogue(p[1])) {
+                let fill = '';
+                try { const F = win.VN_FREE_MODE || window.VN_FREE_MODE; fill = (F && F.lookupExpr) ? F.lookupExpr(p[0], p[1]) : ''; } catch (e) {}
+                p.splice(1, 0, fill || 'Neutral');
+            }
+            return p;
+        },
+
+        _extractTextAndSFX: function(parts) {
+            // 第五欄「站位狀態」Stay/Leave（強制欄、schema 恆定）：最先抽走——所有 [Char] 消費端
+            //（顯示/TTS/日誌/通話字幕）都經過這裡，集中剝除就全鏈乾淨；四欄舊行沒這欄=stage:''，完全相容。
+            let stage = '';
+            if (parts.length > 1) {
+                const lp = parts[parts.length - 1].trim().toLowerCase();
+                if (lp === 'stay' || lp === 'leave') { stage = lp; parts.pop(); }
+            }
+            let sfx = 'NA';
+            if (parts.length > 1) {
+                let lastPart = parts[parts.length - 1].trim();
+                if (/^[a-zA-Z0-9_\-&]+$/.test(lastPart)) {
+                    sfx = parts.pop().trim();
+                }
+            }
+            return { text: parts.join('|'), sfx: sfx, stage: stage };
+        },
+        // 正文內穿插的 #SFXID# 音效標記（旁白不帶 Nar 後的新格式）：抽出第一個當音效、其餘標記一律從顯示文字剝掉。
+        //   回 { text: 去標記後的文字, sfx: 第一個ID或'NA' }。與 tag 尾格 SFX 並存(呼叫端 inline 優先、沒有才用尾格)。
+        //   opts.silent：只要剝好的字、不播 fx-（語音預取／預熱用：還沒播到那句，特效不能先跑）
+        _extractInlineSFX: function(text, opts) {
+            if (!text || text.indexOf('#') === -1) return { text: text || '', sfx: 'NA' };
+            const silent = !!(opts && opts.silent);
+            let sfx = 'NA';
+            const cleaned = String(text).replace(/#([A-Za-z0-9_\-&]+)#/g, (_m, id) => {
+                const _id = id.trim();
+                if (/^fx-/i.test(_id)) {   // ⚡ fx- 開頭 = 畫面特效標記 → 交 OS_FX 播，不當音效
+                    if (!silent) { try { if (window.OS_FX) window.OS_FX.play(_id); } catch (e) {} }
+                    return '';
+                }
+                if (sfx === 'NA') sfx = _id;   // 一行取第一個(playSFX 一次一個、後者會蓋前者)
+                return '';
+            }).replace(/[ \t]{2,}/g, ' ').replace(/\s+([，。、！？,.!?])/g, '$1').trim();
+            return { text: cleaned, sfx: sfx };
+        },
+        // 純剝除 #SFXID# 標記（給歷史/日誌/酒館顯示用，不觸發音效）
+        _stripInlineSFX: function(text) {
+            return String(text || '').replace(/#[A-Za-z0-9_\-&]+#/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+        },
+
+        // Expression → GPT-SoVITS emotion 映射（支援自訂無限標籤）
+        _mapExprToEmotion: function(expr) {
+            if (!expr) return '';
+            const e = expr.toLowerCase();
+            
+            // 1. 保留原本的基礎情緒轉換（為了向下相容舊腳本）
+            if (/happy|smile|laugh|joy|excite|delight|cheer|fun|playful|pleased/.test(e)) return 'happy';
+            if (/sad|cry|sorrow|grief|depressed|melancholy|tear|weep/.test(e))           return 'sad';
+            if (/surpris|shock|amaze|astonish|startl/.test(e))                           return 'surprise';
+            if (/angry|mad|furious|rage|irritat|annoy/.test(e))                          return 'angry';
+            if (/scare|fear|terrif|fright|horror/.test(e))                               return 'scare';
+            if (/disgust|hate|loath|repuls|contempt/.test(e))                            return 'hate';
+            
+            // 2. 🌟 終極解鎖：如果都不符合上述基礎情緒，就「原封不動」回傳腳本上的標籤！
+            // 這樣你的 "Smirk"、"哭腔" 或任何自訂情緒，就會直接送給 TTS 引擎。
+            return expr;
+        },
+
+
+        // 腳本解析時一次性將所有 [Char|] 對話塞進 VN_TTS 佇列預生成
+        _prewarmSoVITS: function() {
+            const VN_TTS = (window.parent || window).VN_TTS;
+            if (!VN_TTS?.config?.enabled) return;
+
+            const lines = [];
+            for (const line of this.script) {
+                if (!line.startsWith('[Char|')) continue;
+                // ⚠️ 必須跟播放端走同一條 _normCharParts（自由模式 [Char|名|「台詞」|Stay] 沒有表情格）。
+                //    漏掉的話 parts.slice(2) 只剩 ["Stay"] → 預熱的是「Stay」而不是台詞，
+                //    快取 key 跟播放端永遠對不上 ⇒ 每一句都得現生 ⇒ 語音很慢出。
+                const parts = this._normCharParts(line.slice(6, -1).split('|'));
+                const charName = parts[0];
+                const ex = this._extractTextAndSFX(parts.slice(2));
+                // 播放端念的是剝掉正文 #音效# 標記之後的字（_extractInlineSFX），預熱也要先剝，快取鍵才對得上
+                const text = this._cleanTextForSoVITS(this._extractInlineSFX(ex.text, { silent: true }).text);
+                
+                // 🎭 拆解 Type 與 Expression
+                let rawExp = parts[1] || '';
+                let typeHint = '';
+                if (rawExp.includes('_')) {
+                    const _pts = rawExp.split('_');
+                    typeHint = _pts[0].trim();
+                    rawExp = _pts.slice(1).join('_').trim();
+                }
+                // 聲線已搬到 [Avatar]：[Char] 沒帶就用 Avatar 宣告的固定聲線（隨機 NPC 才在 [Char] 自帶）
+                if (!typeHint) typeHint = this.charVoices[charName] || '';
+
+                if (!text || (VN_TTS._resolveModel && !VN_TTS._resolveModel(charName, typeHint))) continue;
+                if ((window.parent || window).OS_VOICE_CAST?.has(charName)) continue;   // 名單上的人走雲端，本機不用先生
+                lines.push({ charName, text, emotion: this._mapExprToEmotion(rawExp), typeHint });
+            }
+            if (lines.length) {
+                VN_TTS.prewarm(lines);
+                console.log(`[VN] VN_TTS 預生成：${lines.length} 條語音排入佇列`);
+            }
+        },
+
+        // 台詞欄被 AI 混進旁白（「話」他動了動「話」）→ 語音只念「」內的內容，旁白描述不出聲（防出戲）。
+        // 沒有「」的整句照舊（內心話 *…*、純口語、旁白走自己的路都不受影響）；多段引號用空格串接（TTS 自然停頓）。
+        // 🚨 AI 也會反過來：整句台詞沒包「」、裡面只拿「」引一個詞（…本地人說的「某個詞」了，…），
+        //    以前只念出「」裡那個詞（11-15：Char 基本上可以當語音，但有些 AI 會把旁白放在「」外面）。
+        //    所以只在「像台詞包在「」裡」時才剝外面：整句一對「」、「」開頭或結尾、或「」裡的字不比外面少太多；
+        //    「」只框了一小段、前後都是一大段字 → 整句都是台詞，拿掉引號照念。
+        _speechOnly: function(text) {
+            const s = String(text || '');
+            if (s.indexOf('「') < 0) return s;
+            const t = s.trim().replace(/[。，、…‥！？!?.,\s]+$/, '');
+            // 整句就是一對「」（裡面再拿「」引個詞也算）→ 全部念
+            if (t[0] === '「' && t[t.length - 1] === '」') {
+                let d = 0, whole = true;
+                for (let i = 0; i < t.length; i++) {
+                    if (t[i] === '「') d++; else if (t[i] === '」') d--;
+                    if (d <= 0 && i < t.length - 1) { whole = false; break; }
+                }
+                if (whole) return s.replace(/[「」]/g, '').trim() || s;
+            }
+            const m = s.match(/「[^「」]*」/g);
+            if (!m || !m.length) return s;
+            const joined = m.map(seg => seg.slice(1, -1).trim()).filter(Boolean).join(' ');
+            if (!joined) return s;
+            const bare = x => x.replace(/[\s\p{P}\p{S}]/gu, '').length;
+            const inLen = bare(joined), outLen = bare(s.replace(/「[^「」]*」/g, ''));
+            if (t[0] !== '「' && t[t.length - 1] !== '」' && inLen * 2 < outLen) return s.replace(/[「」]/g, '');
+            return joined;
+        },
+
+        // 送 GPT-SoVITS 前清理文字：去掉開頭與結尾標點，避免後端切句異常與靜音
+        _cleanTextForSoVITS: function(text) {
+            if (!text) return '';
+            // 🔇 站位佔位符不念（2026-08-01）：[Char|名|表情|Stay] 這種「沒台詞、只更新立繪」的行，
+            //    _extractTextAndSFX 的 `parts.length > 1` 守衛剝不掉（parts 只剩一個元素），
+            //    text 就變成字面的 "Stay"/"Leave" → 預熱真的跑去合成「Stay」。實測一條吃 7.4 秒
+            //    （其中 4.5 秒是換模型），還把 GPU 上的模型換成當下用不到的角色，白白燒掉串流窗口。
+            //    TTS 是唯一共用入口（earlybird／預熱／播放都經過這裡）→ 這裡擋掉即全鏈乾淨，不動顯示端。
+            if (/^(stay|leave)$/i.test(String(text).trim())) return '';
+            // 語音壓到「」內（有引號才作用）——播放/系統音/預熱全走這裡 → 快取 key 自動對齊
+            let cleaned = this._speechOnly(text);
+            // 再剝掉 ()（）內的動作/語氣描述（如「(輕笑)」）——那是舞台指示，不該被念出來。
+            //   MiniMax 端 cleanTextForTts 已有剝；SoVITS 這條原本漏了 → 跟 VN-phone 語音對齊。
+            cleaned = String(cleaned).replace(/[（(][^（()]*[)）]/g, ' ');
+            cleaned = cleaned.replace(/^[。，、…‥「」『』【】〔〕！？!?,\s]+/, '');
+            // 🌟 結尾過濾：拿掉了 ！？!? 和 … ‥ ，讓語氣保留！
+            cleaned = cleaned.replace(/[。，、「」『』【】〔〕,\s]+$/, '');
+            cleaned = cleaned.replace(/[,，]/g, ' ');
+            cleaned = cleaned.replace(/\s+/g, ' ');
+            return cleaned.trim();
+        },
+        
+        // GPT-SoVITS TTS 播放 — 透過 VN_TTS 引擎（快取命中即播，否則串流生成）
+        _vnSoVITSPlay: function(charName, rawText, emotion, typeHint) {
+            const VN_TTS = (window.parent || window).VN_TTS;
+            if (!VN_TTS?.config?.enabled) return;
+            const text = this._cleanTextForSoVITS(rawText);
+            if (!text) return;
+            VN_TTS.play(charName, text, emotion, typeHint);
+        },
+
+        // 🔊 讓角色念一句：誰用哪個聲音交給角色配音名單（OS_VOICE_CAST）——名單上的人走他綁的雲端聲音，
+        //    其他人照「沒在名單的人」那格交給本機或不念。rawExp 是去掉聲線前綴的表情，typeHint 是聲線。
+        //    回傳誰在念（'minimax'／'elevenlabs'／'sovits'／''）。
+        _speakAs: function(charName, rawText, rawExp, typeHint) {
+            const V = (window.parent || window).OS_VOICE_CAST;
+            if (!V) return '';
+            return V.speakAs(charName, this._speechOnly(rawText), {   // 雲端壓到「」內：混寫的旁白不進 TTS
+                expression: rawExp || '',
+                local: () => this._vnSoVITSPlay(charName, rawText, this._mapExprToEmotion(rawExp || ''), typeHint || '')
+            });
+        },
+        // 下一句先合成（只有名單上的雲端聲音需要）；fullExp 可以帶聲線前綴，這裡拆掉
+        _prefetchAs: function(charName, rawText, fullExp) {
+            const V = (window.parent || window).OS_VOICE_CAST;
+            if (!V || !rawText) return;
+            let exp = fullExp || '';
+            if (exp.includes('_')) exp = exp.split('_').slice(1).join('_').trim();
+            V.prefetchAs(charName, this._speechOnly(rawText), { expression: exp });
+        },
+
+        // 系統語音播放（[Sys|系統名|訊息]）— 透過 VN_TTS 系統音對應（不同 AI/系統各自的聲音）
+        _vnSysVoicePlay: function(sysName, rawText) {
+            const VN_TTS = (window.parent || window).VN_TTS;
+            if (!VN_TTS?.config?.enabled || typeof VN_TTS.playSystem !== 'function') return;
+            const text = this._cleanTextForSoVITS(rawText);
+            if (!text) return;
+            VN_TTS.playSystem(sysName || '', text);
+        },
+
+        // 旁白語音播放 — Kokoro 開了走 Kokoro、否則 SoVITS 旁白音色；playNarration 自己把關，故不綁 SoVITS 開關
+        // ⚠️ 不在這裡套 _cleanTextForSoVITS（會拔逗號）；傳原文給引擎各自清 —— Kokoro 要保留標點才有停頓
+        _vnNarrVoicePlay: function(rawText) {
+            const VN_TTS = (window.parent || window).VN_TTS;
+            if (typeof VN_TTS?.playNarration !== 'function') return;
+            if (!rawText || !String(rawText).trim()) return;
+            VN_TTS.playNarration(rawText);
+        },
+
+        // 手機五個面（chat/call/browser/nav/moments）裡不該出現的正文層行：看到就當容器已關（見 next 裡的逃生口）
+        _phoneEscapeRe: /^(?:\[(?:Choice|Bg|BGM|Scene|Area|Exit|Item|Date|HP|Buff|Event|Quest|Achievement|Branch|Ending|Dive|Story|Chapter|Preface|Protagonist|World|Sys|EventText|HtmlCard)\||<\/?(?:content|summary|ChapterCard|status|scene|system|BattleStart|live_popup)\b|<(?:chat|call|browser|nav|moments)\b)/i,
+
+        next: function () {
+            this.clearTimers();
+            if (this.skipTypewriter()) { this.checkAutoNext(); return; }
+
+            this.hideOverlays();
+
+            if (this.index >= this.script.length - 1) {
+                document.getElementById('dialogue-text').innerHTML = "";
+                document.getElementById('speaker-name').style.display = 'none';
+                this.isSkip = false; this.updateControlUI();
+                const panelWrapper = document.getElementById('text-panel-wrapper');
+                if (panelWrapper) panelWrapper.style.display = 'none';
+                this._stageClear();   // 章節結束 → 清空兩格立繪
+                try { if (window.OS_FX) window.OS_FX.stopWeather(); } catch (e) {}   // ⚡ 章節結束 → 持續型特效(含循環音效)跟著收，別播到末尾畫面上
+                // 🍸 記憶迴廊的角色外傳（lobby_memory.js）：演完不出章末那排（「繼續」「重新生成」都是主線的），直接交回吧檯
+                const _sideEnd = win.__AURELIA_SIDE_STORY_END || window.__AURELIA_SIDE_STORY_END;
+                if (typeof _sideEnd === 'function') {
+                    win.__AURELIA_SIDE_STORY_END = null; window.__AURELIA_SIDE_STORY_END = null;
+                    try { _sideEnd(); } catch (e) { console.warn('[VN_Core] 外傳交回失敗', e); }
+                    return;
+                }
+                // 📋 借 VN 播的戲（SIDE_PLAYS）：演完照表走。'home'＝直接回大廳（以前會掉進主線的結束畫面：
+                //   「重新生成」重寫酒館主聊天最新那則、「繼續」把字打進主線、還會問世界門要不要撤離進門）
+                const _sp = this.sidePlay();
+                //   'own' 卻沒人接手（例如記憶迴廊那邊已經收掉）也一樣回大廳，不掉進主線那套
+                if (_sp && (_sp.end === 'home' || _sp.end === 'own')) {
+                    try { window.VN_PLAYER.stopGame(); } catch (e) { console.warn('[VN_Core] 小劇場演完回大廳失敗', e); }
+                    return;
+                }
+                // 🎬 這一章播過 [Ending|E#]：整章演完才放片尾（10-30：播到一半先跳會把後面的劇情打斷）。
+                //    放完回到這裡再走一次，那時已經清掉了，接著走下面章末那一串。這時候才重問一次世界門：章數多半已經記好了
+                const _endCode = _sp ? null : this._endingAtEnd;
+                if (_sp) this._endingAtEnd = null;
+                if (_endCode) {
+                    this._endingAtEnd = null;
+                    const _wge = win.OS_WORLDGATE || window.OS_WORLDGATE;
+                    const _EPe = win.VN_EndPanel || window.VN_EndPanel;
+                    const _he = (_wge && _wge.planCodeNow) ? _wge.planCodeNow(_endCode) : null;
+                    if (_he && !_he.shown && _EPe && typeof _EPe.showEnding === 'function') {
+                        try { _wge.markEndingShown(_he.code).catch(() => {}); } catch (e) {}
+                        _EPe.showEnding(_he, () => this.next());
+                        return;
+                    }
+                }
+                // 🌳 結局卡上按了「撤離回奧瑞亞」：演完這一章才撤（世界門那邊記著；沒按過就什麼都不做）
+                //    🚪 這一章播過 [Dive|…]（主角戴上頸環）：也是這一下才進門（世界門記著）
+                this._diveAtEnd = null;
+                //    小劇場演完不算主線的一章：主線按過的撤離、通知主角留著，等主線那章演完才動
+                if (!_sp) { try { const _wgc = win.OS_WORLDGATE || window.OS_WORLDGATE; if (_wgc && _wgc.chapterEnded) _wgc.chapterEnded().catch(() => {}); } catch (e) {} }
+                const endOverlay = document.getElementById('vn-end-overlay');
+                if (endOverlay) {
+                    endOverlay.classList.add('active');
+                    // 四個功能鍵的行為集中在這裡：基本鍵組與世界活動面板共用同一份，
+                    //   面板裡的按鈕用 data-act 認，不在那邊再寫一份開 app 的邏輯。
+                    const _actData = (opt) => {
+                            if (win.OS_API?.isStandalone?.() ?? false) {
+                                VN_StandaloneArchive.show(opt);
+                            } else if (win.AureliaHtmlExtractor && typeof win.AureliaHtmlExtractor.show === 'function') {
+                                win.AureliaHtmlExtractor.show(opt);
+                            } else if (win.toggleHtmlExtractor) {
+                                win.toggleHtmlExtractor();
+                            } else {
+                                console.warn('[VN_Core] 找不到 AureliaHtmlExtractor (狀態提取模組)');
+                            }
+                    };
+                    // CTX 彈窗現在是 #page-game 直屬置中 modal、對話/末尾共用 → 末尾直接 toggle，不再搬元素/浮右上
+                    const _actCtx = () => { window.VN_Core.toggleCtx(); };
+                    // 日誌/地圖：開手機 app。手機殼 panel z-index:50 < VN 全螢幕層 51 →
+                    //   直接開會被 VN 蓋在底下看不到，故把 panel 臨時頂到 VN 之上，關閉(goHome)時還原。
+                    const _openPhoneAppAboveVN = (appKey) => {
+                        const cc = win.AureliaControlCenter || window.AureliaControlCenter;
+                        if (!(cc && typeof cc.launchGameApp === 'function')) { console.warn('[VN_Core] 找不到 AureliaControlCenter.launchGameApp（' + appKey + '）'); return; }
+                        cc.launchGameApp(appKey);
+                        const panel = document.getElementById('aurelia-panel-container');
+                        if (panel) {
+                            const prevZ = panel.style.zIndex;
+                            panel.style.zIndex = '1002';   // 蓋過 VN 全螢幕層(51)
+                            // VN 沉浸模式藏了大廳頂欄 → 面板上緣會空一條；開 app 期間還原頂欄（跟大廳開 app 同畫面）
+                            const hdr = document.querySelector('.void-top-bar');
+                            const hdrWasHidden = !!(hdr && hdr.style.display === 'none');
+                            if (hdrWasHidden) hdr.style.display = '';
+                            // 🎬 轉場：末尾畫面直接被 app 蓋掉會很跳 → 先在 VN 上蒙一層暗幕，app 淡入浮上來。
+                            //    幕布掛在 VN 頁面裡（層級低於面板），所以只暗到末尾畫面，不會糊到 app 自己。
+                            const veilHost = document.getElementById('page-game') || document.body;
+                            let veil = document.getElementById('vn-appwarp-veil');
+                            if (!veil) {
+                                veil = document.createElement('div');
+                                veil.id = 'vn-appwarp-veil';
+                                veilHost.appendChild(veil);
+                            }
+                            requestAnimationFrame(() => veil.classList.add('on'));
+                            panel.classList.remove('vn-appwarp-in', 'vn-appwarp-out');
+                            void panel.offsetWidth;   // 連開兩次也要重播，不然第二次沒動畫
+                            panel.classList.add('vn-appwarp-in');
+                            setTimeout(() => panel.classList.remove('vn-appwarp-in'), 340);
+                            // 關閉偵測用面板 display 變化：返回鍵被 launchGameApp 的攔截器直接 doClose、不經 goHome，
+                            // 掛 goHome 會漏——observer 兩條關閉路徑都蓋得到，觸發即自拆（不累積）
+                            //   🚨關閉是「一瞬間 display:none」，來不及演 → 先把它擋回可見演完收場再真的收掉，
+                            //     closing 旗標防止我們自己改 display 又把 observer 叫回來。
+                            let closing = false;
+                            const ob = new MutationObserver(() => {
+                                if (closing || panel.style.display !== 'none') return;
+                                closing = true;
+                                ob.disconnect();
+                                panel.style.display = 'flex';
+                                panel.classList.add('vn-appwarp-out');
+                                veil.classList.remove('on');
+                                setTimeout(() => {
+                                    panel.style.display = 'none';
+                                    panel.classList.remove('vn-appwarp-out');
+                                    if (hdrWasHidden && hdr) hdr.style.display = 'none';   // 回 VN 沉浸
+                                    panel.style.zIndex = prevZ || '';
+                                    try { veil.remove(); } catch (e) {}
+                                }, 230);
+                            });
+                            ob.observe(panel, { attributes: true, attributeFilter: ['style'] });
+                        }
+                    };
+                    const acts = {
+                        data: () => _actData(),
+                        ctx: _actCtx,
+                        journal: () => _openPhoneAppAboveVN('journal'),
+                        // 🧵 線索帳搬進資料中心當一頁（10-13：跟狀態、選擇放同一個窗）；有人按到線索就直接開到那頁
+                        threads: () => _actData({ tab: 'threads' }),
+                        // 📜 章末簡報卡（11-09）：「角色卡畫面」小牌子＝資料中心開到角色卡作者做的第一頁；「狀態變化」那欄底下＝開到狀態
+                        card: () => _actData({ tab: 'card' }),
+                        avs: () => _actData({ tab: 'avs' }),
+                        // 📅 日曆：只看今天的行程（10-13：簡化成當天的行程表）；整個月、自己加一筆在手機上的日曆 app
+                        calendar: () => {
+                            const C = win.OS_CALENDAR || window.OS_CALENDAR;
+                            if (C && C.openToday) C.openToday();
+                            else { try { (win.AUI || window.AUI).toast('日曆還在載入，等一下再按'); } catch (e) {} }
+                        },
+                        // 🗺️ 地圖：劇情末尾直接開地圖面板看當前世界（探索/排程/小地圖都在裡面）
+                        map: () => _openPhoneAppAboveVN('map'),
+                        // 系統鍵：世界活動面板會把右上角那三顆一起重畫，行為指向原本那三顆做的事
+                        phone: () => { try { win.VoidPhoneShell && win.VoidPhoneShell.open(); } catch (e) {} },
+                        settings: () => { try { window.VN_PLAYER.openGameSettings(); } catch (e) {} },
+                        home: () => { try { window.VN_PLAYER.stopGame(); } catch (e) {} },
+                        // 🔁 這章不滿意 → 丟掉重寫（世界面板沒做這顆的話，基本鍵那顆會補上來）
+                        regen: () => { try { window.VN_Core.regenerateLatest(); } catch (e) { console.warn('[VN_Core] 重新生成失敗', e); } },
+                        // 📜 章末簡報卡的「繼續」：網頁版打開選項頁（這章沒寫選項也開，空的輸入框自己打）；
+                        //    酒館版打開資料中心（酒館的輸入框搬在那裡面），游標放進輸入框
+                        go: () => {
+                            if (win.OS_API?.isStandalone?.() ?? false) {
+                                const A = window.VN_StandaloneArchive;
+                                if (!A) return;
+                                if (!Array.isArray(A._pendingChoices)) A._pendingChoices = [];
+                                if (!A._choiceCallback) A._choiceCallback = (text) => this._sendChoiceAndContinue(text);
+                                A.show();
+                            } else {
+                                _actData();
+                                setTimeout(() => { try { const ta = document.getElementById('send_textarea'); if (ta) ta.focus({ preventScroll: true }); } catch (e) {} }, 450);
+                            }
+                        },
+                    };
+                    // 🚨 #vn-end-btn-threads 那顆：10-13 改成日曆、11-09 又換回線索（日曆從「下一件行程」那塊小牌子進）。
+                    //    編號一直沒換：VN 外觀設計（創作室）是照這些編號上樣式的，換新編號舊外觀就套不到它
+                    const BASIC_OF = { data: 'vn-end-btn-data', ctx: 'vn-end-btn-ctx', journal: 'vn-end-btn-journal', threads: 'vn-end-btn-threads', map: 'vn-end-btn-map', regen: 'vn-end-btn-regen' };
+                    // 📋 小劇場用主線的結束畫面（地圖多視角）：「重新生成」「繼續」動的是酒館主聊天最新那則，拿掉
+                    //   （世界面板上那兩顆沒有事可做會自己變暗；基本鍵那兩顆下面直接藏起來）
+                    if (_sp) { delete acts.regen; delete acts.go; }
+                    Object.keys(BASIC_OF).forEach(k => {
+                        const b = document.getElementById(BASIC_OF[k]);
+                        if (b) { b.onclick = acts[k] || null; b.classList.toggle('hidden', !acts[k]); }
+                    });
+                    { const _go = document.getElementById('vn-end-btn-go'); if (_go) { _go.onclick = acts.go || null; _go.classList.toggle('hidden', !acts.go); } }
+                    // 🎴 這個世界有活動面板就換上去；沒有(舊世界/還沒生成/生成失敗)一律維持原樣。
+                    //   🚨面板要讀 OS_DB(非同步)。舊版是「先亮基本鍵、讀到再換」→ 每次都先看到原本那四顆
+                    //     閃一下才變成設計過的面板。改成先按住不亮，等結果出來再一次淡入：
+                    //     有面板就直接上面板，沒有才亮基本鍵。
+                    //   按住是有上限的：DB 慢或壞掉時不能把末尾卡成空畫面 → 逾時就先亮基本鍵(退回舊行為)。
+                    //     上一章有面板就多等一會(多半還在同一個世界)，第一次進場只等一小段。
+                    //   🚨逐顆收起而不是整組藏掉：模型漏做哪一顆，那顆就留著原本的按鈕，功能不會消失。
+                    const basic = document.getElementById('vn-end-basic');
+                    let _endDecided = false;
+                    // 先按住（模板裡這組預設是顯示的，上一章若被面板收起來過也要重置成「按住」狀態）
+                    // 📜 預設是簡報卡（.vne-brief）；等一下世界面板真的來了才改回「只補漏做的幾顆」。趁按住的時間先把卡片的字填上
+                    if (basic) { basic.classList.add('hidden', 'vne-brief'); basic.classList.remove('vn-end-fade'); }
+                    try { (win.VN_EndBrief || window.VN_EndBrief)?.fill(this, acts); } catch (e) { console.warn('[VN_Core] 章末簡報卡填字失敗', e); }
+                    const _showBasic = () => {
+                        if (!basic) return;
+                        basic.classList.remove('hidden');
+                        basic.classList.add('vn-end-fade');
+                    };
+                    //   等待期間畫面不是空的（末尾背景與右上系統鍵都在），但也不能等太久 → 上限 0.9 秒
+                    let _hold = 420;
+                    try { if (localStorage.getItem('vn_end_panel_hit') === '1') _hold = 900; } catch (e) {}
+                    const _holdTimer = setTimeout(() => { if (!_endDecided) _showBasic(); }, _hold);
+                    const _settle = (r) => {
+                        _endDecided = true;
+                        clearTimeout(_holdTimer);
+                        win.AUI.lsSet('vn_end_panel_hit', r ? '1' : '0', '末尾面板的記號');
+                        if (!r || !basic) { _showBasic(); return; }
+                        // 有世界面板：卡片收掉，只照舊直排補它漏做的那幾顆（面板沒做的線索、繼續，面板那邊已經照它自己的一顆抄好了）。
+                        //   11-15 起網頁版有選項也不再自動彈出資料中心：選項在面板的「繼續」小窗裡（不再跑去資訊中心開出一堆分頁）
+                        basic.classList.remove('vne-brief');
+                        let left = 0;
+                        Object.keys(BASIC_OF).forEach(k => {
+                            const b = document.getElementById(BASIC_OF[k]);
+                            if (!b) return;
+                            const covered = r.found.indexOf(k) >= 0 || !acts[k];   // 拿掉的那幾顆（小劇場）也不補
+                            b.classList.toggle('hidden', covered);
+                            if (!covered) left++;
+                        });
+                        if (!left) basic.classList.add('hidden');   // 面板全包了 → 基本鍵整組不出場
+                        else _showBasic();                          // 有漏做的 → 那幾顆補上來
+                    };
+                    // 🎴 世界面板上的按鈕：線索、繼續、日曆、日誌、CTX 點了各自開一個小窗，就地顯示那一項（11-15）。
+                    //   小窗是簡報卡旁邊那一欄借來的（vn_end_brief.js 的 openSide，簡報卡收著時它自己會浮到正中間），內容跟簡報卡那欄同一份；
+                    //   開不成才退回原本的行為（資料中心／手機 app）。
+                    //   🚨「這一章的資料與狀態」那顆（data）照舊開原版資料中心，不做小窗：資料中心是核心，狀態欄、角色卡自己附帶的美化卡、
+                    //     酒館最後一樓渲染的內容、酒館輸入框都打包在那裡（狀態窗口直接用原版資訊中心，那裡就是狀態欄＋自帶美化卡）。
+                    //   地圖、成就、重新生成、系統鍵也照舊
+                    const _EB = win.VN_EndBrief || window.VN_EndBrief;
+                    const _pop = (key, fb) => () => {
+                        const r = (_EB && typeof _EB.openSide === 'function') ? _EB.openSide(key) : null;
+                        if (r && typeof r.then === 'function') r.then(ok => { if (!ok) fb(); }).catch(() => fb());
+                        else fb();
+                    };
+                    const wacts = Object.assign({}, acts, {
+                        threads: _pop('threads', acts.threads),
+                        calendar: _pop('today', acts.calendar), journal: _pop('journal', acts.journal), ctx: _pop('ctx', acts.ctx),
+                    });
+                    if (acts.go) wacts.go = _pop('go', acts.go);
+                    try {
+                        const _p = window.VN_EndPanel?.render(wacts);
+                        if (_p && typeof _p.then === 'function') _p.then(_settle).catch(() => _settle(null));
+                        else _settle(null);
+                    } catch (e) { _settle(null); }
+                }
+                return;
+            }
+
+            this.index++;
+            const line = this.script[this.index];
+
+            // 站位狀態 |Leave 的延後離場：上一句標了 Leave 的角色，玩家點過那句後(=走到這行時)才移除立繪
+            //（跟 [Exit] 分開行的節奏一致——告別台詞顯示期間人還在，推進才走）
+            if (this._pendingLeave && this._pendingLeave.length) {
+                const _pl = this._pendingLeave; this._pendingLeave = [];
+                _pl.forEach(n => { try { this._stageRemove(n); } catch (e) {} });
+            }
+            // 🎭 Jev 排的收立繪：播到他「從這段起不在」的那一段之前收掉
+            if (this._jevStage) { try { this._jevStageHit(this.index); } catch (e) {} }
+            // 🎵 Jev 排的音效／音樂：這一格要配的音效先記著（旁白播的時候拿）；這一場的音樂先插一行 [BGM|曲|jev] 進來播
+            if (this._jevSfx) {
+                let _bgmLine = null;
+                try { _bgmLine = this._jevSfxHit(this.index); } catch (e) {}
+                if (_bgmLine) { this.script.splice(this.index, 0, _bgmLine); this.index--; return this.next(); }
+            }
+
+            // ── 開場圖片閘門（loading 排最前面）──────────────────────────────
+            // loadScript 後的第一次 next() 就檢查：圖片（含盤點中）沒清空 → 先彈 loading 等，
+            // 什麼都不演（BGM/卡片都壓在後面）；圖全好才放劇本開跑 → 章節卡片出場時一切就緒，
+            // 「開始閱讀」一點即進劇情零等待。圖好了或按「跳過等待」→ 解除閘門，整章不再檢查。
+            if (this._startImgGate) {
+                const _st = (typeof this.imgPendingStatus === 'function') ? this.imgPendingStatus() : { pending: 0 };
+                if (_st.pending > 0) {
+                    this.index--;   // 退回這行，放行後重新走到
+                    const self = this;
+                    this._showStartLoader(300, function () { self._startImgGate = false; self.next(); });
+                    return;
+                }
+                this._startImgGate = false;
+                this._hideWriterCurtain();   // 沒圖可等：把「故事撰寫中」幕布收掉直接開演
+            }
+
+            if (line.startsWith('<chat')) { if(win.VN_Phone) win.VN_Phone.initChat(this, line); return; }
+            if (line.startsWith('</chat>')) { if(win.VN_Phone) win.VN_Phone.exitChat(this); return; }
+            if (line.startsWith('<call')) { if(win.VN_Phone) win.VN_Phone.initCall(this, line); return; }
+            if (line.startsWith('</call>')) { if(win.VN_Phone) win.VN_Phone.exitCall(this); return; }
+            if (line.startsWith('<browser')) { if(win.VN_Browser) win.VN_Browser.initBrowser(this, line); else this.next(); return; }
+            if (/^<\/browser\s*>/i.test(line)) { if(win.VN_Browser) win.VN_Browser.exitBrowser(this); else this.next(); return; }
+            if (/^<nav\b/i.test(line)) { if(win.VN_Nav) win.VN_Nav.initNav(this, line); else this.next(); return; }
+            if (/^<\/nav\s*>/i.test(line)) { if(win.VN_Nav) win.VN_Nav.exitNav(this); else this.next(); return; }
+            if (/^<moments\b/i.test(line)) { if(win.VN_Moments) win.VN_Moments.initMoments(this, line); else this.next(); return; }
+            if (/^<\/moments\s*>/i.test(line)) { if(win.VN_Moments) win.VN_Moments.exitMoments(this); else this.next(); return; }
+
+            // ── 手機殼四個面的逃生口＋瀏覽器/導航的提前分派（必須在所有區塊過濾之前）──
+            //    逃生口：正文層才會出現的行（選項、背景、場景、章節卡、狀態、摘要、另一個容器…）跑進手機裡，
+            //    代表 AI 忘了寫關門那行；當作關門，這一行退回去用 VN 模式重播，後面的劇情才不會整段被手機吃掉。
+            //    提前分派：導航/瀏覽器裡的 [Arrive]、[Page] 這種整行單一標籤，會被下面「格式B：[XXX]」
+            //    當成自訂區塊找不到閉合而跳過，所以這兩個模式的行在這裡就交出去。
+            if (this.mode === 'chat' || this.mode === 'call' || this.mode === 'browser' || this.mode === 'nav' || this.mode === 'moments') {
+                if (this._phoneEscapeRe.test(line)) {
+                    const _pm = this.mode;
+                    this.index--;   // exit 會 next() 一次，剛好回到這一行
+                    if (_pm === 'chat' && win.VN_Phone) win.VN_Phone.exitChat(this);
+                    else if (_pm === 'call' && win.VN_Phone) win.VN_Phone.exitCall(this);
+                    else if (_pm === 'browser' && win.VN_Browser) win.VN_Browser.exitBrowser(this);
+                    else if (_pm === 'nav' && win.VN_Nav) win.VN_Nav.exitNav(this);
+                    else if (_pm === 'moments' && win.VN_Moments) win.VN_Moments.exitMoments(this);
+                    else { this.mode = 'vn'; this.toggleUI('vn'); this.next(); }
+                    return;
+                }
+                if (this.mode === 'browser') { if(win.VN_Browser) win.VN_Browser.handleBrowserLine(line, this); else this.next(); return; }
+                if (this.mode === 'nav') { if(win.VN_Nav) win.VN_Nav.handleNavLine(line, this); else this.next(); return; }
+                if (this.mode === 'moments') { if(win.VN_Moments) win.VN_Moments.handleLine(line, this); else this.next(); return; }
+            }
+
+            // ── <scene>...</scene> 場景插圖 block ───────────────────────
+            if (line === '<scene>') {
+                if (localStorage.getItem('vn_scene_enabled') === '0') {
+                    // 跳過整個 block
+                    let _si = this.index + 1;
+                    while (_si < this.script.length && this.script[_si] !== '</scene>') _si++;
+                    this.index = _si; this.next(); return;
+                }
+                // 收集 block 內所有行，交給 _parseSceneBlock（剔 // 注釋、抽可選 scene-id: 首部）
+                const _raw = [];
+                let _si = this.index + 1;
+                while (_si < this.script.length && this.script[_si] !== '</scene>') { _raw.push(this.script[_si]); _si++; }
+                this.index = _si; // 停在 </scene>
+                const { cacheId: _cacheId, prompt: _scenePrompt } = this._parseSceneBlock(_raw);
+                if (_scenePrompt) {
+                    const _overlay = document.getElementById('scene-cg-overlay');
+                    const _cgImg   = document.getElementById('scene-cg-img');
+                    if (_overlay && _cgImg) {
+                        _overlay.classList.add('active');
+                        this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出（不藏對話框、不擋流程）
+                        this._sceneCgCur = { cacheId: _cacheId, prompt: _scenePrompt };  // 給 🔄 重生鈕
+                        const _memUrl  = this._sceneMemCache[_cacheId];
+                        if (_memUrl) { _cgImg.src = _memUrl; this._setSceneCgFailed(false); }
+                        else {
+                            _cgImg.src = '';
+                            (async () => {
+                                const url = await this._safeFetchScene(_cacheId, _scenePrompt);
+                                if (url && _cgImg) { _cgImg.src = url; this._setSceneCgFailed(false); }
+                                else { this._setSceneCgFailed(true); }   // 429/失敗 → 留佔位卡＋重生鈕、不淡出
+                            })();
+                        }
+                    }
+                }
+                this.next(); return; // 不擋流程：插圖鋪著、劇情繼續往下走
+            }
+            if (line === '</scene>') { this.next(); return; }
+
+            // ── AI 偶爾把地圖引擎的 SceneMap 誤吐進 VN 正文（且常開閉標籤混用 [SceneMap]…</SceneMap>）──
+            //    它不是 VN 內容、也不該當卡片 → 整塊跳過(容忍兩種閉合)、繼續播，別卡死/提早結束劇情
+            if (line === '[SceneMap]' || line === '<SceneMap>') {
+                let _smi = this.index + 1;
+                while (_smi < this.script.length && this.script[_smi] !== '</SceneMap>' && this.script[_smi] !== '[/SceneMap]') _smi++;
+                if (_smi < this.script.length) this.index = _smi;   // 找到閉合→跳到閉合行整塊略過；找不到→只跳過 opener 這行，不吃光劇本
+                this.next(); return;
+            }
+
+            // ⚔️ 戰鬥：<BattleStart>…</BattleStart> 整塊收走 → 開戰鬥面板 → 打完寫回正文才推進。
+            //    必須攔在下面「自訂區塊過濾」之前：那段會把它當 ST 渲染的同名殘影靜默跳過(見 _showDomBlock
+            //    的 _tagHintUp 過濾)，區塊確實不會亂播，但戰鬥也就永遠不會開。
+            if (/^<BattleStart>\s*$/i.test(line)) {
+                const _bLines = [];
+                let _bi = this.index + 1;
+                while (_bi < this.script.length && !/^<\/BattleStart>\s*$/i.test(this.script[_bi])) { _bLines.push(this.script[_bi]); _bi++; }
+                if (_bi < this.script.length) this.index = _bi;   // 找到閉合→停在閉合行；找不到→只跳 opener，別把 index 推到劇本末
+                const _bRaw = _bLines.join('\n');
+                // 這裡不准靜默：空區塊＝上游把內容剝掉了（loadScript 的區塊過濾就幹過一次），沒警告根本查不到
+                if (!window.VN_Battle) { console.warn('[VN_Battle] 模組未載入，跳過戰鬥'); this.next(); return; }
+                if (!_bRaw.trim()) { console.warn('[VN_Battle] <BattleStart> 區塊是空的（內容被上游過濾掉？），跳過戰鬥'); this.next(); return; }
+                // 讀不到任何 [Foe|…]＝這場開不起來。要在 _runBattle 之前擋：它一進去就先剪掉後面的劇本和正文，
+                //   這時才發現沒敵人，劇情已經被剪斷、面板也沒開，畫面就停在這一行。
+                if (!window.VN_Battle.parse(_bRaw).enemies.length) {
+                    console.warn('[VN_Battle] <BattleStart> 裡讀不到敵人，跳過戰鬥：', _bRaw);
+                    try { AUI.toast('這場戰鬥讀不到敵人，沒開打，劇情照原本寫的往下播', { type: 'error' }); } catch (e) {}
+                    this.next(); return;
+                }
+                this._runBattle(_bRaw);
+                return;
+            }
+
+            // ⚙️ 系統框（區塊版）：<system>…</system> 整塊收走。跟 <BattleStart> 同理，
+            //    必須攔在下面「自訂區塊過濾」之前，否則會被當成作者的 HTML 卡片彈掉、系統框永遠不開。
+            //    <system name="未知管理員"> 帶標題；沒帶就是無標題（等同 [Sys|內文]）。
+            {
+                const _sysOpen = line.match(/^<system(?:\s+name\s*=\s*["']?([^"'>]*?)["']?\s*)?>$/i);
+                if (_sysOpen) {
+                    const _sLines = [];
+                    let _si = this.index + 1;
+                    while (_si < this.script.length && !/^<\/system>\s*$/i.test(this.script[_si])) { _sLines.push(this.script[_si]); _si++; }
+                    if (_si < this.script.length) this.index = _si;   // 找到閉合→停在閉合行；找不到→只跳 opener，別把 index 推到劇本末
+                    this._showSysBlock((_sysOpen[1] || '').trim(), _sLines);
+                    return;
+                }
+                if (/^<\/system>\s*$/i.test(line)) { this.next(); return; }
+            }
+
+            // 🔥 【動態積木攔截 - 最優先，必須在 DOM block 過濾之前】
+            if (window.VN_DynamicParser && window.VN_DynamicParser.processLine(line, this)) {
+                return;
+            }
+
+            // ── 📖 章節卡（內建固定版型）────────────────────────────────
+            // 上面的動態積木攔截優先：在應用工坊做了自訂 ChapterCard 組件，整塊由組件收走，
+            // 這裡不會執行。沒做就走內建這張。
+            //   <ChapterCard>  → 先把要顯示的欄位抄一份（只讀、不動 index），
+            //                    區塊內那些 [Bg|/[BGM|/[Avatar| 照常一行行播，背景音樂立繪才會真的生效
+            //   </ChapterCard> → 那時圖與音樂都就位了，卡片才出場，按「開始閱讀」進正文
+            if (/^<ChapterCard>$/i.test(line)) { this._ccData = this._collectChapterCard(this.index); this.next(); return; }
+            if (/^<\/ChapterCard>$/i.test(line)) {
+                if (this._showChapterCard(this._ccData)) return;   // 卡片接管：等她按鈕
+                this.next(); return;
+            }
+            // 卡片的欄位 tag：值已經被卡片收走，本身不是台詞 → 別當旁白唸出來
+            if (/^\[(Story|Chapter|Preface|Protagonist|World)\|/i.test(line)) { this.next(); return; }
+
+            // 裸 HTML 美化卡（loadScript 前置掃描收走的整塊）→ 消毒後彈窗展示
+            if (line.startsWith('[HtmlCard|')) {
+                const _ci = parseInt(line.slice(10), 10);
+                const _rawCard = (this._rawHtmlCards || [])[_ci] || '';
+                if (!_rawCard) { this.next(); return; }
+                // 消毒走全站那支 AUI.safeHtml（有 DOMPurify 時它也先過 DOMPurify）。
+                //   以前沒 DOMPurify（手機版網頁）只靠一條正則，<img onerror> 以外的寫法（javascript: 連結、iframe、svg 動畫…）都擋不住
+                const _cleanCard = this._safeCard(_rawCard);
+                this._showDomBlock(null, null, _cleanCard);
+                return;
+            }
+
+            // --- 自訂區塊過濾 ---
+            {
+                const _sysXml = ['content','call','chat','browser','nav','moments','status','summary','avatar','scene','system',
+                    'p','div','span','br','hr','b','i','em','strong','a','img',
+                    'ul','ol','li','table','tr','td','th','thead','tbody','tfoot',
+                    'h1','h2','h3','h4','h5','h6','blockquote','pre','code','section','aside'];
+
+                if (window.VN_DynamicParser && window.VN_DynamicParser.activeTemplates) {
+                    window.VN_DynamicParser.activeTemplates.forEach(tpl => {
+                        if (tpl.isBlock && tpl.tagId) _sysXml.push(tpl.tagId.toLowerCase());
+                    });
+                }
+
+                // 格式A：<XXX>
+                const _fOpenA = line.match(/^<([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
+                // 單行整顆 <XXX>…</XXX>（如 <live_popup>[EventText|…]</live_popup>）→ 直接彈窗，不需推進 index
+                const _fSelfA = line.match(/^<([A-Za-z一-鿿][\w一-鿿-]*)>[\s\S]*<\/\1>$/);
+                if (_fSelfA && !_sysXml.includes(_fSelfA[1].toLowerCase())) {
+                    this._showDomBlock(_fSelfA[1]);
+                    return;
+                }
+
+                // 全形框卡片：整行 【…】（如 【姓名：…|…】）→ 有對應「卡片型」正則才彈窗，否則照常當旁白顯示
+                if (line.charAt(0) === '【' && line.charAt(line.length - 1) === '】') {
+                    const _lentCard = this._grabRegexCardHtml(line);
+                    if (_lentCard) { this._showDomBlock(null, line, _lentCard); return; }
+                }
+
+                if (_fOpenA && !_sysXml.includes(_fOpenA[1].toLowerCase())) {
+                    let _ei = this.index + 1;
+                    const _ct = `</${_fOpenA[1]}>`;
+                    while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
+                    if (_ei >= this.script.length) { this.next(); return; }   // 找不到閉合 → 別把 index 推到劇本末(會害劇情提早結束)，跳過 opener 這行繼續
+                    this.index = _ei;
+                    this._showDomBlock(_fOpenA[1]);
+                    return;
+                }
+                const _fCloseA = line.match(/^<\/([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)>$/);
+                if (_fCloseA && !_sysXml.includes(_fCloseA[1].toLowerCase())) { this.next(); return; }
+
+                // 格式B：[XXX]
+                const _fOpenB = line.match(/^\[([A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*)\]$/);
+                if (_fOpenB) {
+                    let _ei = this.index + 1;
+                    const _ct = `[/${_fOpenB[1]}]`;
+                    while (_ei < this.script.length && this.script[_ei] !== _ct) _ei++;
+                    if (_ei >= this.script.length) { this.next(); return; }   // 找不到閉合 → 別把 index 推到劇本末(會害劇情提早結束)，跳過 opener 這行繼續
+                    this.index = _ei;
+                    this._showDomBlock(_fOpenB[1]);
+                    return;
+                }
+                if (/^\[\/[A-Za-z\u4e00-\u9fff][\w\u4e00-\u9fff-]*\]$/.test(line)) { this.next(); return; }
+            }
+
+            if (this.mode === 'chat') { if(win.VN_Phone) win.VN_Phone.handleChatLine(line, this); return; }
+            if (this.mode === 'call') { if(win.VN_Phone) win.VN_Phone.handleCallLine(line, this); return; }
+
+            // === VN 模式核心渲染 ===
+            this.toggleUI('vn');
+
+            if (line.startsWith('[BGM|')) {
+                // 🎵 這章音樂交給 Jev 時，AI 自己寫的 [BGM|] 不播（Jev 插的那行帶 |jev）
+                //    時間表還在路上也不播，先扣著（Jev 沒回答才放出來，見 loadScript 尾巴）
+                if ((this._jevSfx || this._jevSfxWait) && !/\|jev\]$/.test(line)) {
+                    if (!this._jevSfx) this._aiBgmHeld = line;
+                    this.next(); return;
+                }
+                const rawName = line.split('|')[1].replace(']', '').trim();
+                const name = rawName.replace(/\.[^.]+$/, '');
+                this._playBgm(name);
+                this.next(); return;
+            }
+
+            // 🎬 場景CG
+            if (line.startsWith('[Scene|')) {
+                if (localStorage.getItem('vn_scene_enabled') === '0') { this.next(); return; }
+                const parts = line.slice(7, -1).split('|');
+                const cacheId = parts[0];
+                const prompt  = parts[1];
+                // 同一份劇本裡同一個 ID 只播第一次。正常寫回是冪等的（正文已有就不重寫），
+                // 會重複多半是 AI 看上下文學著自己填了 [Scene|舊ID] → 播放時對相簿撈到上一輪的圖。
+                // （治本是讓 AI 看不到這些標籤：酒館正則「[VN自由模式] 歷史插圖ID剝除」，promptOnly）
+                if (cacheId) {
+                    if (this._sceneIdPlayed && this._sceneIdPlayed[cacheId]) {
+                        console.warn('[VN] [Scene|' + cacheId + '] 這份劇本裡重複出現 → 跳過（多半是 AI 抄了上文的插圖 ID，會放出舊圖）');
+                        this.next(); return;
+                    }
+                    if (this._sceneIdPlayed) this._sceneIdPlayed[cacheId] = 1;
+                }
+                const overlay = document.getElementById('scene-cg-overlay');
+                const cgImg   = document.getElementById('scene-cg-img');
+                if (overlay && cgImg) {
+                    const memUrl = this._sceneMemCache[cacheId];
+                    if (memUrl) {
+                        overlay.classList.add('active');
+                        this._sceneCgLinger = 3;   // 鋪底式：劇情在上面走、停 3 句對話後自動淡出
+                        this._sceneCgCur = { cacheId, prompt };  // 給 🔄 重生鈕
+                        cgImg.src = memUrl; this._setSceneCgFailed(false);
+                    } else if (cacheId && prompt) {
+                        overlay.classList.add('active');
+                        this._sceneCgLinger = 3;
+                        this._sceneCgCur = { cacheId, prompt };
+                        cgImg.src = '';
+                        (async () => {
+                            const url = await this._safeFetchScene(cacheId, prompt);
+                            if (url && cgImg) { cgImg.src = url; this._setSceneCgFailed(false); }
+                            else { this._setSceneCgFailed(true); }   // 429/失敗 → 留佔位卡＋重生鈕、不淡出
+                        })();
+                    } else if (cacheId) {
+                        // ID-only [Scene|cacheId]（寫回正文的持久化標籤）：只對相簿(scene_cache)撈圖。
+                        // 相簿沒有（被刪/AI 幻造假 ID）→ 靜默跳過：不開 overlay、不佔位、
+                        // 也不走 _safeFetchScene 失敗路（那會觸發全域生圖退避，冤枉擋掉本輪真生圖）。
+                        (async () => {
+                            const cached = await VN_Cache.get('scene_cache', cacheId);
+                            if (!cached || !cached.url) { console.log('[VN] [Scene|' + cacheId + '] 相簿沒有這張 → 跳過'); return; }
+                            const url = await this._safeFetchScene(cacheId, cached.prompt || '');   // 相簿有圖=必命中，只做 objUrl 轉換
+                            if (url && cgImg) {
+                                overlay.classList.add('active');
+                                this._sceneCgLinger = 3;
+                                this._sceneCgCur = { cacheId, prompt: cached.prompt || '' };   // 重生鈕用相簿存的 prompt
+                                cgImg.src = url; this._setSceneCgFailed(false);
+                            }
+                        })();
+                    }
+                }
+                this.next(); return;
+            }
+
+            if (line.startsWith('[Bg|')) {
+                this._stageClear();   // 換背景＝換場景 → 清空兩格立繪
+                try { if (window.OS_FX) window.OS_FX.sceneChange(); } catch (e) {}   // ⚡ 換場 → 持續型天氣特效跟著停
+
+                try { if (win.VN_Phone && win.VN_Phone.currentCallKey) win.VN_Phone.currentCallKey = ''; } catch (e) {}   // 換場景＝通話脈絡結束 → 之後同人來電正常響鈴(非續接)
+                const parts = line.slice(4, -1).split('|');
+                const sceneLabel = parts.length >= 2 ? parts[1] : parts[0];
+                const aiPrompt   = this._bgGenPrompt(parts);   // 第二格(设施名) + 第三格(描述)
+                const cacheId    = sceneLabel || ('bg_' + Date.now());
+
+                if (sceneLabel) {
+                    const sceneName = sceneLabel.replace(/_/g, ' ');
+                    this._sceneName = sceneName;   // 📜 章末簡報卡寫「在哪」用最後一個場景（vn_end_brief.js）
+                    const rankPanel = document.getElementById('stream-rank-panel');
+                    const usePanel  = rankPanel && !rankPanel.classList.contains('hidden');
+                    if (usePanel) {
+                        document.getElementById('stream-scene-label').innerText = sceneName;
+                        document.getElementById('stream-scene-row').classList.remove('hidden');
+                        document.getElementById('top-badge').style.display = 'none';
+                    } else {
+                        const badge = document.getElementById('top-badge');
+                        if (badge) { badge.innerText = sceneName; badge.style.display = 'block'; }
+                    }
+                }
+                if (aiPrompt) {
+                    const memUrl = this._bgMemCache[cacheId];
+                    const _gameBg = document.getElementById('game-bg');
+                    if (memUrl) {
+                        this._lastBgCacheId = cacheId;   // 有現成圖 → 更新「最後可用背景」
+                        this._setBgImage(_gameBg, memUrl);
+                    } else {
+                        (async () => {
+                            const url = await this._safeFetchBg(cacheId, aiPrompt, true);   // 現場這一格：預熱失敗過也再試一次
+                            // ★只有真的拿到圖才更新 _lastBgCacheId；生成失敗/逾時(url='')→保留上一個可用背景，
+                            //   下次 resetState 還原它（治「漏Bg時背景變空」：失敗的 cacheId 指向空 IDB 槽 → 撈空變黑）
+                            if (url) { this._lastBgCacheId = cacheId; this._setBgImage(_gameBg, url); }
+                            else console.warn(`[VN] 背景沒拿到圖：${cacheId}（生成失敗/逾時，或這個 cacheId 剛失敗過被記住了）`);
+                        })();
+                    }
+                }
+                this.next(); return;
+            }
+
+            // 📺 直播資訊 Header
+            if (line.startsWith('[Stream|')) {
+                const p = line.slice(8, -1).split('|').map(s => s.trim());
+                const hdr = document.getElementById('stream-header');
+                if (hdr) {
+                    document.getElementById('stream-title-text').innerText  = p[0] || '';
+                    document.getElementById('stream-host-text').innerText   = p[1] || '';
+                    document.getElementById('stream-viewers').innerText     = p[2] || '';
+                    document.getElementById('stream-followers').innerText   = p[3] || '';
+                    document.getElementById('stream-rank').innerText        = p[4] || '';
+                    hdr.classList.remove('hidden');
+                }
+                this.next(); return;
+            }
+
+            // 🎖 粉絲榜
+            if (line.startsWith('[StreamRank|')) {
+                const p = line.slice(12, -1).split('|').map(s => s.trim());
+                for (let i = 0; i < 3; i++) {
+                    const n = i * 3;
+                    document.getElementById(`sr-name-${i+1}`).innerText  = p[n]   || '';
+                    document.getElementById(`sr-title-${i+1}`).innerText = p[n+1] || '';
+                    document.getElementById(`sr-score-${i+1}`).innerText = p[n+2] || '';
+                }
+                document.getElementById('stream-rank-panel').classList.remove('hidden');
+                const badge = document.getElementById('top-badge');
+                if (badge && badge.style.display !== 'none' && badge.innerText) {
+                    document.getElementById('stream-scene-label').innerText = badge.innerText;
+                    document.getElementById('stream-scene-row').classList.remove('hidden');
+                    badge.style.display = 'none';
+                }
+                this.next(); return;
+            }
+
+            // 💬 彈幕
+            if (line.startsWith('[Danmu|')) {
+                const parts = line.slice(7, -1).split('|');
+                this.launchDanmu(parts[0] || '', parts[1] || '');
+                this.next(); return;
+            }
+
+            // 🏆 成就解鎖
+            //   新格式：[Achievement|emotion|名|描述]   (3 段, V1.2+)
+            //   舊格式：[Achievement|名|描述]           (2 段, 向下相容)
+            if (line.startsWith('[Achievement|')) {
+                const parts = line.slice(13, -1).split('|');
+                let emotion = null, name = '', desc = '';
+                if (parts.length >= 3) {
+                    // 新格式
+                    emotion = (parts[0] || '').trim() || null;
+                    name    = parts[1] || '';
+                    desc    = parts[2] || '';
+                } else {
+                    // 舊格式
+                    name = parts[0] || '';
+                    desc = parts[1] || '';
+                }
+                // 🏅 視差世界的成就是「填代碼」的（繁簡與改寫都不影響比對）→ 這裡換回正式名字，
+                //    收藏冊與紀錄才不會出現 A1 這種東西。不是代碼、或問不到世界 → 照原樣。
+                const _unlock = (n, d) => {
+                    this.addLog("成就解鎖", `${n}${d ? ' — ' + d : ''}`);
+                    if (win.OS_ACHIEVEMENT?.unlock) win.OS_ACHIEVEMENT.unlock(emotion, n, d);
+                };
+                const _wg = win.OS_WORLDGATE || window.OS_WORLDGATE;
+                if (_wg?.resolveAchvCode && /^[A-Za-z]\d{1,2}$/.test(String(name).trim())) {
+                    _wg.resolveAchvCode(String(name).trim())
+                        .then(h => _unlock((h && h.name) || name, (h && (desc || h.desc)) || desc))
+                        .catch(() => _unlock(name, desc));
+                } else _unlock(name, desc);
+                // VN 內舊的成就 overlay 貼紙已移除（展示改由 VN 組件卡片負責）；這裡只記錄+繼續，不顯示、不卡劇情。
+                this.next(); return;
+            }
+
+            // 🕰 主角狀態：[Date|月/日|時:分] [HP|數值] [Buff|名|回合] [Event|月/日|一句話]
+            //    模型只回報變化，程式記住、倒數、下一輪再塞回去（os_phone/rpg/mc_status.js）。不顯示、不卡劇情。
+            // 💰 劇情裡主角花掉的錢。這裡只負責「不顯示、不卡劇情」，
+            //    真的扣錢交給手機那邊掃整本正文時處理（wx_core 的跑團同步）——
+            //    播到這一行才扣的話，她重新生成或往回讀同一段就會再扣一次。
+            //    🚨 [Merchant|]／[Payment|] 是那張微信掃碼付款卡上的兩行，正常會被組件整塊接走；
+            //       她把那個組件關掉的時候才會漏到這裡來，不能讓原始格式跑到畫面上。
+            if (/^\[(Pay|Merchant|Payment)\|/i.test(line)) { this.next(); return; }
+
+            if (/^\[(Date|HP|Buff|Debuff|Event)\|/i.test(line)) {
+                const _in = line.slice(1, -1).split('|');
+                const _tag = (_in[0] || '').trim().toLowerCase();
+                const _a = (_in[1] || '').trim(), _b = _in.slice(2).join('|').trim();
+                // 📋 小劇場（SIDE_PLAYS）不推主線主角的時鐘、血量、狀態、約定：照樣不顯示、不卡劇情，只是不寫
+                const _S = this.sidePlay() ? null : (win.OS_MC_STATUS || window.OS_MC_STATUS);
+                if (_S) {
+                    if (_tag === 'date') _S.setDate(_a, _b);
+                    else if (_tag === 'hp') _S.setHp(_a);
+                    else if (_tag === 'buff' || _tag === 'debuff') { _S.setBuff(_a, _b); this.addLog('狀態', `${_a}${_b ? '（' + _b + ' 回合）' : ''}`); }
+                    else if (_tag === 'event') { _S.addEvent(_a, _b, '', 'ai', this._currentMessageId); this.addLog('約定', `${_a} ${_b}`); }
+                }
+                this.next(); return;
+            }
+
+            // 🌳 視差世界的岔路／結局標記：[Branch|N2]、[Ending|E1]（白板企劃展開的世界，條目教主持AI 在發生的那一句後面寫）。
+            //    記下走到哪由世界門掃整章做（_scanPlan）；這裡只管播到那一句時給她看：岔路飄一張小卡接著播；
+            //    結局先記著、照常往下播，整章演完才放片尾（見上面章末那段，只演一次）。同步查世界門手邊那份，不留空檔。
+            if (/^\[(Branch|Ending)\|/i.test(line)) {
+                const _pm = line.match(/^\[(Branch|Ending)\|\s*([^|\]]*)/i);
+                const _wgp = win.OS_WORLDGATE || window.OS_WORLDGATE;
+                const _h = (_pm && _wgp && _wgp.planCodeNow) ? _wgp.planCodeNow(_pm[2]) : null;
+                if (_h && _h.type === 'node') {
+                    this.launchQuestToast(_h.name, '走過 ' + _h.nodesHit + '／' + _h.nodesTotal + ' 個岔路', '岔路', 'fa-code-branch');
+                    this.addLog('岔路', _h.name);
+                } else if (_h && _h.type === 'ending') {
+                    this.addLog('結局', _h.name);
+                    if (!_h.shown) this._endingAtEnd = _h.code;
+                }
+                this.next(); return;
+            }
+
+            // 🚪 主角戴上頸環上線了：[Dive|世界名]（世界門「通知主角」那條，注入教主持AI 在那一刻寫）。
+            //    這一章演完才進世界（章末叫 OS_WORLDGATE.chapterEnded，跟撤離同一個掛勾）；重看舊章不算。
+            if (/^\[Dive\|/i.test(line)) { this._seeDive(line); this.next(); return; }
+
+            // 🧭 支線提示：[Quest|支線名|一句線索]
+            //    跟成就/彈幕同一路：飄一張小卡、幾秒後自己走、不吃點擊、立刻 next()。
+            //    舊的「委託面板」整張卡（委託人/獎勵/接受委託鈕，會卡住劇情等按）已拆，AI 從來沒被教過寫它。
+            //    劇情裡總有路人鬼鬼祟祟晃過又沒下文、之後再冒頭玩家已忘了他是誰→這張卡就是那個「這是一條線」的標記；同時進日誌好回頭查。
+            if (line.startsWith('[Quest|')) {
+                const parts = line.slice(7, -1).split('|');
+                const qname = (parts[0] || '').trim();
+                const qhint = parts.slice(1).join('|').trim();
+                this.launchQuestToast(qname, qhint);
+                this.addLog("支線", `【${qname}】${qhint ? ' ' + qhint : ''}`);
+                this.next(); return;
+            }
+
+            if (line.startsWith('[Sys|')) {
+                const parts = line.slice(5, -1).split('|');
+                const bodyText = parts.length >= 2 ? parts.slice(1).join('|') : parts[0];
+                if (this._sysIsAchievement(bodyText)) { this.next(); return; }
+                // 單行格式塞不進換行 → 只能照句末標點機械斷。要自己決定哪裡斷就用 <system> 區塊版。
+                this._showSysBox(parts.length >= 2 ? parts[0] : '',
+                                 this._sysBreakSentences(this.parseMarkdown(bodyText)),
+                                 bodyText);
+                return;
+            }
+
+            if (line.startsWith('[Trans|')) {
+                this._stageClear();   // 過場 → 清空兩格立繪
+                try { if (win.VN_Phone && win.VN_Phone.currentCallKey) win.VN_Phone.currentCallKey = ''; } catch (e) {}   // 過場(時間/場景/視角轉換)＝通話脈絡結束 → 之後同人來電正常響鈴
+                const _tParts = line.split('|');
+                const text = (_tParts[2]?.replace(']', '') || _tParts[1]?.replace(']', '') || '').trim();
+                document.getElementById('trans-text').innerText = text;
+                document.getElementById('trans-overlay').classList.add('active');
+                this.hideVNPanel(); setTimeout(() => this.checkAutoNext(), 2000); return;
+            }
+
+            if (line.startsWith('[Item|')) {
+                const parts = line.slice(6, -1).split('|');
+                const itemName = parts[0];
+                document.getElementById('item-title').innerText = itemName;
+                document.getElementById('item-desc').innerText  = parts[1] || '';
+                document.getElementById('item-overlay').classList.add('active');
+                this.hideVNPanel();
+                this._itemShowImg(itemName, '');   // 先歸零：舞台回到「等圖」狀態，不會殘留上一件的圖
+                const memUrl = this._itemMemCache[itemName];
+                if (memUrl) {
+                    this._itemShowImg(itemName, memUrl);
+                } else {
+                    (async () => {
+                        // 走 _safeFetchItem：預熱還在生同一張時共用同一個 promise，不再重複生成
+                        const url = await this._safeFetchItem(itemName, parts[2] || '');   // 第三段＝外觀（生圖用）；描述 parts[1] 只給玩家看
+                        if (url) this._itemShowImg(itemName, url);
+                    })();
+                }
+                this.addLog("獲得物品", `${itemName} - ${parts[1]||''}`);
+                return;
+            }
+
+            // 💳 掃碼付款（內建固定樣式）：[QrPay|out／in／other|對方|金額|買了什麼|單號]
+            //    第一格講方向，名字那格只寫「對方」，主角的名字從頭到尾不出現——以前靠比對主角名字判斷錢往哪走，
+            //    AI 繁簡亂寫就判反。這裡只負責畫那張卡；錢由聊天 app 跑團同步掃整本正文那一層算（重播不會重扣）。
+            if (/^\[QrPay\|/i.test(line)) {
+                const q = this._parseQrPay(line);
+                if (!q) { this.next(); return; }
+                const _e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+                let me = '';
+                try { me = (window.VN_DynamicParser && window.VN_DynamicParser._meName) ? window.VN_DynamicParser._meName() : ''; } catch (e) {}
+                const head = q.dir === 'in' ? '收款' : (q.dir === 'out' ? '付款' : '轉帳');
+                const who = q.dir === 'in' ? ('來自 ' + q.who) : (q.dir === 'out' ? ('付給 ' + q.who) : q.who.replace(/\s*>\s*/, ' → '));
+                const sign = q.dir === 'in' ? '+' : (q.dir === 'out' ? '−' : '');
+                const html = '<div class="vn-qrpay vn-qrpay-' + q.dir + '">'
+                    + '<div class="vn-qrpay-top"><i class="fa-solid fa-qrcode"></i><span>掃碼' + head + '</span></div>'
+                    + '<div class="vn-qrpay-who">' + _e(who) + '</div>'
+                    + '<div class="vn-qrpay-amt"><span class="vn-qrpay-sign">' + sign + '</span><span class="vn-qrpay-cur">¥</span>' + _e(q.amount.toFixed(2)) + '</div>'
+                    + '<div class="vn-qrpay-rows">'
+                    + (q.what ? '<div class="vn-qrpay-row"><span>說明</span><b>' + _e(q.what) + '</b></div>' : '')
+                    + (q.dir !== 'other' && me && me !== '我' ? '<div class="vn-qrpay-row"><span>' + (q.dir === 'in' ? '收款人' : '付款人') + '</span><b>' + _e(me) + '</b></div>' : '')
+                    + (q.txnId ? '<div class="vn-qrpay-row"><span>單號</span><b class="vn-qrpay-mono">' + _e(q.txnId) + '</b></div>' : '')
+                    + '</div>'
+                    + '<button type="button" class="vn-qrpay-btn">完成</button>'
+                    + '</div>';
+                this.hideVNPanel();
+                this._showDomBlock(null, null, html);
+                try {
+                    const btn = document.querySelector('#vn-dom-block-body .vn-qrpay-btn');
+                    if (btn) btn.addEventListener('click', () => this._hideDomBlock());
+                } catch (e) {}
+                // 📒 地圖委託的報酬（單號 evt_…）：收款單收起來後跳「委託完成」卡，點一下卡片滑走才接著播。
+                //    錢早在這章送到時就入帳了，卡等播到這裡才跳，才不會一開章就劇透。每張委託只跳一次（地圖那邊記）。
+                if (q.dir === 'in' && /^evt_/.test(q.txnId) && document.querySelector('#vn-dom-block-overlay.active')) {
+                    this._domBlockAfter = () => {
+                        const M = window.AUREALIS_MAP || (window.parent && window.parent.AUREALIS_MAP);
+                        let went = false;
+                        const go = () => { if (!went) { went = true; this.next(); } };
+                        if (!M || !M.missionDoneFromStory) { go(); return; }
+                        Promise.resolve(M.missionDoneFromStory({ txnId: q.txnId, amount: q.amount, who: q.who, what: q.what }, go))
+                            .then(shown => { if (!shown) go(); }, go);
+                    };
+                }
+                this.addLog(q.dir === 'in' ? '收款' : (q.dir === 'out' ? '付款' : '轉帳'), who + '　¥' + q.amount.toFixed(2) + (q.what ? '　' + q.what : ''));
+                return;
+            }
+
+            // 🎭 這是你最關心的核心：拆解 Type 和 Expression，然後呼叫對應系統
+            if (line.startsWith('[Char|')) {
+                const p = this._normCharParts(line.slice(6, -1).split('|'));
+                const ex = this._extractTextAndSFX(p.slice(2));
+                const _cx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID# → 抽音效 + 剝標記
+                if (!_cx.text) { this.playSFX(_cx.sfx !== 'NA' ? _cx.sfx : ex.sfx); return this.next(); }   // 只剩音效→跳過空對話泡
+
+                // 拆解 Type 與 Expression
+                let rawExp = p[1] || '';
+                let typeHint = '';
+                if (rawExp.includes('_')) {
+                    const _pts = rawExp.split('_');
+                    typeHint = _pts[0].trim();
+                    rawExp = _pts.slice(1).join('_').trim();
+                }
+                // 聲線已搬到 [Avatar]：[Char] 沒帶就用 Avatar 宣告的固定聲線（隨機 NPC 才在 [Char] 自帶）
+                if (!typeHint) typeHint = this.charVoices[p[0]] || '';
+
+                this.updateSprite(p[0], rawExp);
+                this.renderVN(p[0], _cx.text);
+                this.addLog(p[0], _cx.text);
+                this.playSFX(_cx.sfx !== 'NA' ? _cx.sfx : ex.sfx);
+                // 第五欄 |Leave：這句演完(下一次 next)把該角色立繪撤下——強制狀態欄取代 AI 老忘記的 [Exit] 行
+                //    這章 Jev 有回答就不聽第五欄（整章聽 Jev，見 os_jev_stage.js）
+                if (ex.stage === 'leave' && !this._jevStage) (this._pendingLeave = this._pendingLeave || []).push(p[0]);
+                this._lastChar = p[0];
+                this._currentChar = { charName: p[0], text: _cx.text, emotion: this._mapExprToEmotion(rawExp), expression: rawExp, typeHint: typeHint };
+                this.updateControlUI();
+                
+                // 把 typeHint 傳給 TTS（用去 #SFX# 標記的文字，免得念出來）
+                this._speakAs(p[0], _cx.text, rawExp, typeHint);
+
+                (function prefetchNext(script, curIdx) {
+                    for (let i = curIdx + 1; i < script.length; i++) {
+                        const nl = script[i];
+                        if (nl.startsWith('[Char|')) {
+                            // ⚠️ 跟播放端同一條 _normCharParts：自由模式 [Char|名|台詞|Stay] 沒表情格，
+                            //    以前直接 split 會把「Stay」當台詞送去付費合成
+                            const np = VN_Core._normCharParts(nl.slice(6, -1).split('|'));
+                            const nex = VN_Core._extractTextAndSFX(np.slice(2));
+                            // 播到那句時念的是剝掉 #音效# 標記的字：這裡不剝，帶標記的那句就預取了一份永遠用不到的
+                            const ntext = VN_Core._extractInlineSFX(nex.text, { silent: true }).text;
+                            if (ntext && !/^(stay|leave)$/i.test(ntext.trim())) VN_Core._prefetchAs(np[0], ntext, np[1] || '');
+                            break;
+                        }
+                        if (nl.startsWith('[Choice|') || nl.startsWith('[End]') || nl.startsWith('</')) break;
+                    }
+                })(this.script, this.index);
+                return;
+            }
+
+            if (line.startsWith('[Inner|')) {
+                const p = line.slice(7, -1).split('|');
+                const ex = this._extractTextAndSFX(p.slice(1));
+                const _ix = this._extractInlineSFX(ex.text);   // 正文內 #SFXID#
+                const _innerClean = _ix.text.replace(/^\*{1,2}|\*{1,2}$/g, '').trim();
+                if (!_innerClean) { this.playSFX(_ix.sfx !== 'NA' ? _ix.sfx : ex.sfx); return this.next(); }   // 只剩音效→跳過空框
+                this.updateSprite(p[0], 'Think');
+                this.renderVN(p[0], _innerClean, 'inner');
+                this.addLog(p[0], _innerClean);
+                this.playSFX(_ix.sfx !== 'NA' ? _ix.sfx : ex.sfx);
+                return;
+            }
+            if (line.startsWith('[Exit|')) {
+                const p = line.slice(6, -1).split('|');
+                if (p[0] && !this._jevStage) this._stageRemove(p[0].trim());   // 角色離場 → 移除該格立繪（這章聽 Jev 時不管 AI 寫的 [Exit]）
+                this.next();
+                return;
+            }
+            if (line.startsWith('[Nar|')) {
+                const p = line.slice(5, -1).split('|');
+                const ex = this._extractTextAndSFX(p);
+                const _nx = this._extractInlineSFX(ex.text);   // 正文內 #SFXID#
+                // 整則只剩音效(剝標記後空) → 只播音效、跳過、不渲染空對話框
+                if (!_nx.text) { this.playSFX(this._sfxFor(_nx.sfx, ex.sfx)); return this.next(); }
+                this._stageNarr();   // 旁白：算一場次(推進清滯留) + 立繪全留全部變暗
+                this._currentChar = null; this.updateControlUI();
+                this.renderVN('', _nx.text);
+                this.addLog("旁白", _nx.text);
+                this._vnNarrVoicePlay(_nx.text);
+                this.playSFX(this._sfxFor(_nx.sfx, ex.sfx));
+                return;
+            }
+
+            // 🎮 選擇按鈕
+            if (line.startsWith('[Choice|')) {
+                // 🚪 這一章主角已經戴上頸環（[Dive|…]）：選項不給，直接走章末進門
+                if (this._diveAtEnd) { this.index = this.script.length - 1; this.next(); return; }
+                if (win.OS_API?.isStandalone?.() ?? false) {
+                    this._showStandaloneChoices(line);
+                } else {
+                    this.next();
+                }
+                return;
+            }
+
+            // Fallback
+            const _trimmed = line.trim();
+            if (/^\*{1,2}[^*].+\*{1,2}$/.test(_trimmed)) {
+                const _ix = this._extractInlineSFX(_trimmed.replace(/^\*{1,2}|\*{1,2}$/g, '').trim());   // 正文內 #SFXID#
+                if (!_ix.text) { this.playSFX(_ix.sfx); return this.next(); }
+                this.renderVN('', _ix.text, 'inner');
+                this.addLog('内心', _ix.text);
+                this.playSFX(_ix.sfx);
+                return;
+            }
+            const _stripped = _trimmed.replace(/^\[?/, '').replace(/\]$/, '').trim();
+            if (_stripped.length > 2 && !_trimmed.startsWith('[') && !_trimmed.startsWith('<') && !_trimmed.startsWith('//') && !_trimmed.startsWith('---')) {
+                const _nx = this._extractInlineSFX(_stripped);   // 正文內 #SFXID# → 抽音效 + 剝標記
+                // 整行只剩音效(剝標記後空，如單獨一行 #fastrunning#) → 只播音效、跳過、不渲染空對話框
+                if (!_nx.text) { this.playSFX(this._sfxFor(_nx.sfx)); return this.next(); }
+                this._stageNarr();   // 純文字旁白：算一場次(推進清滯留) + 立繪保留變暗
+                this.renderVN('', _nx.text);
+                this.addLog('旁白', _nx.text);
+                this._vnNarrVoicePlay(_nx.text);
+                this.playSFX(this._sfxFor(_nx.sfx));
+                return;
+            }
+            this.next();
+        },
+
+        /* --- 📖 章節卡（內建固定版型；自訂 VN 組件優先，做了組件這張就不出場） --- */
+        _ccEsc: function(v) {
+            return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        },
+        // 掃 <ChapterCard> 區塊裡的 tag 抄一份要顯示的欄位。
+        // 🚨只讀、不動 this.index —— 那些行還要照常一行行播，背景/BGM/立繪才會真的生效。
+        _collectChapterCard: function(from) {
+            const d = { story: '', num: '', title: '', preface: '', who: '', where: '', bgm: '' };
+            for (let i = from + 1; i < this.script.length; i++) {
+                const l = this.script[i];
+                if (/^<\/ChapterCard>$/i.test(l)) break;
+                const m = l.match(/^\[([A-Za-z]+)\|([\s\S]*)\]$/);
+                if (!m) continue;
+                const tag = m[1].toLowerCase(), body = m[2], p = body.split('|');
+                if (tag === 'story') d.story = body.trim();
+                else if (tag === 'chapter') { d.num = (p[0] || '').trim(); d.title = (p[1] || '').trim(); }
+                else if (tag === 'preface') d.preface = body.trim();
+                else if (tag === 'protagonist') d.who = body.trim();
+                else if (tag === 'bgm') d.bgm = (p[0] || '').trim();
+                else if (tag === 'bg') d.where = String(p.length >= 2 ? p[1] : p[0]).replace(/_/g, ' ').trim();
+            }
+            return d;
+        },
+        // 🎵 現在有沒有音樂在放
+        _bgmPlaying: function() {
+            const a = document.getElementById('bgm-player');
+            return !!(a && a.getAttribute('src') && !a.paused);
+        },
+        // 🎵 音樂交給 Jev 的章，沒有音樂在放 → 先接著放這個故事上一次放的那首。
+        //    09-26：Jev 塞車時（一章 14 通被拒 7 通），第一場的音樂問不到 → 整章沒聲音。改成繼續放上一首。
+        _bgmResumeLast: function() {
+            if (this._bgmPlaying()) return;
+            let last = '';
+            try { last = localStorage.getItem('vn_last_bgm:' + (this._currentStoryId || '')) || ''; } catch (e) {}
+            if (last) this._playBgm(last);
+        },
+        // 回 true＝卡片接管畫面（呼叫端就別再 next()，等「開始閱讀」）
+        // 卡片開著時換掉 BGM 那一格（Jev 的時間表在卡片出場之後才回來時用）
+        _ccSetBgm: function(id) {
+            const meta = document.getElementById('vncc-meta');
+            if (!meta || !id) return;
+            const cells = [...meta.querySelectorAll('.vncc-cell')];
+            const hit = cells.find(c => (c.querySelector('.vncc-cell-k') || {}).textContent === 'BGM');
+            if (hit) { hit.querySelector('.vncc-cell-v').textContent = id; return; }
+            meta.insertAdjacentHTML('beforeend', '<div class="vncc-cell"><span class="vncc-cell-k">BGM</span><span class="vncc-cell-v">' + this._ccEsc(id) + '</span></div>');
+        },
+        _showChapterCard: function(d) {
+            const el = document.getElementById('vn-chapter-card');
+            if (!el || !d) return false;
+            if (!d.title && !d.story && !d.preface) return false;   // 全空＝沒東西可演，別擋路
+            const set = (id, v) => { const e = document.getElementById(id); if (e) e.textContent = v || ''; };
+            set('vncc-story', d.story);
+            set('vncc-num', d.num ? ('Chapter ' + d.num) : '');
+            set('vncc-title', d.title || d.story);
+            set('vncc-preface', d.preface);
+            // 🎵 音樂交給 Jev 的章：卡上的 BGM 格寫 Jev 選的那首（還沒回來就先空著），不寫 AI 寫的那首 —— 那首根本不會播
+            if (this._jevSfx || this._jevSfxWait) {
+                // 卡片出來了 Jev 還沒回來 → 先接著放上一首，卡上寫那首；之後 Jev 才到的那首不插隊（見 _jevSfxCatchUp）
+                if (this._jevSfxWait && !this._jevSfx) this._bgmResumeLast();
+                this._ccShownSeq = this._jevStageSeq;
+                const jb = this._jevSfx && (this._jevSfx.bgm || [])[0];
+                let now = '';
+                if (!jb && this._bgmPlaying()) { try { now = localStorage.getItem('vn_last_bgm:' + (this._currentStoryId || '')) || ''; } catch (e) {} }
+                d = Object.assign({}, d, { bgm: jb ? jb.id : now });
+            }
+            const meta = document.getElementById('vncc-meta');
+            if (meta) {
+                meta.innerHTML = [['Protagonist', d.who], ['Location', d.where], ['BGM', d.bgm]]
+                    .filter(c => c[1])
+                    .map(c => '<div class="vncc-cell"><span class="vncc-cell-k">' + this._ccEsc(c[0]) +
+                              '</span><span class="vncc-cell-v">' + this._ccEsc(c[1]) + '</span></div>')
+                    .join('');
+            }
+            this._ccSkin();
+            el.classList.remove('hidden');
+            this._ccOpen = true;
+            // 🚨 對話框要明確收起來：hideOverlays() 每次推進都把 text-panel-wrapper 設回 block，
+            //    卡片只是蓋在上面 → 底下留著一個空的對話框，而且它自己還吃得到點擊
+            //    （#text-panel-wrapper 掛著 handlePanelClick），點一下就在卡片背後偷推一句。
+            //    做法照 toggleUI('phone-chat') 那條：浮層接管畫面時對話框一律 display:none。
+            this._ccPanelHidden = true;
+            const wrap = document.getElementById('text-panel-wrapper');
+            if (wrap) wrap.style.display = 'none';
+            return true;
+        },
+        // 🎨 跟著劇情主題走：主題是「一段自由 CSS」（vn_theme），作者/AI 寫的多半只針對
+        //    #text-panel 那幾個選擇器 —— 卡片若自己一套顏色，換了主題就只有對話框變、卡片還是舊皮。
+        //    → 開卡前把對話框「當下實際算出來的皮」抄過來：底、字色、框線、圓角、陰影、字體。
+        //    #text-panel 有三態(char/nar/inner)，取 nar-mode（敘述者聲音，語氣最接近章節卡）。
+        //    主題想單獨設計這張卡 → 在自訂 CSS 裡對 #vncc-box 寫規則並加 !important 即可蓋過。
+        _ccSkin: function() {
+            try {
+                const panel = document.getElementById('text-panel');
+                const box = document.getElementById('vncc-box');
+                if (!panel || !box) return;
+                const had = panel.className;
+                panel.className = 'nar-mode';                     // 同步借用，讀完立刻還原、畫面不會閃
+                const cs = getComputedStyle(panel);
+                const skin = {
+                    background: cs.backgroundImage && cs.backgroundImage !== 'none' ? cs.backgroundImage : cs.backgroundColor,
+                    backgroundColor: cs.backgroundColor,
+                    border: cs.borderTopWidth + ' ' + cs.borderTopStyle + ' ' + cs.borderTopColor,
+                    borderRadius: cs.borderRadius,
+                    boxShadow: cs.boxShadow,
+                    color: cs.color,
+                    fontFamily: cs.fontFamily,
+                    backdropFilter: cs.backdropFilter,
+                };
+                panel.className = had;
+                if (skin.background && skin.background !== 'none') box.style.backgroundImage = skin.background;
+                if (skin.backgroundColor) box.style.backgroundColor = skin.backgroundColor;
+                if (skin.border && !/^0px/.test(skin.border)) box.style.border = skin.border;
+                if (skin.borderRadius) box.style.borderRadius = skin.borderRadius;
+                if (skin.boxShadow && skin.boxShadow !== 'none') box.style.boxShadow = skin.boxShadow;
+                // 字色走 CSS 變數：卡片裡每個字都寫 var(--text-color, …)，設在盒子上就整張跟著翻，
+                // 不會像直接設 color 那樣被子元素自己的宣告蓋掉（換淺色主題時標題才不會白底白字）
+                if (skin.color) box.style.setProperty('--text-color', skin.color);
+                if (skin.fontFamily) box.style.fontFamily = skin.fontFamily;
+                if (skin.backdropFilter && skin.backdropFilter !== 'none') box.style.backdropFilter = skin.backdropFilter;
+            } catch (e) { /* 讀不到就用 CSS 裡的預設皮，不影響出場 */ }
+        },
+        closeChapterCard: function() {
+            const el = document.getElementById('vn-chapter-card');
+            if (el) el.classList.add('hidden');
+            if (this._ccPanelHidden) {
+                this._ccPanelHidden = false;
+                const wrap = document.getElementById('text-panel-wrapper');
+                if (wrap) wrap.style.display = 'block';
+            }
+            if (!this._ccOpen) return;
+            this._ccOpen = false;
+            this.next();
+        },
+
+        /* --- UI 切換與渲染 --- */
+        hideOverlays: function() {
+            ['sys-overlay', 'trans-overlay', 'item-overlay'].forEach(id => { const _el = document.getElementById(id); if (_el) _el.classList.remove('active'); });
+            // 🎬 scene-cg-overlay 走鋪底式：linger>0 期間留著（由 renderVN 計數淡出），不被每句 next 的 hideOverlays 秒關
+            if (this._sceneCgLinger <= 0 && !this._sceneCgHold) { const _sc = document.getElementById('scene-cg-overlay'); if (_sc) _sc.classList.remove('active'); }
+            // 章節卡接管畫面時別把對話框叫回來：卡片出場前後還有早鳥生圖／立繪這些非同步的活，
+            // 誰晚一步呼叫到這裡，空對話框就又浮出來了。
+            if (this._ccPanelHidden) return;
+            // 🚨手機開著的時候（聊天／通話／瀏覽器／導航）別把對話框叫回來。這支每按一下「下一句」都會先跑一次，
+            //    平常緊接著的那一步會再把對話框收掉所以看不到；但導航到達時要先停 0.9 秒演「已到達」，
+            //    那 0.9 秒對話框就帶著進手機之前的舊台詞亮在手機後面（實測：按下去舊句先冒出來，手機滑走後才換新句）。
+            //    剛從手機回來、還在等第一句台詞的那段（_panelPending）同理不叫。
+            if (this.mode !== 'vn' || this._panelPending) return;
+            const _po = document.getElementById('phone-overlay');
+            if (_po && _po.classList.contains('active')) return;
+            document.getElementById('text-panel-wrapper').style.display = 'block';
+        },
+        _showBgmToast: function(name, found) {
+            const toast = document.getElementById('vn-bgm-toast');
+            if (!toast) return;
+            document.getElementById('vn-bgm-name').textContent = name;
+            document.getElementById('vn-bgm-label').textContent = found ? 'NOW PLAYING' : 'BGM NOT FOUND';
+            document.getElementById('vn-bgm-icon').innerHTML  = found ? '<i class="fa-solid fa-music"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
+            toast.classList.remove('found', 'notfound', 'active');
+            void toast.offsetWidth; // reflow
+            toast.classList.add(found ? 'found' : 'notfound', 'active');
+            clearTimeout(this._bgmToastTimer);
+            this._bgmToastTimer = setTimeout(() => toast.classList.remove('active'), 3000);
+        },
+        _danmuLaneTs: [0,0,0,0,0,0,0], // 每條跑道上次被分配的時間戳
+        launchDanmu: function(name, text) {
+            const container = document.getElementById('danmu-container');
+            if (!container) return;
+
+            // 選出最久沒被用的跑道 (LRU)，保證不重複到同一條
+            const ts = this._danmuLaneTs;
+            let lane = 0;
+            for (let i = 1; i < ts.length; i++) {
+                if (ts[i] < ts[lane]) lane = i;
+            }
+            ts[lane] = Date.now();
+
+            const item = document.createElement('div');
+            item.className = 'danmu-item';
+            const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            item.innerHTML = `<span class="danmu-name">${esc(name)}</span><span class="danmu-sep"> · </span><span class="danmu-text">${esc(text)}</span>`;
+            item.style.top = (lane * 13 + 2) + '%';
+            const baseDur = this._danmuSpeed || 18;
+            item.style.animationDuration = (baseDur + Math.random() * 3).toFixed(1) + 's';
+            container.appendChild(item);
+            item.addEventListener('animationend', () => item.remove());
+        },
+        // 🧭 支線提示小卡：上方置中滑入、停幾秒、自己淡出。pointer-events 全關，不擋點擊也不吃點擊。
+        //    連續幾張就往下堆（容器是 column flex），各自到點各自走；離開動畫走 CSS class，animationend 後拆節點。
+        // label／icon 不給＝支線那張；視差世界的岔路也借這張（'岔路'、'fa-code-branch'）
+        launchQuestToast: function(name, hint, label, icon) {
+            const stack = document.getElementById('quest-toast-stack');
+            if (!stack) return;
+            const card = document.createElement('div');
+            card.className = 'quest-toast';
+            const esc = s => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            const ic = /^fa-[a-z0-9-]+$/.test(icon || '') ? icon : 'fa-signs-post';
+            card.innerHTML =
+                `<i class="fa-solid ${ic} quest-toast-icon"></i>` +
+                `<div class="quest-toast-body">` +
+                    `<div class="quest-toast-head"><span class="quest-toast-label">${esc(label || '支線')}</span><span class="quest-toast-name">${esc(name)}</span></div>` +
+                    (hint ? `<div class="quest-toast-hint">${esc(hint)}</div>` : '') +
+                `</div>`;
+            stack.appendChild(card);
+            const hold = 4200 + Math.min(2400, (hint || '').length * 60);   // 字多停久一點，封頂 6.6 秒
+            setTimeout(() => {
+                card.classList.add('leaving');
+                card.addEventListener('animationend', () => card.remove(), { once: true });
+                setTimeout(() => card.remove(), 800);   // animationend 沒來（分頁隱藏時動畫不跑）的保底
+            }, hold);
+        },
+        hideVNPanel: function() {
+            document.getElementById('text-panel-wrapper').style.display = 'none';
+            const g1 = document.getElementById('game-char'); if (g1) g1.style.display = 'none';
+            const g2 = document.getElementById('game-char-2'); if (g2) g2.style.display = 'none';
+            const cp = document.getElementById('char-portrait'); if (cp) cp.style.display = 'none';
+        },
+        // 🎵 放一首背景音樂（名字不帶副檔名；'stop' 停）。劇本裡的 [BGM|] 行與 Jev 在章節卡片上補放的那首都走這裡。
+        _playBgm: function(name) {
+            const audio = document.getElementById('bgm-player');
+            // 記住上一首（每個故事一份）：Jev 塞車問不到音樂時，接著放這首（見 _bgmResumeLast）
+            if (name && name !== 'stop') win.AUI.lsSet('vn_last_bgm:' + (this._currentStoryId || ''), name, '上一首背景音樂');
+            if (name === 'stop') {
+                if (audio) audio.pause();
+            } else if (!audio) {
+                console.warn(`[VN] BGM「${name}」不播：找不到 #bgm-player（VN 舞台還沒建起來？）`);
+            } else if (!VN_Config.data.bgm) {
+                console.log(`[VN] BGM「${name}」跳過：設定裡的背景音樂是關的`);
+            } else if (VN_Config.data.bgm && audio) {
+                const _self = this;
+                const tryPlay = (filename, fuzzyHint) => {
+                    // iOS 要靠 Web Audio 調 BGM 音量就得開 CORS；crossOrigin 必須在設 src 前設好，
+                    // 否則跨域音訊接進 Web Audio 會被當 tainted 而靜音。
+                    if (win.VN_AudioGain && win.VN_AudioGain.isIOS() && !audio.dataset.noCors) {
+                        audio.crossOrigin = 'anonymous';
+                    }
+                    audio.src = VN_Config.data.bgm + filename + '.mp3';
+                    const onOk  = () => { _self._showBgmToast(fuzzyHint ? `${filename} ←≈ ${name}` : filename, true); cleanup(); };
+                    const onErr = async () => {
+                        cleanup();
+                        // 保命：BGM 主機沒開 CORS 時 crossOrigin 會害載入失敗 → 清掉重試純播放（放棄音量控制但確保有聲音）
+                        if (audio.crossOrigin === 'anonymous' && !audio.dataset.noCors) {
+                            audio.dataset.noCors = '1';
+                            audio.removeAttribute('crossorigin');
+                            tryPlay(filename, fuzzyHint);
+                            return;
+                        }
+                        // exact 失敗 → 嘗試 fuzzy match
+                        if (!fuzzyHint && win.VN_BgmIndex) {
+                            await win.VN_BgmIndex.load();
+                            const match = win.VN_BgmIndex.findMatch(name);
+                            if (match) {
+                                console.log(`[VN] BGM fuzzy match: "${name}" → "${match.name}" (score ${match.score.toFixed(2)})`);
+                                tryPlay(match.name, true);
+                                return;
+                            }
+                        }
+                        // 找不到夠像的 → 靜音（避免配錯氛圍）
+                        _self._showBgmToast(name, false);
+                    };
+                    const cleanup = () => { audio.removeEventListener('canplay', onOk); audio.removeEventListener('error', onErr); };
+                    audio.addEventListener('canplay', onOk, { once: true });
+                    audio.addEventListener('error',   onErr, { once: true });
+                    audio.play().catch(() => {});
+                };
+                tryPlay(name, false);
+            } else {
+                this._showBgmToast(name, false);
+            }
+        },
+
+        toggleUI: function(target) {
+            // 🎬 劇情手機瀏覽器正轉橫看影片：手機要收起來或換別的畫面，先轉回直的（不然外框帶著轉的樣子滑走，下次打開還是橫的）
+            if (target !== 'phone-browser' && win.VN_Browser && win.VN_Browser._land) win.VN_Browser.landOff(true);
+            const po = document.getElementById('phone-overlay');
+            if (target === 'vn') {
+                // 🚨這支在劇情模式下「每一行劇本」都會被叫一次（next() 裡那句 toggleUI('vn')），
+                //    所以一定要分清楚：手機真的開著、這一次是把它關掉 → 才做下面清舊字那一套；
+                //    平常的每一行只要維持對話框開著就好，不能每行都清字、收框。
+                const _wasPhone = po.classList.contains('active');
+                po.classList.remove('active');
+                if (!_wasPhone) {
+                    // 還在等「從手機回來後的第一句」就繼續收著，別被中間的 [BGM|]、[Bg|] 這種行提前放出來
+                    if (!this._panelPending) document.getElementById('text-panel-wrapper').style.display = 'block';
+                    return;
+                }
+                // 🚨從手機（聊天／通話／瀏覽器／導航）回到劇情時，對話框裡還留著「進手機之前」那一句。
+                //    以前這裡直接把對話框叫回來，手機還在滑出去的那一秒，後面就冒出那句舊台詞，
+                //    等下一句真的畫上去才換掉（實測導航走到目的地按下去那一下）。
+                //    現在先把舊的字清掉、對話框繼續收著，等下一句真的要畫（renderVN）才一起出來；
+                //    下一行如果不是台詞（系統框、道具、過場）它們本來就會自己收對話框，不受影響。
+                //    保底：一秒半內都沒有台詞要畫，就把（已經清空的）對話框放回來，免得卡在沒有地方可以點。
+                try {
+                    const _dt = document.getElementById('dialogue-text'); if (_dt) _dt.innerHTML = '';
+                    const _sn = document.getElementById('speaker-name'); if (_sn) _sn.style.display = 'none';
+                    if (this._twTimer) { clearTimeout(this._twTimer); this._twTimer = null; }
+                } catch (e) {}
+                this._panelPending = true;
+                clearTimeout(this._panelPendingTimer);
+                this._panelPendingTimer = setTimeout(() => {
+                    if (!this._panelPending) return;
+                    this._panelPending = false;
+                    const _po = document.getElementById('phone-overlay');
+                    // 有別的東西正蓋在畫面上（系統框、道具、過場、彈出的卡片）就不放，它們收掉時自己會把對話框叫回來
+                    const _busy = document.querySelector('#sys-overlay.active, #trans-overlay.active, #item-overlay.active, #vn-dom-block-overlay.active');
+                    if (this.mode === 'vn' && !_busy && !(_po && _po.classList.contains('active'))) {
+                        document.getElementById('text-panel-wrapper').style.display = 'block';
+                    }
+                }, 1500);
+            }
+            else {
+                this._panelPending = false; clearTimeout(this._panelPendingTimer);
+                po.classList.add('active'); document.getElementById('text-panel-wrapper').style.display = 'none';
+                document.getElementById('phone-chat').classList.toggle('hidden', target !== 'phone-chat');
+                document.getElementById('phone-call').classList.toggle('hidden', target !== 'phone-call');
+                const pb = document.getElementById('phone-browser'); if (pb) pb.classList.toggle('hidden', target !== 'phone-browser');
+                const pn = document.getElementById('phone-nav'); if (pn) pn.classList.toggle('hidden', target !== 'phone-nav');
+                const pm = document.getElementById('phone-moments'); if (pm) pm.classList.toggle('hidden', target !== 'phone-moments');
+                // 狀態列：時間照真的走；底下那塊是深的，時間與橫槓就換白的。
+                //   聊天室的頂欄跟著聊天 app 的主題與黑夜模式變色，不能寫死 → 量頂欄真正的底色（同應用手機的做法）
+                const ps = document.getElementById('phone-screen');
+                if (ps) {
+                    let dark = target === 'phone-call' || target === 'phone-moments';   // 朋友圈頂上是封面（深色）
+                    if (target === 'phone-chat') {
+                        try {
+                            const m = String(getComputedStyle(document.getElementById('chat-header')).backgroundColor).match(/[\d.]+/g);
+                            if (m && (m[3] === undefined || parseFloat(m[3]) > 0.5)) {
+                                const lin = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+                                dark = (0.2126 * lin(+m[0]) + 0.7152 * lin(+m[1]) + 0.0722 * lin(+m[2])) < 0.45;
+                            }
+                        } catch (e) {}
+                    }
+                    ps.classList.toggle('vnp-dark', dark);
+                    const d = new Date(), t = ps.querySelector('.vnp-sb-time');
+                    if (t) t.textContent = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+                }
+            }
+        },
+
+        /* --- UI 按鈕代理函式 --- */
+        answerCall: function() { if (win.VN_Phone) win.VN_Phone.answerCall(this); },
+        rejectCall: function() { if (win.VN_Phone) win.VN_Phone.rejectCall(this); },
+        closeChat:  function() { if (win.VN_Phone) win.VN_Phone.closeChat(this); },
+        hangUpCall: function() { if (win.VN_Phone) win.VN_Phone.hangUpCall(this); },
+
+        /* --- Skip / Log --- */
+        checkAutoNext: function() { if (this.isSkip) this._autoTimer = setTimeout(() => this.next(), this.skipDelay); },
+        /* --- 🍔 其他功能（COT / CTX / ↺TTS 收在這裡；手機上五顆橫排會擠成一團）--- */
+        toggleMore: function() {
+            const menu = document.getElementById('vn-more-menu');
+            const btn = document.getElementById('vn-btn-more');
+            if (!menu) return;
+            const open = menu.classList.toggle('show');
+            if (btn) btn.classList.toggle('active', open);
+            // 插圖正顯示著才給「重新生成插圖」那一項（09-26：畫面上那顆轉圈太顯眼，收進這個選單）
+            try { const ov = document.getElementById('scene-cg-overlay'); menu.classList.toggle('has-cg', !!(open && ov && ov.classList.contains('active') && this._sceneCgCur)); } catch (e) {}
+            // 點畫面上別的地方也要收：VN 只有對話框接點擊，點背景不會走 handlePanelClick
+            if (open) {
+                if (this._moreAway) document.removeEventListener('click', this._moreAway, true);
+                this._moreAway = (ev) => {
+                    if (ev.target.closest && ev.target.closest('#vn-more-menu, #vn-btn-more')) return;
+                    this.closeMore();
+                };
+                setTimeout(() => document.addEventListener('click', this._moreAway, true), 0);
+            }
+        },
+        // 回傳「剛剛真的收了一個開著的選單」，給 handlePanelClick 判斷要不要吃掉這一下點擊
+        retrySceneCgFromMenu: function() {
+            this.closeMore();
+            try { AUI.toastr.info('插圖重新生成中…'); } catch (e) {}
+            try { this.retrySceneCg(); } catch (e) {}
+        },
+        closeMore: function() {
+            const menu = document.getElementById('vn-more-menu');
+            if (!menu || !menu.classList.contains('show')) return false;
+            menu.classList.remove('show');
+            const btn = document.getElementById('vn-btn-more');
+            if (btn) btn.classList.remove('active');
+            if (this._moreAway) { document.removeEventListener('click', this._moreAway, true); this._moreAway = null; }
+            return true;
+        },
+        toggleCtx: function() {
+            // 章末簡報卡的 CTX 是把這個浮窗借進旁邊那欄（11-13）：對話框這顆要開置中的，先叫它還回來
+            try { (win.VN_EndBrief || window.VN_EndBrief)?.ctxHome?.(); } catch (e) {}
+            const popup = document.getElementById('vn-ctx-popup');
+            const btn   = document.getElementById('vn-btn-ctx');
+            if (!popup) return;
+            const isOpen = popup.classList.toggle('show');
+            if (btn) btn.classList.toggle('active', isOpen);
+            // 這顆鈕兩版做的事不一樣(酒館開故事管理面板、PWA 直接生大總結) → 名字也要跟著換，
+            //   不然 PWA 按下去跑的是大總結、標題卻寫故事管理。
+            if (isOpen) {
+                const sb = document.getElementById('ctx-summary-btn');
+                if (sb) sb.textContent = ((win.OS_API?.isStandalone?.()) ?? false) ? '大總結' : '故事管理';
+            }
+            if (isOpen) VN_CtxMonitor.poll();
+        },
+        closeCtx: function() {
+            const popup = document.getElementById('vn-ctx-popup');
+            if (popup) popup.classList.remove('show');
+            const btn = document.getElementById('vn-btn-ctx');
+            if (btn) btn.classList.remove('active');
+        },
+        // 🛠️ 故事管理：開 OS_STORY_TOOLS 完整面板（大總結 + 編輯模板 + 合併 + 隱藏對話）。取代原 CTX 的「📝 大總結」快捷鈕。
+        openStoryTools: function() {
+            // 🚨 PWA 走自帶的大總結產生器。故事管理面板整套是酒館的：它讀酒館聊天樓層、隱藏對話靠酒館斜線指令，
+            //   獨立版兩樣都沒有 → 開起來是空轉。（2026-06-19 CTX 浮窗重做時這顆鈕改指故事管理，
+            //   VN_Summary.generate 從此沒有呼叫點，PWA 的大總結就是那時候斷線的。）
+            if ((win.OS_API?.isStandalone?.()) ?? false) {
+                const S = win.VN_Summary || window.VN_Summary;
+                if (S && typeof S.generate === 'function') { S.generate(); return; }   // CTX 先不收：那顆鈕要留著顯示「⏳ 生成中…」
+                this.closeCtx();
+                AUI.alert('大總結模組尚未載入');
+                return;
+            }
+            this.closeCtx();
+            const st = window.OS_STORY_TOOLS || (window.parent && window.parent.OS_STORY_TOOLS);
+            const cont = document.getElementById('page-game') || document.body;
+            if (st && typeof st.openPanel === 'function') st.openPanel(cont);
+            else AUI.alert('故事管理工具尚未載入');
+        },
+        _saveCtxLimit: function(val) {
+            VN_CtxMonitor.saveLimit(val);
+        },
+        toggleSkip: function() {
+            this.clearTimers();
+            this.isSkip = false;
+            this._twSpeed = VN_Settings.data.twSpeed || 30;
+            this.updateControlUI();
+
+            let scanMode = this.mode;
+            for (let i = this.index + 1; i < this.script.length; i++) {
+                const line = this.script[i];
+                if (line.startsWith('<chat'))       { scanMode = 'chat'; continue; }
+                if (line.startsWith('</chat>'))     { scanMode = 'vn';   continue; }
+                if (line.startsWith('<call'))       { scanMode = 'call'; continue; }
+                if (line.startsWith('</call>'))     { scanMode = 'vn';   continue; }
+
+                if (scanMode === 'chat' || scanMode === 'call') {
+                    if (win.VN_Phone) win.VN_Phone.scanLog(line, scanMode, this);
+                } else {
+                    if (/^\[Dive\|/i.test(line)) { this._seeDive(line); continue; }   // 🚪 略過也要認：主角戴上頸環了
+                    if (line.startsWith('[Char|'))  { const p = this._normCharParts(line.slice(6,-1).split('|')); const ex=this._extractTextAndSFX(p.slice(2)); this.addLog(p[0], this._stripInlineSFX(ex.text)); }
+                    else if (line.startsWith('[Inner|')) { const p = line.slice(7,-1).split('|'); const ex=this._extractTextAndSFX(p.slice(1)); this.addLog(p[0], `*${this._stripInlineSFX(ex.text)}*`); }
+                    else if (line.startsWith('[Nar|'))  { const p = line.slice(5,-1).split('|'); const ex=this._extractTextAndSFX(p); this.addLog("旁白", this._stripInlineSFX(ex.text)); }
+                    else if (line.startsWith('[Sys|'))  { const p = line.slice(5,-1).split('|'); this.addLog("系統", p.length >= 2 ? p.slice(1).join('|') : p[0]); }
+                    else if (line.startsWith('[Item|')) { const p = line.slice(6,-1).split('|'); this.addLog("獲得物品", `${p[0]} - ${p[1]||''}`); }
+                }
+            }
+
+            this.mode = 'vn';
+            this.toggleUI('vn');
+            document.getElementById('dialogue-text').innerHTML = '';
+            document.getElementById('speaker-name').style.display = 'none';
+
+            // 檢查末尾是否為選擇（支援新格式：連續多行 [Choice|...]）
+            // 找到最後一段連續 Choice 行的起始位置
+            let _firstChoiceIdx = this.script.length - 1;
+            while (_firstChoiceIdx > 0 && this.script[_firstChoiceIdx].startsWith('[Choice|')) {
+                _firstChoiceIdx--;
+            }
+            // 修正：如果退到非 Choice 行，往前一步
+            if (!this.script[_firstChoiceIdx]?.startsWith('[Choice|')) _firstChoiceIdx++;
+
+            const _firstChoiceLine = this.script[_firstChoiceIdx];
+            if (_firstChoiceLine?.startsWith('[Choice|') && !this._diveAtEnd && (win.OS_API?.isStandalone?.() ?? false)) {
+                this.index = _firstChoiceIdx;
+                this._showStandaloneChoices(_firstChoiceLine);
+            } else {
+                this.index = this.script.length - 1;
+                this.next();   // 直接觸發「到末尾」顯示資訊中心，不要留一個空對話框等用戶再點一下
+            }
+        },
+        updateControlUI: function() {
+            const btnSkip = document.getElementById('vn-btn-skip');
+            if (btnSkip) btnSkip.classList.toggle('active', this.isSkip);
+
+            const btnRegen = document.getElementById('vn-btn-regen');
+            if (!btnRegen) return;
+
+            const isStandalone = win.OS_API?.isStandalone?.() ?? false;
+            if (isStandalone) {
+                // 獨立模式：這個角色用雲端聲音念時（重播上一句不用再花錢），或本機語音開著時（10-20 補齊：電腦上開網頁版也連得到本機 SoVITS）才顯示
+                const cloud = !!(this._currentChar && win.OS_VOICE_CAST?.cloudFor(this._currentChar.charName));
+                const local = !!(this._currentChar && (window.parent || window).VN_TTS?.config?.enabled);
+                btnRegen.style.display = (cloud || local) ? 'inline-block' : 'none';
+                btnRegen.title = cloud ? '重播當前語音' : '清除快取並重新生成當前語音';
+            } else {
+                // ST 模式：有角色行就顯示，title 保持原意
+                btnRegen.style.display = this._currentChar ? 'inline-block' : 'none';
+                btnRegen.title = '清除快取並重新生成當前語音（VN_TTS）';
+            }
+        },
+
+        // 重新生成/重播當前 [Char|] 行的 TTS
+        // 獨立模式 → MiniMax 重播；ST 模式 → GPT-SoVITS 重新生成（原邏輯不動）
+        regenCurrentTTS: async function() {
+            const { charName, text, emotion, expression, typeHint } = this._currentChar || {};
+            if (!charName || !text) return;
+
+            const btn = document.getElementById('vn-btn-regen');
+
+            // ── 名單上的雲端聲音：優先從快取重播（免費），快取失效才再合成一次 ──
+            const V = win.OS_VOICE_CAST;
+            if (V && V.cloudFor(charName)) {
+                if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; }
+                const spoken = this._speechOnly(text);
+                const hit = await V.replayAs(charName, spoken, { expression });
+                if (!hit) V.speakAs(charName, spoken, { expression });
+                if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
+                return;
+            }
+            // 網頁版（10-20 補齊）也走下面這條：本機語音（SoVITS／IndexTTS）開著就清快取重生，沒開就什麼都不做
+
+            // ── 本機語音：透過 VN_TTS 重新生成 ──
+            const VN_TTS = (window.parent || window).VN_TTS;
+            if (!VN_TTS?.config?.enabled) { console.warn('[VN] VN_TTS 不可用或未啟用'); return; }
+
+            // 跟播放那條（_vnSoVITSPlay）用同一份清好的字和同一個聲線：快取鍵是「音色＋清好的字」，
+            //   拿原文去清會對不到鍵（舊檔刪不掉），也會把旁白、括號裡的動作一起念出來；少了聲線還可能換一副嗓子
+            const spoken = this._cleanTextForSoVITS(text);
+            if (!spoken) return;
+            if (btn) { btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; btn.disabled = true; }
+            VN_TTS.clearCache(charName, spoken, typeHint || '');
+            VN_TTS.play(charName, spoken, emotion, typeHint || '');
+            if (btn) { btn.textContent = '↺ TTS'; btn.disabled = false; }
+        },
+        addLog: function(name, text) { this.logHistory.push({ name, text: text.replace(/\*/g, '') }); },
+        // 紀錄裡的名字和台詞是模型寫的原文：轉義再放（以前原樣塞，台詞裡夾 <img onerror> 一打開紀錄就跑）
+        showLog: function() { const content = document.getElementById('vn-log-content'); const _e = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); content.innerHTML = this.logHistory.map(log => `<div class="vn-log-item"><div class="vn-log-name">${_e(log.name)}</div><div class="vn-log-text">${_e(log.text)}</div></div>`).join(''); document.getElementById('vn-log-overlay').classList.add('active'); setTimeout(() => { content.scrollTop = content.scrollHeight; }, 50); },
+        hideLog: function() { document.getElementById('vn-log-overlay').classList.remove('active'); },
+
+        typewriter: function(el, html, speed) {
+            if (this._twTimer) { clearTimeout(this._twTimer); this._twTimer = null; }
+            this._twEl = el; this._twFull = html;
+            const tokens = []; const re = /<[^>]+>|[\s\S]/g; let m;
+            while ((m = re.exec(html)) !== null) tokens.push(m[0]);
+            let idx = 0, current = ''; el.innerHTML = '';
+            const step = () => {
+                if (idx >= tokens.length) { this._twTimer = null; this.checkAutoNext(); return; }
+                let added = 0;
+                while (idx < tokens.length) {
+                    const t = tokens[idx++]; current += t;
+                    if (!t.startsWith('<')) { added++; if (added >= 1) break; }
+                }
+                el.innerHTML = current;
+                this._twTimer = setTimeout(step, speed !== undefined ? speed : (this.isSkip ? 5 : this._twSpeed));
+            };
+            this._twTimer = setTimeout(step, speed !== undefined ? speed : (this.isSkip ? 5 : this._twSpeed));
+        },
+        skipTypewriter: function() {
+            if (this._twTimer) {
+                clearTimeout(this._twTimer); this._twTimer = null;
+                if (this._twEl) this._twEl.innerHTML = this._twFull;
+                return true;
+            }
+            return false;
+        },
+        // 系統框：兩種格式最後都走這裡，差別只在 bodyHtml 是誰決定怎麼斷行的。
+        _showSysBox: function (title, bodyHtml, plainText) {
+            const titleEl = document.getElementById('sys-title');
+            const textEl  = document.getElementById('sys-text');
+            if (title) { titleEl.innerText = title; titleEl.style.display = 'block'; }
+            else { titleEl.style.display = 'none'; }
+            // 多行才靠左。拿完整內容判斷而不是看當下打到哪——看當下的話會打到第一個換行時
+            //   對齊方式突然從置中跳成靠左，整段字瞬間位移。
+            textEl.classList.toggle('sys-multiline', bodyHtml.includes('<br>'));
+            document.getElementById('sys-overlay').classList.add('active');
+            this.hideVNPanel();
+            this.typewriter(textEl, bodyHtml);
+            this.addLog("系統", plainText);
+            // 🖥️ 系統語音：依系統名抽對應的音；無系統名 → 預設系統音
+            this._vnSysVoicePlay(title || '', plainText);
+        },
+        // 成就是走成就系統彈的，系統框不重複播一次
+        _sysIsAchievement: function (t) {
+            return t.includes('成就解鎖') || t.includes('成就：') || t.includes('Achievement');
+        },
+        // ⚙️ 系統框區塊版：<system> … </system>，AI 自己決定哪裡換行。
+        //   單行的 [Sys|…] 塞不進換行，只能靠句末標點機械斷——斷在哪是語意問題，
+        //   寫的人知道、標點不知道，所以區塊版把那個決定交回去，這裡一行就是一行、不再自動斷。
+        //   空行照留（連兩個 <br>），段落間距就是這麼來的。
+        _showSysBlock: function (title, lines) {
+            const body = lines.slice();
+            while (body.length && !body[0].trim()) body.shift();          // 開頭結尾的空行是排版殘留
+            while (body.length && !body[body.length - 1].trim()) body.pop();
+            const plain = body.join('\n');
+            if (this._sysIsAchievement(plain)) { this.next(); return; }
+            if (!plain.trim()) { console.warn('[VN] <system> 區塊是空的（內容被上游過濾掉？），跳過'); this.next(); return; }
+            this._showSysBox(title, body.map(l => this.parseMarkdown(l)).join('<br>'), plain);
+        },
+        // 系統框專用：一句一行。整段黏成一團在固定寬的框裡讀起來像一堵牆，
+        //   斷在句末標點之後最自然——那本來就是說話換氣的地方。
+        //   ⚠️ 只在標籤外動手：parseMarkdown 留下的 <em> 被切開就壞了，所以 tag 整段跳過。
+        //   收尾的引號/括號跟著前一句走（『樂園』！」不能斷在 ！ 跟 」 中間）；
+        //   最後那個斷點沒有下一句可斷，拿掉，否則框底下多一條空行。
+        //   只給 [Sys| 用：對話框寬度本來就是固定的、沒有這個毛病，也不動她習慣的斷句。
+        _sysBreakSentences: function (html) {
+            const MARK = '\u0000';   // 用跳脫寫：字面上的 NUL 會讓搜尋工具把整支檔當二進位檔跳過
+            const marked = String(html).replace(
+                /(<[^>]+>)|([。！？…‼⁇]+[」』）】》”’"']*)/g,
+                (m, tag, sent) => tag ? tag : sent + MARK
+            );
+            return marked
+                .replace(new RegExp(MARK + '(?=(?:<[^>]*>|\s)*$)', 'g'), '')
+                .split(MARK).join('<br>');
+        },
+        // 🌐 外語台詞「原文」(翻譯)：翻譯拆出來放下面一行小字。只拆「」裡不是中文的那種
+        //    （日文、韓文看假名／韓文字；其他看有沒有漢字），中文台詞後面的（輕笑）這種動作括號不動。
+        _splitTL: function(t) {
+            const s = String(t || '');
+            if (s.indexOf('」') < 0 && s.indexOf('』') < 0) return { orig: s, tl: '' };
+            const foreign = (b) => /[\u3040-\u30ff\uac00-\ud7af]/.test(b) || (!/[\u3400-\u9fff]/.test(b) && /[A-Za-z\u00c0-\u024f\u0400-\u04ff]/.test(b));
+            const tls = [];
+            const orig = s.replace(/(「[^」]*」|『[^』]*』)\s*[（(]([^（）()]*)[)）]/g, (m, q, tl) => {
+                if (!foreign(q.slice(1, -1)) || !/[\u3400-\u9fff]/.test(tl)) return m;
+                tls.push(tl.trim());
+                return q;
+            });
+            return tls.length ? { orig: orig.trim(), tl: tls.join(' ') } : { orig: s, tl: '' };
+        },
+        // 給畫面用：原文照 parseMarkdown，翻譯包成 .vn-tl（下面一行小字）
+        _tlHtml: function(t) {
+            const x = this._splitTL(t);
+            return this.parseMarkdown(x.orig) + (x.tl ? '<span class="vn-tl">' + this.parseMarkdown(x.tl) + '</span>' : '');
+        },
+        parseMarkdown: function(t) { return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\*\*(.+?)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'<em>$1</em>'); },
+        renderVN: function(n, t, mode) {
+            // 🎬 鋪底式場景插圖：每渲染一句對話 -1，停滿 3 句就淡出（CSS opacity transition）
+            if (this._sceneCgLinger > 0 && !this._sceneCgHold) {   // 正常插圖：每句 -1，停滿 3 句淡出
+                this._sceneCgLinger--;
+                if (this._sceneCgLinger <= 0) {
+                    const _scOv = document.getElementById('scene-cg-overlay');
+                    if (_scOv) _scOv.classList.remove('active');
+                    const _scIm = document.getElementById('scene-cg-img');
+                    if (_scIm) setTimeout(() => { const o = document.getElementById('scene-cg-overlay'); if (o && !o.classList.contains('active')) _scIm.src = ''; }, 600);
+                }
+            } else if (this._sceneCgHold && this._sceneCgFailLinger > 0) {   // 失敗佔位：玩家沒手動重生 → 也倒數 3 則後自己淡掉、不永遠卡著
+                this._sceneCgFailLinger--;
+                if (this._sceneCgFailLinger <= 0) {
+                    this._sceneCgHold = false;
+                    const _scOv = document.getElementById('scene-cg-overlay');
+                    if (_scOv) _scOv.classList.remove('active', 'scene-cg-failed');
+                    const _scIm = document.getElementById('scene-cg-img');
+                    if (_scIm) setTimeout(() => { const o = document.getElementById('scene-cg-overlay'); if (o && !o.classList.contains('active')) _scIm.src = ''; }, 600);
+                }
+            }
+            const nel = document.getElementById('speaker-name');
+            const panel = document.getElementById('text-panel');
+            const dtEl = document.getElementById('dialogue-text');
+            // 從手機回來後收著的對話框：這一句要畫了才放出來（見 toggleUI）
+            if (this._panelPending) {
+                this._panelPending = false; clearTimeout(this._panelPendingTimer);
+                const _w = document.getElementById('text-panel-wrapper'); if (_w) _w.style.display = 'block';
+            }
+            panel.classList.remove('inner-mode');
+            if (mode === 'inner') {
+                if (n) { nel.style.display = 'inline-block'; nel.innerText = n; }
+                else { nel.style.display = 'none'; }
+                panel.classList.remove('nar-mode'); panel.classList.add('char-mode', 'inner-mode');
+            } else if (n) {
+                nel.style.display = 'inline-block'; nel.innerText = n;
+                panel.classList.remove('nar-mode'); panel.classList.add('char-mode');
+            } else {
+                nel.style.display = 'none';
+                panel.classList.remove('char-mode'); panel.classList.add('nar-mode');
+            }
+            panel.classList.remove('anim'); void panel.offsetWidth; panel.classList.add('anim');
+            this.typewriter(dtEl, this._tlHtml(t));   // 外語台詞的翻譯拆到下面一行
+            // 👄 出聲的台詞才動嘴（內心話 *…* 不動），旁白／內心那句先把上一個人的嘴收起來（vn_core_stage 的 _mouthTalk）
+            try {
+                if (n && mode !== 'inner' && !/^\s*\*/.test(String(t || ''))) this._mouthTalk && this._mouthTalk(n, t);
+                else this._mouthHalt && this._mouthHalt();
+            } catch (e) {}
+        },
+
+        _nameVariants: function(name) {
+            return [
+                name,
+                name.replace(/[·・•·]/g, '_'),
+                name.replace(/[·・•·\s]/g, ''),
+                name.split(/[·・•·]/)[0].trim(),
+            ].filter((v, i, arr) => v && arr.indexOf(v) === i);
+        },
+
+        // 模糊查找頭像提示詞：先精確，再 variants，再雙向前綴/包含匹配
+        // 解決 AI profile 用全名（卡蜜拉·洛爾德）但 VN tag 用短名（卡蜜拉）的對齊問題
+        // 取 OS_PERSONA 的頭像資料：先 URL，再 desc（作為生圖 prompt）
+        // 只在 name 與當前 persona 名稱吻合時才返回資料
+        // 🎴 開了「跳過頭像」（立繪直生；三合一生成也在它底下）而且這個人有外觀可生 → 要的是立繪：
+        //   頭像那兩種（世界書【素材-角色頭像素材】、酒館人設清單的頭像）不准排在生立繪前面，只在沒外觀可生時墊底（舞台那條本來就是這樣）。
+        //   頭像模式照舊：她放的頭像最先。她放的立繪（表情／預設立繪條目、立繪目錄）在哪個模式都還是最先。
+        //   10-14：開了跳過頭像或三種一起生時，頭像不該比立繪先用。
+        //   （酒館的人設一定有一張頭像，就算是問號剪影 → 以前主角每次都被它頂掉、永遠不生立繪）
+        _spriteFirst: function(name) {
+            const C = window.VN_Config;
+            return !!(C && C.data && C.data.spriteDirect === true) && !!this._resolveAvatarPrompt(name);
+        },
+        _getPersonaFallback: function(name) {
+            try {
+                const userName = win.OS_PERSONA?.getName?.() || win.OS_API?.getGlobalUserName?.();
+                if (!userName || name !== userName) return null;
+                const p = win.OS_PERSONA?.getCurrent?.() || {};
+                return { url: p.avatar || '' };
+            } catch(e) { return null; }
+        },
+
+        // 原始查表（不過濾 none）：外觀字串照實回傳，給 _isNoneChar 判斷用
+        _lookupAvatarDesc: function(name) {
+            if (!name) return '';
+            const avatars = this.avatars;
+            // 1. 精確
+            if (avatars[name]) return avatars[name];
+            // 2. _nameVariants 變形
+            for (const v of this._nameVariants(name)) {
+                if (avatars[v]) return avatars[v];
+            }
+            // 3. 雙向前綴模糊：name 是 key 的前綴，或 key 是 name 的前綴（長名 ↔ 短名）
+            const keys = Object.keys(avatars);
+            for (const k of keys) {
+                if (k.startsWith(name) || name.startsWith(k)) return avatars[k];
+            }
+            // 4. 包含匹配（最後手段）
+            for (const k of keys) {
+                if (k.includes(name) || name.includes(k)) return avatars[k];
+            }
+            return '';
+        },
+        // 「none」＝AI 宣告了聲線但沒給外觀（帶代號的路人，如 [Avatar|巡邏員|青男沉|none]）
+        //   ⚠️ 以前 'none' 會被當成外觀字串直接拿去生圖(生出垃圾/裸圖)，這裡統一視同「沒外觀」
+        _isNoneDesc: function(d) { return !d || /^none$/i.test(String(d).trim()); },
+        _isNoneChar: function(name) { const d = this._lookupAvatarDesc(name); return !!d && /^none$/i.test(String(d).trim()); },
+        _resolveAvatarPrompt: function(name) {
+            const d = this._lookupAvatarDesc(name);
+            return this._isNoneDesc(d) ? '' : d;   // none → ''，由呼叫端決定「剪影」還是「合成 prompt」
+        },
+        // 聲線模糊抓性別 → 1boy / 1girl（如「青男沉」→ 男 → 1boy）；抓不到就不掛性別詞
+        _genderFromVoice: function(name) {
+            let v = (this.charVoices && this.charVoices[name]) || '';
+            if (!v) { for (const k of this._nameVariants(name)) { if (this.charVoices && this.charVoices[k]) { v = this.charVoices[k]; break; } } }
+            v = String(v || '');
+            if (/男|male|boy/i.test(v)) return '1boy';
+            if (/女|female|girl/i.test(v)) return '1girl';
+            return '';
+        },
+        // none 路人的 prompt 合成（立繪模式 / 一鍵生立繪 專用）：
+        //   「故事標題, 角色名」→ 翻成英文（同 Bg 的中→英作法）→ 前面掛聲線推出的 1boy/1girl。
+        //   回傳的英文串會被存進 avatar_cache.prompt，一鍵生立繪之後可直接重用。
+        // 名字 → 固定的小數字（同一個路人每次都長一樣，但彼此不一樣）
+        _nameSeed: function(name) {
+            let h = 0;
+            const s = String(name || '');
+            for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+            return Math.abs(h);
+        },
+        // 🚨 none 路人的立繪 prompt。
+        //   舊版是「故事標題 + 角色名」丟去翻譯當外觀 —— 兩個都是專有名詞，翻出來是垃圾：
+        //     「初入多重社, 時安」→ "Beginner Multiple Society, Safe time"
+        //   而且每個路人只差名字那一小段，其餘完全相同 → 相簿裡一整排長得同一個人。
+        //   改成：性別（從聲線推）＋ 世界觀（[World|] 那一格，那是普通名詞，翻得動）
+        //         ＋ 依名字固定挑選的中性外觀。**不放任何專有名詞**。
+        _buildNonePrompt: async function(name) {
+            const HAIR  = ['black hair', 'dark brown hair', 'ash grey hair', 'light brown hair'];
+            const STYLE = ['short hair', 'medium hair', 'messy short hair', 'neat short hair'];
+            const AGE   = ['young adult', 'adult', 'teenager'];
+            const seed = this._nameSeed(name);
+
+            // 🚨 時代感不要丟去翻譯：「現代」會被翻成 "Modern history"（歷史課本用語），
+            //    生圖模型讀了只會更歪。常見的幾個直接對照，認不得就乾脆不放時代詞
+            //    —— 少一個詞只是比較普通，放錯詞會整張歪掉。
+            const ERA = [
+                [/現代|现代|都市|現實|现实/, 'modern day'],
+                [/未來|未来|科幻|賽博|赛博|cyber/i, 'futuristic sci-fi'],
+                [/奇幻|中世紀|中世纪|西幻|魔法/, 'medieval fantasy'],
+                [/武俠|武侠|仙俠|仙侠|古代|古風|古风|江湖/, 'ancient chinese, wuxia'],
+                [/校園|校园/, 'school campus'],
+                [/末世|廢土|废土/, 'post-apocalyptic'],
+            ];
+            let era = '';
+            const zhEra = String(this._currentWorldTag || '').trim();
+            if (zhEra) {
+                const hit = ERA.find(([re]) => re.test(zhEra));
+                if (hit) era = hit[1];
+                else console.log(`[VN] 路人立繪：認不得的世界觀「${zhEra}」→ 這次不放時代詞`);
+            }
+
+            const p = [
+                this._genderFromVoice(name) || 'solo',
+                era,
+                'ordinary passerby, plain clothes, neutral expression',
+                HAIR[seed % HAIR.length],
+                STYLE[(seed >> 3) % STYLE.length],
+                AGE[(seed >> 6) % AGE.length],
+            ].filter(Boolean).join(', ');
+            console.log(`[VN] none 路人「${name}」合成立繪 prompt：${p}`);
+            return p;
+        },
+
+        // 立刻隱藏（無 transition，不留殘影）
+        _hideEl: function(el) {
+            if (!el) return;
+            el.classList && el.classList.remove('no-frame');
+            el.style.transition = 'none';
+            el.style.opacity = '0';
+            el.style.display = 'none';
+        },
+        // 淡入顯示（fade-in，避免閃爍）
+        _showEl: function(el, src) {
+            if (!el) return;
+            // 正在動嘴、眨眼（顯示的是原圖疊出來的那幾份，vn_core_stage 的 _faceBase）也算同一張，不重淡入
+            const sameSrc = (src === undefined) || (el.getAttribute('src') === src) || (!!this._faceBase && this._faceBase(el) === src);
+            const visible = el.style.display !== 'none' && el.style.display !== '' && el.style.opacity !== '0';
+            const isSlot = el.id === 'game-char' || el.id === 'game-char-2';
+            if (isSlot && this._blinkStart) this._blinkStart();
+            // 圖真正冒出來的那一刻重打一次燈：晚到的圖立即拿到正確版位（獨角置中/雙格近遠），
+            // 不用等下一句對話才補正（治「單人先卡左位、隔幾句才滑去中間」）
+            const relight = () => { if (isSlot) { try { this._applyStageLighting(this._lastLightIdx != null ? this._lastLightIdx : -1); } catch (e) {} } };
+            if (src !== undefined) el.src = src;
+            // 已經在顯示同一張圖 → 只確保亮著，不重跑淡入（避免同角色連說 / 旁白後再開口時閃爍）
+            if (sameSrc && visible) { el.style.display = 'block'; el.style.opacity = '1'; relight(); return; }
+            el.style.transition = 'none';
+            el.style.opacity = '0';
+            el.style.display = 'block';
+            requestAnimationFrame(() => {
+                el.style.transition = 'opacity 0.18s ease';
+                el.style.opacity = '1';
+                relight();
+                // 淡入完把行內 transition 清掉 → 還給樣式表的 left/height/max-width transition
+                //（行內只剩 opacity 會把版位/尺寸的過渡蓋死，近遠互換就不平滑）
+                if (isSlot) setTimeout(() => { if (el.style.opacity === '1') el.style.transition = ''; }, 260);
+            });
+        },
+
+        // 換圖：先把新圖預載好，再「設版型 class + 換 src + 淡入」一起做 →
+        // 避免同一格從頭像換成立繪時，舊圖殘留在新版型位置一兩幀
+        _swapImage: function(img, url, isAvatar, isStale, onShown) {
+            if (!img || !url) return;
+            const apply = () => {
+                if (isStale && isStale()) return;
+                img.classList.toggle('vn-avatar', !!isAvatar);
+                this._showEl(img, url);
+                if (onShown) onShown();
+            };
+            const visible = img.style.display !== 'none' && img.style.display !== '' && img.style.opacity !== '0';
+            if ((img.getAttribute('src') === url || (!!this._faceBase && this._faceBase(img) === url)) && visible) { apply(); return; }   // 已是同圖且顯示中（含動嘴、眨眼中）→ 直接套用
+            const tmp = new Image();
+            tmp.onload = apply;
+            // 探測失敗絕不上圖：此時 handleImgError 多半已把 onerror 拆掉，死連結一上就是永久破圖標
+            tmp.onerror = () => { console.warn('[VN_Core] 圖片載入失敗，略過:', String(url).slice(0, 120)); };
+            tmp.src = url;
+        },
+
+        // ===== 雙格立繪舞台＋角色卡（2026-07-17 拆檔）＝> vn_core_stage.js =====
+        //    含：_slotEl/_stageInit/_singleSlot/_slotMemory/_stageIndexFor/_slotShowing/_applyStageLighting/
+        //        _stageDimAll/_stageNarr/_clearSlot/_stageRemove/_stageClear/_staleSweep/_tryLoad/updateSprite/
+        //        _renderSlot/updateCallAvatar/handleImgError/fallbackToAI/_applyAvatarAnim/_readCharState/_charCV/
+        //        saveCharCV/unlockCharCV/autoGenSprite/_spriteTap/openCharCard/closeCharCard
+        //    Object.assign 掛回 VN_Core（this 語義不變），載入順序排本檔之後。
+    };
+    // === 4. 全域 UI 輔助函數 ===
+
+    function switchPage(id) {
+        document.querySelectorAll('.page').forEach(e => e.classList.add('hidden'));
+        const target = document.getElementById(id);
+        if (target) target.classList.remove('hidden');
+        if (id !== 'page-game') {
+            const bgm = document.getElementById('bgm-player'); if (bgm) { bgm.pause(); bgm.currentTime = 0; }
+            try { const _fx = window.OS_FX || win.OS_FX; if (_fx) _fx.stopAll(); } catch (e) {}   // ⚡ 離開劇情頁 → 特效與循環音效一起收
+        }
+        // 進入 VN 劇情時暫停大廳 BGM，避免兩條音樂重疊；離開時恢復
+        try {
+            if (id === 'page-game') {
+                if (win.VoidTerminal?.suspendLobbyActivity) win.VoidTerminal.suspendLobbyActivity();
+                else if (win.VoidAmbient?.pauseBgm) win.VoidAmbient.pauseBgm();
+            } else {
+                if (win.VoidTerminal?.resumeLobbyActivity) win.VoidTerminal.resumeLobbyActivity();
+            }
+        } catch(e) {}
+    }
+
+    function stopGame() {
+        // 退出遊戲才真正清空頭像快取（跨章節期間保留）
+        for (const url of Object.values(window.VN_Core._avatarMemCache || {})) {
+            if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
+        }
+        window.VN_Core._avatarMemCache = {};
+        window.VN_Core._faceMemCache = {};
+        window.VN_Core.avatars = {};
+        window.VN_Core.resetState();
+        const bgm = document.getElementById('bgm-player');
+        if (bgm) { bgm.pause(); bgm.currentTime = 0; }
+        try { if (window.OS_FX) window.OS_FX.stopAll(); } catch (e) {}   // ⚡ 退出遊戲 → 特效畫面與音效一起收
+        const pageGame = document.getElementById('page-game');
+        if (pageGame) pageGame.classList.add('hidden');
+        if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
+    }
+
+    // === 5. 導出到 Window ===
+    // ⚠️ 截斷／API 錯誤橫幅：獨立版生成器也用這支，UI 只有一份
+    VN_Core.showTruncBanner = _vnTruncBannerShow;
+    VN_Core.hideTruncBanner = _vnTruncBannerHide;
+    window.VN_Core = VN_Core;
+    // 🧷 上次跑圖跑到一半被整頁重開的話，打開幾秒後講一聲是哪一步（等提示框 AUI 載好）
+    setTimeout(function () { try { VN_Core._heavyReport(); } catch (e) {} }, 5000);
+
+    window.VN_PLAYER = {
+        launchApp,
+        switchPage, stopGame, openChapterPanel, closeChapterPanel,
+        openGameSettings, closeGameSettings, openChatBgPanel, closeChatBgPanel, handleChatBgFile,
+        applyChatBgUrl, clearChatBg,
+        generateStory, runCardDive, runFreeDive,
+        loadAvatarManager,   // 供 vn_settings.js 外接調用（接受自定義 listId）
+        async backupAvatarsToWorldbook(btn) {
+            const tr = AUI.toastr;
+            const _orig = btn ? btn.textContent : '';
+            if (btn) { btn.disabled = true; btn.textContent = '備份中…'; }
+            try {
+                const r = await window.VN_Core.backupAvatarsToCharLorebook();
+                if (r && r.ok) { tr && tr.success(r.msg, '頭像備份'); }
+                else { tr && tr.warning((r && r.msg) || '備份未完成', '頭像備份'); }
+            } catch (e) {
+                tr && tr.error('備份失敗：' + ((e && e.message) || e), '頭像備份');
+            } finally {
+                if (btn) { btn.disabled = false; btn.textContent = _orig; }
+            }
+        },
+        loadBgManager,       // 供 vn_settings.js 外接調用（BG 快取列表）
+        loadSpriteManager,   // 立繪庫網格（sprite_cache，世界感知）
+        loadSceneManager: window.VN_Panels.loadSceneManager,   // 場景插圖展廳（scene_cache，與頭像同套卡片管理）
+
+        // 💭 本章思考鏈小窗
+        showThinkPopup() {
+            const popup = document.getElementById('vn-think-popup');
+            if (!popup) return;
+            if (popup.classList.contains('active')) { this.hideThinkPopup(); return; }
+            const body = document.getElementById('vn-think-popup-body');
+            const _escT = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+            const sp = VN_Core.sidePlay();   // 這支掛在 VN_PLAYER 上：this 不是 VN_Core
+            if (sp) {
+                // 📋 小劇場：看寫這場戲的那一通（控制台記錄那筆），不看酒館主聊天最新一則
+                const rec = VN_Core._sideRec();
+                const t = rec && String(rec.think || '').trim();
+                body.innerHTML = t ? _escT(t)
+                    : '<div class="think-empty-msg">' + (rec ? '寫這場' + _escT(sp.name) + '的那一通沒有思考記錄<br><small>（模型沒寫思考，或思考沒開）</small>'
+                        : '找不到寫這場' + _escT(sp.name) + '的那一通<br><small>（控制台只記這次開起來以後的呼叫；重看以前存的就沒有）</small>') + '</div>';
+                if (rec) body.insertAdjacentHTML('beforeend', VN_Core._sideLogLinkHtml(rec));
+            } else {
+            // OS_THINK.log 最新一筆（entries.unshift，index 0 = 最新）
+            const lastEntry = win.OS_THINK?.getLatest();
+            let thinkContent = lastEntry?.content?.trim() || '';
+            // 酒館模式 OS_THINK 不在 → 讀酒館原生 reasoning（最近一則 AI 訊息的 extra.reasoning）
+            if (!thinkContent) thinkContent = (win.AureliaAPI || window.AureliaAPI)?.getLatestReasoning?.() || '';
+            body.innerHTML = thinkContent
+                ? _escT(thinkContent)
+                : '<div class="think-empty-msg">本章無思考記錄<br><small>（需啟用 enable_thinking 且 AI 支援）</small></div>';
+            }
+            popup.classList.add('active');
+            // 點彈窗外面 → 關閉（click capture，吃掉這次點擊避免順便推進劇情；排除 COT 按鈕本身）
+            const self = this;
+            this._thinkAway = function(e) {
+                if (popup.contains(e.target)) return;
+                if (e.target.closest && e.target.closest('#vn-btn-think')) return;
+                e.stopPropagation();
+                self.hideThinkPopup();
+            };
+            setTimeout(function () { document.addEventListener('click', self._thinkAway, true); }, 0);
+        },
+        hideThinkPopup() {
+            document.getElementById('vn-think-popup')?.classList.remove('active');
+            if (this._thinkAway) { document.removeEventListener('click', this._thinkAway, true); this._thinkAway = null; }
+        },
+
+        // ⛔ VN 內建舊閱讀器（showReaderPanel / hideReaderPanel）已移除：
+        //    閱讀器早就是獨立模組 VN_READER（大廳與手機殼都直接叫 VN_READER.show()），
+        //    這兩支零呼叫者、連同 #vn-reader-overlay 那份 DOM 與 CSS 一起清掉。
+
+        // ⛔ 大總結編輯器已移除：收斂到「故事日誌 → 故事管理」一處(os_story_tools 獨立版分支)。
+        //    這裡原本是 VN 內建舊閱讀器那顆鈕的目標，鈕已一併拿掉。
+    };
+
+    // === 6. 啟動程序 ===
+    function launchApp(container) {
+        if (!window.VN_STYLES || !window.VN_STYLES.vnHTML) {
+            console.error('[VN_Core] 找不到 window.VN_STYLES.vnHTML，請確認 vn_styles.js 已先載入！');
+            return;
+        }
+
+        container.innerHTML = window.VN_STYLES.vnHTML;
+
+        VN_Config.load();
+        VN_Settings.load();
+        loadSavedChatBg();
+        VN_Sticker.init();
+        
+        // 啟動時初始化主頁背景音樂按鈕與播放狀態
+        if (window.VN_Core.updateHomeBgmState) {
+            window.VN_Core.updateHomeBgmState();
+        }
+
+        if (window._pendingAutoScript) {
+            const _pending = window._pendingAutoScript;
+            window._pendingAutoScript = null;
+            setTimeout(() => {
+                const _pScript = typeof _pending === 'object' ? _pending.text : _pending;
+                const _pMsgId  = typeof _pending === 'object' ? _pending.messageId : null;
+                window.VN_Core.loadScript(_pScript, _pMsgId);   // loadScript 尾端已 applyLatestFresh()，最新這輪插圖在此插入
+                // 🗺 劇情→地圖（vn_map_link.js）：這章的地點與在場的人交給地圖。只掛在「新的一章」這裡，回頭看舊章節不會把位置拉回過去；不 await
+                try { const _L = window.VN_MAP_LINK || (window.parent && window.parent.VN_MAP_LINK); if (_L) _L.onChapter((window.VN_Core.script || []).slice(), _pMsgId); } catch (e) {}
+                switchPage('page-game');
+                window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
+                console.log('[PhoneOS] 自動偵測：已套用暫存劇本');
+            }, 150);
+        }
+        // 自由劇情不再留紙條等這裡撿：書架直接 showVnPanel ＋ VN_PLAYER.runFreeDive（見 qb_bookshelf 踏入故事）
+    }
+
+    function install() {
+        if (win.PhoneSystem) {
+            win.PhoneSystem.install('視覺終端', '🎭', '#111', launchApp);
+            console.log('[PhoneOS] VN 視覺終端播放器已安裝 (V8.6 - 核心模組化 + SFX優化 + 主頁BGM)');
+        } else { setTimeout(install, 1000); }
+    }
+    install();
+
+    // ⚠️ 截斷／API 錯誤橫幅（兩版共用同一份 UI，重試行為由呼叫端給）
+    //    酒館：/regenerate 與 /continue 交給酒館助手；獨立版：生成器自己重跑或接續（沒有 slash 指令可用）。
+    //    掛在 document.body（不掛 page-game）→ 搭配 fixed + 高 z-index，浮在資訊中心那類 overlay 之上不被擋住。
+    function _vnTruncBannerHide() {
+        const b = document.getElementById('vn-trunc-banner');
+        if (b) b.classList.remove('show');
+    }
+    function _vnTruncBannerShow(opts) {
+        opts = opts || {};
+        let b = document.getElementById('vn-trunc-banner');
+        if (!b) {
+            b = document.createElement('div');
+            b.id = 'vn-trunc-banner';
+            b.innerHTML =
+                '<div class="vn-trunc-msg"></div>' +
+                '<div class="vn-trunc-sub"></div>' +
+                '<div class="vn-trunc-btns">' +
+                    '<button class="vn-trunc-btn vn-trunc-primary" id="vn-trunc-regen">重新生成</button>' +
+                    '<button class="vn-trunc-btn" id="vn-trunc-cont">繼續生成</button>' +
+                    '<button class="vn-trunc-btn" id="vn-trunc-close">關閉</button>' +
+                '</div>';
+            document.body.appendChild(b);
+        }
+        b.querySelector('.vn-trunc-msg').textContent = opts.title || '正文被截斷';
+        b.querySelector('.vn-trunc-sub').textContent = opts.sub || '沒收到結尾（缺 </content>）';
+        const _regen = b.querySelector('#vn-trunc-regen');
+        const _cont  = b.querySelector('#vn-trunc-cont');
+        const _close = b.querySelector('#vn-trunc-close');
+        _regen.style.display = opts.onRegen ? '' : 'none';
+        _cont.style.display  = opts.onContinue ? '' : 'none';
+        _regen.onclick = function () { _vnTruncBannerHide(); try { opts.onRegen && opts.onRegen(); } catch (e) { console.warn(e); } };
+        _cont.onclick  = function () { _vnTruncBannerHide(); try { opts.onContinue && opts.onContinue(); } catch (e) { console.warn(e); } };
+        _close.onclick = function () {
+            _vnTruncBannerHide();
+            try { opts.onClose ? opts.onClose() : window.VN_Core._hideWriterCurtain(); } catch (e) {}
+        };
+        b.classList.add('show');
+    }
+
+    // === 8. 自動偵測新劇本 ===
+    window._pendingAutoScript = window._pendingAutoScript || null;
+
+    (function _setupAutoDetect() {
+        if (window._VN_AUTO_DETECT_REGISTERED) return;
+        window._VN_AUTO_DETECT_REGISTERED = true;
+
+        function init() {
+            if (!window.TavernHelper) { setTimeout(init, 1000); return; }
+            if (!window.eventOn || !window.tavern_events) { setTimeout(init, 500); return; }
+
+            // ── ⭐ END-driven：跟副模型(state_runtime)同一套——純 GENERATION_ENDED 驅動，生成「真的結束」才讀正文判完整。
+            //    取代舊「MESSAGE_RECEIVED(事件來得早、半截)+每1.5秒輪詢等收尾+_processedIds鎖樓號」：鎖會讓刪樓/重生落同樓號永不再套用。
+            //    完整正文＝同時有 <content> 與 </content>(正文收尾)。重複套用守門靠 _lastApplied 特徵比對(見 _onGenEnded)。
+            // 先剝 CoT 再判/取正文：<thinking> 裡提到 <content> 字樣不能當「正文開始」，否則會把 CoT 包進正文
+            function _noCot(t) { return String(t).replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, ''); }
+            function _hasOpen(t)  { return _noCot(t).indexOf('<content>')  !== -1; }
+            function _hasClose(t) { return _noCot(t).indexOf('</content>') !== -1; }
+            // ⚔️ 戰鬥交棒不算截斷：世界書要求輸出 </BattleStart> 後立刻停筆，這種訊息天生沒有 </content>。
+            //    判「含有閉合的戰鬥區塊」而不是「以它結尾」——就算模型不聽話在後面又寫了半截戰果才真被截，
+            //    這章照樣能播（開打時那半截本來就會被剪掉），跳截斷窗反而擋住一場能打的仗。
+            function _battleDone(t) { return /<\/BattleStart>/i.test(_noCot(t)); }
+            // 已套用特徵：擋掉「副模型在 🍎/generateRaw 模式也會發 GENERATION_ENDED 但沒設 __AURELIA_SUMMARIZING」「事件偶爾連發」
+            //   造成的重複 loadScript（會洗掉剛 splice 進去的場景插圖）。比對「同樓號＋同 <content> 內容」才算已套用。
+            let _lastApplied = null;   // { mid, sig }
+            function _sig(text) { const s = _noCot(text); const m = s.match(/<content>([\s\S]*?)<\/content>/i); const b = m ? m[1] : s; return b.length + '|' + b.slice(0, 40) + '|' + b.slice(-40); }
+            let _truncMsgId = null;
+            // VN 是否正在前景（玩家在看故事）→ 此時主模型這通理應產出 <content>…</content>，沒收尾＝截斷。
+            // 用來判斷「連 <content> 都還沒生出來就截斷(思考期截)」要不要當截斷，避免誤傷非 VN 的一般聊天訊息。
+            function _vnVisibleNow() { const p = document.getElementById('aurelia-vn-panel'); return !!(p && p.style.display !== 'none' && document.getElementById('page-game')); }
+            // 這張卡是不是 VN 正文格式（鐵則 2026-08-04：截斷判定看「格式」不看「面板開沒開」——
+            // exe 裡 VN 是常態，面板剛好沒開著時 API 壞樓照樣要跳截斷窗）。
+            // 判法：往前找最多 6 則「先前的」AI 樓，任一帶 <content> ＝ 這卡就是 VN 格式。最新這則(正在判定的)不算證據。
+            function _storyFormatChat() {
+                try {
+                    const stCtx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                    const chat = stCtx && Array.isArray(stCtx.chat) ? stCtx.chat : null;
+                    if (!chat) return false;
+                    let seen = 0, skippedCur = false;
+                    for (let i = chat.length - 1; i >= 0 && seen < 6; i--) {
+                        const m = chat[i];
+                        if (!m || m.is_user) continue;
+                        if (!skippedCur) { skippedCur = true; continue; }
+                        seen++;
+                        if (String(m.mes || m.message || '').indexOf('<content>') !== -1) return true;
+                    }
+                    return false;
+                } catch (e) { return false; }
+            }
+            function _hideTruncBanner() { _vnTruncBannerHide(); }
+            // 重試：/regenerate(整則重生，破甲截斷首選) 或 /continue(接著補寫，乾淨早停用)。
+            // 補/重生完會再發 GENERATION_ENDED → 收尾完整就自動套用；先清 _lastApplied，確保即使內容雷同也照樣重套。
+            function _retryTrunc(cmd) {
+                _hideTruncBanner();
+                const th = window.TavernHelper || (window.parent && window.parent.TavernHelper) || (window.top && window.top.TavernHelper);
+                if (!th || typeof th.triggerSlash !== 'function') { try { AUI.toastr.warning('找不到酒館助手，請回酒館手動操作'); } catch (e) {} return; }
+                _lastApplied = null;
+                try { window.VN_Core._showWriterCurtain(); } catch (e) {}
+                th.triggerSlash(cmd).catch(function () {});
+            }
+            function _rerollTrunc() { _retryTrunc('/regenerate'); }
+            function _continueTrunc() { _retryTrunc('/continue'); }
+            // 末尾「重新生成」鈕（VN_Core.regenerateLatest）酒館那條就是這支：清套用記號、上撰寫幕布、/regenerate
+            try { window.VN_Core._tavernRegenerate = _rerollTrunc; } catch (e) {}
+            function _showTruncBanner(messageId) {
+                _truncMsgId = messageId;
+                _vnTruncBannerShow({
+                    title: '正文被截斷',
+                    sub: '沒收到結尾（缺 </content> 或 </summary>）',
+                    onRegen: _rerollTrunc,
+                    onContinue: _continueTrunc,
+                });
+            }
+
+            function _readMsgText(messageId) {
+                let text = '';
+                const stCtx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+                if (stCtx && stCtx.chat && stCtx.chat[messageId]) {
+                    const m = stCtx.chat[messageId];
+                    text = m.mes || m.message || m.content || '';
+                }
+                if (!text) {
+                    try {
+                        const msgs = window.TavernHelper.getChatMessages(messageId);
+                        if (msgs && msgs.length > 0) text = msgs[0].message || msgs[0].mes || msgs[0].content || '';
+                    } catch (e) {}
+                }
+                // TauriTavern 懶載入會讓「樓號 ≠ 陣列索引」拿不到 → 退而求其次讀最後一條 AI 訊息
+                // （GENERATION_ENDED 當下，最新一則 AI 正文就是最後一條）
+                if (!text && stCtx && Array.isArray(stCtx.chat) && stCtx.chat.length) {
+                    const last = stCtx.chat[stCtx.chat.length - 1];
+                    if (last && !last.is_user) text = last.mes || last.message || last.content || '';
+                }
+                return text;
+            }
+
+            function _apply(text, messageId) {
+                _hideTruncBanner();   // 真的套用到劇本了 → 收掉截斷橫幅（純 DOM，不影響套用流程）
+                const _vnPanel = document.getElementById('aurelia-vn-panel');
+                const _vnVisible = _vnPanel && _vnPanel.style.display !== 'none';
+                if (_vnVisible && document.getElementById('page-game')) {
+                    switchPage('page-game');
+                    window.VN_Core.loadScript(text, messageId);   // loadScript 尾端已 applyLatestFresh()，最新這輪插圖在此插入
+                    // 🗺 劇情→地圖（vn_map_link.js）：這章的地點與在場的人交給地圖。只掛在「新的一章」這裡，回頭看舊章節不會把位置拉回過去；不 await
+                    try { const _L = window.VN_MAP_LINK || (window.parent && window.parent.VN_MAP_LINK); if (_L) _L.onChapter((window.VN_Core.script || []).slice(), messageId); } catch (e) {}
+                    window.VN_Core.next();   // 開場閘門在 next() 內建：劇情文本渲染前自動等圖
+                    console.log('[PhoneOS] 自動偵測：已套用新劇本 (訊息 ID:', messageId, ')');
+                } else {
+                    window._pendingAutoScript = { text: text, messageId: messageId };
+                    console.log('[PhoneOS] 自動偵測：劇本已暫存，待開啟 VN app 後套用');
+                }
+            }
+
+            // ── ⭐ 套用入口：生成真正結束 → 讀完整正文 → 完整就套用、截斷就疊橫幅。debounce 收斂連發事件 + 等 TauriTavern 正文寫定。──
+            let _endTimer = null, _curtainSafety = null;
+            function _onGenEnded(messageId) {
+                if (window.__AURELIA_SUMMARIZING) return;   // 大總結 generateRaw 發的 END 不是正文
+                clearTimeout(_curtainSafety);
+                clearTimeout(_endTimer);
+                _endTimer = setTimeout(() => {
+                    try {
+                        const text = _readMsgText(messageId);
+                        if (_hasOpen(text) && (_hasClose(text) || _battleDone(text))) {
+                            const sig = _sig(text);
+                            // 同一則、同內容已套用過 → 這通多半是副模型(🍎/generateRaw 也發 END)或事件連發 → 跳過，免得重跑 loadScript 洗掉場景插圖
+                            if (_lastApplied && _lastApplied.mid === messageId && _lastApplied.sig === sig) return;
+                            _apply(text, messageId);
+                            _lastApplied = { mid: messageId, sig: sig };
+                        } else {
+                            try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
+                            // 截斷：①有 <content> 沒收尾＝正文截在中間 ②連 <content> 都沒(思考期就截/API壞樓)
+                            //    ②的判定看「這卡是不是 VN 格式」(_storyFormatChat)，不看面板開沒開——
+                            //    面板可見度只是加分條件（保舊行為），格式命中就全局跳窗。
+                            if (_hasOpen(text) || _vnVisibleNow() || _storyFormatChat()) _showTruncBanner(messageId);
+                        }
+                    } catch (e) { console.error('[PhoneOS] 自動偵測失敗:', e); }
+                }, 600);
+            }
+            if (window.tavern_events.GENERATION_ENDED) window.eventOn(window.tavern_events.GENERATION_ENDED, _onGenEnded);
+
+            // 生成開始（VN 前景、非空跑/非總結）→ 立刻蓋「故事撰寫中」黑幕，避免玩家看到主模型逐字裸寫；套用或截斷時自然收掉。
+            //    安全閥：5 分鐘內沒等到 GENERATION_ENDED（生成卡死）→ 收幕並提示重生，避免黑幕卡死。
+            if (window.tavern_events.GENERATION_STARTED) {
+                window.eventOn(window.tavern_events.GENERATION_STARTED, (type, opts, dryRun) => {
+                    if (dryRun || window.__AURELIA_SUMMARIZING) return;
+                    if (!_vnVisibleNow()) return;
+                    try { window.VN_Core._showWriterCurtain(); } catch (e) {}
+                    clearTimeout(_curtainSafety);
+                    _curtainSafety = setTimeout(() => { try { window.VN_Core._hideWriterCurtain(); } catch (e) {} _showTruncBanner(null); }, 300000);
+                });
+            }
+
+            // 使用者改動樓層 → 清「已套用」記號，讓下次 GENERATION_ENDED 必定重套（刪樓/swipe/手動編輯後重生能重新套用）。
+            //    ★只收使用者動作；不收 MESSAGE_UPDATED（那是場景插圖 splice／AVS 程式寫入，清了會讓下一通副模型 END 重套→洗掉插圖）。
+            ['MESSAGE_DELETED', 'MESSAGE_SWIPED', 'MESSAGE_EDITED'].forEach(name => {
+                const ev = window.tavern_events[name];
+                if (ev) window.eventOn(ev, () => { _lastApplied = null; });
+            });
+
+            if (window.tavern_events.CHAT_CHANGED) {
+                window.eventOn(window.tavern_events.CHAT_CHANGED, () => {
+                    clearTimeout(_endTimer); clearTimeout(_curtainSafety);
+                    _lastApplied = null;
+                    _hideTruncBanner();
+                    try { window.VN_Core._hideWriterCurtain(); } catch (e) {}
+                });
+            }
+
+            console.log('[PhoneOS] VN 自動劇本偵測已啟動（END-driven）');
+        }
+        init();
+    }());
+
+})();

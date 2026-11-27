@@ -1,0 +1,712 @@
+/* 後院＋牧場（os_phone/farm/）：原本是 參考資料/farm_lab 的六支 CSS，搬進奧瑞亞時合成這一支。
+   🚨 每一條都關在 .aurelia-farm 裡（農場的根元素），不准寫全域規則：奧瑞亞與酒館的樣式都在同一頁。
+   🚨 根元素自己的規則寫成 .aurelia-farm.fw-on／.aurelia-farm（不是它底下的）。
+   素材圖在 sound-files 的 farm/ 資料夾（走 jsdelivr）。 */
+/* ── farm_ui ── */
+.aurelia-farm {color-scheme: light;
+    --ink: #283324;
+    --muted: #6f796a;
+    --paper: rgba(255, 252, 241, .92);
+    --line: rgba(64, 86, 57, .22);
+    --green: #557b48;
+    --green-dark: #35532e;
+    --cream: #fff8e8;
+    --gold: #bd8434;
+    --blue: #5ca7d6;}
+.aurelia-farm, .aurelia-farm * {box-sizing: border-box;}
+.aurelia-farm button, .aurelia-farm a {color: inherit; font: inherit;}
+.aurelia-farm button {appearance: none;}
+.aurelia-farm {position: relative; width: 100%; height: 100%; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 50% 12%, rgba(255,255,255,.58), transparent 38%), linear-gradient(155deg, #dae7ca, #b8cda8);}
+.aurelia-farm .farm-stage {position: relative; width: min(100vw, calc(100dvh * 1.7779)); aspect-ratio: 1672 / 941; max-height: 100dvh; overflow: hidden; background: #b8ca9d; box-shadow: 0 18px 70px rgba(44,62,38,.25); user-select: none; touch-action: manipulation;}
+.aurelia-farm .farm-bg {position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none;}
+.aurelia-farm .farm-shade {position: absolute; inset: 0; z-index: 18; pointer-events: none; background: linear-gradient(180deg, rgba(33,46,31,.10), transparent 15%, transparent 78%, rgba(30,42,28,.13));}
+/* 夜裡（台灣 20:00～06:00，os_farm 掛 is-night）：整片場景蓋一層藍黑。場景自己隔成一層，蓋不到上面的按鈕、小窗、背包 */
+.aurelia-farm .farm-stage {isolation: isolate;}
+.aurelia-farm.is-night .farm-stage .farm-shade {z-index: 120; background: linear-gradient(180deg, rgba(22,28,72,.40), rgba(26,32,80,.24) 45%, rgba(18,22,60,.42));}
+.aurelia-farm .farm-decor {position: absolute; z-index: 4; height: auto; object-fit: contain; pointer-events: none; filter: drop-shadow(0 8px 6px rgba(39,50,31,.16));}
+.aurelia-farm .decor-pond {left: 7.1%; top: 18.2%; width: 16.9%;}
+.aurelia-farm .decor-shed {left: 73.8%; top: 0.7%; width: 17.6%;}
+.aurelia-farm .decor-pen {left: 78.2%; top: 29.3%; width: 15.6%;}
+.aurelia-farm .decor-bench {left: 2.4%; top: 70.5%; width: 8.2%;}   /* 10-11 原本的位置（1.5%, 47.7%）讓給第 7 塊田 */
+.aurelia-farm .pen-gate {position: absolute; left: 80%; top: 32%; width: 12%; height: 16%; z-index: 9; cursor: pointer; border-radius: 12px;}
+.aurelia-farm .yard-spot {position: absolute; z-index: 9; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 12px;}
+.aurelia-farm .spot-pond {left: 8%; top: 20%; width: 15%; height: 17%;}
+.aurelia-farm .spot-shed {left: 75%; top: 3%; width: 15%; height: 27%;}
+.aurelia-farm .yard-spot:hover + .farm-decor, .aurelia-farm .yard-spot:focus-visible + .farm-decor {filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px rgba(255,255,255,.85));}
+.aurelia-farm .pen-gate:hover + .decor-pen, .aurelia-farm .pen-gate:focus-visible + .decor-pen {filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px rgba(255,255,255,.85));}
+.aurelia-farm .farm-title {position: absolute; left: 3%; top: 2.4%; z-index: 30; display: flex; align-items: center; gap: 10px; padding: 9px 14px; border: 1px solid rgba(255,255,255,.72); border-radius: 13px; background: rgba(39,51,36,.80); color: #fffdf2; box-shadow: 0 7px 22px rgba(26,38,23,.2); backdrop-filter: blur(9px);}
+.aurelia-farm .farm-title-mark {display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: #8eb87c; color: #253b20;}
+.aurelia-farm .farm-title strong {display: block; font-size: 14px; font-weight: 800; letter-spacing: .08em;}
+.aurelia-farm .farm-title span {display: block; margin-top: 2px; color: rgba(255,255,255,.76); font-size: 10px; letter-spacing: .06em;}
+.aurelia-farm .farm-tools {position: absolute; right: 3%; top: 2.4%; z-index: 35; display: flex; gap: 7px;}
+.aurelia-farm .farm-tool[hidden] {display: none;}   /* 下一行的 inline-flex 會蓋掉 hidden：做客頁「看他上次怎麼顧」沒紀錄也一直在 */
+.aurelia-farm .farm-tool {display: inline-flex; align-items: center; justify-content: center; min-height: 42px; padding: 0 13px; border: 1px solid rgba(255,255,255,.78); border-radius: 13px; background: rgba(255,252,241,.92); color: #405139; font-size: 11px; font-weight: 800; text-decoration: none; cursor: pointer; box-shadow: 0 6px 18px rgba(36,53,31,.16); backdrop-filter: blur(8px); transition: transform .15s ease, background .15s ease;}
+.aurelia-farm .farm-tool i {margin-right: 6px;}
+.aurelia-farm .farm-tool:hover {transform: translateY(-1px); background: #fffdf6;}
+.aurelia-farm .farm-tool.primary {background: rgba(61,91,50,.94); color: #fff;}
+.aurelia-farm .farm-tool.economy {background: rgba(255,245,208,.95); color: #76521f;}
+.aurelia-farm .farm-tool.icon-only {padding-inline: 12px;}
+.aurelia-farm .farm-tool:disabled {opacity: .58; cursor: wait; transform: none;}
+.aurelia-farm .farm-stats {position: absolute; left: 3%; top: 12.8%; z-index: 25; display: grid; gap: 6px; width: 176px;}
+.aurelia-farm .farm-stat {display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 11px; border: 1px solid rgba(255,255,255,.7); border-radius: 11px; background: rgba(255,252,241,.86); box-shadow: 0 5px 15px rgba(39,57,33,.1); backdrop-filter: blur(8px);}
+.aurelia-farm .farm-stat span {color: var(--muted); font-size: 10px;}
+.aurelia-farm .farm-stat strong {overflow: hidden; max-width: 102px; font-size: 11px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap;}
+.aurelia-farm .farm-stat.coin strong {color: #96631d;}
+.aurelia-farm .farm-plot {position: absolute; z-index: 10; display: grid; place-items: center; padding: 0; border: 0; background: transparent; cursor: pointer; transition: filter .15s ease;}
+.aurelia-farm .farm-plot:hover, .aurelia-farm .farm-plot:focus-visible {outline: none; filter: drop-shadow(0 0 7px rgba(255,236,170,.85));}
+/* 分格播放：平滑的光暈動畫＝每一格都重畫整塊田，鏡頭移動時會一頓一頓 */
+.aurelia-farm .farm-plot.mature {animation: plot-ready 1.7s steps(6, jump-none) infinite;}
+.aurelia-farm .farm-plot.wilted {animation: plot-warning 1.35s steps(6, jump-none) infinite;}
+@keyframes plot-ready { 0%,100%{filter:none} 50%{filter:drop-shadow(0 0 10px rgba(255,227,112,.95))} }
+@keyframes plot-warning { 0%,100%{filter:none} 50%{filter:drop-shadow(0 0 9px rgba(215,104,73,.85))} }
+.aurelia-farm .farm-plot:nth-child(1) {left: 21.0%; top: 34.8%; width: 17.8%; height: 14.2%;}
+.aurelia-farm .farm-plot:nth-child(2) {left: 40.1%; top: 34.8%; width: 17.5%; height: 14.2%;}
+.aurelia-farm .farm-plot:nth-child(3) {left: 58.8%; top: 34.8%; width: 17.4%; height: 14.2%;}
+.aurelia-farm .farm-plot:nth-child(4) {left: 20.4%; top: 52.3%; width: 17.7%; height: 16.0%;}
+.aurelia-farm .farm-plot:nth-child(5) {left: 39.8%; top: 52.3%; width: 17.8%; height: 16.0%;}
+.aurelia-farm .farm-plot:nth-child(6) {left: 58.8%; top: 52.3%; width: 17.8%; height: 16.0%;}
+.aurelia-farm .plot-art {width: 112%; height: 112%; object-fit: contain; pointer-events: none; filter: drop-shadow(0 5px 4px rgba(42,52,32,.12));}
+.aurelia-farm svg.plot-art {height: auto; aspect-ratio: 1448 / 1086; overflow: visible;}
+.aurelia-farm .plot-badge {position: absolute; right: 2px; top: 0; display: grid; place-items: center; min-width: 23px; height: 23px; padding: 0 6px; border-radius: 999px; background: rgba(224,246,255,.92); color: #3d92c6; font-size: 9px; box-shadow: 0 3px 8px rgba(39,81,105,.18);}
+.aurelia-farm .farm-plot.wilted .plot-badge {background: rgba(255,226,213,.94); color: #a74f35;}
+.aurelia-farm .plot-badge.plot-fert, .aurelia-farm .farm-plot.wilted .plot-badge.plot-fert {right: auto; left: 2px; top: auto; bottom: 4px; background: rgba(246,231,191,.95); color: #8a5a36;}
+.aurelia-farm .seed-tray {position: absolute; left: 48%; bottom: 2.0%; z-index: 28; display: flex; align-items: center; gap: 6px; width: min(66%,1100px); padding: 7px; overflow-x: auto; border: 1px solid rgba(255,255,255,.74); border-radius: 16px; background: rgba(255,252,241,.90); box-shadow: 0 9px 28px rgba(37,55,32,.2); transform: translateX(-50%); backdrop-filter: blur(9px); scrollbar-width: thin;}
+.aurelia-farm .seed-btn {position: relative; flex: 0 0 auto; display: flex; align-items: center; gap: 6px; min-height: 42px; padding: 4px 9px 4px 5px; border: 1px solid rgba(66,88,58,.18); border-radius: 11px; background: rgba(245,246,230,.82); font-size: 10px; font-weight: 800; cursor: pointer;}
+.aurelia-farm .seed-btn img, .aurelia-farm .seed-btn .fi-icon {width: 32px; height: 32px; object-fit: contain; flex: none;}
+.aurelia-farm .seed-btn small {display: block; color: var(--muted); font-size: 8px;}
+.aurelia-farm .seed-btn.active {border-color: var(--green); background: #e5efdc; color: var(--green-dark); box-shadow: inset 0 0 0 1px rgba(85,123,72,.15);}
+.aurelia-farm .seed-btn.water-mode {padding-inline: 11px; color: #3b799d;}
+.aurelia-farm .seed-btn.water-mode i {display:grid; place-items:center; width:30px; height:30px; border-radius:10px; background:#dff2fb; font-size:14px;}
+.aurelia-farm .seed-btn.fert-mode {padding-inline: 11px; color: #8a5a36;}
+.aurelia-farm .seed-btn.fert-mode i {display:grid; place-items:center; width:30px; height:30px; border-radius:10px; background:#f6e7bf; font-size:14px;}
+.aurelia-farm .farm-log {position: absolute; right: 3%; bottom: 2.4%; z-index: 27; width: min(285px,25vw); padding: 12px 14px; border: 1px solid rgba(255,255,255,.74); border-radius: 16px; background: rgba(39,51,36,.82); color: #fffdf2; box-shadow: 0 9px 28px rgba(37,55,32,.2); backdrop-filter: blur(9px);}
+.aurelia-farm .farm-log-head {display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;}
+.aurelia-farm .farm-log-head strong {font-size:11px; letter-spacing:.08em;}
+.aurelia-farm .farm-log-head span {color:rgba(255,255,255,.66); font-size:9px;}
+.aurelia-farm .farm-log-line {overflow:hidden; color:rgba(255,255,255,.84); font-size:10px; line-height:1.5; text-overflow:ellipsis; white-space:nowrap;}
+.aurelia-farm .farm-log-line + .farm-log-line {margin-top:3px;}
+/* 11-09 截圖：種子商店打開，左下的搖桿（fw-joy 61）、底下工具列（fb-hotbar 58）、走近田跳出的小提示（fw-bar 60）都疊在商店上面。
+   商店跟背包（90）、出貨箱（92）那些小窗同一級：遮罩 93、商店 94；買東西回報那條提示（farm-toast）再往上 96，商店開著也看得到 */
+.aurelia-farm .farm-drawer-backdrop {position:absolute; inset:0; z-index:93; background:rgba(30,42,28,.25); backdrop-filter:blur(2px);}
+.aurelia-farm .farm-shop {position:absolute; right:1.6%; top:1.8%; bottom:1.8%; z-index:94; display:flex; flex-direction:column; width:min(430px,44%); padding:15px; overflow:hidden; border:1px solid rgba(255,255,255,.8); border-radius:20px; background:rgba(255,252,241,.97); box-shadow:0 18px 60px rgba(29,42,25,.34);}
+.aurelia-farm .farm-shop[hidden], .aurelia-farm .farm-drawer-backdrop[hidden] {display:none;}
+.aurelia-farm .shop-head {display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px;}
+.aurelia-farm .shop-head strong {display:block; font-size:15px;}
+.aurelia-farm .shop-head span {display:block; margin-top:2px; color:var(--muted); font-size:9px;}
+.aurelia-farm .shop-head button {width:34px; height:34px; border:0; border-radius:11px; background:#e8eadf; font-size:21px; cursor:pointer;}
+.aurelia-farm .shop-wallet {display:flex; justify-content:space-between; padding:9px 11px; margin-bottom:10px; border-radius:11px; background:#fff0c9; color:#76521f; font-size:11px;}
+.aurelia-farm .shop-wallet strong {font-size:13px;}
+.aurelia-farm .shop-list {flex:1; display:grid; grid-template-columns:1fr 1fr; gap:7px; overflow:auto; padding-right:3px;}
+.aurelia-farm .shop-card {display:grid; grid-template-columns:48px 1fr; gap:7px; padding:8px; border:1px solid var(--line); border-radius:13px; background:#f8f7eb;}
+.aurelia-farm .shop-card img, .aurelia-farm .shop-card .fi-icon, .aurelia-farm .shop-card .ra-product {width:48px; height:48px; object-fit:contain; flex:none;}
+.aurelia-farm .shop-card h3 {margin:1px 0 3px; font-size:11px;}
+.aurelia-farm .shop-card p {margin:0 0 5px; color:var(--muted); font-size:8px; line-height:1.35;}
+.aurelia-farm .shop-actions {grid-column:1/-1; display:grid; grid-template-columns:1fr 1fr; gap:5px;}
+.aurelia-farm .shop-actions button {min-height:29px; padding:3px 5px; border:1px solid rgba(67,94,58,.18); border-radius:8px; background:#e1ecd8; color:#35532e; font-size:8px; font-weight:800; cursor:pointer;}
+.aurelia-farm .shop-actions button.sell {background:#e4edf3; color:#365e75;}
+.aurelia-farm .shop-actions button:disabled {opacity:.42; cursor:not-allowed;}
+.aurelia-farm .shop-ledger {flex:0 0 auto; margin-top:10px; padding-top:9px; border-top:1px solid var(--line);}
+.aurelia-farm .ledger-head {display:flex; justify-content:space-between; gap:10px; margin-bottom:5px;}
+.aurelia-farm .ledger-head strong {font-size:10px;}
+.aurelia-farm .ledger-head span {color:var(--muted); font-size:8px;}
+.aurelia-farm .ledger-line {display:flex; justify-content:space-between; gap:10px; padding:3px 1px; color:var(--muted); font-size:8px;}
+.aurelia-farm .ledger-line b {color:var(--ink); font-weight:700;}
+.aurelia-farm .ledger-line .plus {color:#3e7a48;}
+.aurelia-farm .ledger-line .minus {color:#a7613a;}
+.aurelia-farm .farm-toast {position:absolute; left:50%; bottom:12.5%; z-index:96; max-width:min(430px,calc(100% - 32px)); padding:10px 14px; border-radius:12px; background:rgba(36,49,33,.92); color:#fff; font-size:11px; opacity:0; transform:translate(-50%,10px); transition:opacity .2s ease,transform .2s ease; pointer-events:none;}
+.aurelia-farm .farm-toast.show {opacity:1; transform:translate(-50%,0);}
+@media (max-width: 980px) {
+.aurelia-farm .farm-tools .link, .aurelia-farm .farm-tool.icon-only span {display:none;}
+.aurelia-farm .farm-tool.icon-only i {margin:0;}
+.aurelia-farm .seed-tray {width:72%; left:45%;}
+.aurelia-farm .farm-log {width:25vw;}
+}
+@media (max-width: 780px) {
+.aurelia-farm .farm-title {left:2%; top:2%; padding:7px 9px;}
+.aurelia-farm .farm-title-mark, .aurelia-farm .farm-title span {display:none;}
+.aurelia-farm .farm-title strong {font-size:11px;}
+.aurelia-farm .farm-tools {right:2%; top:2%; gap:4px;}
+.aurelia-farm .farm-tool {width:36px; height:36px; min-height:0; padding:0; font-size:0;}
+.aurelia-farm .farm-tool i {margin:0; font-size:14px;}
+.aurelia-farm .farm-stats, .aurelia-farm .farm-log {display:none;}
+.aurelia-farm .seed-tray {left:50%; bottom:1.3%; width:96%; padding:5px; gap:4px;}
+.aurelia-farm .seed-btn {min-height:36px; padding:2px 7px 2px 3px; font-size:8px;}
+.aurelia-farm .seed-btn img, .aurelia-farm .seed-btn .fi-icon {width:27px; height:27px;}
+.aurelia-farm .seed-btn.water-mode i, .aurelia-farm .seed-btn.fert-mode i {width:27px; height:27px;}
+.aurelia-farm .farm-shop {right:1%; top:1%; bottom:1%; width:min(480px,98%);}
+.aurelia-farm .farm-toast {bottom:12%;}
+/* 手機：上面那排鈕每顆都寫字（圖示底下一行小字），點擊範圍 44px；七顆跟標題擠不下，整排挪到標題底下（MOB-1121） */
+.aurelia-farm .farm-tools {left:2%; right:2%; top:calc(2% + 50px); justify-content:flex-end; gap:3px;}
+.aurelia-farm .farm-tool {width:44px; height:44px; flex-direction:column; gap:2px; font-size:9px; letter-spacing:0; white-space:nowrap; border-radius:11px;}
+.aurelia-farm .farm-tool i {font-size:14px;}
+/* 種子商店：字和按鈕放大到讀得清楚、點得到 */
+.aurelia-farm .shop-head span {font-size:11px;}
+.aurelia-farm .shop-head button {width:44px; height:44px;}
+.aurelia-farm .shop-card h3 {font-size:13px;}
+.aurelia-farm .shop-card p {font-size:11px;}
+.aurelia-farm .shop-actions button {min-height:40px; font-size:12px;}
+}
+@media (max-width: 480px) {
+.aurelia-farm .shop-list {grid-template-columns:1fr;}
+}
+
+/* ── ranch_ui ── */
+.aurelia-farm .ranch-stage {container-type: inline-size;}
+.aurelia-farm .ranch-obj {position: absolute; height: auto; pointer-events: none; filter: drop-shadow(0 7px 5px rgba(39,50,31,.18));}
+.aurelia-farm .obj-barn {left: 66%; top: 6%;  width: 20%; z-index: 38;}
+/* 擴建過的棚屋（阿洛照原本那間畫的 1536×1024）：原本那間落在同一個位置，側屋往左長、穀倉塔在右後方 */
+.aurelia-farm .obj-barn.lv2, .aurelia-farm .obj-barn.lv3 {left: 56.6%; top: 6.64%; width: 29.66%;}
+.aurelia-farm .obj-trough {left: 14%; top: 14%; width: 13%; z-index: 30;}
+.aurelia-farm .obj-water {left: 28%; top: 12%; width: 11%; z-index: 24;}
+.aurelia-farm .obj-hay {left: 8%;  top: 52%; width: 11%; z-index: 62;}
+/* 狗屋（程式畫，farm_ranch.js 依飯碗滿不滿重畫）：腳底在 46%，門口在 x 10.6% */
+.aurelia-farm .obj-doghouse {left: 5%; top: 29%; width: 12%; z-index: 46;}
+.aurelia-farm .obj-doghouse svg {display: block; width: 100%; height: auto;}
+/* 昨晚野狼叼走了雞：那一天地上一撮雞毛＋一串腳印 */
+.aurelia-farm .ranch-wolfsign {position: absolute; left: 80%; top: 62%; width: 8%; z-index: 21; pointer-events: none; display: none;}
+.aurelia-farm .ranch-wolfsign.is-on {display: block;}
+.aurelia-farm .ranch-wolfsign svg {display: block; width: 100%; height: auto;}
+.aurelia-farm .trough-hay {position: absolute; left: 14%; top: 14%; width: 13%; aspect-ratio: 1; z-index: 30; pointer-events: none;}
+.aurelia-farm .trough-hay svg {display: block; width: 100%; height: 100%;}
+.aurelia-farm .ranch-animals {position: absolute; inset: 0; pointer-events: none;}
+/* 動物跟小人同一招：ra-pos 跟畫面一樣大、走路是 transform 的過場（不重排版面），動物掛在它左上角 */
+.aurelia-farm .ra-pos {position: absolute; inset: 0; pointer-events: none;
+    transition-property: transform; transition-timing-function: linear;}
+.aurelia-farm .ranch-animal {position: absolute; left: 0; top: 0; width: var(--w);
+    transform: translate(-50%, -92%);}
+.aurelia-farm .ranch-animal .ra-face {display: block;}
+.aurelia-farm .ranch-animal.to-left .ra-face {transform: scaleX(-1);}
+.aurelia-farm .ranch-animal svg {display: block; width: 100%; height: auto; overflow: visible;}
+.aurelia-farm .ranch-stage .farm-shade {z-index: 120;}
+.aurelia-farm .ranch-stage .farm-toast {z-index: 150;}
+.aurelia-farm .ranch-back {position: absolute; left: 1.2cqw; top: 1.2cqw; z-index: 130;
+    display: inline-flex; align-items: center; gap: .6cqw; padding: clamp(4px, .9cqw, 9px) clamp(7px, 1.4cqw, 14px);
+    border: 1px solid rgba(255,255,255,.8); border-radius: clamp(8px, 1.4cqw, 14px);
+    background: rgba(42,55,38,.84); color: #fff; text-decoration: none; font-weight: 800; font-size: clamp(9px, 1.4cqw, 14px);
+    box-shadow: 0 8px 22px rgba(35,49,34,.25); backdrop-filter: blur(8px);}
+.aurelia-farm .ranch-back:hover {background: rgba(42,55,38,.95);}
+.aurelia-farm .ranch-hud {position: absolute; right: 1.2cqw; top: 1.2cqw; z-index: 130; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: .6cqw; max-width: 82%;}
+.aurelia-farm .ranch-chip {display: inline-flex; align-items: center; gap: .5cqw; white-space: nowrap;
+    padding: clamp(3px, .7cqw, 7px) clamp(5px, 1.1cqw, 11px); border-radius: clamp(7px, 1.2cqw, 12px);
+    border: 1px solid rgba(255,255,255,.8); background: rgba(255,252,241,.92); color: #283324;
+    font-size: clamp(8px, 1.2cqw, 12px); font-weight: 800; box-shadow: 0 6px 16px rgba(35,49,34,.18);}
+.aurelia-farm .ranch-chip.coin {color: #8a5a14;}
+.aurelia-farm .ranch-btn {cursor: pointer; background: #557b48; color: #fff; border-color: rgba(255,255,255,.6);}
+.aurelia-farm .ranch-btn:hover {background: #35532e;}
+.aurelia-farm .ranch-gate {position: absolute; z-index: 100; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 12px;}
+.aurelia-farm .gate-trough {left: 15%; top: 18%; width: 11%; height: 12%;}
+.aurelia-farm .gate-hay {left: 9%; top: 57%; width: 9%; height: 10%;}
+.aurelia-farm .gate-water {left: 29%; top: 16%; width: 9%; height: 11%;}
+.aurelia-farm .gate-barn {left: 68%; top: 9%; width: 16%; height: 27%;}
+.aurelia-farm .gate-barn.is-big {left: 58%; width: 26%;}
+.aurelia-farm .gate-doghouse {left: 6%; top: 31%; width: 10%; height: 15%;}
+/* 水面遮罩走 GitHub raw：素材庫超過 jsDelivr 的 50MB 上限會隨機 403，CSS 遮罩接不到失敗（見 lobby_stage.js 的 _sfRetry） */
+.aurelia-farm .water-fill {position: absolute; left: 28%; top: 12%; width: 11%; aspect-ratio: 1; z-index: 24; pointer-events: none;
+    -webkit-mask-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/farm/ranch_obj_water_surface_v1.webp); mask-image: url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/farm/ranch_obj_water_surface_v1.webp);
+    -webkit-mask-size: 100% 100%; mask-size: 100% 100%;}
+.aurelia-farm .water-fill img {display: block; width: 100%; height: 100%; transform: translateY(var(--sink, 0%)); opacity: var(--clear, 1); transition: transform .6s ease, opacity .6s ease;}
+.aurelia-farm .water-fill.is-dry {display: none;}
+.aurelia-farm .ranch-chip.is-low {color: #c0392b;}
+.aurelia-farm .ranch-gate:hover + .ranch-obj, .aurelia-farm .ranch-gate:focus-visible + .ranch-obj {filter: drop-shadow(0 0 3px #fff) drop-shadow(0 0 10px rgba(255,255,255,.85));}
+.aurelia-farm .ranch-animal {pointer-events: auto; cursor: pointer;}
+.aurelia-farm .ra-bubble {position: absolute; left: 50%; top: -6px; transform: translate(-50%, -100%);
+    display: grid; place-items: center; width: clamp(10px, 2.1cqw, 22px); height: clamp(10px, 2.1cqw, 22px); border-radius: 50%;
+    background: #fff8e8; color: #b0761e; font-size: clamp(6px, 1.05cqw, 11px); box-shadow: 0 3px 8px rgba(35,49,34,.25);
+    animation: ra-bubble 1.6s ease-in-out infinite;}
+.aurelia-farm .ra-bubble::after {content: ''; position: absolute; left: 50%; bottom: -.3cqw; width: .7cqw; height: .7cqw; background: #fff8e8; transform: translateX(-50%) rotate(45deg);}
+.aurelia-farm .ra-bubble.is-none {display: none;}
+.aurelia-farm .ra-bubble.b-starving, .aurelia-farm .ra-bubble.b-starving::after {background: #d9534f;}
+.aurelia-farm .ra-bubble.b-starving {color: #fff; animation-duration: .7s;}
+.aurelia-farm .ra-bubble.b-sick, .aurelia-farm .ra-bubble.b-sick::after {background: #cfe8b8;}
+.aurelia-farm .ra-bubble.b-sick {color: #4f7a2e;}
+.aurelia-farm .ra-bubble.b-ready, .aurelia-farm .ra-bubble.b-ready::after {background: #fff;}
+.aurelia-farm .ra-bubble.b-ready svg {width: 90%; height: 90%;}
+.aurelia-farm .ra-bubble.b-sad, .aurelia-farm .ra-bubble.b-sad::after {background: #ffe3e8;}
+.aurelia-farm .ra-bubble.b-sad {color: #d24a64;}
+.aurelia-farm .ranch-animal.is-sick .ra-face svg {filter: sepia(.6) hue-rotate(45deg) saturate(1.7) brightness(.93);}
+.aurelia-farm .ranch-animal.is-leaving {pointer-events: none; animation: ra-leave .9s ease-in forwards;}
+@keyframes ra-leave {
+    0% { opacity: 1; transform: translate(-50%, -92%); }
+    40% { opacity: 1; transform: translate(-50%, -150%); }
+    100% { opacity: 0; transform: translate(-50%, -125%) scale(.7); }
+}
+.aurelia-farm .ranch-animal.is-leaving .ra-bubble {display: none;}
+@keyframes ra-bubble { 0%,100% { transform: translate(-50%, -100%); } 50% { transform: translate(-50%, -115%); } }
+.aurelia-farm .ra-heart {position: absolute; left: 50%; top: 0; color: #e0566a; font-size: 16px; pointer-events: none; animation: ra-heart 1s ease-out forwards;}
+@keyframes ra-heart { from { opacity: 1; transform: translate(-50%, 0) scale(.6); } to { opacity: 0; transform: translate(-50%, -34px) scale(1.2); } }
+.aurelia-farm .ranch-drops {position: absolute; inset: 0; pointer-events: none;}
+.aurelia-farm .ranch-drop {position: absolute; left: var(--x); top: var(--y); width: 3.4%; padding: 0; border: 0; background: transparent;
+    transform: translate(-50%, -90%); cursor: pointer; pointer-events: auto;
+    animation: ra-drop-in .5s cubic-bezier(.2,1.6,.4,1) both;}
+.aurelia-farm .ranch-drop svg {display: block; width: 100%; height: auto; overflow: visible;}
+.aurelia-farm .ranch-drop.is-weed {width: 4.2%;}
+.aurelia-farm .ranch-drop.is-poop {width: 3.2%;}
+.aurelia-farm .ranch-drop:hover svg {filter: drop-shadow(0 0 4px #fff) drop-shadow(0 0 8px rgba(255,255,255,.9));}
+.aurelia-farm .ranch-drop.is-picked {animation: ra-pick .35s ease-in forwards; pointer-events: none;}
+@keyframes ra-drop-in { from { opacity: 0; transform: translate(-50%, -140%) scale(.6); } to { opacity: 1; transform: translate(-50%, -90%) scale(1); } }
+@keyframes ra-pick { to { opacity: 0; transform: translate(-50%, -180%) scale(1.3); } }
+
+/* ── farm_walk ── */
+.aurelia-farm.fw-on {display: block; container-type: size;}
+.aurelia-farm.fw-on > .farm-stage {position: absolute; left: 0; top: 0; width: auto; max-height: none; aspect-ratio: auto;
+    transform-origin: 0 0; will-change: transform; cursor: pointer;}
+/* 小人：fw-pos 跟底圖一樣大、只動 transform（translate 的 % ＝底圖的 %）；小人掛在它左上角，看得到的腳踩在那一點 */
+.aurelia-farm .fw-pos {position: absolute; inset: 0; pointer-events: none; will-change: transform;}
+.aurelia-farm .fw-player {position: absolute; left: 0; top: 0; height: var(--fw-h, 15%);
+    transform: translate(-50%, calc(-100% + var(--fw-pad, 0%))); pointer-events: none;
+    filter: drop-shadow(0 5px 3px rgba(33,43,27,.22));}
+.aurelia-farm .fw-body {position: relative; height: 100%;}
+.aurelia-farm .fw-img {display: block; height: 100%; width: auto; image-rendering: pixelated; user-select: none; -webkit-user-drag: none;}
+.aurelia-farm .fw-sheet {height: 100%; background-size: 300% 400%; background-repeat: no-repeat; image-rendering: pixelated;}
+.aurelia-farm .fw-player.is-loading .fw-body {visibility: hidden;}
+.aurelia-farm .fw-player.is-dot .fw-body {aspect-ratio: .5; border-radius: 45% 45% 38% 38%; background: #3a4557;}
+.aurelia-farm .fw-player.is-flip .fw-img {transform: scaleX(-1);}
+.aurelia-farm .fw-player.is-walking:not(.is-sheet) .fw-body {animation: fw-bob .35s steps(2) infinite;}
+.aurelia-farm .fw-player.is-happy .fw-body {animation: fw-cheer .5s ease-out;}
+.aurelia-farm .fw-player.is-tired .fw-body {filter: saturate(.55) brightness(.92);}
+@keyframes fw-bob { 0%,100% { translate: 0 0; } 50% { translate: 0 -3%; } }
+@keyframes fw-cheer { 0%,100% { translate: 0 0; } 35% { translate: 0 -10%; } }
+/* 手上拿的工具：只有畫的工具＋旁邊的數字，不墊底板（10-12：有框看起來像拿著一塊板子）；
+   直接壓在草地上，工具加一點影子、數字照快捷列那樣白字描深邊才看得清 */
+.aurelia-farm .fw-hand {position: absolute; left: 66%; top: 55%; display: flex; align-items: flex-end; gap: 1px;
+    font-size: clamp(9px, 1.4cqw, 13px); white-space: nowrap;}
+.aurelia-farm .fw-hand[hidden] {display: none;}   /* 上面的 display:flex 會蓋掉 hidden：放下工具後手上還留著那把 */
+.aurelia-farm .fw-hand b {font: 800 .95em/1 system-ui, sans-serif; color: #fff;
+    text-shadow: -1px 0 #2c4a63, 1px 0 #2c4a63, 0 -1px #2c4a63, 0 1px #2c4a63;}
+.aurelia-farm .fw-hand svg {width: 2em; height: 2em; display: block; filter: drop-shadow(0 1px 1.5px rgba(30,40,20,.5));}
+.aurelia-farm .fw-doing {position: absolute; left: 50%; top: -2%; transform: translate(-50%, -100%) scale(.4); opacity: 0;
+    display: grid; place-items: center; width: 2em; height: 2em; border-radius: 50%;
+    background: #fff8e8; color: #557b48; font-size: clamp(9px, 1.4cqw, 14px); box-shadow: 0 3px 8px rgba(35,49,34,.25);
+    transition: transform .18s ease, opacity .18s ease;}
+.aurelia-farm .fw-player.is-doing .fw-doing {opacity: 1; transform: translate(-50%, -100%) scale(1);}
+/* 會發金光的東西各自一層：金光加上／拿掉只重畫那一小塊。不分層的話整張後院那一大層全部重畫
+   （背景、房子、每塊田），一次 10～30ms，走到下一塊田就頓一下，鏡頭在動時特別明顯 */
+.aurelia-farm .farm-plot, .aurelia-farm .farm-decor, .aurelia-farm .ranch-obj, .aurelia-farm .ranch-animal,
+.aurelia-farm .ranch-drop, .aurelia-farm .fs-bin {will-change: transform;}
+.aurelia-farm .fw-focus, .aurelia-farm .fw-focus + .ranch-obj, .aurelia-farm .fw-focus + .farm-decor {filter: drop-shadow(2px 0 0 #ffe7a0) drop-shadow(-2px 0 0 #ffe7a0) drop-shadow(0 2px 0 #ffe7a0) drop-shadow(0 -2px 0 #ffe7a0)
+            drop-shadow(0 0 10px rgba(255,205,110,.85)) !important;}
+.aurelia-farm .fw-bar {position: absolute; left: 0; top: 0; z-index: 60; will-change: transform;
+    width: max-content; max-width: min(360px, calc(100% - 16px)); padding: 8px 9px 9px; border-radius: 13px;
+    background: rgba(255,252,241,.97); color: #283324; border: 2px solid #8b5a2b;
+    box-shadow: 0 10px 26px rgba(35,49,34,.3); font-size: 12px;}
+.aurelia-farm .fw-bar::after {content: ''; position: absolute; left: var(--tail, 50%); bottom: -8px; width: 12px; height: 12px; margin-left: -6px;
+    background: rgba(255,252,241,.97); border-right: 2px solid #8b5a2b; border-bottom: 2px solid #8b5a2b; transform: rotate(45deg);}
+.aurelia-farm .fw-bar.is-below::after {bottom: auto; top: -8px; transform: rotate(225deg);}
+.aurelia-farm .fw-bar[hidden] {display: none;}
+.aurelia-farm .fw-bar-head {display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; margin: 0 2px 6px;}
+.aurelia-farm .fw-bar-head strong {font-size: 13px; white-space: nowrap;}
+.aurelia-farm .fw-bar-head span {color: #6f796a; font-size: 11px; line-height: 1.4;}
+.aurelia-farm .fw-bar-acts {display: flex; flex-wrap: wrap; gap: 5px;}
+.aurelia-farm .fw-bar button {display: inline-flex; align-items: center; gap: 6px; padding: 6px 9px; border-radius: 9px; cursor: pointer;
+    border: 1px solid rgba(64,86,57,.22); background: #fff; color: #283324; font-size: 12px; font-weight: 700;}
+.aurelia-farm .fw-bar button:hover:not(:disabled) {background: #eef5e4;}
+.aurelia-farm .fw-bar button:disabled {opacity: .45; cursor: default;}
+.aurelia-farm .fw-bar button small {color: #6f796a; font-weight: 600;}
+.aurelia-farm .fw-bar button.fav {border-color: #d9b45a;}
+.aurelia-farm .fw-bar kbd {display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 3px; border-radius: 5px;
+    background: #e8eadf; color: #6f796a; font: 700 10px/1 system-ui, sans-serif;}
+@media (pointer: coarse) {
+.aurelia-farm .fw-bar kbd {display: none;}
+}
+.aurelia-farm .fw-joy {position: absolute; left: 18px; bottom: var(--fw-joy-bottom, 92px); z-index: 61; width: 104px; height: 104px; border-radius: 50%;
+    background: rgba(255,252,241,.35); border: 2px solid rgba(255,255,255,.7); touch-action: none;
+    box-shadow: 0 6px 20px rgba(35,49,34,.2);}
+.aurelia-farm .fw-joy-knob {position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%;
+    background: rgba(255,252,241,.92); box-shadow: 0 3px 10px rgba(35,49,34,.3); pointer-events: none;}
+.aurelia-farm.fw-on .farm-toast {top: 64px; bottom: auto;}
+
+/* ── farm_bag ── */
+.aurelia-farm .fb-hotbar {position: absolute; left: 50%; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 58; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 4px; padding: 5px;
+    border: 3px solid #8b5a2b; border-radius: 11px; background: #e6c48a;
+    box-shadow: inset 0 0 0 2px #f4dca9, 0 8px 22px rgba(46,33,18,.3);}
+.aurelia-farm .fb-slot {position: relative; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; flex: none;
+    border: 2px solid #c4935a; border-radius: 6px; background: #fbeccb; cursor: pointer;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.55), inset 0 -2px 0 rgba(139,90,43,.12);}
+.aurelia-farm .fb-slot:hover:not(.is-empty) {background: #fff5dc;}
+.aurelia-farm .fb-slot.is-empty {cursor: default; background: #f1dcae; border-color: #cfa46c;}
+.aurelia-farm .fb-slot.is-selected {border-color: #d9412b; box-shadow: 0 0 0 2px rgba(217,65,43,.35), inset 0 2px 0 rgba(255,255,255,.55);}
+.aurelia-farm .fb-slot.is-picked {border-color: #3d7fb3; box-shadow: 0 0 0 2px rgba(61,127,179,.35);}
+.aurelia-farm .fb-slot.is-hand {margin-right: 5px; background: #fff6de; border-color: #8b5a2b;}
+.aurelia-farm .fb-ico {display: grid; place-items: center; width: 32px; height: 32px;}
+.aurelia-farm .fb-ico svg {width: 32px; height: 32px; display: block; overflow: visible;}
+.aurelia-farm .fb-count {position: absolute; right: 2px; bottom: 0; font: 800 11px/1 system-ui, sans-serif; color: #fff;
+    text-shadow: -1px 0 #4a3015, 1px 0 #4a3015, 0 -1px #4a3015, 0 1px #4a3015;}
+.aurelia-farm .fb-slot.is-good::after {content: ''; position: absolute; left: 3px; top: 3px; width: 7px; height: 7px; border-radius: 50%;
+    background: #f3c969; box-shadow: 0 0 0 1px #a8741e;}
+.aurelia-farm .fb-bag-btn {position: relative; display: grid; place-items: center; width: 42px; height: 42px; margin-left: 4px; padding: 0; flex: none;
+    border: 2px solid #5e3b18; border-radius: 8px; background: #8b5a2b; cursor: pointer;}
+.aurelia-farm .fb-bag-btn svg {width: 32px; height: 32px; display: block;}
+.aurelia-farm .fb-bag-btn:hover {background: #9d6834;}
+.aurelia-farm .fb-more {position: absolute; right: -6px; top: -7px; min-width: 18px; padding: 2px 4px; border-radius: 999px;
+    background: #d9412b; color: #fff; font: 800 10px/1.1 system-ui, sans-serif;}
+.aurelia-farm .fb-bag-wrap {position: absolute; inset: 0; z-index: 90; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 16px; background: rgba(33,26,16,.32);}
+.aurelia-farm .fb-bag-wrap[hidden] {display: none;}
+.aurelia-farm .fb-bag {display: flex; flex-direction: column; width: min(460px, 100%); max-height: min(560px, 100%);
+    border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
+    box-shadow: inset 0 0 0 2px #f4dca9, 0 18px 50px rgba(33,26,16,.4);}
+.aurelia-farm .fb-bag-head {display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px;}
+.aurelia-farm .fb-bag-head strong {display: flex; align-items: center; gap: 8px; font-size: 15px; letter-spacing: .08em;}
+.aurelia-farm .fb-bag-close {width: 32px; height: 32px; border: 2px solid #8b5a2b; border-radius: 8px; background: #fbeccb; color: #6c4a22; cursor: pointer;}
+.aurelia-farm .fb-bag-body {flex: 1; overflow: auto; margin: 0 10px; padding: 8px; border-radius: 9px; background: #f4dca9;}
+.aurelia-farm .fb-sec + .fb-sec {margin-top: 10px;}
+.aurelia-farm .fb-sec h4 {margin: 0 0 5px; font-size: 11px; color: #8b5a2b; letter-spacing: .1em;}
+.aurelia-farm .fb-grid {display: grid; grid-template-columns: repeat(auto-fill, 42px); gap: 5px;}
+.aurelia-farm .fb-empty {margin: 18px 6px; text-align: center; color: #8b5a2b; font-size: 12px;}
+.aurelia-farm .fb-bag-foot {display: flex; flex-direction: column; gap: 2px; min-height: 48px; padding: 8px 14px 11px; font-size: 12px;}
+.aurelia-farm .fb-bag-foot strong {font-size: 13px;}
+.aurelia-farm .fb-bag-foot span {color: #6c4a22; line-height: 1.45;}
+@media (max-width: 420px) {
+.aurelia-farm .fb-slot, .aurelia-farm .fb-bag-btn {width: 38px; height: 38px;}
+.aurelia-farm .fb-ico, .aurelia-farm .fb-ico svg, .aurelia-farm .fb-bag-btn svg {width: 28px; height: 28px;}
+.aurelia-farm .fb-grid {grid-template-columns: repeat(auto-fill, 38px);}
+}
+
+/* ── farm_ship ── */
+.aurelia-farm .fs-bin {position: absolute; width: 7%; padding: 0; border: 0; background: transparent; cursor: pointer;
+    transform: translate(-50%, -92%); filter: drop-shadow(0 5px 4px rgba(39,50,31,.18));}
+.aurelia-farm .fs-bin svg {display: block; width: 100%; height: auto; overflow: visible;}
+.aurelia-farm .fs-bin-yard {left: 13.5%; top: 47.5%; z-index: 12;}
+.aurelia-farm .fs-bin-ranch {left: 66%; top: 79.5%; z-index: 79;}
+.aurelia-farm .fs-wrap {position: absolute; inset: 0; z-index: 92; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 16px; background: rgba(33,26,16,.32);}
+.aurelia-farm .fs-wrap[hidden] {display: none;}
+.aurelia-farm .fs-card {display: flex; flex-direction: column; width: min(440px, 100%); max-height: min(620px, 100%);
+    border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
+    box-shadow: inset 0 0 0 2px #f4dca9, 0 18px 50px rgba(33,26,16,.4);}
+.aurelia-farm .fs-head {display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px;}
+.aurelia-farm .fs-head strong {display: flex; align-items: center; gap: 8px; font-size: 15px; letter-spacing: .06em;}
+.aurelia-farm .fs-close {width: 32px; height: 32px; border: 2px solid #8b5a2b; border-radius: 8px; background: #fbeccb; color: #6c4a22; cursor: pointer;}
+.aurelia-farm .fs-body {flex: 1; overflow: auto; margin: 0 10px; padding: 8px 10px 10px; border-radius: 9px; background: #f4dca9;}
+.aurelia-farm .fs-body h4 {display: flex; justify-content: space-between; margin: 10px 0 5px; font-size: 12px; color: #8b5a2b; letter-spacing: .08em;}
+.aurelia-farm .fs-body h4:first-child {margin-top: 0;}
+.aurelia-farm .fs-body h4 b {color: #3e7a48;}
+.aurelia-farm .fs-foot {display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 14px 12px; font-size: 12px;}
+.aurelia-farm .fs-foot b {color: #3e7a48; font-size: 14px;}
+.aurelia-farm .fs-foot button, .aurelia-farm .fs-row button {padding: 6px 11px; border: 2px solid #8b5a2b; border-radius: 8px; background: #fbeccb; color: #5e3b18;
+    font: 700 12px system-ui, sans-serif; cursor: pointer; white-space: nowrap;}
+.aurelia-farm .fs-foot button:hover, .aurelia-farm .fs-row button:hover {background: #fff5dc;}
+.aurelia-farm .fs-ok {margin-left: auto; background: #8b5a2b !important; color: #fbeccb !important;}
+.aurelia-farm .fs-list {display: grid; gap: 5px;}
+.aurelia-farm .fs-row {display: grid; grid-template-columns: 38px 1fr auto auto; align-items: center; gap: 7px; padding: 5px 6px; border-radius: 8px; background: #fbeccb;}
+.aurelia-farm .fs-row .fs-all {border-color: #3e7a48; color: #2f5d36;}
+.aurelia-farm .fs-ico {display: grid; place-items: center; width: 38px; height: 38px;}
+.aurelia-farm .fs-ico svg {width: 100%; height: 100%; display: block; overflow: visible;}
+.aurelia-farm .fs-ico.sm {width: 24px; height: 24px;}
+.aurelia-farm .fs-name strong {display: block; font-size: 13px;}
+.aurelia-farm .fs-name small {color: #8b5a2b; font-size: 11px;}
+.aurelia-farm .fs-empty {margin: 8px 4px; color: #8b5a2b; font-size: 12px;}
+.aurelia-farm .fs-bin-list, .aurelia-farm .fs-sold, .aurelia-farm .fs-spent, .aurelia-farm .fs-events {list-style: none; margin: 0; padding: 0; display: grid; gap: 3px;}
+.aurelia-farm .fs-bin-list li, .aurelia-farm .fs-spent li {display: flex; justify-content: space-between; gap: 10px; padding: 3px 6px; font-size: 12px;}
+.aurelia-farm .fs-bin-list b, .aurelia-farm .fs-sold b {color: #3e7a48;}
+.aurelia-farm .fs-none {color: #a8834e;}
+.aurelia-farm b.minus {color: #a7613a !important;}
+.aurelia-farm .fs-net {display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 2px 10px; padding: 10px 12px; border-radius: 10px; background: #fbeccb;}
+.aurelia-farm .fs-net span {font-size: 12px; color: #8b5a2b;}
+.aurelia-farm .fs-net strong {grid-row: span 2; font-size: 24px; color: #3e7a48;}
+.aurelia-farm .fs-net.down strong {color: #a7613a;}
+.aurelia-farm .fs-net small {font-size: 11px; color: #8b5a2b;}
+.aurelia-farm .fs-sold li {display: grid; grid-template-columns: 24px 1fr auto auto; align-items: center; gap: 7px; padding: 2px 6px; font-size: 12px;}
+.aurelia-farm .fs-sold li.fs-none {display: block;}
+.aurelia-farm .fs-sold em {font-style: normal; color: #a8834e; font-size: 11px;}
+.aurelia-farm .fs-events li {display: grid; grid-template-columns: 18px 1fr; align-items: start; gap: 6px; padding: 3px 6px; font-size: 12px; line-height: 1.45;}
+.aurelia-farm .fs-events li i {margin-top: 2px; color: #557b48; text-align: center;}
+.aurelia-farm .fs-events li.bad i {color: #c0392b;}
+.aurelia-farm .fs-buyer {display: grid; grid-template-columns: 46px 1fr; gap: 8px; align-items: center; margin: 0 0 6px; padding: 6px 8px; border-radius: 10px; background: #fbeccb;}
+.aurelia-farm .fs-nova {display: block; width: 46px; height: 46px;}
+.aurelia-farm .fs-nova svg {display: block; width: 100%; height: 100%; overflow: visible;}
+.aurelia-farm .fs-nova.sm {display: inline-block; width: 26px; height: 26px; margin-right: 4px; vertical-align: middle;}
+.aurelia-farm .fs-buyer strong {display: block; font-size: 12px; color: #8b5a2b;}
+.aurelia-farm .fs-buyer p {margin: 1px 0 0; font-size: 12px; line-height: 1.45;}
+.aurelia-farm .fs-nova-line {display: inline-flex; align-items: center; flex-wrap: wrap; gap: 0 3px;}
+
+/* ── farm_board ── */
+/* 🚨 四個小窗的底（背包、結算單、看板、雲端）都要把格子固定成底那麼大：沒固定時格子照內容長，日記一多木框就被推到畫面下面、底部被切掉（09-30 酒館看板） */
+.aurelia-farm .fd-wrap {position: absolute; inset: 0; z-index: 91; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
+.aurelia-farm .fd-wrap[hidden] {display: none;}
+.aurelia-farm .fd-card {display: flex; flex-direction: column; width: min(620px, 100%); height: min(760px, 100%);
+    border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
+    box-shadow: inset 0 0 0 2px #f4dca9, 0 18px 50px rgba(33,26,16,.4);}
+.aurelia-farm .fd-head {display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px;}
+.aurelia-farm .fd-head strong {display: flex; align-items: center; gap: 8px; font-size: 15px; letter-spacing: .06em;}
+.aurelia-farm .fd-close {width: 32px; height: 32px; border: 2px solid #8b5a2b; border-radius: 8px; background: #fbeccb; color: #6c4a22; cursor: pointer;}
+.aurelia-farm .fd-body {flex: 1; overflow: auto; margin: 0 10px 10px; padding: 10px 12px 14px; border-radius: 9px; background: #f4dca9;}
+.aurelia-farm .fd-body h4 {display: flex; align-items: center; gap: 7px; margin: 16px 0 7px; font-size: 13px; color: #8b5a2b; letter-spacing: .08em;}
+.aurelia-farm .fd-empty {margin: 4px 2px; color: #a8834e; font-size: 12px;}
+.aurelia-farm .fd-tiles {display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;}
+.aurelia-farm .fd-tile {display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 10px; background: #fbeccb;}
+.aurelia-farm .fd-tile span {font-size: 11px; color: #8b5a2b;}
+.aurelia-farm .fd-tile strong {font-size: 22px; line-height: 1.2; color: #3f2a12;}
+.aurelia-farm .fd-tile small {font-size: 11px; color: #a8834e; line-height: 1.4;}
+.aurelia-farm .fd-tile.up strong {color: #3e7a48;}
+.aurelia-farm .fd-tile.down strong {color: #a7613a;}
+.aurelia-farm .fd-rank {display: grid; gap: 5px;}
+.aurelia-farm .fd-rank-row {display: grid; grid-template-columns: 26px 56px 1fr auto auto auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 9px; background: #fbeccb; font-size: 12px;}
+.aurelia-farm .fd-rank-row b {display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #f3c969; color: #6c4a22;}
+.aurelia-farm .fd-rank-row strong {font-size: 13px;}
+.aurelia-farm .fd-rank-row.is-me {box-shadow: inset 0 0 0 2px #e3b94f;}
+.aurelia-farm .fd-rank-row.is-empty {background: transparent; border: 2px dashed #d7b27a;}
+.aurelia-farm .fd-rank-row.is-empty b {background: #ead3a4;}
+.aurelia-farm .fd-rank-row .fd-wait {grid-column: 3 / -1; color: #a8834e;}
+.aurelia-farm .fd-days {list-style: none; margin: 0; padding: 0; display: grid; gap: 4px;}
+.aurelia-farm .fd-days button {display: grid; grid-template-columns: 76px 80px 1fr 14px; align-items: center; gap: 8px; width: 100%;
+    padding: 8px 10px; border: 0; border-radius: 9px; background: #fbeccb; color: #3f2a12; font: inherit; text-align: left; cursor: pointer;}
+.aurelia-farm .fd-days button:hover {background: #fff5dc;}
+.aurelia-farm .fd-days strong {font-size: 13px;}
+.aurelia-farm .fd-days .up {color: #3e7a48; font-weight: 700;}
+.aurelia-farm .fd-days .down {color: #a7613a; font-weight: 700;}
+.aurelia-farm .fd-days small {font-size: 11px; color: #a8834e;}
+.aurelia-farm .fd-days i {color: #c9a46a; font-size: 11px;}
+.aurelia-farm .fd-diary-day + .fd-diary-day {margin-top: 8px;}
+.aurelia-farm .fd-diary-day h5 {margin: 0 0 3px; font-size: 12px; color: #6c4a22;}
+.aurelia-farm .fd-diary-day ul {margin: 0; padding: 6px 10px 6px 24px; border-radius: 9px; background: #fbeccb;}
+.aurelia-farm .fd-diary-day li {font-size: 12px; line-height: 1.55; color: #4a3218;}
+@media (max-width: 420px) {
+.aurelia-farm .fd-rank-row {grid-template-columns: 26px 1fr auto auto;}
+.aurelia-farm .fd-rank-row span:not(.fd-wait):nth-of-type(n+2) {display: none;}
+.aurelia-farm .fd-days button {grid-template-columns: 64px 70px 1fr 12px;}
+}
+
+/* ── 搬進奧瑞亞後才有的 ── */
+/* 字型與底色：LAB 寫在 body 上，這裡改寫在根元素（不碰整頁） */
+.aurelia-farm { color: var(--ink); font-family: Inter, "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; }
+/* 後院標題左邊的「離開」：回到奧瑞亞 */
+.aurelia-farm .farm-exit { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 9px; background: #8eb87c; color: #253b20; cursor: pointer; font-size: 14px; }
+.aurelia-farm .farm-exit:hover { background: #a3c793; }
+/* 牧場左上：離開＋回後院兩顆並排 */
+.aurelia-farm .ranch-lead { position: absolute; left: 1.2cqw; top: 1.2cqw; z-index: 130; display: flex; gap: 6px; }
+.aurelia-farm .ranch-lead .ranch-back { position: static; cursor: pointer; }
+/* 第一次打開、檔案還在路上時的那一格 */
+.aurelia-farm .farm-loading { display: flex; flex-direction: column; align-items: center; gap: 10px; color: #35532e; font-size: 14px; }
+.aurelia-farm .farm-loading i { font-size: 28px; color: #557b48; }
+.aurelia-farm .farm-loading.is-error { color: #8a3b2b; }
+.aurelia-farm .farm-loading button { padding: 7px 14px; border: 2px solid #8b5a2b; border-radius: 9px; background: #fbeccb; color: #5e3b18; font-weight: 700; cursor: pointer; }
+
+/* ── farm_cloud：雲端存檔（跟看板同一套木框，小一號）──
+   z-index 140：要蓋過牧場右上那排（.ranch-hud／.ranch-lead 130），不然牧場裡打開雲端、住戶、雇人，木框最上面那條被那排壓住（10-11 雇人面板抓到） */
+.aurelia-farm .fc-wrap {position: absolute; inset: 0; z-index: 140; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; padding: 14px; background: rgba(33,26,16,.32);}
+.aurelia-farm .fc-wrap[hidden] {display: none;}
+.aurelia-farm .fc-card {display: flex; flex-direction: column; width: min(380px, 100%);
+    border: 3px solid #8b5a2b; border-radius: 14px; background: #e6c48a; color: #3f2a12;
+    box-shadow: inset 0 0 0 2px #f4dca9, 0 18px 50px rgba(33,26,16,.4);}
+.aurelia-farm .fc-head {display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px;}
+.aurelia-farm .fc-head strong {display: flex; align-items: center; gap: 8px; font-size: 15px; letter-spacing: .06em;}
+.aurelia-farm .fc-head .aui-help {border: 0; background: none; color: #a8834e; cursor: pointer; font-size: 14px; padding: 0 2px;}
+.aurelia-farm .fc-close {width: 32px; height: 32px; border: 2px solid #8b5a2b; border-radius: 8px; background: #fbeccb; color: #6c4a22; cursor: pointer;}
+.aurelia-farm .fc-body {display: grid; gap: 10px; margin: 0 10px 10px; padding: 12px; border-radius: 9px; background: #f4dca9;}
+.aurelia-farm .fc-field {display: grid; gap: 4px; font-size: 12px; color: #8b5a2b;}
+.aurelia-farm .fc-field input {width: 100%; box-sizing: border-box; padding: 9px 10px; border: 2px solid #d7b27a; border-radius: 9px;
+    background: #fffaf0; color: #3f2a12; font-family: inherit; font-size: 13px; outline: none;}
+.aurelia-farm .fc-field input:focus {border-color: #8b5a2b;}
+.aurelia-farm .fc-state {display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 13px; line-height: 1.5; color: #3e7a48;}
+.aurelia-farm .fc-state i {margin-top: 3px;}
+.aurelia-farm .fc-state.is-busy {color: #6c4a22;}
+.aurelia-farm .fc-state.is-offline, .aurelia-farm .fc-state.is-error {color: #a7613a;}
+.aurelia-farm .fc-where {display: flex; align-items: center; gap: 7px; margin: 0; font-size: 11px; color: #a8834e; word-break: break-all;}
+.aurelia-farm .fc-acts {display: flex; gap: 8px;}
+.aurelia-farm .fc-btn {flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 10px 12px;
+    border: 2px solid #8b5a2b; border-radius: 10px; background: #fbeccb; color: #6c4a22; font-family: inherit; font-size: 13px; font-weight: 700; line-height: 1; cursor: pointer;}
+.aurelia-farm .fc-btn.is-main {background: #557b48; border-color: #3e5d34; color: #fff;}
+.aurelia-farm .fc-btn:disabled {opacity: .55; cursor: default;}
+/* 右上那顆雲：開著且同步好＝綠，正在送＝跳動，連不上＝橘 */
+.aurelia-farm [data-farm-cloud].is-on i {color: #3e7a48;}
+.aurelia-farm [data-farm-cloud].is-busy i {color: #6c4a22; animation: fc-pulse 1s steps(2, jump-none) infinite;}
+.aurelia-farm [data-farm-cloud].is-warn i {color: #c0663a;}
+@keyframes fc-pulse { 0%,100% {opacity: 1;} 50% {opacity: .35;} }
+
+/* ── 住戶顧田（farm_cloud 的 residentsPanel）：一人一張卡，開關、醒來時間、上次醒來、現在叫他起來 ── */
+.aurelia-farm .fr-panel {width: min(420px, 100%); max-height: 100%;}
+.aurelia-farm .fr-panel .fc-body {overflow: auto;}
+.aurelia-farm .fr-card {display: grid; gap: 8px; padding: 10px 12px; border-radius: 10px; background: #fbeccb; border: 2px solid transparent;}
+.aurelia-farm .fr-card.is-on {border-color: #9dbb7e;}
+.aurelia-farm .fr-card header {display: flex; align-items: center; justify-content: space-between;}
+.aurelia-farm .fr-card header strong {font-size: 15px;}
+.aurelia-farm .fr-switch {position: relative; width: 44px; height: 24px; padding: 0; border: 2px solid #b89a6a; border-radius: 999px; background: #e9d6ae; cursor: pointer;}
+.aurelia-farm .fr-switch i {position: absolute; left: 2px; top: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fffaf0; box-shadow: 0 1px 3px rgba(63,42,18,.3); transition: transform .15s ease;}
+.aurelia-farm .fr-switch[aria-checked="true"] {background: #557b48; border-color: #3e5d34;}
+.aurelia-farm .fr-switch[aria-checked="true"] i {transform: translateX(20px);}
+.aurelia-farm .fr-times {display: flex; flex-wrap: wrap; align-items: center; gap: 6px;}
+.aurelia-farm .fr-label {font-size: 12px; color: #8b5a2b; margin-right: 2px;}
+.aurelia-farm .fr-none {font-size: 12px; color: #a8834e;}
+.aurelia-farm .fr-time {display: inline-flex; align-items: center; gap: 4px; padding: 4px 4px 4px 9px; border-radius: 999px; background: #fffaf0; border: 1px solid #d7b27a; font-size: 13px; font-weight: 700; color: #3f2a12;}
+.aurelia-farm .fr-time button {display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 50%; background: #ead3a4; color: #6c4a22; font-size: 10px; cursor: pointer;}
+.aurelia-farm .fr-add {display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 2px dashed #b89a6a; border-radius: 999px; background: transparent; color: #8b5a2b; cursor: pointer;}
+.aurelia-farm .fr-new {padding: 4px 8px; border: 2px solid #8b5a2b; border-radius: 999px; background: #fffaf0; color: #3f2a12; font-family: inherit; font-size: 13px;}
+.aurelia-farm .fr-last {display: flex; align-items: center; gap: 6px; margin: 0; font-size: 12px; color: #6c4a22;}
+.aurelia-farm .fr-by {display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: #8b5a2b;}
+.aurelia-farm .fr-note {display: flex; align-items: flex-start; gap: 6px; margin: 0; padding: 6px 9px; border-radius: 9px; background: #fffaf0; border: 1px dashed #d7b27a; font-size: 12px; line-height: 1.5; color: #4a3218;}
+.aurelia-farm .fr-note i {margin-top: 3px; color: #c9a46a;}
+.aurelia-farm .fr-foot {display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 12px; color: #a8834e;}
+
+/* ── 雇人（farm_hire.js）：誰來、做多少、交代、最近的單子（木框跟住戶面板同一套）── */
+.aurelia-farm .fh-panel {width: min(440px, 100%); max-height: 100%;}
+.aurelia-farm .fh-panel .fc-body {overflow: auto; min-height: 0;}
+.aurelia-farm .fh-block {display: grid; gap: 7px;}
+.aurelia-farm .fh-block h4 {margin: 0; font-size: 12px; font-weight: 700; color: #8b5a2b; letter-spacing: .08em;}
+.aurelia-farm .fh-people, .aurelia-farm .fh-sizes {display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px;}
+.aurelia-farm .fh-who, .aurelia-farm .fh-size {display: grid; justify-items: center; gap: 3px; padding: 9px 6px 8px; border: 2px solid #d7b27a; border-radius: 11px;
+    background: #fffaf0; color: #3f2a12; font-family: inherit; cursor: pointer; text-align: center; min-width: 0;}
+.aurelia-farm .fh-who:hover, .aurelia-farm .fh-size:hover {border-color: #b88a4e;}
+.aurelia-farm .fh-who.is-on, .aurelia-farm .fh-size.is-on {border-color: #557b48; background: #eef5df; box-shadow: inset 0 0 0 1px #557b48;}
+.aurelia-farm .fh-who b {display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff; font-size: 16px; font-weight: 800;
+    border: 2px solid rgba(63,42,18,.25);}
+.aurelia-farm .fh-dan b {background: #e0884a;}
+.aurelia-farm .fh-aluo b {background: #4f8f86;}
+.aurelia-farm .fh-keyu b {background: #8a70b8;}
+.aurelia-farm .fh-who strong, .aurelia-farm .fh-size strong {font-size: 14px;}
+.aurelia-farm .fh-who small, .aurelia-farm .fh-size small {font-size: 11px; color: #8b6a3e; line-height: 1.3;}
+.aurelia-farm .fh-size b {font-size: 14px; color: #8a5a14;}
+.aurelia-farm .fh-ask {width: 100%; box-sizing: border-box; resize: none; padding: 8px 10px; border: 2px solid #d7b27a; border-radius: 9px;
+    background: #fffaf0; color: #3f2a12; font-family: inherit; font-size: 13px; line-height: 1.5; outline: none;}
+.aurelia-farm .fh-ask:focus {border-color: #8b5a2b;}
+.aurelia-farm .fh-chips {display: flex; flex-wrap: wrap; gap: 6px;}
+.aurelia-farm .fh-chip {padding: 5px 10px; border: 1px solid #d7b27a; border-radius: 999px; background: #fbeccb; color: #6c4a22; font-family: inherit; font-size: 12px; cursor: pointer;}
+.aurelia-farm .fh-chip.is-on {background: #557b48; border-color: #3e5d34; color: #fff;}
+.aurelia-farm .fh-send {flex: 1 1 auto;}
+.aurelia-farm .fh-coins {display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin: -4px 2px 0; font-size: 12px; color: #8a5a14;}
+.aurelia-farm .fh-jobs {display: grid; gap: 6px; margin: 0; padding: 0; list-style: none;}
+.aurelia-farm .fh-job {display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: #fbeccb; border-left: 4px solid #d7b27a;}
+.aurelia-farm .fh-job.is-wait {border-left-color: #c9a046;}
+.aurelia-farm .fh-job.is-work {border-left-color: #4f8f86;}
+.aurelia-farm .fh-job.is-done {border-left-color: #557b48;}
+.aurelia-farm .fh-job.is-back {border-left-color: #b9a58a; opacity: .85;}
+.aurelia-farm .fh-job header {display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;}
+.aurelia-farm .fh-job header strong {font-size: 14px;}
+.aurelia-farm .fh-job header span {font-size: 12px; color: #8b6a3e;}
+.aurelia-farm .fh-job header em {display: inline-flex; align-items: center; gap: 4px; font-style: normal; font-size: 12px; font-weight: 700; color: #4a3218;}
+.aurelia-farm .fh-job header time {margin-left: auto; font-size: 11px; color: #a8834e;}
+.aurelia-farm .fh-job p {display: grid; gap: 2px; margin: 0; font-size: 12px; line-height: 1.5; color: #4a3218; word-break: break-word;}
+.aurelia-farm .fh-job p small {font-size: 11px; color: #8b6a3e;}
+.aurelia-farm .fh-cancel {justify-self: start; display: inline-flex; align-items: center; gap: 5px; padding: 4px 10px; border: 1px solid #b88a4e; border-radius: 8px;
+    background: #fffaf0; color: #6c4a22; font-family: inherit; font-size: 12px; cursor: pointer;}
+.aurelia-farm .fh-empty {margin: 0; font-size: 12px; color: #a8834e;}
+
+/* ── 做客（farm_visit.js）＋看板「去他家」── */
+.aurelia-farm .fd-visit {display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border: 2px solid #8b5a2b; border-radius: 9px; background: #fffaf0; color: #5e3b18; font-size: 12px; font-weight: 700; white-space: nowrap; cursor: pointer;}
+.aurelia-farm .fd-visit:hover {background: #fff5dc;}
+.aurelia-farm .fs-bin.fv-deco {pointer-events: none; cursor: default;}
+/* 只看他們（11-23）：手機上左邊那排收起來了，標題底下那行（他在哪、上次醒來）照樣顯示 */
+.aurelia-farm .farm-title.fv-watch span[data-farm="where"] {display: block;}
+.aurelia-farm .fv-loading {position: absolute; inset: 0; z-index: 80; justify-content: center; background: linear-gradient(155deg, #dae7ca, #b8cda8);}
+/* 主人：跟她同一套小人外殼（fw-player），名字掛在腳下、說的話冒在頭上 */
+.aurelia-farm .fv-host .fw-img {image-rendering: pixelated;}
+.aurelia-farm .fv-host.is-dot .fw-body {aspect-ratio: 1.2; border-radius: 40%; background: #d97757;}
+.aurelia-farm .fv-name {position: absolute; left: 50%; top: 100%; transform: translate(-50%, 3px); padding: 1px 7px; border-radius: 999px;
+    background: rgba(39,51,36,.82); color: #fffdf2; font-size: clamp(9px, 1.2cqw, 12px); font-weight: 700; white-space: nowrap;}
+.aurelia-farm .fv-say {position: absolute; left: 50%; bottom: calc(100% + 6px); transform: translateX(-50%); width: max-content; max-width: min(260px, 40cqw);
+    padding: 6px 10px; border: 2px solid #8b5a2b; border-radius: 12px; background: rgba(255,252,241,.97); color: #3f2a12;
+    font-size: clamp(10px, 1.3cqw, 13px); line-height: 1.45; white-space: normal; box-shadow: 0 6px 16px rgba(35,49,34,.25);}
+.aurelia-farm .fv-say::after {content: ''; position: absolute; left: 50%; bottom: -7px; width: 10px; height: 10px; margin-left: -5px;
+    background: rgba(255,252,241,.97); border-right: 2px solid #8b5a2b; border-bottom: 2px solid #8b5a2b; transform: rotate(45deg);}
+.aurelia-farm .fv-say[hidden] {display: none;}
+.aurelia-farm .fv-host.is-doing .fv-say {bottom: calc(100% + 2.6em);}
+
+/* ── 10-11 大件：開墾的兩塊田、蜂箱、商店的大件 ── */
+/* 第 7 塊在左邊（原本長椅那裡）、第 8 塊在右邊小圍欄下面；田的圖照格子寬縮放，這兩塊窄一點、作物也小一點 */
+.aurelia-farm .farm-plot:nth-child(7) {left: 6.5%; top: 52.3%; width: 15.5%; height: 16.0%;}
+.aurelia-farm .farm-plot:nth-child(8) {left: 76.2%; top: 53.8%; width: 15.5%; height: 16.0%;}
+.aurelia-farm .farm-plot.wild {opacity: .96;}
+/* 蜂箱：右下角花叢邊 */
+.aurelia-farm .yard-hive {position: absolute; left: 86.4%; top: 69.2%; width: 8.6%; z-index: 12; cursor: pointer; will-change: transform;}
+.aurelia-farm .yard-hive[hidden] {display: none;}
+.aurelia-farm .yard-hive.fv-deco {pointer-events: none; cursor: default;}
+.aurelia-farm .yard-hive .hive-img {display: block; width: 100%; height: auto; pointer-events: none; filter: drop-shadow(0 6px 5px rgba(39,50,31,.18));}
+.aurelia-farm .hive-bee {position: absolute; width: 24%; pointer-events: none; animation: hive-bee 5s linear infinite;}
+.aurelia-farm .hive-bee svg {display: block; width: 100%; height: auto;}
+.aurelia-farm .hive-bee.hb1 {left: 14%; top: 18%;}
+.aurelia-farm .hive-bee.hb2 {left: 58%; top: 4%; animation-duration: 6.4s; animation-delay: -2.1s;}
+.aurelia-farm .hive-bee.hb3 {left: 38%; top: 30%; animation-duration: 4.3s; animation-delay: -1.2s;}
+@keyframes hive-bee {
+    0%, 100% { transform: translate(0, 0); }
+    24% { transform: translate(-70%, -45%) scaleX(-1); }
+    50% { transform: translate(-25%, -120%) scaleX(-1); }
+    74% { transform: translate(60%, -55%); }
+}
+.aurelia-farm.is-night .hive-bee {display: none;}
+/* 蜂箱裡有蜂蜜：頭上一顆泡泡寫幾罐 */
+.aurelia-farm .hive-jar {position: absolute; left: 50%; top: 0; display: flex; align-items: center; gap: 2px; padding: 2px 7px 2px 3px; border-radius: 999px;
+    background: #fff; box-shadow: 0 3px 8px rgba(35,49,34,.25); pointer-events: none; animation: hive-jar 1.6s ease-in-out infinite;}
+.aurelia-farm .hive-jar svg {width: clamp(14px, 2.2cqw, 26px); height: auto;}
+.aurelia-farm .hive-jar b {color: #a8761a; font-size: clamp(8px, 1.1cqw, 12px);}
+@keyframes hive-jar { 0%,100% { transform: translate(-50%, -100%); } 50% { transform: translate(-50%, -115%); } }
+/* 商店最底下的大件 */
+.aurelia-farm .shop-sec {grid-column: 1 / -1; margin: 8px 2px 0; color: #76521f; font-size: 11px;}
+.aurelia-farm .shop-card .shop-big-art {display: grid; place-items: center; width: 48px; height: 48px; object-fit: contain;}
+.aurelia-farm .shop-card span.shop-big-art svg {width: 100%; height: auto;}
+.aurelia-farm .shop-big .shop-actions {grid-template-columns: 1fr;}
+
+/* ── 10-11 雇來的人在畫面上走（farm_worker.js）：跟做客看到的主人同一套樣子 ── */
+.aurelia-farm .fw-pos.fk-pos {z-index: 17;}
+.aurelia-farm .fk-worker {--fw-h: 11%;}
+.aurelia-farm .fh-replay {color: #557b48;}
+
+/* ── 11-23 小精靈（farm_elf_draw.js 畫、farm_visit.js 擺）：做客時站在他家田裡 ── */
+.aurelia-farm .fw-pos.fv-elf-pos {z-index: 16;}
+.aurelia-farm .fv-elf {--fw-h: 7.5%; pointer-events: auto; cursor: pointer;}
+.aurelia-farm .fv-elf .fw-body {aspect-ratio: 40 / 56;}
+.aurelia-farm .fe-svg {display: block; width: 100%; height: 100%;}
+.aurelia-farm .fv-elf.is-work .fw-body {animation: fe-work .55s ease-in-out infinite;}
+.aurelia-farm .fv-elf.is-work.k-diligent .fw-body {animation-duration: .38s;}
+.aurelia-farm .fv-elf.is-wait .fw-body {animation: fe-idle 2.4s ease-in-out infinite;}
+.aurelia-farm .fv-elf.is-sit, .aurelia-farm .fv-elf.is-sleep {--fw-h: 6%;}
+.aurelia-farm .fv-elf.is-sleep .fw-body {filter: brightness(.82);}
+@keyframes fe-work { 0%,100% { translate: 0 0; rotate: -3deg; } 50% { translate: 0 -8%; rotate: 3deg; } }
+@keyframes fe-idle { 0%,100% { translate: 0 0; } 50% { translate: 0 -3%; } }
+.aurelia-farm .fv-zzz {position: absolute; left: 70%; bottom: 80%; color: #fffdf2; font-weight: 800; font-size: clamp(9px, 1.3cqw, 13px); text-shadow: 0 1px 2px rgba(30,40,25,.6); pointer-events: none;}
+.aurelia-farm .fv-zzz i {position: absolute; font-style: normal; opacity: 0; animation: fe-z 2.4s linear infinite;}
+.aurelia-farm .fv-zzz i:nth-child(2) {animation-delay: .8s;}
+.aurelia-farm .fv-zzz i:nth-child(3) {animation-delay: 1.6s;}
+@keyframes fe-z { 0% { opacity: 0; transform: translate(0, 0) scale(.7); } 20% { opacity: 1; } 100% { opacity: 0; transform: translate(.9em, -1.8em) scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .aurelia-farm .fv-elf .fw-body, .aurelia-farm .fv-zzz i {animation: none;} .aurelia-farm .fv-zzz i {opacity: 1;} }
+/* 「小精靈」那一頁 */
+.aurelia-farm .fe-cards {display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px; margin-bottom: 8px;}
+.aurelia-farm .fe-card {display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 2px solid #d9bf8f; border-radius: 12px; background: #fffaf0;}
+.aurelia-farm .fe-card strong {display: block; color: #4b3217; font-size: 14px;}
+.aurelia-farm .fe-card small {display: block; color: #7a5a35; font-size: 12px; line-height: 1.45;}
+.aurelia-farm .fe-card > div {flex: 1; min-width: 0;}
+.aurelia-farm .fe-bars {display: flex; flex-direction: column; gap: 2px; margin: 3px 0 2px;}
+.aurelia-farm .fe-bar {display: grid; grid-template-columns: 28px minmax(0, 1fr) 22px; align-items: center; gap: 5px; color: #7a5a35; font-size: 11px; text-align: right;}
+.aurelia-farm .fe-bar i {display: block; height: 6px; border-radius: 4px; background: rgba(160, 120, 80, .18); overflow: hidden;}
+.aurelia-farm .fe-bar b {display: block; height: 100%; border-radius: 4px; background: #b08a62;}
+.aurelia-farm .fe-bar b.lo {background: #c46a5a;}
+.aurelia-farm .fe-bar b.hi {background: #6f9a5c;}
+.aurelia-farm .fe-card small.fe-warn {color: #a14444; font-weight: 700;}
+.aurelia-farm .fe-mini {flex: 0 0 auto; width: 34px; height: 44px;}
+.aurelia-farm .fe-plan {margin: 2px 2px 10px; color: #5b4326; font-size: 13px; line-height: 1.5;}
+.aurelia-farm .fe-money {display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 2px 0 4px;}
+.aurelia-farm .fe-money span {font-weight: 800; font-size: 13px;}
+.aurelia-farm .fe-money span.up {color: #3f7a32;}
+.aurelia-farm .fe-money span.down {color: #b0442e;}
+.aurelia-farm .fe-money small {color: #7a5a35; font-size: 12px;}
+.aurelia-farm .fe-day li.bad {color: #a2462d;}
+/* 改版公告（11-23） */
+.aurelia-farm .fe-patch {margin: 0 0 10px; padding: 0; list-style: none;}
+.aurelia-farm .fe-patch li {display: flex; gap: 6px; align-items: baseline; padding: 4px 2px; color: #4b3217; font-size: 13px; line-height: 1.5;}
+.aurelia-farm .fe-patch li i {flex: 0 0 auto; font-size: 11px;}
+.aurelia-farm .fe-patch li.up i {color: #3f7a32;}
+.aurelia-farm .fe-patch li.down i {color: #b0442e;}
+.aurelia-farm .fe-patch.skip li {color: #8a6a4a; font-size: 12px;}
+/* 颱風（11-23） */
+.aurelia-farm .farm-tool.fe-alert {background: rgba(176,68,46,.94); color: #fff8ed; border-color: #fff;}
+.aurelia-farm .fe-typhoon {margin: 0 0 12px; padding: 10px 12px; border: 2px solid #b0442e; border-radius: 12px; background: #fff1ea; color: #5a2a18;}
+.aurelia-farm .fe-typhoon strong {display: flex; gap: 6px; align-items: center; font-size: 14px;}
+.aurelia-farm .fe-typhoon small {display: block; margin-top: 4px; font-size: 12px; line-height: 1.55; color: #7a3d26;}
+.aurelia-farm .fe-typhoon ul {margin: 6px 0 0; padding-left: 18px; font-size: 12px; line-height: 1.6;}
+.aurelia-farm .fe-typhoon.past {border-color: #8a6a4a; background: #fbf4ea; color: #4b3217;}
+/* ── 天氣（11-23）：陰天灰一點、下雨蓋雨絲、颱風雨更大更斜；排在夜色那層下面（夜裡照樣變暗） ── */
+.aurelia-farm .farm-weather {position: absolute; inset: 0; z-index: 119; overflow: hidden; pointer-events: none; transition: background .8s ease;}
+.aurelia-farm .farm-weather.wx-cloud {background: linear-gradient(180deg, rgba(78,88,98,.30), rgba(96,106,116,.12) 60%, rgba(78,88,98,.20));}
+.aurelia-farm .farm-weather.wx-rain {background: linear-gradient(180deg, rgba(44,56,78,.46), rgba(62,76,96,.28) 55%, rgba(44,56,78,.38));}
+.aurelia-farm .farm-weather.wx-typhoon {background: linear-gradient(180deg, rgba(28,36,52,.60), rgba(42,52,70,.42) 55%, rgba(28,36,52,.54));}
+.aurelia-farm .fwx-drop {position: absolute; top: -12%; left: var(--x); width: 2.5px; height: 9%; border-radius: 2px; opacity: var(--o);
+    background: linear-gradient(180deg, rgba(232,242,255,0), rgba(232,242,255,.95)); animation: fwx-fall var(--d) linear var(--t) infinite;}
+.aurelia-farm .wx-typhoon .fwx-drop {height: 12%; animation-name: fwx-blow;}
+@keyframes fwx-fall {from {transform: translateY(0);} to {transform: translateY(1500%);}}
+@keyframes fwx-blow {from {transform: translate(0, 0) rotate(22deg);} to {transform: translate(-1800%, 1000%) rotate(22deg);}}
+@media (prefers-reduced-motion: reduce) {.aurelia-farm .fwx-drop {display: none;}}
+.aurelia-farm .fe-wx {display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 12px; padding: 0; list-style: none;}
+.aurelia-farm .fe-wx li {display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 46px; padding: 6px 4px; border-radius: 10px; background: #f6f0df; color: #6a5426; font-size: 11px;}
+.aurelia-farm .fe-wx li i {font-size: 15px;}
+.aurelia-farm .fe-wx li span {color: var(--muted); font-size: 10px;}
+.aurelia-farm .fe-wx li.wet {background: #e2ecf6; color: #2d4a66;}
+.aurelia-farm .fe-wx li.today {box-shadow: inset 0 0 0 2px #6c8a4e;}
+.aurelia-farm .fe-wx li.tmr {border: 1.5px dashed #a08a5a;}

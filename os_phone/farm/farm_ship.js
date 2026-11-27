@@ -1,0 +1,271 @@
+// ============================================================
+// farm_ship.js — 出貨箱的畫面＋結算單（後院、牧場共用）
+// ------------------------------------------------------------
+// 規則在 farm_ship_core.js（放進去、拿回來、過一天結算）；位置檢查在 farm_walk_core.js 的 act。
+// 這支管：場景裡那個箱子、走近後「放東西進去」的面板、過一天跳出來的結算單（也可以從右上再打開上一張）。
+// 樣式在 farm_ship.css（木框，跟快捷列／背包同一套）。
+// ============================================================
+(function () {
+    'use strict';
+
+    function esc(v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function fa(icon) { return '<i class="fa-solid ' + icon + '"></i>'; }
+    function money(n) { return (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n) + 'G'; }
+    // 收購商：諾瓦（09-29 定的圍裙店主）。長相在 FarmItemDraw.buyerSvg。
+    // 之後接 AI 出價與評語時，評語放在 report.buyer.say；現在是照牌價收，評語那格不顯示（不假造內容）。
+    var BUYER = { name: '諾瓦' };
+
+    function iconOf(key) {
+        var p = key.split(':');
+        if (p[0] === 'harvest') return window.FarmItemDraw.svg({ kind: 'harvest', crop: p[1] });
+        return window.FarmAnimalDraw ? window.FarmAnimalDraw.productSvg(p[1], p[2]) : '';
+    }
+
+    // 昨天發生的事：從農場、牧場過一天的回報翻成一句一句
+    function eventLines(rep) {
+        var out = [], f = rep.farm, r = rep.ranch;
+        if (f) {
+            if (f.grew) out.push({ icon: 'fa-seedling', text: f.grew + ' 塊田長大一階' });
+            if (f.rescued) out.push({ icon: 'fa-hand-holding-droplet', text: f.rescued + ' 塊救回來的田在休養' });
+            if (f.wilted) out.push({ icon: 'fa-triangle-exclamation', text: f.wilted + ' 塊田兩天沒澆水，枯萎了（今天澆還救得回來）', bad: true });
+            if (f.died) out.push({ icon: 'fa-skull', text: f.died + ' 塊田枯死了', bad: true });
+        }
+        if (r) {
+            if (r.thirsty) out.push({ icon: 'fa-droplet-slash', text: '水槽昨天是乾的，動物什麼都沒產', bad: true });
+            else if (r.made) out.push({ icon: 'fa-egg', text: '牧場產了 ' + r.made + ' 樣東西（蛋在地上、奶和毛要去收）' });
+            if (r.wasted && r.wasted.length) out.push({ icon: 'fa-hourglass-end', text: r.wasted.join('、') + '前一天的沒收，浪費了一份', bad: true });
+            if (r.downgraded) out.push({ icon: 'fa-broom', text: '牧場太髒，' + r.downgraded + ' 樣上等品降成普通', bad: true });
+            if (r.fellSick && r.fellSick.length) out.push({ icon: 'fa-face-dizzy', text: r.fellSick.join('、') + '生病了', bad: true });
+            if (r.upset && r.upset.length) out.push({ icon: 'fa-face-dizzy', text: r.upset.join('、') + '最近半夜被吵醒吃東西，睡不好、胃不舒服，生病了', bad: true });
+            if (r.healed && r.healed.length) out.push({ icon: 'fa-heart', text: r.healed.join('、') + '病好了' });
+            if (r.born && r.born.length) out.push({ icon: 'fa-baby', text: '生了' + r.born.map(function (b) { return b.name; }).join('、') });
+            if (r.grown && r.grown.length) out.push({ icon: 'fa-arrow-up', text: r.grown.join('、') });
+            var stillHungry = (r.hungry || 0) - ((r.ran && r.ran.length) || 0);
+            if (stillHungry > 0) out.push({ icon: 'fa-wheat-awn', text: stillHungry + ' 隻昨天沒吃到東西', bad: true });
+            if (r.ranNames && r.ranNames.length) out.push({ icon: 'fa-person-running', text: r.ranNames.join('、') + '餓了兩天，翻圍欄跑了', bad: true });
+            if (r.wolf && r.wolf.chased) out.push({ icon: 'fa-shield-dog', text: '半夜野狼來過，被狗趕跑了' });
+            else if (r.wolf && r.wolf.took) out.push({ icon: 'fa-feather', text: '狗不在家，野狼叼走了' + r.wolf.took, bad: true });
+            else if (r.wolf) out.push({ icon: 'fa-feather', text: '狗不在家，野狼來繞了一圈，沒找到雞' });
+            if (r.dog && r.dog.left) out.push({ icon: 'fa-dog', text: '狗好幾天沒人理，離家出走了（今晚沒人守夜）', bad: true });
+            if (r.dog && r.dog.back) out.push({ icon: 'fa-dog', text: '離家的狗自己回來了（好感 ' + r.dog.love + '/5）' });
+            if (r.hive && r.hive.made) out.push({ icon: 'fa-jar', text: '蜂箱多了一罐蜂蜜（裡面 ' + r.hive.jars + ' 罐，去後院右下角收）' });
+            if (r.hive && r.hive.full) out.push({ icon: 'fa-jar', text: '蜂箱裝滿了沒收，這一罐浪費掉了', bad: true });
+        }
+        return out;
+    }
+
+    // opts：{ app, world, scene, state(), libs, toast(text), onChange() }
+    function create(opts) {
+        var ship = window.FarmShipCore, WC = window.FarmWalkCore;
+        var app = opts.app, libs = opts.libs;
+        var binKey = opts.scene === 'ranch' ? 'ranchbin' : 'yardbin';
+        var spot = WC.SCENES[opts.scene].spots[binKey];
+
+        // ── 場景裡的箱子 ──
+        var binEl = document.createElement('button');
+        binEl.type = 'button';
+        binEl.className = 'fs-bin fs-bin-' + opts.scene;
+        binEl.setAttribute('data-fw-key', binKey);
+        binEl.setAttribute('aria-label', '出貨箱');
+        opts.world.appendChild(binEl);
+        var binFull = null;
+        function renderBin() {
+            var full = ship.binList(opts.state(), libs).length > 0;
+            if (full === binFull) return;
+            binFull = full;
+            binEl.innerHTML = window.FarmItemDraw.binSvg(full);
+        }
+
+        // ── 「放東西進去」面板 ──
+        var wrap = document.createElement('div');
+        wrap.className = 'fs-wrap';
+        wrap.hidden = true;
+        wrap.setAttribute('data-fw-modal', '');
+        app.appendChild(wrap);
+        var mode = null;   // 'ship' | 'cafe' | 'report'
+        function close() { wrap.hidden = true; mode = null; }
+        function openShip() { mode = 'ship'; wrap.hidden = false; renderShip(); }
+        // ── 「送去書咖」（11-13 後院送料）：吃的才送得過去；送了就不賣錢，書咖後廚做菜先用自家的 ──
+        function cafeApi() { return (window.parent && window.parent.OS_CAFE) || window.OS_CAFE || null; }
+        function openCafe() { mode = 'cafe'; wrap.hidden = false; renderCafe(); }
+        function renderCafe() {
+            var st = opts.state(), have = ship.cafeables ? ship.cafeables(st, libs) : [];
+            var rows = have.length ? have.map(function (i) {
+                return '<div class="fs-row"><span class="fs-ico">' + iconOf(i.key) + '</span><div class="fs-name"><strong>' + esc(i.name) + '</strong><small>有 ' + i.have + ' ' + esc(i.unit) + '</small></div>' +
+                    '<button type="button" data-cafe="' + esc(i.key) + '" data-n="1">送 1</button><button type="button" class="fs-all" data-cafe="' + esc(i.key) + '">全部送</button></div>';
+            }).join('') : '<p class="fs-empty">沒有能送的。收成、撿蛋、擠奶、收蜂蜜之後再來（羊毛不是吃的，送不過去）。</p>';
+            wrap.innerHTML = '<section class="fs-card" role="dialog" aria-label="送去書咖">' +
+                '<header class="fs-head"><strong>' + fa('fa-mug-hot') + '送去書咖</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fs-body"><p class="fs-empty">送過去的放進書咖的倉庫，後廚做菜、備料會先用自家的（那幾份不花錢）。送了就不會再賣錢。</p><div class="fs-list">' + rows + '</div></div></section>';
+        }
+        var sending = false;
+        function sendCafe(key, n) {
+            var CAFE = cafeApi();
+            if (!CAFE || !CAFE.collectFromFarm || !CAFE.cafeDev) { if (opts.toast) opts.toast('書咖還沒準備好，等一下再送'); return; }
+            if (sending) return;
+            sending = true;
+            CAFE.cafeDev().then(function (dev) {
+                var out = WC.act(opts.state(), { type: 'cafe', item: key, quantity: n, dev: dev }, libs);
+                if (opts.toast) opts.toast(out.message);
+                if (!out.ok) return null;
+                if (opts.onChange) opts.onChange();   // 先存田（送貨單寫在田的帳本裡），書咖照送貨單收
+                if (mode === 'cafe') renderCafe();
+                return CAFE.collectFromFarm({ flush: true }).then(function (r) {
+                    if (!opts.toast) return;
+                    if (r && r.pending) opts.toast('送貨單寫好了，等田存上伺服器，書咖就會收到');
+                    else if (r && r.added && r.added.length) opts.toast(out.message + '書咖收到了');
+                });
+            }).catch(function (e) { console.warn('[Farm] 送去書咖', e); if (opts.toast) opts.toast('這次沒送成，等一下再試'); }).then(function () { sending = false; });
+        }
+        // ── 「換成 PT」（11-18：錢分開算，但可以換成 PT）：金幣一比一換成交易所的 PT，一天有上限；跟送去書咖同一套，田存上去了 PT 才入帳 ──
+        function ptApi() { return (window.parent && window.parent.OS_PT) || window.OS_PT || null; }
+        function ptToday() { var P = ptApi(); return P && P.today ? P.today() : 0; }
+        function openPT() { mode = 'pt'; wrap.hidden = false; renderPT(); }
+        function renderPT() {
+            var r = ship.ptRoom(opts.state(), ptToday());
+            var why = r.used >= r.cap ? '今天換滿了，明天再來。' : (r.can <= 0 ? '金幣不夠換：後院要留 ' + r.keep + 'G 買種子。' : '');
+            wrap.innerHTML = '<section class="fs-card" role="dialog" aria-label="換成 PT">' +
+                '<header class="fs-head"><strong>' + fa('fa-coins') + '換成 PT</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fs-body"><p class="fs-empty">金幣一比一換成 PT，換好拿去白兔交易所用。一天最多 ' + r.cap + ' PT，後院留 ' + r.keep + 'G 買種子。</p>' +
+                '<div class="fs-list"><div class="fs-row"><span class="fs-ico">' + fa('fa-coins') + '</span><div class="fs-name"><strong>金幣 ' + r.coins + 'G</strong><small>今天換了 ' + r.used + '／' + r.cap + ' PT</small></div>' +
+                (r.can > 0 ? '<button type="button" class="fs-all" data-pt="' + r.can + '">換 ' + r.can + ' PT</button>' : '<button type="button" disabled>' + esc(why.split('：')[0].replace(/。$/, '')) + '</button>') +
+                '</div></div>' + (why ? '<p class="fs-empty">' + esc(why) + '</p>' : '') + '</div></section>';
+        }
+        var ptBusy = false;
+        function sendPT(n) {
+            var P = ptApi();
+            if (!P || !P.collectFromFarm || !P.farmDev) { if (opts.toast) opts.toast('交易所還沒準備好，等一下再換'); return; }
+            if (ptBusy) return;
+            ptBusy = true;
+            P.farmDev().then(function (dev) {
+                var out = WC.act(opts.state(), { type: 'pt', quantity: n, dev: dev, today: ptToday() }, libs);
+                if (opts.toast) opts.toast(out.message);
+                if (!out.ok) return null;
+                if (opts.onChange) opts.onChange();   // 先存田（換匯單寫在田的帳本裡），PT 照單入帳
+                if (mode === 'pt') renderPT();
+                return P.collectFromFarm({ flush: true }).then(function (r) {
+                    if (!opts.toast) return;
+                    if (r && r.pending) opts.toast('換好了，等田存上伺服器，PT 就會入帳');
+                    else if (r && r.gain > 0) opts.toast('PT 入帳了：+' + r.gain);
+                });
+            }).catch(function (e) { console.warn('[Farm] 換成 PT', e); if (opts.toast) opts.toast('這次沒換成，等一下再試'); }).then(function () { ptBusy = false; });
+        }
+        function renderShip() {
+            var st = opts.state();
+            var have = ship.sellables(st, libs), inBin = ship.binList(st, libs), total = ship.binTotal(st, libs);
+            var rows = have.length ? have.map(function (i) {
+                return '<div class="fs-row"><span class="fs-ico">' + iconOf(i.key) + '</span><div class="fs-name"><strong>' + esc(i.name) + '</strong><small>有 ' + i.have + ' ' + esc(i.unit) + ' · 一' + esc(i.unit) + ' ' + i.price + 'G</small></div>' +
+                    '<button type="button" data-ship="' + esc(i.key) + '" data-n="1">放 1</button><button type="button" class="fs-all" data-ship="' + esc(i.key) + '">全部 +' + (i.price * i.have) + 'G</button></div>';
+            }).join('') : '<p class="fs-empty">沒有能賣的東西。收成、撿蛋、擠奶、剪毛之後再來。</p>';
+            var binRows = inBin.length ? inBin.map(function (b) {
+                return '<li><span>' + esc(b.name) + ' × ' + b.qty + '</span><b>+' + b.amount + 'G</b></li>';
+            }).join('') : '<li class="fs-none">箱子是空的</li>';
+            wrap.innerHTML = '<section class="fs-card" role="dialog" aria-label="出貨箱">' +
+                '<header class="fs-head"><strong>' + fa('fa-box-open') + '出貨箱</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fs-body"><h4>手上能賣的</h4><div class="fs-list">' + rows + '</div>' +
+                '<h4>箱子裡</h4><ul class="fs-bin-list">' + binRows + '</ul></div>' +
+                '<footer class="fs-foot"><span class="fs-nova-line"><span class="fs-nova sm">' + window.FarmItemDraw.buyerSvg() + '</span>明天早上' + BUYER.name + '來收，大約 <b>+' + total + 'G</b></span>' +
+                (inBin.length ? '<button type="button" class="fs-back">全部拿回來</button>' : '') + '</footer></section>';
+        }
+
+        // ── 結算單 ──
+        function openReport(rep) {
+            rep = rep || (opts.state().ship && opts.state().ship.report);
+            if (!rep) { if (opts.toast) opts.toast('還沒有結算單。過一天才會有。'); return; }
+            mode = 'report';
+            wrap.hidden = false;
+            var sold = rep.sold.length ? rep.sold.map(function (s) {
+                return '<li><span class="fs-ico sm">' + iconOf(s.key) + '</span><span>' + esc(s.name) + ' × ' + s.qty + '</span><em>' + s.price + 'G</em><b>+' + s.amount + 'G</b></li>';
+            }).join('') : '<li class="fs-none">這天沒有出貨</li>';
+            var spent = rep.spent.length ? rep.spent.map(function (s) {
+                return '<li><span>' + esc(s.note) + '</span><b class="minus">' + money(s.amount) + '</b></li>';
+            }).join('') : '<li class="fs-none">這天沒有花錢</li>';
+            // 去別人家偷吃拿到的（沒有就整段不出現）
+            var stolenHtml = rep.stolen && rep.stolen.length ? '<h4>偷吃來的<b>+' + rep.stolenTotal + 'G</b></h4><ul class="fs-spent">' + rep.stolen.map(function (s) {
+                return '<li><span>' + esc(s.note) + '</span><b>+' + s.amount + 'G</b></li>';
+            }).join('') + '</ul>' : '';
+            // 打工賺的、雇人退回來的（10-11；沒有就整段不出現）
+            var earnedHtml = rep.earned && rep.earned.length ? '<h4>打工、退回來的<b>+' + rep.earnedTotal + 'G</b></h4><ul class="fs-spent">' + rep.earned.map(function (s) {
+                return '<li><span>' + esc(s.note) + '</span><b>+' + s.amount + 'G</b></li>';
+            }).join('') + '</ul>' : '';
+            var ev = eventLines(rep);
+            var evHtml = ev.length ? '<h4>昨天發生的事</h4><ul class="fs-events">' + ev.map(function (e) {
+                return '<li' + (e.bad ? ' class="bad"' : '') + '>' + fa(e.icon) + '<span>' + esc(e.text) + '</span></li>';
+            }).join('') + '</ul>' : '';
+            // 結算單是昨天的：後院寫第 10 日、單子寫第 9 日看起來像算錯，標明是昨天（小斐 11-17）
+            var nowDay = 0;
+            try { nowDay = (opts.state() || {}).day || 0; } catch (e) { }
+            var title = nowDay === rep.day + 1 ? '昨天（第 ' + rep.day + ' 日）的結算' : '第 ' + rep.day + ' 日結算';
+            wrap.innerHTML = '<section class="fs-card fs-report" role="dialog" aria-label="結算單">' +
+                '<header class="fs-head"><strong>' + fa('fa-receipt') + title + '</strong><button type="button" class="fs-close" aria-label="關上">' + fa('fa-xmark') + '</button></header>' +
+                '<div class="fs-body">' +
+                '<div class="fs-net ' + (rep.net >= 0 ? 'up' : 'down') + '"><span>這一天淨賺</span><strong>' + money(rep.net) + '</strong><small>金幣 ' + rep.coinsStart + ' → ' + rep.coinsEnd + '</small></div>' +
+                '<h4>出貨<b>+' + rep.income + 'G</b></h4>' +
+                '<div class="fs-buyer"><span class="fs-nova">' + window.FarmItemDraw.buyerSvg() + '</span><div><strong>' + BUYER.name + '</strong>' +
+                (rep.buyer && rep.buyer.say ? '<p>' + esc(rep.buyer.say) + '</p>' : '<p>' + (rep.sold.length ? '照牌價收走了這些。' : '今天沒有收到貨。') + '</p>') + '</div></div>' +
+                '<ul class="fs-sold">' + sold + '</ul>' + stolenHtml + earnedHtml +
+                '<h4>花掉的<b class="minus">' + money(rep.spentTotal) + '</b></h4><ul class="fs-spent">' + spent + '</ul>' +
+                evHtml + '</div>' +
+                '<footer class="fs-foot"><button type="button" class="fs-ok">知道了</button></footer></section>';
+        }
+
+        wrap.addEventListener('click', function (e) {
+            e.stopPropagation();
+            if (e.target === wrap || e.target.closest('.fs-close') || e.target.closest('.fs-ok')) { close(); return; }
+            var cf = e.target.closest('[data-cafe]');
+            if (cf) { sendCafe(cf.getAttribute('data-cafe'), cf.getAttribute('data-n') ? Number(cf.getAttribute('data-n')) : null); return; }
+            var pt = e.target.closest('[data-pt]');
+            if (pt) { sendPT(Number(pt.getAttribute('data-pt'))); return; }
+            var b = e.target.closest('[data-ship]');
+            var out = null;
+            if (b) out = WC.act(opts.state(), { type: 'ship', item: b.getAttribute('data-ship'), quantity: b.getAttribute('data-n') ? Number(b.getAttribute('data-n')) : null }, libs);
+            else if (e.target.closest('.fs-back')) out = WC.act(opts.state(), { type: 'unship' }, libs);
+            if (!out) return;
+            if (opts.toast) opts.toast(out.message);
+            if (opts.onChange) opts.onChange();
+            if (mode === 'ship') renderShip();
+        });
+        // Esc 關掉就標記處理過，底下的看板才不會跟著一起關
+        function onKey(e) { if (e.key === 'Escape' && !wrap.hidden) { close(); e.preventDefault(); } }
+        window.addEventListener('keydown', onKey);
+
+        // 給走路舞台：箱子這個搆得到的東西
+        function target() {
+            var st = opts.state();
+            return {
+                key: binKey, x: spot.x, y: spot.y, reach: spot.reach, el: binEl,
+                title: function () { return '出貨箱'; },
+                info: function () {
+                    var n = ship.binList(st, libs).length;
+                    return n ? '箱子裡 ' + n + ' 樣，明天早上' + BUYER.name + '來收，大約 +' + ship.binTotal(st, libs) + 'G。' : '要賣的東西放進來，明天早上' + BUYER.name + '來收。';
+                },
+                actions: function () {
+                    var list = [{ icon: 'fa-box-open', label: '放東西進去', cls: 'fav', sub: ship.sellables(st, libs).length ? null : '沒有能賣的', run: function () { openShip(); return null; } }];
+                    if (ship.binList(st, libs).length) list.push({ icon: 'fa-rotate-left', label: '全部拿回來', run: function () { return WC.act(st, { type: 'unship' }, libs); } });
+                    if (ship.cafeables && cafeApi()) list.push({ icon: 'fa-mug-hot', label: '送去書咖', sub: ship.cafeables(st, libs).length ? null : '沒有能送的', run: function () { openCafe(); return null; } });
+                    if (ship.toPT && ptApi()) list.push({ icon: 'fa-coins', label: '換成 PT', run: function () { openPT(); return null; } });
+                    return list;
+                }
+            };
+        }
+
+        // 「結束今天」：提早結束這一天 → 跳結算單。今天已經提早結束過（比真的時間多走一天了）就擋下來跳一句，回 ok:false
+        function endDay(extraOpts) {
+            var out = ship.endEarly(opts.state(), libs, Date.now(), extraOpts);
+            if (!out.ok) { if (opts.toast) opts.toast(out.message); return out; }
+            binFull = null;
+            renderBin();
+            openReport(out.report);
+            return out;
+        }
+
+        renderBin();
+        return {
+            render: renderBin, target: target, openShip: openShip, openCafe: openCafe, openPT: openPT, openReport: openReport, endDay: endDay, close: close,
+            isOpen: function () { return !wrap.hidden; },
+            destroy: function () { window.removeEventListener('keydown', onKey); }
+        };
+    }
+
+    window.FarmShip = { create: create, eventLines: eventLines };
+})();

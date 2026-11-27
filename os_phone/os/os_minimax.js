@@ -1,0 +1,495 @@
+// ----------------------------------------------------------------
+// [檔案] os_minimax.js (V1.4)
+// 路徑：os_phone/os/os_minimax.js
+// 職責：Minimax TTS 語音合成模組（獨立）
+// 更新 V1.3：
+//   ① cleanTextForTts 只清標籤，保留中文標點（讓 API 有語調依據）
+//   ② 預設模型改為 speech-02-turbo（表現力明顯優於 speech-01）
+//   ③ 新增 EXPRESSION_EMOTION_MAP：VN Expression → Minimax emotion 自動映射
+//   ④ play() 支援 options.emotion，傳入 voice_setting.emotion
+//   ⑤ playForChar() 接收 expression 參數，自動轉 emotion 後播放
+// 跨面板通用：VN 面板、wx 面板皆可直接呼叫
+// 2026-10：角色 → 聲音改由 os_voice_cast.js（角色配音名單）決定，這裡多了 speakVoice／prefetchVoice／replayVoice（指定音色、不查名字）。
+//   playForChar／findVoiceId 留著給 AI 助手房間（另一個 repo）用，名單存檔時會把 Minimax 那幾位抄回 voiceProfiles。
+// ----------------------------------------------------------------
+(function() {
+    'use strict';
+    console.log('[PhoneOS] 載入 Minimax TTS 模組 (V1.3)...');
+
+    const win = window.parent || window;
+    const STORAGE_KEY = 'os_minimax_config';
+
+    // 預設配置
+    // ② 預設模型改為 speech-02-turbo
+    const DEFAULT_CONFIG = {
+        enabled: false,
+        groupId: '',
+        apiKey: '',
+        provider: 'cn',
+        speechModel: 'speech-02-turbo',
+        defaultSpeed: 1.0,
+        defaultLanguageBoost: '',
+        voiceProfiles: []
+    };
+
+    // ③ Expression → Minimax emotion 全局對照表（大小寫不敏感比對）
+    // 涵蓋常見 VN 表情命名慣例（英文/中文/縮寫）
+    // Minimax t2a_v2 有效 emotion 值（僅此 5 個，happy/neutral 已移除）：
+    // sad | angry | fearful | disgusted | surprised
+    // 找不到對應 → 不傳 emotion，讓音色自然語調發揮
+    const EXPRESSION_EMOTION_MAP = {
+        // Sad 系
+        'sad':      'sad',   'cry':      'sad',   'sob':     'sad',
+        'weep':     'sad',   'crying':   'sad',   'depressed':'sad',
+        'grief':    'sad',   'gloomy':   'sad',   'hurt':    'sad',
+        '悲伤':     'sad',   '哭':       'sad',   '難過':    'sad',
+        '伤心':     'sad',   '悲':       'sad',
+
+        // Angry 系
+        'angry':    'angry', 'mad':      'angry', 'rage':    'angry',
+        'annoyed':  'angry', 'furious':  'angry', 'irritated':'angry',
+        'tsun':     'angry', 'sulk':     'angry',
+        '愤怒':     'angry', '生气':     'angry', '怒':      'angry',
+        '不满':     'angry', '憤怒':     'angry',
+
+        // Surprised 系
+        'surprised':'surprised', 'shock':    'surprised', 'shocked':  'surprised',
+        'amazed':   'surprised', 'startled': 'surprised', 'astonished':'surprised',
+        '惊讶':     'surprised', '惊喜':     'surprised', '驚':       'surprised',
+        '震惊':     'surprised',
+
+        // Fearful 系
+        'fearful':  'fearful', 'fear':     'fearful', 'scared':   'fearful',
+        'nervous':  'fearful', 'anxious':  'fearful', 'timid':    'fearful',
+        'worried':  'fearful', 'panic':    'fearful',
+        '恐惧':     'fearful', '害怕':     'fearful', '緊張':     'fearful',
+        '不安':     'fearful',
+
+        // Disgusted 系
+        'disgusted':'disgusted', 'disgust':  'disgusted', 'dislike':  'disgusted',
+        '厌恶':     'disgusted', '嫌弃':     'disgusted',
+    };
+
+    // --- 內部狀態 ---
+    let _isPlaying = false;
+    let _isIntentionalStop = false;
+    let _currentBlobUrl = null;
+    // 第幾次叫念：快速點下一句時，上一句的合成可能比這一句晚回來，晚回來的看到號碼不是自己就不碰播放器
+    // （不然會把這一句的音源換成舊台詞）。stop() 也會換號，停了之後才回來的那句不會再自己響起來
+    let _playSeq = 0;
+
+    // 等音檔緩衝好再播（不然第一個字會被吃掉）；音檔壞掉或被換掉時 canplay 永遠不會來，要接 error 才不會一直卡著
+    function _waitCanPlay(audio, blobUrl) {
+        return new Promise((resolve, reject) => {
+            const ok = () => { audio.removeEventListener('error', bad); resolve(); };
+            const bad = () => { audio.removeEventListener('canplay', ok); reject(new Error('音檔讀不出來')); };
+            audio.addEventListener('canplay', ok, { once: true });
+            audio.addEventListener('error', bad, { once: true });
+            audio.src = blobUrl;
+            audio.load();
+        });
+    }
+
+    // --- 重播快取（Blob 物件，不受 revokeObjectURL 影響，供免費重播使用）---
+    let _replayBlob = null;
+    let _replayBlobKey = '';
+
+    // --- 預取快取（key = voiceId§cleanedText，value = Promise<Blob|null>）---
+    const _prefetchCache = new Map();
+    const PREFETCH_MAX = 2;  // 最多快取幾句
+
+    // 抽離 API 呼叫，供 play() 與 prefetch 共用；回傳 Blob（不是 URL）
+    async function _callTtsApi(textForTts, voiceId, options, cfg) {
+        const baseUrl = cfg.provider === 'io'
+            ? 'https://api.minimax.io'
+            : 'https://api.minimaxi.com';
+        const requestUrl = `${baseUrl}/v1/t2a_v2?GroupId=${cfg.groupId}`;
+        const voiceSetting = { voice_id: voiceId, speed: options.speed ?? cfg.defaultSpeed ?? 1.0 };
+        if (options.emotion) voiceSetting.emotion = options.emotion;
+        const requestBody = { model: cfg.speechModel || 'speech-02-turbo', text: textForTts, voice_setting: voiceSetting };
+        const lb = options.language_boost ?? cfg.defaultLanguageBoost;
+        if (lb) requestBody.language_boost = lb;
+
+        const response = await fetch(requestUrl, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
+        });
+        const result = await response.json();
+        if (!response.ok || (result.base_resp && result.base_resp.status_code !== 0)) {
+            throw new Error(`API ${result.base_resp?.status_code || response.status}: ${result.base_resp?.status_msg || response.statusText}`);
+        }
+        if (!result.data?.audio) throw new Error('回應無音頻數據');
+        const blob = hexToBlob(result.data.audio);
+        if (!blob) throw new Error('Hex 轉換失敗');
+        // 這句計費幾個字（中日韓一個字算兩個）：借接口那格（os_keyrun.js）拿來估花了多少
+        _lastInfo = { chars: result.extra_info ? result.extra_info.usage_characters : null, model: requestBody.model, provider: cfg.provider, at: Date.now() };
+        return blob;  // 回傳 Blob，由呼叫方決定何時建 URL
+    }
+    let _lastInfo = null;
+
+    // --- 工具：取得或建立 <audio> 元素 ---
+    function getAudioEl() {
+        const doc = win.document;
+        let el = doc.getElementById('os-minimax-tts-player');
+        if (!el) {
+            el = doc.createElement('audio');
+            el.id = 'os-minimax-tts-player';
+            el.style.display = 'none';
+            doc.body.appendChild(el);
+        }
+        return el;
+    }
+
+    // --- 工具：Hex 字符串 → Blob ---
+    function hexToBlob(hex) {
+        if (!hex) return null;
+        const cleanHex = hex.replace(/[^0-9a-fA-F]/g, '');
+        if (cleanHex.length % 2 !== 0) {
+            console.error('[OS_MINIMAX] Hex 長度為奇數，解碼失敗');
+            return null;
+        }
+        const buffer = new Uint8Array(cleanHex.length / 2);
+        for (let i = 0; i < cleanHex.length; i += 2) {
+            buffer[i / 2] = parseInt(cleanHex.substr(i, 2), 16);
+        }
+        return new Blob([buffer], { type: 'audio/mpeg' });
+    }
+
+    // 支援語氣詞的模型白名單（僅 speech-2.8-hd / speech-2.8-turbo）
+    const VOCAL_SUPPORT_MODELS = new Set(['speech-2.8-hd', 'speech-2.8-turbo']);
+
+    // 語氣詞對照表：中文（簡/繁）→ Minimax API 英文標籤
+    const VOCAL_ZH_TO_EN = {
+        // 簡體
+        '笑声':   'laughs',       '轻笑':   'chuckle',    '咳嗽':   'coughs',
+        '清嗓子': 'clear-throat', '呻吟':   'groans',     '正常换气':'breath',
+        '喘气':   'pant',         '吸气':   'inhale',     '呼气':   'exhale',
+        '倒吸气': 'gasps',        '吸鼻子': 'sniffs',     '叹气':   'sighs',
+        '哼':     'snorts',       '咂嘴':   'lip-smacking','哼唱':  'humming',
+        '嘶嘶声': 'hisses',       '呃':     'emm',        '喷嚏':   'sneezes',
+        '口哨':   'whistles',
+        // 繁體（吸鼻子、咂嘴、哼唱簡繁同字，上面已經有）
+        '笑聲':   'laughs',       '輕笑':   'chuckle',    '正常換氣':'breath',
+        '喘氣':   'pant',         '吸氣':   'inhale',     '呼氣':   'exhale',
+        '倒吸氣': 'gasps',        '嘆氣':   'sighs',      '嘶嘶聲': 'hisses',
+        '噴嚏':   'sneezes',
+    };
+    // 英文語氣詞白名單（直接透傳，不清除）
+    const VOCAL_EN_SET = new Set([
+        'laughs','chuckle','coughs','clear-throat','groans','breath',
+        'pant','inhale','exhale','gasps','sniffs','sighs','snorts',
+        'lip-smacking','humming','hisses','emm','sneezes','whistles',
+    ]);
+
+    // 檢查是否有實質可念內容（至少有一個字或數字，哪種文字都算）
+    //   以前只認中英數，「めんどくさい」這種全假名的日語整句被當成只有標點、不念（11-02 做 MV 撞到）
+    function _hasSpeakable(text) {
+        return /[\p{L}\p{N}]/u.test(text);
+    }
+
+    // ① 清洗 TTS 文字：移除 VN 標籤和動作括號，保留中文標點
+    // supportsVocal=true 時：將中文語氣詞轉為英文標籤（僅限 speech-2.8-hd/turbo）
+    // supportsVocal=false 時：所有括號內容一律清除
+    function cleanTextForTts(text, supportsVocal = false) {
+        return (text || '')
+            .replace(/\(([^)]*)\)/g, (m, inner) => {
+                if (!supportsVocal) return '';
+                const key = inner.trim();
+                if (VOCAL_EN_SET.has(key)) return ` (${key}) `;    // 已是英文，透傳
+                const en = VOCAL_ZH_TO_EN[key];
+                if (en) return ` (${en}) `;                          // 中文轉英文
+                return '';                                            // 其他清除
+            })
+            .replace(/（[^）]*）/g, '')          // 移除 （中文括號內容）
+            .replace(/【[^】]*】/g, '')          // 移除 【系統標籤】
+            .replace(/\[[^\]]*\]/g, '')          // 移除 [VN標籤]
+            .replace(/\*[^*]*\*/g, '')           // 移除 *動作描述*
+            .replace(/「|」/g, '')               // 移除引號（保留內容）
+            .replace(/\s+/g, ' ')               // 多餘空白合併
+            .trim();
+    }
+
+    // --- 主要接口 ---
+    const OS_MINIMAX = {
+
+        /** 讀取設定 */
+        getConfig() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                try { return { ...DEFAULT_CONFIG, ...JSON.parse(saved) }; } catch(e) {}
+            }
+            return { ...DEFAULT_CONFIG };
+        },
+
+        /** 儲存設定：存成回 true，沒存成回 false（已經跳過提示了） */
+        saveConfig(data) {
+            return win.AUI.lsSet(STORAGE_KEY, JSON.stringify({ ...DEFAULT_CONFIG, ...data }), '語音設定');
+        },
+
+        /** 是否正在播放 */
+        isPlaying() { return _isPlaying; },
+
+        /** 最近一次合成成功的那句：{ chars（計費字數）, model, provider, at } */
+        lastInfo() { return _lastInfo; },
+
+        /**
+         * ③ 將 VN Expression 名稱轉換為 Minimax emotion 值
+         * 先查全局對照表，找不到回傳 null（API 不傳 emotion = 預設 neutral）
+         */
+        expressionToEmotion(expression) {
+            if (!expression) return null;
+            const key = expression.trim().toLowerCase();
+            return EXPRESSION_EMOTION_MAP[key] || null;
+        },
+
+        /**
+         * 依角色名查找音色ID（匹配 label 或任一 alias，大小寫不敏感）
+         */
+        findVoiceId(charName) {
+            if (!charName) return null;
+            const cfg = this.getConfig();
+            const name = charName.trim().toLowerCase();
+            for (const p of (cfg.voiceProfiles || [])) {
+                if (!p.id) continue;
+                if ((p.label || '').trim().toLowerCase() === name) return p.id;
+                if (Array.isArray(p.aliases)) {
+                    for (const alias of p.aliases) {
+                        if ((alias || '').trim().toLowerCase() === name) return p.id;
+                    }
+                }
+            }
+            return null;
+        },
+
+        /** 停止當前播放 */
+        stop() {
+            _playSeq++;
+            if (!_isPlaying) return;
+            _isIntentionalStop = true;
+            const audio = getAudioEl();
+            audio.pause();
+            audio.src = '';
+            _isPlaying = false;
+            if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
+            setTimeout(() => { _isIntentionalStop = false; }, 100);
+        },
+
+        /**
+         * 只合成、不播：回 Blob。AI 助手房間的語音泡泡自己播、自己留著重播，同一句不會扣兩次錢。
+         * 沒填金鑰丟 NO_KEY、沒音色丟 NO_VOICE、整句念不出東西（只有標點）丟 NOTHING_TO_SAY。
+         */
+        async synth(text, voiceId, options = {}) {
+            const cfg = this.getConfig();
+            if (!cfg.groupId || !cfg.apiKey) throw new Error('NO_KEY');
+            if (!voiceId) throw new Error('NO_VOICE');
+            const textForTts = cleanTextForTts(text, VOCAL_SUPPORT_MODELS.has(cfg.speechModel || ''));
+            if (!textForTts || !_hasSpeakable(textForTts)) throw new Error('NOTHING_TO_SAY');
+            return _callTtsApi(textForTts, voiceId, options, cfg);
+        },
+
+        /**
+         * 合成並播放語音
+         * @param {string} text
+         * @param {string} voiceId
+         * @param {object} options - { speed, language_boost, emotion }
+         *   emotion: 'happy'|'sad'|'angry'|'fearful'|'disgusted'|'surprised'|'neutral'
+         *            不傳則 API 自行判斷（通常 neutral）
+         */
+        async play(text, voiceId, options = {}) {
+            this.stop();
+            const seq = ++_playSeq;
+            await new Promise(r => setTimeout(r, 50));
+            if (seq !== _playSeq) return false;
+
+            const cfg = this.getConfig();
+            if (!cfg.groupId || !cfg.apiKey) {
+                console.warn('[OS_MINIMAX] ⚠️ 尚未設置 Group ID 或 API Key');
+                return false;
+            }
+            if (!voiceId) {
+                console.warn('[OS_MINIMAX] ⚠️ 未提供 voiceId');
+                return false;
+            }
+
+            const supportsVocal = VOCAL_SUPPORT_MODELS.has(cfg.speechModel || '');
+            const textForTts = cleanTextForTts(text, supportsVocal);
+            if (!textForTts || !_hasSpeakable(textForTts)) return false; // 純標點/省略號跳過
+
+            const cacheKey = voiceId + '§' + textForTts;
+            _isPlaying = true;
+            _isIntentionalStop = false;
+
+            try {
+                let blob;
+                if (_prefetchCache.has(cacheKey)) {
+                    // 🎯 命中預取快取，直接取用
+                    console.log('[OS_MINIMAX] 🎯 預取命中 →', voiceId, textForTts.slice(0, 20));
+                    blob = await _prefetchCache.get(cacheKey);
+                    _prefetchCache.delete(cacheKey);
+                    if (!blob) throw new Error('預取失敗，無音頻');
+                } else {
+                    // 即時呼叫 API
+                    console.log('[OS_MINIMAX] 請求 TTS →', voiceId,
+                        options.emotion ? `[${options.emotion}]` : '[no emotion]',
+                        textForTts.slice(0, 20));
+                    blob = await _callTtsApi(textForTts, voiceId, options, cfg);
+                }
+                if (seq !== _playSeq) return false;   // 等合成的時候已經換下一句（或按了停）
+
+                // 存入重播快取（Blob 物件不受 revokeObjectURL 影響）
+                _replayBlob = blob;
+                _replayBlobKey = cacheKey;
+
+                const blobUrl = URL.createObjectURL(blob);
+                _currentBlobUrl = blobUrl;
+                const audio = getAudioEl();
+                const _ttsVol = typeof win._vnTtsVolume === 'number' ? win._vnTtsVolume : 0.8;
+                if (win.VN_AudioGain) win.VN_AudioGain.set(audio, _ttsVol); else audio.volume = _ttsVol; // iOS 走 GainNode
+                audio.onended = () => {
+                    _isPlaying = false;
+                    if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
+                };
+                audio.onerror = (e) => {
+                    if (!_isIntentionalStop) console.error('[OS_MINIMAX] 播放錯誤:', e);
+                    _isPlaying = false;
+                    if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
+                };
+                // 等音訊緩衝就緒再播，避免第一個字被吃掉
+                await _waitCanPlay(audio, blobUrl);
+                if (seq !== _playSeq) return false;
+                await audio.play();
+                console.log('[OS_MINIMAX] ✅ 播放中 →', voiceId, options.emotion || '');
+                return true;
+
+            } catch (error) {
+                if (seq !== _playSeq) return false;   // 被下一句換掉而中斷的，不算失敗，狀態也歸下一句管
+                console.error('[OS_MINIMAX] ❌ TTS 失敗:', error.message);
+                _isPlaying = false;
+                return false;
+            }
+        },
+
+        // 🔇 含 Sex/NSFW 標記的表情一律不念（VN 那邊的慣例）
+        _skipExpression(expression) {
+            const SKIP_EXPRESSIONS = ['sex', 'nsfw', 'r18', 'erotic', 'lewd'];
+            const exprLower = (expression || '').toLowerCase();
+            return SKIP_EXPRESSIONS.some(k => exprLower.includes(k));
+        },
+        _withEmotion(options) {
+            const o = { ...options };
+            if (o.expression && !o.emotion) {
+                const mapped = this.expressionToEmotion(o.expression);
+                if (mapped) o.emotion = mapped;   // 找不到對標情緒 → 不傳 emotion，讓音色用預設語調
+            }
+            return o;
+        },
+
+        /**
+         * 指定音色預取（角色配音名單用：誰配哪個音色由 OS_VOICE_CAST 決定，這裡不查名字）
+         */
+        prefetchVoice(voiceId, text, options = {}) {
+            const cfg = this.getConfig();
+            if (!voiceId || !cfg.groupId || !cfg.apiKey) return;
+            if (this._skipExpression(options.expression)) return;
+            const pfOptions = this._withEmotion(options);
+
+            const supportsVocal = VOCAL_SUPPORT_MODELS.has(cfg.speechModel || '');
+            const textForTts = cleanTextForTts(text, supportsVocal);
+            if (!textForTts || !_hasSpeakable(textForTts)) return; // 純標點/省略號跳過
+
+            const cacheKey = voiceId + '§' + textForTts;
+            if (_prefetchCache.has(cacheKey)) return; // 已在預取
+
+            // 快取超量時驅逐最舊的（存的是 Blob，不用釋放網址）
+            if (_prefetchCache.size >= PREFETCH_MAX) {
+                _prefetchCache.delete(_prefetchCache.keys().next().value);
+            }
+
+            console.log('[OS_MINIMAX] 🔮 預取 →', voiceId, textForTts.slice(0, 20));
+            _prefetchCache.set(cacheKey,
+                _callTtsApi(textForTts, voiceId, pfOptions, cfg).catch(e => {
+                    console.warn('[OS_MINIMAX] 預取失敗:', e.message);
+                    return null;
+                })
+            );
+        },
+
+        /**
+         * 指定音色念一句（角色配音名單用）：表情 → emotion、NSFW 表情不念
+         */
+        async speakVoice(voiceId, text, options = {}) {
+            if (this._skipExpression(options.expression)) {
+                console.log(`[OS_MINIMAX] 🔇 跳過（含 ${options.expression} 標記）`);
+                return false;
+            }
+            return this.play(text, voiceId, this._withEmotion(options));
+        },
+
+        /**
+         * ⑤ 依角色名查音色 + 自動將 expression 轉換為 emotion 後播放
+         * 供 VN / wx 面板呼叫
+         * @param {string} charName  - 角色名（自動匹配別名）
+         * @param {string} text      - 對白文字
+         * @param {object} options   - { expression, speed, language_boost }
+         *   expression: VN 的 p[1]，例如 'Happy'、'Angry_Cry'
+         *               自動對應 EXPRESSION_EMOTION_MAP，找不到則不傳 emotion
+         */
+        async playForChar(charName, text, options = {}) {
+            const cfg = this.getConfig();
+            if (!cfg.enabled) return false;
+            const voiceId = this.findVoiceId(charName);
+            if (!voiceId) return false;
+            return this.speakVoice(voiceId, text, options);
+        },
+
+        /** 指定音色重播上一句（同一句才算，不打 API） */
+        async replayVoice(voiceId, text, options = {}) {
+            const cfg = this.getConfig();
+            if (!voiceId || !cfg.groupId || !cfg.apiKey) return false;
+            const supportsVocal = VOCAL_SUPPORT_MODELS.has(cfg.speechModel || '');
+            const textForTts = cleanTextForTts(text, supportsVocal);
+            if (!textForTts || !_hasSpeakable(textForTts)) return false;
+
+            const cacheKey = voiceId + '§' + textForTts;
+            if (_replayBlobKey !== cacheKey || !_replayBlob) return false;  // 快取不命中
+
+            // 快取命中：從 Blob 建新 URL，不打 API
+            this.stop();
+            const seq = ++_playSeq;
+            await new Promise(r => setTimeout(r, 50));
+            if (seq !== _playSeq) return false;
+            _isPlaying = true;
+            _isIntentionalStop = false;
+            try {
+                const blobUrl = URL.createObjectURL(_replayBlob);
+                _currentBlobUrl = blobUrl;
+                const audio = getAudioEl();
+                const _ttsVol = typeof win._vnTtsVolume === 'number' ? win._vnTtsVolume : 0.8;
+                if (win.VN_AudioGain) win.VN_AudioGain.set(audio, _ttsVol); else audio.volume = _ttsVol; // iOS 走 GainNode
+                audio.onended = () => {
+                    _isPlaying = false;
+                    if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
+                };
+                audio.onerror = (e) => {
+                    if (!_isIntentionalStop) console.error('[OS_MINIMAX] 重播錯誤:', e);
+                    _isPlaying = false;
+                    if (_currentBlobUrl) { URL.revokeObjectURL(_currentBlobUrl); _currentBlobUrl = null; }
+                };
+                await _waitCanPlay(audio, blobUrl);
+                if (seq !== _playSeq) return false;
+                await audio.play();
+                console.log('[OS_MINIMAX] ♻️ 重播快取 →', voiceId);
+                return true;
+            } catch(error) {
+                if (seq !== _playSeq) return false;
+                console.error('[OS_MINIMAX] ❌ 重播失敗:', error.message);
+                _isPlaying = false;
+                return false;
+            }
+        }
+    };
+
+    win.OS_MINIMAX = OS_MINIMAX;
+    console.log('[OS_MINIMAX] ✅ Minimax TTS 模組就緒 (V1.4)');
+})();

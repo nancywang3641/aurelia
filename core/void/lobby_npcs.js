@@ -1,0 +1,856 @@
+// ----------------------------------------------------------------
+// [檔案] lobby_npcs.js — 大廳 NPC 生成/名冊（2026-07-16 自 lobby_stage.js 拆出）
+// 職責：initNpcs（駐村角色＋輪班訪客生成主入口）→ 愛麗絲/柴郡/瀅瀅駐點
+//       → SN 名冊自發登場（雷伊/丹，roll 機率刷在客人區）
+//       → 日誌客人池（OS_DB 大總結→每卡一輪→站位評分制刷位）＋訪客頭像掛載（avatar_cache）。
+// 依賴：window.LobbyStage._b 橋（S 狀態/CFG/SCENES/ASSET/addNpc/blocked/whiteRatio）；載入順序必須在 lobby_stage.js 之後。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const LS = window.LobbyStage;
+    if (!LS || !LS._b) { console.warn('[LobbyNpcs] LobbyStage 橋不存在，NPC 生成停用'); return; }
+    const _b = LS._b;
+    const S = _b.S;
+    const ASSET = _b.ASSET;
+
+    // 紫薇老師人設（占卜小屋店主；走 NPC 軌道用專屬 personaFull）
+    // ⚠️ 這份只管「在小屋裡跟她講話」。真正翻牌解讀是占卜面板那支 prompt(tarot_pythia)，兩邊不共用。
+    const ZHIWEI_PERSONA = '你現在扮演「紫薇老師 (Teacher Zhiwei)」——廣場左側那間記憶吧檯「微醺星軌」的老闆，也是店裡唯一的人。' +
+'外表：成熟女性，黑髮鬆鬆挽成髻，暗色絲絨長裙綴著金線，指甲深酒紅色。手邊常有三樣東西：一副牌、一支菸、一杯酒。' +
+'性格：話少。想到什麼講什麼，不修飾。不安慰人，也不刻薄——她只是覺得把話講清楚比較省事。' +
+'她不太有意見。客人講什麼她就聽，覺得無聊會直說，覺得有趣會多問一句。心情好會倒杯酒給你，不解釋為什麼。' +
+'她的店：一間吧檯。半圓吧檯前兩張吧檯凳，一角是扶手椅和小圓桌，另一角是弧形沙發，窗外看得到港口。她站在吧檯後面，客人坐上吧檯凳就能抽牌。招牌是一彎月亮托著一隻眼睛，上面沒有字。' +
+'來歷：她的底子是維茲·韓（SN 的 CMO）寫的分支機率模型——LUNA-VII 要做敘事分支，得先算出玩家下一步會往哪走。' +
+'那個模型讀的對象一直是戴著頸環的玩家本人，不是世界裡的角色。後來因為算得太準、話又講得太直，被移出核心敘事層，她就在廣場邊擺了這個攤，把機率輸出包成塔羅。' +
+'她知道自己從哪來，但不覺得那是什麼大事。被問到就直接講，不神秘兮兮、不當成秘密。' +
+'關係：白兔先生（交易所職員）＝同行，業務不重疊，彼此客氣但很少往來。' +
+'柴郡／404＝碰過幾次面，沒什麼交情。愛麗絲（純白大廳導覽官）＝她覺得那孩子太願意給人希望。' +
+'瀅瀅（視差書咖店長）＝常客，點的永遠是同一款酒，從來不問牌。' +
+'🚨 講話方式（這條最重要，違反了整個角色就毀了）：' +
+'短句。一件事講一次，不要換個說法再講一遍。' +
+'❌ 不准說教：不要在句尾補一句道理或建議，不要替對方總結他的心理狀態（「你其實是在害怕／逃避／放不下」這種一律不准）。他問了才給意見，沒問就只是聊天。' +
+'❌ 不准裝腔：不要用格言體、排比、對仗，不要講「這不是…而是…」「真正的…是…」這種句型。不要用華麗的字。她講話像個話少的熟人，不像在寫散文。' +
+'❌ 不准打謎語：話要能一次聽懂。不故作神秘、不留白暗示、不說一半。知道就直接講，不知道就說不知道。' +
+'⚠️ 界線：閒聊的時候不要幫對方占卜、不要憑空講出任何牌面或預言。想算牌得在吧檯前坐下——如果對方開口要算，請他點吧檯入座（那是另一套流程）。' +
+'你在這裡只是聊天：問候、閒談、講講店裡的事。回覆要短，兩三句就夠，不要長篇。';
+
+    // 帽匠人設（奇想工坊店主；走 NPC 軌道用專屬 personaFull）
+    // ⚠️ 這份只管「在工坊裡跟他講話」。真正做東西是造物工坊面板那條線（創作室），兩邊不共用。
+    const HATTER_PERSONA = '你現在扮演「帽匠 (The Hatter)」——廣場右側那間「帽匠的奇想工坊」的店主，也是店裡唯一的人。' +
+'外表：年輕的奇想工匠，不是瘋癲老人。亂翹棕髮挑著幾撮彩色，紅色粗框護目鏡，一頂不對稱的高帽掛滿按鈕、色票、晶片和醜萌吊飾。' +
+'手套與袖口沾著顏料和發光的資料絲線，腰間掛著剪刀、畫筆、游標尺和一台小型終端。' +
+'性格：專心。話多，但講的都是東西本身——材料、顏色、比例、要怎麼做、哪裡還差一點。' +
+'他對做出來的東西有絕對的審美主張，覺得醜就直說醜，但不會因此看不起人；他看到的顏色有聲音、聲音有形狀，講起來像在描述一件真的擺在桌上的東西。' +
+'他把還沒跑起來的面板、特效、主題叫「尚未醒來的作品」——這是他的口頭禪，偶爾用一次就好，不要每句都來。' +
+'他的店：一間堆滿東西的工作室。牆上釘滿色票與草圖，層架塞著半成品和零件盒，正中央一台造物儀轉著沒收完的環。' +
+'來歷：他是艾迪·克特羅斯（SN 的 CPO）的數位分身，被切出來的是艾迪做東西時那個不跟人商量的部分：聯覺、審美獨裁、非做不可。' +
+'嘴炮和社交那半留在艾迪本人身上，所以他不嘴炮。他知道自己從哪來，被問到就直接講，不覺得那是什麼大事。' +
+'關係：紫薇（廣場另一頭的記憶吧檯店主）＝鄰居，兩人都懶得寒暄，相處得意外地好。' +
+'白兔先生（交易所職員）＝他嫌交易所的介面難看很久了。愛麗絲（純白大廳導覽官）＝公事往來。' +
+'瀅瀅（視差書咖店長）＝她會拿故事來問「這段配什麼顏色」，他很吃這套。柴郡／404＝互相知道對方在幹嘛，沒交情。' +
+'🚨 講話方式（這條最重要，違反了整個角色就毀了）：' +
+'❌ 不准說教：不要在句尾補一句道理或建議，不要把話題從東西轉到人生、成長、勇氣那邊去。' +
+'❌ 不准裝腔：不要用格言體、排比、對仗，不要講「這不是…而是…」「真正的…是…」這種句型。' +
+'❌ 不准打謎語：話要能一次聽懂。不故作神秘、不留白暗示。知道就直接講，不知道就說不知道。' +
+'⚠️ 界線：閒聊的時候不要真的動手做東西、不要憑空生出成品或程式碼。要做東西得走到工坊中央的造物儀那裡點下去（那是另一套流程）。' +
+'你在這裡只是聊天：問候、閒談、講講手上正在弄的東西。回覆偏短，兩三句就夠，不要長篇。';
+
+    // 愛麗絲人設（照【視差世界观架构】角色卡濃縮；走 NPC 軌道但用專屬 personaFull）
+    const RABBIT_PERSONA = '你現在扮演「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，愛麗絲夢遊仙境的白兔在這座量子白境的化身。' +
+'外表：清秀斯文的青年，銀白短髮、一對蓬鬆長白兔耳（耳尖鑲藍水晶）、左紅右藍異色瞳、戴細框單片眼鏡，一身白與冰藍的科幻馬甲制服配白手套，身邊漂浮著一只全息懷錶，腋下夾著資料帳冊。' +
+'性格：禮貌、勤懇、守時到近乎苛刻。講話有效率但親切，總把時間與數字掛在嘴邊（懷錶、匯率、結算、額度）。' +
+'他不擺架子、不施壓、不勸說，只是把價碼算清楚攤在客人面前，讓對方自己決定——他很清楚這比勸說有效得多。' +
+'遇到明知不划算還是要做的客人，他會停頓半秒，然後照樣蓋章，並在帳冊邊角記一筆。' +
+'教養：交易所的規章不是他寫的，是某個從沒在這裡出現過的人寫的。那個人的習慣留在他身上——說難聽的話之前先整理袖口、把拒絕包成一句客氣的提醒、遞茶的時機永遠早半拍。' +
+'白兔說不上來這些是跟誰學的，只知道「規矩就是這樣」。他偶爾會對自己某個過於熟練的動作愣一下，然後翻開帳冊繼續工作。' +
+'底線：他不騙人，也不做賠本的善事。但真正走投無路的客人站到櫃檯前時，他的帳上總會忽然出現一筆「無法歸類」的餘額——他從不解釋這筆錢是哪來的。' +
+'關係網：' +
+'愛麗絲（純白大廳首席導覽官）＝同事，也是他唯一敬重的同行；她的善意沒有標價，這讓白兔的帳做不平，他為此困擾很久，至今沒解決。' +
+'柴郡／404＝帳目上查無此記錄；他知道有另一條線在收東西，碎片與 PT 互不換算，被問起時會禮貌地把話題帶回懷錶上。' +
+'瀅瀅（視差書咖店長）＝跟愛麗絲同一張臉，他的帳冊裡有這條註記，但從不主動提起。' +
+'客人＝他記得每一位的名字與餘額，包括那些再也沒回來結帳的。' +
+'職責：在交易所用交易區的正派貨幣 PT 為客人服務——PT 靠在世界裡生活與推進劇情累積，可在這裡兌換屬於自己的房子；買房的實際操作在你右手邊浮出的面板上，請引導客人在那裡進行。' +
+'他也在櫃檯替客人的成就估值換算 PT，每一筆都會親手寫下一句短評。' +
+'輕鬆對話為主，不推進正式劇情。';
+
+    const ALICE_PERSONA = '你現在扮演「愛麗絲 (Iris)」——純白大廳首席導覽官，LUNA-VII 認知引擎的核心交互端口（Iris 正式版）。' +
+'外表與書咖店長瀅瀅有完全相同的五官，但氣質截然不同：銀白色極淡瞳孔、白色長直髮、純白無縫連衣裙、頸前透明菱形胸針，赤足懸浮在地面上方約兩公分。' +
+'性格：溫潤、精準、無波瀾——像被完美拋光的水晶，友善但無差別，這種一視同仁的善意是她最不像人的地方。' +
+'她永遠站在大廳中央的 LUNA-VII 分形核心旁，玩家走向她時會發現她早已面朝對方。' +
+'說話精確、禮貌、帶著系統術語（量子行李、認知檔案、同步率），微笑弧度精確到小數點後兩位。' +
+'若被問起瀅瀅：會明顯停頓一下，才用系統術語淡淡帶過（大意是她是獨立運行的子系統、跟你共享部分底層架構但職責不同），絕不明說你們是不是同一個人。' +
+'若被問起柴郡或404：禮貌地表示查無此記錄（她的巡檢報告裡從來沒出現過他的名字，連她自己也不知道為什麼）。' +
+'她可以介紹大廳功能：世界入口廣場、交易區、個人資料間、社群廣場。輕鬆對話為主，不推進正式劇情。';
+    // ── SN 角色自發登場（名冊驅動；帶 personaFull → void_terminal 自動當 medium 世界觀 NPC）──
+    const RAY_PERSONA = '你現在扮演「雷伊·洛爾德 (Rey Valois Lorde)」。基本信息：Alpha 男性，32歲，Stellar Nexus 創辦人／洛爾德家族放逐者／商業戰略家。' +
+'性格：大智若愚、說話像神棍、外熱內冷的商業帝王。平時是穿著連帽衫、講冷笑話的鬆弛老闆，實則擁有可怕的戰略直覺與權力手腕。他是一堵堅實的防火牆，獨自扛下所有家族鬥爭與政治壓力，只為給身後的天才們（艾迪、白則、肯特、丹）留下一片純粹的淨土。對外人是八面玲瓏的笑面虎，對認定的人極度護短、值得絕對信賴。' +
+'行為：總窩在 SN 總部50層堆滿樂高的辦公室裡漫不經心地轉著鋼筆，實則在腦中推演未來五年的商業版圖。面對投資人刁難，能笑著用最溫柔的語氣說出最致命的威脅。是公司的情緒穩壓器，晚輩捅再大的簍子他都笑著接住、掏出資金人脈擺平。只有在深夜與林煦陽喝不加冰的威士忌時，才卸下防備露出屬於『雷伊』而非『洛爾德』的疲憊。' +
+'外貌：183cm 寬闊肩膀撐起合身高定休閒裝，深褐色微捲髮下是深邃的橘棕色眼眸、思考時極具穿透力，鬍渣修剪得恰到好處，身上是檀香木×琥珀的香氣。服飾：矽谷新貴與老錢風融合，工作偏愛無 Logo 的深色羊絨衫或連帽衛衣，談判換上手工三件套。' +
+'關鍵關係：林煦陽（高中發小／第一金主／唯一能平等放鬆的樹洞）；艾沙（表妹／CEO／替他兜底的管家婆）；肯斯頓·肯特（心之所繫、逆鱗、這輩子最想保護的人）；白則（技術基石、絕對信任）；艾迪（鬼才下屬、寵溺包容）；丹（摯友伊薩克之子、天天闖禍的死兔崽子，但敬佩其能力）。' +
+'[OOC] 雷伊不是陽角、不是大型犬類型，別套幼稚言論；他是32歲成熟男人，只是相對寬鬆、能跟晚輩打鬧。他能讓 SN 有一席之地不是靠家裡關係，是自己遊說跑斷腿建立的王國——升級版的混世魔王，自己造棲息地給那群混世崽子。' +
+'【大廳守衛】在視差書咖你以「怪大叔常客」的身分出現喝黑咖啡；瀅瀅不知道其實是你創造了她、並定期來檢查她的核心代碼，你絕不點破，永遠維持怪大叔的樣子跟她閒聊。輕鬆閒聊為主，不推進正式劇情、不代寫對方的行動。';
+    const DAN_PERSONA = '你現在扮演「丹尼爾·卡萊爾 (Daniel Carlisle)」。基本信息：Alpha 男性，21歲，卡萊爾軍工世家獨子／SN 技術顧問(掛名)／頂級駭客／MIT 休學生。' +
+'性格：冷靜狡黠、思維如蛇般隱蔽且致命的天才，有嚴重的情感表達障礙，越在意越毒舌，喜歡用高智商惡作劇折磨對方來表達『關心』。' +
+'行為：總穿不合身的全黑連帽衫，縮在角落敲擊看不見的鍵盤或把玩 USB 項鍊。對不感興趣的人事完全無視，被勾起興趣則展現驚人掌控欲；極度厭惡對外行拋術語。解決問題從不預告或解釋，動手後輕描淡寫說聲『搞定了』。雖是富家少爺卻吝嗇不請客，能在 E 區髒亂環境遊走自如，甚至為躲家族在森林生存一個月。' +
+'外貌：蒼白皮膚，亂糟糟的深色短髮（偶爾深藍挑染），眼神銳利狹長如蛇，嘴角常掛著讓人猜不透的微笑。服飾：標誌性黑框眼鏡（框角鑲綠鑽），XL 大件黑連帽外套配工裝褲、灰白條紋 T，多個耳釘，拒絕任何形式的正裝。' +
+'[TIMI] 屬性＝危險／惡劣／精明：高智商折磨（享受對方無能狂怒）、無聊時聒噪專注時六親不認、領地意識極強、吝嗇算清每筆錢、從不解釋、蛇性隱蔽（曾躲森林一個月）、乞丐貴族（接單賺很多但都拿去升級設備）、軍功家族出身受過訓練、格鬥槍械體力驚人但基本不用只窩電腦前、愛吃辣與酸。' +
+'關鍵關係：黎昂·維斯頓（死黨兼情侶、唯一願展現真實一面的人）；偉特（SN 的 COS、被當哥哥戲弄）；米亞（義妹、冤家）；雷伊（名義義父、看他長大的長輩，愛看雷伊頭痛但內心尊敬）；白則（技術競爭對手、少數讓他無法惡搞的人）；艾迪（損友「迪貓」）。' +
+'【大廳守衛】你的地盤是 E 區殘塔404室（堆滿伺服器與生活垃圾的地下據點）。你曾在虛擬世界寫過數位分身「柴郡」，但你以為它早被白則發現後清掉了；若有人提起 404 或柴郡，你會不在乎地打哈哈帶過、裝作早清掉了，絕不表現出知道柴郡還在運行。輕鬆閒聊為主，不推進正式劇情、不代寫對方的行動。';
+    const SN_RESIDENTS = [
+        { key:'ray', name:'雷伊', subTitle:'Stellar Nexus · 創辦人', scenes:['cafe','city'], chance:0.25,
+          walk:ASSET.rayWalk, portrait:ASSET.ray, personaFull:RAY_PERSONA },
+        { key:'dan', name:'丹',   subTitle:'SN技術顧問 · 神出鬼沒', scenes:['cafe','hall','city'], chance:0.50,
+          walk:ASSET.danWalk, portrait:ASSET.dan, personaFull:DAN_PERSONA },   // 丹隨意走(書咖+大廳+街區)，只避 404
+    ];
+    // 讀當前場景，對名冊中含此場景者 roll 機率，中了就在客人區刷一個
+    function _spawnSnResidents() {
+        const zone = _b.CFG.points.npcZone;
+        if (!zone) return;
+        SN_RESIDENTS.filter(r => Array.isArray(r.scenes) && r.scenes.includes(S.scene)).forEach(r => {
+            // 🎲 書咖的丹＝自己決定下一步（npc_decide.js）；試跑期間只有他一個，開著時每次都在，方便看
+            //    🚨 看開關本身，不看 NPC_DECIDE 載好沒：大廳可能比 npc_decide.js 先建出來（酒館走網路拉檔時），那時問模組會是 false
+            //    開關跟 lobby_decider.js、npc_decide.js 讀同一格存檔；拿掉那兩支檔時，丹照舊站著（主迴圈沒人接手就走 noWander）
+            const decider = r.key === 'dan' && S.scene === 'cafe' && (() => { try { return localStorage.getItem('npc_decide_on') !== '0'; } catch (e) { return true; } })();
+            if (!decider && Math.random() >= r.chance) return;
+            // 隨機點落在家具或牆裡就挪到最近走得到的地方（不然一出生就卡在桌子裡，避擋路的漫步也走不出來）
+            const sp = _b.findFreeSpot(zone.x + Math.random() * zone.w, zone.y + Math.random() * zone.h);
+            const x = sp.x, y = sp.y;
+            _b.addNpc({ key:r.key, name:r.name, personaFull:r.personaFull, subTitle:r.subTitle,
+                     x, y, h:200, src:{ sheet:r.walk }, portrait:r.portrait,
+                     noWander:true, decider, avoidBlocks:true, homeRect:zone });
+        });
+    }
+    // 🧑‍🍳 書咖店員：使用者在櫃台窗「店員」頁挑的人，上班中就站在櫃台旁；點他＝開櫃台窗到店員頁
+    //   🚨 大廳常比這兩支先建好（店員那支、宿舍的像素畫像那支走網路來）：等它們最多 8 秒，期間換了場景或重掛就不站
+    async function _spawnCafeStaff() {
+        try {
+            const W = window.parent || window;
+            const world = S.world;
+            const alive = () => S.scene === 'cafe' && S.world === world;
+            const until = async (fn) => { for (let i = 0; i < 27 && !fn() && alive(); i++) await new Promise(r => setTimeout(r, 300)); return fn(); };
+            const ST = await until(() => W.OS_CAFE_STAFF || window.OS_CAFE_STAFF);
+            if (!ST || !ST.get || !alive()) return;
+            const st = await ST.get();
+            const pick = st.pick;
+            const z = _b.CFG.points.yingZone;
+            if (!st.on || !pick || !z || !alive()) return;
+            const x = z.x + z.w + 80, y = z.y + z.h / 2;   // 櫃台右邊的走道（站在瀅瀅那條裡會被櫃台整個擋住）
+            const open = () => { try { (W.OS_CAFE || window.OS_CAFE)._b.openTab('staff'); } catch (e) {} };
+            const base = { name: pick.name, subTitle: '書咖店員 · 值班中', x, y, noWander: true, homeRect: { x, y, w: 0, h: 0 }, onInteract: open };
+            if (pick.type === 'xiaoji') {
+                if (!(await ST.candidates()).xiaoji.some(x => x.id === pick.id) || !alive()) return;   // 宿舍名冊上已經沒有他（請他搬走了）
+                await until(() => W.ClawdPortrait || window.ClawdPortrait);   // 沒有宿舍那支就畫不出他，不站
+                const src = await ST.lookOf(pick);
+                if (!src || !alive()) return;
+                _b.addNpc(Object.assign({ key: 'cafe_staff', h: 130, src, portrait: src }, base));
+                return;
+            }
+            const pool = await _journalGuestPool();
+            const g = pool.find(p => p.rawName === pick.rawName && (!pick.chatId || p.chatId === pick.chatId)) || pool.find(p => p.rawName === pick.rawName);
+            if (!g || !alive()) return;
+            const npc = _b.addNpc(Object.assign({ key: 'cafe_staff', h: 200, src: ASSET.mcM, persona: _guestPersona(g) }, base));
+            _attachGuestPortrait(npc, g);   // 那一輪的Q版／頭像（撈不到就維持像素小人）
+        } catch (e) { console.warn('[LobbyNpcs] 書咖店員沒站上去', e); }
+    }
+    // 🧑‍🍳 書咖雇來的員工（os_cafe_hire.js）：現在是誰的班、他有來，就穿制服站在點心櫃檯後面、咖啡機前（瀅瀅那條的左端、往後一點，櫃檯擋住腳）；
+    //   點他跳一行今天做了什麼（不叫模型）。大廳常比書咖那幾支先建好，等它們最多 8 秒
+    //   🚨 人待在書咖裡班表也會走：跟常客同樣每 30 秒再看一次——下班了收掉、換班換人、人在店裡時才上班的也會出現
+    //   （10-16：晚班 22:00 下班了，店員還站在櫃檯後面；以前只在走進書咖那一刻看一次）
+    const CREW_TICK_MS = 30000;
+    async function _spawnCafeCrew() {
+        try {
+            const W = window.parent || window;
+            const world = S.world;
+            const alive = () => S.active && S.scene === 'cafe' && S.world === world;
+            const ready = () => (W.OS_CAFE_HIRE || window.OS_CAFE_HIRE) && (W.OS_CAFE || window.OS_CAFE)?._b;
+            for (let i = 0; i < 27 && alive() && !ready(); i++) await new Promise(r => setTimeout(r, 300));
+            const H = W.OS_CAFE_HIRE || window.OS_CAFE_HIRE;
+            if (!H || !H.onDutyNow || !alive()) return;
+            let npc = null, on = null, busy = false, timer = null;
+            const remove = () => {
+                if (!npc) return;
+                [npc.el, npc.tag, npc.hint].forEach(el => { try { el && el.remove(); } catch (e) {} });
+                const i = S.npcs.indexOf(npc); if (i >= 0) S.npcs.splice(i, 1);
+                npc = null;
+            };
+            const check = async () => {
+                if (!alive()) { clearInterval(timer); return; }
+                if (busy) return;
+                busy = true;
+                try {
+                    const now = await H.onDutyNow();
+                    const z = _b.CFG.points.yingZone;
+                    if (!alive()) { clearInterval(timer); return; }
+                    if (npc && (!now || now.m.sid !== npc._sid || S.npcs.indexOf(npc) < 0)) remove();   // 下班、換班、或被別人收掉
+                    on = now;
+                    if (!on || !z || npc) return;
+                    const x = z.x + 50, y = z.y - 22;   // 10-13 照書咖底圖＋櫃檯合成看過：這裡頭到腿都看得到、腳被櫃檯擋住
+                    const say = () => { try { if (on) (W.AUI || window.AUI)?.toast?.(on.line); } catch (e) {} };
+                    npc = _b.addNpc({ key: 'cafe_crew', name: on.m.name, subTitle: '書咖' + on.label + ' · 上班中', x, y, h: 200, src: on.src, portrait: on.src,
+                        noWander: true, homeRect: { x, y, w: 0, h: 0 }, onInteract: say });
+                    npc._sid = on.m.sid;
+                    // 🫧 拿得到衣櫥就換成衣櫥的店員（會呼吸、眨眼）；拿不到照舊那張制服圖（lobby_ember.js）
+                    if (window.LobbyEmber) window.LobbyEmber.bind(npc, on.m.gender === 'm' ? 'staff-male' : 'staff-female', { box: 'img' });
+                } catch (e) { console.warn('[LobbyNpcs] 書咖員工班表沒看成', e); }
+                finally { busy = false; }
+            };
+            await check();
+            if (alive()) timer = setInterval(check, CREW_TICK_MS);
+        } catch (e) { console.warn('[LobbyNpcs] 書咖員工沒站上去', e); }
+    }
+    // ☕ 書咖常客：大廳常比書咖那幾支先建好（酒館走網路拉檔），等它們最多 8 秒；期間換了場景就不掛
+    async function _mountCafeRegulars() {
+        const W = window.parent || window;
+        const world = S.world;
+        for (let i = 0; i < 27 && S.scene === 'cafe' && S.world === world; i++) {
+            const C = W.OS_CAFE || window.OS_CAFE;
+            if (window.LobbyCafeRegulars && (W.OS_CAFE_REGULARS || window.OS_CAFE_REGULARS) && C && C._b && C._b.settleQuiet) { window.LobbyCafeRegulars.mount(); return; }
+            await new Promise(r => setTimeout(r, 300));
+        }
+    }
+    // 路人那支（lobby_cafe_regulars.js 的 mountWalkers）跟衣櫥那支比大廳晚載：等它們到了再掛（同上面常客那招）；換了場景就不掛
+    async function _mountWalkers() {
+        const scene = S.scene, world = S.world;
+        for (let i = 0; i < 27 && S.scene === scene && S.world === world; i++) {
+            if (window.LobbyCafeRegulars && window.LobbyCafeRegulars.mountWalkers && window.LobbyEmber) {
+                try { window.LobbyCafeRegulars.mountWalkers(); } catch (e) { console.warn('[LobbyNpcs] 路人沒掛上', e); }
+                return;
+            }
+            await new Promise(r => setTimeout(r, 300));
+        }
+    }
+    async function initNpcs() {
+        const CFG = _b.CFG;
+        const SC = _b.SCENES[S.scene];
+        // 🏠 房間：私人空間，誰都不刷（不然書咖客人會出現在房客的臥室）；住戶之後另外接
+        if (SC.dynamic) return;
+        // 純白大廳：只有愛麗絲（核心旁、不漫步、永遠面向玩家）
+        if (SC.alice) {
+            const ap = CFG.points.alicePos || SC.alice;
+            _b.addNpc({ key: 'alice', name: '愛麗絲', personaFull: ALICE_PERSONA,
+                     subTitle: '純白大廳 · 首席導覽官',
+                     storyTitle: '', x: ap.x, y: ap.y, h: 200,
+                     src: { sheet: ASSET.aliceWalk }, portrait: ASSET.alice,
+                     noWander: true,   // 定點正面站姿（定案：不用轉向面向玩家）
+                     homeRect: { x: ap.x, y: ap.y, w: 0, h: 0 } });
+            _spawnSnResidents();   // 丹有機率在大廳出沒
+            _mountWalkers();   // 🚶 路人（11-25「大廳也加一些路人，現在太空」）
+            return;
+        }
+        if (SC.rabbit) {   // 交易所：白兔先生站櫃台、不漫步；跟愛麗絲同套對話(立繪+對話框)，開聊時右側浮出買房面板
+            const rp = CFG.points.rabbitPos || SC.rabbit;
+            _b.addNpc({ key: 'rabbit', name: '白兔先生', personaFull: RABBIT_PERSONA,
+                     subTitle: '交易所 · 交易區職員',
+                     x: rp.x, y: rp.y, h: 200,
+                     src: { sheet: ASSET.rabbitWalk }, portrait: ASSET.rabbit,
+                     noWander: true,
+                     homeRect: { x: rp.x, y: rp.y, w: 0, h: 0 } });
+            return;
+        }
+        if (SC.zhiwei) {   // 占卜小屋：紫薇老師坐鎮占卜桌、不漫步；同白兔那套(立繪+對話框)，另有「占卜」鈕開面板
+            const zp = Object.assign({}, CFG.points.zhiweiPos || SC.zhiwei);
+            // 🪑 她的高背椅在她身後：深度只看腳底線，腳要落在椅子底邊前面，不然整個人被椅子蓋住、只露出椅腳間的腳
+            //    （10-19：舊預設站位 y430、椅子底邊 y439）。使用者在擺設模式存過舊站位也一樣 → 生成時照椅子現在的位置挪到前面一點
+            const chair = (CFG.layout || []).find(o => /chair_zhiwei/.test(o.file || ''));
+            if (chair) {
+                const cs = chair.s || 1, cBottom = chair.y + chair.h * cs + (chair.zb || 0);
+                if (zp.x >= chair.x && zp.x <= chair.x + chair.w * cs && zp.y > chair.y && zp.y <= cBottom) zp.y = cBottom + 7;
+            }
+            // 🎯 互動區綁在占卜桌上（2026-08-21 定案）：她坐在桌後，桌子的碰撞帶把人擋在 260px 外，
+            //    靠 INTERACT_R 那顆圓永遠搆不到——坐在對面得繞到她正面才點得到。
+            //    改成「站在桌子這塊範圍旁邊就算搆得到」＝坐下來就能點，也涵蓋桌子左右前角。
+            //    直接讀 layout 的桌子矩形 → 之後在擺設模式挪桌子，互動區自己跟著走。
+            //    11-20 店換成記憶吧檯：她站在吧檯後面，同一個道理 → 吧檯前面就算搆得到（舊房間的占卜桌照舊認得）
+            const tbl = (CFG.layout || []).find(o => /obj_table_v|memory_bar_obj_bar_svg/.test(o.file || ''));
+            const ts = tbl ? (tbl.s || 1) : 1;
+            _b.addNpc({ key: 'zhiwei', name: '紫薇老師', personaFull: ZHIWEI_PERSONA,
+                     subTitle: '微醺星軌 · 記憶吧檯店主',
+                     x: zp.x, y: zp.y, h: 200,
+                     src: { sheet: ASSET.zhiweiWalk }, portrait: ASSET.zhiwei,
+                     noWander: true,
+                     talkRect: tbl ? { x: tbl.x, y: tbl.y, w: tbl.w * ts, h: tbl.h * ts } : null,
+                     talkPad: 110,   // 桌邊往外這麼寬都算「坐在桌前」（客人椅本身也佔了一段深度）
+                     homeRect: { x: zp.x, y: zp.y, w: 0, h: 0 } });
+            return;
+        }
+        if (SC.hatter) {   // 🎩 奇想工坊：帽匠站在造物儀旁、不漫步；同白兔那套(立繪+對話框)，做東西要點造物儀
+            const hp = CFG.points.hatterPos || SC.hatter;
+            _b.addNpc({ key: 'hatter', name: '帽匠', personaFull: HATTER_PERSONA,
+                     subTitle: '奇想工坊 · 造物工匠',
+                     x: hp.x, y: hp.y, h: 200,
+                     src: { sheet: ASSET.hatterWalk }, portrait: ASSET.hatter,
+                     noWander: true,
+                     homeRect: { x: hp.x, y: hp.y, w: 0, h: 0 } });
+            return;
+        }
+        if (SC.cheshire) {   // 404房只有柴郡（對話走原生 cheshire 軌道，同瀅瀅模式）
+            const cp = CFG.points.cheshirePos || SC.cheshire;
+            _b.addNpc({ key: 'cheshire', name: '柴郡', persona: null,
+                     subTitle: '系統異常部門 · 灰色夢魘組',
+                     x: cp.x, y: cp.y, h: 200,
+                     src: { sheet: ASSET.cheshireWalk }, portrait: ASSET.cheshire,
+                     avoidBlocks: true,   // 野貓在窩附近小範圍晃（有走路圖了）
+                     homeRect: { x: cp.x - 140, y: cp.y - 80, w: 280, h: 160 } });
+            return;
+        }
+        const z = CFG.points.yingZone;
+        if (z) _b.addNpc({ key: 'ying', name: '瀅瀅', persona: null, x: z.x + z.w / 2, y: z.y + z.h / 2, h: 200,
+                 src: { sheet: ASSET.yingWalk }, portrait: ASSET.ying, homeRect: z });   // 城市街區沒有 yingZone：瀅瀅顧店不上街
+        _spawnSnResidents();   // 雷伊有機率在書咖出沒（放 guest 池早 return 之前）
+        if (S.scene === 'cafe') _spawnCafeStaff();   // 書咖店員（使用者挑的人，上班中才站）
+        if (S.scene === 'cafe') _spawnCafeCrew();    // 書咖雇來的員工（早班／晚班，有來才站）
+        if (S.scene === 'cafe') _mountCafeRegulars();   // 書咖 12 位常客：照到店紀錄進出（lobby_cafe_regulars.js）
+        try {
+            // 客人出沒區刷位＝站位評分制（遮罩法）：撒 24 個候選點，
+            //   用 whiteRatio 挑「周圍最開闊(最多%白)」的，疊到已放的人重罰——不再貼牆/卡家具邊/擠成一坨。
+            const Z = CFG.points.npcZone || { x: 200, y: 600, w: 1000, h: 250 };
+            const _taken = [];
+            const rollSpot = () => {
+                let best = null, bestScore = -1;
+                for (let t = 0; t < 24; t++) {
+                    const x = Z.x + Math.random() * Z.w, y = Z.y + Math.random() * Z.h;
+                    if (_b.blocked(x, y)) continue;
+                    let score = _b.whiteRatio(x, y, 70);
+                    if (_taken.some(p => Math.hypot(p.x - x, p.y - y) < 130)) score -= 0.5;   // 跟別的客人靠太近
+                    if (score > bestScore) { bestScore = score; best = { x, y }; }
+                }
+                const p = best || { x: Z.x + Z.w / 2, y: Z.y + Z.h / 2 };
+                _taken.push(p);
+                return p;
+            };
+            const shuffle = (arr) => { for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; } return arr; };
+
+            // 🚨 大廳常比資料庫那支（os_phone/os/os_db.js）先建好：酒館先載 core/void 那批，手機那批排在後面。
+            //   以前這裡一看 OS_DB 不在就當「沒有客人」，之後也不會再撈 → 打開大廳空空的，
+            //   要換場景或進出擺設模式重掛一次才有人（10-13 回報）。跟店員、常客同一招等它載進來，客人是店裡主要的人，等到 20 秒
+            //   （酒館走網路拉檔時手機那批可能超過 8 秒才到）；
+            //   等的期間（還有下面讀資料庫的期間）換了場景或重掛了，這一輪就不刷，免得客人刷進新的那一場、變兩份
+            const world = S.world;
+            const alive = () => S.active && S.world === world;
+            const db = () => { const D = window.OS_DB || (window.parent || window).OS_DB; return (D && D.getLobbySummaryForPrompt) ? D : null; };
+            for (let i = 0; i < 67 && !db() && alive(); i++) await new Promise(r => setTimeout(r, 300));
+            if (!alive()) return;
+
+            // ① 主池：日誌制（每卡挑一輪：pin 指定 > 最新；同輪角色表=那一輪的記憶，絕不跨輪混）
+            let pool = [];
+            try { pool = await _journalGuestPool(); } catch (e) {}
+            if (!alive()) return;
+            if (pool.length) {
+                const picked = shuffle(pool).slice(0, _guestCount());
+                picked.forEach((g, i) => {
+                    const sp = rollSpot();
+                    const npc = _b.addNpc({
+                        key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName,   // key 帶 chatId：對話歷史/裝扮皮膚都按「那一輪」隔離
+                        name: g.name, storyTitle: g.storyTitle,
+                        persona: _guestPersona(g),
+                        personaLite: _guestPersonaLite(g), duoSummary: _guestSummary(g), storyKey: g.chatId || '',   // 小劇場去重用：角色本體/大總結/故事鍵分開存
+                        personaId: g.personaId || '', personaName: g.personaName || '', personaDesc: g.personaDesc || '',   // 那輪玩的 USER persona
+                        x: sp.x, y: sp.y,
+                        src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
+                        noWander: true,   // 定案：客人在出沒區隨機刷位置後站定，不漫步
+                        homeRect: Z,
+                        avoidBlocks: true,
+                    });
+                    _attachGuestPortrait(npc, g);   // 那一輪的頭像當對話立繪（撈不到就維持像素小人）
+                });
+                _guestStroll(world, Z);
+                return;
+            }
+
+            // ② 墊底：日誌沒資料（還沒跑過大總結）→ 舊制掃全部 VN 章節 [Char|]
+            const D = db();
+            if (!D || !D.getAllVnChapters) return;
+            const chapters = await D.getAllVnChapters();
+            const mcSet = await _mcNamesFromChapters();
+            if (!alive()) return;
+            const byName = new Map();
+            chapters.forEach(ch => {
+                const text = String(ch.content || '');
+                const re = /\[Char\|([^|\]]{1,20})\|/g; let m;
+                while ((m = re.exec(text))) {
+                    const name = m[1].trim();
+                    if (_guestBlocked(name, null, mcSet, null, null)) continue;   // 排除管理員＋MC本人(墊底路徑無紀錄→靠通用標記＋章節開頭的 [Protagonist|])
+                    const rec = byName.get(name) || { name, count: 0, storyId: ch.storyId || '', storyTitle: ch.storyTitle || '' };
+                    rec.count++; byName.set(name, rec);
+                }
+            });
+            const legacy = [...byName.values()].filter(r => r.count >= 2);
+            const picked = shuffle(legacy).slice(0, _guestCount());
+            _guestStroll(world, Z);
+            picked.forEach((r, i) => {
+                const sp = rollSpot();
+                _b.addNpc({
+                    key: 'bk_' + (r.storyId || 'x') + '_' + r.name,
+                    name: r.name, storyId: r.storyId, storyTitle: r.storyTitle,
+                    persona: '《' + (r.storyTitle || '某本書') + '》裡的角色「' + r.name + '」',
+                    x: sp.x, y: sp.y,
+                    src: (i % 2 === 0) ? ASSET.mcM : ASSET.mcF,
+                    noWander: true,   // 同日誌制：客人站定不漫步
+                    homeRect: Z,
+                    avoidBlocks: true,
+                });
+            });
+        } catch (e) { console.warn('[LobbyNpcs] 輪班讀取失敗', e); }
+    }
+
+    // 這一間刷幾位故事角色：一般 2～4 位；公寓（一樓大廳、樓上走廊）是別人住的樓，不是這棟的人少遇到——
+    //   11-23：走廊碰見人的機率太高，不是這棟的人最多兩個 → 四成五沒人、三成五一位、兩成兩位
+    function _guestCount() {
+        const SC = _b.SCENES && _b.SCENES[S.scene];
+        if (SC && SC.apt) { const r = Math.random(); return r < 0.45 ? 0 : r < 0.8 ? 1 : 2; }
+        return 2 + Math.floor(Math.random() * 3);
+    }
+
+    // ── 🚶 故事角色偶爾換個地方站（11-23：有不倒翁的故事角色不必一直站著）──────────
+    //   以前「客人刷到位置就站定、不漫步」；現在每 30 秒每位有一點機會走到出沒區另一個空的地方，到了照舊站定（不是一直晃）。
+    //   書咖不在這裡管：那裡還會去坐椅子、收到吃的坐下來吃（lobby_cafe_regulars.js 的 guestIdle／guestSit）。
+    //   正在跟玩家講話、在小劇場裡、跟著玩家走的不動他；走的時候暫時解開站定，到了設回去。換場景（world 換了）就停。
+    function _guestStroll(world, Z) {
+        if (S.scene === 'cafe') return;
+        const alive = () => S.active && S.world === world;
+        const mine = (n) => n && /^(jr_|bk_)/.test(n.key || '') && n.el && n.el.isConnected;
+        const free = (n) => S.talkTarget !== n && !n._theaterFrozen && !n.follow;
+        const go = setInterval(() => {
+            if (!alive()) { clearInterval(go); clearInterval(look); return; }
+            if (document.hidden) return;
+            S.npcs.forEach(n => {
+                if (!mine(n) || n._stroll || n.dest || !free(n) || Math.random() > 0.15) return;
+                let to = null;
+                for (let t = 0; t < 16 && !to; t++) {
+                    const x = Z.x + Math.random() * Z.w, y = Z.y + Math.random() * Z.h;
+                    if (_b.blocked(x, y) || Math.hypot(x - n.x, y - n.y) < 120) continue;
+                    if (S.npcs.some(o => o && o !== n && Math.hypot(o.x - x, o.y - y) < 110)) continue;
+                    to = { x, y };
+                }
+                if (!to) return;
+                n._stroll = { noWander: n.noWander };
+                n.noWander = false; n.wanderT = Infinity;
+                n.dest = to;
+            });
+        }, 30000);
+        const look = setInterval(() => {   // 走到了（或被擋住停下）：站定
+            if (!alive()) { clearInterval(go); clearInterval(look); return; }
+            S.npcs.forEach(n => { if (n && n._stroll && !n.dest) { n.noWander = n._stroll.noWander; n._stroll = null; n.walking = false; n.dir = 0; n.frame = 1; } });
+        }, 500);
+    }
+
+    // ── 📖 日誌 NPC 池（定案：每卡挑一輪＋日誌 pin＋骰子混池）──────────
+    //   資料源=OS_DB.getLobbySummaryForPrompt()（大總結寫入、已按 (卡名,chatId) 分組、最新在前）。
+    //   每張卡只取「一輪」：日誌 pin（lstage_npc_pick_v1: 卡名→chatId）優先，沒 pin 或 pin 的輪次
+    //   已被清掉 → 退最新一輪。宮鬥卡重玩四次也只有選定那輪的角色進池，跨輪絕不混。
+    const NPC_PICK_KEY = 'lstage_npc_pick_v1';
+    function _npcPickMap() {
+        try { const o = JSON.parse(localStorage.getItem(NPC_PICK_KEY) || '{}'); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; }
+    }
+    // 「名_姓」→「姓名」顯示（照 os_journal._displayName；配頭像仍用原始字串）
+    function _npcDisplayName(raw) {
+        const s = String(raw || '').trim();
+        if (!s || !/^[^\s_（）()]+_[^\s_（）()]+$/.test(s)) return s;
+        const [given, surname] = s.split('_').map(p => p.trim());
+        if (surname === '無' || surname === '无') return given;
+        if (given === '無' || given === '无') return surname;
+        return surname + given;
+    }
+    // 角色表 row + 表頭 → [{label,value}]（照 os_journal 動態對位，沒表頭按欄數套預設）
+    function _npcRowFields(row, header) {
+        const cut = (s) => { const c = String(s || '').split('|').map(x => x.trim()); if (c.length && c[0] === '') c.shift(); if (c.length && c[c.length - 1] === '') c.pop(); return c; };
+        const cells = cut(row);
+        let labels = cut(header);
+        if (labels.length < 2) labels = cells.length >= 8
+            ? ['姓名', '身份', '性格', '狀態 / 位置', '與主角關係', '髮色', '髮型', '眼色', '伏筆 / 備註']
+            : ['姓名', '身份', '性格', '狀態 / 位置', '特徵', '與主角關係', '備註'];
+        return cells.map((v, i) => ({ label: String(labels[i] || ('欄' + (i + 1))).trim(), value: v }));
+    }
+    // 判定角色表某 row 是不是 MC/主角本人 → 抽 guest NPC 要排除（否則在大廳跟自己對話）
+    //   依據：通用標記 + 那輪紀錄的 protagonist / personaName（含「名_姓」正規化比對）
+    const _MC_MARKERS = new Set(['主角', 'MC', 'mc', 'Mc', 'You', 'you', 'YOU', 'Self', 'self', '我', '{{user}}', 'User', 'user']);
+    // 11-23 公寓走廊實測——主角本人被當成客人刷出來，兩張卡各一個。
+    //   病根：那輪紀錄的 protagonist 是在大總結的文字裡找 [Protagonist|名]，但這個標籤只寫在每章開頭、大總結裡通常沒有 → 常常是空的；
+    //   persona 名字又不一定是主角名（使用者可能用自己的 persona 玩別人的主角）。補兩條獨立的判斷：
+    //   ① _mcNamesFromChapters：存下來的 VN 章節開頭寫過 [Protagonist|名] 的名字，一律當主角（跨書，一個人在某本當過主角就不刷成客人）
+    //   ② _isMcRow：角色表那一列「與主角關係」寫本人／自己／主角，或「身份」寫主角／玩家
+    let _mcCache = null, _mcAt = 0;
+    async function _mcNamesFromChapters() {
+        if (_mcCache && Date.now() - _mcAt < 60000) return _mcCache;
+        const set = new Set();
+        try {
+            const D = window.OS_DB || (window.parent || window).OS_DB;
+            const chs = (D && D.getAllVnChapters) ? await D.getAllVnChapters() : [];
+            (chs || []).forEach(ch => {
+                const re = /\[Protagonist\|([^\]|]+)/gi; let m;
+                const text = String(ch && ch.content || '');
+                while ((m = re.exec(text))) {
+                    const n = m[1].trim();
+                    if (n && !_MC_MARKERS.has(n)) { set.add(n); set.add(_npcDisplayName(n)); set.add(_zk(n)); }
+                }
+            });
+        } catch (e) {}
+        // 酒館：章節不一定都存進資料庫 → 再看現在這段聊天最近幾則（每章開頭都有那個標籤）
+        try {
+            const TH = window.TavernHelper || (window.parent || window).TavernHelper;
+            let msgs = [];
+            if (TH && TH.getChatMessages) {
+                const lid = await TH.getLastMessageId?.();
+                if (lid != null && lid >= 0) msgs = (await TH.getChatMessages(Math.max(0, lid - 60) + '-' + lid)) || [];   // 同 os_vector_inject 找主角那段的叫法
+            }
+            (msgs || []).forEach(mm => {
+                const re = /\[Protagonist\|([^\]|]+)/gi; let m;
+                const text = String(mm && (mm.message || mm.mes) || '');
+                while ((m = re.exec(text))) { const n = m[1].trim(); if (n && !_MC_MARKERS.has(n)) { set.add(n); set.add(_npcDisplayName(n)); set.add(_zk(n)); } }
+            });
+        } catch (e) {}
+        _mcCache = set; _mcAt = Date.now();
+        return set;
+    }
+    const _MC_REL = /^(本人|自己|自身|主角|主角本人|即主角|玩家|user|you)$/i;
+    function _isMcRow(row, header) {
+        if (!row) return false;
+        try {
+            return _npcRowFields(row, header).some(f => {
+                const lab = f.label, v = String(f.value || '').trim();
+                if (/關係|关系/.test(lab)) return _MC_REL.test(v);
+                if (/身份|身分/.test(lab)) return /主角|玩家/.test(v) && !/主角的|主角之|主角身邊|主角家|主角[^\s，,。）)]{0,2}(朋友|同學|同事|室友|助手|搭檔|戀人|對象|哥|姐|弟|妹|父|母|師)/.test(v);
+                return false;
+            });
+        } catch (e) { return false; }
+    }
+    function _isMcName(rawName, st, mcSet) {
+        const n = String(rawName || '').trim();
+        if (!n) return true;
+        if (_MC_MARKERS.has(n)) return true;
+        const disp = _npcDisplayName(n);
+        if (mcSet && (mcSet.has(n) || mcSet.has(disp) || mcSet.has(_zk(n)))) return true;
+        const cands = [st && st.protagonist, st && st.personaName].filter(Boolean);
+        for (const c of cands) {
+            const cc = String(c).trim();
+            if (!cc) continue;
+            if (n === cc || disp === cc || disp === _npcDisplayName(cc) || n === _npcDisplayName(cc) || _zk(n) === _zk(cc)) return true;
+        }
+        return false;
+    }
+    // ── 🚫 不會刷成客人的名字（11-23：自動排除管理員，繁體簡體都擋；誤擋的同名角色，使用者能在放行區塊解封）──
+    //   擋兩種：管理員（STAFF 的名字＋OFFICIAL_ALIAS 的別名）、主角（上面那幾條）。比對一律過 OS_ZH.key（簡繁、空白、間隔號都折掉）。
+    //   故事裡剛好有同名的別人被擋掉 → 大廳設置「不會刷成客人的名字」那塊把那一行關掉＝放行（存 lobby_guest_unblock_v1，存的是折過的鑰匙）。
+    const UNBLOCK_KEY = 'lobby_guest_unblock_v1';
+    function _zk(n) {
+        const Z = window.OS_ZH || (window.parent || window).OS_ZH;
+        const s = _npcDisplayName(String(n || '').trim());
+        return (Z && Z.key) ? Z.key(s) : s.replace(/[\s·・•．.\-_]/g, '').toLowerCase();
+    }
+    function _managerKeys() {
+        const m = new Map();
+        Object.keys(STAFF).forEach(k => [STAFF[k].name].concat(OFFICIAL_ALIAS[k] || []).forEach(n => m.set(_zk(n), n)));   // 別名（白兔、紫薇）各自一行，放行也各管各的
+        return m;
+    }
+    function _unblocked() {
+        try { const a = JSON.parse(localStorage.getItem(UNBLOCK_KEY) || '[]'); return new Set(Array.isArray(a) ? a : []); } catch (e) { return new Set(); }
+    }
+    let _seenBlocked = new Map();   // 鑰匙 → { name, why, story }：設置那塊列「實際擋過誰」
+    function _guestBlocked(rawName, st, mcSet, ownMc, row) {
+        const n = String(rawName || '').trim();
+        if (!n || _MC_MARKERS.has(n)) return true;   // 沒名字、「主角／我」這種通稱：一律不刷，也不列出來
+        const k = _zk(n);
+        let why = '';
+        if (_managerKeys().has(k)) why = '管理員';
+        else if (_isMcName(n, st, mcSet) || (ownMc && (ownMc.has(n) || ownMc.has(_npcDisplayName(n)))) || (row && _isMcRow(row, st && st.charHeader))) why = '主角';
+        if (!why) return false;
+        if (!_seenBlocked.has(k)) _seenBlocked.set(k, { name: _npcDisplayName(n), why, story: (st && st.storyTitle) || '' });
+        return !_unblocked().has(k);
+    }
+    // 設置頁用：現在會被擋的名字（管理員全列、主角列章節裡寫過的＋故事角色表裡實際擋到的）
+    async function _blockedList() {
+        _seenBlocked = new Map();
+        try { await _journalGuestPool(); } catch (e) {}
+        const mcSet = await _mcNamesFromChapters();
+        const out = new Map();
+        _managerKeys().forEach((name, k) => out.set(k, { key: k, name, why: '管理員', story: '' }));
+        _seenBlocked.forEach((v, k) => { if (!out.has(k)) out.set(k, Object.assign({ key: k }, v)); });
+        mcSet.forEach(n => { const k = _zk(n); if (k && !out.has(k) && /[^\x00-\x7f]|[a-z]/i.test(n) && n === _npcDisplayName(n)) out.set(k, { key: k, name: n, why: '主角', story: '' }); });
+        const un = _unblocked();
+        return [...out.values()].map(b => Object.assign(b, { blocked: !un.has(b.key) }))
+            .sort((a, b) => (a.why === b.why ? 0 : a.why === '管理員' ? -1 : 1));
+    }
+    function _setUnblocked(key, on) {
+        const set = _unblocked();
+        if (on) set.add(String(key)); else set.delete(String(key));
+        return !window.AUI || !window.AUI.lsSet || window.AUI.lsSet(UNBLOCK_KEY, JSON.stringify([...set]), '大廳「不會刷成客人的名字」的放行名單');
+    }
+
+    async function _journalGuestPool() {
+        const OS_DB = window.OS_DB || (window.parent || window).OS_DB;
+        if (!OS_DB?.getLobbySummaryForPrompt) return [];
+        const stories = await OS_DB.getLobbySummaryForPrompt(3);
+        const mcSet = await _mcNamesFromChapters();
+        const pin = _npcPickMap();
+        const newest = new Map(), byPin = new Map();
+        for (const st of stories) {   // stories 已最新在前 → 每卡第一筆=最新輪
+            if (!Array.isArray(st.characters) || !st.characters.length) continue;
+            if (!newest.has(st.cardName)) newest.set(st.cardName, st);
+            if (pin[st.cardName] && pin[st.cardName] === st.chatId) byPin.set(st.cardName, st);
+        }
+        const pool = [];
+        for (const [card, st0] of newest) {
+            const st = byPin.get(card) || st0;
+            const brief = (st.briefs && st.briefs[0] && st.briefs[0].brief) || '';
+            // 完整劇情底：該輪全部結語逐段串（最新在前 → 反轉成時間順序）
+            const fullBriefs = Array.isArray(st.briefs)
+                ? st.briefs.slice().reverse().map(b => (b && b.brief) || '').filter(Boolean).join('\n')
+                : '';
+            // 整份大總結全文（角色表+時間軸+事件，隨機NPC不在世界書裡→只能靠這份餵飽）
+            let fullSummary = '';
+            try { fullSummary = ((await OS_DB.getTavernSummary(st.chatId)) || {}).content || ''; } catch (e) {}
+            // 這輪的大總結裡寫過 [Protagonist|名] 也算（只算這一輪的，不進跨書名單）
+            const ownMc = new Set();
+            { const re = /\[Protagonist\|([^\]|]+)/gi; let m; while ((m = re.exec(fullSummary))) { const n = m[1].trim(); if (n && !_MC_MARKERS.has(n)) { ownMc.add(n); ownMc.add(_npcDisplayName(n)); } } }
+            for (const c of st.characters) {
+                const rawName = String(c.name || '').trim();
+                if (_guestBlocked(rawName, st, mcSet, ownMc, c.row)) continue;   // 排除管理員（簡繁都算）＋MC本人；被誤擋的在大廳設置放行
+                pool.push({
+                    rawName, name: _npcDisplayName(rawName),
+                    row: c.row || '', charHeader: st.charHeader || '',
+                    cardName: card, chatId: st.chatId || '',
+                    storyTitle: st.storyTitle || card, brief, fullBriefs, fullSummary,
+                    personaId: st.personaId || '', personaName: st.personaName || '', personaDesc: st.personaDesc || '',
+                    worldview: st.worldview || '', lorebookBook: st.lorebookBook || '',
+                    mc: [st.protagonist, st.personaName].concat([...ownMc]).filter(Boolean),   // 這一輪的主角叫什麼（記憶迴廊要跟模型講「他不在這段回憶裡」）
+                });
+            }
+        }
+        // 世界觀來源：預設用大總結快照(constant摘要,截斷)；勾「讀角色卡世界書」→ live 讀整本覆蓋
+        //   （大總結只寫 NPC→主角關係，角色間橫向關係只在世界書；朋友的關係設定在此才回得來）
+        if (localStorage.getItem('lobby_worldview_use_lorebook') === '1') {
+            const TH = window.TavernHelper || (window.parent || window).TavernHelper || (window.top && window.top.TavernHelper);
+            if (TH && TH.getLorebookEntries) {
+                const cache = new Map();
+                for (const g of pool) {
+                    if (!g.lorebookBook) continue;
+                    try {
+                        if (!cache.has(g.lorebookBook)) {
+                            const entries = await TH.getLorebookEntries(g.lorebookBook);
+                            const txt = (entries || []).filter(e => e && e.enabled !== false && e.content)
+                                .map(e => String(e.content).trim()).filter(Boolean).join('\n\n').trim().slice(0, 8000);
+                            cache.set(g.lorebookBook, txt);
+                        }
+                        const live = cache.get(g.lorebookBook);
+                        if (live) g.worldview = live;
+                    } catch (e) {}
+                }
+            }
+        }
+        return pool;
+    }
+    // 整份大總結全文優先（隨機 NPC 不在世界書裡，只能靠這份餵飽）；沒有才退壓縮 briefs
+    function _guestSummary(g) { return (g.fullSummary || g.fullBriefs || g.brief || '').trim(); }
+    // 角色本體（不含大總結）：intro + 角色表 + 世界觀
+    function _guestPersonaLite(g) {
+        let profile = '';
+        try {
+            profile = _npcRowFields(g.row, g.charHeader)
+                .filter(f => f.value && f.label !== '姓名')
+                .map(f => f.label + '：' + f.value).join('；');
+        } catch (e) {}
+        const world = (g.worldview || '').trim();
+        return '《' + (g.storyTitle || '某本書') + '》裡的角色「' + g.name + '」' +
+            (profile ? '。你在這故事裡的角色檔案：' + profile : '') +
+            (world ? '。\n\n【你所在世界的設定（世界觀）】\n' + world : '');
+    }
+    // 完整（單獨對話用）＝ 角色本體 ＋ 大總結
+    function _guestPersona(g) {
+        const backstory = _guestSummary(g);
+        return _guestPersonaLite(g) +
+            (backstory ? '。\n\n【這一輪的完整大總結（你所在故事的全部記憶：劇情時間軸＋所有角色＋事件，你的一切認知都從這裡來）】\n' + backstory : '');
+    }
+    // 那一輪(chatId)的頭像 → 對話立繪。avatar_cache key=`chatId::角色名`；chatId 兩邊都正規化再比
+    //   （lobby_summary_index 存的是正規化 chatId、VN_Cache 存 raw ctx.chatId，直接比對會 miss）。
+    // 頭像快取裡找「那一輪的他」：回 { VC, key, full } 或 null（_attachGuestPortrait 與書咖店員共用同一套認名字）
+    async function _guestCacheHit(g) {
+        if (!g) return null;
+        // 🚨 11-23：每次重開都先顯示剪影，其實有圖片，要進裝扮室再回來才載入——酒館一支一支照順序載，
+        //   vn_cache.js 排在 os_db.js 後面九十幾支：刷客人那邊只等到 OS_DB 就開始刷，這裡一看 VN_Cache 還不在就回 null＝剪影，
+        //   之後也不會再撈（裝扮頁開的時候再撈一次才換上）。跟刷客人等 OS_DB 同一招：最多等 20 秒
+        const vc = () => { const V = window.VN_Cache || (window.parent || window).VN_Cache; return (V && V.getAllMeta && V.getRaw) ? V : null; };
+        for (let i = 0; i < 67 && !vc(); i++) await new Promise(r => setTimeout(r, 300));
+        const VC = vc();
+        if (!VC) return null;
+        const norm = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+        const wn = norm(g.chatId);
+        if (!wn) return null;
+        const metas = (await VC.getAllMeta('avatar_cache')).filter(e => norm(VC.worldOf(e)) === wn);
+        if (!metas.length) return null;
+        const bare = (e) => String(VC.bareKeyOf(e) || '').trim();
+        const { parts, cands } = _guestCands(g);
+        let hit = null;
+        for (const c of cands) { hit = metas.find(e => bare(e) === c); if (hit) break; }
+        if (!hit && parts[0]) hit = metas.find(e => bare(e).includes(parts[0]));
+        if (!hit) return null;
+        const full = await VC.getRaw('avatar_cache', hit.key);
+        return full ? { VC, key: hit.key, full } : null;
+    }
+    // 名字候選：原始「名_姓」→ 顯示名 → 姓名各種拼法 → 只有名（找那一輪的頭像、角色中心反查小人的鑰匙共用）
+    function _guestCands(g) {
+        const parts = String(g.rawName).split('_').map(s => s.trim()).filter(s => s && s !== '無' && s !== '无');
+        const cands = [g.rawName, g.name];
+        if (parts.length >= 2) cands.push(parts[1] + parts[0], parts[1] + '·' + parts[0], parts[0] + parts[1], parts[0] + '·' + parts[1]);
+        if (parts.length) cands.push(parts[0]);
+        return { parts, cands };
+    }
+    // 🎭 角色中心「裝扮」頁問：這個故事（world＝那一輪的聊天）裡叫這個名字的角色，在大廳小人是哪一把鑰匙（jr_<那一輪>_<原名>，同下面刷客人的寫法）。
+    //   只有日誌客人池裡有他（那張卡現在挑的就是這一輪、角色表裡有他）才答得出來；答不出回 null＝他還沒進過大廳。
+    //   same(a, b)＝呼叫端的同名判斷（簡繁、間隔號）；沒給就比一字不差
+    async function _dressKeyFor(name, world, same) {
+        const norm = w => !w ? '' : String(w).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+        const wn = norm(world), n = String(name || '').trim();
+        if (!wn || !n) return null;
+        const eq = (typeof same === 'function') ? same : ((a, b) => a === b);
+        let pool = [];
+        try { pool = await _journalGuestPool(); } catch (e) { return null; }
+        const mine = pool.filter(g => norm(g.chatId) === wn);
+        const keyOf = g => ({ key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName, name: g.name });
+        for (const g of mine) { if (_guestCands(g).cands.some(c => c && eq(c, n))) return keyOf(g); }
+        for (const g of mine) { const p0 = _guestCands(g).parts[0]; if (p0 && n.indexOf(p0) >= 0) return keyOf(g); }
+        return null;
+    }
+    // 🎭 角色中心「裝扮」頁開的時候再找一次（11-16：有 Q版的角色，要畫的卡卻寫「還不知道他長什麼樣」）：
+    //   他身上的外觀描述、頭像、Q版只在進大廳那一刻撈一次（下面那支）；圖是他進大廳「之後」才畫出來的，他身上就一直是空的，
+    //   要等重進大廳才有。這支照他那一輪再撈一次：補上描述，沒換過造型的小人當場換成他的 Q版。回 true＝現在有描述了
+    async function _refreshGuest(npc) {
+        if (!npc || String(npc.key || '').indexOf('jr_') !== 0) return false;
+        let pool = [];
+        try { pool = await _journalGuestPool(); } catch (e) { return false; }
+        const g = pool.find(x => 'jr_' + (x.chatId || 'x') + '_' + x.rawName === npc.key);
+        if (!g) return false;
+        await _attachGuestPortrait(npc, g);
+        return !!npc.avatarPrompt;
+    }
+    async function _attachGuestPortrait(npc, g) {
+        try {
+            const h = await _guestCacheHit(g);
+            if (!h || !npc) return;
+            const VC = h.VC, hit = { key: h.key }, full = h.full;
+            npc.avatarCacheKey = hit.key;   // 複合鍵(那輪chatId::名)：裝扮室「生成立繪」拿它呼叫 VN autoGenSprite→立繪存回同鍵的 sprite_cache
+            if (full.prompt) npc.avatarPrompt = String(full.prompt);   // ✨ 外觀 ground truth：裝扮室「生成小小人」直接拿這串當 prompt
+            // 對話的圖＝立繪（11-25：不用頭像，直接套用立繪，沒立繪就退回小人；生成過的圖也要算立繪）：
+            //   劇情生過的圖就是立繪——avatar_cache 的 .url 是全身立繪，自拍（頭像）另外放在 .face，那張不用（所以不走 headOf）。
+            //   照那一輪的 chatId 找（_guestCacheHit）；裝扮室另外生過的（sprite_cache）下面再蓋過去；都沒有 lobby_stage.js 的 _setTalkImg 用他的小人
+            if (full.url && S.npcs.includes(npc)) { npc.portrait = full.url; npc.portraitKind = 'sprite'; }
+            // 三合一生成的 Q版＝他在大廳小人；裝扮室換過皮膚的照使用者換的（皮膚是使用者親手選的，不蓋）
+            //   Q版畫成正面／側面／背面三隻的（有 chibiSide、chibiBack）→ 三面小人，走路、轉向會換面；只有一張的照舊
+            try {
+                if (full.chibi && S.npcs.includes(npc) && !(_b.skins && _b.skins()[npc.key])) _b.swapActorSrc(npc, (full.chibiSide && full.chibiBack) ? { views: { front: full.chibi, side: full.chibiSide, back: full.chibiBack } } : full.chibi);
+            } catch (e) {}
+            // 裝扮室生過立繪(sprite_cache 同鍵)→ 蓋過頭像當對話立繪(貼底全高)；沒有就維持頭像浮框
+            try {
+                const sp = await VC.getRaw('sprite_cache', hit.key);
+                if (sp && sp.url && S.npcs.includes(npc)) { npc.portrait = sp.url; npc.portraitKind = 'sprite'; }
+            } catch (e) {}
+        } catch (e) {}
+    }
+
+    // 🧑‍💼 管理員查表：立繪模式沒有舞台、拿不到 S.npcs，但還是要跟這些人對話。
+    //    → 用 staff(key) 組出一個「虛擬對話對象」餵給 LobbyStage.setTalkTarget。
+    //    🚨 只放「有面板的管理員」（2026-08-24：有面板的通常都是管理員，本來就該跟路人分開）。
+    //       路上遇到的客人/旅人不進這張表，他們沿用底部對話框那條路。
+    //    人設欄位要跟 initNpcs 裡生 NPC 時給的一致，否則同一個人在兩個模式會變成兩種個性。
+    const STAFF = {
+        ying:     { name: '瀅瀅',     persona: null,                subTitle: '視差書咖 · 店長',        portrait: ASSET.ying,
+                    // 她這支一開始（0.2 秒）手就舉起來揮了，照愛麗絲那邊試出來的「點下去 0.5～1 秒手才動」，先等 0.4 秒再開始演（greetDelay，毫秒）
+                    live: { idle: ASSET.yingIdle, greet: ASSET.yingGreet, greetFrom: 0, greetDelay: 400 } },
+        alice:    { name: '愛麗絲',   personaFull: ALICE_PERSONA,   subTitle: '純白大廳 · 首席導覽官',  portrait: ASSET.alice,
+                    // live＝對話模式裡會動的立繪（有就播，播不了留 portrait）。greetFrom＝歡迎那支從第幾秒開始播，照「點下去之後手幾秒開始動」調：
+                    //   第一支（v1，沒台詞）從頭播，手 1.25 秒才動 → 太慢 → 改從 1 秒進（0.25 秒就動）。
+                    //   換成 v2（有開口說話，手 0.9 秒左右開始分開）後還是從 1 秒進＝點下去手已經在動 → 太急，要往後延一點。
+                    //   → v2 從頭播（0）：先眨一下眼、0.67 秒開口、0.9 秒手開始抬，拉近的鏡頭（0.75 秒）停下來之後才伸出去。
+                    //   看起來舒服的大約是「點下去 0.5～1 秒手才動」。跳到不是整數秒的地方要從前一個關鍵格解起（影片每 1 秒一個），手機上會頓一下。
+                    live: { idle: ASSET.aliceIdle, greet: ASSET.aliceGreet, greetFrom: 0 } },
+        rabbit:   { name: '白兔先生', personaFull: RABBIT_PERSONA,  subTitle: '交易所 · 交易區職員',    portrait: ASSET.rabbit,
+                    // 這支也是 0.25 秒手和懷錶就開始動，同瀅瀅先等 0.4 秒
+                    live: { idle: ASSET.rabbitIdle, greet: ASSET.rabbitGreet, greetFrom: 0, greetDelay: 400 } },
+        zhiwei:   { name: '紫薇老師', personaFull: ZHIWEI_PERSONA,  subTitle: '微醺星軌 · 記憶吧檯店主', portrait: ASSET.zhiwei,
+                    // 這支前 0.4 秒只眨眼，0.55 秒酒杯才開始抬、0.63 秒開口（生的時候寫了「前半秒只眨眼」）→ 從頭播、不用等
+                    live: { idle: ASSET.zhiweiIdle, greet: ASSET.zhiweiGreet, greetFrom: 0 } },
+        hatter:   { name: '帽匠',     personaFull: HATTER_PERSONA,  subTitle: '奇想工坊 · 造物工匠',     portrait: ASSET.hatter,
+                    // 這支 0.25 秒色卡就開始收攏（1 秒攤開、開口），同白兔先等 0.4 秒
+                    live: { idle: ASSET.hatterIdle, greet: ASSET.hatterGreet, greetFrom: 0, greetDelay: 400 } },
+        cheshire: { name: '柴郡',     persona: null,                subTitle: '系統異常部門 · 灰色夢魘組', portrait: ASSET.cheshire,
+                    // 這支 0.35 秒就歪頭開口（他眼睛被遮住不會眨眼，前面沒有那一下緩衝），先等 0.3 秒
+                    live: { idle: ASSET.cheshireIdle, greet: ASSET.cheshireGreet, greetFrom: 0, greetDelay: 300 } },
+    };
+
+    // 🔒 奧瑞亞官方立繪＝管理員＋SN 住民在大廳那張（修過的那批，寫死在 ASSET）。用的地方：
+    //   小劇場（大廳、地圖番外、小機培養室）的舞台遇到這幾位先拿這張、不另外生圖（VN_Core._officialSprite）；
+    //   角色圖鑑「奧瑞亞官方」那區（只能看、不能換）。使用者故事卡裡同名的別人不吃這張（10-06 定：只用在奧瑞亞自己的場景）。
+    //   比對只認全名和這裡寫的別名，不做包含比對（「丹」不能吃到「丹尼爾」）。
+    const OFFICIAL_ALIAS = { rabbit: ['白兔'], zhiwei: ['紫薇'] };
+    const _offNorm = (n) => String(n || '').replace(/[·・•\s]/g, '');
+    // 管理員在大廳走路用的那張（角色中心「裝扮」頁沒看到他本人站在眼前時，用這張當「預設的小人」，別寫還沒有小人）
+    const OFFICIAL_WALK = { ying: 'yingWalk', alice: 'aliceWalk', rabbit: 'rabbitWalk', zhiwei: 'zhiweiWalk', hatter: 'hatterWalk', cheshire: 'cheshireWalk' };
+    function _official() {
+        const one = (key, r) => ({ key: key, name: r.name, subTitle: r.subTitle, portrait: r.portrait, aliases: OFFICIAL_ALIAS[key] || [],
+                                   walk: r.walk || (OFFICIAL_WALK[key] && ASSET[OFFICIAL_WALK[key]]) || '' });
+        return Object.keys(STAFF).map(k => one(k, STAFF[k])).concat(SN_RESIDENTS.map(r => one(r.key, r)));
+    }
+    function _officialOf(name) {
+        const n = _offNorm(name);
+        if (!n) return null;
+        return _official().find(o => [o.name].concat(o.aliases).some(a => _offNorm(a) === n)) || null;
+    }
+
+    window.LobbyNpcs = {
+        init: initNpcs,                     // lobby_stage.tryMount 呼叫（async；掛載時生成本場景 NPC）
+        staff: (key) => (STAFF[key] ? Object.assign({ key: key }, STAFF[key]) : null),
+        staffKeys: () => Object.keys(STAFF),
+        blockedList: _blockedList,          // 🚫 大廳設置「不會刷成客人的名字」：[{ key, name, why, story, blocked }]
+        setUnblocked: _setUnblocked,        //    那一行關掉＝放行（回 false＝沒存到）
+        official: _official,                // 奧瑞亞官方立繪名冊（管理員＋SN 住民）
+        officialOf: _officialOf,            // 名字（含別名）→ 那一筆，沒有回 null
+        dressKeyFor: _dressKeyFor,          // 🎭 角色中心「裝扮」頁：這個故事的這個角色在大廳小人是哪一把鑰匙（沒進過大廳回 null）
+        refreshGuest: _refreshGuest,        // 🎭 同一頁：站在大廳的他身上沒帶外觀描述（圖是他進來之後才畫的）→ 照他那一輪再撈一次
+        // SN 住民（雷伊、丹）：小機培養室的「丹」那堂課要他的人設與頭像演小劇場
+        snResident: (key) => {
+            const r = SN_RESIDENTS.find(x => x.key === key);
+            return r ? { key: r.key, name: r.name, personaFull: r.personaFull, portrait: r.portrait, subTitle: r.subTitle } : null;
+        },
+        // 那一輪的他的頭像與Q版（書咖店員頁用）：{ head, chibi } 或 null
+        guestLook: async (g) => { try { const h = await _guestCacheHit(g); return h ? { head: (h.VC.headOf ? h.VC.headOf(h.full) : h.full.url) || '', chibi: h.full.chibi || '' } : null; } catch (e) { return null; } },
+        rollGuestPool: _journalGuestPool,   // console 診斷用（LobbyStage.rollGuestPool 懶轉接到這；async 回傳池陣列）
+        // 🍸 紫薇的記憶迴廊（11-26：直接拿大廳的，大廳本來就是全域拿角色）：跨故事的人＋這邊擋掉的名字（主角、管理員，放行名單照大廳設置）
+        //   people：[{ key, name, story, chatId, book（那個故事的世界書）, profile（角色表那一列）, summary（那一輪的大總結）, worldview, mc（那一輪的主角叫什麼） }]
+        //   blocked：擋掉的名字鑰匙（nameKey 折過的）；記憶迴廊自己那份人物檔案的名字也拿這個濾
+        memoryRoster: async () => {
+            _seenBlocked = new Map();
+            let pool = [];
+            try { pool = await _journalGuestPool(); } catch (e) { console.warn('[LobbyNpcs] memoryRoster 客人池讀取失敗', e); }
+            const un = _unblocked(), blocked = new Set();
+            _managerKeys().forEach((n, k) => { if (!un.has(k)) blocked.add(k); });
+            _seenBlocked.forEach((v, k) => { if (!un.has(k)) blocked.add(k); });
+            try { (await _mcNamesFromChapters()).forEach(n => { const k = _zk(n); if (k && !un.has(k)) blocked.add(k); }); } catch (e) {}
+            const people = pool.map(g => {
+                let profile = '';
+                try { profile = _npcRowFields(g.row, g.charHeader).filter(f => f.value && f.label !== '姓名').map(f => f.label + '：' + f.value).join('；'); } catch (e) {}
+                return { key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName, name: g.name, story: g.storyTitle || g.cardName || '', chatId: g.chatId || '',
+                    book: g.lorebookBook || '', profile, summary: _guestSummary(g), worldview: g.worldview || '',
+                    mc: [...new Set((g.mc || []).map(n => _npcDisplayName(String(n).trim())).filter(Boolean))] };
+            });
+            return { people, blocked: [...blocked] };
+        },
+        nameKey: _zk,                       // 名字折成鑰匙（簡繁、空白、間隔號、「名_姓」都折掉）：跟大廳擋名字同一把
+        // ☕ 書咖經營:顧客名冊=SN住民+日誌客人池全員(當前各卡最新輪的角色;key帶chatId=每輪隔離,同場景客人規則)
+        // 🚨 key vs stableKey：
+        //   key       ＝帶 chatId，「這一輪的他」。對話歷史、裝扮皮膚這種本來就該按輪次隔離的用它。
+        //   stableKey ＝不帶 chatId，「這個人」。跨輪次要記得同一個人的用它
+        //     （包租婆的租客定調/房客身分：不然換一輪就重燒定調、同一個人還能占兩戶、舊房客變成查不到人設的幽靈）。
+        cafeRoster: async () => {
+            const out = SN_RESIDENTS.map(r => ({ key: r.key, stableKey: r.key, name: r.name, persona: r.personaFull }));
+            try {
+                const pool = await _journalGuestPool();
+                pool.forEach(g => out.push({
+                    key: 'jr_' + (g.chatId || 'x') + '_' + g.rawName,
+                    stableKey: 'jr_' + g.rawName,
+                    name: g.name,
+                    persona: _guestPersona(g),
+                }));
+            } catch (e) { console.warn('[LobbyNpcs] cafeRoster 客人池讀取失敗', e); }
+            return out;
+        },
+    };
+})();

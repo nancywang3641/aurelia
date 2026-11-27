@@ -1,0 +1,431 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Cormorant+Garamond:wght@500;600;700&display=swap');
+
+/* ============================================================
+   藏書 Reader（踏入故事）
+   亮版 = 白金視差（冷白理石 / 深藍 / 金點綴,與入場精靈同一套 DNA）
+   暗版 = 黑金模式（深藍燙金 / 描邊框 / 金色標題）
+   功能性結構不動，只重塑視覺。
+   ============================================================ */
+
+:root {
+    /* 亮版 — 白金視差（對齊 story_entry_wizard 的配色）*/
+    --se-paper:        #eef1f7;
+    --se-paper-card:   #fdfdfc;
+    --se-ink:          #1f3a68;
+    --se-ink-soft:     rgba(31,58,104,0.62);
+    --se-line:         rgba(42,74,128,0.22);
+    --se-navy-acc:     #2a4a80;     /* 亮版主色深藍 */
+    --se-accent:       #b9924f;     /* 亮版點綴金 */
+    /* 暗版 — 深藍燙金 */
+    --se-navy-0:       #0a1024;
+    --se-navy-1:       #111a38;
+    --se-navy-card:    rgba(18,27,56,0.55);
+    --se-gold:         #d4af37;
+    --se-gold-soft:    #e8dcb5;
+    --se-gold-line:    rgba(212,175,55,0.32);
+    /* 共用襯線閱讀字（系統 Song/Ming 為主，免載重 CJK webfont）*/
+    --se-serif: 'Cormorant Garamond', 'Noto Serif TC', 'Source Han Serif TC',
+                'Songti TC', 'Songti SC', 'Source Han Serif SC', 'SimSun', serif;
+}
+
+/* === 發消息後的等待室（故事撰寫中 → 圖片繪製中 → 進入劇情）=== */
+#se-flow-overlay {
+    position: absolute; inset: 0; z-index: 60;
+    background: rgba(238,241,247,0.96);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+}
+.theme-darkgold #se-flow-overlay {
+    background: radial-gradient(circle at 50% 40%, rgba(17,26,56,0.97), rgba(7,10,24,0.98));
+}
+#se-flow-spin {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid rgba(42,74,128,0.15); border-top-color: var(--se-navy-acc);
+    animation: se-flow-rot 1s linear infinite;
+}
+.theme-darkgold #se-flow-spin { border-color: rgba(212,175,55,0.2); border-top-color: var(--se-gold); }
+#se-flow-label { font-size: 14px; font-weight: 700; letter-spacing: 3px; color: var(--se-ink); font-family: var(--se-serif); }
+.theme-darkgold #se-flow-label { color: var(--se-gold); text-shadow: 0 0 12px rgba(212,175,55,0.35); }
+#se-flow-sub { font-size: 12px; color: var(--se-ink-soft); min-height: 16px; letter-spacing: 1px; }
+.theme-darkgold #se-flow-sub { color: rgba(232,220,181,0.7); }
+@keyframes se-flow-rot { to { transform: rotate(360deg); } }
+
+/* ============================================================
+   亮版（默認）：白金視差
+   ============================================================ */
+#se-root-wrapper {
+    width: 100%; height: 100%; display: flex; flex-direction: column;
+    position: relative; overflow: hidden; box-sizing: border-box;
+    color: var(--se-ink);
+    background:
+        radial-gradient(circle at 50% -10%, #ffffff 0%, var(--se-paper) 55%, #e3e9f4 100%);
+}
+
+/* Header — 對齊「系統設置」：左返回鍵 + 絕對置中標題 + 右控制；淨色橫條、只留底線無陰影 */
+#se-toolbar {
+    position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    background: rgba(253,253,252,0.92);
+    border-bottom: 1px solid var(--se-line);
+    flex-shrink: 0;
+}
+/* 標題兩側翼線收尾金菱（呼應入場精靈的標題列）*/
+#se-toolbar::after {
+    content: '';
+    position: absolute; left: 50%; bottom: -3.5px;
+    width: 6px; height: 6px;
+    background: var(--se-accent);
+    transform: translateX(-50%) rotate(45deg);
+    pointer-events: none;
+}
+.se-back-btn {
+    position: relative; z-index: 2;
+    border: none; background: transparent; cursor: pointer; padding: 0;
+    font-size: 18px; line-height: 1; color: var(--se-ink-soft);
+    width: 34px; height: 34px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    transition: all 0.2s ease;
+}
+.se-back-btn:hover { background: rgba(42,74,128,0.08); color: var(--se-ink); }
+.se-title {
+    position: absolute; left: 0; right: 0; z-index: 1;
+    text-align: center; pointer-events: none;
+    font-family: var(--se-serif);
+    font-weight: 700; font-size: 19px; letter-spacing: 4px; color: var(--se-ink);
+}
+.se-controls { position: relative; z-index: 2; display: flex; gap: 4px; }
+.se-icon-btn {
+    border: none; background: transparent; cursor: pointer;
+    font-size: 15px; color: var(--se-ink-soft); transition: all 0.2s ease;
+    width: 34px; height: 34px; border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.se-icon-btn:hover { color: var(--se-navy-acc); background: rgba(42,74,128,0.10); }
+
+#se-content-area {
+    flex: 1; position: relative; width: 100%;
+    overflow-y: auto; overflow-x: hidden;
+    background: transparent; min-height: 150px;
+    padding: 22px 20px 28px; box-sizing: border-box;
+}
+
+/* 純文字容器：白理石紙卡（細藍框,同入場精靈選卡 DNA）*/
+#se-root-wrapper .native-render-wrapper {
+    color: var(--se-ink); display: flow-root; width: 100%;
+    max-width: 720px; margin: 0 auto 18px;
+    background: var(--se-paper-card);
+    border: 1px solid rgba(42,74,128,0.35);
+    border-radius: 8px;
+    padding: 26px 30px;
+    box-shadow: 0 1px 2px rgba(42,74,128,0.05), 0 10px 28px -18px rgba(31,58,104,0.45);
+    font-family: var(--se-serif);
+    font-size: calc(var(--mainFontSize, 16px) + 3px);
+    line-height: 1.9;
+    letter-spacing: 0.2px;
+    text-align: justify;
+}
+/* 段落首行縮排 + 段距，閱讀體 */
+#se-root-wrapper .native-render-wrapper p { margin: 0 0 0.85em; text-indent: 2em; }
+#se-root-wrapper .native-render-wrapper p:last-child { margin-bottom: 0; }
+
+/* HTML 區塊容器：透明、只給間距，讓角色卡自帶樣式發光 */
+#se-root-wrapper .story-html-block {
+    width: 100%; max-width: 760px; margin: 0 auto 18px;
+    display: flow-root;
+}
+
+/* 強制繼承：擋掉外部對 p/li/td 等的直接規則覆蓋 */
+#se-root-wrapper .native-render-wrapper * {
+    font-family: inherit !important;
+    color: inherit !important;
+}
+/* 吃掉 <q> 自動引號（避免跟原文引號重複）*/
+#se-root-wrapper .native-render-wrapper q::before,
+#se-root-wrapper .native-render-wrapper q::after { content: none !important; }
+
+#se-root-wrapper .native-render-wrapper p,
+#se-root-wrapper .native-render-wrapper li,
+#se-root-wrapper .native-render-wrapper td { color: var(--se-ink); }
+#se-root-wrapper .native-render-wrapper h1,
+#se-root-wrapper .native-render-wrapper h2,
+#se-root-wrapper .native-render-wrapper h3 {
+    color: var(--se-ink); font-family: var(--se-serif); letter-spacing: 1px;
+    text-indent: 0; text-align: left;
+    border-bottom: 1px solid var(--se-line); padding-bottom: 0.3em;
+}
+#se-root-wrapper .native-render-wrapper svg text,
+#se-root-wrapper .native-render-wrapper .nodeLabel,
+#se-root-wrapper .native-render-wrapper .edgeLabel {
+    color: var(--se-ink) !important; fill: var(--se-ink) !important;
+}
+
+/* ============================================================
+   暗版：黑金模式（深藍燙金）
+   ============================================================ */
+#se-root-wrapper.theme-darkgold {
+    color: var(--se-gold-soft);
+    background:
+        radial-gradient(circle at 50% -15%, #1a274d 0%, var(--se-navy-1) 38%, var(--se-navy-0) 72%, #070a18 100%);
+}
+/* 燙金描邊框（包整本「書」）+ 極淡星塵 */
+#se-root-wrapper.theme-darkgold::before {
+    content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
+    background-image:
+        radial-gradient(rgba(212,175,55,0.06) 1px, transparent 1px);
+    background-size: 26px 26px;
+}
+#se-root-wrapper.theme-darkgold::after {
+    content: ''; position: absolute; inset: 8px; z-index: 6; pointer-events: none;
+    border: 1px solid var(--se-gold-line);
+    border-radius: 8px;
+    box-shadow: inset 0 0 0 3px rgba(212,175,55,0.06),
+                inset 0 0 30px rgba(212,175,55,0.04);
+}
+#se-root-wrapper.theme-darkgold #se-toolbar,
+#se-root-wrapper.theme-darkgold #se-content-area,
+#se-root-wrapper.theme-darkgold #se-input-area { position: relative; z-index: 7; }
+
+#se-root-wrapper.theme-darkgold #se-toolbar {
+    background: transparent;
+    border-bottom: 1px solid var(--se-gold-line);
+}
+#se-root-wrapper.theme-darkgold .se-title {
+    color: var(--se-gold);
+    font-family: 'Cinzel', var(--se-serif);
+    font-weight: 700; letter-spacing: 5px;
+    text-shadow: 0 0 14px rgba(212,175,55,0.4);
+}
+#se-root-wrapper.theme-darkgold .se-back-btn { color: rgba(212,175,55,0.78); }
+#se-root-wrapper.theme-darkgold .se-back-btn:hover {
+    color: var(--se-gold); background: rgba(212,175,55,0.12);
+}
+#se-root-wrapper.theme-darkgold .se-icon-btn { color: rgba(212,175,55,0.78); }
+#se-root-wrapper.theme-darkgold .se-icon-btn:hover {
+    color: var(--se-gold); background: rgba(212,175,55,0.12);
+}
+
+#se-root-wrapper.theme-darkgold #se-content-area { background: transparent; color: var(--se-gold-soft); }
+
+#se-root-wrapper.theme-darkgold .native-render-wrapper {
+    color: var(--se-gold-soft);
+    background: var(--se-navy-card);
+    border: 1px solid var(--se-gold-line);
+    border-radius: 10px;
+    padding: 26px 30px;
+    box-shadow: inset 0 0 24px rgba(212,175,55,0.05),
+                0 12px 30px -18px rgba(0,0,0,0.9);
+    backdrop-filter: blur(2px);
+}
+#se-root-wrapper.theme-darkgold .native-render-wrapper p,
+#se-root-wrapper.theme-darkgold .native-render-wrapper li,
+#se-root-wrapper.theme-darkgold .native-render-wrapper td { color: var(--se-gold-soft); }
+#se-root-wrapper.theme-darkgold .native-render-wrapper h1,
+#se-root-wrapper.theme-darkgold .native-render-wrapper h2,
+#se-root-wrapper.theme-darkgold .native-render-wrapper h3 {
+    color: var(--se-gold);
+    border-bottom: 1px solid var(--se-gold-line);
+    text-shadow: 0 0 10px rgba(212,175,55,0.25);
+}
+
+/* ============================================================
+   VN TAB 模式（小窗口）— 收緊尺寸，沿用主題視覺
+   ============================================================ */
+#se-root-wrapper.vn-tab-mode { font-size: 12px; }
+#se-root-wrapper.vn-tab-mode #se-toolbar { height: 38px !important; padding: 0 12px !important; }
+#se-root-wrapper.vn-tab-mode .se-title { font-size: 14px !important; letter-spacing: 2px; }
+#se-root-wrapper.vn-tab-mode .se-icon-btn { width: 30px !important; height: 30px !important; font-size: 14px !important; }
+#se-root-wrapper.vn-tab-mode #se-content-area { padding: 12px 12px 16px !important; }
+#se-root-wrapper.vn-tab-mode .native-render-wrapper { padding: 16px 18px !important; margin-bottom: 12px !important; font-size: 13px !important; }
+
+/* Story Extractor 容器 */
+#story-extractor-container-vn { display: none; }
+#story-extractor-container-vn.show { display: flex !important; }
+
+/* ============================================================
+   輸入區底座（劫持 #form_sheld 進來用）
+   ============================================================ */
+#se-root-wrapper #se-input-area {
+    flex-shrink: 0; width: 100%;
+    background: rgba(253,253,252,0.88);
+    border-top: 1px solid var(--se-line);
+    z-index: 10; min-height: 50px; box-sizing: border-box;
+}
+#se-root-wrapper #se-input-area #form_sheld {
+    position: relative !important;
+    bottom: auto !important; left: auto !important; right: auto !important;
+    width: 100% !important; max-width: 100% !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 10px !important; margin: 0 !important;
+}
+/* 把酒館原生輸入框洗成本主題（form_sheld 還回原位後 selector 不再匹配，ST 原樣式自動回來）*/
+#se-root-wrapper #se-input-area #send_textarea,
+#se-root-wrapper #se-input-area textarea {
+    background: rgba(255,255,255,0.94) !important;
+    color: var(--se-ink) !important;
+    border: 1px solid var(--se-line) !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    font-family: var(--se-serif) !important;
+}
+#se-root-wrapper #se-input-area #send_textarea::placeholder { color: var(--se-ink-soft) !important; }
+#se-root-wrapper #se-input-area #send_textarea:focus,
+#se-root-wrapper #se-input-area textarea:focus {
+    background: #fff !important;
+    border-color: var(--se-navy-acc) !important;
+    box-shadow: 0 0 0 2px rgba(42,74,128,0.16) !important;
+    outline: none !important;
+}
+#se-root-wrapper #se-input-area #form_sheld > div,
+#se-root-wrapper #se-input-area #form_sheld > form,
+#se-root-wrapper #se-input-area #send_form,
+#se-root-wrapper #se-input-area #nonQRFormItems,
+#se-root-wrapper #se-input-area #leftSendForm,
+#se-root-wrapper #se-input-area #rightSendForm {
+    background: transparent !important; box-shadow: none !important; border: none !important;
+}
+#se-root-wrapper #se-input-area i,
+#se-root-wrapper #se-input-area svg,
+#se-root-wrapper #se-input-area .fa,
+#se-root-wrapper #se-input-area .fa-solid,
+#se-root-wrapper #se-input-area .fa-regular,
+#se-root-wrapper #se-input-area .fa-brands,
+#se-root-wrapper #se-input-area [class*="fa-"],
+#se-root-wrapper #se-input-area .menu_button,
+#se-root-wrapper #se-input-area #send_but,
+#se-root-wrapper #se-input-area .send_but,
+#se-root-wrapper #se-input-area #options_button,
+#se-root-wrapper #se-input-area label,
+#se-root-wrapper #se-input-area button {
+    color: var(--se-ink) !important; fill: var(--se-ink) !important;
+    opacity: 1 !important; text-shadow: none !important;
+}
+#se-root-wrapper #se-input-area #send_but,
+#se-root-wrapper #se-input-area .send_but {
+    background: rgba(42,74,128,0.08) !important;
+    border: 1px solid rgba(42,74,128,0.30) !important;
+    border-radius: 8px !important;
+}
+#se-root-wrapper #se-input-area #send_but:hover,
+#se-root-wrapper #se-input-area .send_but:hover {
+    background: var(--se-navy-acc) !important; color: #fff !important;
+}
+#se-root-wrapper #se-input-area #send_but:hover i,
+#se-root-wrapper #se-input-area .send_but:hover i { color: #fff !important; fill: #fff !important; }
+
+/* 暗版：黑金輸入區 */
+#se-root-wrapper.theme-darkgold #se-input-area {
+    background: rgba(10,16,36,0.82);
+    border-top: 1px solid var(--se-gold-line);
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_textarea,
+#se-root-wrapper.theme-darkgold #se-input-area textarea {
+    background: rgba(18,27,56,0.85) !important;
+    color: var(--se-gold-soft) !important;
+    border-color: var(--se-gold-line) !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_textarea::placeholder { color: rgba(232,220,181,0.4) !important; }
+#se-root-wrapper.theme-darkgold #se-input-area #send_textarea:focus,
+#se-root-wrapper.theme-darkgold #se-input-area textarea:focus {
+    border-color: var(--se-gold) !important;
+    box-shadow: 0 0 0 2px rgba(212,175,55,0.18) !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_but,
+#se-root-wrapper.theme-darkgold #se-input-area .send_but {
+    background: rgba(212,175,55,0.10) !important;
+    color: var(--se-gold) !important;
+    border-color: var(--se-gold-line) !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_but:hover,
+#se-root-wrapper.theme-darkgold #se-input-area .send_but:hover {
+    background: var(--se-gold) !important; color: var(--se-navy-0) !important;
+}
+/* 暗版圖示一律金 */
+#se-root-wrapper.theme-darkgold #se-input-area,
+#se-root-wrapper.theme-darkgold #se-input-area *,
+#se-root-wrapper.theme-darkgold #se-input-area *::before,
+#se-root-wrapper.theme-darkgold #se-input-area *::after {
+    color: var(--se-gold) !important; fill: var(--se-gold) !important; text-shadow: none !important;
+}
+#se-root-wrapper.theme-darkgold #se-input-area #send_but:hover i,
+#se-root-wrapper.theme-darkgold #se-input-area .send_but:hover i { color: var(--se-navy-0) !important; fill: var(--se-navy-0) !important; }
+
+/* ── 開場白切換列（多開局卡） ── */
+.se-hidden { display: none !important; }
+#se-swipe-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--se-line);
+    flex-shrink: 0;
+}
+#se-swipe-label {
+    font-family: var(--se-serif);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--se-ink-soft);
+    min-width: 96px;
+    text-align: center;
+}
+.se-swipe-btn {
+    background: none;
+    border: 1px solid var(--se-line);
+    border-radius: 8px;
+    width: 32px;
+    height: 26px;
+    font-size: 12px;
+    color: var(--se-ink-soft);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.se-swipe-btn:hover:not(:disabled) { color: var(--se-navy-acc); background: rgba(42,74,128,0.10); }
+.se-swipe-btn:disabled { opacity: 0.3; cursor: default; }
+.theme-darkgold #se-swipe-bar { border-bottom-color: var(--se-gold-line); }
+.theme-darkgold #se-swipe-label { color: var(--se-gold-soft); }
+.theme-darkgold .se-swipe-btn { border-color: var(--se-gold-line); color: var(--se-gold-soft); }
+.theme-darkgold .se-swipe-btn:hover:not(:disabled) { color: var(--se-gold); background: rgba(212,175,55,0.12); }
+
+/* ── 本卡模式列（圖庫/自由） ── */
+#se-mode-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 5px 12px 7px;
+    border-bottom: 1px solid var(--se-line);
+    flex-shrink: 0;
+}
+#se-mode-label {
+    font-family: var(--se-serif);
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: var(--se-ink-soft);
+}
+.se-mode-chip {
+    border: 1px solid var(--se-line);
+    background: transparent;
+    color: var(--se-ink-soft);
+    border-radius: 999px;
+    padding: 3px 14px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+/* 視差世界期間模式由世界門決定 → 三顆都不給按（active 那顆照樣亮著，看得出現在在跑哪個） */
+.se-mode-chip.locked {
+    cursor: default;
+    opacity: 0.55;
+}
+.se-mode-chip.active {
+    background: var(--se-navy-acc);
+    border-color: var(--se-navy-acc);
+    color: #f4efe3;
+    font-weight: 700;
+}
+.theme-darkgold #se-mode-bar { border-bottom-color: var(--se-gold-line); }
+.theme-darkgold #se-mode-label { color: var(--se-gold-soft); }
+.theme-darkgold .se-mode-chip { border-color: var(--se-gold-line); color: var(--se-gold-soft); }
+.theme-darkgold .se-mode-chip.active { background: var(--se-gold); border-color: var(--se-gold); color: #1a1408; }

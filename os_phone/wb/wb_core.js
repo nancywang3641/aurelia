@@ -1,0 +1,974 @@
+// ----------------------------------------------------------------
+// [微博] wb_core.js (V6.5 - Animation Fix)
+// 職責：微博核心邏輯
+// 升級：修復詳情頁互動時動畫重播問題，改為只更新評論列表區域。
+// ----------------------------------------------------------------
+(async function() {
+    console.log('[Weibo] App Core V6.5 (Animation Fix) Loaded');
+    const win = window.parent || window;
+    const doc = win.document;
+
+    // --- 依賴檢查 ---
+    if (window.WB_THEME) { window.WB_THEME.inject(doc); }
+    if (!win.WB_VIEW) { console.error('錯誤：未檢測到 wb_view.js'); return; }
+    if (!win.OS_DB) { console.error('錯誤：未檢測到 os_db.js'); return; }
+
+    let GLOBAL_POSTS = [];   // 全部故事的都在這（找某一則用它）；畫面與給 AI 看的一律用 _posts()
+    // 只留這個故事的：蓋這本章的、常駐角色發的（大廳章）、沒蓋章的舊資料
+    function _posts() {
+        let cid = null, L = '';
+        try { cid = win.OS_DB && win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null; L = (win.OS_DB && win.OS_DB.LOBBY_ID) || ''; } catch (e) {}
+        if (cid == null) return GLOBAL_POSTS;
+        return GLOBAL_POSTS.filter(function (p) { return p && (p.tavernChatId == null || p.tavernChatId === cid || (L && p.tavernChatId === L)); });
+    }
+    // 圖庫編號的圖（生完存進 OS_DB 的）要另外貼上
+    function _hydrateImgs(root) {
+        try { const PI = win.OS_PHONE_IMAGE; if (PI && PI.hydrate) PI.hydrate(root); } catch (e) {}
+    }
+    // 轉發名單裡的名字是她或模型取的：放進 HTML 前轉掉，塞進 onclick 的字串參數再多轉一層 JS（\ ' 換行）
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _jsArg(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n'));
+    }
+    let CURRENT_TAB = 'home';
+    let APP_CONTAINER = null;
+    let CURRENT_OPEN_POST_ID = null;
+    let DARK_MODE = localStorage.getItem('wb_dark_mode') === 'true';
+
+    win.wbApp = {
+        
+        isLoading: false, 
+
+        // --- 1. 啟動與數據加載 ---
+        init: async function() {
+            try {
+                const savedPosts = await win.OS_DB.getAllWbPosts();
+                if (savedPosts && savedPosts.length > 0) {
+                    GLOBAL_POSTS = savedPosts;
+                    console.log(`[Weibo] 成功讀取 ${GLOBAL_POSTS.length} 條存檔`);
+                }
+            } catch (e) {
+                console.error("[Weibo] 讀取存檔失敗:", e);
+            }
+        },
+
+        switchTab: function(tab) {
+            CURRENT_TAB = tab;
+            this.render();
+        },
+
+        openDetail: function(postId) {
+            const post = GLOBAL_POSTS.find(p => p.id === postId);
+            if (!post) return;
+            CURRENT_OPEN_POST_ID = postId;
+            const container = doc.getElementById('wb-detail-container');
+            if (container) {
+                container.innerHTML = win.WB_VIEW.renderDetailPage(post);
+                _hydrateImgs(container);
+            }
+        },
+
+        closeDetail: function() {
+            CURRENT_OPEN_POST_ID = null;
+            const container = doc.getElementById('wb-detail-container');
+            if (container) { container.innerHTML = ''; }
+            this.render(); 
+        },
+
+        render: function() {
+            if (APP_CONTAINER && win.WB_VIEW && typeof win.WB_VIEW.renderApp === 'function') {
+                // 如果正在查看詳情頁，只更新評論列表，避免重新觸發動畫
+                if (CURRENT_OPEN_POST_ID) {
+                    const post = GLOBAL_POSTS.find(p => p.id === CURRENT_OPEN_POST_ID);
+                    if (post) {
+                        const commentListEl = doc.getElementById('wb-comment-list');
+                        if (commentListEl && win.WB_VIEW.renderCommentList) {
+                            // 只更新評論列表 HTML
+                            commentListEl.innerHTML = win.WB_VIEW.renderCommentList(post);
+                            // 更新評論數量顯示
+                            const commentHeader = doc.querySelector('.wb-comment-header');
+                            if (commentHeader) {
+                                commentHeader.textContent = `評論 ${post.comments ? post.comments.length : 0}`;
+                            }
+                            // 重置載入更多按鈕狀態
+                            if (!this.isLoading) {
+                                const loadMoreBtn = doc.getElementById('wb-load-more-btn');
+                                if (loadMoreBtn) {
+                                    loadMoreBtn.classList.remove('wb-load-more-loading');
+                                    loadMoreBtn.innerHTML = '<i class="fa-solid fa-rotate-right"></i> 載入更多評論';
+                                    loadMoreBtn.style.pointerEvents = '';
+                                }
+                            }
+                            return; // 只更新評論部分，不重新渲染整個頁面
+                        }
+                    }
+                }
+
+                // 正常渲染主頁面
+                APP_CONTAINER.innerHTML = win.WB_VIEW.renderApp(_posts(), CURRENT_TAB, this.isLoading, DARK_MODE);
+                _hydrateImgs(APP_CONTAINER);
+            }
+        },
+
+        // --- 發文 ---
+        _compose: null,   // { text, media }；media 跟貼文的 media 同一種形狀（image/video/vote/location），null = 沒附件
+
+        _renderCompose: function() {
+            const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER;
+            if (!host) return;
+            const old = host.querySelector('.wb-compose-mask');
+            if (old) old.remove();
+            if (!this._compose) return;
+            const holder = doc.createElement('div');
+            holder.innerHTML = win.WB_VIEW.renderCompose(this._compose);
+            host.appendChild(holder.firstElementChild);
+            const ta = host.querySelector('#wb-compose-text');
+            if (ta) ta.focus({ preventScroll: true });   // 發文小窗剛蓋上來，別讓 focus 把外層捲歪
+        },
+        _readCompose: function() {
+            if (!this._compose) return;
+            const ta = doc.getElementById('wb-compose-text');
+            if (ta) this._compose.text = ta.value;
+        },
+        openCompose: function() {
+            this._compose = { text: '', media: null };
+            this._renderCompose();
+        },
+        closeCompose: function() {
+            this._compose = null;
+            this._renderCompose();
+        },
+        composePickImage: async function() {
+            this._readCompose();
+            const pick = await this._sheet([
+                { key: 'desc',     icon: 'fa-regular fa-image',       label: '寫一句描述', hint: '之後可展開生成' },
+                { key: 'photo',    icon: 'fa-solid fa-camera',        label: '選一張照片', hint: '相簿或相機' },
+                { key: 'video',    icon: 'fa-solid fa-video',         label: '影片',       hint: '標題與一句描述' },
+                { key: 'vote',     icon: 'fa-solid fa-square-poll-horizontal', label: '投票', hint: '題目與幾個選項' },
+                { key: 'location', icon: 'fa-solid fa-location-dot', label: '位置',       hint: '在哪裡' },
+            ]);
+            if (!pick || !this._compose) return;
+            if (pick === 'photo') return this.composePickPhoto();
+            const cur = this._compose.media || {};
+            let fields = [], build = null;
+            if (pick === 'desc') {
+                fields = [{ key: 'desc', label: '', value: cur.type === 'image' && !String(cur.desc || '').startsWith('data:') ? cur.desc : '', placeholder: '例如：桌上一盤咖哩飯，窗邊有陽光' }];
+                build = (v) => v.desc ? { type: 'image', desc: v.desc } : null;
+            } else if (pick === 'video') {
+                fields = [{ key: 'title', label: '標題', value: cur.type === 'video' ? cur.title : '', placeholder: '影片叫什麼' }, { key: 'desc', label: '一句描述', value: cur.type === 'video' ? cur.desc : '', placeholder: '拍了什麼' }];
+                build = (v) => v.title ? { type: 'video', title: v.title, desc: v.desc } : null;
+            } else if (pick === 'vote') {
+                fields = [{ key: 'title', label: '題目', value: cur.type === 'vote' ? cur.title : '', placeholder: '想問大家什麼' }, { key: 'options', label: '選項', value: cur.type === 'vote' ? (cur.options || []).join('，') : '', placeholder: '用逗號分開，例如：去，不去' }];
+                build = (v) => { const opts = String(v.options || '').split(/[,，]/).map(x => x.trim()).filter(Boolean); return (v.title && opts.length >= 2) ? { type: 'vote', title: v.title, options: opts } : null; };
+            } else if (pick === 'location') {
+                fields = [{ key: 'name', label: '地點', value: cur.type === 'location' ? cur.name : '', placeholder: '在哪裡' }, { key: 'desc', label: '一句話', value: cur.type === 'location' ? cur.desc : '', placeholder: '可不填' }];
+                build = (v) => v.name ? { type: 'location', name: v.name, desc: v.desc } : null;
+            }
+            const titles = { desc: '描述這張圖', video: '影片', vote: '投票', location: '位置' };
+            const v = await this._form(titles[pick] || '', fields);
+            if (v == null || !this._compose) return;
+            const media = build(v);
+            if (!media) { this._showToast(pick === 'vote' ? '題目和至少兩個選項' : '還沒填'); return; }
+            this._compose.media = media;
+            this._renderCompose();
+        },
+        composeEditMedia: function() {
+            // 點標籤＝重新開單選（各型別的欄位會帶入現值）
+            return this.composePickImage();
+        },
+        composePickPhoto: async function() {
+            this._readCompose();
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            if (!PI || !PI.pickPhoto) return;
+            let url = '';
+            try { url = await PI.pickPhoto(); } catch (e) { console.warn('[Weibo] 選照片失敗:', e); this._showToast('照片讀不進來'); }
+            if (!url || !this._compose) return;
+            this._compose.media = { type: 'image', desc: url };
+            this._renderCompose();
+        },
+        composeClearImage: function() {
+            this._readCompose();
+            if (!this._compose) return;
+            this._compose.media = null;
+            this._renderCompose();
+        },
+        submitCompose: async function() {
+            this._readCompose();
+            const c = this._compose;
+            if (!c) return;
+            const text = String(c.text || '').trim();
+            if (!text && !c.media) { this._showToast('先寫點什麼'); return; }
+            let name = 'User', avatar = '';
+            try { const acc = win.WB_ACCOUNT.getCurrentAccount(); name = acc.weiboNickname || acc.realName || 'User'; avatar = acc.avatar || ''; } catch (e) {}
+            const post = {
+                id: 'post_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                user: name,
+                content: text,
+                avatar: avatar || win.WB_VIEW.getAvatar(name),
+                likes: 0,
+                verified: false,
+                comments: [],
+                media: c.media || null,
+                isMe: true,
+                timestamp: Date.now()
+            };
+            GLOBAL_POSTS.unshift(post);
+            await win.OS_DB.saveWbPost(post);
+            this._compose = null;
+            this.render();
+            this._showToast('發佈了');
+        },
+
+        // --- 互動邏輯 ---
+        sendComment: async function(postId) {
+            const inputEl = doc.getElementById('wb-comment-input');
+            if (!inputEl) return;
+            const content = inputEl.value.trim();
+            if (!content) return;
+
+            const post = GLOBAL_POSTS.find(p => p.id === postId);
+            if (post) {
+                if (!post.comments) post.comments = [];
+
+                // 獲取顯示名稱：優先從 WB_ACCOUNT 讀取最新值
+                let myName = '我';
+                console.log('[sendComment] WB_ACCOUNT 存在?', !!win.WB_ACCOUNT);
+                if (win.WB_ACCOUNT) {
+                    const acc = win.WB_ACCOUNT.getCurrentAccount();
+                    console.log('[sendComment] 當前帳號資料:', acc);
+                    console.log('[sendComment] weiboNickname:', acc.weiboNickname);
+                    console.log('[sendComment] realName:', acc.realName);
+                    myName = acc.weiboNickname || acc.realName || 'User';
+                    console.log('[sendComment] 最終使用的名字:', myName);
+                } else {
+                    console.error('[sendComment] WB_ACCOUNT 未載入！');
+                }
+
+                post.comments.push({ author: myName, content: content, time: Date.now() });
+                await win.OS_DB.saveWbPost(post);
+                inputEl.value = '';
+                this.render(); 
+            }
+        },
+
+        deleteComment: async function(postId, commentIndex) {
+            if (!(await this._ask('刪除這條評論？', '刪除'))) return;
+            const post = GLOBAL_POSTS.find(p => p.id === postId);
+            if (post && post.comments) {
+                post.comments.splice(commentIndex, 1);
+                await win.OS_DB.saveWbPost(post);
+                this.render();
+            }
+        },
+
+        deletePost: async function(postId) {
+            if (!(await this._ask('刪除這條微博？', '刪除'))) return;
+            GLOBAL_POSTS = GLOBAL_POSTS.filter(p => p.id !== postId);
+            await win.OS_DB.deleteWbPost(postId);
+            if (CURRENT_OPEN_POST_ID === postId) {
+                this.closeDetail();
+            } else {
+                this.render();
+            }
+        },
+
+        clearAllData: async function() {
+            // 只清這個故事的（別本故事的、常駐角色發的都不動）
+            const mine = _posts().filter(p => !(win.OS_DB && p.tavernChatId === win.OS_DB.LOBBY_ID));
+            const n = mine.length;
+            if (!(await this._ask(`清空這個故事的 ${n} 條微博？刪了就回不來。`, '清空'))) return;
+            for (const p of mine) { try { await win.OS_DB.deleteWbPost(p.id); } catch (e) {} }
+            const gone = new Set(mine.map(p => p.id));
+            GLOBAL_POSTS = GLOBAL_POSTS.filter(p => !gone.has(p.id));
+            this.render();
+            this._showToast('已清空');
+        },
+
+        // --- 編輯功能區 ---
+
+        editBio: async function() {
+            const wbAccount = win.WB_ACCOUNT || window.WB_ACCOUNT;
+            if (!wbAccount) return;
+            const account = wbAccount.getCurrentAccount();
+            const newBio = await this._prompt('個性簽名', account.bio || '', '寫一句');
+            if (newBio !== null) {
+                wbAccount.updateCurrentBio(newBio.trim());
+                this.render(); 
+            }
+        },
+
+        // 🔥 新增：編輯暱稱 (這是解決你問題的關鍵！)
+        editNickname: async function() {
+            const wbAccount = win.WB_ACCOUNT || window.WB_ACCOUNT;
+            if (!wbAccount) return;
+            const account = wbAccount.getCurrentAccount();
+            const newName = await this._prompt('微博暱稱', account.weiboNickname || '', '想叫什麼');
+
+            if (newName !== null && newName.trim() !== '') {
+                if (wbAccount.updateCurrentNickname(newName.trim())) this._showToast(`暱稱改成 ${newName.trim()}`);   // 沒存成就不報
+                this.render();
+            }
+        },
+
+        toggleDarkMode: function() {
+            DARK_MODE = !DARK_MODE;
+            win.AUI.lsSet('wb_dark_mode', DARK_MODE ? 'true' : 'false', '微博的深色模式');
+            this.render();
+        },
+
+        // 關注列表＝微信通訊錄（當前故事那本）裡的人，扣掉在微博按過「取消關注」的。
+        //   🚨 以前讀全手機共用的舊通訊錄（不分故事），別張角色卡的人全堆在這；刪除也是刪那本共用的。
+        //   取消關注只記在微博這邊（也按故事分），不會刪到微信好友。
+        _unfollowKey: function() {
+            let sid = '';
+            try { sid = (win.OS_DB && win.OS_DB.currentChatId) ? String(win.OS_DB.currentChatId() || '') : ''; } catch (e) {}
+            return 'wb_unfollowed' + (sid ? '__' + sid : '');
+        },
+        _unfollowed: function() {
+            try { const a = JSON.parse(localStorage.getItem(this._unfollowKey()) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+        },
+        // 微信通訊錄（當前故事那本）裡的人，扣掉群和自己。關注列表、轉發名單都從這裡拿，兩邊才不會是兩本名冊。
+        _wxFriends: function() {
+            const C = win.WX_CONTACTS;
+            let all = [];
+            try { all = (C && C.getAllCustomContacts) ? (C.getAllCustomContacts() || []) : []; } catch (e) { all = []; }
+            const me = ['我', 'User'];
+            try { const u = win.VN_PANEL_FEED && win.VN_PANEL_FEED.userSync ? win.VN_PANEL_FEED.userSync() : null; if (u) me.push(u.name, u.nickname); } catch (e) {}
+            try { if (win.WX_ME && win.WX_ME.name) me.push(win.WX_ME.name()); } catch (e) {}
+            return all.filter(c => c && c.id && !c.isGroup && c.name && me.indexOf(c.name) < 0);
+        },
+        followList: function() {
+            const off = this._unfollowed();
+            return this._wxFriends().filter(c => off.indexOf(c.id) < 0);
+        },
+        // 粉絲數沒有真的資料：用名字算一個固定的數，每次打開都一樣，不再亂跳
+        _fansOf: function(name) {
+            let h = 0;
+            const s = String(name || '');
+            for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+            return 500 + (h % 50000);
+        },
+
+        // 開在微博自己的畫面裡（.wb-shell），不是蓋在整個頁面上：手機殼裡開就在手機螢幕裡
+        showContacts: function() {
+            const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER;
+            if (!host) return;
+            const old = host.querySelector('.wb-follow-mask');
+            if (old) old.remove();
+            const list = this.followList();
+            const mask = doc.createElement('div');
+            mask.className = 'wb-follow-mask';
+            mask.innerHTML = '<div class="wb-follow-card">'
+                + '<div class="wb-follow-hd"><span class="wb-follow-title"></span><button class="wb-follow-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>'
+                + (list.length ? '<div class="wb-follow-bar"><label class="wb-follow-all"><input type="checkbox" class="wb-follow-all-chk"><span>全選</span></label><button class="wb-follow-off" type="button">取消關注</button></div>' : '')
+                + '<div class="wb-follow-list"></div></div>';
+            mask.querySelector('.wb-follow-title').textContent = '關注列表（' + list.length + '）';
+            const box = mask.querySelector('.wb-follow-list');
+            if (!list.length) {
+                const empty = doc.createElement('div');
+                empty.className = 'wb-follow-empty';
+                empty.textContent = '還沒有關注的人。微信通訊錄裡的人會出現在這裡。';
+                box.appendChild(empty);
+            }
+            list.forEach(c => {
+                const row = doc.createElement('label');
+                row.className = 'wb-follow-row';
+                row.innerHTML = '<input type="checkbox" class="wb-follow-chk"><div class="wb-follow-av"></div><div class="wb-follow-info"><div class="wb-follow-name"></div><div class="wb-follow-bio"></div><div class="wb-follow-fans"></div></div>';
+                row.querySelector('.wb-follow-chk').dataset.id = c.id;
+                const av = row.querySelector('.wb-follow-av');
+                av.textContent = String(c.name).charAt(0);
+                row.querySelector('.wb-follow-name').textContent = c.name;
+                const bio = String(c.desc || c.bio || '').trim();
+                row.querySelector('.wb-follow-bio').textContent = (bio && bio !== '...') ? bio : '這個人很懶，什麼都沒寫';
+                row.querySelector('.wb-follow-fans').textContent = '粉絲 ' + this._fansOf(c.name);
+                box.appendChild(row);
+                // 頭像：微信那邊存的圖（編號就去手機資料庫換網址），沒有就留首字
+                const aid = c.avatarId ? String(c.avatarId) : '';
+                const put = (url) => { if (!url || !av.isConnected) return; const img = doc.createElement('img'); img.alt = ''; img.src = url; img.onerror = () => img.remove(); av.textContent = ''; av.appendChild(img); };
+                if (/^(https?:|data:|blob:)/.test(aid)) put(aid);
+                else if (aid && win.OS_DB && win.OS_DB.getImage) win.OS_DB.getImage(aid).then(put).catch(() => {});
+            });
+            const close = () => mask.remove();
+            mask.querySelector('.wb-follow-x').onclick = (e) => { e.stopPropagation(); close(); };
+            mask.onclick = (e) => { if (e.target === mask) close(); };
+            const allChk = mask.querySelector('.wb-follow-all-chk');
+            if (allChk) allChk.onchange = () => { mask.querySelectorAll('.wb-follow-chk').forEach(chk => { chk.checked = allChk.checked; }); };
+            const offBtn = mask.querySelector('.wb-follow-off');
+            if (offBtn) offBtn.onclick = async (e) => {
+                e.stopPropagation();
+                const ids = Array.from(mask.querySelectorAll('.wb-follow-chk:checked')).map(chk => chk.dataset.id);
+                if (!ids.length) { AUI.toast('先勾選要取消關注的人'); return; }
+                if (!(await this._ask('取消關注這 ' + ids.length + ' 個人？微信好友不會被刪。', '取消關注'))) return;
+                const next = this._unfollowed();
+                ids.forEach(id => { if (next.indexOf(id) < 0) next.push(id); });
+                if (!win.AUI.lsSet(this._unfollowKey(), JSON.stringify(next), '取消關注')) return;
+                this.render();          // 「我」頁的關注數跟著變
+                this.showContacts();
+            };
+            host.appendChild(mask);
+        },
+
+        // --- 轉發到微信 ---
+        shareToWx: function(postId) {
+            const post = GLOBAL_POSTS.find(p => p.id === postId);
+            if (!post) return;
+
+            const wxApp = win.wxApp;
+            if (!wxApp || typeof wxApp.shareFromWeibo !== 'function') {
+                AUI.alert('微信面板尚未載入，請先開啟微信');
+                return;
+            }
+
+            // 名單跟關注列表同一本（微信通訊錄、當前故事）：以前讀的是不分故事的舊總表，別張卡的人也混進來
+            //   取消關注只是微博這邊不看他，微信好友還在，所以照樣轉發得到
+            const existing = doc.getElementById('wb-share-modal');
+            if (existing) existing.remove();
+
+            const contactList = this._wxFriends();
+
+            if (contactList.length === 0) {
+                AUI.alert('尚無微信聯繫人可分享');
+                return;
+            }
+
+            const isDark = DARK_MODE;
+            const bg     = isDark ? '#1c1c1e' : '#fff';
+            const border = isDark ? '#2a2a2a' : '#f0f0f0';
+            const textC  = isDark ? '#f0f0f0' : '#333';
+            const subC   = isDark ? '#888'    : '#999';
+
+            // 預覽文字：作者、正文是模型寫的。名字當純文字；正文跟卡片上同一套（照格式顯示、會跑的拿掉）
+            const preview = (post.content || '').replace(/\n/g, ' ').substring(0, 40);
+            const _A = win.AUI || window.AUI;
+            const previewSafe = (_A && _A.safeHtml) ? _A.safeHtml(preview) : _esc(preview);
+            const previewHtml = `<div style="background:${isDark?'#252525':'#f8f8f8'}; border-radius:8px; padding:10px 12px; margin:12px 15px 0; font-size:13px; color:${subC}; border-left:3px solid #ff8200;">
+                <span style="color:#ff8200; font-weight:bold;">@${_esc(post.user)}</span>
+                <span style="margin-left:6px;">${previewSafe}${post.content && post.content.length > 40 ? '…' : ''}</span>
+            </div>`;
+
+            const listHtml = contactList.map(c => {
+                const name = String(c.name);
+                const initial = _esc(Array.from(name)[0] || '');
+                return `<div style="display:flex; align-items:center; padding:12px 15px; border-bottom:1px solid ${border}; gap:10px;">
+                    <div style="width:40px; height:40px; border-radius:6px; background:linear-gradient(135deg,#07c160,#05a050); flex-shrink:0; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:16px;">${initial}</div>
+                    <div style="flex:1; font-size:14px; color:${textC}; font-weight:500;">${_esc(name)}</div>
+                    <div onclick="(window.parent.wbApp||window.wbApp)._doShare('${_jsArg(c.id)}','${_jsArg(postId)}',this)" style="background:#07c160; color:#fff; font-size:13px; padding:5px 14px; border-radius:14px; cursor:pointer; font-weight:500; white-space:nowrap;">傳送</div>
+                </div>`;
+            }).join('');
+
+            const wrap = doc.createElement('div');
+            wrap.id = 'wb-share-modal';
+            wrap.innerHTML = `
+                <div style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:10002; display:flex; align-items:flex-end; justify-content:center;" onclick="this.parentElement.remove()">
+                    <div style="background:${bg}; width:100%; max-width:480px; border-radius:16px 16px 0 0; overflow:hidden; max-height:75vh; display:flex; flex-direction:column; animation:wbFadeIn 0.25s;" onclick="event.stopPropagation()">
+                        <div style="padding:14px 15px 0; flex-shrink:0;">
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <span style="font-size:16px; font-weight:bold; color:${textC};">轉發到微信</span>
+                                <span style="font-size:22px; color:${subC}; cursor:pointer; line-height:1;" onclick="document.getElementById('wb-share-modal').remove()"><i class="fa-solid fa-xmark"></i></span>
+                            </div>
+                            ${previewHtml}
+                            <div style="margin:12px 0 0; padding-bottom:8px; font-size:12px; color:${subC}; padding-left:2px;">選擇聯繫人</div>
+                        </div>
+                        <div style="overflow-y:auto; flex:1;">${listHtml}</div>
+                    </div>
+                </div>`;
+            doc.body.appendChild(wrap);
+        },
+
+        _doShare: async function(contactId, postId, btnEl) {
+            const post = GLOBAL_POSTS.find(p => p.id === postId);
+            if (!post) return;
+            const wxApp = win.wxApp;
+            if (!wxApp || typeof wxApp.shareFromWeibo !== 'function') return;
+
+            // 視覺反饋：禁用按鈕
+            if (btnEl) { btnEl.innerHTML = '<i class="fa-solid fa-check"></i>'; btnEl.style.background = '#aaa'; btnEl.style.pointerEvents = 'none'; }
+
+            const ok = await wxApp.shareFromWeibo(contactId, post);
+            if (ok) {
+                const modal = doc.getElementById('wb-share-modal');
+                if (modal) modal.remove();
+                // 獲取聯繫人名稱（跟轉發名單同一本）
+                const contact = this._wxFriends().find(c => c.id === contactId);
+                const name = contact ? contact.name : contactId;
+                this._showToast(`已轉發給 ${name}`);
+            } else {
+                AUI.alert('轉發失敗');
+            }
+        },
+
+        // 微博自己畫的確認視窗：瀏覽器原生 confirm 在她的環境擋不住手滑，改成兩顆鈕的底部卡片。
+        // 回 Promise<boolean>；點背景或取消都算否。掛在 .wb-shell 裡，詳情頁疊在上面時也蓋得住。
+        _ask: function(text, okLabel) {
+            return new Promise((resolve) => {
+                const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER || doc.body;
+                const old = host.querySelector('.wb-ask-mask');
+                if (old) old.remove();
+                const mask = doc.createElement('div');
+                mask.className = 'wb-ask-mask';
+                mask.innerHTML = `<div class="wb-ask-card"><div class="wb-ask-text"></div><div class="wb-ask-btns"><div class="wb-ask-btn wb-ask-cancel">取消</div><div class="wb-ask-btn wb-ask-ok"></div></div></div>`;
+                mask.querySelector('.wb-ask-text').textContent = text;
+                mask.querySelector('.wb-ask-ok').textContent = okLabel || '確定';
+                const done = (v) => { mask.remove(); resolve(v); };
+                mask.querySelector('.wb-ask-ok').onclick = (e) => { e.stopPropagation(); done(true); };
+                mask.querySelector('.wb-ask-cancel').onclick = (e) => { e.stopPropagation(); done(false); };
+                mask.onclick = (e) => { if (e.target === mask) done(false); };
+                host.appendChild(mask);
+            });
+        },
+
+        // 圖片生完寫回貼文：ref = 貼文 id｜第幾張；下次開微博直接顯示、不再重生
+        setImageUrl: async function(ref, url) {
+            const [postId, idxStr] = String(ref || '').split('|');
+            const post = GLOBAL_POSTS.find(p => p.id === postId);
+            if (!post || !post.media || !url) return false;
+            const idx = parseInt(idxStr, 10) || 0;
+            if (post.media.type === 'images' && Array.isArray(post.media.list)) post.media.list[idx] = url;
+            else if (post.media.type === 'image') post.media.desc = url;
+            else return false;
+            try { await win.OS_DB.saveWbPost(post); } catch (e) { console.warn('[Weibo] 圖片網址寫回失敗:', e); }
+            return true;
+        },
+
+        // 上拉單選：items = [{key, icon, label, hint}]；回 key，點背景或取消回 null
+        _sheet: function(items) {
+            return new Promise((resolve) => {
+                const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER || doc.body;
+                const old = host.querySelector('.wb-sheet-mask');
+                if (old) old.remove();
+                const mask = doc.createElement('div');
+                mask.className = 'wb-sheet-mask';
+                const rows = (items || []).map(it => `<div class="wb-sheet-item" data-key="${String(it.key)}"><i class="${it.icon || 'fa-solid fa-circle'}"></i><div class="wb-sheet-text"><div class="wb-sheet-label"></div><div class="wb-sheet-hint"></div></div></div>`).join('');
+                mask.innerHTML = `<div class="wb-sheet">${rows}<div class="wb-sheet-cancel">取消</div></div>`;
+                (items || []).forEach((it, i) => { const el = mask.querySelectorAll('.wb-sheet-item')[i]; el.querySelector('.wb-sheet-label').textContent = it.label || ''; el.querySelector('.wb-sheet-hint').textContent = it.hint || ''; });
+                const done = (v) => { mask.remove(); resolve(v); };
+                mask.querySelectorAll('.wb-sheet-item').forEach(el => { el.onclick = (e) => { e.stopPropagation(); done(el.dataset.key); }; });
+                mask.querySelector('.wb-sheet-cancel').onclick = (e) => { e.stopPropagation(); done(null); };
+                mask.onclick = (e) => { if (e.target === mask) done(null); };
+                host.appendChild(mask);
+            });
+        },
+
+        // 多欄輸入小視窗：fields = [{key, label, value, placeholder}]；回 {key: 值}，取消回 null
+        _form: function(title, fields) {
+            return new Promise((resolve) => {
+                const host = (APP_CONTAINER && APP_CONTAINER.querySelector('.wb-shell')) || APP_CONTAINER || doc.body;
+                const old = host.querySelector('.wb-prompt-mask');
+                if (old) old.remove();
+                const mask = doc.createElement('div');
+                mask.className = 'wb-prompt-mask';
+                const rows = (fields || []).map(() => `<div class="wb-prompt-field"><div class="wb-prompt-label"></div><input type="text" class="wb-prompt-input"></div>`).join('');
+                mask.innerHTML = `<div class="wb-prompt-card"><div class="wb-prompt-title"></div>${rows}<div class="wb-ask-btns"><div class="wb-ask-btn wb-ask-cancel">取消</div><div class="wb-ask-btn wb-prompt-ok">確定</div></div></div>`;
+                mask.querySelector('.wb-prompt-title').textContent = title || '';
+                const inputs = Array.from(mask.querySelectorAll('.wb-prompt-input'));
+                (fields || []).forEach((f, k) => {
+                    const row = mask.querySelectorAll('.wb-prompt-field')[k];
+                    const lab = row.querySelector('.wb-prompt-label');
+                    lab.textContent = f.label || '';
+                    if (!f.label) lab.remove();
+                    inputs[k].value = f.value == null ? '' : String(f.value);
+                    inputs[k].placeholder = f.placeholder || '';
+                });
+                const collect = () => { const out = {}; (fields || []).forEach((f, k) => { out[f.key] = inputs[k].value.trim(); }); return out; };
+                const done = (v) => { mask.remove(); resolve(v); };
+                mask.querySelector('.wb-prompt-ok').onclick = (e) => { e.stopPropagation(); done(collect()); };
+                mask.querySelector('.wb-ask-cancel').onclick = (e) => { e.stopPropagation(); done(null); };
+                inputs.forEach((inp, k) => { inp.onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); if (k < inputs.length - 1) inputs[k + 1].focus({ preventScroll: true }); else done(collect()); } }; });
+                mask.onclick = (e) => { if (e.target === mask) done(null); };
+                host.appendChild(mask);
+                setTimeout(() => { try { inputs[0].focus({ preventScroll: true }); inputs[0].select(); } catch (e) {} }, 30);
+            });
+        },
+
+        // 單欄版：回字串；取消回 null
+        _prompt: async function(title, value, placeholder) {
+            const v = await this._form(title, [{ key: 'v', value: value, placeholder: placeholder }]);
+            return v == null ? null : v.v;
+        },
+
+        _showToast: function(msg) { AUI.toast(msg); },   // 走全站同一套提示條（core/aurelia_dialog.js）
+
+        // --- 載入更多評論 (帶 Loading 狀態) ---
+        startLoadMore: function(btn, postId) {
+            if (this.isLoading) return;
+            if (btn) {
+                btn.classList.add('wb-load-more-loading');
+                btn.innerHTML = '<span class="wb-lm-spinner"></span> 評論加載中…';
+                btn.style.pointerEvents = 'none';
+            }
+            this.triggerSinglePostAI(postId);
+        },
+
+        // --- AI 輔助函數 ---
+        _filterComments: function(comments) {
+            let myName = 'User';
+            let myRealName = 'User';
+            if (win.WB_ACCOUNT) {
+                const acc = win.WB_ACCOUNT.getCurrentAccount();
+                myName = acc.weiboNickname;
+                myRealName = acc.realName;
+            }
+            const filteredComments = [];
+            const recentComments = comments.slice(-5);
+            recentComments.forEach((c, index) => {
+                // 舊格式的字串評論本身就是「名字: 內容」，直接送；只有物件才拆 author/content
+                if (typeof c !== 'object') { filteredComments.push(String(c)); return; }
+                let author = c.author || 'Unknown';
+                let content = c.content;
+                const isMe = (author === myName || author === myRealName || author === '我' || author === 'User');
+                const isLastItem = (index === recentComments.length - 1);
+                if (isMe && !isLastItem) { return; }
+                filteredComments.push(`${author}: ${content}`);
+            });
+            return filteredComments.join(' | ');
+        },
+
+        // AI 寫的 When（剛剛／35分鐘前／3小時前／昨天／3天前／上週…）換算成毫秒；換不動回 null
+        _whenToOffset: function(str) {
+            const t = String(str || '').trim();
+            if (!t) return null;
+            if (/^(剛剛|刚刚|just now|now|現在|现在)$/i.test(t)) return 0;
+            const num = (x) => { const map = { 零: 0, 一: 1, 二: 2, 兩: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9, 十: 10, 半: 0.5 }; if (/^\d+(\.\d+)?$/.test(x)) return parseFloat(x); if (x in map) return map[x]; if (x === '十一') return 11; if (x === '十二') return 12; if (x === '幾' || x === '几' || x === 'a few' || x === 'several') return 3; return NaN; };
+            let m = t.match(/^(\d+|[零一二兩两三四五六七八九十半幾几]+|a few|several|a|an)\s*(分鐘|分钟|分|min|minute|小時|小时|hour|hr|天|日|day|週|周|week|wk|個月|个月|month)s?\s*(前|以前|ago)?$/i);
+            if (m) {
+                const n = num(m[1] === 'a' || m[1] === 'an' ? '1' : m[1]);
+                if (isNaN(n)) return null;
+                const u = m[2];
+                const unit = /分/.test(u) || /min/i.test(u) ? 60e3 : /小時|小时|hour|hr/i.test(u) ? 3600e3 : /天|日|day/i.test(u) ? 86400e3 : /週|周|week|wk/i.test(u) ? 7 * 86400e3 : 30 * 86400e3;
+                return Math.round(n * unit);
+            }
+            if (/^(昨天|昨晚|昨日|yesterday)/i.test(t)) return 86400e3;
+            if (/^(前天)/.test(t)) return 2 * 86400e3;
+            if (/^(上週|上周|last week)/i.test(t)) return 7 * 86400e3;
+            if (/^(上個月|上个月|last month)/i.test(t)) return 30 * 86400e3;
+            if (/^(今天|今早|今天早上|今晚|today|this morning|tonight)/i.test(t)) return 2 * 3600e3;
+            return null;
+        },
+
+        // 真照片（data URL）最多夾最近這幾張給 AI 看；更早的退成文字，免得每輪拖一疊圖
+        _PHOTO_LIMIT: 3,
+        // 👁 設置裡的「看圖」：off 不送圖、main 夾真照片（下面這支）、helper 先讓看圖模型寫描述存在貼文上（_ensurePhotoDescs）
+        _visionMode: function() {
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            return (PI && PI.visionMode) ? PI.visionMode() : 'off';
+        },
+        _ensurePhotoDescs: async function(posts) {
+            // 看一次圖走共用那支（OS_PHONE_IMAGE.lookOnce），只做「由看圖模型讀圖」這條；聊天模型自己看那條在 _collectPhotos
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            if (!PI || !PI.lookOnce) return;
+            const mine = (posts || []).filter(p => p && p.isMe && p.media && p.media.type === 'image' && String(p.media.desc || '').startsWith('data:'))
+                .reverse();   // 貼文是新的在前；lookOnce 挑「還沒看過的最後幾筆」，翻過來讓它挑到最新的
+            const got = await PI.lookOnce(mine.map(p => p.media), { src: m => m.desc, descKey: 'aiDesc', triesKey: 'aiTries', max: this._PHOTO_LIMIT,
+                helperOnly: true, about: '這是社群動態裡貼出來的照片。' });
+            if (!got) return;
+            for (const p of mine) {
+                if (got.used.indexOf(p.media) === -1) continue;
+                try { await win.OS_DB.saveWbPost(p); } catch (e) { console.warn('[Weibo] 照片描述存不進去:', e); }
+            }
+        },
+        _collectPhotos: function(posts) {
+            const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            const out = [];
+            if (this._visionMode() !== 'main') return out;
+            for (const p of posts) {
+                const d = p && p.media && p.media.type === 'image' ? String(p.media.desc || '') : '';
+                if (p && p.isMe && d.startsWith('data:') && PI && PI.isUrl(d)) out.push({ postId: p.id, url: d });
+                if (out.length >= this._PHOTO_LIMIT) break;
+            }
+            return out;
+        },
+        _describeMedia: function(p, photos) {
+            const m = p && p.media;
+            if (!m) return '';
+            const _PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+            // 照片描述只給前段：後段是畫圖用的英文，餵回去只是多花字數，它還會當成貼文內容照抄
+            const _only = function (v) { const t = String(v || ''); return (_PI && _PI.textOnly) ? _PI.textOnly(t) : t; };
+            if (m.type === 'image') {
+                const d = _only(m.desc);
+                const idx = photos.findIndex(x => x.postId === p.id);
+                if (idx >= 0) return ` [Image: see attached photo #${idx + 1}]`;
+                if (m.aiDesc) return ` [Image: a photo | ${m.aiDesc}]`;
+                if (d.startsWith('data:') || d.startsWith('http')) return ' [Image: a photo]';
+                return ` [Image: ${d}]`;
+            }
+            if (m.type === 'images') return ` [Images: ${(m.list || []).map(x => (String(x).startsWith('http') || String(x).startsWith('data:')) ? 'a photo' : _only(x)).join(' | ')}]`;
+            if (m.type === 'video') return ` [Video: ${m.title || ''}${m.desc ? ' | ' + m.desc : ''}]`;
+            if (m.type === 'vote') return ` [Vote: ${m.title || ''} | ${(m.options || []).join(', ')}]`;
+            if (m.type === 'location') return ` [Location: ${m.name || ''}${m.desc ? ' | ' + m.desc : ''}]`;
+            return '';
+        },
+        serializeFeedForAI: function() {
+            const recent = _posts().slice(0, 6);
+            const photos = this._collectPhotos(recent);
+            return recent.map(p => {
+                let comms = (p.comments && p.comments.length > 0) ? this._filterComments(p.comments) : "None";
+                const who = p.isMe ? `${p.user} (the player's own account)` : p.user;
+                return `[ID: ${p.id}] [Author: ${who}] [Posted: ${win.WB_VIEW.fmtTime(p)}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
+            }).join('\n\n');
+        },
+        // 把真照片夾進訊息末尾（multimodal 陣列；OS_API 三條路都吃）
+        _attachPhotos: function(messages, photos) {
+            if (!photos || !photos.length) return messages;
+            const parts = [{ type: 'text', text: `Attached photos from the player's own posts, numbered in order (#1..#${photos.length}). Look at them; NPC replies should react to what is actually in the photo.` }];
+            photos.forEach(ph => parts.push({ type: 'image_url', image_url: { url: ph.url } }));
+            messages.push({ role: 'user', content: parts });
+            return messages;
+        },
+
+        serializeSinglePostForAI: function(postId) {
+            const p = GLOBAL_POSTS.find(post => post.id === postId);
+            if (!p) return "Target post not found.";
+            let comms = (p.comments && p.comments.length > 0) ? this._filterComments(p.comments) : "None";
+            const photos = this._collectPhotos([p]);
+            const who = p.isMe ? `${p.user} (the player's own account)` : p.user;
+            return `[TARGET POST - FOCUS ONLY ON THIS]\n[ID: ${p.id}] [Author: ${who}] [Posted: ${win.WB_VIEW.fmtTime(p)}] [Content: ${p.content}]${this._describeMedia(p, photos)} [Recent Comments: ${comms}]`;
+        },
+
+        triggerPost: async function() {
+            if (!win.OS_API) { AUI.alert("API 引擎未載入"); return; }
+            this.isLoading = true;
+            this.render();
+            try {
+                const isInitial = _posts().length <= 1; 
+                let messages = [];
+                if (isInitial) {
+                    messages = await win.OS_API.buildContext("System Request: Generate World Social Media Feed.", 'wb_world_gen');
+                } else {
+                    await this._ensurePhotoDescs(_posts().slice(0, 6));
+                    const feedContext = this.serializeFeedForAI();
+                    let prompt = win.OS_PROMPTS.get('wb_world_continue');
+                    messages = await win.OS_API.buildContext("System Request: Continue World Feed.", 'wb_world_continue');
+                    messages.forEach(m => {
+                        if (m.role === 'system' && typeof m.content === 'string' && m.content.includes('{{context}}')) {
+                            m.content = m.content.replace('{{context}}', feedContext);
+                        }
+                    });
+                    this._attachPhotos(messages, this._collectPhotos(_posts().slice(0, 6)));
+                }
+                // 設定：直接用主模型完整設定（含 useSystemApi/useGenerateRaw/stProfileId/url/key）跟創作室同源。
+                // 🚨別再用 wx_phone_api_config 覆蓋——舊 wx 設定會把「跟隨酒館/generateRaw」旗標蓋成直連→報「無 URL/Key」。
+                let config = {};
+                try { const _S = win.OS_SETTINGS; if (_S && _S.getConfig) { const _b = _S.getConfig(); if (_b) config = Object.assign({}, _b); } } catch (e) {}
+                if (!config.maxTokens) config.maxTokens = 1000;
+                await win.OS_API.chat(messages, config, null, async (finalText) => {
+                     await this.processWorldResponse(finalText);
+                }, (err) => {
+                    console.error(err);
+                    AUI.alert("生成失敗: " + err.message);
+                    this.isLoading = false;
+                    this.render();
+                }, { task: 'weibo' });
+            } catch (e) { console.error(e); this.isLoading = false; this.render(); }
+        },
+
+        triggerSinglePostAI: async function(postId) {
+            if (!win.OS_API) { AUI.alert("API 引擎未載入"); return; }
+            this.isLoading = true;
+            this.render();
+            try {
+                await this._ensurePhotoDescs(GLOBAL_POSTS.filter(p => p.id === postId));
+                const singleContext = this.serializeSinglePostForAI(postId);
+                let messages = await win.OS_API.buildContext("System Request: Generate comments for specific post.", 'wb_world_continue');
+                messages.forEach(m => {
+                    if (m.role === 'system' && typeof m.content === 'string' && m.content.includes('{{context}}')) {
+                        m.content = m.content.replace('{{context}}', singleContext);
+                        m.content += `\n\n[SYSTEM IMPORTANT INSTRUCTION]\nUser is focusing on Post ID: ${postId}.\n1. DO NOT generate new [wb_post].\n2. ONLY generate [wb_reply] for [Target: ${postId}].\n3. Generate 2-3 interesting replies from different NPCs.`;
+                    }
+                });
+                // 設定：直接用主模型完整設定（含 useSystemApi/useGenerateRaw/stProfileId/url/key）跟創作室同源。
+                // 🚨別再用 wx_phone_api_config 覆蓋——舊 wx 設定會把「跟隨酒館/generateRaw」旗標蓋成直連→報「無 URL/Key」。
+                let config = {};
+                try { const _S = win.OS_SETTINGS; if (_S && _S.getConfig) { const _b = _S.getConfig(); if (_b) config = Object.assign({}, _b); } } catch (e) {}
+                if (!config.maxTokens) config.maxTokens = 1000;
+                await win.OS_API.chat(messages, config, null, async (finalText) => {
+                     await this.processWorldResponse(finalText);
+                }, (err) => {
+                    console.error(err);
+                    AUI.alert("生成失敗: " + err.message);
+                    this.isLoading = false;
+                    this.render();
+                }, { task: 'weibo' });
+            } catch (e) { console.error(e); this.isLoading = false; this.render(); }
+        },
+
+        processWorldResponse: async function(text) {
+            // 🔥 Debug: 顯示 AI 原始輸出
+            console.log('🤖 [Weibo] AI 原始輸出 (前 500 字):', text.substring(0, 500));
+            console.log('🤖 [Weibo] AI 原始輸出 (完整):', text);
+
+            const result = this.parsePosts(text);
+
+            // 🔥 Debug: 顯示解析結果
+            console.log('📊 [Weibo] 解析結果 - 新帖子數:', result.newPosts.length);
+            console.log('📊 [Weibo] 解析結果 - 回覆數:', result.replies.length);
+            if (result.replies.length > 0) {
+                console.log('📊 [Weibo] 回覆詳情:', result.replies);
+            }
+
+            if (result.newPosts.length > 0) {
+                for (let p of result.newPosts.reverse()) {
+                    // When 能換算成「多久以前」就把時間戳往回推，卡片上的時間會自己隨真實時間老去；換不動的保留原字
+                    const offset = this._whenToOffset(p.when);
+                    const newPost = {
+                        id: 'post_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        user: p.author,
+                        content: p.content,
+                        avatar: `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(p.author)}`,
+                        likes: Math.floor(Math.random() * 2000) + 50,
+                        comments: p.comments,
+                        media: p.media,
+                        verified: !!p.verified,
+                        whenText: offset == null ? (p.when || '') : '',
+                        isMe: false,
+                        timestamp: Date.now() - (offset || 0)
+                    };
+                    GLOBAL_POSTS.unshift(newPost);
+                    await win.OS_DB.saveWbPost(newPost);
+                }
+                GLOBAL_POSTS.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+            }
+            if (result.replies.length > 0) {
+                let updatedCount = 0;
+                for (let r of result.replies) {
+                    const targetPost = GLOBAL_POSTS.find(p => p.id === r.targetId);
+                    if (targetPost) {
+                        if (!targetPost.comments) targetPost.comments = [];
+                        const isDuplicate = targetPost.comments.some(c => (c.content === r.content) && (c.author === r.author));
+                        if (!isDuplicate) {
+                            const newComment = { author: r.author, content: r.content, time: Date.now() };
+                            console.log('💬 [Weibo] 新增評論到帖子', r.targetId, ':', newComment);
+                            targetPost.comments.push(newComment);
+                            await win.OS_DB.saveWbPost(targetPost);
+                            updatedCount++;
+                        }
+                    }
+                }
+                console.log(`[Weibo] 已更新 ${updatedCount} 條舊帖子的評論`);
+            }
+            this.isLoading = false;
+            this.render();
+        },
+
+        parsePosts: function(text) {
+            const newPosts = [];
+            const replies = [];
+            const postRegex = /\[wb_post\]([\s\S]*?)\[\/wb_post\]/gi;
+            let match;
+            while ((match = postRegex.exec(text)) !== null) {
+                const block = match[1];
+                const res = { author: '匿名', content: '', media: null, comments: [] };
+
+                const authM = block.match(/\[Author:\s*([^\]]+)\]/i);
+                if (authM) res.author = authM[1].trim();
+                const typeM = block.match(/\[Type:\s*([^\]]+)\]/i);
+                res.verified = !!(typeM && /official|media|官方|媒體|媒体|機構|机构/i.test(typeM[1]));
+                const whenM = block.match(/\[When:\s*([^\]]+)\]/i);
+                res.when = whenM ? whenM[1].trim() : '';
+
+                // 🔥 关键修复：[Post: ...] 可能包含嵌套的方括号（如 [系統公告]）
+                // 使用负向前瞻：匹配到下一个 [标签名: 或 [/wb_post] 为止
+                const postM = block.match(/\[Post:\s*([\s\S]*?)(?=\[(?:Img|Video|Vote|Location|When|Type|Comments|\/wb_post)|\s*$)/i);
+                if (postM) {
+                    res.content = postM[1].trim().replace(/\]$/, ''); // 移除可能的尾部 ]
+                }
+
+                const imgM = block.match(/\[Img:\s*([^\]]+)\]/i);
+                if (imgM) {
+                    // 支持多图：用 | 分隔
+                    const images = imgM[1].split('|').map(s => s.trim()).filter(s => s);
+                    if (images.length === 1) {
+                        res.media = { type: 'image', desc: images[0] };
+                    } else {
+                        res.media = { type: 'images', list: images };
+                    }
+                }
+
+                const vidM = block.match(/\[Video:\s*([^\]]+)\]/i);
+                if (vidM) {
+                    // 支持标题|描述格式
+                    const parts = vidM[1].split('|').map(s => s.trim());
+                    res.media = {
+                        type: 'video',
+                        title: parts[0] || '視頻',
+                        desc: parts[1] || ''
+                    };
+                }
+
+                const voteM = block.match(/\[Vote:\s*([^\]]+)\]/i);
+                if (voteM) {
+                    const parts = voteM[1].split('|');
+                    if (parts.length >= 2) {
+                        res.media = {
+                            type: 'vote',
+                            title: parts[0].trim(),
+                            options: parts[1].split(/[,，]/).map(o => o.trim()).filter(Boolean)
+                        };
+                    }
+                }
+
+                const locM = block.match(/\[Location:\s*([^\]]+)\]/i);
+                if (locM) {
+                    const parts = locM[1].split('|').map(x => x.trim());
+                    res.media = { type: 'location', name: parts[0] || '', desc: parts[1] || '' };
+                }
+
+                // 🔥 Comments 也可能包含方括号，使用同样的技巧
+                const commM = block.match(/\[Comments:\s*([\s\S]*?)(?=\[\/wb_post\]|\s*$)/i);
+                if (commM) {
+                    const comms = commM[1].replace(/\]$/, '').split('|');
+                    comms.forEach(c => {
+                        const trimmed = c.trim();
+                        if (trimmed) res.comments.push(trimmed);
+                    });
+                }
+
+                if (res.author !== '匿名' || res.content) {
+                    newPosts.push(res);
+                } else {
+                    console.warn('[Weibo Parse] 空白 post 已忽略');
+                }
+            }
+            const replyRegex = /\[wb_reply\]([\s\S]*?)\[\/wb_reply\]/gi;
+            let rMatch;
+            while ((rMatch = replyRegex.exec(text)) !== null) {
+                const block = rMatch[1];
+                const res = { targetId: '', author: '路人', content: '' };
+
+                const targetM = block.match(/\[Target:\s*([^\]]+)\]/i);
+                if (targetM) res.targetId = targetM[1].trim();
+
+                const authM = block.match(/\[Author:\s*([^\]]+)\]/i);
+                if (authM) res.author = authM[1].trim();
+
+                // 🔥 Content 也可能包含嵌套方括号，匹配到 [/wb_reply] 为止
+                const contM = block.match(/\[Content:\s*([\s\S]*?)(?=\[\/wb_reply\]|\s*$)/i);
+                if (contM) res.content = contM[1].trim().replace(/\]$/, '');
+
+                if (res.targetId && res.content) {
+                    replies.push(res);
+                } else {
+                    console.warn('[Weibo Parse] 無效 reply (缺 Target 或 Content)');
+                }
+            }
+            return { newPosts, replies };
+        },
+
+        install: async function() {
+            if (win.PhoneSystem) {
+                await win.wbApp.init();
+                win.PhoneSystem.install('微博', '<i class="fa-solid fa-eye"></i>', '#ff8200', (c) => {
+                    APP_CONTAINER = c;
+                    // 每次打開微博都照現在的帳號整頁重畫，「我」頁的暱稱、頭像就是最新的，不用另外輪詢人設換了沒
+                    //   （OS_USER 沒有 getHash 這種東西，以前那支每秒輪詢的計時器其實什麼都沒做）
+                    win.wbApp.render();
+                });
+            } else { setTimeout(win.wbApp.install, 500); }
+        }
+    };
+    if (win.OS_PHONE_IMAGE && win.OS_PHONE_IMAGE.onDone) win.OS_PHONE_IMAGE.onDone('wb', (ref, url) => win.wbApp.setImageUrl(ref, url));
+    win.wbApp.install();
+})();

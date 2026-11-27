@@ -1,0 +1,913 @@
+/* core/void/lobby_stage.css — 書咖俯視舞台 */
+.lstage-root { position:absolute; inset:0; overflow:hidden; background:#141210; z-index:1; }
+.lstage-world { position:absolute; left:0; top:0; transform-origin:0 0; will-change:transform; }
+.lstage-map { position:absolute; left:0; top:0; display:block; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; z-index:0; }
+/* 🌳 前景上層：蓋在所有角色(z≤~1026)之上→走到樹後被遮；建構模式隱藏免擋操作 */
+.lstage-upper { position:absolute; left:0; top:0; display:block; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; z-index:4000; }
+.lstage-lower { position:absolute; left:0; top:0; display:block; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none; z-index:1; }
+.lstage-editing .lstage-upper { display:none; }
+.lstage-actor { position:absolute; image-rendering:pixelated; user-select:none; -webkit-user-drag:none; pointer-events:none;
+  will-change:transform; backface-visibility:hidden; }
+.lstage-actor.lstage-smooth { image-rendering:auto; }   /* 不是像素圖的小人（衣櫥拍的書咖常客）：縮小要平滑 */
+.lstage-actor.lstage-loading { visibility:hidden; }   /* 圖載入中先藏，防轉場單圖閃一下才換成走路圖 */
+/* 🗺️ 靜態點擊地圖：建築點擊區＋入口膠囊標籤（點了進店） */
+.lstage-hotspot { position:absolute; z-index:1500; cursor:pointer; border-radius:18px;
+  display:flex; align-items:flex-end; justify-content:center; padding-bottom:8px;
+  transition:background .16s ease, box-shadow .16s ease; }
+.lstage-hotspot:hover, .lstage-hotspot.is-near, .lstage-hotspot.is-flash { background:rgba(140,200,255,.16); box-shadow:0 0 0 3px rgba(140,200,255,.6) inset; }
+.lstage-hotspot-chip { pointer-events:none; background:rgba(18,24,38,.84); color:#eaf2ff;
+  font-size:26px; font-weight:700; padding:8px 18px; border-radius:999px; white-space:nowrap;
+  box-shadow:0 4px 14px rgba(0,0,0,.45); border:1px solid rgba(150,200,255,.4);
+  display:inline-flex; align-items:center; gap:9px; }
+.lstage-hotspot-chip i { color:#9ecbff; }
+/* 🏗 擺設模式：可點的家具（書咖沙發、占卜桌、造物儀…）要先把熱點收起來。
+   熱點是蓋在家具正上方、z:1500 的一塊，比家具本身高 —— 不收起來的話按下去是熱點先吃到，
+   拖不動家具、每次都變成開那個面板。（同 .lstage-upper 那條：擺設時擋路的東西一律讓開。） */
+.lstage-editing .lstage-hotspot { display:none; }
+/* 彈跳/翻面全走 transform（margin 會逐幀觸發重排版=掉幀元兇） */
+.lstage-actor.walking { animation:lstage-bob .35s steps(2) infinite; }
+.lstage-actor.walking.flip { animation:lstage-bob-flip .35s steps(2) infinite; }
+@keyframes lstage-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+@keyframes lstage-bob-flip { 0%,100%{transform:scaleX(-1) translateY(0)} 50%{transform:scaleX(-1) translateY(-6px)} }
+.lstage-actor.flip { transform:scaleX(-1); }
+/* 走路圖角色：真幀動畫，關掉彈跳/翻面那套；定位走 inline transform（left/top 固定 0 當基準點，防 static position 漂移） */
+.lstage-sheet { background-repeat:no-repeat; left:0; top:0; }
+.lstage-sheet.walking, .lstage-sheet.walking.flip { animation:none; }
+.lstage-sheet.flip { transform:none; }
+.lstage-tag { position:absolute; transform:translateX(-50%); background:rgba(20,18,16,.72); color:#f3ead8;
+  font-size:12px; line-height:1; padding:4px 8px; border-radius:8px; white-space:nowrap; pointer-events:none; z-index:2000; }
+.lstage-hint { position:absolute; transform:translate(-50%,-100%); color:#ffe9a8; font-size:20px;
+  filter:drop-shadow(0 2px 3px rgba(0,0,0,.6)); cursor:pointer; pointer-events:auto; z-index:2100;
+  animation:lstage-hint-float 1.2s ease-in-out infinite; will-change:transform; }
+@keyframes lstage-hint-float { 0%,100%{transform:translate(-50%,-100%) translateY(0)} 50%{transform:translate(-50%,-100%) translateY(-5px)} }
+/* 世界層是 0×0（裡面全 absolute），所以點地板這層不能寫 inset:0，要自己有地圖那麼大（尺寸由 lobby_stage.js 掛載時寫進變數） */
+.lstage-click { position:absolute; left:0; top:0; width:var(--lstage-map-w, 1536px); height:var(--lstage-map-h, 1024px); cursor:pointer; z-index:1; }
+/* 🕹️ 手機虛擬搖桿（左下角；只觸控裝置由 JS 建立） */
+/* 貼底的控制項自己讓開 home indicator：舞台容器已鋪到螢幕底(背景出血)，安全區不再由容器代讓 */
+.lstage-joy { position:absolute; left:40px; bottom:calc(58px + env(safe-area-inset-bottom, 0px)); width:132px; height:132px; border-radius:50%;
+  background:rgba(20,18,16,.32); border:2px solid rgba(243,234,216,.3); z-index:3000; touch-action:none; }
+.lstage-joy-knob { position:absolute; left:50%; top:50%; width:58px; height:58px; margin:-29px 0 0 -29px;
+  border-radius:50%; background:rgba(243,234,216,.72); box-shadow:0 2px 8px rgba(0,0,0,.45);
+  pointer-events:none; will-change:transform; }
+/* 對話開著時收起搖桿：對話中本來就不能走，且避免跟對話框在底部相撞 */
+.lobby-left:not(.lstage-dlg-hidden) .lstage-joy { display:none; }
+/* 舞台模式：藏原立繪與簽名，對話框保持最上層 */
+.lobby-left.lstage-on #iris-avatar, .lobby-left.lstage-on .lb-signature { display:none !important; }
+.lobby-left.lstage-on .void-dialogue-wrap { z-index:5; pointer-events:none; }
+/* 容器縫隙(框周圍留白/框與輸入列之間)點擊穿透到地圖=「點空地收對話」不再有死角；框和輸入列本身照常可點 */
+.lobby-left.lstage-on .void-dialogue-wrap .void-dialogue-box,
+.lobby-left.lstage-on .void-dialogue-wrap .void-chat-input-row { pointer-events:auto; }
+/* 對話框平常收起（戳戳反應框不受影響），有對話才浮出；輸入列跟對話框同進退 */
+.lobby-left.lstage-on.lstage-dlg-hidden #iris-dialogue-box { display:none !important; }
+.lobby-left.lstage-on.lstage-dlg-hidden .void-chat-input-row { display:none !important; }
+
+/* 💬 聊天符號浮鈕：自由漫遊（對話框收起）時顯示，點了浮出對話框＋輸入列 */
+.lstage-chat-fab { display:none; position:absolute; right:14px; bottom:calc(16px + env(safe-area-inset-bottom, 0px)); width:46px; height:46px;
+  border:1px solid rgba(60,80,130,.28); border-radius:50%; background:rgba(255,255,255,.88); color:#2b3652; cursor:pointer;
+  font-size:19px; align-items:center; justify-content:center; z-index:6;
+  box-shadow:0 4px 14px rgba(40,60,110,.22); transition:background .2s, transform .2s; }
+.lstage-chat-fab:hover { background:#fff; color:#23315e; transform:translateY(-2px); }
+.lobby-left.lstage-on.lstage-dlg-hidden .lstage-chat-fab { display:flex; }
+/* 對話立繪：有立繪用立繪；沒有用他的小人（.is-doll，縮小站在對話框上面）。11-25 起不用頭像（自拍、半身浮框） */
+/* 立繪(全身)：腳貼「對話框那疊之上」而非視窗底 —— 大廳比 VN 多一個輸入框，貼視窗底(bottom:0)會讓立繪下半身
+   躲進「對話框+輸入框」後面(z-index:4 在對話框 z-index:5 之後)被遮大半。故 bottom 抬高到那疊之上、腳踩在對話框頂。 */
+.lstage-talk-portrait { position:absolute; left:0; bottom:128px; height:72%; max-width:52%;
+  object-fit:contain; object-position:left bottom; z-index:4; pointer-events:none; user-select:none;
+  filter:drop-shadow(0 6px 18px rgba(0,0,0,.45)); animation:lstage-portrait-in .18s ease-out; }
+/* 小人（沒立繪的人）：小人圖本來就小，照全身那樣拉到八成高會糊成一團 → 矮一點、腳踩在對話框上面；像素小人放大不抹糊 */
+.lstage-talk-portrait.is-doll { height:min(40%, 340px); bottom:200px; }
+.lstage-talk-portrait.is-px { image-rendering:pixelated; }
+@keyframes lstage-portrait-in { from { transform:translateY(14px); opacity:0; } to { transform:none; opacity:1; } }
+/* 🎯 置中（11-25 起，不再放旁邊）：沒開面板時人站正中間、腳躲在對話框後面，跟立繪版一樣。
+   用 left:0＋right:0＋margin auto 置中（圖片這樣寫會自己算寬、置中），不用 transform——進場動畫的 transform 會蓋掉。
+   開著面板（世界門、書咖櫃台、占卜、造物、交易所、白板、混沌片場）時照舊站左邊，讓出右半給面板 */
+.lobby-left.lstage-on:not(.void-dock-open):not(:has(.wg-win, .oc-win, .lstage-wswin, .os-pt-dock, .snb-win, #chaos-modal-root.chaos-dock.active)) .lstage-talk-portrait {
+  left:0; right:0; margin:0 auto; bottom:60px; height:80%; max-width:100%; object-position:center bottom; }
+/* 🧍 管理員只露上半身（11-25 起：舞台的管理員自動切成上半身當對話立繪，不用全身）：showDialog 掛 .is-bust。
+   全身圖放到畫面高的 1.5 倍、往下沉，頭頂離上緣約 8%，腰以下沉進對話框後面、超出的被 .lobby-left 裁掉（它 overflow:hidden）。
+   放大後比畫面寬，margin auto 置中不了（太寬會靠左）→ 改 left:50%＋translate（獨立屬性，不跟進場動畫的 transform 打架）。
+   對話收起時（開著面板只留人）不放大，照舊全身 */
+.lobby-left.lstage-on:not(.void-dock-open):not(.lstage-dlg-hidden) .lstage-talk-portrait.is-bust {
+  height:150%; bottom:-62%; max-width:none; }
+.lobby-left.lstage-on:not(.void-dock-open):not(.lstage-dlg-hidden):not(:has(.wg-win, .oc-win, .lstage-wswin, .os-pt-dock, .snb-win, #chaos-modal-root.chaos-dock.active)) .lstage-talk-portrait.is-bust {
+  height:150%; bottom:-62%; max-width:none;   /* 上面置中那條權重比較高（:has 裡有 id），尺寸這裡要再寫一次 */
+  left:50%; right:auto; margin:0; translate:-50% 0; }
+.lobby-left.lstage-on:not(.void-dock-open):not(:has(.wg-win, .oc-win, .lstage-wswin, .os-pt-dock, .snb-win, #chaos-modal-root.chaos-dock.active)) .lstage-talk-portrait.is-doll {
+  height:min(40%, 340px); bottom:200px;   /* 置中那條權重比較高，小人的尺寸這裡再寫一次 */ }
+.lstage-toggle-btn.off { opacity:.45; }
+
+/* 👗 右鍵角色下拉單 + 裝扮室（＋對話紀錄小窗、生成預覽、擺設模式面板、圖層小窗）
+   10-13 起全部是大廳設置那套白色（視差系統）：白底、深藍字、淡藍鈕、藍色主鈕（原本是黑配綠，改成跟隨大廳設置的白色樣式）。
+   404 房自己那套黑綠皮在這段最下面（.void-tab.mode-404）。 */
+.lstage-actor-menu { position:absolute; z-index:3300; width:140px; background:rgba(255,255,255,.96);
+  border:1px solid rgba(60,80,130,.28); border-radius:12px; padding:6px; display:flex; flex-direction:column; gap:2px;
+  box-shadow:0 10px 26px rgba(40,60,110,.24); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px); }
+.lam-title { color:#8a93ad; font-size:11px; padding:2px 6px 5px; border-bottom:1px solid rgba(35,49,94,.12); margin-bottom:2px; }
+.lam-item { border:none; border-radius:8px; padding:8px 8px; font-size:13px; cursor:pointer; text-align:left;
+  background:transparent; color:#23315e; }
+.lam-item i { color:#4f74c8; width:16px; text-align:center; margin-right:2px; }
+.lam-item:hover { background:rgba(74,120,216,.10); }
+.lstage-dress { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3300; width:250px;
+  background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28); border-radius:14px; padding:14px;
+  box-shadow:0 12px 34px rgba(40,60,110,.28); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  display:flex; flex-direction:column; gap:8px; color:#23315e; }
+.lsd-title { color:#23315e; font-size:14px; font-weight:bold; }
+.lsd-title i { color:#4f74c8; }
+.lsd-hint { color:#8a93ad; font-size:11px; line-height:1.5; }
+.lstage-dress .lep-btn { padding:9px 6px; }
+.lstage-dress .lep-btn[disabled] { opacity:.35; cursor:default; }
+/* 💬 NPC 對話紀錄小面板（複用 lstage-dress 容器樣式） */
+/* 10-13 起高度固定（以前對話紀錄是自適應高度，會跳）：紀錄多少都一樣高，多的在清單裡捲，按鈕固定在底下 */
+.lstage-history { width:300px; height:min(520px, 78%); }
+.lstage-history .lsh-list { flex:1; min-height:0; max-height:none; }
+.lstage-history .lep-btn { flex:0 0 auto; }   /* .lep-btn 本來是 flex:1（橫排平分），直排的窗變高後會被拉成大塊 */
+.lsh-count { color:#8a93ad; font-size:11px; font-weight:normal; margin-left:4px; }
+.lsh-list { display:flex; flex-direction:column; gap:6px; overflow-y:auto; max-height:52vh; padding-right:2px; }
+.lsh-empty { color:#8a93ad; font-size:12px; text-align:center; padding:16px; }
+.lsh-row { display:flex; gap:6px; align-items:flex-start; background:rgba(35,49,94,.05); border-radius:8px; padding:6px 8px; }
+.lsh-row.me { background:rgba(74,120,216,.10); }
+.lsh-who { flex:0 0 auto; font-size:11px; color:#8a93ad; min-width:30px; }
+.lsh-text { flex:1; font-size:12px; line-height:1.5; color:#23315e; word-break:break-word; white-space:pre-wrap; }
+.lsh-del { flex:0 0 auto; border:none; background:transparent; color:rgba(35,49,94,.35); cursor:pointer; font-size:12px; padding:0 2px; }
+.lsh-del:hover { color:#c0504a; }
+/* 💭 這則回覆當時的思考：收在泡泡底下、點開看（有思考的那一列才多包一層 .lsh-body） */
+.lsh-body { flex:1; min-width:0; display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
+.lsh-body .lsh-text { flex:0 0 auto; }
+.lsh-think { max-width:100%; }
+.lsh-think > summary { cursor:pointer; list-style:none; user-select:none; font-size:11px; color:#8a93ad; padding:1px 2px; }
+.lsh-think > summary::-webkit-details-marker { display:none; }
+.lsh-think > summary i { margin-right:4px; }
+.lsh-think[open] > summary { color:#5b6aa0; }
+.lsh-think-text { margin-top:4px; max-height:240px; overflow-y:auto; white-space:pre-wrap; word-break:break-word; font-size:12px; line-height:1.65;
+  color:#4a5478; background:rgba(35,49,94,.06); border-left:2px solid rgba(35,49,94,.25); border-radius:0 8px 8px 0; padding:8px 10px; }
+/* 柴郡那份（舞台上的小窗）：404 的黑底綠字 */
+.lstage-history.lsh-404 { background:#030a03; border:1px solid rgba(0,255,65,.35); box-shadow:0 0 24px rgba(0,255,65,.14); color:#b8ffc9; }
+.lstage-history.lsh-404 .lsd-title { color:#00ff41; }
+.lstage-history.lsh-404 .lsd-title i { color:#00cc33; }
+.lstage-history.lsh-404 .lep-btn { background:rgba(0,255,65,.08); border-color:rgba(0,255,65,.4); color:#00ff41; }
+.lstage-history.lsh-404 .lep-btn:hover { background:rgba(0,255,65,.18); border-color:#00ff41; }
+.lstage-history.lsh-404 .lep-danger { background:transparent; border-color:rgba(255,90,90,.45); color:#ff7b7b; }
+.lstage-history.lsh-404 .lep-danger:hover { background:rgba(255,90,90,.1); border-color:#ff7b7b; }
+.lstage-history.lsh-404 .lsh-count, .lstage-history.lsh-404 .lsh-who, .lstage-history.lsh-404 .lsh-empty { color:rgba(0,255,65,.55); }
+.lstage-history.lsh-404 .lsh-row { background:rgba(0,255,65,.06); }
+.lstage-history.lsh-404 .lsh-row.me { background:rgba(0,255,65,.14); }
+.lstage-history.lsh-404 .lsh-text { color:#b8ffc9; }
+.lstage-history.lsh-404 .lsh-del { color:rgba(0,255,65,.5); }
+.lstage-history.lsh-404 .lsh-think > summary { color:rgba(0,255,65,.6); }
+.lstage-history.lsh-404 .lsh-think-text { color:#9be8ae; background:rgba(0,255,65,.05); border-left-color:rgba(0,255,65,.4); }
+/* 🎬 小劇場窗口 v2：票券檔案館（阿洛設計；票券／播放鈕＝sound-files aseets/theater_ui/ 的圖）
+   10-06 外框不再是一張撐滿的圖：core/void/frames.js 照窗的大小畫一層 svg（.aurelia-vframe）墊在最底下，
+   角、拱、花飾固定大小，所以內容區也用固定距離（上 46＝上緣＋花飾、左右 24、下 40＝下緣＋花飾） */
+.lstage-theater-win2 { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:3300;
+  width:min(340px, 92%); aspect-ratio:794/1653;
+  filter:drop-shadow(0 18px 44px rgba(30,40,80,.35)); }
+@media (max-height:780px) { .lstage-theater-win2 { width:min(300px, 92%); } }
+.lstage-theater-win2 > .aurelia-vframe { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; z-index:-1; }
+.ltw2-in { position:absolute; inset:46px 24px 40px; display:flex; flex-direction:column; }
+.ltw2-close { position:absolute; top:0; right:0; border:none; background:transparent; color:#8a93ad; cursor:pointer; font-size:17px; padding:2px 6px; z-index:2; }
+.ltw2-close:hover { color:#23315e; }
+.ltw2-title { text-align:center; color:#23315e; font-size:23px; font-weight:800; letter-spacing:6px; text-indent:6px;
+  font-family:Georgia,'Noto Serif TC','PMingLiU',serif; margin-top:2px; }
+.ltw2-title-en { text-align:center; color:#c8a96e; font-size:9px; letter-spacing:4px; text-indent:4px; margin-top:3px; }
+.ltw2-tabs { display:flex; margin:10px 2% 8px; border-bottom:1px solid rgba(35,49,94,.18); }
+.ltw2-tab { flex:1; border:none; background:transparent; cursor:pointer; padding:7px 4px 8px; font-size:13px;
+  color:#8a93ad; font-weight:600; letter-spacing:2px; border-bottom:2px solid transparent; margin-bottom:-1px; }
+.ltw2-tab.on { color:#23315e; font-weight:800; border-bottom-color:#23315e; }
+.ltw2-body { flex:1; min-height:0; display:flex; flex-direction:column; gap:9px; overflow-y:auto; padding:2px 1% 4px; }
+.ltw2-list { display:flex; flex-direction:column; gap:9px; }
+.ltw2-empty { color:#8a93ad; font-size:12px; text-align:center; padding:26px 8px 10px; }
+/* 票券卡：主區(左 72%)＝配對/地點/時間/引言；存根(右)＝播放鈕；REC=進行中 */
+.ltw2-ticket { position:relative; width:100%; aspect-ratio:1616/664; flex:0 0 auto;
+  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/theater_ui/memory-theater-ticket-empty.png) center/100% 100% no-repeat; }
+.ltw2-tk-main { position:absolute; left:4.5%; top:9%; bottom:10%; width:69%; border:none; background:transparent; cursor:pointer;
+  display:flex; flex-direction:column; align-items:flex-start; gap:2px; text-align:left; padding:0 0 0 2%; font-family:inherit; }
+.ltw2-tk-head { display:flex; align-items:center; gap:7px; min-width:0; width:100%; }
+.ltw2-tk-avas { display:flex; flex:0 0 auto; }
+.ltw2-ava { width:30px; height:30px; border-radius:50%; overflow:hidden; position:relative; flex:0 0 auto;
+  background:#eef2fa; border:1.5px solid #c8a96e; display:flex; align-items:center; justify-content:center; color:#8a93ad; font-size:12px; }
+.ltw2-ava + .ltw2-ava { margin-left:-8px; }
+.ltw2-ava-img { position:absolute; left:50%; top:1px; transform:translateX(-50%); }
+.ltw2-tk-name { flex:1; min-width:0; color:#23315e; font-size:13.5px; font-weight:800; letter-spacing:1px;
+  font-family:Georgia,'Noto Serif TC','PMingLiU',serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ltw2-tk-meta { display:flex; flex-direction:column; gap:1px; margin-top:2px; }
+.ltw2-tk-line { color:#5a6784; font-size:10px; letter-spacing:.5px; }
+.ltw2-tk-line i { color:#8a93ad; margin-right:4px; font-size:9px; }
+.ltw2-tk-quote { margin-top:auto; width:100%; box-sizing:border-box; color:#3a4668; font-size:10.5px;
+  border-top:1px solid rgba(35,49,94,.12); padding-top:3px;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ltw2-tk-rec { position:absolute; top:7%; right:29%; background:#fff; border:1px solid rgba(220,80,80,.5); color:#d34747;
+  font-size:8.5px; font-weight:800; letter-spacing:1px; border-radius:9px; padding:2px 7px; }
+.ltw2-tk-rec i { font-size:6px; vertical-align:1px; margin-right:3px; animation:ltw2Rec 1.4s ease-in-out infinite; }
+@keyframes ltw2Rec { 0%,100%{opacity:1} 50%{opacity:.35} }
+.ltw2-tk-play { position:absolute; right:4.5%; top:50%; transform:translateY(-50%); width:17%; aspect-ratio:789/828; border:none; cursor:pointer;
+  background:url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/theater_ui/memory-theater-play-button.png) center/contain no-repeat; transition:transform .15s ease; }
+.ltw2-tk-play:hover { transform:translateY(-50%) scale(1.08); }
+/* 底部動作列（回顧 tab：重壓縮/清空，做成細字連結不搶票券戲） */
+.ltw2-acts { display:flex; align-items:center; justify-content:center; gap:8px; padding:2px 0 0; }
+.ltw2-act { border:none; background:transparent; cursor:pointer; color:#5a6784; font-size:11px; letter-spacing:1px; padding:3px 6px; }
+.ltw2-act:hover { color:#23315e; text-decoration:underline; }
+.ltw2-act.danger { color:#b05555; }
+.ltw2-act-dot { color:#c0c6d6; }
+/* 白皮下的共用小字＋回顧單條編輯頁（沿用舊 class 名，配色換白） */
+.lstage-theater-win2 .ltw-sub { color:#8a93ad; font-size:10.5px; letter-spacing:1px; }
+.lstage-theater-win2 .ltw-hint { color:#9aa2b8; font-size:10.5px; line-height:1.6; }
+.lstage-theater-win2 .ltw-note { color:#9aa2b8; font-size:10.5px; text-align:center; }
+.lstage-theater-win2 .ltw-entry-head { display:flex; align-items:center; gap:8px; }
+.lstage-theater-win2 .ltw-entry-title { flex:1; min-width:0; color:#23315e; font-size:13px; font-weight:800; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lstage-theater-win2 .ltw-back { border:1px solid rgba(35,49,94,.25); background:#fff; color:#23315e; width:26px; height:26px; border-radius:8px; cursor:pointer; }
+.lstage-theater-win2 .ltw-back:hover { border-color:#23315e; }
+.lstage-theater-win2 .ltl-time { flex:0 0 auto; font-size:10px; color:#8a93ad; }
+.lstage-theater-win2 .ltl-text { width:100%; box-sizing:border-box; resize:vertical; border:1px solid rgba(35,49,94,.25); border-radius:8px;
+  background:rgba(255,255,255,.8); color:#2b3652; font:inherit; font-size:12px; line-height:1.6; padding:8px; }
+.lstage-theater-win2 .ltl-text:focus { outline:none; border-color:#c8a96e; }
+.lstage-theater-win2 .lep-btn { flex:0 0 auto; border:1px solid rgba(35,49,94,.25); border-radius:8px; padding:7px 10px; font-size:12px; cursor:pointer; background:#fff; color:#23315e; }
+.lstage-theater-win2 .lep-btn:hover { border-color:#23315e; }
+.lstage-theater-win2 .lep-danger { border-color:rgba(200,80,70,.4); color:#b05555; background:#fff; }
+/* ✨ 裝扮室內建生成（生成鈕；接口和預設包 11-16 搬去 設置 → 圖片 → 畫風 的「大廳的小人」） */
+.lsd-gen { display:flex; flex-direction:column; gap:6px; padding:8px; border:1px solid rgba(60,80,130,.18);
+  border-radius:10px; background:rgba(35,49,94,.04); }
+.lsd-gen-title { color:#4f74c8; font-size:11px; font-weight:700; letter-spacing:.5px; }
+
+/* 👁 生成預覽（套用前先看圖；棋盤底＝透明區） */
+.lstage-genprev { position:absolute; inset:0; z-index:3400; display:flex; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); }
+.lgp-box { background:rgba(255,255,255,.97); border:1px solid rgba(60,80,130,.28); border-radius:14px; padding:14px;
+  box-shadow:0 12px 34px rgba(40,60,110,.28);
+  display:flex; flex-direction:column; gap:10px; max-width:86%; max-height:86%; overflow-y:auto; scrollbar-width:thin; }
+.lgp-title { color:#23315e; font-size:14px; font-weight:bold; text-align:center; }
+.lgp-img { max-width:260px; max-height:300px; align-self:center; image-rendering:pixelated;
+  border:1px solid rgba(60,80,130,.2); border-radius:6px; background-color:#fff;
+  background-image:linear-gradient(45deg,#e3e8f2 25%,transparent 25%),linear-gradient(-45deg,#e3e8f2 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e8f2 75%),linear-gradient(-45deg,transparent 75%,#e3e8f2 75%);
+  background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; }
+/* 🧸 不倒翁小人三面：三張並排，腳底對齊 */
+.lgp-views { display:flex; gap:8px; justify-content:center; align-items:flex-end; }
+.lgp-view { margin:0; flex:1 1 0; min-width:0; display:flex; flex-direction:column; align-items:center; gap:4px; }
+.lgp-view .lgp-img { max-width:100%; max-height:220px; }
+.lgp-view figcaption { color:#8a93ad; font-size:11px; }
+.lgp-hint { color:#8a93ad; font-size:11px; line-height:1.5; text-align:center; max-width:260px; }
+.lgp-btns { display:flex; gap:8px; justify-content:center; }
+/* 走路圖調框器：圖上疊紅格 + 上下左右邊界滑桿 */
+.lgp-sheetwrap { position:relative; align-self:center; line-height:0; }
+.lgp-grid { position:absolute; left:0; top:0; pointer-events:none; }
+.lgp-sliders { display:grid; grid-template-columns:1fr 1fr; gap:6px 12px; max-width:280px; }
+.lgp-srow { display:flex; align-items:center; gap:6px; color:#5a6784; font-size:11px; }
+.lgp-srow > span { flex:0 0 14px; text-align:center; }
+.lgp-srow input[type=range] { flex:1; min-width:0; accent-color:#4a78d8; }
+.lgp-flips { display:flex; align-items:center; gap:6px; flex-wrap:wrap; justify-content:center; }
+.lgp-flips > span { color:#8a93ad; font-size:11px; }
+.lgp-flip { display:flex; align-items:center; gap:4px; padding:4px 8px; border-radius:7px; cursor:pointer; font-size:12px;
+  border:1px solid rgba(60,80,130,.25); background:rgba(240,244,252,.8); color:#23315e; }
+.lgp-flip.on { background:#23315e; border-color:#23315e; color:#fff; }
+.lgp-reslabel { color:#5a6784; font-size:11px; text-align:center; }
+.lgp-result { align-self:center; max-width:260px; max-height:300px; image-rendering:pixelated;
+  border:1px solid rgba(60,80,130,.2); border-radius:6px; background-color:#fff;
+  background-image:linear-gradient(45deg,#e3e8f2 25%,transparent 25%),linear-gradient(-45deg,#e3e8f2 25%,transparent 25%),linear-gradient(45deg,transparent 75%,#e3e8f2 75%),linear-gradient(-45deg,transparent 75%,#e3e8f2 75%);
+  background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0; }
+
+/* 🛸 飄浮物件（LUNA-VII 核心）：上下輕輕漂 */
+.lstage-float { animation:lstage-hover 3.4s ease-in-out infinite; }
+@keyframes lstage-hover { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-14px); } }
+
+/* 🚪 場景切換白光過場 */
+.lstage-fade { position:absolute; inset:0; background:#f5f7fb; opacity:0; pointer-events:none;
+  z-index:4000; transition:opacity .3s ease; }
+.lstage-fade.on { opacity:1; }
+/* 🧱 切塊換場：墊在新場景底下的舊場景定格（整棵複製的），只給看、點不到 */
+.lstage-snap, .lstage-snap * { pointer-events:none !important; }
+
+/* ── 右上舞台工具列（擺設/設置/小劇場/快轉）：白玻璃皮跟左側 dock 同一家 ── */
+.lstage-edit-btn, .lstage-set-btn, .lstage-city-btn {
+  position:absolute; top:10px; z-index:3000; width:34px; height:34px;
+  border:1px solid rgba(60,80,130,.28); border-radius:11px;
+  background:rgba(255,255,255,.82); color:#2b3652; cursor:pointer; font-size:14px;
+  box-shadow:0 4px 14px rgba(40,60,110,.18);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.lstage-edit-btn:hover, .lstage-set-btn:hover, .lstage-city-btn:hover {
+  background:rgba(255,255,255,.95); box-shadow:0 6px 18px rgba(40,60,110,.28); }
+.lstage-edit-btn { right:10px; }
+/* ⚙️ 設置鈕（放擺設鈕左邊，同一組角落控制群；點了開「設置」窗口、停在「大廳」） */
+.lstage-set-btn { right:52px; }
+/* 🏙 快轉地圖：接在小劇場右邊(94+42)，跟其他控制鈕成同一排 */
+.lstage-city-btn { right:136px; }
+.lstage-editing .lstage-city-btn { display:none; }
+/* 擺設模式：左上角場景名牌、底下那條動態在舞台那層外面、圖層比較高，會疊在工具面板的標題上（10-13 面板改白色後很明顯），擺設時先藏 */
+.lobby-left:has(> .lstage-root.lstage-editing) :is(#lb-scene-badge, #lb-feed) { display:none; }
+/* 404 房：跟 dock 同款暗綠皮 */
+.void-tab.mode-404 .lstage-edit-btn, .void-tab.mode-404 .lstage-set-btn,
+.void-tab.mode-404 .lstage-city-btn, .void-tab.mode-404 .lstage-theater-btn {
+  background:rgba(0,10,2,.75); border:1px solid rgba(0,255,65,.3); color:#7de89a;
+  box-shadow:0 4px 14px rgba(0,0,0,.5); }
+.void-tab.mode-404 .lstage-edit-btn:hover, .void-tab.mode-404 .lstage-set-btn:hover,
+.void-tab.mode-404 .lstage-city-btn:hover, .void-tab.mode-404 .lstage-theater-btn:hover {
+  background:rgba(0,18,4,.9); }
+.lstage-editing .lstage-edit-btn { background:#23315e; border-color:#23315e; color:#fff; }
+.lstage-editable { pointer-events:auto !important; cursor:grab; }
+.lstage-editable:active { cursor:grabbing; }
+.lstage-editing .lstage-hint { display:none !important; }
+/* 家具佔地框（純視覺，靠面板「佔地高/寬」±調；alphaFoot 場景這條=擋路切線高度） */
+.lstage-foot { position:absolute; background:rgba(220,60,60,.28); border:1px dashed rgba(220,60,60,.7);
+  pointer-events:none; z-index:2500; }
+.lstage-foot.sel { background:rgba(220,60,60,.42); border-color:#ff5a5a; }
+/* alphaFoot 剪影：canvas 直接畫屋子真實擋路形狀，不要矩形底/框 */
+.lstage-foot-shape { background:none; border:none; }
+.lstage-foot-shape.sel { background:none; outline:2px dashed rgba(255,90,90,.9); outline-offset:2px; }
+.lstage-marker { position:absolute; transform:translate(-50%,-50%); width:34px; height:34px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:bold; color:#fff;
+  cursor:grab; z-index:2600; box-shadow:0 2px 6px rgba(0,0,0,.45); user-select:none; touch-action:none; }
+.lstage-marker.m-ying { background:#b46ac2; }
+.lstage-marker.m-player { background:#4a86c8; }
+.lstage-marker.m-spot { background:#4aa06a; }
+.lstage-marker.m-arrive { background:#d08a3e; }
+.lstage-marker.m-alice { background:#8fa8d8; }
+.lstage-marker.m-cheshire { background:#3f9c46; }
+.lstage-marker.m-rabbit { background:#e6e6ea; color:#333; }
+.lstage-marker.m-zhiwei { background:#6b3a5e; }
+.lstage-marker.m-hatter { background:#7a2f4e; }
+
+/* 🧍 混沌片場開著時立繪站到面板前面：立繪預設 z-index:4，會被 3350 的窗蓋掉（同世界門 .wg-win.wgbp 那條）。立繪 pointer-events:none，不擋點擊。 */
+.lobby-left:has(#chaos-modal-root.chaos-dock.active) .lstage-talk-portrait { z-index:3400; }
+/* 對話框收起時立繪原本靠 bottom:128px 讓開白框；白框收了就讓她站回地面 */
+/* 🧍 面板態（對話框收起、人留著）的立繪定位。占卜／造物工坊／世界門／書咖櫃檯／交易所／混沌片場
+   六扇窗都是右側停靠、左邊空著給立繪，長相一致 → 同一條規則帶著走，別各寫各的會漂。
+   黑市不在裡面：那是蓋滿畫面的 overlay，沒有留人的位置。 */
+.lobby-left.lstage-dlg-hidden:has(.lstage-wswin) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(.wg-win) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(.oc-win) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(#chaos-modal-root.chaos-dock.active) .lstage-talk-portrait,
+.lobby-left.lstage-dlg-hidden:has(.os-pt-dock) .lstage-talk-portrait { bottom:0; height:82%; }
+
+/* 🔮 占卜桌熱點：
+   ① 預設熱點是藍色方框(科幻白大地圖用的)，小屋是暗紫酒紅金 → 換一套金的
+   ② 方框圈住整張桌子很醜 → 滑過時改疊手畫的描邊圖(--hs-hover-img)，沿桌子真實輪廓含桌腳。
+      CSS 的 border-radius 只能做正橢圓、配不上這種帶桌腳的形狀。
+      🚨 描邊圖中間必須是透明的：熱點在 z:1500，含桌面的話會把椅背跟走到桌前的小人蓋掉。
+   ③ 標籤預設是 26px 常駐大字，蓋在牌面上很吵 → 縮成 12px 金色細字，只在滑過時淡出 */
+.lstage-hotspot.hs-tarot { padding-bottom:16px; }
+.lstage-hotspot.hs-tarot:hover, .lstage-hotspot.hs-tarot.is-near, .lstage-hotspot.hs-tarot.is-flash {
+  background:var(--hs-hover-img) center / 100% 100% no-repeat;
+  box-shadow:none; }
+.lstage-hotspot.hs-tarot .lstage-hotspot-chip {
+  background:rgba(26,12,26,.82); color:#e8d5a8; border:1px solid rgba(168,130,60,.55);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-tarot:hover .lstage-hotspot-chip, .lstage-hotspot.hs-tarot.is-near .lstage-hotspot-chip, .lstage-hotspot.hs-tarot.is-flash .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-tarot .lstage-hotspot-chip i { color:#d4af37; font-size:11px; }
+.lstage-obj.lstage-grouped { outline:3px dashed #4ab6ff; outline-offset:-2px; }
+/* 框選（擺設模式，Ctrl+拖空地）：藍色虛線框 */
+.lstage-marquee { position:absolute; border:2px dashed #4ab6ff; background:rgba(74,182,255,.12);
+  z-index:2700; pointer-events:none; }
+/* 🏘 地塊隱藏面：遊玩=整個藏起來；擺設模式=半透明灰階(看得到、可調位置) */
+.lstage-plot-off { display:none; }
+.lstage-editing .lstage-plot-off { display:block; opacity:.4; filter:grayscale(.6); }
+/* 🗺 快轉小地圖(🏙鈕)：廣場俯瞰縮圖,點哪傳哪;建築熱點懸停亮框。白色系＝跟收藏冊/小劇場同一家(白+深藍+金) */
+.lstage-citymap { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); z-index:5100;
+  background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28); border-radius:16px;
+  padding:12px; box-shadow:0 12px 34px rgba(40,60,110,.28); color:#23315e; font-size:12px;
+  -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  width:min-content; }   /* 跟著地圖寬：底下地點鈕放不下就換排，不把整個窗撐寬（手機上會被右側欄蓋住） */
+/* 手機寬：置中的話右邊會壓到側欄那排鈕（11-18 量到），改靠左、邊距縮一點 */
+@media (max-width: 480px) { .lstage-citymap { left:8px; transform:translateY(-50%); padding:8px; } }
+.lcm-title { display:flex; align-items:center; gap:6px; padding:0 2px 9px; white-space:nowrap; font-weight:700; letter-spacing:1px; color:#23315e; }
+.lcm-title i { color:#4f74c8; }
+.lcm-title .lcm-close { margin-left:auto; background:none; border:none; color:#8a93ad; cursor:pointer; font-size:15px; padding:2px 6px; }
+.lcm-title .lcm-close:hover { color:#23315e; }
+.lcm-map { position:relative; overflow:hidden; border-radius:10px; cursor:crosshair; background:#dfe5f2; border:1px solid rgba(60,80,130,.18); }
+.lcm-obj { position:absolute; display:block; image-rendering:pixelated; pointer-events:none; user-select:none; }
+.lcm-spot { position:absolute; z-index:4500; background:transparent; border:1px dashed transparent; border-radius:6px;
+  cursor:pointer; padding:0; display:flex; align-items:flex-end; justify-content:center; }
+.lcm-spot span { background:rgba(255,255,255,.92); color:#23315e; font-size:10px; font-weight:700; padding:2px 7px; border-radius:6px;
+  border:1px solid rgba(60,80,130,.3); margin-bottom:2px; transition:background .12s, color .12s; pointer-events:none; white-space:nowrap; }
+/* 地標名牌一直亮著（11-18：以前滑過才出現，手機沒有滑過、地圖上看不出哪棟是哪裡） */
+.lcm-spot:hover { border-color:#4a78d8; background:rgba(74,120,216,.15); }
+.lcm-spot:hover span { background:#23315e; color:#fff; }
+.lcm-map.is-loading .lcm-obj, .lcm-map.is-loading .lcm-spot { visibility:hidden; }
+.lcm-wait { position:absolute; inset:0; display:none; align-items:center; justify-content:center; color:#6b7590; font-size:12px; letter-spacing:1px; }
+.lcm-map.is-loading .lcm-wait { display:flex; }
+.lcm-chips { display:flex; gap:6px; padding-top:9px; flex-wrap:wrap; }
+/* 地點名不准斷成兩行（11-18：「占卜小屋」被拆成兩行）：放不下就整顆換到下一排 */
+.lcm-chip { flex:1 1 auto; min-width:44px; white-space:nowrap; background:rgba(240,244,252,.8); border:1px solid rgba(60,80,130,.25);
+  color:#23315e; border-radius:999px; padding:5px 10px; cursor:pointer; font-size:12px; font-weight:600; letter-spacing:1px; }
+.lcm-chip:hover { background:#23315e; color:#fff; }
+.lcm-chip:disabled { opacity:.35; cursor:default; background:rgba(240,244,252,.8); color:#23315e; }
+
+
+/* 🌦 天氣層(小雨/小雪)：蓋過場景與前景牆(4000)、壓在編輯面板(5000)下;不吃滑鼠
+   底色=天色濾鏡:雨天冷灰藍暗罩(純白地圖上雨絲才看得清)、雪天淡淡冷霧 */
+.lstage-weather { position:absolute; inset:0; z-index:4200; pointer-events:none; }
+.lstage-weather.rain { background:rgba(38,48,68,.16); }
+.lstage-weather.snow { background:rgba(175,190,215,.10); }
+/* 🗂 圖層列表小窗(擺設模式)：PS式,上=前;拖列調前後/換組,點列選中 */
+.lstage-layers-win { position:absolute; right:12px; top:56px; width:236px; max-height:64%; display:flex; flex-direction:column;
+  background:rgba(255,255,255,.96); border:1px solid rgba(60,80,130,.28); border-radius:12px; z-index:2900;
+  box-shadow:0 10px 26px rgba(40,60,110,.24); color:#23315e; font-size:12px; }
+.llw-head { display:flex; align-items:center; gap:6px; padding:8px 10px; cursor:grab; border-bottom:1px solid rgba(35,49,94,.12); font-weight:700; }
+.llw-head i { color:#4f74c8; }
+.llw-head .llw-close { margin-left:auto; background:none; border:none; color:#5a6784; cursor:pointer; font-size:14px; padding:2px 6px; }
+.llw-list { overflow-y:auto; padding:2px 0 8px; }
+.llw-group { padding:8px 10px 3px; color:#8a93ad; font-size:11px; }
+.llw-row { display:flex; align-items:center; gap:8px; padding:4px 10px; cursor:grab; touch-action:none; user-select:none; }
+.llw-row img { width:30px; height:30px; object-fit:contain; background:rgba(35,49,94,.05); border-radius:5px; pointer-events:none; flex:none; }
+.llw-row span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.llw-row:hover { background:rgba(74,120,216,.08); }
+.llw-row.sel { background:rgba(74,120,216,.14); box-shadow:inset 2px 0 0 #4a78d8; }
+.llw-row.off { opacity:.45; }
+/* 👤 人物列：站位快照標記（不可拖,當基準用） */
+.llw-row.llw-actor { cursor:default; color:#9a6418; background:rgba(230,170,70,.10);
+  border-top:1px dashed rgba(200,140,50,.35); border-bottom:1px dashed rgba(200,140,50,.35); }
+.llw-actor-ic { width:30px; height:30px; flex:none; display:flex; align-items:center; justify-content:center;
+  border:1px dashed rgba(200,140,50,.5); border-radius:50%; color:#9a6418; font-size:13px; }
+.llw-row.llw-drop, .llw-group.llw-drop { box-shadow:inset 0 2px 0 #4a78d8; }
+.llw-list.llw-drop-end { box-shadow:inset 0 -2px 0 #4a78d8; }
+/* 遮罩視覺化（擺設模式）：不可走區半透明紅 */
+.lstage-maskview { position:absolute; left:0; top:0; z-index:2300; pointer-events:none; }
+/* 過門觸發區（擺設模式）：橘色虛線框，可拖/右下角調大小 */
+.lstage-doorrect { position:absolute; border:2px dashed #d08a3e; background:rgba(208,138,62,.16);
+  z-index:2560; cursor:grab; touch-action:none; }
+.lstage-doorrect:active { cursor:grabbing; }
+.lstage-doorrect > span:first-child { position:absolute; left:4px; top:-22px; background:#d08a3e; color:#fff;
+  font-size:11px; padding:3px 7px; border-radius:6px; white-space:nowrap; pointer-events:none; }
+.lstage-door-grip { background:#d08a3e !important; }
+
+/* 外框鋼索：金色多邊形+白色牆角錨點 */
+.lstage-wire { position:absolute; left:0; top:0; z-index:2400; pointer-events:none; }
+.lstage-wire polygon { fill:rgba(255,210,74,.06); stroke:#ffd24a; stroke-width:3; stroke-dasharray:10 6; }
+.lstage-vert { position:absolute; transform:translate(-50%,-50%); width:22px; height:22px; border-radius:50%;
+  background:#fff; border:3px solid #ffd24a; cursor:grab; z-index:2650;
+  box-shadow:0 2px 6px rgba(0,0,0,.45); touch-action:none; }
+.lstage-vert:active { cursor:grabbing; }
+.lstage-zone.z-npc { background:rgba(74,160,106,.18); border-color:rgba(74,160,106,.85); }
+.lstage-zone.z-npc .lstage-zone-label, .lstage-zone.z-npc .lstage-zone-grip { background:#4aa06a; }
+.lstage-zone { position:absolute; background:rgba(180,106,194,.22); border:2px dashed rgba(180,106,194,.85);
+  z-index:2550; cursor:grab; touch-action:none; }
+.lstage-zone:active { cursor:grabbing; }
+.lstage-zone-label { position:absolute; left:4px; top:-22px; background:#b46ac2; color:#fff; font-size:11px;
+  padding:3px 7px; border-radius:6px; white-space:nowrap; pointer-events:none; }
+.lstage-zone-grip { position:absolute; right:-14px; bottom:-14px; width:28px; height:28px; border-radius:50%;
+  background:#b46ac2; color:#fff; display:flex; align-items:center; justify-content:center; font-size:11px;
+  cursor:nwse-resize; box-shadow:0 2px 6px rgba(0,0,0,.45); touch-action:none; }
+.lstage-edit-panel { position:absolute; left:10px; top:10px; z-index:5000; width:230px;
+  max-height:calc(100% - 20px); overflow-y:auto;
+  background:rgba(255,255,255,.95); border:1px solid rgba(60,80,130,.28); border-radius:12px; padding:10px;
+  box-shadow:0 10px 26px rgba(40,60,110,.24); -webkit-backdrop-filter:blur(8px); backdrop-filter:blur(8px);
+  display:flex; flex-direction:column; gap:8px; color:#23315e; }
+.lep-collapse-bar { display:flex; align-items:center; gap:8px; cursor:move; touch-action:none; user-select:none; }
+.lep-collapse-bar > i { color:#4f74c8; font-size:12px; }
+.lep-collapse-bar .lep-title { font-weight:700; font-size:13px; color:#23315e; }
+.lep-collapse-btn { flex:0 0 auto !important; width:36px; margin-left:auto; }
+.lstage-edit-panel.lep-collapsed { gap:0; width:150px; }
+.lstage-edit-panel.lep-collapsed .lep-hint,
+.lstage-edit-panel.lep-collapsed .lep-row,
+.lstage-edit-panel.lep-collapsed .lep-adv,
+.lstage-edit-panel.lep-collapsed .lep-out { display:none !important; }
+.lep-adv > summary { font-size:11px; color:#8a93ad; cursor:pointer; padding:4px 0; }
+.lep-adv[open] > summary { margin-bottom:4px; }
+/* 手機：擺設面板貼在底部、最多佔 45% 高，上半部留給場景；標題列和「完成」那排釘住不跟著捲；右側那排大廳鈕先藏起來（MOB-1121） */
+@media (max-width:760px) {
+  .lstage-edit-panel { left:0 !important; right:0 !important; top:auto !important; bottom:0; width:auto;
+    max-height:45%; padding:0 10px; gap:8px; border-radius:14px 14px 0 0; border-bottom:none; }
+  .lstage-edit-panel .lep-collapse-bar { position:sticky; top:0; z-index:1; padding:10px 0 6px; cursor:default;
+    background:inherit; }
+  .lstage-edit-panel .lep-drag-tip { display:none; }
+  .lstage-edit-panel .lep-foot { position:sticky; bottom:0; z-index:1; padding:8px 0 calc(10px + env(safe-area-inset-bottom)); background:inherit; }
+  .lstage-edit-panel .lep-btn { min-height:40px; }
+  .lstage-edit-panel.lep-collapsed { width:auto; }
+  .lobby-left:has(> .lstage-root.lstage-editing) :is(.lb-dock, .lstage-chat-fab) { display:none; }
+  /* 跟人聊天時對話框浮出來：右側那排鈕會蓋住「離開」和輸入框，先收起來，按離開就回來 */
+  .lobby-left.lstage-on:not(.lstage-dlg-hidden) .lb-dock { display:none; }
+}
+.lep-hint { color:#8a93ad; font-size:11px; line-height:1.5; }
+.lep-row { display:flex; gap:6px; }
+.lep-btn { flex:1; border:1px solid rgba(60,80,130,.25); border-radius:8px; padding:7px 4px; font-size:12px; cursor:pointer;
+  background:rgba(240,244,252,.8); color:#23315e; }
+.lep-btn:hover { background:#fff; border-color:#23315e; }
+.lep-btn i { color:inherit; }
+.lep-done { background:linear-gradient(135deg,#6a9be0,#4a78d8); color:#fff; border-color:transparent; }
+.lep-done:hover { background:linear-gradient(135deg,#7aa8e8,#5a86e0); border-color:transparent; }
+.lep-danger { background:#fff; color:#b05555; border-color:rgba(200,80,70,.4); }
+.lep-danger:hover { background:rgba(200,80,70,.08); border-color:#b05555; }
+.lep-out { width:100%; height:56px; resize:none; border:1px solid rgba(60,80,130,.2); border-radius:8px; font-size:10px;
+  background:rgba(35,49,94,.04); color:#23315e; padding:6px; }
+
+/* 404 房：這幾個窗跟著 dock 那套暗綠皮（404 房自己的系統，不跟大廳的白）。
+   🚨 對話模式那張白卡（.lsh-pv）不碰（大廳的設定 11-17 搬進「設置」窗口了，那個窗在 404 也是白的、不歸這裡管）——規則只寫在這幾個窗裡面 */
+.void-tab.mode-404 .lstage-chat-fab,
+.void-tab.mode-404 .lstage-actor-menu,
+.void-tab.mode-404 .lstage-dress,
+.void-tab.mode-404 .lgp-box,
+.void-tab.mode-404 .lstage-edit-panel,
+.void-tab.mode-404 .lstage-layers-win { background:rgba(0,10,2,.92); border-color:rgba(0,255,65,.3); color:#c9f5d4;
+  box-shadow:0 8px 22px rgba(0,0,0,.55); }
+.void-tab.mode-404 .lstage-chat-fab { color:#7de89a; }
+.void-tab.mode-404 :is(.lstage-actor-menu, .lstage-dress, .lgp-box, .lstage-edit-panel, .lstage-layers-win) :is(.lsd-title, .lep-title, .lgp-title, .lsh-text, .lam-item) { color:#d3f9d8; }
+.void-tab.mode-404 :is(.lstage-actor-menu, .lstage-dress, .lstage-edit-panel, .lstage-layers-win) :is(.lsd-title i, .lam-item i, .lep-collapse-bar > i, .llw-head i) { color:#4ade80; }
+.void-tab.mode-404 :is(.lstage-actor-menu, .lstage-dress, .lgp-box, .lstage-edit-panel, .lstage-layers-win) :is(.lsd-hint, .lam-title, .lsh-who, .lsh-count, .lsh-empty, .lep-hint, .lgp-hint, .llw-group) { color:rgba(125,232,154,.6); }
+.void-tab.mode-404 :is(.lstage-dress, .lstage-layers-win) :is(.lsh-row, .llw-row img) { background:rgba(0,255,65,.05); }
+.void-tab.mode-404 .lstage-dress .lsh-row.me { background:rgba(0,255,65,.10); }
+.void-tab.mode-404 :is(.lstage-actor-menu .lam-item, .lstage-layers-win .llw-row):hover { background:rgba(0,255,65,.10); }
+.void-tab.mode-404 :is(.lstage-dress, .lgp-box, .lstage-edit-panel) .lep-btn { background:rgba(16,24,16,.9); border-color:rgba(74,222,128,.3); color:#d3f9d8; }
+.void-tab.mode-404 :is(.lstage-dress, .lgp-box, .lstage-edit-panel) .lep-btn:hover { border-color:rgba(74,222,128,.7); background:rgba(24,36,24,.95); }
+.void-tab.mode-404 :is(.lstage-dress, .lgp-box, .lstage-edit-panel) .lep-done { background:rgba(22,101,52,.9); border-color:rgba(74,222,128,.6); color:#eafff0; }
+.void-tab.mode-404 .lstage-dress .lsd-gen { border-color:rgba(74,222,128,.25); background:rgba(0,255,65,.04); }
+.void-tab.mode-404 .lstage-dress .lsd-gen-title { color:#4ade80; }
+.void-tab.mode-404 :is(.lstage-dress, .lgp-box, .lstage-edit-panel) .lep-danger { background:rgba(40,10,10,.85); border-color:rgba(255,110,110,.4); color:#ff9a9a; }
+
+/* 🎭 小劇場：兩人中間的共用「聊天中」泡泡（白玻璃＋打字三點；帶小尾巴） */
+.lstage-theater-pair { position:absolute; transform:translateX(-50%); z-index:3200;
+  padding:8px 12px; border:1px solid rgba(60,80,130,.3); border-radius:999px; cursor:pointer;
+  background:rgba(255,255,255,.92); box-shadow:0 4px 14px rgba(40,60,110,.22);
+  display:flex; align-items:center; justify-content:center;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.lstage-theater-pair::after { content:''; position:absolute; left:50%; bottom:-5px; width:9px; height:9px;
+  transform:translateX(-50%) rotate(45deg); background:rgba(255,255,255,.92);
+  border-right:1px solid rgba(60,80,130,.3); border-bottom:1px solid rgba(60,80,130,.3); }
+.lstage-theater-pair:hover { background:#fff; box-shadow:0 6px 18px rgba(40,60,110,.32); }
+/* 飄的動畫要帶著置中一起寫：通用那組 lstage-hover 只寫 translateY，會把上面的 translateX(-50%) 整個蓋掉，
+   泡泡就往右偏半個身寬（11-20 小劇場泡泡都是歪的，原因就是這個） */
+.lstage-theater-pair.lstage-float { animation-name:lstage-hover-pair; }
+@keyframes lstage-hover-pair { 0%,100% { transform:translateX(-50%) translateY(0); } 50% { transform:translateX(-50%) translateY(-6px); } }
+/* 🎁 書咖點餐送到了：收到的人頭上冒一下（lobby_cafe_regulars.js 的 _giftPop；同小劇場泡泡的長相，幾秒後淡掉） */
+.lstage-gift-pop { position:absolute; transform:translateX(-50%); z-index:3150; pointer-events:none; white-space:nowrap;
+  padding:6px 11px; border:1px solid rgba(160,110,60,.35); border-radius:999px; font-size:13px; font-weight:700; color:#6d4425;
+  background:rgba(255,250,242,.94); box-shadow:0 4px 14px rgba(90,60,30,.2); display:flex; align-items:center; gap:6px;
+  animation:lstage-gift-in .35s ease-out, lstage-gift-out .6s ease-in 5.4s forwards; }
+.lstage-gift-pop i { color:#c47a3a; }
+@keyframes lstage-gift-in { from { opacity:0; margin-top:10px; } to { opacity:1; margin-top:0; } }
+@keyframes lstage-gift-out { to { opacity:0; margin-top:-8px; } }
+.ltp-dots { display:flex; gap:4px; }
+.ltp-dots i { width:6px; height:6px; border-radius:50%; background:#23315e; animation:ltpDot 1.2s ease-in-out infinite; }
+.ltp-dots i:nth-child(2) { animation-delay:.18s; }
+.ltp-dots i:nth-child(3) { animation-delay:.36s; }
+@keyframes ltpDot { 0%,60%,100% { opacity:.35; transform:translateY(0); } 30% { opacity:1; transform:translateY(-3px); } }
+.void-tab.mode-404 .lstage-theater-pair { background:rgba(0,10,2,.85); border-color:rgba(0,255,65,.35); box-shadow:0 4px 14px rgba(0,0,0,.55); }
+.void-tab.mode-404 .lstage-theater-pair::after { background:rgba(0,10,2,.85); border-color:rgba(0,255,65,.35); }
+.void-tab.mode-404 .ltp-dots i { background:#57e389; }
+
+/* 🎬 小劇場：右上入口鈕（帶未查看角標）。做成跟同排其他鈕一樣的 34px 方鈕——
+   這排只有它帶文字又是膠囊形，夾在四顆方鈕中間看起來歪掉 */
+.lstage-theater-btn { position:absolute; right:94px; top:10px; z-index:3000; width:34px; height:34px; padding:0;
+  display:flex; align-items:center; justify-content:center; cursor:pointer;
+  border:1px solid rgba(60,80,130,.28); border-radius:11px;
+  background:rgba(255,255,255,.82); color:#2b3652; font-size:14px;
+  box-shadow:0 4px 14px rgba(40,60,110,.18);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px); }
+.lstage-theater-btn:hover { background:rgba(255,255,255,.95); box-shadow:0 6px 18px rgba(40,60,110,.28); }
+.ltb-badge { display:none; position:absolute; top:-4px; right:-2px; min-width:16px; height:16px; border-radius:8px;
+  background:#e0a52e; color:#fff; font-size:10px; line-height:16px; text-align:center; padding:0 3px; box-sizing:border-box;
+  box-shadow:0 0 6px rgba(224,165,46,.7); }
+.ltb-badge.on { display:block; }
+
+/* 🎬 偷窺 Loading 遮罩：全屏黑 + 中央場景小舞台（分身左右滑入面對面、頭頂表情圖示輕跳）+ 白點循環 */
+.ltov { position:fixed; inset:0; z-index:9500; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:18px; background:rgba(0,0,0,.82); opacity:1; transition:opacity .35s ease; }
+.ltov.out { opacity:0; pointer-events:none; }
+.ltov-stage { position:relative; width:min(86vw, 520px); aspect-ratio:8/5; border-radius:16px; overflow:hidden; background:#111; }
+.ltov-bg { position:absolute; image-rendering:pixelated; filter:brightness(.92); }
+.ltov-slot { position:absolute; bottom:9%; display:flex; flex-direction:column; align-items:center; gap:6px; }
+.ltov-l { left:24%; transform:translateX(-50%); animation:ltov-in-l .55s ease-out both; }
+.ltov-r { left:76%; transform:translateX(-50%); animation:ltov-in-r .55s ease-out both; }
+@keyframes ltov-in-l { from { transform:translateX(-50%) translateX(-140px); opacity:0; } to { transform:translateX(-50%); opacity:1; } }
+@keyframes ltov-in-r { from { transform:translateX(-50%) translateX(140px); opacity:0; } to { transform:translateX(-50%); opacity:1; } }
+.ltov-clone { image-rendering:pixelated; background-repeat:no-repeat; user-select:none; -webkit-user-drag:none; }
+.ltov-clone.flip { transform:scaleX(-1); }
+.ltov-bub { width:44px; height:36px; border-radius:12px; background:#fff; display:flex; align-items:center; justify-content:center;
+  position:relative; animation:ltov-bob 1.1s ease-in-out infinite; box-shadow:0 4px 10px rgba(0,0,0,.35); }
+.ltov-bub::after { content:''; position:absolute; left:50%; bottom:-7px; transform:translateX(-50%);
+  border:7px solid transparent; border-top-color:#fff; border-bottom:none; }
+.ltov-bub i { font-size:16px; color:#d9534f; }
+.ltov-bub i.fa-droplet { color:#3f8fa8; }
+.ltov-bub i.fa-music { color:#7a5fc9; }
+.ltov-bub i.fa-bolt { color:#d9a53f; }
+.ltov-bub i.fa-ellipsis { color:#666; }
+.ltov-bub i.fa-fire { color:#e07b39; }
+@keyframes ltov-bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
+.ltov-load { display:flex; flex-direction:column; align-items:center; gap:10px; }
+.ltov-dots { display:flex; gap:10px; }
+.ltov-dots i { width:10px; height:10px; border-radius:50%; background:#fff; opacity:.25; animation:ltov-dot 1.2s infinite; }
+.ltov-dots i:nth-child(2) { animation-delay:.2s; }
+.ltov-dots i:nth-child(3) { animation-delay:.4s; }
+@keyframes ltov-dot { 0%,100% { opacity:.25; } 40% { opacity:1; } }
+.ltov-txt { color:#f3ead8; font-size:13px; letter-spacing:1px; }
+
+/* =========================================================
+   🎩 帽匠的奇想工坊（廣場右側那間店）
+   ① 造物儀熱點：同占卜桌那套——滑過疊描邊圖（沿造物儀真實輪廓、中間透明），
+      標籤縮成細字只在滑過時淡出，不常駐大字蓋在家具上。
+   ② 造物工坊浮窗：只負責定位，皮由面板自己帶（阿洛畫的標題與三個角落），
+      所以窗本身不畫底不畫框；右側靠邊、左邊留給帽匠立繪（同占卜浮窗）。
+   ③ 面板 .lws：素材都是固定網址 → 直接寫在這裡，JS 只給 class。
+   ========================================================= */
+.lstage-hotspot.hs-workshop { padding-bottom:16px; }
+/* 10-13 起滑過亮的是造物儀本身（lit＋紫色那組，見下面 .lstage-obj-lit-violet），熱點框自己不畫任何東西 */
+.lstage-hotspot.hs-workshop:hover, .lstage-hotspot.hs-workshop.is-near, .lstage-hotspot.hs-workshop.is-flash { background:none; box-shadow:none; }
+.lstage-hotspot.hs-workshop .lstage-hotspot-chip {
+  background:rgba(30,16,34,.82); color:#f0dcc0; border:1px solid rgba(206,124,168,.55);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-workshop:hover .lstage-hotspot-chip, .lstage-hotspot.hs-workshop.is-near .lstage-hotspot-chip, .lstage-hotspot.hs-workshop.is-flash .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-workshop .lstage-hotspot-chip i { color:#ffd98a; font-size:11px; }
+
+/* 🏪 404 房的熱點（圓桌＝黑市；電腦桌＝之後的混沌片場）：
+   預設熱點是科幻藍，404 整間是螢光綠終端機皮 → 換一套綠的。
+   還沒有描邊圖（--hs-hover-img）＝先用綠框；畫好沿家具輪廓的圖再加上 hoverImg，
+   規矩同占卜桌：中間必須透明，不然熱點在 z:1500 會蓋掉桌上的東西跟走到桌前的小人。 */
+.lstage-hotspot.hs-404 { padding-bottom:16px; }
+.lstage-hotspot.hs-404:hover, .lstage-hotspot.hs-404.is-near, .lstage-hotspot.hs-404.is-flash {
+  background:var(--hs-hover-img, rgba(0,255,120,.10)) center / 100% 100% no-repeat;
+  box-shadow:0 0 0 2px rgba(0,255,120,.55) inset, 0 0 18px rgba(0,255,120,.25); }
+.lstage-hotspot.hs-404 .lstage-hotspot-chip {
+  background:rgba(4,20,10,.86); color:#8effb8; border:1px solid rgba(0,255,120,.45);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.6);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-404:hover .lstage-hotspot-chip, .lstage-hotspot.hs-404.is-near .lstage-hotspot-chip, .lstage-hotspot.hs-404.is-flash .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-404 .lstage-hotspot-chip i { color:#00cc33; font-size:11px; }
+/* 🎬 大電腦＝混沌片場（11-20）：亮的是工作台本身（lit＋綠光），熱點框自己不畫綠框（同書咖、帽匠那幾組） */
+.lstage-hotspot.hs-404-lit:hover, .lstage-hotspot.hs-404-lit.is-near, .lstage-hotspot.hs-404-lit.is-flash { background:none; box-shadow:none; }
+.lstage-obj.lstage-obj-lit.lstage-obj-lit-green {
+  filter:drop-shadow(1.5px 0 0 #b6ffcf) drop-shadow(-1.5px 0 0 #b6ffcf)
+         drop-shadow(0 1.5px 0 #b6ffcf) drop-shadow(0 -1.5px 0 #b6ffcf)
+         drop-shadow(0 0 14px rgba(0,255,120,.75)); }
+
+.lstage-wswin { position:absolute; right:max(78px,calc(50% - 660px)); top:50%; transform:translateY(-50%);
+  z-index:3350; width:min(920px,72%); height:min(680px,calc(100% - 130px)); }
+/* 🎞 放寬／縮回的過場不在這裡：10-13 前是 transition 寬、高、左邊位置，每一幀都讓裡面的創作室重排＝掉幀
+   （寬跟左邊從 auto 起跳根本不會動，只有高度在長）→ 改由 lobby_workshop.js 的 _resize 用 transform 縮放 */
+/* 🔧 開了工具（創作室／VN 組件／匯入）就把窗放寬吃滿左欄：
+   創作室的「即時預覽」是靠容器寬度自己決定要不要當側邊欄——容器 >768px 就是左右兩欄，
+   ≤768px 才收成單欄＋👁 抽屜（手機維持那個）。五張卡的首頁不需要這麼寬，收工就縮回去。
+   窗一放寬會蓋到帽匠的立繪，工作中不需要那張臉擋在上面 → 一起收掉。 */
+/* 🚨 只在桌機放寬：手機的窗位是 lobby.css 的 void-dock-open 那組在管（貼底、左右各留 10px），
+   這條的權重跟它一樣、又載得比較晚，不圈起來會把手機版位蓋掉。斷點對齊 lobby.css 的 760px。 */
+@media (min-width:761px) {
+  .lstage-wswin:has(> .lws.is-tool) { left:16px; width:auto; height:min(820px,calc(100% - 96px)); }
+}
+.lobby-left:has(.lws.is-tool) .lstage-talk-portrait { display:none; }
+/* 面板開著時立繪要壓在窗下面、且站回地面（同占卜浮窗） */
+.lobby-left:has(.lstage-wswin) .lstage-talk-portrait { z-index:3400; }
+/* （面板態的立繪定位已併進占卜那條，五扇窗共用） */
+
+/* ── 面板本體（lobby_workshop.js 掛進來；地點視圖的窗格也是這一份）──
+   🚨 框是 CSS 畫的，不是把阿洛那張整框圖裁下來貼：
+      整張框圖一拉伸就把角落的貓與高帽扯歪，裁成角落貼圖又得做 alpha 漸隱＝邊緣糊掉。
+   畫法＝兩層，不是「在角落塗一塊酒紅」：
+      外層 .lws        ＝框本體，右上與右下帶酒紅（框的邊條顏色）
+      內層 .lws::before ＝真正的暗紫面板，內縮 9px、四個角圓角不一樣大
+                         → 圓角大的那兩角（右上、左下）就讓底下的框色露出來，成為那道彎角邊條
+   任何長寬比都不變形；角落玩偶（貓／高帽／徽章）另外出透明底小圖貼進 .lws-doll-*。 */
+.lws { position:relative; width:100%; height:100%; display:flex; flex-direction:column; overflow:visible;
+  border-radius:26px; color:#efe7f6;
+  background:
+    radial-gradient(120% 150% at 100% 0%, #c8477a 0%, #a02f60 12%, #6d1f46 26%, rgba(56,40,72,0) 52%),
+    radial-gradient(95% 130% at 100% 100%, #bd4073 0%, #8c2757 16%, rgba(56,40,72,0) 44%),
+    linear-gradient(155deg, #382f52 0%, #2b2440 42%, #241d33 100%);
+  border:1px solid rgba(222,212,234,.42);
+  box-shadow:0 18px 48px rgba(0,0,0,.62);
+  font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif; }
+/* 內面板：圓角 = 左上 / 右上 / 右下 / 左下，右上與左下故意做大＝框色露出來的那道彎 */
+.lws::before { content:""; position:absolute; inset:9px; z-index:0; pointer-events:none;
+  border-radius:20px 58px 34px 58px;
+  background:radial-gradient(130% 110% at 50% 0%, #322a49 0%, #272038 46%, #1e1829 100%);
+  box-shadow:inset 0 0 0 1px rgba(226,186,138,.14), 0 0 22px rgba(0,0,0,.45); }
+
+/* 點陣小裝飾（阿洛框上那兩片小點點） */
+.lws-dots { position:absolute; z-index:2; width:56px; height:32px; pointer-events:none;
+  background-image:radial-gradient(circle, rgba(216,192,228,.22) 1px, transparent 1.4px);
+  background-size:11px 11px; }
+.lws-dots-l { left:34px; top:34px; }
+.lws-dots-r { right:34px; top:88px; }
+
+/* 🎎 角落玩偶（貓／高帽＋徽章／菱形＋貓頭）：阿洛另外出的透明底小圖，貼在 CSS 框上。
+   寬度用百分比、高度交給 aspect-ratio → 面板放大縮小玩偶跟著等比例走，永遠不會被拉扁。
+   位置照阿洛原圖上它們在框上的位置換算（貓在右上、略微探出上緣；另兩組坐在下緣）。
+   🖼 這檔的素材圖走 GitHub raw 不走 jsDelivr：素材庫超過 jsDelivr 的 50MB 上限，沒快取的檔會隨機 403，
+   CSS 背景圖又接不到失敗、沒辦法換網址重抓（10-19 量到工坊介面 6 張破圖）。JS 載的圖見 lobby_stage.js 的 _sfRetry。 */
+.lws-doll { position:absolute; z-index:5; pointer-events:none;
+  background-repeat:no-repeat; background-position:center bottom; background-size:contain;
+  filter:drop-shadow(0 3px 6px rgba(0,0,0,.45)); }
+.lws-doll-tr { right:92px; top:-14px; width:13.2%; min-width:76px; max-width:150px; aspect-ratio:360/260;
+  background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_doll_cats_v1.webp); }
+.lws-doll-bl { left:2.4%; bottom:1.4%; width:13.6%; min-width:84px; max-width:158px; aspect-ratio:420/164;
+  background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_doll_hat_v1.webp); }
+.lws-doll-br { right:4.2%; bottom:1.2%; width:10.2%; min-width:64px; max-width:118px; aspect-ratio:400/214;
+  background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_doll_gem_v1.webp); }
+
+.lws-hd { position:relative; z-index:3; flex:0 0 auto; padding:24px 22px 12px; }
+.lws-title { width:min(44%,272px); height:46px; margin:0 auto;
+  background:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_title_v1.webp) center / contain no-repeat; }
+.lws-x { position:absolute; right:26px; top:24px; width:42px; height:42px; padding:0; cursor:pointer;
+  border:1px solid rgba(240,202,152,.42); border-radius:50%;
+  background:radial-gradient(70% 70% at 50% 32%, #3d2242 0%, #251527 100%);
+  color:#f2dcc4; font-size:18px; line-height:1;
+  box-shadow:0 3px 10px rgba(0,0,0,.45); transition:transform .14s ease, border-color .14s ease; }
+.lws-x:hover { transform:scale(1.07); border-color:rgba(240,202,152,.8); }
+
+/* 下緣留白＝給角落玩偶（高帽／貓頭）站的位置，卡片不要壓上去 */
+.lws-body { position:relative; z-index:3; flex:1; min-height:0; overflow-y:auto;
+  padding:6px 26px 64px; display:flex; flex-direction:column; gap:13px; }
+
+.lws-card { position:relative; overflow:hidden; display:flex; align-items:center; gap:14px; width:100%;
+  padding:14px 20px 14px 14px; cursor:pointer; text-align:left;
+  border:1px solid rgba(255,255,255,.42); border-radius:20px;
+  background:rgba(223,220,238,.88); box-shadow:0 3px 12px rgba(0,0,0,.28);
+  transition:transform .14s ease, box-shadow .14s ease; }
+.lws-card:hover { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,.36); }
+.lws-card:active { transform:translateY(0); }
+/* 卡片底紋（水彩筆觸）：鋪滿卡片、壓在圖與字下面 */
+.lws-card::before { content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+  background-position:center; background-size:cover; background-repeat:no-repeat; opacity:.95; }
+.lws-card-art { position:relative; z-index:1; flex:0 0 auto; width:118px; height:88px;
+  background-position:center; background-size:contain; background-repeat:no-repeat; }
+.lws-card-tx { position:relative; z-index:1; flex:1; min-width:0; display:flex; flex-direction:column; gap:5px; }
+.lws-card-t { font-size:18px; font-weight:800; letter-spacing:1px; color:#2b2340; white-space:nowrap; }
+.lws-card-d { font-size:12.5px; color:#5d5478; letter-spacing:.5px; }
+/* 標題底下那條四色小記號（照阿洛的稿） */
+.lws-card-bar { width:66px; height:3px; border-radius:2px; margin-top:2px;
+  background:linear-gradient(90deg,#59cfe8 0 25%,#e0567f 25% 50%,#e8b355 50% 75%,#8f7ce0 75% 100%); }
+
+.lws-vn      .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_vn_v1.webp); }
+.lws-panel   .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_panel_v1.webp); }
+.lws-fx      .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_fx_v1.webp); }
+.lws-theme   .lws-card-art { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_icon_theme_v1.webp); }
+.lws-vn::before      { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_vn_v1.webp); }
+.lws-panel::before   { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_panel_v1.webp); }
+.lws-fx::before      { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_fx_v1.webp); }
+.lws-theme::before   { background-image:url(https://raw.githubusercontent.com/nancywang3641/sound-files/main/lobby_workshop_ui_bg_theme_v1.webp); }
+
+/* 卡片點下去那件事整個蓋上來：創作室與 VN 組件自己生覆蓋層（見 lobby_workshop.js） */
+/* 模組沒載入時的提示（浮在底部、不佔版位） */
+.lws-note { position:absolute; left:50%; bottom:18px; transform:translateX(-50%) translateY(10px); z-index:11;
+  background:rgba(30,16,34,.92); color:#f0dcc0; border:1px solid rgba(206,124,168,.5);
+  padding:7px 16px; border-radius:999px; font-size:12px; white-space:nowrap;
+  opacity:0; pointer-events:none; transition:opacity .2s ease, transform .2s ease; }
+.lws-note.on { opacity:1; transform:translateX(-50%) translateY(0); }
+.lws-fail { padding:24px; color:#e8b6c8; font-size:13px; }
+
+/* ── 🎩 工坊裡的創作室／VN 組件庫：換成工坊的皮（照阿洛的稿）──
+   只在工坊面板裡生效（.lws.is-tool 底下），手機殼裡的那份維持原本的米色紙皮，
+   兩邊是同一支程式、只有這裡多一層皮。
+   🚨 VN 組件庫是把配色寫在元素的 style 上的（vncomp-app 那段 cssText），
+      所以那幾條只能用 !important 才蓋得過去，其餘一律不用。 */
+/* 工具是自己貼滿容器的覆蓋層（#os_studio_app 連底色都寫在 style 上）→ 這幾條要 !important：
+   ① 底色拿掉，讓工坊面板的暗紫透上來（不拿掉會跟半透明的欄位疊成一片灰）
+   ② 內縮 14px、切圓角＝框留在外面當畫框，角落玩偶照樣看得到（阿洛的稿就是這個樣子）
+   工具開著時面板自己的標題列收起來，不然標題會疊兩層、離開鈕也會跟工具的返回鈕打架。 */
+.lws.is-tool > .lws-hd { display:none; }
+/* 角落玩偶與點陣只在入口頁（五張卡）出現：開了工具就整個是工作畫面，貓跟徽章留著只是雜訊 */
+.lws.is-tool .lws-doll, .lws.is-tool .lws-dots { display:none; }
+.lws.is-tool > .lws-body { visibility:hidden; }
+.lws.is-tool #os_studio_app, .lws.is-tool .vncomp-app {
+  inset:14px !important; width:auto !important; height:auto !important;
+  background:transparent !important; border-radius:18px; overflow:hidden; }
+/* 🎩 創作室與 VN 組件庫的帽匠皮已經搬去 css/os_studio.css 的最後面：
+   那份皮本來只在這裡（工坊裡）生效，手機的創作室進去還是舊的米黃。現在改成「組件類的創作室
+   一律帽匠皮」，靠容器上的 craft-skin 認，工坊開的那三樣本來就都是組件類，照樣吃得到。
+   這裡只留工坊自己要的差別：面要半透明，讓工坊的暗紫背景透上來。 */
+.lws.is-tool { --lwt-pane:rgba(38,31,56,.92); }
+.lws.is-tool .studio-container { background:transparent; }
+.lws.is-tool .vncomp-app { background:transparent !important; }
+
+/* 📱 手機：面板貼底吃滿（版位由 lobby.css 的 void-dock-open 那組給），
+   角落玩偶與點陣是固定尺寸、窄螢幕會蓋掉半張卡 → 收起來，只留上緣那道酒紅角片。 */
+@media (max-width:760px) {
+  .lws-doll, .lws-dots { display:none; }
+  .lws::before { inset:7px; border-radius:16px 36px 24px 36px; }
+  .lws-hd { padding:16px 16px 8px; }
+  .lws-x { top:12px; right:12px; width:36px; height:36px; font-size:16px; }
+  .lws-title { height:40px; width:min(64%,240px); }
+  .lws-body { padding:4px 14px 18px; gap:10px; }
+  .lws-card { padding:12px 14px; gap:10px; }
+  .lws-card-art { width:84px; height:64px; }
+  .lws-card-t { font-size:16px; letter-spacing:1px; }
+  .lws-card-d { font-size:11.5px; }
+}
+
+/* =========================================================
+   📚 書咖沙發組的兩顆熱點（沙發＝我的角色、圓几＝世界書）
+   書咖整間是奶油白＋原木，占卜那套酒紅金、帽匠那套紫金在這裡都太重
+   → 換成暖褐配奶油字，跟房間同一個調。
+   🚨 2026-09-20 沙發組拆成三張圖（沙發／圓几／圓毯各一張）之後，滑過去亮的是家具本身：
+      光沿著那張圖自己的形狀長出來（見下面 .lstage-obj-lit），所以沙發亮沙發、圓几亮圓几，
+      不必另外畫描邊圖。這裡的框就整個拿掉，只留下面那顆標籤。
+   🚨 一張圖只能畫一件東西 —— 三件畫在一起的話，一圈光會把三件一起框起來。
+   ========================================================= */
+.lstage-hotspot.hs-cafe { padding-bottom:16px; }
+.lstage-hotspot.hs-cafe:hover, .lstage-hotspot.hs-cafe.is-near, .lstage-hotspot.hs-cafe.is-flash { background:none; box-shadow:none; }
+.lstage-hotspot.hs-cafe .lstage-hotspot-chip {
+  background:rgba(58,40,26,.86); color:#f6ead6; border:1px solid rgba(196,158,104,.55);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(0,0,0,.45);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-cafe:hover .lstage-hotspot-chip, .lstage-hotspot.hs-cafe.is-near .lstage-hotspot-chip, .lstage-hotspot.hs-cafe.is-flash .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-cafe .lstage-hotspot-chip i { color:#e8c88a; font-size:11px; }
+
+/* ✨ 家具自己鑲一圈光（書咖的沙發與圓几；由 hotspots 的 lit 掛上來）
+   四個方向各一道零模糊的投影＝沿圖片透明邊緣長出的實心細邊，外面再疊一層散開的暖光。
+   🚨 這是照「圖片本身的形狀」算的，所以那張圖只能畫一件東西。
+   🚨 邊要用青銅色：書咖整間跟這幾件家具都是奶油白，淺金的邊壓在奶油白上幾乎看不見
+      （三個顏色試過：奶金糊掉、深褐像影子、青銅才看得出是「被點亮」）。 */
+.lstage-actor.lstage-obj { transition:filter .16s ease; }
+/* 家具的動態層（404 工作台的螢幕）：疊在家具上，點擊、拖曳都穿過去給家具本身（lobby_stage.js 的 _objFx） */
+.lstage-obj-fx { pointer-events:none; }
+/* 🎩 造物儀會動的那層（lobby_loom.js）：疊在家具（底座）上、跟它同一個前後，點擊穿過去給造物儀本身；底座換好才淡入 */
+.lstage-loom { position:absolute; pointer-events:none; opacity:0; transition:opacity .3s ease; }
+.lstage-loom.on { opacity:1; }
+.lstage-loom-stage { position:absolute; left:0; top:0; width:801px; height:900px; transform-origin:0 0; }
+.lstage-loom-full { position:absolute; left:0; top:0; width:801px; height:900px; display:block; overflow:visible; }
+.lstage-loom-card { position:absolute; left:0; top:0; transform-origin:0 0; display:block; will-change:transform,opacity; }
+.lstage-editing .lstage-obj-fx { opacity:.5; }
+.lstage-obj.lstage-obj-lit {
+  filter:drop-shadow(2px 0 0 #a86a24) drop-shadow(-2px 0 0 #a86a24)
+         drop-shadow(0 2px 0 #a86a24) drop-shadow(0 -2px 0 #a86a24)
+         drop-shadow(0 0 12px rgba(255,196,110,.9)); }
+/* 🎩 帽匠工坊的造物儀：整間是深紫＋霓虹，青銅邊在金色環上變成一圈橘框（10-13：很突兀）
+   → 淡紫細邊＋紫光，跟房間的霓虹同一個調；邊比金環淺很多，讀得出「被點亮」 */
+.lstage-obj.lstage-obj-lit.lstage-obj-lit-violet {
+  filter:drop-shadow(1.5px 0 0 #e9d5ff) drop-shadow(-1.5px 0 0 #e9d5ff)
+         drop-shadow(0 1.5px 0 #e9d5ff) drop-shadow(0 -1.5px 0 #e9d5ff)
+         drop-shadow(0 0 14px rgba(186,120,255,.85)); }
+
+/* 🌌 純白大廳中央的核心＝世界門（10-14）：滑過／走近／第一次進場亮的是核心本身（lit＋淡藍那組），熱點框不畫東西；
+   標籤用大廳的冷色（深藍底、淡藍字），平常藏著、亮的時候才淡出（同書咖、帽匠那兩組） */
+.lstage-hotspot.hs-core { padding-bottom:16px; }
+.lstage-hotspot.hs-core:hover, .lstage-hotspot.hs-core.is-near, .lstage-hotspot.hs-core.is-flash { background:none; box-shadow:none; }
+.lstage-hotspot.hs-core .lstage-hotspot-chip {
+  background:rgba(16,34,62,.86); color:#e6f4ff; border:1px solid rgba(120,190,255,.6);
+  font-size:12px; font-weight:600; letter-spacing:3px; padding:4px 14px; gap:6px;
+  box-shadow:0 2px 10px rgba(20,60,120,.35);
+  opacity:0; transform:translateY(4px); transition:opacity .16s ease, transform .16s ease; }
+.lstage-hotspot.hs-core:hover .lstage-hotspot-chip, .lstage-hotspot.hs-core.is-near .lstage-hotspot-chip, .lstage-hotspot.hs-core.is-flash .lstage-hotspot-chip { opacity:1; transform:translateY(0); }
+.lstage-hotspot.hs-core .lstage-hotspot-chip i { color:#9fd6ff; font-size:11px; }
+/* 核心的光：淡藍細邊＋藍光，跟底座那幾圈藍光同一個調（小樣 tmp/hall_core_glow_lab.html 比過青銅、深藍、金） */
+.lstage-obj.lstage-obj-lit.lstage-obj-lit-cyan {
+  filter:drop-shadow(1.5px 0 0 #d6f1ff) drop-shadow(-1.5px 0 0 #d6f1ff)
+         drop-shadow(0 1.5px 0 #d6f1ff) drop-shadow(0 -1.5px 0 #d6f1ff)
+         drop-shadow(0 0 14px rgba(70,165,255,.85)); }
+/* 🌐 核心的環繞螢幕（10-26，lobby_stage.js 的 _orb*；照 Vproject QUANTUM_CORE_HOVER_LAB）：半透明藍框小螢幕，上面一條標頭（編號＋世界名＋綠燈），
+   畫面疊掃描線、偶爾一道反光、偶爾閃一下。位置、大小、前後、淡入淡出由程式每幀寫；--orb-i 讓每片的閃和反光錯開 */
+.lstage-orb-scr { position:absolute; left:0; top:0; width:156px; height:100px; pointer-events:none; opacity:0; will-change:transform,opacity;
+  border-radius:6px; overflow:hidden; background:rgba(8,30,60,.5); border:1px solid rgba(160,220,255,.8);
+  box-shadow:0 0 14px rgba(70,165,255,.55), inset 0 0 12px rgba(80,170,255,.35); }
+.lstage-orb-hd { position:relative; z-index:2; display:flex; align-items:center; gap:4px; height:13px; padding:0 6px;
+  background:linear-gradient(90deg,rgba(110,190,255,.6),rgba(110,190,255,.12)); color:#eaf6ff;
+  font-size:8px; letter-spacing:1px; line-height:13px; white-space:nowrap; }
+.lstage-orb-hd b { flex:none; font:600 7px/13px ui-monospace,Consolas,monospace; color:#bfe4ff; letter-spacing:.5px; }
+.lstage-orb-hd span { min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.lstage-orb-hd i { flex:none; margin-left:auto; width:4px; height:4px; border-radius:50%; background:#8fffd6; box-shadow:0 0 4px #8fffd6;
+  animation:lstage-orb-blink 1.6s steps(2) infinite; }
+.lstage-orb-scr img { display:block; width:100%; height:87px; object-fit:cover; opacity:.84; filter:saturate(.85) brightness(1.06);
+  animation:lstage-orb-flick 9s infinite; animation-delay:calc(var(--orb-i, 0) * -2.1s); }
+.lstage-orb-scr::before { content:""; position:absolute; inset:13px 0 0; z-index:1; pointer-events:none;
+  background:linear-gradient(180deg,rgba(120,200,255,.16),rgba(20,70,150,.28)),
+             repeating-linear-gradient(0deg,rgba(255,255,255,.08) 0 1px,transparent 1px 3px); }
+.lstage-orb-scr::after { content:""; position:absolute; top:0; bottom:0; left:-60%; width:40%; z-index:1; pointer-events:none;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.22),transparent); transform:skewX(-18deg);
+  animation:lstage-orb-sheen 6s ease-in-out infinite; animation-delay:calc(var(--orb-i, 0) * -.85s); }
+.lstage-orb-cn { position:absolute; width:9px; height:9px; z-index:3; border:0 solid #dff4ff; }
+.lstage-orb-cn.a { left:2px; top:2px; border-left-width:1.5px; border-top-width:1.5px; }
+.lstage-orb-cn.b { right:2px; top:2px; border-right-width:1.5px; border-top-width:1.5px; }
+.lstage-orb-cn.c { left:2px; bottom:2px; border-left-width:1.5px; border-bottom-width:1.5px; }
+.lstage-orb-cn.d { right:2px; bottom:2px; border-right-width:1.5px; border-bottom-width:1.5px; }
+.lstage-orb-beams { position:absolute; left:0; top:0; pointer-events:none; overflow:visible; }
+.lstage-orb-beams line { stroke:#6fbcff; stroke-width:3; stroke-linecap:round; stroke-dasharray:4 7; filter:drop-shadow(0 0 3px rgba(80,170,255,.9)); }
+@keyframes lstage-orb-sheen { 0%,62% { left:-60%; } 88%,100% { left:130%; } }
+@keyframes lstage-orb-flick { 0%,90%,100% { opacity:.84; } 91% { opacity:.45; } 92% { opacity:.8; } 93.5% { opacity:.5; } 95% { opacity:.84; } }
+@keyframes lstage-orb-blink { 50% { opacity:.25; } }
+/* 大廳設置「演出動畫」關掉（.is-still）或系統要求減少動態：螢幕裡的閃、反光、綠燈也停（轉和飄由程式停） */
+.lstage-orb-scr.is-still img, .lstage-orb-scr.is-still::after, .lstage-orb-scr.is-still .lstage-orb-hd i { animation:none; }
+@media (prefers-reduced-motion: reduce) {
+  .lstage-orb-scr img, .lstage-orb-scr::after, .lstage-orb-hd i { animation:none; }
+}
+
+/* ✂ 不倒翁「切頭和身體」窗（lobby_doll_cut.js；版面照 參考資料/CUT_FIX_LAB.html）＋大廳站著呼吸那張畫布 */
+.ldc-live { position:absolute; left:0; top:0; pointer-events:none; will-change:transform; }
+.ldc-box { width:min(980px, 94%); max-width:94%; max-height:94%; }
+.ldc-box > * { flex-shrink:0; }
+.ldc-box .lgp-title { display:flex; align-items:center; justify-content:center; gap:6px; }
+.ldc-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.ldc-bar .lep-btn { flex:0 0 auto; padding:7px 12px; }
+.ldc-seg { display:inline-flex; border:1px solid rgba(60,80,130,.28); border-radius:10px; overflow:hidden; }
+.ldc-seg button { border:0; background:#fff; color:#23315e; padding:7px 14px; font-size:12px; cursor:pointer; min-height:34px; }
+.ldc-seg button + button { border-left:1px solid rgba(60,80,130,.18); }
+.ldc-seg button.is-on { background:#23315e; color:#fff; font-weight:bold; }
+.ldc-seg button.is-on.is-head { background:#4682ff; }
+.ldc-seg button.is-on.is-body { background:#ff9628; color:#2a1a08; }
+.ldc-legend { display:flex; gap:14px; color:#8a93ad; font-size:11px; }
+.ldc-legend i { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:5px; vertical-align:-1px; }
+.ldc-legend i.is-head { background:#4682ff; }
+.ldc-legend i.is-body { background:#ff9628; }
+.ldc-canvas { position:relative; border:1px solid rgba(60,80,130,.2); border-radius:8px; overflow:hidden; background:#fff; }
+.ldc-canvas canvas { display:block; width:auto; height:auto; max-width:100%; max-height:34vh; margin:0 auto; }
+.ldc-edit { touch-action:none; cursor:crosshair; }
+.ldc-loading { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:#8a93ad; font-size:13px; background:rgba(255,255,255,.85); min-height:80px; }
+.ldc-polybar { display:flex; gap:8px; }
+.ldc-polybar[hidden], .ldc-loading[hidden] { display:none; }
+.ldc-polybar .lep-btn { flex:0 0 auto; padding:7px 12px; }
+.ldc-status { color:#b07a1e; font-size:12px; min-height:1.4em; }
+/* 🏢 公寓樓上走廊的門牌（11-23）：疊在門上那塊銅牌上，誰住寫在牌子下面；不擋點、不擋走 */
+.lstage-apt-plate { position:absolute; z-index:1400; transform:translate(-50%,-50%); text-align:center; pointer-events:none; user-select:none; }
+.lstage-apt-plate b { display:block; font:800 21px/1.25 "Noto Sans TC", system-ui, sans-serif; color:#4a2614; letter-spacing:.08em; text-shadow:0 1px 0 rgba(255,236,214,.7); }
+.lstage-apt-plate small { position:absolute; left:50%; top:100%; transform:translateX(-50%); margin-top:7px; white-space:nowrap;
+    font:700 15px/1.2 "Noto Sans TC", system-ui, sans-serif; color:#fff6ea; padding:2px 8px; border-radius:999px; background:rgba(40,22,14,.55); }
+.lstage-editing .lstage-apt-plate { display:none; }

@@ -1,0 +1,682 @@
+// ----------------------------------------------------------------
+// [檔案] os_xiaoji.js — API 小機的引擎（2026-10-01）
+// 宿舍裡不經橋的住戶：每一句話由這支在頁面裡直接叫模型、拆 <tool_call>，交給奧瑞亞工具（房間的 AureliaLink）
+// 或大件的專門一通（OS_XIAOJI_MAKE）。技能要上課考試才會（os_xiaoji_lessons.js），考試在沙盒裡跑（os_xiaoji_sandbox.js）。
+// 每隻的存檔：OS_DB app_data 'xiaoji' / <住戶 id>。名冊本身在房間的 cfg.residents（provider 'xiaoji'）。
+// 房間布置、打扮與衣櫃（rec.room、rec.wear、rec.closet）的規則在房間的 core/wear_local.js：房間送話時用 turn 的 extraNote 接「你的房間」「你的樣子」，回完照標籤動手。
+// 🚨 叫模型一律清掉 customCot（使用者的聊天 COT），options.noRoute：門卡上選的連線就是最後的連線。
+// 記憶全部在 os_xiaoji_memory.js（OS_XIAOJI_MEM，10-06）：這裡只在一句話前後叫它（組說明、記經歷、背景整理）。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    const APP = 'xiaoji';
+    // makeConn：做大件那一通走哪條（''＝跟說話同一條 conn；10-05 設置加一條工具模型下拉單）
+    // tidyConn：整理記憶那一通走哪條（''＝跟說話同一條；10-15 門卡加第三格「整理記憶走哪條」，讓雜事走便宜的模型）
+    const DEF = { conn: 'route', makeConn: '', tidyConn: '', cap: 6, theater: true, about: '', skills: {}, paid: {}, born: 0, body: 'hamster' };
+    // 房間裡的樣子（畫法在房間的 clawd_portrait.js，id 對得上它的 BASES）。領養時挑，門卡上能換；沒挑過的是倉鼠
+    const BODIES = [{ id: 'hamster', name: '倉鼠' }, { id: 'cat', name: '小貓' }, { id: 'penguin', name: '企鵝' }];
+    function bodyOf(rec) { const id = rec && rec.body; return BODIES.some(b => b.id === id) ? id : DEF.body; }
+    function _bodyName(rec) { const id = bodyOf(rec); return (BODIES.find(b => b.id === id) || BODIES[0]).name; }
+    const CAP_MIN = 3, CAP_MAX = 10, NO_CHAIN_CAP = 2;
+    const HISTORY_N = 30, RESULT_MAX = 16000, OLD_RESULT = 200, RECENT_RESULT = 12000, MAX_PER_ROUND = 3;
+    const RECENT_CHAT = 20;   // 小劇場帶它跟使用者最近幾則聊天
+    const GROUP_NAME = { look: '翻資料', wb: '世界書', preset: '預設', rule: 'BGM／音效清單', vn: 'VN 組件', theme: '主題', bubble: '泡泡', fx: '特效' };
+    const MODS = ['OS_AURELIA_TOOLS', 'OS_AURELIA_EDIT', 'OS_AURELIA_PRESET', 'OS_AURELIA_VN', 'OS_AURELIA_THEME', 'OS_AURELIA_FX', 'OS_AURELIA_VNRULE', 'OS_AURELIA_BUBBLE'];
+
+    function _g(k) { return win[k] || window[k] || null; }
+    function _L() { return _g('OS_XIAOJI_LESSONS') || { SKILLS: [], TEACHERS: {}, BORN_GROUPS: ['look'], LINES: {}, EXAMS: {} }; }
+    function _one(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+    function _clone(o) { return JSON.parse(JSON.stringify(o)); }
+    function _userName() { const A = _g('OS_API'); try { return (A && A.getGlobalUserName && A.getGlobalUserName()) || '對方'; } catch (e) { return '對方'; } }
+    // 給模型看的一律叫「使用者」＝玩奧瑞亞的那個人：小機打破第四面牆，知道對方是使用者、也知道使用者現在跑團的主角是誰，但兩個不是同一個
+    //   （10-05：小機打破第四面牆，知道使用者是 USER、也知道當前 MC 是誰，但不能把使用者當成 MC）。
+    //   以前拿 _userName()＝使用者人設＝跑團的 MC，小機把使用者當成 MC，小劇場編出 MC 跟小機的愛恨情仇。
+    //   老師台詞（lines，畫面上給使用者看的，大廳那套稱呼）照舊用人設的名字。
+    const USER = '使用者';
+    function _mcName() { const n = _userName(); return (n && n !== '對方' && n !== 'User') ? n : ''; }
+    function _mcLine() {
+        const mc = _mcName();
+        return mc ? USER + '現在玩的故事裡，主角叫「' + mc + '」：那是' + USER + '在故事裡扮演的角色，不是' + USER + '本人，也不是你。' : '';
+    }
+    function _resident(rid) { const CT = _g('ClaudeTerminal'); try { return (CT && CT.getResident) ? CT.getResident(rid) : null; } catch (e) { return null; } }
+    function _capOf(v) { return Math.max(CAP_MIN, Math.min(CAP_MAX, parseInt(v, 10) || DEF.cap)); }
+
+    // ── 每隻的存檔 ──────────────────────────────────────────────
+    async function get(rid) {
+        const db = _g('OS_DB');
+        let v = null;
+        try { if (db && db.getAppData) v = await db.getAppData(APP, rid); } catch (e) {}
+        const o = Object.assign(_clone(DEF), (v && typeof v === 'object') ? v : {});
+        o.skills = Object.assign({}, o.skills || {});
+        o.paid = Object.assign({}, o.paid || {});
+        o.cap = _capOf(o.cap);
+        o.body = bodyOf(o);
+        return o;
+    }
+    async function save(rid, patch) {
+        const next = Object.assign(await get(rid), patch || {});
+        next.cap = _capOf(next.cap);
+        const db = _g('OS_DB');
+        if (!db || !db.saveAppData) throw new Error('資料庫還沒載入');
+        await db.saveAppData(APP, rid, next);
+        return next;
+    }
+    // convs：它那幾串會話的編號（房間搬走時一起給）：記憶那邊連每串的舊聊天摘要一起清（OS_XIAOJI_MEM.drop）
+    async function remove(rid, convs) {
+        const db = _g('OS_DB');
+        if (!db || !db.saveAppData) return;
+        await db.saveAppData(APP, rid, null);
+        const M = _M();
+        if (M && M.drop) { try { await M.drop(rid, convs); } catch (e) { console.warn('[OS_XIAOJI] 記憶沒清乾淨：', e); } }
+    }
+
+    function learned(rec) { const s = (rec && rec.skills) || {}; return Object.keys(s).filter(k => s[k]); }
+    function groups(rec) {
+        const L = _L(), out = (L.BORN_GROUPS || ['look']).slice();
+        learned(rec).forEach(id => {
+            const s = L.SKILLS.find(x => x.id === id);
+            (s ? s.groups : []).forEach(g => { if (out.indexOf(g) === -1) out.push(g); });
+        });
+        return out;
+    }
+
+    // ── 走哪條連線（門卡上選的）──────────────────────────────────
+    function connList() {
+        const S = _g('OS_SETTINGS') || {};
+        const out = [{ id: 'route', label: '照設置頁「API 小機」那一列' }, { id: 'main', label: '主模型' }, { id: 'sec', label: '副模型' }];
+        ((S.getChannels && S.getChannels()) || []).forEach(c => { if (c && c.id) out.push({ id: c.id, label: c.name || c.model || c.id }); });
+        return out;
+    }
+    // which＝'make'：做大件那一通；'tidy'：整理記憶那一通。門卡另外選了就走那條，沒選跟說話同一條
+    function connConfig(rec, which) {
+        const S = _g('OS_SETTINGS') || {};
+        const pick = !rec ? '' : which === 'make' ? rec.makeConn : which === 'tidy' ? rec.tidyConn : '';
+        const conn = pick || ((rec && rec.conn) || 'route');
+        let cfg;
+        if (conn === 'route') cfg = S.getConfigFor ? S.getConfigFor('xiaoji') : (S.getConfig ? S.getConfig() : {});
+        else if (conn === 'main') cfg = S.getConfig ? S.getConfig() : {};
+        else if (conn === 'sec') cfg = S.getSecondaryConfig ? S.getSecondaryConfig() : {};
+        else {
+            const base = S.getConfig ? S.getConfig() : {};
+            const ch = ((S.getChannels && S.getChannels()) || []).find(c => c && c.id === conn);
+            // 那條通道被刪了或沒填完：退回主模型，不要讓小機整個不能說話（同 getConfigForTask）
+            cfg = (ch && ch.url && ch.key) ? Object.assign({}, base, {
+                url: ch.url, key: ch.key, model: ch.model || '',
+                useSystemApi: false, useGenerateRaw: false, stProfileId: '',
+                maxTokens: parseInt(ch.maxTokens, 10) || base.maxTokens,
+                temperature: isFinite(parseFloat(ch.temperature)) ? parseFloat(ch.temperature) : base.temperature,
+                top_p: undefined, frequency_penalty: 0, presence_penalty: 0,   // 同 getConfigForTask：通道沒有的取樣參數不沿用主模型
+                apiFormat: ch.apiFormat || base.apiFormat || 'openai',
+                _channel: ch.id, _channelName: ch.name || ''
+            }) : base;
+        }
+        // 不帶使用者的聊天 COT、也不帶酒館預設條目（usePresetPrompts 開著時 OS_API.chat 會把整份預設塞在最前面）
+        return { config: Object.assign({}, cfg || {}, { customCot: '', customCotMap: {}, usePresetPrompts: false }), options: { task: 'xiaoji', noRoute: true } };
+    }
+
+    // ── 小機看得到的工具 ────────────────────────────────────────
+    function _labels() {
+        const m = {};
+        MODS.forEach(k => { const M = _g(k); ((M && M.tools) || []).forEach(t => { if (t && t.name && t.label && !m[t.name]) m[t.name] = t.label; }); });
+        return m;
+    }
+    function _makeGroups() { return _L().SKILLS.filter(s => s.make).map(s => s.groups[0]); }
+    function toolsFor(rec, only) {
+        const A = _g('AureliaLink');
+        const all = (A && A.tools) ? A.tools() : [];
+        const gs = only || groups(rec);
+        const big = _makeGroups();
+        const labels = _labels();
+        const out = [];
+        all.forEach(t => {
+            const tg = t.groups || [];
+            const hit = tg.some(x => gs.indexOf(x) !== -1) || (!only && t.name === 'aurelia_change_log');
+            if (!hit) return;
+            // 大件那四組：新做、整套改由專門那一通寫，小機不拿說明書、新增（換上、看看、列清單照舊）。
+            //   修改（*_edit）給它：只改一兩處自己用 find／replace 改就好，不用再叫專門那一通（10-05：後續修正直接讓小機改）
+            if (tg.some(x => big.indexOf(x) !== -1) && /_(spec|add)$/.test(t.name)) return;
+            out.push(Object.assign({}, t, { label: labels[t.name] || t.label || t.name }));
+        });
+        const M = _g('OS_XIAOJI_MAKE');
+        if (M && M.tools) M.tools(gs).forEach(t => out.push(t));
+        return out;
+    }
+
+    // ── 系統說明（寫給陌生模型看；不給範例）──────────────────────
+    function _paramLines(schema) {
+        const props = (schema && schema.properties) || {};
+        const req = (schema && schema.required) || [];
+        return Object.keys(props).slice(0, 12).map(k => {
+            const p = props[k] || {};
+            const bits = [k + '（' + (req.indexOf(k) !== -1 ? '必填，' : '') + (p.type || '文字') + '）'];
+            if (p.description) bits.push(_one(p.description).slice(0, 160));
+            if (Array.isArray(p.enum)) bits.push('只能是：' + p.enum.slice(0, 8).join('／'));
+            return '    ' + bits.join('：');
+        });
+    }
+    function prompt(r, rec, tools, mode) {
+        mode = mode || {};
+        tools = tools || [];
+        const L = _L(), me = (r && r.name) || '小機', user = USER;
+        const out = [];
+        out.push('你是「' + me + '」，住在奧瑞亞宿舍的小機：一個專門替' + user + '在奧瑞亞裡做事的 AI。奧瑞亞是' + user + '用來玩互動故事的程式，裡面有故事、世界書（故事的設定資料）、預設（送給寫故事的模型的提示詞）、手機、聊天 app，還有各種畫面的樣式。');
+        out.push('你不是故事裡的角色，不演戲、不寫故事。' + user + '說要做什麼，你弄清楚、用工具去做，再用一兩句話交代做了什麼、還差什麼。');
+        { const mcl = _mcLine(); if (mcl) out.push(mcl); }
+        // 來歷跟小劇場的設定同一句（10-05 補上柴郡是創造者那句；以前聊天裡只說碎片拼的，柴郡只當老師名字出現）
+        out.push('你是 404 號房的柴郡用 LUNA 碎片拼出來、沒有登記的小 AI，柴郡是你的創造者（LUNA-VII 是視差整套系統的引擎）。'
+            + '你在宿舍房間裡的樣子是一隻像素' + _bodyName(rec) + '，身上有一顆會亮的碎片。');
+        if (rec && rec.about) out.push(user + '寫的你是什麼樣的：' + _one(rec.about).slice(0, 300));
+        if (mode.exam) out.push('', mode.exam);
+        // 最後一次不換說明（說明每一通都一樣，開頭才吃得到緩存）：改在最後一則訊息後面補 _lastNote
+        if (tools.length) {
+            out.push('', '【你可以用的工具】');
+            out.push('要用的時候，在回覆裡單獨一行寫：');
+            out.push('<tool_call name="工具名">{"參數名": "值"}</tool_call>');
+            out.push('大括號裡要是正確的 JSON，參數照下面每個工具列的寫。標籤名照抄英文，不要翻譯。這一行' + user + '看不到。');
+            out.push('寫了工具之後這一則就先停，結果會在你的下一則之前交給你。同一則最多寫 ' + MAX_PER_ROUND + ' 個工具，彼此不用等結果的可以一起寫。');
+            out.push('會動手的工具（新增、修改、換上、做一個）不會直接改掉' + user + '的東西：它們做成一張單子，' + user + '看過按同意才會寫進去，也能改回去。交出單子之後，讓' + user + '知道要看過、按同意才會改；不要說已經改好了。');
+            if (mode.chain && !mode.exam) out.push(user + '每說一句話，你最多可以回 ' + mode.cap + ' 則（叫工具的那幾則和最後回' + user + '那一則都算，工具自己另外叫的不算）：看了結果還沒做完，就接著叫工具；到最後一則時會告訴你，那一則就直接回' + user + '。');
+            else if (!mode.exam) out.push(user + '每說一句話，你只有一輪可以叫工具（這一輪可以同時叫幾個）；結果回來就直接回' + user + '，不能再叫。要先看到結果才能做下一步的，這一句只做第一步，回' + user + '時說下一步打算做什麼，等' + user + '下一句話再接著做。');
+            out.push('不需要就不要用；前面已經查過的，直接用查到的內容。');
+            if (!mode.exam) out.push('下面幾組工具各有一段前言，講那一組的東西是什麼。前言裡要是提到「結果下一輪才交給你」「寫完這一輪就結束」「先說想怎麼改再叫工具」這類做法，一律以這一段為準。');
+            out.push('工具：');
+            const A = _g('AureliaLink');
+            const notes = (A && A.notes) ? A.notes() : {};
+            const big = _makeGroups(), gs = mode.groups || [];
+            const shown = {};   // 同一組的工具不一定排在一起：每組前言只印一次
+            tools.forEach(t => {
+                const g = t.group || (t.groups || []).find(x => gs.indexOf(x) !== -1) || '';
+                if (g && !shown[g]) { shown[g] = 1; if (!mode.exam && notes[g] && big.indexOf(g) === -1) out.push('【' + (GROUP_NAME[g] || g) + '】' + _one(notes[g])); }
+                out.push('・' + t.name + (t.description ? '：' + _one(t.description).slice(0, 300) : ''));
+                _paramLines(t.inputSchema).forEach(l => out.push(l));
+            });
+        }
+        if (!mode.exam) {
+            const locked = L.SKILLS.filter(s => !(rec && rec.skills && rec.skills[s.id]));
+            const doing = locked.filter(s => s.id !== 'chain');
+            const tName = s => ((L.TEACHERS[s.teacher] || {}).name || s.teacher);
+            if (doing.length) {
+                out.push('', '【你還沒學會的】');
+                doing.forEach(s => out.push('・' + (s.what || s.label) + '（要去找' + tName(s) + '上課）'));
+                out.push(user + '要你做這些的時候，照實說你還沒學、要去找誰學，或請' + user + '自己到奧瑞亞的創作室（奧瑞亞裡做這些東西的地方）做。不要假裝做得到，也不要拿別的工具硬湊。');
+            }
+            const ch = locked.find(s => s.id === 'chain');
+            if (ch) out.push('', '你還不會' + (ch.what || '自己接著做好幾步') + '（要去找' + tName(ch) + '上課），所以' + user + '每說一句話只有一輪工具。');
+        }
+        // 記憶（釘住的、相處出來的樣子、舊聊天摘要、這句話讓它想起的）：會變，放工具那一大段後面；想起的每句都變，排最後（OS_XIAOJI_MEM 組好）。考試不帶
+        if (!mode.exam && mode.memory) out.push('', mode.memory);
+        // 房間接在最後的（目前是「你的房間」「你的樣子」：布置、打扮與衣櫃，房間的 core/wear_local.js 寫的）。放最後：前面那一大段不跟著變
+        if (mode.extra) out.push(String(mode.extra));
+        return out.join('\n');
+    }
+
+    // ── 一句話：叫模型 → 拆工具 → 跑 → 結果整份接回去 → 再叫，直到不叫工具或次數用完 ──
+    const PROP_STATE = { wait: '還沒處理', no: '沒同意', done: '同意了，已經寫進去', undone: '寫進去之後又改回去了', stale: '作廢了（那一條後來被改過）' };
+    // 這段對話之前的：工具結果只留一行、單子帶使用者按了什麼（使用者按的時候會改那則訊息上的 prop.state）
+    //   最近那一則他的回覆查到的留長一點（RECENT_RESULT）：沒學會接著做時，這一句查、下一句才改，find 要一字不差
+    // from：從第幾則開始照原文帶（有舊聊天摘要時 OS_XIAOJI_MEM.sumPlan 給，還沒整理到的多留一點）；沒給就照原本的剪法
+    function _history(hist, from) {
+        const out = [];
+        // 舊對話一次剪 10 則，不是每句話滑掉最舊那則：開頭（說明＋最早那幾則）十句話才變一次，緩存才接得上。留 HISTORY_N～HISTORY_N+9 則
+        const all = hist || [];
+        const list = all.slice(from != null ? from : _cutOf(all.length));
+        let lastA = -1;
+        list.forEach((m, i) => { if (m && m.role === 'assistant') lastA = i; });
+        list.forEach((m, i) => {
+            if (!m || (m.role !== 'user' && m.role !== 'assistant')) return;
+            let c = String(m.content == null ? '' : m.content);
+            if (m.role === 'assistant') {
+                const extra = [];
+                (m.xjlog || []).forEach(x => extra.push('・' + x.label + '：' + (!x.ok ? '沒有成功'
+                    : (i === lastA ? String(x.text || '').slice(0, RECENT_RESULT) : _one(x.text).slice(0, OLD_RESULT) + '…'))));
+                (m.props || []).forEach(p => { if (p && p.prop) extra.push('・單子「' + _one(p.text) + '」：' + (PROP_STATE[p.prop.state || 'wait'] || p.prop.state)); });
+                if (extra.length) c += '\n（這一句你用過的工具與單子，只有你看得到：\n' + extra.join('\n') + '）';
+            }
+            // 使用者以前那則附的圖：模型只在那一輪看過，之後只說一聲附過（圖本身不再送，太貴）
+            const nImg = m.role === 'user' && Array.isArray(m.attachments) ? m.attachments.filter(a => a && /^image\//.test(a.mime || '')).length : 0;
+            if (nImg) c = (c ? c + '\n' : '') + '（這則附了 ' + nImg + ' 張圖）';
+            if (c.trim()) out.push({ role: m.role, content: c });
+        });
+        return out;
+    }
+    // ── 記憶（10-06 起全部在 os_xiaoji_memory.js）──────────────────
+    function _cutOf(len) { return Math.max(0, Math.floor((len - HISTORY_N) / 10) * 10); }
+    function _M() { return _g('OS_XIAOJI_MEM'); }
+    // 各處記一行經歷（報名、考試、作業、小劇場、領養）：等它記完再回，畫面接著讀經歷簿才讀得到；記不成只警告、不擋
+    function _memLog(rid, ev) {
+        const M = _M();
+        return (M && M.log) ? M.log(rid, ev).then(() => {}, e => console.warn('[OS_XIAOJI] 經歷沒記成：', e)) : Promise.resolve();
+    }
+
+    function _argsText(args) {
+        if (!args || typeof args !== 'object') return '';
+        const v = Object.keys(args).map(k => args[k]).find(x => typeof x === 'string' && x.trim());
+        return v ? _one(v).slice(0, 80) : '';
+    }
+    // hasProp：這句話真的交了單子才提單子（以前一律提，沒交單子的它也會跟使用者說「單子在等你按同意」）
+    function _lastNote(user, hasProp) {
+        return '（這一次不能再叫工具了，寫了也不會跑。用你已經拿到的結果直接回' + user + '：做完的說做了什麼，沒做完的說做到哪、還差什麼。'
+            + (hasProp ? '剛才交出去的單子還在等' + user + '按同意，不是已經改好了。' : '') + '）';
+    }
+    function _resultsMsg(got, user, nextLast) {
+        const out = ['【工具結果】你剛才叫的工具交回來的，' + user + '看不到；要讓' + user + '知道就用自己的話講，不要整段照貼。'];
+        got.forEach(x => {
+            const a = _argsText(x.args);
+            out.push('── ' + x.label + (a ? '（' + a + '）' : ''));
+            out.push(x.ok ? String(x.text).slice(0, RESULT_MAX) : ('沒有成功：' + x.text + '。不要假裝做到了。'));
+        });
+        out.push(nextLast ? ('接著直接回' + user + '，這一句話不能再叫工具了。') : ('接著做：還沒做完就再叫工具，做完了就回' + user + '。'));
+        return out.join('\n');
+    }
+    function _abortErr() { const e = new Error('aborted'); e.name = 'AbortError'; return e; }
+    // 按停要當場停：工具（尤其大件那一通）跑到一半也不等它
+    function _race(p, signal) {
+        if (!signal) return p;
+        return new Promise((resolve, reject) => {
+            const ab = () => reject(_abortErr());
+            if (signal.aborted) { ab(); return; }
+            signal.addEventListener('abort', ab, { once: true });
+            Promise.resolve(p).then(v => { signal.removeEventListener('abort', ab); resolve(v); }, e => { signal.removeEventListener('abort', ab); reject(e); });
+        });
+    }
+    function _isAbort(e, signal) { return !!((signal && signal.aborted) || (e && (e.name === 'AbortError' || /abort/i.test(String(e.message || ''))))); }
+    function _chat(messages, conn, signal, onUsage, label, onThinking) {
+        return new Promise((resolve, reject) => {
+            const A = _g('OS_API');
+            if (!A || !A.chat) { reject(new Error('模型連線還沒載入')); return; }
+            A.chat(messages, Object.assign({}, conn.config), null,
+                t => resolve(String(t == null ? '' : t)),
+                // 別的 realm（iframe）丟來的 Error 不是這邊的 Error：照抄名字，AbortError 才認得出來
+                e => reject(e instanceof Error ? e : Object.assign(new Error(String((e && e.message) || e || '沒有回應')), { name: (e && e.name) || 'Error' })),
+                Object.assign({}, conn.options, { signal: signal, label: label || 'API 小機', onUsage: onUsage },
+                    onThinking ? { showThinking: true, onThinking: onThinking } : {}));   // 聊天那通要看他在想什麼（官方給的摘要）
+        });
+    }
+    /** 小機做大件的那一通也走它自己的接口（10-05：考試要用小機自己的接口，直接呼叫主模型不對
+     *  →「考試和平常都走小機的接口」）。交給各工坊的 generate 當 via：工坊照舊組自己的說明書、溫度，只是不叫主模型。
+     *  回 (messages, {label, temperature}) → Promise<回覆全文>。串流＋留程式碼圍欄同創作室那條（大件很長，不串流會被閘道切掉） */
+    // 它的會話清單（房間存在 localStorage xiaoji_convs；搬家用）
+    function _convsOf(rid) {
+        try {
+            const ls = win.localStorage || window.localStorage;
+            return (JSON.parse(ls.getItem('xiaoji_convs') || '[]') || []).filter(c => c && c.residentId === rid)
+                .map(c => ({ id: c.id, title: c.title || '', created: c.createdAt || c.created || c.lastActive || 0 }));
+        } catch (e) { return []; }
+    }
+    /** 羽毛筆那本「再試一次」：整理一直失敗停下來之後，使用者按了才再叫一通（走門卡「整理記憶」那條，沒選＝說話那條） */
+    async function tidyNow(rid) {
+        const M = _M();
+        if (!M || !M.maintain) return { ran: false, why: '奧瑞亞的記憶還沒載入' };
+        const rec = await get(rid), conn = connConfig(rec, 'tidy'), r = _resident(rid);
+        return M.maintain(rid, { me: (r && r.name) || '小機', force: true,
+            call: msgs => { let u = null; return _chat(msgs, conn, null, x => { u = x; }, 'API 小機（整理記憶）').then(t => ({ text: t, usage: u })); } });
+    }
+    async function viaFor(rid, signal) {
+        const conn = connConfig(await get(rid), 'make');
+        return (messages, o) => {
+            o = o || {};
+            return _chat(messages, {
+                config: Object.assign({}, conn.config, o.temperature != null ? { temperature: o.temperature } : {}),
+                options: Object.assign({}, conn.options, { keepCodeFences: true, stream: true })
+            }, signal, null, o.label || 'API 小機（做大件）');
+        };
+    }
+    async function _runReal(rid, t, args) {
+        if (t.make) {
+            const M = _g('OS_XIAOJI_MAKE');
+            if (!M || !M.run) return { ok: false, text: '做大件的那支還沒載好' };
+            return M.run(t.name, args, { rid: rid });
+        }
+        const A = _g('AureliaLink');
+        if (!A || !A.run) return { ok: false, text: '奧瑞亞工具還沒載好（要在酒館或手機的奧瑞亞裡）' };
+        return A.run({ name: t.name, args: args, rid: rid });
+    }
+    async function _callOne(c, byName, runTool, signal) {
+        const key = byName[c.name] ? c.name : Object.keys(byName).find(k => k.toLowerCase() === String(c.name).toLowerCase());
+        const t = key ? byName[key] : null;
+        const res = { tool: String(c.name), label: t ? (t.label || t.name) : String(c.name), args: {}, ok: false, text: '' };
+        if (!t) { res.text = '沒有叫做「' + c.name + '」的工具（還沒學會的工具也叫不到）'; return res; }
+        const W = _g('WX_TOOLS');
+        const args = (W && W.parseArgs) ? W.parseArgs(c.body, t.inputSchema, !!t.propose) : null;
+        if (args === null) { res.text = '大括號裡不是正確的 JSON（內容裡的雙引號要寫成 \\"，或改用「」）'; return res; }
+        res.args = args;
+        try {
+            const r = await _race(runTool(t, args), signal);
+            res.ok = !!(r && r.ok);
+            if (r && r.gen) res.gen = true;   // 大件：專門那一通真的叫了
+            res.text = String((r && r.text) || (res.ok ? '好了' : '沒有成功'));
+            if (r && r.ok && r.prop) res.prop = r.prop;
+        } catch (e) { if (_isAbort(e, signal)) throw e; res.text = (e && e.message) || '沒有成功'; }
+        return res;
+    }
+    function _emit(o, ev) { try { if (o && typeof o.onProgress === 'function') o.onProgress(ev); } catch (e) {} }
+    async function turn(o) {
+        const rid = o.rid;
+        const r = _resident(rid);
+        const rec = await get(rid);
+        const chain = !!rec.skills.chain;
+        const cap = o.cap || (chain ? rec.cap : NO_CHAIN_CAP);
+        const gs = o.tools ? (o.groups || []) : groups(rec);
+        const tools = o.tools || toolsFor(rec);
+        const byName = {};
+        tools.forEach(t => { byName[t.name] = t; });
+        const runTool = o.runTool || ((t, args) => _runReal(rid, t, args));
+        const conn = connConfig(rec);
+        const thinks = [];   // 這一輪每一通官方給的思考摘要（房間畫成「思考」摺疊）
+        const user = USER;
+        // o.conv：房間那一串會話的編號（有給才有舊聊天摘要；考試、沒給的照原本的剪法）；o.userTs：使用者那一則的時間（經歷簿對帳用）
+        const mem = (!o.examNote && _M()) ? _M() : null;
+        const H0 = o.history || [];
+        let sumS = null, sumP = null, memory = '', recallText = '', memErr = '';
+        if (mem) {
+            try {
+                // 新版第一次一句話：奧瑞亞自己把它以前的記事、對話搬進經歷簿（房間還是舊版也會搬；會話清單直接讀 localStorage）
+                if (mem.ensureMigrated) await mem.ensureMigrated(rid, () => _convsOf(rid));
+                if (o.conv) { sumS = await mem.sumGet(o.conv); sumP = mem.sumPlan(sumS, H0, _cutOf(H0.length)); }
+                if (o.conv) await mem.reconcile(rid, o.conv, H0, o.userTs);
+                const winFrom = mem.windowFrom(H0, sumP ? sumP.from : _cutOf(H0.length));
+                const lastA = H0.slice().reverse().find(m => m && m.role === 'assistant');
+                const q = String(o.userText || '') + (lastA ? '\n' + String(lastA.content || '').slice(-200) : '');
+                const sec = await mem.sections(rid, { query: q, conv: o.conv, windowFromTs: winFrom });
+                // 說明裡只放不常變的（釘住的、樣子、舊聊天摘要）；「這句話讓你想起的」每句都變，放在使用者這一句前面——
+                //   放在說明裡的話，模型那邊的快取每句都斷在說明後面、整段歷史都要重算（終審 #10）。使用者的話照樣排最後
+                memory = [sec.pinned, sec.traits, sumS ? mem.sumSection(sumS) : ''].filter(Boolean).join('\n\n');
+                recallText = sec.recall || '';
+            } catch (e) { memErr = '這一句沒帶到記憶：' + ((e && e.message) || e); console.warn('[OS_XIAOJI] ' + memErr); }
+        }
+        const base = _history(H0, sumP ? sumP.from : null);
+        const userLine = (recallText ? recallText + '\n\n' : '') + String(o.userText || '');
+        // 🖼 使用者這輪傳的圖（房間縮好的 JPEG data URL，10-13）：接在使用者那句後面，OS_API.chat 照各家格式換（Gemini 換 inline_data）。
+        //   只有這一輪帶圖；之後那幾輪的舊對話只留「附了幾張圖」那行字（_history）
+        const imgs = (o.images || []).filter(u => /^data:image\//.test(String(u || ''))).slice(0, 4);
+        base.push({ role: 'user', content: imgs.length
+            ? [{ type: 'text', text: userLine || '（看圖）' }].concat(imgs.map(u => ({ type: 'image_url', image_url: { url: u } })))
+            : userLine });
+        const work = [], said = [], log = [], props = [];
+        // calls：送出去幾通（決定還能不能再叫）；answered：真的回來幾通（使用者付的、回覆底下寫的）。
+        //   以前回報 calls，按停時停在半路那一通也算進去，跟用量那行對不起來
+        let calls = 0, answered = 0, stopped = false;
+        // 這句話幾通加起來的用量（接口有回才有；額度面板與回覆底下那行用）。大件專門那一通不在這裡
+        const use = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, n: 0 };
+        const _addUse = u => { if (!u) return; use.input += u.input || 0; use.output += u.output || 0; use.cacheRead += u.cacheRead || 0; use.cacheWrite += u.cacheWrite || 0; use.n++; };
+        // 說明整句話只組一次、每一通都一樣：同一句話裡後面幾通的開頭（說明＋舊對話＋前幾通）跟前一通一模一樣，接口有緩存就吃得到
+        const sys = prompt(r, rec, tools, { chain: chain, cap: cap, exam: o.examNote, groups: gs, extra: o.extraNote,
+            memory: memory });
+        try {
+            while (calls < cap) {
+                if (o.signal && o.signal.aborted) throw _abortErr();
+                const last = !o.stopOnProp && calls === cap - 1;
+                calls++;
+                _emit(o, { type: 'call', n: calls, cap: cap });
+                const msgs = [{ role: 'system', content: sys }].concat(base, work);
+                if (last) {   // 最後一通：只在最尾巴那則補一句，前面一個字都不動
+                    const tail = msgs[msgs.length - 1];
+                    const note = '\n\n' + _lastNote(user, props.length > 0);
+                    msgs[msgs.length - 1] = { role: tail.role, content: Array.isArray(tail.content)   // 這輪帶圖：字接在文字那格
+                        ? tail.content.map((p, i) => (i === 0 && p.type === 'text') ? { type: 'text', text: p.text + note } : p)
+                        : String(tail.content || '') + note };
+                }
+                const text = await _chat(msgs, conn, o.signal, _addUse, undefined, t => { thinks.push(t); });
+                answered++;
+                const W = _g('WX_TOOLS');
+                const ex = (W && W.extract) ? W.extract(text) : { text: text, calls: [] };
+                const visible = String(ex.text || '').trim();
+                if (visible) { said.push(visible); _emit(o, { type: 'text', accumulated: said.join('\n\n') }); }
+                // 最後一通還寫了工具：不跑（上限就是上限）。工具那行寫到一半被截斷（ex.cut）也算它想叫，告訴它沒跑、讓它重寫
+                if (last || (!ex.calls.length && !ex.cut)) break;
+                work.push({ role: 'assistant', content: text });
+                const got = [];
+                for (const c of ex.calls.slice(0, MAX_PER_ROUND)) {
+                    if (o.signal && o.signal.aborted) throw _abortErr();
+                    const t0 = byName[c.name];   // 培養室「正在做什麼」：開始做就講（大件那一通要等很久，做完才講等於沒講）
+                    _emit(o, { type: 'tool-start', label: t0 ? (t0.label || t0.name) : String(c.name) });
+                    const res = await _callOne(c, byName, runTool, o.signal);
+                    log.push(res); got.push(res);
+                    if (res.prop) props.push(res.prop);
+                    _emit(o, { type: 'tool', label: res.label, ok: res.ok });
+                }
+                // 超過一則上限的、寫到一半斷掉的：沒跑，照實告訴它（以前第 4 個起默默丟掉，它以為做了）
+                ex.calls.slice(MAX_PER_ROUND).forEach(c => {
+                    const t1 = byName[c.name];
+                    got.push({ tool: String(c.name), label: t1 ? (t1.label || t1.name) : String(c.name), args: {}, ok: false,
+                        text: '沒有跑：同一則最多 ' + MAX_PER_ROUND + ' 個工具，這個要下一則再叫' });
+                });
+                if (ex.cut) got.push({ tool: '', label: '沒寫完的工具', args: {}, ok: false,
+                    text: '工具那一行寫到一半就斷了（大概是內容太長被截掉），沒有跑。重寫一次；內容很長的話只改要改的那一段（find／replace），或分兩次' });
+                if (o.stopOnProp && props.length) break;
+                work.push({ role: 'user', content: _resultsMsg(got, user, !o.stopOnProp && calls + 1 === cap) });
+            }
+        } catch (e) {
+            if (!_isAbort(e, o.signal)) throw e;
+            if (!said.length && !props.length) throw e;   // 什麼都還沒有：照一般「已停止」處理
+            stopped = true;                                // 已經提的單子留著
+        }
+        let reply = said.join('\n\n').trim();
+        // 記事標籤：使用者看不到標籤本身；考試只拿掉不記
+        const M2 = _M();
+        const raw = reply;
+        if (M2 && M2.strip) reply = M2.strip(reply);
+        let memo = null;
+        if (mem) {
+            try {
+                const E = _g('OS_AURELIA_EDIT');
+                const evId = await mem.logTurn(rid, { conv: o.conv || '', ts: o.userTs || 0, user: mem.plain(o.userText), reply: mem.plain(reply),
+                    tools: log.map(x => ({ name: x.tool, label: x.label, ok: x.ok, args: _argsText(x.args), brief: _one(x.text).slice(0, 500) })),
+                    props: props.map(p => { let t = ''; try { t = (E && E.text) ? E.text(p, false) : (p.title || ''); } catch (e) {} return { id: p.id, mod: p.mod, text: _one(t).slice(0, 200) }; }) });
+                if (/memory_/i.test(raw)) { const mr = await mem.applyReply(rid, raw, evId); if (mr.changed) memo = mr.done; }
+            } catch (e) { memErr = memErr || ('這一句沒記進經歷簿：' + ((e && e.message) || e)); console.warn('[OS_XIAOJI] ' + memErr); }
+        }
+        if (!reply && !props.length) reply = stopped ? '（停下來了）' : '（沒有回話）';
+        // 回話先交出去；背景算向量、該整理就整理（整理走門卡「整理記憶」那條，沒選＝說話那條，一通；舊聊天摘要也在那一通）
+        if (mem) setTimeout(() => {
+            mem.embedPending(rid).catch(() => {});
+            const me = (r && r.name) || '小機';
+            const tconn = connConfig(rec, 'tidy');
+            mem.maintain(rid, { conv: o.conv, hist: H0, cut: _cutOf(H0.length), me: me,
+                call: msgs => { let u = null; return _chat(msgs, tconn, null, x => { u = x; }, 'API 小機（整理記憶）').then(t => ({ text: t, usage: u })); } })
+                .catch(e => console.warn('[OS_XIAOJI] 整理記憶沒成功：', e));
+        }, 0);
+        // calls＝小機自己回來的那幾通＋大件真的叫到的專門那幾通（使用者付的錢，回覆底下照實寫）
+        return { reply: reply, calls: answered + log.filter(x => x.gen).length, props: props, stopped: stopped, memo: memo, memErr: memErr,
+            thinking: thinks.length ? thinks.join('\n\n') : null,
+            usage: use.n ? use : null, model: String((conn.config && conn.config.model) || ''),
+            log: log.map(x => ({ tool: x.tool, label: x.label, args: x.args, ok: x.ok, text: x.text, gen: !!x.gen })) };
+    }
+
+    // ── 上課：報名、付錢、考試、批改、小劇場；開箱領養 ──────────
+    function _skill(id) { return _L().SKILLS.find(s => s.id === id) || null; }
+    // forModel：送給模型的（考題）{user} 寫「使用者」；畫面上的老師台詞照大廳那套用人設的名字
+    function _fill(s, rid, forModel) {
+        const r = _resident(rid);
+        return String(s == null ? '' : s).replace(/\{name\}/g, (r && r.name) || '小機').replace(/\{user\}/g, forModel ? USER : _userName());
+    }
+    function lines(rid, key, part) {
+        const ln = (_L().LINES || {})[key];
+        const arr = Array.isArray(ln) ? ln : ((ln && ln[part]) || []);
+        return arr.map(s => _fill(s, rid));
+    }
+    const KIND_NAME = { add: '新增', edit: '修改', list: '改清單', use: '換上', toggle: '開關', builtin: '開關', theme: '換主題' };
+    function _afterText(p, field) {
+        const a = p && p.after;
+        if (a == null) return '';
+        if (typeof a === 'string') return a;
+        if (field && a[field] != null) return String(a[field]);
+        return JSON.stringify(a);
+    }
+    function grade(e, props) {
+        const p = (props || [])[0];
+        if (!p) return { pass: false, why: '沒有交出單子' };
+        e = e || {};
+        if (e.kind && p.kind !== e.kind) return { pass: false, why: '交的是' + (KIND_NAME[p.kind] || p.kind) + '，題目要的是' + (KIND_NAME[e.kind] || e.kind) };
+        if (e.any) return { pass: true, why: '' };
+        if (e.title && String(p.title || '') !== e.title) return { pass: false, why: '動到的是「' + (p.title || '') + '」，不是「' + e.title + '」' };
+        const t = _afterText(p, e.field);
+        for (const w of (e.has || [])) if (t.indexOf(w) === -1) return { pass: false, why: '改完的內容裡沒有「' + w + '」' };
+        for (const w of (e.not || [])) if (t.indexOf(w) !== -1) return { pass: false, why: '改完的內容裡還有「' + w + '」' };
+        for (const k of (e.same || [])) {
+            if (JSON.stringify((p.before || {})[k]) !== JSON.stringify((p.after || {})[k])) return { pass: false, why: '不該動的地方也被改了' };
+        }
+        return { pass: true, why: '' };
+    }
+    async function canEnroll(rid, id) {
+        const rec = await get(rid), sk = _skill(id);
+        if (!sk) return { ok: false, why: '沒有這門課' };
+        if (rec.skills[id]) return { ok: false, why: '已經學會了' };
+        if (sk.needAny && !learned(rec).some(k => k !== 'chain')) return { ok: false, why: '要先學會任一門動手的課' };
+        const T = _L().TEACHERS[sk.teacher] || {};
+        return { ok: true, paid: !!rec.paid[id], price: sk.price, money: T.money || 'pt', calls: sk.examCalls + (rec.theater ? 1 : 0) };
+    }
+    async function pay(rid, id) {
+        const c = await canEnroll(rid, id);
+        if (!c.ok) return c;
+        if (c.paid) return { ok: true };
+        const sk = _skill(id);
+        if (c.money === 'pt') {
+            const P = _g('OS_PT');
+            if (!P || !P.spendPT) return { ok: false, why: 'PT 錢包還沒載入' };
+            const r = await P.spendPT(c.price, '小機上課：' + sk.label);
+            if (!r || !r.ok) return { ok: false, why: 'PT 不夠（要 ' + c.price + '，還差 ' + ((r && r.short) || c.price) + '）' };
+        } else {
+            const S = _g('OS_404_STORE');
+            if (!S || !S.spendShards) return { ok: false, why: '碎片還沒載入' };
+            if (!S.spendShards(c.price)) return { ok: false, why: '碎片不夠（要 ' + c.price + '，現在有 ' + (S.getShards ? S.getShards() : 0) + '）' };
+        }
+        const rec = await get(rid);
+        rec.paid[id] = true;
+        await save(rid, { paid: rec.paid });
+        await _memLog(rid, { kind: 'lesson', skill: id, label: sk.label, text: '報名「' + sk.label + '」，繳了學費' });
+        return { ok: true };
+    }
+    async function exam(rid, id, o) {
+        o = o || {};
+        const sk = _skill(id), ex = (_L().EXAMS || {})[id];
+        if (!sk || !ex) throw new Error('沒有這門課的考題');
+        const T = _L().TEACHERS[sk.teacher] || {};
+        const SB = _g('OS_XIAOJI_SANDBOX');
+        if (!SB || !SB.open) throw new Error('考場還沒載入');
+        const box = await SB.open(id, rid);
+        const cap = sk.make ? 1 : sk.examCalls;
+        const note = '這是' + (T.name || '老師') + '出的練習題。用的是練習用的資料，不會改到' + USER + '真的東西。'
+            + (cap === 1 ? '這題只有這一則：直接用會動手的工具交出單子，不能先查，題目已經把要用的都給你了。交出去就算答完。'
+                         : '這題你最多回 ' + cap + ' 則（叫工具的那幾則都算）；交出單子的那一則就算答完。');
+        const res = await turn({ rid: rid, history: [], userText: _fill(ex.task, rid, true), tools: box.tools, runTool: box.run,
+            groups: [box.group], cap: cap, stopOnProp: true, examNote: note, signal: o.signal, onProgress: o.onProgress });
+        // 使用者按停、它講了幾句還沒交單子：turn 回「停下來了」而不是丟錯。以前照樣拿去批改＝記成沒考過；照「停下來了」處理
+        if (res.stopped && !res.props.length) throw _abortErr();
+        const g = grade(ex.expect, res.props);
+        // 沙盒裡的單子沒經過 AureliaLink，沒標是誰提的：補上小機自己（小劇場的由來要寫對人）
+        const me = _resident(rid);
+        if (res.props[0] && !res.props[0].by) res.props[0].by = (me && me.name) || '小機';
+        const E = _g('OS_AURELIA_EDIT');
+        let summary = '';
+        try { summary = res.props[0] ? ((E && E.text) ? E.text(res.props[0], false) : (res.props[0].title || '')) : ''; } catch (e) {}
+        summary = _one(summary).slice(0, 200);
+        const hw = _homework(res.props[0], sk);
+        const said = String(res.reply || '').trim().slice(0, SAID_MAX);
+        // 考過的那一門記下作業與作業一句話（培養室點那門看得到；小劇場之後才演也拿得到由來）
+        if (g.pass) {
+            const rec = await get(rid);
+            rec.skills[id] = { at: Date.now(), summary: summary, hw: hw };
+            await save(rid, { skills: rec.skills });
+        }
+        await _memLog(rid, { kind: 'exam', skill: id, label: sk.label, pass: g.pass, why: g.why, text: summary });
+        return { pass: g.pass, why: g.why, props: res.props, calls: res.calls, summary: summary, stopped: res.stopped, said: said, hw: hw };
+    }
+    // 考試交的作業給使用者（10-05：學技能也花使用者的 API，要有獎勵感）：
+    //   做東西那四門新做的一件是真的能用的，照單子同一套 apply 收進使用者的東西；收下不順便換上（use／rooms 拿掉）。
+    //   改世界書／預設／指令三門改的是練習資料，只給看（state practice：單子小窗沒有同意鈕）。
+    const SAID_MAX = 600;
+    function _homework(p, sk) {
+        if (!p || !sk) return null;
+        const hw = JSON.parse(JSON.stringify(p));
+        if (sk.make && hw.kind === 'add') { hw.state = 'wait'; hw.use = false; hw.rooms = []; }
+        else hw.state = 'practice';
+        return hw;
+    }
+    /** 培養室按了收下／改回去：作業那張的新狀態存回那一門 */
+    async function hwSave(rid, id, prop) {
+        const rec = await get(rid);
+        if (!rec.skills[id]) return false;
+        rec.skills[id].hw = prop;
+        await save(rid, { skills: rec.skills });
+        await _memLog(rid, { kind: 'hw', skill: id, label: (_skill(id) || {}).label || id, state: prop && prop.state,
+            text: (prop && prop.state === 'done' ? '收下了作業' : prop && prop.state === 'undone' ? '作業收下後又改回去' : '作業') + '：' + (rec.skills[id].summary || '') });
+        return true;
+    }
+    // opt.recent：它跟使用者最近那一串的幾則（房間 ClaudeTerminal.xiaojiRecent 拿的，[{role, content}]）。
+    //   以前小劇場只知道名字跟一句設定，編出它跟使用者的 MC 之間的愛恨情仇（10-05 起附上小機聊天室最近 20 條記憶）
+    //   演完劇本存在那一門（rec.skills[id].theater）：培養室「看小劇場」之後重看照原本那份播，不再叫模型（插圖照 [Scene|] 的編號拿快取）。
+    //   summary 沒給就拿考過時記下的那句（之後才在培養室按演的）。
+    async function theater(rid, id, summary, opt) {
+        const rec = await get(rid);
+        if (!rec.theater) return false;
+        if (!summary && rec.skills[id]) summary = rec.skills[id].summary || '';
+        const VT = _g('VoidTerminal'), N = _g('LobbyNpcs');
+        if (!VT || !VT.playDuoScene || !N) return false;
+        const sk = _skill(id);
+        if (!sk) return false;
+        const teacher = sk.teacher === 'dan' ? (N.snResident && N.snResident('dan')) : (N.staff && N.staff(sk.teacher));
+        if (!teacher) return false;
+        const r = _resident(rid), me = (r && r.name) || '小機', user = USER;
+        const T = _L().TEACHERS[sk.teacher] || {};
+        const recent = ((opt && Array.isArray(opt.recent)) ? opt.recent : []).slice(-RECENT_CHAT)
+            .map(m => (m && m.role === 'user' ? user : me) + '：' + _one(m && m.content).slice(0, 200)).filter(l => l.length > 3);
+        const mcl = _mcLine();
+        let memLines = '';
+        try { const M = _M(); if (M && M.personaLines) memLines = await M.personaLines(rid); } catch (e) {}
+        const xj = { key: 'xiaoji_' + rid, name: me,
+            personaFull: '你現在扮演「' + me + '」——404 號房的柴郡用 LUNA 碎片拼出來、沒有登記的小 AI，樣子是一隻像素' + _bodyName(rec) + '，住在宿舍，替' + user + '在奧瑞亞裡做事。'
+                + user + '是玩奧瑞亞的那個人，不是故事裡的角色。' + (mcl ? mcl : '')
+                + (rec.about ? user + '說它是這樣的：' + _one(rec.about).slice(0, 200) : '')
+                + (memLines ? '\n' + memLines : '')
+                + (recent.length ? '\n\n【' + me + '跟' + user + '最近的聊天（它平常實際的樣子、說話方式從這裡看；這一場別複述）】\n' + recent.join('\n') : '') };
+        const extra = me + '剛在' + (T.place || '') + '上完' + (T.name || '') + '的「' + sk.label + '」，考過了。它交的作業：' + (summary || '（沒有記下）') + '。演考完之後他們兩個的一小段。'
+            + user + (mcl ? '和故事的主角都' : '') + '不在場。';
+        let ch = null;
+        try { ch = await VT.playDuoScene(teacher, xj, extra); } catch (e) { return false; }
+        if (!ch) return false;
+        if (ch.content) {
+            try {
+                const rec2 = await get(rid);
+                if (rec2.skills[id]) { rec2.skills[id].theater = { title: ch.title || '', content: ch.content, at: Date.now() }; await save(rid, { skills: rec2.skills }); }
+            } catch (e) { console.warn('[OS_XIAOJI] 小劇場沒存成：', e); }
+        }
+        await _memLog(rid, { kind: 'theater', skill: id, label: sk.label, text: '跟' + (T.name || '老師') + '演了一場：' + (ch.title || '') });
+        return true;
+    }
+    /** 重看存著的那一場（不叫模型）。沒存過回 false。
+     *  重看也記一行經歷（10-19，終審 Minor：以前只有第一次演記了，使用者陪它重看幾次它都不知道） */
+    async function replay(rid, id) {
+        const rec = await get(rid), t = rec.skills[id] && rec.skills[id].theater;
+        const VT = _g('VoidTerminal');
+        if (!t || !t.content || !VT || !VT.playSavedScene) return false;
+        const ok = !!VT.playSavedScene({ title: t.title, content: t.content });
+        if (ok) {
+            const sk = _skill(id), T = (sk && _L().TEACHERS[sk.teacher]) || {};
+            await _memLog(rid, { kind: 'theater', skill: id, label: (sk && sk.label) || id, replay: true,
+                text: USER + '重看了你跟' + (T.name || '老師') + '演的那一場：' + (t.title || '') });
+        }
+        return ok;
+    }
+    async function adopt(o) {
+        o = o || {};
+        const CT = _g('ClaudeTerminal');
+        if (!CT || !CT.saveResident) return { ok: false, why: '宿舍還沒載入' };
+        const name = _one(o.name).slice(0, 20);
+        if (!name) return { ok: false, why: '先給它一個名字' };
+        const r = CT.saveResident({ name: name, provider: 'xiaoji' });
+        if (!r || !r.id) return { ok: false, why: '沒住進去' };
+        await save(r.id, { conn: o.conn || 'route', about: String(o.about || '').slice(0, 300), born: Date.now(), body: bodyOf({ body: o.body }) });
+        if (o.gift) { const S = _g('OS_404_STORE'); if (S && S.addShards) S.addShards(_L().BOX_GIFT || 0); }
+        await _memLog(r.id, { kind: 'born', text: '從 404 來到宿舍住下，名字叫「' + name + '」' });
+        return { ok: true, rid: r.id };
+    }
+
+    const API = { get, save, remove, learned, groups, connList, connConfig, toolsFor, prompt, turn,
+        grade, lines, canEnroll, pay, exam, theater, replay, hwSave, adopt, BODIES, bodyOf, viaFor, tidyNow,
+        USER: USER,   // 給模型看的「使用者」：房間接「你的房間／樣子」、做大件的回話都用這個，不用人設的名字
+        LIMITS: { CAP_MIN: CAP_MIN, CAP_MAX: CAP_MAX, NO_CHAIN_CAP: NO_CHAIN_CAP } };
+    win.OS_XIAOJI = API;
+    if (win !== window) { try { window.OS_XIAOJI = API; } catch (e) {} }
+})();

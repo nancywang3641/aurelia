@@ -1,0 +1,397 @@
+// ----------------------------------------------------------------
+// [檔案] vn_config.js
+// 路徑：os_phone/vn_story/vn_config.js
+// 職責：VN 視覺小說播放器 - 系統配置、Prompt 排列管理、BGM 模糊匹配、生圖引擎
+// 自 vn_core.js V8.6 拆分出獨立模組
+// 依賴：(運行期) OS_PROMPTS, OS_IMAGE_MANAGER
+// 暴露：window.VN_Config, window.VN_PromptOrder, window.VN_BgmIndex, window.VN_Image
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    console.log('[PhoneOS] 載入 VN 配置/生圖模組 (vn_config.js)...');
+    const win = window.parent || window;
+
+    // === 系統配置 ===
+    const VN_Config = {
+        data: { bgm: '', sfx: '', spriteBase: '', stickerBase: '', charDefaultBase: '', finalFallbackSprite: 'https://files.catbox.moe/9je7j2.png', avatarBasePrompt: '', avatarNegPrompt: 'bad anatomy, extra limbs, disfigured, blurry, low quality, worst quality, watermark, text', bgBasePrompt: '', bgNegPrompt: 'people, person, man, woman, child, crowd, character, pedestrian, anime screencap, cel shading, flat color, simple lines, sketch, low quality, worst quality, blurry, overexposed, photography, photorealistic, 3d render', itemBasePrompt: 'item only, product shot, no background, white background, clean illustration, high quality', itemNegPrompt: 'person, human, character, body, face, hands, people, crowd, bad anatomy, blurry, low quality, worst quality, watermark, text', ctxChapters: 5 },
+        // UI 設置由 vn_settings.js 管理，此處只負責從 localStorage 載入供運行期使用
+        load: function() {
+            try {
+                const s = localStorage.getItem('vn_cfg_v4');
+                if (s) this.data = { ...this.data, ...JSON.parse(s) };
+            } catch (e) {}
+        }
+    };
+    // 🔑 腳本載入就先讀一次設定——早鳥/大總結補頭像等路徑在「VN 面板還沒開」時就會生圖，
+    //    等 vn_core init 才 load 的話，那些生成讀到的 spriteDirect 永遠是 undefined
+    //    → 立繪模式開著卻偶爾生出頭像（帶背景大頭照）的真兇。之後 vn_core/設定存檔會再 load、無害。
+    VN_Config.load();
+
+    // ─── BGM 模糊匹配 index ───────────────────────────────────────
+    // AI 流口水寫錯 BGM 名時，從本地 bgm 目錄找最接近的檔名。找不到夠像的就靜音（避免氛圍違和）
+    const VN_BgmIndex = {
+        _list: null,
+        _loadPromise: null,
+
+        async load() {
+            if (this._list) return this._list;
+            if (this._loadPromise) return this._loadPromise;
+            this._loadPromise = (async () => {
+                const baseUrl = (win.VN_Config?.data?.bgm) || '';
+                // 解析 GitHub Pages URL：https://owner.github.io/repo/path/ → owner/repo/path
+                const m = baseUrl.match(/^https:\/\/([^.]+)\.github\.io\/([^/]+)\/(.+?)\/?$/);
+                if (!m) {
+                    console.warn('[VN] BGM 目錄非 GitHub Pages URL，跳過 fuzzy match index');
+                    this._list = [];
+                    return [];
+                }
+                const [, owner, repo, path] = m;
+                try {
+                    const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+                    const res = await fetch(apiUrl);
+                    if (!res.ok) throw new Error('GitHub API ' + res.status);
+                    const arr = await res.json();
+                    this._list = arr
+                        .filter(f => f.type === 'file' && /\.(mp3|m4a|ogg|wav|flac)$/i.test(f.name))
+                        .map(f => f.name.replace(/\.[^.]+$/, ''));
+                    console.log(`[VN] BGM index 載入 ${this._list.length} 個檔案`);
+                    return this._list;
+                } catch (e) {
+                    console.warn('[VN] BGM index 載入失敗:', e);
+                    this._list = [];
+                    return [];
+                }
+            })();
+            return this._loadPromise;
+        },
+
+        findMatch(needName) {
+            if (!this._list || !this._list.length) return null;
+            const need = String(needName).toLowerCase().trim();
+            if (!need) return null;
+            let best = null, bestScore = 0;
+            for (const cand of this._list) {
+                const c = String(cand).toLowerCase();
+                if (c === need) return cand;
+                let score = 0;
+                // 子字串包含優先（最常見：「咖啡時光」vs「咖啡時光午後」）
+                if (c.includes(need) || need.includes(c)) {
+                    const lenRatio = Math.min(need.length, c.length) / Math.max(need.length, c.length);
+                    score = 0.5 + lenRatio * 0.4;  // 0.5~0.9 看相對長度
+                } else {
+                    // Jaccard 字符集合相似度
+                    const sa = new Set(need); const sb = new Set(c);
+                    const inter = [...sa].filter(x => sb.has(x)).length;
+                    const union = new Set([...need, ...c]).size;
+                    score = union ? inter / union : 0;
+                }
+                if (score > bestScore) { best = cand; bestScore = score; }
+            }
+            // 門檻 0.5 — 不夠像就回 null（讓系統選擇靜音而非配錯氛圍）
+            return bestScore >= 0.5 ? { name: best, score: bestScore } : null;
+        }
+    };
+
+    // 把幾段 prompt 接起來：接縫處補逗號、重複逗號收掉、空段跳過。
+    //   前綴通常自己就帶著結尾逗號，後綴通常沒有 —— 不統一處理就會黏在一起。
+    function _joinTags() {
+        return Array.prototype.slice.call(arguments)
+            .map(x => String(x == null ? '' : x).trim().replace(/^,+|,+$/g, '').trim())
+            .filter(Boolean)
+            .join(', ');
+    }
+
+    // === 生圖引擎 ===
+    // 這一列（圖片設置 → 畫風）實際走哪個接口；舊版引擎沒有 serviceForUse 就退回桶
+    function _svcOf(use, type) {
+        const M = win.OS_IMAGE_MANAGER;
+        if (!M) return '';
+        if (typeof M.serviceForUse === 'function') return M.serviceForUse(use);
+        if (typeof M.serviceFor === 'function') return M.serviceFor(type);
+        return (M.config && M.config.service) || '';
+    }
+    // 這一列選了畫風嗎（沒選回 null＝照舊用原本的底詞）
+    function _styleOf(use) {
+        const M = win.OS_IMAGE_MANAGER;
+        return (M && typeof M.styleFor === 'function') ? M.styleFor(use) : null;
+    }
+    const VN_Image = {
+        _join: function(...parts) { return parts.filter(Boolean).join(', '); },
+        // 立繪三段（前綴/角色描述/後綴）接合：三條立繪路徑共用同一份，別再各自 pfx+desc+sfx 硬接（會黏成 dresssimple）
+        _joinTags: _joinTags,
+        getBg: async function(prompt, outMeta) {
+            if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateBackgroundAsync === 'function') {
+                const _st = _styleOf('bg');   // 選了畫風＝用那包取代原本的背景底詞
+                const full = this._join(_st ? _st.pos : VN_Config.data.bgBasePrompt, prompt);
+                // 背景尺寸：讀「🌄 背景 → 背景尺寸」設定（取代原本寫死 1024×768）
+                let _bw = 1024, _bh = 768;
+                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').bgSize) || '1024x768').split('x').map(Number); if (_p[0]&&_p[1]) { _bw=_p[0]; _bh=_p[1]; } } catch(e) {}
+                const opts = { width: _bw, height: _bh, negativePrompt: (_st ? _st.neg : VN_Config.data.bgNegPrompt) || undefined, use: 'bg', styleDone: true };
+                const url = await win.OS_IMAGE_MANAGER.generateBackgroundAsync(full, opts);
+                if (outMeta) outMeta.translatedPrompt = opts.translatedPrompt;
+                return url;
+            } return "";
+        },
+        getAvatar: async function(prompt, exp, force) {
+            if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
+                // 來源隔離：走「酒館原生(tavern_sd)」時改用「酒館原生專屬」頭像底詞/負詞（預設空＝乾淨），
+                // 避免給 poll ai 的 avatarBasePrompt/avatarNegPrompt 漏進 ComfyUI → 跟模型底詞打架爆光
+                const _svc = _svcOf('avatar', 'char');
+                // tavern_sd / comfyui_direct：底詞由各自來源控制，VN 層改用「乾淨」專屬底詞，避免 poll ai 底詞漏入
+                const _isTavern = (_svc === 'tavern_sd' || _svc === 'comfyui_direct');
+                const _st = _styleOf('avatar');   // 選了畫風＝用那包取代原本的頭像底詞
+                const _base = _st ? _st.pos : (_isTavern ? VN_Config.data.avatarBasePromptTavern : VN_Config.data.avatarBasePrompt);
+                const _neg  = _st ? _st.neg : (_isTavern ? VN_Config.data.avatarNegPromptTavern  : VN_Config.data.avatarNegPrompt);
+                // 順序：(來源對應)追加詞 → 角色描述詞 → 表情
+                const full = this._join(_base, prompt, `${exp} expression`);
+                const negPrompt = _neg || undefined;
+                // 角色頭像尺寸：讀「🎭 頭像 → 角色頭像尺寸」設定。
+                //   有設＝明確覆寫（所有接口一致吃這格）；留空＝真的交給接口自己——
+                //   ComfyUI 落到「基本參數/預設包」調的寬高、NAI 用引擎預設（跟下拉說明對齊）。
+                //   ⚠️ 先前留空寫死 512×768 → ComfyUI 的包/面板寬高在劇情頭像上永遠無效＝「調了跟沒調一樣」。
+                //   想要舊的 512×768 直式小圖＝下拉明選那格，不再是隱形預設。
+                const _avOpts = { negativePrompt: negPrompt, force: !!force, use: 'avatar', styleDone: true };
+                try { const _p = String((JSON.parse(localStorage.getItem('os_image_config')||'{}').avatarSize) || '').split('x').map(Number); if (_p[0]&&_p[1]) { _avOpts.width=_p[0]; _avOpts.height=_p[1]; } } catch(e) {}
+                // force=true（畫廊「重生」用）→ 繞過 generate() 記憶體快取
+                return await win.OS_IMAGE_MANAGER.generate(full, 'char', _avOpts);
+            } return "";
+        },
+        // 🎨 立繪要不要「原樣送」（raw）——同一個旗標在不同接口代表不同的事，不能一律開著：
+        //   ・NAI：raw 會連品質負詞與畫風底詞一起不送 → 要 false（本來就是）
+        //   ・自訂接口：raw 唯一的作用就是「不要附上使用者自己填的底詞」，而那格底詞就是使用者的畫風，
+        //     生圖那支的註解自己寫著「畫風放這裡由程式保證每張都帶」 → 要 false，否則立繪完全沒有風格。
+        //     （症狀：風格沒送，連自動立繪的底詞都沒送。）
+        //   ・酒館原生／ComfyUI：它們的底詞是內建那套動漫底詞，會跟立繪模板打架 → 維持 true。
+        _spriteRaw: function (svc) { return !(svc === 'novelai' || svc === 'custom_api'); },
+        // 立繪前綴／後綴：使用者在立繪工作室存的那兩格（os_sprite_tpl_prefix/suffix）。只有「沒存過」才退預設，
+        //   存了空字串＝清掉了、就是不要（工作室另有「還原預設」鈕）。單張、多人一張、舞台一鍵生立繪都問這支，
+        //   以前三處各抄一份預設、空字串一處當預設一處當空，清掉前綴後兩邊生出來的構圖不一樣。
+        SPRITE_DEF_PFX: 'straight posturing, solo, (facing viewer:1.2), (cowboy shot:1.2), front view, clothes and pants, standing, ',
+        SPRITE_DEF_SFX: 'simple bright background, straight view, no shading',
+        _spriteTpl: function () {
+            let pfx = null, sfx = null;
+            try { pfx = localStorage.getItem('os_sprite_tpl_prefix'); } catch (e) {}
+            try { sfx = localStorage.getItem('os_sprite_tpl_suffix'); } catch (e) {}
+            return { pfx: pfx == null ? this.SPRITE_DEF_PFX : pfx, sfx: sfx == null ? this.SPRITE_DEF_SFX : sfx };
+        },
+        // 立繪模式專用：直接從角色描述生「全身站姿立繪」(跟 studio 頭像轉立繪同套邏輯)。
+        // 清掉跟立繪衝突的構圖/背景/視角 tag → 套全身模板 → 512×896 直立 → 非 NAI 走 raw(純模板)，NAI 套頭像同畫風底詞避免太裸。
+        getSprite: async function(prompt, force) {
+            if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return "";
+            const _svc = _svcOf('sprite', 'char');
+            const _useNAI = (_svc === 'novelai');
+            // ⭐ 跟「角色立繪 studio / 一鍵生立繪」一字不差：用使用者在 studio 調好的前綴/後綴(localStorage os_sprite_tpl_prefix/suffix)，
+            //   別再自己硬編模板。沒設過才退預設(cowboy shot + brown background 那組，避免 full body 打架被切、純色底好去背)。
+            //   prompt 是角色描述：清掉跟立繪衝突的構圖/背景/視角 tag(同 studio renderAvatarPicker 的 stripPromptForSprite)。
+            //   底詞/負詞/畫師串交給 generate(raw=!NAI 同 studio)：NAI 套 charBasePrompt、非 NAI raw 純模板，這裡不另塞。
+            // ⚠️ 預設必須跟 studio「一鍵生立繪」的 DEF_PREFIX/DEF_SUFFIX 一字不差(os_settings.js _initSpriteUI)——
+            //    studio 手動生讀的是「框裡的值」(沒存過也預填這預設,所以永遠帶 no shading→不出陰影);
+            //    getSprite 讀 localStorage,沒存過就退這裡的預設。以前這裡前綴不同、後綴是空字串→少了 no shading + simple bright background
+            //    → spriteDirect 才會跑出陰影(手動不會)。改成一字不差,兩條路才真的一樣。改 studio 預設記得同步 SPRITE_DEF_PFX/SFX。
+            const { pfx, sfx } = this._spriteTpl();
+            // 🚨 三段之間一定要逗號：以前是 pfx + desc + sfx 直接黏，
+            //    角色描述的最後一個 tag 會跟後綴的第一個字黏成一團（white dress + simple → "white dresssimple"），
+            //    等於一次毀掉兩個 tag。os_settings 的 studio 那條也是同一個寫法，一起修。
+            // 前綴已經寫了 pants（預設那句 clothes and pants）就不重複；改過前綴拿掉的，看外觀決定要不要補（_lowerWear）
+            const _look = this._stripForSprite(prompt);
+            let full = _joinTags(pfx, _look, /pants/i.test(pfx) ? '' : this._lowerWear(_look), sfx);   // = studio 的 prefix + finalPrompt + suffix
+            // 立繪尺寸：跟 studio 共用「立繪比例」設定 os_sprite_size，預設 512×896
+            let _w = 512, _h = 896;
+            try { const _p = String(localStorage.getItem('os_sprite_size') || '512x896').split('x').map(Number); if (_p[0] && _p[1]) { _w = _p[0]; _h = _p[1]; } } catch(e) {}
+            // 🪽 帶翼角色(羽人/惡魔/harpy/fairy)：人身比例的畫布一定切到翅膀 → 加寬畫框、附上「整對翅膀進框」約束。
+            //    判定看角色描述本身(prompt)，不是套完模板的 full——模板裡沒有翅膀詞。
+            try {
+                const _wf = win.OS_IMAGE_MANAGER.wideFrame(_w, _h, prompt);
+                if (_wf.extra) { _w = _wf.width; _h = _wf.height; full += ', ' + _wf.extra; }
+            } catch (e) {}
+            // 立繪負詞（studio「負詞」框 os_sprite_tpl_neg，三條立繪路徑共用）：接在各接口既有負詞後面(extraNegative)。空＝不送。
+            let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
+            _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: _w, height: _h, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' });
+        },
+        // 🎯 幾個角色擠一張寬圖一次生完（只在官方那顆開；見設置 → 圖片 → 頭像 → 每次生成角色數）。
+        //    回傳整張寬圖，切開的事交給呼叫端（vn_core 的 _sliceSheet）。
+        //    🚨 分隔帶是關鍵：不能叫它「平均分成三等分」然後照三分之一下刀——它不保證切線在那裡，
+        //       差幾像素每一格邊緣就黏到隔壁一條。改成叫它畫明顯的分隔帶，切的時候去找那條帶子。
+        SHEET_SEP: '#00ff00',
+        getSpriteSheet: async function (descs, force) {
+            if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return '';
+            const list = (descs || []).filter(Boolean);
+            if (!list.length) return '';
+            const { pfx, sfx } = this._spriteTpl();
+            const n = list.length;
+            const people = list.map(function (d, i) {
+                const look = this._stripForSprite(d);
+                return 'Panel ' + (i + 1) + ': ' + _joinTags(pfx, look, /pants/i.test(pfx) ? '' : this._lowerWear(look));
+            }, this).join('\n');
+            // 寫給它的排版要求：等寬直欄、每欄一個人、欄與欄之間一條純色帶、人不可以跨欄。
+            const full = [
+                'A single wide image divided into exactly ' + n + ' equal-width vertical panels, side by side.',
+                'Between every two panels draw a solid ' + this.SHEET_SEP + ' vertical bar, 24 pixels wide, running the full height.',
+                'Each panel contains exactly one character, centered, facing the viewer, entirely inside that panel.',   // 取景範圍別寫死：那是使用者在立繪前綴裡定的（寫死 full-body＋腳要在格子裡，會整個蓋掉前綴填的 cowboy shot）
+                'No character may cross a panel border. Do not draw any frame, caption, number or text.',
+                'All panels share the same art style, lighting and camera height.',
+                people,
+                sfx,
+            ].join('\n');
+            let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
+            _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
+            // 官方只收那三種尺寸，寬的那個就是 1536×1024：切兩格＝每個 768×1024、切三格＝每個 512×1024
+            const _svc = _svcOf('sprite', 'char');
+            return await win.OS_IMAGE_MANAGER.generate(full, 'char', { width: 1536, height: 1024, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' });
+        },
+        // 🎴 三合一生成（設置 → 圖片 → 畫風 → 立繪模式底下那格）：一張三格圖＝左立姿全身／右上自拍／右下 Q版，
+        //    切開的事交給 vn_core_images 的 _makeTrio。回 { raw, withTpl }。
+        //    🚨 母圖只給 GPT 那種（自訂接口）：在 ComfyUI 五角色×三做法×四種子對照過（2026-10-05），
+        //       ComfyUI 拿母圖圖生圖會把母圖的 Q版人數、長相、衣服帶過來，沒母圖反而最準；GPT 是看懂格子不是靠底色。
+        //    提示詞預設是實測調好的那段（拿掉畫風那兩行——畫風交給「立繪」那列的畫風包）；使用者在設置那格改過就用改過的。
+        TRIO_LOOK: '【角色外觀】',
+        TRIO_TPL: 'a three-panel character sprite sheet featuring the same character in three different formats;\n\n'
+            + 'left panel: a standee cowboy shot illustration of the same character, cowboy shot, framed from the top of the hair to mid-thigh, standing upright and centered, 【角色外觀】, white background;\n\n'
+            + 'upper-right panel: the same character taking a casual selfie inside a cluttered room, close-up portrait composition;\n\n'
+            + 'right lower panel: a chibi adaptation of the exact same character, preserving the same hairstyle, hair color, eye color, skin tone and facial identity; wearing the exact same plain clothing as in the other panels, with the same garments, cut, colors and proportions adapted only to the chibi body; only the body proportions change into an oversized head and a small 2.5-head-tall body, centered fully inside the panel with clear white margin, plain white background;',
+        // 🧸 自訂接口（GPT 那種）那一格的預設：11-15 曾經內建把右下畫成不倒翁小人三面（bd388614），11-16 實際生了一張之後改回一隻站立 Q版——
+        //   畫風是加在整張圖上的（畫風包的字、接口的底詞、畫風底圖），小人那格也被照著畫，跟立繪同一種畫風，不是小人的畫法
+        //   （結果小人跟立繪畫風全一樣 → 先改回站立 Q版）。不倒翁小人之後另外做（裝扮室那邊單獨生）。
+        //   使用者自己在那格寫成三面並排的照樣會切成三張（VN_Core._chibiViews），大廳照方向換面；側面要臉朝右（lobby_stage.js 的 placeActor 當它朝右）。
+        // 三格提示詞分兩份：自訂接口一份（os_trio_tpl_gpt）、其他接口一份（os_trio_tpl，原本那格）。設置頁兩格、這裡照「立繪」那列接的接口挑。
+        trioTplKey: function (svc) { return svc === 'custom_api' ? 'os_trio_tpl_gpt' : 'os_trio_tpl'; },
+        trioTplDef: function (svc) { return this.TRIO_TPL; },   // 兩格現在同一份預設（一隻站立 Q版）；格子還是分開存，各自改各自的
+        // 分兩份那天的一次性搬家：以前只有一格、兩種接口共用。若已經在那格寫了三面（側面、背面那些字）＝那是寫給自訂接口的，
+        //   整段搬去自訂接口那格、原本那格回預設（其他接口照舊畫一隻）；沒寫三面的不動。搬過記一筆，之後不再看。
+        trioTplMigrate: function () {
+            try {
+                if (localStorage.getItem('os_trio_tpl_split') === '1') return;
+                const A = win.AUI || window.AUI;
+                if (!(A && typeof A.lsSet === 'function')) return;   // 還沒載好，下次再搬
+                const old = localStorage.getItem('os_trio_tpl');
+                if (old && old.trim() && !localStorage.getItem('os_trio_tpl_gpt') && /side view|back view|rear view|from behind|from the side|three views|turnaround|側面|侧面|背面|三面/i.test(old)) {
+                    if (!A.lsSet('os_trio_tpl_gpt', old, '三合一生成的提示詞')) return;
+                    localStorage.removeItem('os_trio_tpl');
+                }
+                A.lsSet('os_trio_tpl_split', '1', '三合一生成的提示詞');
+            } catch (e) {}
+        },
+        // 🦭 動物形體的角色（幼海豹、小黑貓那種，不是貓耳少女、擬人狼）換這套：上面那套寫的是人的身體——
+        //   「從頭髮拍到大腿、直立站好」「同樣的髮型、穿一樣的衣服」，海豹會被畫成人的身體（10-14 實測踩到，畫面很嚇人）。
+        //   🚨 不要寫「not humanoid」「no human body」：生圖模型看不懂否定，寫了反而畫出來；不想要的放負詞（BEAST_NEG）
+        TRIO_TPL_BEAST: 'a three-panel character sprite sheet featuring the same creature in three different formats;\n\n'
+            + 'left panel: a full-body illustration of the same creature in its natural animal form and animal anatomy, the whole body visible and centered, 【角色外觀】, white background;\n\n'
+            + 'upper-right panel: a close-up portrait of the same creature\'s face inside a cozy cluttered room;\n\n'
+            + 'right lower panel: a chibi adaptation of the exact same creature, preserving the same fur or skin color, markings, eye color and face; only the proportions change into a rounder, cuter version with an oversized head, centered fully inside the panel with clear white margin, plain white background;',
+        BEAST_NEG: 'humanoid, human body, human torso, muscular, abs, clothes, pants',
+        // 判斷是不是動物形體：要有明確的動物身體字樣、或描述一開頭就是那隻動物，而且沒有人的字樣（女孩、男人、獸耳、擬人…）。
+        //   寧可漏判（照舊用人的那套）也不要誤判：把龍騎士當成龍，畫出來的是一隻龍。
+        _BEAST_SPECIES: '(?:seal|cat|kitten|dog|puppy|fox|wolf|rabbit|bunny|bear|dragon|bird|owl|penguin|otter|hamster|mouse|squirrel|ferret|hedgehog|pig|piglet|cow|sheep|lamb|goat|horse|pony|deer|fawn|lion|tiger|leopard|panda|monkey|duck|duckling|chick|frog|turtle|tortoise|snake|lizard|whale|dolphin|shark|octopus|slime|griffin|gryphon|unicorn|phoenix)s?',
+        _BEAST_HUMAN: /\b(girls?|boys?|m[ae]n|wom[ae]n|person|people|human|humanoid|anthro|anthropomorphic|kemonomimi|furry\s+(?:character|person)|lady|gentleman|maiden|knight|warrior|witch|wizard|mage|elf|prince(?:ss)?|king|queen|child|kid|teen(?:ager)?|student|(?:cat|fox|wolf|dog|bunny|rabbit|animal)\s+ears)\b|獸耳|貓耳|狐耳|犬耳|人形|擬人|獸人|少女|少年|男人|女人|女孩|男孩/i,
+        _isBeast: function (look) {
+            const s = String(look || '');
+            if (!s.trim() || this._BEAST_HUMAN.test(s)) return false;
+            const sp = this._BEAST_SPECIES;
+            const mark = new RegExp('\\b(?:feral|quadruped|four[\\s-]legged|on\\s+all\\s+fours|creature|animal\\s+(?:form|body|anatomy))\\b'
+                + '|\\bbeast\\b(?!\\s*(?:man|men|kin|tamer|master|hunter|ears?))'
+                + '|\\b' + sp + '\\s+(?:pup|cub|kit|body|form)\\b|\\b(?:kitten|puppy|piglet|fawn|duckling|cub)s?\\b'
+                + '|動物形態|動物的樣子|原形|獸形|四足|四腳', 'i');
+            if (mark.test(s)) return true;
+            // 一開頭就是那隻動物（a small black cat…、red dragon with…）：前面最多四個形容詞，中間不能有 with（witch with a black cat 是人）
+            return new RegExp('^\\s*(?:\\(\\s*)?(?:a|an|the)?\\s*(?:(?!with\\b)[\\w-]+\\s+){0,4}' + sp + '\\b', 'i').test(s);
+        },
+        // 母圖格子：左格 50% 寬、右上 55% 高（LAB 試成功的那組）
+        TRIO_LP: 0.5, TRIO_TP: 0.55,
+        trioLine: function (OW, OH) { return Math.max(6, Math.round(Math.min(OW, OH) * 0.016)); },
+        trioLayoutBlob: function (OW, OH) {
+            const c = document.createElement('canvas'); c.width = OW; c.height = OH;
+            const g = c.getContext('2d'), t = this.trioLine(OW, OH);
+            g.fillStyle = '#fff'; g.fillRect(0, 0, OW, OH);
+            g.fillStyle = '#000';
+            g.fillRect(0, 0, OW, t); g.fillRect(0, OH - t, OW, t); g.fillRect(0, 0, t, OH); g.fillRect(OW - t, 0, t, OH);
+            const vx = Math.round(OW * this.TRIO_LP - t / 2), hy = Math.round(OH * this.TRIO_TP - t / 2);
+            g.fillRect(vx, 0, t, OH);
+            g.fillRect(vx, hy, OW - vx, t);
+            return new Promise(function (r) { c.toBlob(function (b) { r(b); }, 'image/png'); });
+        },
+        getTrio: async function (prompt, force) {
+            if (!(win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function')) return null;
+            const _svc = _svcOf('sprite', 'char');
+            let tpl = null;
+            this.trioTplMigrate();
+            try { tpl = localStorage.getItem(this.trioTplKey(_svc)); } catch (e) {}
+            if (!tpl || !tpl.trim()) tpl = this.trioTplDef(_svc);
+            // 三合一生成不吃立繪前綴：左格拍到大腿，外觀沒寫下身又有腿的補一句（_lowerWear；人魚、動物那種不補）
+            const look0 = this._stripForSprite(prompt);
+            const look = _joinTags(look0, this._lowerWear(look0));
+            // 🦭 動物形體：換動物那套（使用者改過的那格是照人寫的，動物一樣換），負詞加 BEAST_NEG
+            const beast = this._isBeast(look0);
+            if (beast) tpl = this.TRIO_TPL_BEAST;
+            const full = tpl.indexOf(this.TRIO_LOOK) >= 0 ? tpl.split(this.TRIO_LOOK).join(look) : _joinTags(tpl, look);
+            // 尺寸：GPT 官方只收那三種，寬的就是 1536×1024；ComfyUI 用實測定的 1312×1104（正方形會讓左格太窄、壯碩的被壓扁）
+            const withTpl = (_svc === 'custom_api');
+            const W = withTpl ? 1536 : (_svc === 'comfyui_direct' ? 1312 : 1216);
+            const H = withTpl ? 1024 : (_svc === 'comfyui_direct' ? 1104 : 1024);
+            let _neg = null; try { _neg = localStorage.getItem('os_sprite_tpl_neg'); } catch (e) {}
+            _neg = (_neg && _neg.trim()) ? _neg.trim() : undefined;
+            if (beast) _neg = _neg ? _neg + ', ' + this.BEAST_NEG : this.BEAST_NEG;
+            const opts = { width: W, height: H, raw: this._spriteRaw(_svc), force: !!force, extraNegative: _neg, use: 'sprite' };
+            if (withTpl) opts._layoutRef = { name: 'layout', kind: 'layout', blob: await this.trioLayoutBlob(W, H) };
+            const raw = await win.OS_IMAGE_MANAGER.generate(full, 'char', opts);
+            return raw ? { raw: raw, withTpl: withTpl } : null;
+        },
+        // 剝掉跟立繪衝突的構圖/背景/視角 tag。只有這一份：設置的立繪工作室（os_settings stripPromptForSprite）、
+        //   舞台的一鍵生立繪（vn_core_stage）都叫這支（以前三份各抄一次，一起錯）。
+        _stripForSprite: function(p) {
+            if (!p) return '';
+            // 背景：整個「…background」詞組一起拿掉，前面的 in/against/with + a/the 也一起。
+            //   以前只吃 background 前面一個字，「dark room background」剩「dark」留在外觀裡（10-06 看到）。
+            //   往前最多吃三個字、遇到冠詞／介系詞／動詞就停：沒逗號的句子（wearing a black hoodie against background）衣服不會被吃掉。
+            const STOP = '(?:a|an|the|and|or|in|on|at|of|with|against|over|under|behind|before|near|by|from|into|wearing|holding|standing|sitting|posing|is|are)';
+            const bg = new RegExp('(?:\\b(?:in\\s+front\\s+of|against|on|in|at|over|before|behind|with)\\s+)?(?:\\b(?:a|an|the)\\s+)?(?:\\b(?!' + STOP + '\\b)[a-z][a-z-]*\\s+){0,3}background\\b', 'gi');
+            const patterns = [
+                /\bbust(\s+|-)?shot\b/gi, /\bportrait\b/gi, /\bheadshot\b/gi, /\bhead\s+shot\b/gi,
+                /\bclose[\s-]?up\b/gi, /\bcowboy(\s+|-)?shot\b/gi, /\bupper(\s+|-)?body\b/gi, /\bfull(\s+|-)?body\b/gi,
+                /\bhead\s+and\s+shoulders\b/gi, /\bwaist[\s-]?up\b/gi, /\bchest[\s-]?up\b/gi,
+                bg, /\bisolated\b/gi, /\bno\s+bg\b/gi,
+                /\bsoft\s+lighting\b/gi, /\bstudio\s+lighting\b/gi, /\bflat\s+lighting\b/gi,   // 同 studio：剝燈光詞避免跟後綴 no shading 打架
+                /\bfrom\s+(above|below|side|behind|front)\b/gi,
+            ];
+            let s = p;
+            patterns.forEach(rx => { s = s.replace(rx, ''); });
+            return s.replace(/\s+,/g, ',').replace(/,\s*,+/g, ',').replace(/^\s*,+/, '').replace(/,+\s*$/, '').replace(/\s+/g, ' ').trim();
+        },
+        // 🩳 立繪拍到大腿：外觀只寫了上衣（例如一件大帽 T），模型會把它畫成連身裙、腿光著（10-06 實測踩到）。
+        //   但不能寫死 clothes and pants：西幻的人魚也會被補出褲子——所以立繪前綴可能已拿掉那句。
+        //   看外觀本身決定：已經寫了下半身、或沒有腿的（人魚、蛇身、半人馬…），不補；有腿又沒寫下身才補一句。
+        //   🚨 生圖模型看不懂「如果」：條件只能在這裡判斷，不能寫進提示詞（寫了 tail 這種字就會長出尾巴）。同帶翼角色的 wideFrame
+        _NO_LEGS: /mer(maid|man|folk)|\bsiren\b|fish[\s-]?tail|tail\s?fin|\bnaga\b|lamia|(snake|serpent(ine)?)[\s-]+(body|tail|lower)|centaur|\btaur\b|arachne|人魚|魚尾|蛇身|蛇尾|半人馬|半人蛇|拉米亞|那伽/i,
+        //   dress 前後可以黏字（sundress、ballgown），但 dressed in（穿著）、dress shirt（襯衫）不算下身
+        _HAS_LOWER: /\b[a-z]*(dress(es)?\b(?!\s*shirt)|skirts?\b|gowns?\b)|\b(pants|trousers|jeans|shorts|kimono|yukata|hakama|robes?|cloak|leggings|tights|stockings|pantyhose|overalls|jumpsuit|bodysuit|leotard|armou?r|uniform|suit|hanfu|qipao|cheongsam|slacks|chinos|sweatpants|joggers|culottes|sarong|kilt|bloomers|swimsuit|bikini)\b|褲|裙|袍|洋裝|和服|浴衣|旗袍|漢服|盔甲|鎧甲|制服|連身|泳裝/i,
+        _lowerWear: function (look) {
+            const s = String(look || '');
+            if (!s.trim() || this._NO_LEGS.test(s) || this._HAS_LOWER.test(s) || this._isBeast(s)) return '';   // 動物形體不穿褲子（幼海豹被補了 wearing pants）
+            return 'fully clothed, wearing pants';
+        },
+        getItem: async function(prompt) {
+            if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generateItem === 'function') {
+                return await win.OS_IMAGE_MANAGER.generateItem(prompt, { use: 'item' });
+            } return "";
+        },
+        // force＝插圖上的重生鈕：generate() 記憶體裡還留著這句的舊圖，不帶就原圖奉還
+        getScene: async function(prompt, force) {
+            if (win.OS_IMAGE_MANAGER && typeof win.OS_IMAGE_MANAGER.generate === 'function') {
+                // 場景插圖尺寸：讀「圖片設置 → 場景插圖尺寸」下拉（獨立設定），預設 1024×1024
+                // 底詞：場景跟角色共用「角色底詞」（generate→_genNovelAI 把 scene 當 char 套 charBasePrompt/charNegPrompt），不另設場景底詞（定案：場景只吃角色底詞）
+                let _sw = 1024, _sh = 1024;
+                try {
+                    const _sz = (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen || {}).size || '1024x1024';
+                    const _p = String(_sz).split('x').map(Number);
+                    if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
+                } catch(e) {}
+                return await win.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: !!force, use: 'scene' });
+            } return "";
+        }
+    };
+
+    // === 暴露到全域 ===
+    window.VN_Config = VN_Config;
+    win.VN_BgmIndex = VN_BgmIndex;
+    window.VN_Image = VN_Image;
+})();

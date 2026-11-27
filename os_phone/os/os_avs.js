@@ -1,0 +1,2911 @@
+﻿// ----------------------------------------------------------------
+// [檔案] os_avs.js (V1.2 - Dual-Mode AVS Workshop)
+// 路徑：os_phone/os/os_avs.js
+// 職責：變數工坊 App。管理變數包與煉丹爐。支援酒館/獨立雙通向。
+// ----------------------------------------------------------------
+(function() {
+    console.log('[PhoneOS] 載入 AVS 變數工坊系統 (V1.2)...');
+    const win = window.parent || window; // 🔥 絕對保留雙通向核心
+
+    // 外來文字（模型抽的狀態值、模型取的檔案名、煉丹爐 AI 寫的面板）進畫面前用這三支：
+    //   _avsEsc＝純文字（名字、數值、錯誤訊息）；_avsSafe＝本來就帶格式的面板 HTML（AUI.safeHtml：會跑的拿掉、版面留著）；
+    //   _avsStyle＝塞進 <style> 的面板 CSS（帶 </style> 會跳出去長標籤）
+    function _avsEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    function _avsSafe(h) { const A = win.AUI || window.AUI; return (A && A.safeHtml) ? A.safeHtml(h) : _avsEsc(h); }
+    function _avsStyle(css) { return String(css == null ? '' : css).replace(/<\/style/gi, '<\\/style'); }
+
+    let currentPacks = [];
+    let currentTemplates = [];
+    let activeEditingPack = null;
+    let _furnaceRefineTpl = null;   // 非 null = 煉丹爐開在「✏️ 微調(diff)」模式，值＝正在微調的面板 tpl
+
+    let _appContainer = null;   // launchApp 掛載的容器；給對外 API（openNewPackEditor 等）取用
+
+    async function launchApp(container) {
+        _appContainer = container;
+        container.innerHTML = `
+            <div class="avs-container">
+                <div class="avs-header sysh">
+                    <div class="avs-back-btn sysh-back" id="avs-nav-home">‹</div>
+                    <div class="avs-title sysh-title">狀態檔案</div>
+                    <div class="avs-back-btn sysh-act" id="avs-btn-help" style="font-size:16px;font-weight:bold;">?</div>
+                </div>
+                <!-- 使用說明遮罩 -->
+                <div id="avs-help-overlay" style="display:none;position:absolute;inset:0;background:rgba(var(--os-tint-rgb), 0.98);z-index:200;overflow-y:auto;padding:20px 18px 80px;box-sizing:border-box;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+                        <div style="font-size:16px;font-weight:bold;color:var(--os-ink);"><i class="fa-solid fa-book-open"></i> 使用說明</div>
+                        <div id="avs-help-close" style="font-size:22px;color:rgba(var(--os-ink-rgb), 0.25);cursor:pointer;padding:4px 8px;">✕</div>
+                    </div>
+                    <div style="font-size:13px;color:var(--os-ink-soft);line-height:1.9;">
+
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;">狀態檔案是什麼？</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;">
+                            在故事進行時，幫你自動記住角色的各種數值，例如血量、金幣、好感度。<br>
+                            每次故事推進，這些數字會一起更新，你不必自己手記。
+                        </p>
+
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-box"></i> 第一步：建立要記住的項目</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 6px;">先決定這個故事要記住哪些東西，幫它們取名字，並填上起始值。例如：</p>
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(var(--os-ink-rgb), 0.30);padding:10px 12px;border-radius:4px;margin-bottom:16px;font-family:monospace;font-size:12px;color:var(--os-ink);">
+                            hp = 100　　← 血量，從 100 開始<br>
+                            gold = 0　　← 金幣，從 0 開始<br>
+                            好感度 = 0　← 名字也可以用中文
+                        </div>
+
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-fire"></i> 第二步：用「煉丹爐」做一個好看的面板（可選）</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;">
+                            選好項目後，描述你想要的風格（例如「暗黑奇幻、血紅色」），就可以請它幫你做一個狀態面板。做好後到「展廳」打開，故事進行時就會看到這個面板，而不是一排純數字。
+                        </p>
+
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-bolt"></i> 第三步：設定條件規則（可選）</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 6px;">
+                            你可以設定「當某個數字達到某個條件時，自動提醒故事裡該怎麼表現」。例如：
+                        </p>
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(var(--os-ink-rgb), 0.30);padding:10px 12px;border-radius:4px;margin-bottom:6px;font-size:12px;color:var(--os-ink);">
+                            好感度 ≥ 80 → 提醒：「這個角色現在對你非常親密，說話語氣要溫柔」
+                        </div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;font-size:12px;">
+                            這樣就不必在每次對話裡重複說明，系統會依數字自動切換說明，也比較省字數。
+                        </p>
+
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-chart-simple"></i> 故事進行中：查看目前狀態</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 16px;">
+                            打開右側「資料中心」→「<i class="fa-solid fa-chart-simple"></i> 狀態」，就能看到目前的數值，以及每一章改了什麼。<br>
+                            如果這一章的數值改錯了，可以按「<i class="fa-solid fa-rotate-left"></i> 回朔上一章節」復原。
+                        </p>
+
+                        <div style="color:var(--os-ink);font-weight:bold;margin-bottom:6px;"><i class="fa-solid fa-lightbulb"></i> 提示：告訴它怎麼更新數字</div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:0 0 6px;">在你的提示詞裡加上這段說明，它就知道要在回覆結尾寫出數值變化：</p>
+                        <div style="background:rgba(212,175,55,0.07);border-left:3px solid rgba(var(--os-ink-rgb), 0.30);padding:10px 12px;border-radius:4px;font-family:monospace;font-size:12px;color:var(--os-ink);">
+                            每次回覆結束後，如果有數值改變，請在最後加上：<br>
+                            &lt;vars&gt;<br>
+                            hp -= 20<br>
+                            gold += 100<br>
+                            好感度 += 5<br>
+                            &lt;/vars&gt;
+                        </div>
+                        <p style="color:rgba(var(--os-ink-rgb), 0.6);margin:6px 0 0;font-size:12px;">（&lt;vars&gt; 是一段固定格式的標記，用來列出這一章變動的數字，請原樣保留。）</p>
+
+                    </div>
+                </div>
+                <div class="avs-tabs">
+                    <div class="avs-tab active" data-tab="state">狀態檔案</div>
+                    <div class="avs-tab" data-tab="memory">記憶</div>
+                </div>
+                <div class="avs-content">
+                    <div id="avs-view-memory" class="avs-view"></div>
+                    <div id="avs-view-state" class="avs-view active"></div>
+                    <div id="avs-view-packs" class="avs-view">
+                        <div class="avs-packs-title"><i class="fa-solid fa-box"></i> 我的檔案</div>
+                        <div id="avs-pack-list" style="display:flex; flex-direction:column; gap:10px;"></div>
+                        <div id="avs-pack-editor" class="avs-card" style="display:none;">
+                            <div class="avs-label">檔案名稱</div>
+                            <input class="avs-input" id="avs-pack-name" style="margin-bottom:15px;">
+                            <div class="avs-label">說明</div>
+                            <textarea class="avs-textarea" id="avs-pack-notes" style="margin-bottom:15px;"></textarea>
+                            <div id="avs-var-rows-container" style="margin-bottom:15px;"></div>
+                            <div class="avs-btn avs-btn-outline" id="avs-btn-add-var" style="width:100%; margin-bottom:15px;">＋ 新增項目</div>
+                            <div style="display:flex; gap:10px;">
+                                <div class="avs-btn avs-btn-primary" id="avs-btn-save-pack" style="flex:1;">儲存</div>
+                                <div class="avs-btn avs-btn-outline" id="avs-btn-cancel-pack" style="flex:1;">取消</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🔥 煉丹爐 modal（從變數包 tab 頂部按鈕 / 卡片按鈕觸發）-->
+                <div id="avs-furnace-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; align-items:center; justify-content:center; overflow-y:auto;">
+                    <div style="max-width:600px; width:100%; background:var(--os-page-bg); border:1px solid rgba(var(--os-ink-rgb), 0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(var(--os-ink-rgb), 0.10); margin:auto;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(var(--os-ink-rgb), 0.15);">
+                            <strong id="furnace-modal-title" style="font-size:16px; color:var(--os-ink);"><i class="fa-solid fa-fire"></i> 煉丹爐 · 為檔案煉個 UI 面板</strong>
+                            <div style="color:var(--os-ink); cursor:pointer; font-size:20px;" id="avs-furnace-close">✕</div>
+                        </div>
+                        <div class="avs-card" id="furnace-card" style="background:transparent; border:none; padding:0;">
+                            <!-- 預選 pack 顯示（煉丹爐永遠從變數包卡片進入，所以一定知道是哪個 pack）-->
+                            <div id="furnace-pack-display" style="margin-bottom:15px; padding:10px 12px; background:rgba(var(--os-ink-rgb), 0.08); border:1px solid rgba(var(--os-ink-rgb), 0.15); border-radius:6px; font-size:13px; color:var(--os-ink);">
+                                正在為 <strong id="furnace-pack-display-name" style="color:var(--os-ink);">?</strong> 煉丹
+                            </div>
+                            <!-- 內部用的 hidden select，存當前 packId 供煉丹流程讀取 -->
+                            <select id="furnace-pack-select" style="display:none;"></select>
+
+                            <!-- 風格建議下拉（有建議時才顯示） -->
+                            <div id="furnace-presets-wrap" style="display:none;margin-bottom:14px;">
+                                <div class="avs-label" style="margin-bottom:6px;"><i class="fa-solid fa-lightbulb"></i> 載入風格建議</div>
+                                <div id="furnace-presets-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+                            </div>
+
+                            <!-- 🎨 美術方向：從風格庫挑一包當底，治「每次生出來都同一種味道」-->
+                            <div id="furnace-art-wrap">
+                                <div class="avs-label">美術方向</div>
+                                <div class="avs-art-row">
+                                    <select class="avs-input" id="furnace-art-select"></select>
+                                    <div class="avs-btn avs-btn-outline" id="furnace-art-reroll">換一個</div>
+                                </div>
+                                <div class="avs-art-note" id="furnace-art-note"></div>
+                                <div class="avs-label">世界貼紙</div>
+                                <div class="avs-art-row">
+                                    <select class="avs-input" id="furnace-sticker-src">
+                                        <option value="none">不用</option>
+                                        <option value="comfyui_direct">ComfyUI</option>
+                                        <option value="novelai">NAI</option>
+                                    </select>
+                                    <select class="avs-input" id="furnace-sticker-preset"></select>
+                                </div>
+                                <div class="avs-art-note" id="furnace-sticker-note">貼紙的東西從這個世界裡挑，畫風由你選的預設包決定。只當裝飾，不會壓到資料。</div>
+                            </div>
+
+                            <div class="avs-label">視覺風格要求</div>
+                            <textarea class="avs-textarea" id="furnace-style-prompt" placeholder="例如：賽博龐克風格、霓虹發光、半透明玻璃&#10;可留空，交給上面的美術方向決定" style="margin-bottom:15px;"></textarea>
+                            <div class="avs-btn avs-btn-primary" id="furnace-start-btn" style="width:100%;"><i class="fa-solid fa-fire"></i> 開始煉丹</div>
+                            <div class="furnace-log" id="furnace-log-output" style="margin-top:15px;">等待點火...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- V3：條件規則 modal（從變數包卡片「⚡ 規則」按鈕觸發）-->
+                <div id="avs-rules-modal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(5px); z-index:99999; padding:20px; box-sizing:border-box; overflow-y:auto;">
+                    <div style="max-width:600px; margin:20px auto; background:var(--os-page-bg); border:1px solid rgba(var(--os-ink-rgb), 0.25); border-radius:8px; padding:20px; box-shadow:0 0 40px rgba(var(--os-ink-rgb), 0.10);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; padding-bottom:10px; border-bottom:1px solid rgba(var(--os-ink-rgb), 0.15);">
+                            <strong style="font-size:16px; color:var(--os-ink);"><i class="fa-solid fa-bolt"></i> <span id="avs-rules-modal-title">檔案</span> · 條件規則</strong>
+                            <div style="color:var(--os-ink); cursor:pointer; font-size:20px;" id="avs-rules-modal-close">✕</div>
+                        </div>
+                        <div style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.30); margin-bottom:12px; line-height:1.6;">
+                            條件滿足時注入主模型 system prompt，引導劇情走向。<br>例：「好感度 ≥ 80 時對主角親暱稱呼」
+                        </div>
+                        <div id="avs-rules-modal-list" style="display:flex; flex-direction:column; gap:10px; max-height:60vh; overflow-y:auto; padding:4px;"></div>
+                        <div style="display:flex; margin-top:14px;">
+                            <div class="avs-btn avs-btn-primary" id="avs-rules-modal-aigen" style="flex:1;">AI 生成條件規則</div>
+                        </div>
+                        <div style="display:flex; gap:10px; margin-top:10px;">
+                            <div class="avs-btn avs-btn-outline" id="avs-rules-modal-add" style="flex:1;">＋ 手動添加</div>
+                            <div class="avs-btn avs-btn-outline" id="avs-rules-modal-close-btn" style="flex:0 0 100px;">關閉</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        container.querySelector('#avs-nav-home').onclick = () => { if (win.PhoneSystem) win.PhoneSystem.goHome(); };
+
+        const helpOverlay = container.querySelector('#avs-help-overlay');
+        container.querySelector('#avs-btn-help').onclick  = () => { helpOverlay.style.display = 'block'; };
+        container.querySelector('#avs-help-close').onclick = () => { helpOverlay.style.display = 'none'; };
+
+        // V3：規則 modal 關閉 + 添加按鈕
+        const rulesModalCloseBtn = container.querySelector('#avs-rules-modal-close');
+        const rulesModalCloseBtn2 = container.querySelector('#avs-rules-modal-close-btn');
+        const rulesModalAddBtn = container.querySelector('#avs-rules-modal-add');
+        if (rulesModalCloseBtn)  rulesModalCloseBtn.onclick = () => closeRulesModal(container);
+        if (rulesModalCloseBtn2) rulesModalCloseBtn2.onclick = () => closeRulesModal(container);
+        if (rulesModalAddBtn) rulesModalAddBtn.onclick = () => {
+            _editingRuleIdInModal = '__new__';
+            renderRulesModalList(container);
+        };
+        const rulesModalAiBtn = container.querySelector('#avs-rules-modal-aigen');
+        if (rulesModalAiBtn) rulesModalAiBtn.onclick = () => aiGenRulesForCurrentPack(container);
+
+        const tabs = container.querySelectorAll('.avs-tab');
+        tabs.forEach(tab => {
+            tab.onclick = () => {
+                tabs.forEach(t => t.classList.remove('active'));
+                container.querySelectorAll('.avs-view').forEach(v => v.classList.remove('active'));
+                tab.classList.add('active');
+                const _t = tab.dataset.tab;
+                if (_t === 'state') {
+                    // 「狀態檔案」整合頁＝目前狀態(上) + 檔案(下) 同一頁。
+                    // ⚠️ 檔案區塊【不要】在這裡 add active：狀態那邊是 async（先顯示「載入狀態中…」），
+                    //    檔案清單卻是同步的會馬上畫好 → 檔案先蹦出來卡在載入訊息底下。
+                    //    交給 os_avs_state 的 _build 收尾時依「有沒有 schema」toggle（見 os_avs_state.js 的 #avs-view-packs）。
+                    container.querySelector('#avs-view-state').classList.add('active');
+                    renderStateView(container);
+                    renderPackList(container);
+                } else {
+                    container.querySelector(`#avs-view-${_t}`).classList.add('active');
+                    if (_t === 'memory') win.OS_AVS_MEMORY?.renderInto?.(container.querySelector('#avs-view-memory'));
+                }
+            };
+        });
+
+        // 🔥 煉丹爐 modal 關閉（開啟由變數包卡片內按鈕觸發，沒有獨立頂部入口）
+        const furnaceModal = container.querySelector('#avs-furnace-modal');
+        const closeFurnaceBtn = container.querySelector('#avs-furnace-close');
+        if (closeFurnaceBtn) closeFurnaceBtn.onclick = () => closeFurnaceModal(container);
+        // 點空白處關閉 modal
+        if (furnaceModal) furnaceModal.onclick = (e) => {
+            if (e.target === furnaceModal) closeFurnaceModal(container);
+        };
+
+        await loadAllData(container);
+        bindPackEditorEvents(container);
+        bindFurnaceEvents(container);
+        // 「狀態檔案」整合頁：預設同時顯示 目前狀態(上) + 檔案(下)
+        // 🛡️ await loadAllData 期間使用者可能已切到「記憶」tab；若已切走就別硬補 active，
+        //    否則檔案 view 會跟記憶 view 同時 active（兩者都 display:flex）→ 我的檔案 UI 疊進記憶 tab
+        if (container.querySelector('.avs-tab[data-tab="state"]')?.classList.contains('active')) {
+            // 同上：檔案區塊的顯示與否交給 os_avs_state 的 _build 決定，這裡不搶著開
+            container.querySelector('#avs-view-state')?.classList.add('active');
+            renderStateView(container);
+            renderPackList(container);
+        }
+
+        // 監聽 AVS 更新事件，自動刷新狀態頁
+        // 🚨 已經畫著的就原地刷新（refresh 會留在她正在看的那頁、改數值時先不動）；
+        //    以前一律 renderInto → 整個重掛、回首頁：按儲存／還原被踢回首頁，改到一半剛好抽完一輪就全沒了
+        // 🚨 掛在 win 上的這兩個要拆：以前每開一次變數工坊就多掛一組、關掉不拆，每組都抓著那次的整份畫面，
+        //    劇情每更新一次狀態，所有看不到的舊畫面還會跟著重畫一次（10-20 手機記憶體巡查：每開一次多 596 個節點、40 個監聽）。
+        //    同時只會有一個變數工坊 → 開新的先拆上一組；畫面被拆掉以後收到事件也順手拆掉自己
+        if (_offAvsEvents) _offAvsEvents();
+        const onVars = () => {
+            if (!container.isConnected) { off(); return; }
+            const stateView = container.querySelector('#avs-view-state');
+            if (!stateView || !stateView.classList.contains('active')) return;
+            const S = win.OS_AVS_STATE;
+            if (S && S.isHost && S.isHost(stateView) && S.refresh) S.refresh();
+            else renderStateView(container);
+        };
+        // 變數包新增/儲存後重載檔案卡列表——「開始追蹤狀態」在 os_avs_state 那頭生成完只重繪狀態視圖，
+        // 檔案列表畫的是 currentPacks 快取，不收事件重載的話要關掉重開面板才看得到新卡
+        const onPacks = () => {
+            if (!container.isConnected) { off(); return; }
+            loadAllData(container);
+        };
+        const off = () => {
+            win.removeEventListener('AVS_VARS_UPDATED', onVars);
+            win.removeEventListener('AVS_PACKS_UPDATED', onPacks);
+            if (_offAvsEvents === off) _offAvsEvents = null;
+        };
+        win.addEventListener('AVS_VARS_UPDATED', onVars);
+        win.addEventListener('AVS_PACKS_UPDATED', onPacks);
+        _offAvsEvents = off;
+    }
+    let _offAvsEvents = null;   // 上一次打開變數工坊掛在 win 上的那組監聽（見 launchApp 尾端）
+
+    // 🧬 共用：AI 生成 schema → 轉變數 → 存變數包 → 同步世界書 → 觸發初始填充。
+    // 兩個入口共用（變數包「AI 從世界生成」按鈕 + AVS 狀態「開始追蹤狀態」按鈕）；UI 更新由各呼叫端自己做。
+    // 條件規則不在這裡生（10-07 起）：檔案卡的「規則」窗口按 AI 生成，見 aiGenRulesForCurrentPack。
+    // 回傳 { pack } 成功 / null 失敗（generate 內部已 toast 失敗訊息）。
+    async function _aiGenerateAndSavePack(userPrompt) {
+        if (!win.OS_STATE_SCHEMA?.generate) {
+            AUI.alert('OS_STATE_SCHEMA 不可用（請確認 state_schema.js 已載入）');
+            return null;
+        }
+        const result = await win.OS_STATE_SCHEMA.generate({ skipInitialFill: true, userPrompt });
+        const schema = result?.fields || result;   // 向前兼容舊版只返回 fields
+        if (!schema || !Object.keys(schema).length) return null;
+        const variables = Object.entries(schema).map(([name, def]) => {
+            const init = def?.init;
+            const t = def?.type || 'string';
+            let defaultValue;
+            if (t === 'list') {
+                if (Array.isArray(init)) {
+                    defaultValue = JSON.stringify(init);
+                } else if (typeof init === 'string' && init.trim()) {
+                    try {
+                        const parsed = JSON.parse(init);
+                        defaultValue = Array.isArray(parsed) ? JSON.stringify(parsed) : '[]';
+                    } catch(e) {
+                        defaultValue = '[]';
+                    }
+                } else {
+                    defaultValue = '[]';
+                }
+            } else if (init === undefined || init === null || init === '') {
+                defaultValue = t === 'number' ? 0 : '';
+            } else if (typeof init === 'object') {
+                try { defaultValue = JSON.stringify(init); } catch(e) { defaultValue = ''; }
+            } else {
+                defaultValue = init;
+            }
+            return { name, defaultValue, desc: def?.desc || '', type: t };
+        });
+        const title = win.OS_AVS_ADAPTER?.getStoryTitle?.() || '新世界';
+        const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+        const pack = {
+            id: 'pack_' + Date.now(),
+            name: `${title} (AI 生成)`,
+            notes: '由主模型讀世界書 + 角色卡 + 開頭劇情自動生成。可手動編輯增/減/改變數。',
+            variables,
+            chatId: currentChatId
+        };
+        await win.OS_DB.saveVarPack(pack);
+        await syncVarPackToLorebook();
+        try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
+        if (AUI.toastr) AUI.toastr.success(`已生成「${pack.name}」（${variables.length} 個項目），世界書已同步`);
+        if (win.OS_STATE_RUNTIME?.extractOnce) {
+            setTimeout(() => {
+                try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch(e) {
+                    console.warn('[AVS] 觸發副模型初始填充失敗:', e);
+                }
+            }, 500);
+        }
+        return { pack };
+    }
+
+    async function loadAllData(container) {
+        if (!win.OS_DB) return;
+        currentPacks = await win.OS_DB.getAllVarPacks();
+        currentTemplates = await win.OS_DB.getAllUITemplates();
+        renderPackList(container);
+    }
+
+    // === 同步變數包定義到酒館世界書（讓酒館主模型寫劇情時看到變數說明）===
+    // 觸發時機：AI 生成 / 編輯儲存 / 刪除變數包 之後
+    // PWA 不需要（PWA 的主模型走自家機制，不靠酒館世界書）
+    async function syncVarPackToLorebook() {
+        if (win.OS_API?.isStandalone?.()) return;
+        if (!win.TavernHelper?.getLorebookEntries) return;
+
+        const chatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+        if (!chatId) return;
+
+        const bookName = win.TavernHelper.getCurrentCharPrimaryLorebook?.()
+            || win.TavernHelper.getCharWorldbookNames?.('current')?.primary;
+        if (!bookName) {
+            console.warn('[AVS Sync] 未綁定世界書，跳過同步');
+            return;
+        }
+
+        // 🔄 改版(2026-06-29)：變數說明書改成「跟著當前值一起即時注入主提示詞」(state_runtime.injectCurrent→buildVarDefsContent)、
+        //   不再寫世界書——舊作法每個 chatId 建一條 [本世界狀態變數說明書]-chatId，同角色卡重玩不同聊天室會疊一堆。
+        //   這裡保留為「清理殘留」：把過去寫進世界書的 [本世界狀態變數說明書]* 條目全刪掉（不分 chatId）。
+        try {
+            if (!win.TavernHelper.updateLorebookEntriesWith) return;
+            const entries = await win.TavernHelper.getLorebookEntries(bookName);
+            const _isOld = (e) => e && e.comment && e.comment.indexOf('[本世界狀態變數說明書]') === 0;
+            if (!(entries || []).some(_isOld)) return;
+            await win.TavernHelper.updateLorebookEntriesWith(bookName, list => list.filter(e => !_isOld(e)));
+            console.log('[AVS Sync] 已清掉舊的世界書變數說明書條目（改走即時注入主提示詞，不再堆世界書）');
+        } catch(e) {
+            console.warn('[AVS Sync] 清理舊變數說明書條目失敗:', e);
+        }
+    }
+
+    // 變數定義說明書內容（給 state_runtime.injectCurrent 跟「當前值」一起即時注入主提示詞）。無變數回 ''。
+    let _oldDefsCleaned = false;   // 一次性：清掉舊世界書殘留 [本世界狀態變數說明書]* 條目（同卡重玩堆的那堆）
+    async function buildVarDefsContent(chatId) {
+        try {
+            // 第一次被叫到就順手清一次舊殘留（fire-and-forget，不擋生成；自帶 chatId/bookName 守衛）
+            if (!_oldDefsCleaned) { _oldDefsCleaned = true; try { syncVarPackToLorebook(); } catch (e) {} }
+            if (!chatId || !win.OS_DB?.getAllVarPacks) return '';
+            const allPacks = await win.OS_DB.getAllVarPacks();
+            const packs = (allPacks || []).filter(p => !p.chatId || p.chatId === chatId);   // 全域 pack + 綁當前 chat 的
+            const allVars = [];
+            for (const pack of packs) { if (Array.isArray(pack.variables)) for (const v of pack.variables) if (v.name) allVars.push(v); }
+            if (!allVars.length) return '';
+            const lines = allVars.map(v => `- ${v.name}${v.type ? ` (${v.type})` : ''}${v.desc ? `：${v.desc}` : ''}`);
+            return `<世界狀態變數說明書 規則="變數定義·寫作前必讀">\n本世界劇情追蹤的狀態變數定義。劇情演進時依各變數的描述與範圍合理推進，不要違反枚舉值範圍或數值上下限。當前值由系統另行注入。\n${lines.join('\n')}\n</世界狀態變數說明書>`;
+        } catch (e) { return ''; }
+    }
+
+    // 🔥 煉丹前把 object 型變數分類，並算出要告訴 AI 的欄位名（看「實際資料形狀」）：
+    //   值是物件 → 多實體（角色/NPC，用 {{#each}} 迴圈）
+    //   值是純量 → 單一群組（一組固定欄位，用 {{群組.欄位}} 點記法；用迴圈會整段空白）
+    //   🚨 2026-09-16 回報：AVS 煉丹生成的 UI 面板總是漏掉「劇情目標」（當前沒目標時）——就是這個。
+    //      範本寫成自包裝（劇情目標:\n  長期目標:\n  短期待辦:）時，initFromPack 讓容器從 {} 起跳；
+    //      開場到副模型第一次抽到目標之前，劇情目標一直是 {}。以前這裡看到物件就直接拿它的 key → 欄位清單是空的，
+    //      提示只寫「欄位：（動態）」，AI 不知道有哪幾格可放就整段省略，出爐校驗再報「整個沒被用到」。
+    //      另一條：範本沒自包裝（長期目標: …\n短期待辦: …）又沒 runtime 時，舊寫法拿「第一個值」當內層，那是字串 → 也是空。
+    //   現在：runtime 是空的或沒有 → 一律看範本；單一群組就算有 runtime，也把範本上宣告的欄位補進來（這輪剛好沒值的也照樣放進面板）。
+    //   多實體還是單一群組，沒 runtime 時照舊看名字傾向（兩種範本長得一樣，分不出來）。
+    function _classifyObjVar(v, curState) {
+        let tree = {};
+        try { tree = win._AVS_ENGINE?.parseTree?.(v.defaultValue) || {}; } catch (e) {}
+        const tplKeys = Object.keys(tree);
+        // 自包裝範本（最外層只有變數名自己）→ 剝掉那層；空欄位在範本裡會被解析成 {}，所以不能拿「值是不是物件」判斷要不要剝
+        const tpl = (tplKeys.length === 1 && tplKeys[0] === v.name && tree[v.name] && typeof tree[v.name] === 'object') ? tree[v.name] : tree;
+        const cur = curState ? curState[v.name] : undefined;
+        if (cur && typeof cur === 'object' && !Array.isArray(cur) && Object.keys(cur).length) {
+            // ⚠️ 陣列不算實體證據：混合群組(如 MC財富與交易={金錢餘額:數字,交易日誌:[]})曾因陣列被誤判成多實體
+            //    → 模板套 {{#each}}、純量成員(金錢)被 each 丟掉＝「錢包欄位消失」真兇
+            const firstObj = Object.values(cur).find(x => x && typeof x === 'object' && !Array.isArray(x) && Object.keys(x).length);
+            if (firstObj) return { kind: 'multi', fields: Object.keys(firstObj) };
+            const fields = Object.keys(cur);
+            Object.keys(tpl).forEach(k => { if (fields.indexOf(k) < 0) fields.push(k); });
+            return { kind: 'single', fields };
+        }
+        // 沒 runtime 資料、或容器還是空的 {} → 看範本結構 + 名字傾向
+        const kind = /狀態|角色|npc|成員|隊友|敵人|怪|實體/i.test(v.name) ? 'multi' : 'single';
+        if (kind === 'multi') {
+            const firstTpl = tpl === tree && tplKeys.length ? Object.values(tree).find(x => x && typeof x === 'object' && Object.keys(x).length) : null;
+            return { kind, fields: Object.keys(firstTpl || tpl) };
+        }
+        return { kind, fields: Object.keys(tpl) };
+    }
+
+    // 🧪 出爐即校驗：把煉好的模板跟變數包對一次，回傳白話問題清單（空陣列＝沒問題）。
+    //   為什麼要有這個：渲染引擎對「接不到資料」全都是靜默的——欄位名對不上只顯示「—」、
+    //   迴圈容器名對不上整段消失、變數根本沒被引用就永遠不出現。面板於是「畫得漂亮但資料一片空白」，
+    //   而且從畫面上看不出是資料還沒進來、還是模板寫錯。
+    //   只提示不自動改：欄位名沒有可靠的機器對應（MP 到底是魔力值還是魔法點數？猜錯更糟）。
+    function _auditTemplate(content, objInfo, flatVars) {
+        const issues = [];
+        const html = String(content || '');
+        const known = {};                       // 群組名 → 該群組已知欄位名
+        (objInfo || []).forEach(o => { known[o.v.name] = new Set(o.fields || []); });
+        const flatNames = new Set((flatVars || []).map(v => v.name));
+        // ① 欄位名：AI 常把欄位改寫成自己習慣的縮寫（魔力值→MP、金錢餘額→gold）
+        const bad = [];
+        for (const mm of html.matchAll(/\{\{\s*([^#\/@{}][^{}]*?)\s*\}\}/g)) {
+            const expr = String(mm[1]).trim();
+            if (expr.indexOf('.') < 0) {         // 扁平變數（或被當群組直接引用）
+                if (!flatNames.has(expr) && !known[expr]) bad.push({ ph: mm[0], group: '' });
+                continue;
+            }
+            const i = expr.indexOf('.');
+            const g = expr.slice(0, i), fld = expr.slice(i + 1);
+            if (!known[g]) { bad.push({ ph: mm[0], group: '' }); continue; }
+            // fields 為空＝煉丹時算不出欄位清單（沒 runtime 資料且範本解不出）→ 無從比對，不誤報
+            if (known[g].size && !known[g].has(fld)) bad.push({ ph: mm[0], group: g });
+        }
+        if (bad.length) issues.push(bad.length + ' 個欄位名對不上變數包，那幾格會顯示「—」：' +
+            bad.slice(0, 4).map(b => b.ph).join('、') + (bad.length > 4 ? ' …' : ''));
+        // ② 容器與迴圈：「標題都在、資料一片空白」幾乎都壞在這裡
+        const usedEach = new Set();
+        for (const mm of html.matchAll(/\{\{#each\s+([^\s{}]+)\}\}/g)) usedEach.add(String(mm[1]).trim());
+        usedEach.forEach(n => {
+            if (!known[n]) issues.push('迴圈 {{#each ' + n + '}} 的容器不存在，這一段不會顯示任何東西');
+        });
+        (objInfo || []).forEach(o => {
+            const n = o.v.name;
+            const dot = html.indexOf('{{' + n + '.') >= 0;
+            if (!usedEach.has(n) && !dot && html.indexOf('{{' + n + '}}') < 0) {
+                issues.push('「' + n + '」整個沒被用到，面板上不會有它的資料');
+            } else if (o.kind === 'multi' && !usedEach.has(n) && dot) {
+                issues.push('「' + n + '」是多實體，卻用了點記法（要用 {{#each}}）');
+            } else if (o.kind === 'single' && usedEach.has(n) && !dot) {
+                issues.push('「' + n + '」是一組固定欄位，卻套了迴圈（要用 {{' + n + '.欄位}}）');
+            }
+        });
+        return issues;
+    }
+
+    // 🔥 開煉丹爐 modal（永遠帶 packId，從變數包卡片內按鈕進入）
+    function openFurnaceModal(container, packId, refineTpl) {
+        if (!packId) { console.warn('[AVS] openFurnaceModal 需要 packId'); return; }
+        _furnaceRefineTpl = refineTpl || null;   // 有帶 tpl = 微調(diff)模式；沒帶 = 新建(全生成)
+        const modal = container.querySelector('#avs-furnace-modal');
+        const displayName = container.querySelector('#furnace-pack-display-name');
+        const select = container.querySelector('#furnace-pack-select');
+
+        refreshFurnacePackSelect(container); // 填 hidden select 的 option
+
+        const pack = currentPacks.find(p => p.id === packId);
+        if (displayName) displayName.textContent = pack ? pack.name : '?';
+        if (select) select.value = packId;
+
+        // 切換「新建 / 微調」兩種模式的文案（同一個彈窗共用）
+        const titleEl  = container.querySelector('#furnace-modal-title');
+        const styleEl  = container.querySelector('#furnace-style-prompt');
+        const startEl  = container.querySelector('#furnace-start-btn');
+        const presetEl = container.querySelector('#furnace-presets-wrap');
+        const artEl    = container.querySelector('#furnace-art-wrap');
+        const logEl    = container.querySelector('#furnace-log-output');
+        // 🚨微調走 find/replace,只能改你指名的地方。這時候注入一整套美術方向,
+        //   模型會照著新風格重寫、find 全部定位不到 → 看起來就是「按了沒反應」。所以微調模式整區收起來。
+        if (artEl) artEl.style.display = _furnaceRefineTpl ? 'none' : '';
+        if (_furnaceRefineTpl) {
+            if (titleEl)  titleEl.innerHTML = '<i class="fa-solid fa-pen"></i> 微調面板 · 只改你說的、其他不動';
+            if (styleEl)  { styleEl.value = ''; styleEl.placeholder = '說你要改哪裡，例如：標題字大一點、邊框改金色、血條改紅色（只動你說的，其他保留）'; }
+            if (startEl)  startEl.innerHTML = '<i class="fa-solid fa-pen"></i> 套用微調';
+            if (presetEl) presetEl.style.display = 'none';   // 微調不需要風格預設
+            if (logEl)    logEl.innerHTML = '說一句要改的地方，我只動那裡、不重做整份。';
+        } else {
+            if (titleEl)  titleEl.innerHTML = '<i class="fa-solid fa-fire"></i> 煉丹爐 · 為檔案煉個 UI 面板';
+            if (styleEl)  styleEl.placeholder = '例如：賽博龐克風格、霓虹發光、半透明玻璃\n或點上方「載入風格建議」快速填入';
+            if (startEl)  startEl.innerHTML = '<i class="fa-solid fa-fire"></i> 開始煉丹';
+            if (logEl)    logEl.innerHTML = '等待點火...';
+            try { _refreshFurnacePresets(container, packId); } catch (e) {}   // 重評風格建議顯示（剛從微調模式切回來時把它復原）
+            try { _refreshFurnaceArt(container, true); } catch (e) {}          // 每次開爐重擲一次美術方向
+        }
+
+        if (modal) modal.style.display = 'flex';
+    }
+
+    function closeFurnaceModal(container) {
+        const modal = container.querySelector('#avs-furnace-modal');
+        if (modal) modal.style.display = 'none';
+        _furnaceRefineTpl = null;
+    }
+
+    // ── ✏️ 微調(diff)：只送差異、不整份重生（省 token、保留沒改的）。同創作室的 find/replace 概念，套在狀態面板的 CSS+HTML ──
+    function _buildFurnaceDiffPrompt(css, html, refineMsg) {
+        return `你是 UI 工程師。用戶已有一個狀態面板（CSS + HTML），給你一個修改要求。\n` +
+            `產生精準的「替換指令」(find / replace)，只改用戶要的、其他一字不動，不要重寫整份。\n\n` +
+            `【保守鐵則 — 絕對遵守】\n` +
+            `- 只動用戶明確要求的部分；沒被指名的（含結構、{{變數名}}、{{#each}}…{{/each}} 佔位符）一律不要碰，即使你覺得能更好。\n` +
+            `- {{...}} 佔位符是資料插槽，絕對不可改名、刪除、增減——動到面板就空白或報錯。\n\n` +
+            `### 當前面板\n` +
+            `[--- CSS BEGIN ---]\n${css}\n[--- CSS END ---]\n\n` +
+            `[--- HTML BEGIN ---]\n${html}\n[--- HTML END ---]\n\n` +
+            `### 用戶要改\n「${refineMsg}」\n\n` +
+            `### 輸出規範（只輸出 <patch> 區塊，其他什麼都別寫）\n` +
+            `對每個改動輸出一個 <patch>：\n` +
+            `<patch target="css">\n` +
+            `<find>原始片段（必須跟上面當前面板【完全一致、一字不差】，含空白與換行）</find>\n` +
+            `<replace>新片段</replace>\n` +
+            `</patch>\n\n` +
+            `規則：\n` +
+            `1. target 只能是 css 或 html。\n` +
+            `2. find 必須在該 target 的內容裡【唯一存在】：挑夠長夠特別的片段；找不到或出現多次都會被放棄、改不到。\n` +
+            `3. 可以一次輸出多個 <patch>（改多處都行）。\n` +
+            `4. 不要輸出 JSON、不要用 markdown 圍欄包住；<patch> 區塊內只能有 <find> 和 <replace>，不要夾對話。\n` +
+            `5. 若這次其實是「大改」（要動很多處才達得到），不要硬湊 → 只輸出單獨一行 <too_big/>，讓用戶改按「重新煉丹」整份重做。`;
+    }
+
+    // 解析 <patch> 並對 tpl 的 cssContent / htmlContent 做字串替換（find 須唯一，否則放棄該條保護面板）。回 { applied, msg? }
+    function _applyFurnaceDiffPatches(responseText, tpl) {
+        if (/<too_big\s*\/?\s*>/i.test(responseText)) {
+            return { applied: 0, msg: 'AI 認為這次要改的範圍太大、不適合微調，請按「重新煉丹」整份重做。' };
+        }
+        const FIELD = { css: 'cssContent', html: 'htmlContent' };
+        const patchRegex = /<patch\s+target=["']([^"']+)["']\s*>([\s\S]*?)<\/patch>/gi;
+        let applied = 0, m;
+        while ((m = patchRegex.exec(responseText)) !== null) {
+            const field = FIELD[m[1].trim().toLowerCase()];
+            if (!field) continue;
+            const findM = m[2].match(/<find>([\s\S]*?)<\/find>/i);
+            const repM  = m[2].match(/<replace>([\s\S]*?)<\/replace>/i);
+            if (!findM || !repM) continue;
+            const findStr = findM[1];
+            if (!findStr || findStr.trim() === '') continue;
+            const orig = tpl[field] || '';
+            const occ = orig.split(findStr).length - 1;
+            if (occ !== 1) continue;   // 0=找不到、>1=不唯一 → 放棄，別亂改毀面板
+            tpl[field] = orig.split(findStr).join(repM[1]);
+            applied++;
+        }
+        return { applied };
+    }
+
+    async function _runFurnaceRefine(container) {
+        const tpl = _furnaceRefineTpl;
+        const log = container.querySelector('#furnace-log-output');
+        const btn = container.querySelector('#furnace-start-btn');
+        const refineMsg = (container.querySelector('#furnace-style-prompt').value || '').trim();
+        if (!tpl) { if (log) log.innerHTML = '沒有可微調的面板'; return; }
+        if (!refineMsg) { if (log) log.innerHTML = '說一句你要改哪裡'; return; }
+        if (log) log.innerHTML = '微調中…只動你說的地方';
+        if (btn) btn.disabled = true;
+        try {
+            const prompt = _buildFurnaceDiffPrompt(tpl.cssContent || '', tpl.htmlContent || '', refineMsg);
+            const full = await (
+                win.OS_API_ENGINE?.generateText?.('general_assistant', prompt) ||
+                Promise.reject(new Error('API 引擎未就緒'))
+            );
+            if (!full) throw new Error('AI 回傳空白');
+            const res = _applyFurnaceDiffPatches(full, tpl);
+            if (res.applied === 0) {
+                if (log) log.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ' + (res.msg || '沒改到（AI 沒給有效修改、或定位不到原文）。換更具體的說法，或按「重新煉丹」整份重做。');
+                return;
+            }
+            await win.OS_DB.saveUITemplate(tpl);   // 同 id 覆寫、只改了 css/html
+            if (log) log.innerHTML = `已微調 ${res.applied} 處！`;
+            currentTemplates = await win.OS_DB.getAllUITemplates();
+            try { updateActiveTemplatesCache(); } catch (e) {}
+            renderPackList(container);
+            setTimeout(() => closeFurnaceModal(container), 1200);
+        } catch (e) {
+            console.error('[AVS Furnace Refine]', e);
+            if (log) log.innerHTML = `微調失敗：${_avsEsc(e && e.message)}`;   // 接口錯誤可能夾著伺服器回的字
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    function renderPackList(container) {
+        const listEl = container.querySelector('#avs-pack-list');
+        listEl.innerHTML = '';
+        const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
+        const _curCid = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+
+        // 建檔入口一律走「狀態檔案」的建檔畫面（開始追蹤狀態／簡易預設／自己建），這裡不再放第二套按鈕。
+        //    一個故事一套追蹤欄位就夠——擺兩組入口只會誘導做出重複包；要重做就先刪舊的。
+
+        if (currentPacks.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(var(--os-ink-rgb), 0.20); font-size:13px;">尚無檔案<br><br>回上方建檔畫面選一種建立方式</div>';
+            return;
+        }
+
+        // 只渲染「當前卡」的檔案。其他卡 / 全域的檔案改從建檔畫面的「📋 沿用其他故事的設定」看，
+        // 那邊按角色卡分頁、附頭像，比這裡摺一個灰色清單清楚；也省掉替 N 個用不到的檔案建卡片＋渲染 UI 面板預覽。
+        const _mine = currentPacks.filter(p => p.chatId && p.chatId === _curCid);
+        // 有檔案、但沒有一個是這個故事的（例如舊版在 PWA 生的包 chatId 是空的）→ 這裡以前是整片空白，
+        //   看起來像「生成失敗」。明講一句，並指去看得到它們的地方。
+        if (!_mine.length) {
+            listEl.innerHTML = '<div style="text-align:center; padding:30px 20px; color:rgba(var(--os-ink-rgb), 0.20); font-size:13px;">這個故事還沒有自己的檔案<br><br>已有的 ' + currentPacks.length + ' 份屬於別的故事<br>回上方建檔畫面用「<i class="fa-solid fa-clipboard"></i> 沿用其他故事的設定」搬過來</div>';
+            return;
+        }
+        _mine.forEach(pack => {
+            const rulesCount = allRules.filter(r => r.packId === pack.id).length;
+            // 找此 pack 的 UI 面板（只看屬於 AVS 的：有 packId + 沒 VN 標記）
+            const packTpls = currentTemplates.filter(t => t.packId === pack.id && !t.isVNTag && !t.isBlock && !t.tagId);
+            const activeTpl = packTpls.find(t => t.isActive) || packTpls[0] || null;
+
+            const card = document.createElement('div');
+            card.className = 'avs-card';
+            card.innerHTML = `
+                <strong style="color:var(--os-ink);">${_avsEsc(pack.name)}</strong>
+                <p style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.25);">${pack.variables.length} 個項目${rulesCount ? ` · ${rulesCount} 條規則` : ''}</p>
+                <div style="font-size:11px; margin:1px 0 2px;">${pack.chatId ? `<i class="fa-solid fa-lock"></i> <span style="color:#2e9e6b;">綁定此卡</span> <span style="color:rgba(var(--os-ink-rgb), 0.45);">${String(pack.chatId).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : `<i class="fa-solid fa-globe"></i> <span style="color:#c9920f;">全域 · 所有卡共用 <i class="fa-solid fa-triangle-exclamation"></i></span>`}</div>
+                <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+                    <div class="avs-btn avs-btn-outline btn-edit" style="flex:1; min-width:60px; padding:6px;">編輯</div>
+                    <div class="avs-btn avs-btn-outline btn-rules" style="flex:1; min-width:90px; padding:6px;"><i class="fa-solid fa-bolt"></i> 規則${rulesCount ? ` (${rulesCount})` : ''}</div>
+                    <div class="avs-btn avs-btn-danger btn-del" style="padding:6px 12px;">刪除</div>
+                </div>
+                <div class="pack-ui-area" style="margin-top:14px; padding-top:12px; border-top:1px dashed rgba(var(--os-ink-rgb), 0.10);"></div>
+            `;
+
+            // === 嵌入 UI 面板區（取代原本獨立「展廳」tab）===
+            const uiArea = card.querySelector('.pack-ui-area');
+            if (!activeTpl) {
+                uiArea.innerHTML = `
+                    <div style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.25); margin-bottom:8px;"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:var(--os-ink-soft);">無</span></div>
+                    <div class="avs-btn avs-btn-outline btn-go-furnace" style="width:100%; padding:8px; font-size:12px;"><i class="fa-solid fa-wand-magic-sparkles"></i> 為這個檔案煉個 UI 面板</div>
+                `;
+                uiArea.querySelector('.btn-go-furnace').onclick = () => openFurnaceModal(container, pack.id);
+            } else {
+                // 用當前狀態 + 預設值替換佔位符做預覽（支援 object 型 {{#each}} 迴圈）
+                const previewState = win._AVS_ENGINE?.read?.() || {};
+                const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
+                const _avCore = (win.VN_PLAYER || win.VN_Core) || {};
+                const _avMem = Object.assign({}, _avCore._avatarMemCache || {}, _avCore._faceMemCache || {});   // 預覽用記憶體頭像(best-effort)；三合一生成的自拍頭像蓋過全身立繪
+                let previewHtml = _avsSafe(_avsRenderTemplate(activeTpl.htmlContent || '', previewState, pack.variables || [], fmt, _avMem));   // 面板是煉丹爐 AI 寫的（也可能是沿用／還原來的）
+
+                const scopeId = `pack-tpl-preview-${activeTpl.id}`;
+                let scopedCssText = '';
+                if (activeTpl.cssContent) {
+                    scopedCssText = activeTpl.cssContent.replace(/([^{}@][^{}]*)\{/g, (m, selector) => {
+                        const scoped = selector.trim().split(',').map(s => `#${scopeId} ${s.trim()}`).join(', ');
+                        return `${scoped} {`;
+                    });
+                }
+
+                uiArea.innerHTML = `
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <span style="font-size:12px; color:rgba(var(--os-ink-rgb), 0.68);"><i class="fa-solid fa-image"></i> UI 面板：<span style="color:var(--os-ink);">已煉</span>${activeTpl.isActive ? '<span style="font-size:10px;color:#2ecc71;border:1px solid #2ecc71;padding:1px 6px;border-radius:3px;margin-left:6px;">啟用中</span>' : ''}</span>
+                    </div>
+                    ${scopedCssText ? `<style>${_avsStyle(scopedCssText)}</style>` : ''}
+                    <div class="avs-pv-tabs">
+                        <button class="avs-pv active" data-pv="phone" title="手機（外框約 390）">手機</button>
+                        <button class="avs-pv" data-pv="center" title="中間（外框約 1000）">中間</button>
+                        <button class="avs-pv" data-pv="full" title="全屏（螢幕寬）">全屏</button>
+                    </div>
+                    <div class="avs-pv-wrap">
+                        <div class="avs-pv-box" id="${scopeId}">
+                            ${previewHtml || '<span style="color:rgba(var(--os-ink-rgb), 0.20);font-size:12px;">（無預覽內容）</span>'}
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:8px; margin-bottom:6px;">
+                        <div class="avs-btn avs-btn-primary btn-refine-tpl" style="flex:1; padding:6px; font-size:12px;"><i class="fa-solid fa-pen"></i> 微調</div>
+                        <div class="avs-btn avs-btn-outline btn-refurnace" style="flex:1; padding:6px; font-size:12px;"><i class="fa-solid fa-rotate"></i> 重新煉丹</div>
+                    </div>
+                    ${/\bwsk\b/.test(activeTpl.htmlContent || '') ? `<div class="avs-btn avs-btn-outline btn-wsk-tune" style="width:100%; padding:6px; font-size:12px; margin-bottom:6px;"><i class="fa-solid fa-shapes"></i> 調整貼紙位置</div>` : ''}
+                    <div style="display:flex; gap:8px;">
+                        <div class="avs-btn avs-btn-outline btn-toggle-active" style="flex:1; padding:6px; font-size:12px;">${activeTpl.isActive ? '✓ 取消啟用' : '設為啟用'}</div>
+                        <div class="avs-btn avs-btn-danger btn-del-tpl" style="padding:6px 12px; font-size:12px;"><i class="fa-solid fa-trash-can"></i></div>
+                    </div>
+                `;
+
+                // 三尺寸預覽縮放器（手機/中間/全屏）— 行為共用創作室的 attachVpScaler，看面板在窄框是否溢出
+                try {
+                    win.OS_STUDIO?.attachVpScaler?.(
+                        uiArea.querySelector('.avs-pv-tabs'),
+                        uiArea.querySelector('.avs-pv-wrap'),
+                        uiArea.querySelector('.avs-pv-box')
+                    );
+                } catch (e) {}
+
+                const _tglBtn = uiArea.querySelector('.btn-toggle-active');
+                _tglBtn.onclick = async () => {
+                    // 重畫整份清單要跑每個面板的預覽，慢的時候看起來像當機 → 按下就先換字，讓她知道有收到
+                    if (_tglBtn.dataset.busy) return;
+                    const _was = _tglBtn.textContent;
+                    _tglBtn.dataset.busy = '1'; _tglBtn.textContent = '處理中…';
+                    try {
+                        // 同一個 pack 只能有一個 active
+                        if (!activeTpl.isActive) {
+                            const otherActive = currentTemplates.find(t => t.packId === activeTpl.packId && t.isActive && t.id !== activeTpl.id);
+                            if (otherActive) {
+                                otherActive.isActive = false;
+                                await win.OS_DB.saveUITemplate(otherActive);
+                            }
+                        }
+                        activeTpl.isActive = !activeTpl.isActive;
+                        await win.OS_DB.saveUITemplate(activeTpl);
+                        currentTemplates = await win.OS_DB.getAllUITemplates();
+                        updateActiveTemplatesCache();
+                        renderPackList(container);   // 成功：整塊重畫，這顆按鈕連同狀態一起被換掉
+                    } catch (e) {
+                        // 以前這裡沒有網子：鏈上任何一步炸掉都只是靜靜結束，按鈕停在原字＝「沒反應」
+                        activeTpl.isActive = (_was.indexOf('取消') >= 0);   // 畫面退回按之前的樣子
+                        _tglBtn.textContent = _was; delete _tglBtn.dataset.busy;
+                        console.error('[AVS] 切換啟用失敗:', e);
+                        _wskSay('切換啟用沒成功：' + ((e && e.message) || e), false);
+                    }
+                };
+                uiArea.querySelector('.btn-wsk-tune')?.addEventListener('click', () => _openStickerTuner(container, activeTpl, pack));
+                uiArea.querySelector('.btn-refine-tpl').onclick = () => openFurnaceModal(container, pack.id, activeTpl);
+                uiArea.querySelector('.btn-refurnace').onclick = () => openFurnaceModal(container, pack.id);
+                uiArea.querySelector('.btn-del-tpl').onclick = async () => {
+                    if (!await AUI.confirm(`刪除這個檔案對應的 UI 面板？檔案本身保留。`)) return;
+                    await win.OS_DB.deleteUITemplate(activeTpl.id);
+                    currentTemplates = await win.OS_DB.getAllUITemplates();
+                    updateActiveTemplatesCache();
+                    renderPackList(container);
+                };
+            }
+
+            card.querySelector('.btn-edit').onclick = () => openPackEditor(container, pack);
+            card.querySelector('.btn-rules').onclick = () => openRulesModal(container, pack);
+            card.querySelector('.btn-del').onclick = async () => {
+                // 列出此 pack 綁定的展廳 UI 模板 + 條件規則（讓用戶看清楚會連帶刪什麼）
+                const tplsAll = await win.OS_DB.getAllUITemplates();
+                const orphanedTpls = (tplsAll || []).filter(t => t.packId === pack.id);
+                const orphanedRules = (win.OS_AVS_RULES?.loadRules?.() || []).filter(r => r.packId === pack.id);
+
+                const warn = [];
+                if (orphanedTpls.length)  warn.push(`${orphanedTpls.length} 個展廳 UI 模板`);
+                if (orphanedRules.length) warn.push(`${orphanedRules.length} 條條件規則`);
+                const tplWarning = warn.length ? `\n\n同時會刪除這個檔案對應的：\n  · ${warn.join('\n  · ')}` : '';
+                if (!await AUI.confirm(`刪除檔案「${pack.name}」？${tplWarning}\n\n世界書內狀態說明條目會自動更新（沒其他項目時也會被刪）。`)) return;
+
+                // 1. 刪變數包本體
+                await win.OS_DB.deleteVarPack(pack.id);
+                // 2. 刪所有綁此 packId 的展廳 UI 模板
+                for (const tpl of orphanedTpls) {
+                    try { await win.OS_DB.deleteUITemplate(tpl.id); } catch(e) {}
+                }
+                // 3. 刪所有綁此 packId 的條件規則
+                for (const r of orphanedRules) {
+                    try { win.OS_AVS_RULES?.deleteRule?.(r.id); } catch(e) {}
+                }
+                // 4. reload UI + sync 世界書（沒變數時 sync 會自動刪世界書條目）
+                await loadAllData(container);
+                await syncVarPackToLorebook();
+                console.log(`[AVS] 已刪除變數包「${pack.name}」+ ${orphanedTpls.length} 模板 + ${orphanedRules.length} 規則`);
+            };
+            listEl.appendChild(card);
+        });
+    }
+
+    // ================================================================
+    // V3：條件規則 modal（每個變數包自己一份規則）
+    // ================================================================
+    let _currentRulesPack = null;        // 當前開啟 modal 的 pack
+    let _editingRuleIdInModal = null;    // null / ruleId / '__new__'
+
+    function openRulesModal(container, pack) {
+        _currentRulesPack = pack;
+        _editingRuleIdInModal = null;
+        container.querySelector('#avs-rules-modal-title').textContent = pack.name;
+        container.querySelector('#avs-rules-modal').style.display = 'block';
+        renderRulesModalList(container);
+    }
+
+    function closeRulesModal(container) {
+        _currentRulesPack = null;
+        _editingRuleIdInModal = null;
+        container.querySelector('#avs-rules-modal').style.display = 'none';
+        // 規則數可能變了，刷新 pack 列表（重新計算 N 條規則徽章）
+        loadAllData(container);
+    }
+
+    // 規則窗口的「AI 生成條件規則」：★只生規則、不碰狀態/變數——餵當前 pack 的變數，用主模型
+    //   (general_assistant → OS_API_ENGINE.generateText = 主模型 generateRaw，不帶 preset/歷史)。生出的規則綁 packId、顯示在本窗口。
+    async function aiGenRulesForCurrentPack(container) {
+        const pack = _currentRulesPack;
+        if (!pack) return;
+        if (!Array.isArray(pack.variables) || !pack.variables.length) {
+            AUI.alert('這個檔案還沒有任何項目，先加變數再生成規則');
+            return;
+        }
+        if (!win.OS_AVS_RULES?.generateRulesForWorld) { AUI.alert('規則引擎未載入'); return; }
+        if (!win.OS_API_ENGINE?.generateText) { AUI.alert('主模型 API 引擎未就緒'); return; }
+        const btn = container.querySelector('#avs-rules-modal-aigen');
+        const orig = btn ? btn.textContent : '';
+        if (btn) { btn.textContent = '主模型生成中…'; btn.style.pointerEvents = 'none'; btn.style.opacity = '0.6'; }
+        try {
+            const callApi = (t, p) => win.OS_API_ENGINE.generateText(t, p, { task: 'avs_design' });   // 主模型路由
+            const n = await win.OS_AVS_RULES.generateRulesForWorld({
+                packId: pack.id,
+                worldId: '',
+                worldTitle: pack.name || '',
+                worldDesc: pack.notes || pack.name || '',
+                variables: pack.variables,
+                callApi
+            });
+            if (n > 0) {
+                if (AUI.toastr) AUI.toastr.success('AI 生成 ' + n + ' 條條件規則');
+                _editingRuleIdInModal = null;
+                renderRulesModalList(container);
+            } else if (AUI.toastr) {
+                AUI.toastr.warning('這次沒生出規則，再試一次或檢查主模型連線');
+            } else { AUI.alert('這次沒生出規則'); }
+        } catch (e) {
+            console.warn('[AVS] AI 生成條件規則失敗', e);
+            if (AUI.toastr) AUI.toastr.error('生成失敗：' + ((e && e.message) || e)); else AUI.alert('生成失敗');
+        } finally {
+            if (btn) { btn.textContent = orig; btn.style.pointerEvents = ''; btn.style.opacity = ''; }
+        }
+    }
+
+    const RULE_OPS = ['>=', '<=', '>', '<', '=', '!='];
+
+    function renderRuleEditForm(pack, rule, isNew) {
+        const id = isNew ? '__new__' : rule.id;
+        const safeId = String(id).replace(/'/g, '&#39;');
+        const fieldNames = (pack.variables || []).map(v => v.name).filter(Boolean);
+        const curPath = rule?.path || fieldNames[0] || '';
+        const curOp = rule?.op || '>=';
+        const curVal = rule?.value !== undefined ? String(rule.value) : '';
+        const curName = rule?.name || '';
+        const curContent = rule?.content || '';
+
+        return `<div class="avs-card" data-rule-edit="${id}" style="background:rgba(var(--os-tint-rgb), 0.97); border-color:var(--os-ink);">
+            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">名稱</span>
+                <input class="avs-input" data-rule-key="name" value="${escapeAttr(curName)}" placeholder="例：高好感親密化 / 末日緊張感">
+            </div>
+            <div style="display:flex; gap:6px; margin-bottom:8px;">
+                <div style="flex:2;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">項目</span>
+                    <select class="avs-select" data-rule-key="path">
+                        ${fieldNames.length === 0
+                          ? '<option value="">（檔案無項目）</option>'
+                          : fieldNames.map(n => `<option value="${escapeAttr(n)}" ${n === curPath ? 'selected' : ''}>${escapeHtml(n)}</option>`).join('')}
+                    </select>
+                </div>
+                <div style="flex:0 0 70px;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">運算</span>
+                    <select class="avs-select" data-rule-key="op">
+                        ${RULE_OPS.map(o => `<option value="${o}" ${o === curOp ? 'selected' : ''}>${o}</option>`).join('')}
+                    </select>
+                </div>
+                <div style="flex:1;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">值</span>
+                    <input class="avs-input" data-rule-key="value" value="${escapeAttr(curVal)}" placeholder="例 80">
+                </div>
+            </div>
+            <div style="margin-bottom:8px;"><span style="font-size:11px; color:rgba(var(--os-ink-rgb), 0.35);">注入內容（給主模型看的指示）</span>
+                <textarea class="avs-textarea" data-rule-key="content" style="min-height:60px;" placeholder="條件滿足時主模型該怎麼寫劇情。例：對主角的稱呼從「你」改為親暱稱呼，對話帶撒嬌語氣">${escapeHtml(curContent)}</textarea>
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <div class="avs-btn avs-btn-outline" onclick="window.OS_AVS?._cancelEditRule?.()">取消</div>
+                <div class="avs-btn avs-btn-primary" onclick="window.OS_AVS?._saveEditRule?.('${safeId}')">${isNew ? '新增' : '儲存'}</div>
+            </div>
+        </div>`;
+    }
+
+    function renderRulesModalList(container) {
+        if (!_currentRulesPack) return;
+        const listEl = container.querySelector('#avs-rules-modal-list');
+        if (!listEl) return;
+        const pack = _currentRulesPack;
+        const allRules = win.OS_AVS_RULES?.loadRules?.() || [];
+        const packRules = allRules.filter(r => r.packId === pack.id);
+
+        let html = '';
+        for (const r of packRules) {
+            if (_editingRuleIdInModal === r.id) {
+                html += renderRuleEditForm(pack, r, false);
+                continue;
+            }
+            const enabled = r.enabled !== false;
+            html += `<div class="avs-card" style="${!enabled ? 'opacity:0.5;' : ''}">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <strong style="color:var(--os-ink); font-size:13px;">${escapeHtml(r.name || '未命名規則')}</strong>
+                    <div style="display:flex; gap:6px; flex-shrink:0;">
+                        <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._toggleRule?.('${escapeAttr(r.id)}')">${enabled ? '啟用' : '停用'}</div>
+                        <div class="avs-btn avs-btn-outline" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._editRule?.('${escapeAttr(r.id)}')">編輯</div>
+                        <div class="avs-btn avs-btn-danger" style="padding:4px 10px; font-size:11px;" onclick="window.OS_AVS?._delRule?.('${escapeAttr(r.id)}')"><i class="fa-solid fa-xmark"></i></div>
+                    </div>
+                </div>
+                <div style="font-size:12px; margin-top:6px; color:rgba(var(--os-ink-rgb), 0.68); font-family:monospace;">
+                    ${escapeHtml(r.path || '?')} <span style="color:var(--os-ink); margin:0 4px;">${r.op}</span> <span style="color:var(--os-ink);">${escapeHtml(String(r.value ?? ''))}</span>
+                </div>
+                <div style="font-size:12px; margin-top:6px; color:rgba(var(--os-ink-rgb), 0.78); line-height:1.6;">${escapeHtml(r.content || '（無注入內容）')}</div>
+            </div>`;
+        }
+        if (_editingRuleIdInModal === '__new__') {
+            html += renderRuleEditForm(pack, null, true);
+        }
+        if (!packRules.length && _editingRuleIdInModal !== '__new__') {
+            html = `<div style="text-align:center; padding:40px 20px; color:rgba(var(--os-ink-rgb), 0.20); font-size:12px;">
+                這個檔案還沒設規則。點下方「＋ 添加規則」開始。
+            </div>` + html;
+        }
+        listEl.innerHTML = html;
+    }
+
+    // escape helpers（os_avs.js 內未必有，定義一下）
+    function escapeHtml(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function escapeAttr(s) {
+        return String(s ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    // 🪶 簡易預設：一鍵套「角色狀態(形象/身分/好感度)」，跳過 AI 生成。
+    //    入口在「狀態檔案」的建檔畫面（os_avs_state.js 的 #avs-st-preset）；這裡是實作本體。
+    async function applySimplePreset(btnEl) {
+            if (!await AUI.confirm('套用「簡易預設」檔案？\n每個角色追蹤：形象(髮色/眼色/體型)、身分、好感度。\n適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。')) return;
+            const _o = btnEl && btnEl.textContent;
+            if (btnEl) { btnEl.textContent = '套用中...'; btnEl.style.pointerEvents = 'none'; }
+            try {
+                const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+                // 已有「簡易預設」就沿用同 id 覆蓋(不另建重複包)；重套＝更新結構，不重置已記錄的角色資料
+                let _existingId = '';
+                try { const _all = await win.OS_DB.getAllVarPacks() || []; const _e = _all.find(p => (p.name || '').includes('簡易預設') && (!p.chatId || p.chatId === currentChatId)); if (_e) _existingId = _e.id; } catch(e) {}
+                const pack = {
+                    id: _existingId || ('pack_' + Date.now()),
+                    name: '簡易預設（形象/身分/好感度）',
+                    notes: '輕量預設：每個角色追蹤 形象(髮色/眼色/體型)、身分、好感度。新角色登場自動套這組。適合只想簡單跑劇情；想複雜可改走「AI 從世界生成」。',
+                    // 物件型必須給「縮排結構範本」(parseTree 解析)，副模型才看得到固定子欄位、不會每輪亂編結構而導致覆蓋。外層用變數名包裝當範本(會被剝掉)。
+                    variables: [{
+                        name: '主線目標',
+                        type: 'string',
+                        defaultValue: '',
+                        desc: '整個故事的核心目標／最初接下的任務，一句話講清「為什麼出發、最終要達成什麼」。穩定錨點：開場確立後固定不動，跑團再深也別覆蓋（防 AI 忘記初衷）。跟「當前任務」不同——當前任務每輪會變、主線目標幾乎不動；劇情明確翻轉主線才改。'
+                    }, {
+                        name: '角色狀態',
+                        type: 'object',
+                        defaultValue: '角色狀態:\n  髮色: 待定\n  眼色: 待定\n  體型: 待定\n  身分: 待定\n  好感度: 0',
+                        desc: '每個「有意義的具名角色」的即時狀態。固定基礎屬性(每個角色同一組、全部平鋪不要再分層、順序一致)：髮色、眼色、體型、身分、好感度(0-100，對主角MC的好感，純數字不加符號)。'
+                            + '【更新方式】用點記法只更新有變化的「單一屬性」，固定三層「角色狀態.角色名.屬性」(例：角色狀態.愛麗絲.好感度、角色狀態.愛麗絲.髮色)，不要再多包一層、不要整包重寫、沒變的別動，避免洗掉其他角色與屬性。'
+                            + '【誰要記】只記有名字、對劇情有份量的人物角色；雜魚/怪獸/野生動物/路人敵兵這類不要當角色(除非是有劇情份量的具名角色)。'
+                            + '【主角MC例外】主角 / MC / {{user}} 本人「不要好感度」→ 好感度欄填 null，其餘欄照記。'
+                            + '新角色登場時按固定基礎屬性組補齊每一欄初值。'
+                    }],
+                    chatId: currentChatId
+                };
+                await win.OS_DB.saveVarPack(pack);
+                // 把現有資料的舊「形象」巢狀一併攤平(形象.髮色 → 髮色)，跟新的平結構對齊、不丟角色
+                try {
+                    const _eng = win._AVS_ENGINE; const _st = _eng?.read?.();
+                    if (_st && _st['角色狀態'] && typeof _st['角色狀態'] === 'object') {
+                        for (const _ent of Object.values(_st['角色狀態'])) {
+                            if (_ent && typeof _ent === 'object' && _ent['形象'] && typeof _ent['形象'] === 'object') {
+                                for (const [_k, _v] of Object.entries(_ent['形象'])) if (_ent[_k] === undefined) _ent[_k] = _v;
+                                delete _ent['形象'];
+                            }
+                        }
+                        _eng.write(_st);
+                    }
+                } catch(e) {}
+                // 附一個「內建簡單面板」：沒有美化面板時自動裝+啟用，朋友/測試期不用每次叫 AI 生（有 AI 面板就不搶）
+                try {
+                    const _DEF_HTML = '<div class="avsdef-wrap"><div class="avsdef-quest"><i class="fa-solid fa-bullseye"></i> 主線目標：{{主線目標}}</div><div class="avsdef-title"><i class="fa-solid fa-clipboard"></i> 角色狀態</div><div class="avsdef-grid">{{#each 角色狀態}}<div class="avsdef-card"><div class="avsdef-hd"><img class="avsdef-ava" src="{{@avatar}}"><div class="avsdef-name">{{@key}}</div></div><div class="avsdef-row"><span class="avsdef-k">身分</span><span class="avsdef-v">{{身分}}</span></div><div class="avsdef-row"><span class="avsdef-k">好感度</span><span class="avsdef-v avsdef-fav">{{好感度}}</span></div><div class="avsdef-sep"></div><div class="avsdef-row"><span class="avsdef-k">髮色</span><span class="avsdef-v">{{髮色}}</span></div><div class="avsdef-row"><span class="avsdef-k">眼色</span><span class="avsdef-v">{{眼色}}</span></div><div class="avsdef-row"><span class="avsdef-k">體型</span><span class="avsdef-v">{{體型}}</span></div></div>{{/each}}</div></div>';
+                    const _DEF_CSS = '.avsdef-wrap{font-family:-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;padding:4px 0;}.avsdef-quest{font-size:12px;color:#5a4a78;background:rgba(120,90,160,0.10);border:1px solid rgba(120,90,160,0.18);border-radius:8px;padding:8px 10px;margin:0 0 10px;line-height:1.5;}.avsdef-title{font-size:15px;font-weight:700;color:#7a5fb0;letter-spacing:1px;margin:0 0 10px 2px;}.avsdef-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;}.avsdef-card{background:#fff;border:1px solid rgba(120,90,160,0.18);border-radius:14px;padding:12px 14px;box-shadow:0 2px 8px rgba(120,90,160,0.08);}.avsdef-hd{display:flex;align-items:center;gap:9px;margin-bottom:8px;border-bottom:1px dashed rgba(120,90,160,0.25);padding-bottom:8px;}.avsdef-ava{width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;background:rgba(120,90,160,0.08);border:1px solid rgba(120,90,160,0.2);}.avsdef-name{font-size:15px;font-weight:800;color:#5a4a78;}.avsdef-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:3px 0;font-size:12px;}.avsdef-k{color:#9a90b0;flex-shrink:0;}.avsdef-v{color:#3a3450;font-weight:600;text-align:right;word-break:break-word;}.avsdef-fav{color:#e0608a;}.avsdef-sep{height:1px;background:rgba(120,90,160,0.10);margin:5px 0;}';
+                    const _allTpls = (await win.OS_DB.getAllUITemplates?.()) || [];
+                    const _mine = _allTpls.filter(t => t.packId === pack.id);
+                    const _hasActive = _mine.some(t => t.isActive);
+                    const _defId = 'tpl_default_' + pack.id;
+                    if (!_mine.some(t => t.id === _defId)) {
+                        await win.OS_DB.saveUITemplate({
+                            id: _defId, packId: pack.id, packName: pack.name,
+                            cssContent: _DEF_CSS, htmlContent: _DEF_HTML,
+                            isActive: !_hasActive, isDefault: true, createdAt: Date.now()
+                        });
+                        const _all2 = (await win.OS_DB.getAllUITemplates?.()) || [];
+                        _saveActiveTplCache(_all2.filter(t => t.isActive));
+                    }
+                } catch(e) { console.warn('[AVS] 內建簡單面板安裝失敗:', e); }
+                if (_appContainer) await loadAllData(_appContainer);
+                await syncVarPackToLorebook();
+                if (AUI.toastr) AUI.toastr.success('已套用簡易預設檔案');
+                try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}   // 從狀態面板初始引導觸發時，套用後刷新該面板（init 卡 → 追蹤視圖）
+                if (win.OS_STATE_RUNTIME?.extractOnce) {
+                    setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
+                }
+            } catch (e) {
+                console.error('[AVS] 套用簡易預設失敗:', e);
+                AUI.alert('套用失敗：' + (e?.message || e));
+        } finally {
+            if (btnEl) { btnEl.textContent = _o; btnEl.style.pointerEvents = ''; }
+        }
+    }
+
+    // 🌌 視差通用預設：世界門專用的一鍵建檔，跳過 AI。跟簡易預設並列、互不影響。
+    //    跟簡易預設的差別＝多了視差跑團真正會變的三樣東西：
+    //      ① 所在世界（同一個聊天室會前後進不同世界，沒這欄 AI 會把上一個世界的設定串進來）
+    //      ② 貨幣（每個世界都有錢，只是叫法不同；單位穩定、持有走 delta）
+    //      ③ 角色狀態多一欄「形態」（DIVE 開場就會把人改造成能在該世界生存的樣子，
+    //         只有髮色眼色體型三欄的話，AI 跑兩輪就滑回人類描寫）
+    //    skin＝'prism' | 'cheshire'：兩張皮都會裝進同一個包，點的那張設為啟用，
+    //    之後隨時能在 UI 面板展廳切換（同包只會有一個啟用中）。
+    async function applyParallaxPreset(btnEl, skin) {
+        // 🚨不要用 confirm 問「確定嗎」——TauriTavern 會擋掉原生彈窗，按了等於沒反應。
+        //   兩張皮各給一顆按鈕，點下去就是決定，不需要再確認一次。
+        const _o = btnEl && btnEl.textContent;
+        if (btnEl) { btnEl.textContent = '套用中...'; btnEl.style.pointerEvents = 'none'; }
+        try {
+            const currentChatId = win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '';
+            let _existingId = '';
+            try {
+                const _all = await win.OS_DB.getAllVarPacks() || [];
+                const _e = _all.find(p => (p.name || '').includes('視差預設') && (!p.chatId || p.chatId === currentChatId));
+                if (_e) _existingId = _e.id;
+            } catch (e) {}
+            const pack = {
+                id: _existingId || ('pack_' + Date.now()),
+                name: '視差預設（世界門）',
+                notes: '世界門專用：追蹤所在世界、本趟目標、當地貨幣，以及每個角色的形態／身分／好感度與外貌三欄。面板有稜鏡與柴郡兩張皮，可在 UI 面板切換。',
+                variables: [{
+                    name: '所在世界',
+                    type: 'string',
+                    defaultValue: '',
+                    desc: '玩家現在人在哪個視差世界（世界檔案上的名字）。穩定錨點：進入時確立後固定不動，'
+                        + '直到玩家撤離並進入另一個世界才改。同一個聊天室會前後去過好幾個世界，這一欄是用來擋「把上一個世界的設定串進來」的。'
+                }, {
+                    name: '本趟目標',
+                    type: 'string',
+                    defaultValue: '',
+                    desc: '這一趟進來想達成什麼，一句話講清「為什麼來、要拿到什麼才算沒白來」。穩定錨點：開場確立後固定不動，'
+                        + '劇情明確翻轉才改。跟每輪都在變的當前任務不同。撤離後進新世界時整句換掉。'
+                }, {
+                    name: '貨幣',
+                    type: 'object',
+                    defaultValue: '貨幣:\n  單位: 待定\n  持有: 0',
+                    desc: '玩家在這個世界身上的錢。固定兩欄：單位、持有。'
+                        + '【單位】這個世界的貨幣叫什麼（世界檔案第六節寫過的那個名稱）。開場確立後就固定不動，'
+                        + '不准中途改叫法——換個叫法會讓帳對不起來。換世界才換單位並把持有歸零重記。'
+                        + '【持有】純數字不加單位符號。收支用增減寫法只寫變化量（例：貨幣.持有 += 30、貨幣.持有 -= 12），'
+                        + '不要每輪重寫絕對值，只有一開始給初值時才寫絕對值。'
+                        + '這是世界裡的錢，跟視差自己的 PT 是兩回事，不要混在一起記。'
+                }, {
+                    name: '角色狀態',
+                    type: 'object',
+                    defaultValue: '角色狀態:\n  形態: 待定\n  髮色: 待定\n  眼色: 待定\n  體型: 待定\n  身分: 待定\n  好感度: 0',
+                    desc: '每個「有意義的具名角色」的即時狀態。固定基礎屬性（每個角色同一組、全部平鋪不要再分層、順序一致）：'
+                        + '形態、髮色、眼色、體型、身分、好感度（0-100，對主角MC的好感，純數字不加符號）。'
+                        + '【形態】這個世界的法則把他的身體改造成什麼樣子（抵達時就會發生），要寫得看得出來不是人類，例如尾巴顏色、鰓、鰭耳、鱗片。'
+                        + '本來就是人類形態的世界就寫人類。這一欄比外貌三欄重要，全篇都要照它描寫身體。'
+                        + '【身分】當地人怎麼理解這個人（外來者、同行旅人、某某行會的誰）。'
+                        + '【更新方式】用點記法只更新有變化的「單一屬性」，固定三層「角色狀態.角色名.屬性」'
+                        + '（例：角色狀態.賀嵐.好感度、角色狀態.賀嵐.形態），不要再多包一層、不要整包重寫、沒變的別動。'
+                        + '【誰要記】只記有名字、對劇情有份量的人物；雜魚／怪獸／野生動物／路人這類不要當角色。'
+                        + '【主角MC例外】主角 / MC / {{user}} 本人「不要好感度」→ 好感度欄填「—」（一個破折號，不要填 null，會被原樣印在面板上）。'
+                        + '新角色登場時按固定基礎屬性組補齊每一欄初值。'
+                }],
+                chatId: currentChatId
+            };
+            await win.OS_DB.saveVarPack(pack);
+
+            // 兩張皮都裝進同一個包：點的那張啟用，另一張留著備用。
+            // 同包只能有一個啟用中（展廳的切換邏輯會自動關掉另一個），所以這裡也要自己守住。
+            const SK = win.OS_AVS_SKINS || {};
+            const want = (skin === 'cheshire') ? 'cheshire' : 'prism';
+            try {
+                for (const key of ['prism', 'cheshire']) {
+                    const s = SK[key];
+                    if (!s) continue;
+                    await win.OS_DB.saveUITemplate({
+                        id: 'tpl_px_' + key + '_' + pack.id,
+                        packId: pack.id, packName: pack.name,
+                        cssContent: s.css, htmlContent: s.html,
+                        isActive: key === want, isDefault: true, createdAt: Date.now()
+                    });
+                }
+                const _all2 = (await win.OS_DB.getAllUITemplates?.()) || [];
+                // 同包裡「不是這次選的」那些舊模板一律取消啟用，避免兩張皮同時亮著互相蓋
+                for (const t of _all2) {
+                    if (t.packId === pack.id && t.isActive && t.id !== 'tpl_px_' + want + '_' + pack.id) {
+                        t.isActive = false;
+                        await win.OS_DB.saveUITemplate(t);
+                    }
+                }
+                const _all3 = (await win.OS_DB.getAllUITemplates?.()) || [];
+                _saveActiveTplCache(_all3.filter(t => t.isActive));
+            } catch (e) { console.warn('[AVS] 視差面板皮安裝失敗:', e); }
+
+            if (_appContainer) await loadAllData(_appContainer);
+            await syncVarPackToLorebook();
+            if (AUI.toastr) AUI.toastr.success('已套用視差預設（' + (SK[want]?.label || want) + '）；想換另一張皮到 UI 面板切換');
+            try { win.OS_AVS_STATE?.refresh?.(); } catch (e) {}
+            if (win.OS_STATE_RUNTIME?.extractOnce) {
+                setTimeout(() => { try { win.OS_STATE_RUNTIME.extractOnce({ skipScenes: true }); } catch (e) {} }, 500);
+            }
+        } catch (e) {
+            console.error('[AVS] 套用視差預設失敗:', e);
+            AUI.alert('套用失敗：' + (e?.message || e));
+        } finally {
+            if (btnEl) { btnEl.textContent = _o; btnEl.style.pointerEvents = ''; }
+        }
+    }
+
+    // ＋ 建新檔案：開空白的變數包編輯器（自己填欄位名／型別／預設值／說明，不經過 AI）。
+    //    入口在建檔畫面的「自己建」；這裡確保檔案區塊看得到再開編輯器。
+    function openNewPackEditor() {
+        if (!_appContainer) return false;
+        try { _appContainer.querySelector('#avs-view-packs')?.classList.add('active'); } catch (e) {}
+        openPackEditor(_appContainer, null);
+        try { _scrollToTopInBox(_appContainer.querySelector('#avs-pack-editor')); } catch (e) {}
+        return true;
+    }
+    // 只捲編輯器所在那一格，讓它頂端對齊（＝scrollIntoView 的 block:start）。
+    //   scrollIntoView 會連外層一起捲：編輯器剛打開、狀態面板可能還在滑進來，整個面板會卡在兩頁中間
+    function _scrollToTopInBox(el) {
+        if (!el) return;
+        let box = el.parentElement;
+        while (box && box !== document.body && box !== document.documentElement) {
+            const oy = getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box || box === document.body || box === document.documentElement) return;
+        const top = box.scrollTop + el.getBoundingClientRect().top - box.getBoundingClientRect().top - box.clientTop;
+        box.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    }
+
+    function bindPackEditorEvents(container) {
+        const btnSave = container.querySelector('#avs-btn-save-pack');
+        const btnCancel = container.querySelector('#avs-btn-cancel-pack');
+        const btnAddVar = container.querySelector('#avs-btn-add-var');
+        const rowsContainer = container.querySelector('#avs-var-rows-container');
+
+        btnCancel.onclick = () => { container.querySelector('#avs-pack-editor').style.display = 'none'; container.querySelector('#avs-pack-list').style.display = 'flex'; };
+        btnAddVar.onclick = () => addVarRow(rowsContainer, '', '', '', 'string');
+
+        btnSave.onclick = async () => {
+            const name = container.querySelector('#avs-pack-name').value;
+            if (!name) return;
+            const variables = [];
+            rowsContainer.querySelectorAll('.avs-var-row').forEach(row => {
+                const vn = row.querySelector('.var-name').value;
+                if (!vn) return;
+                const vtype = row.querySelector('.var-type')?.value || 'string';
+                // 物件型的預設值來自大文字框（var-default-obj），其餘來自單行 input
+                const defVal = vtype === 'object'
+                    ? (row.querySelector('.var-default-obj')?.value || '')
+                    : (row.querySelector('.var-default')?.value || '');
+                variables.push({
+                    name: vn,
+                    defaultValue: defVal,
+                    desc: row.querySelector('.var-desc')?.value || '',
+                    type: vtype
+                });
+            });
+            // 🚨 新建的包要綁在這個故事上：以前沒帶 chatId → 清單只列綁這個故事的，看不到它；
+            //    抽取那邊卻把沒有 chatId 的包當全域，套到每一本故事。編輯既有的包照原本的綁定不動
+            const pack = activeEditingPack ? { ...activeEditingPack } : { id: 'pack_' + Date.now(), chatId: win.OS_AVS_ADAPTER?.getCurrentChatId?.() || '' };
+            pack.name = name; pack.notes = container.querySelector('#avs-pack-notes').value; pack.variables = variables;
+            await win.OS_DB.saveVarPack(pack);
+            btnCancel.onclick(); await loadAllData(container);
+            await syncVarPackToLorebook();
+        };
+    }
+
+    // ================================================================
+    // UI 模板渲染引擎：{{變數}} 佔位符 + {{#each 容器}}...{{/each}} 迴圈
+    //   迴圈用於 object 型變數（如「角色狀態」），對每個實體重複渲染卡片
+    //   迴圈內可用 {{@key}}（實體名）與 {{屬性名}}（該實體的屬性值）
+    //   → 跑團新增的角色會自動長出卡片，不必重煉
+    // ================================================================
+    function _avsGetByPath(obj, path) {
+        const keys = String(path).split('.');
+        let cur = obj;
+        for (const k of keys) {
+            if (cur == null || typeof cur !== 'object') return undefined;
+            cur = cur[k];
+        }
+        return cur;
+    }
+    function _avsRenderTemplate(html, state, packVars, fmt, avatarMap) {
+        // 填進面板的值（角色名、欄位名、欄位值、頭像網址）都是模型抽的：一律轉義成純文字再放（屬性裡、字裡都安全，畫面上的字不變）
+        //   面板本身（html）是 AI 寫的版型，由呼叫端整份過 AUI.safeHtml（對外的 renderTemplate 已經包好）
+        const _fmt0 = fmt || (v => String(v == null ? '' : v));
+        const f = v => _avsEsc(_fmt0(v));
+        const _js = v => _avsEsc(JSON.stringify(v));
+        const _AV = avatarMap || {};
+        const _TPX = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';   // 透明 1px：沒頭像時用，避免破圖 icon
+        let out = String(html || '');
+        // 1. {{#each 容器}}...{{/each}} 迴圈塊（object 型變數用）
+        const _avsDeepMerge = (base, over) => {
+            if (over == null) return base;
+            if (typeof base !== 'object' || typeof over !== 'object' || Array.isArray(base) || Array.isArray(over)) return over;
+            const o = { ...base };
+            for (const k of Object.keys(over)) o[k] = _avsDeepMerge(base[k], over[k]);
+            return o;
+        };
+        // 把一層巢狀攤平：{形象:{髮色,眼色}} → {髮色,眼色}（相容舊的「形象」分層資料，讓 {{髮色}} 讀得到）
+        const _avsFlatObj = (o) => { const r = {}; for (const [k, v] of Object.entries(o || {})) { if (v && typeof v === 'object' && !Array.isArray(v)) { for (const [k2, v2] of Object.entries(v)) r[k2] = v2; } else r[k] = v; } return r; };
+        out = out.replace(/\{\{#each\s+([^\s{}]+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (m, containerPath, innerTpl) => {
+            const container = _avsGetByPath(state, containerPath);
+            // 取「每實體範本」(剝掉自包裝)，逐實體補初值；不再把整個 {變數名:範本} 灌進容器(那正是多出鬼實體的原因)
+            let entTpl = {};
+            const pv = (packVars || []).find(v => v.name === containerPath && v.type === 'object');
+            if (pv) {
+                try {
+                    const tree = win._AVS_ENGINE?.parseTree?.(pv.defaultValue) || {};
+                    const tk = Object.keys(tree);
+                    entTpl = _avsFlatObj((tk.length === 1 && tk[0] === containerPath) ? tree[containerPath] : tree);
+                } catch(e) {}
+            }
+            if (!container || typeof container !== 'object') return '';
+            let blocks = '';
+            for (const [entityKey, entityValRaw] of Object.entries(container)) {
+                if (entityKey === containerPath) continue;                       // 跳過自包裝範本鍵(鬼實體)
+                if (entityValRaw === null || entityValRaw === undefined) continue;
+                // 純量/陣列成員不再整個丟掉：混合群組(如 MC財富與交易)被模板誤用 {{#each}} 時，
+                // 金錢餘額(數字)原本被當「範本殘留」跳過＝欄位直接消失。包成單欄位偽實體照樣渲染。
+                const flatReal = Array.isArray(entityValRaw)
+                    ? Object.fromEntries(entityValRaw.map((x, i) => [String(i + 1), x]))
+                    : (typeof entityValRaw === 'object') ? _avsFlatObj(entityValRaw)
+                    : { [entityKey]: entityValRaw };                              // 這個實體「實際擁有」的欄位(攤平)
+                const entityVal = { ...entTpl, ...flatReal };                     // 範本當底 + 實體(舊「形象」巢狀也攤平)
+                let block = innerTpl;
+                block = block.split('{{@key}}').join(_avsEsc(entityKey));
+                block = block.split('{{@avatar}}').join(_avsEsc(_AV[entityKey] || _TPX));   // 角色頭像：用角色名去頭像庫撈，沒有就透明
+                // {{#fields}}…{{/fields}}：逐欄位自動展開「這個實體實際有的欄位」→ 異質角色各畫各的、跑團新增欄位也自動出現、永不漏
+                //   列裡用 {{@label}}=欄位名、{{@value}}=欄位值。模板不必寫死欄位名（治「卡片只剩固定幾列、多的角色被切」）
+                block = block.replace(/\{\{#fields\}\}([\s\S]*?)\{\{\/fields\}\}/g, (mm, rowTpl) => {
+                    let rows = '';
+                    for (const [fk, fv] of Object.entries(flatReal)) {
+                        if (fv && typeof fv === 'object' && !Array.isArray(fv)) continue;   // 巢狀物件不適合當單列(略過)
+                        const val = (fv === null || fv === undefined || fv === '') ? '—'
+                            : Array.isArray(fv) ? fv.map(x => (x && typeof x === 'object') ? _avsEsc(Object.values(x).join('·')) : f(x)).join('、')
+                            : f(fv);
+                        rows += rowTpl.split('{{@label}}').join(_avsEsc(fk)).split('{{@value}}').join(val);
+                    }
+                    return rows;
+                });
+                for (const [ak, av] of Object.entries(entityVal)) {
+                    const sv = (av && typeof av === 'object') ? _js(av) : f(av);
+                    block = block.split(`{{${ak}}}`).join(sv);
+                }
+                // 剩餘 {{x}} / {{x.y}}：用點記法在「原始(未攤平)實體」上找 → 相容 AI 生的巢狀佔位符(如 {{形象.體型}})，找不到才 —
+                block = block.replace(/\{\{([^{}]+)\}\}/g, (mm, expr) => {
+                    const key = String(expr).trim();
+                    if (key === '@key') return _avsEsc(entityKey);
+                    if (key === '@avatar') return _avsEsc(_AV[entityKey] || _TPX);
+                    const val = _avsGetByPath(entityValRaw, key);
+                    return (val === undefined || val === null) ? '—' : (typeof val === 'object' ? _js(val) : f(val));
+                });
+                blocks += block;
+            }
+            return blocks;
+        });
+        // 清單美化：陣列→逐行文字（物件元素取值串接）；空陣列給 —
+        const _avsListText = (arr) => arr.length
+            ? arr.map(x => (x && typeof x === 'object')
+                ? (Array.isArray(x) ? x.map(f).join('·') : Object.values(x).map(f).join('·'))
+                : f(x)).join('<br>')
+            : '—';
+        // 2. 一般佔位符 {{變數}}（扁平變數；object 型已由 each 處理，跳過）
+        //    ⚠️ 陣列也是 object——list 型變數({{委託日誌}}/{{MC物品欄}}等)原本被這行跳過、
+        //    最後被「殘留佔位符→—」清掉＝清單永遠空白的真兇。陣列改成逐行渲染。
+        Object.entries(state || {}).forEach(([k, v]) => {
+            if (Array.isArray(v)) { out = out.split(`{{${k}}}`).join(_avsListText(v)); return; }
+            if (v && typeof v === 'object') return;
+            out = out.split(`{{${k}}}`).join(f(v));
+        });
+        (packVars || []).forEach(v => {
+            if (v.type === 'object') return;
+            out = out.split(`{{${v.name}}}`).join(f(v.defaultValue == null ? '0' : v.defaultValue));
+        });
+        // 2.5 頂層巢狀佔位符 {{群組.欄位}}（單一群組物件用，如 {{系統進度.當前時間}}）：
+        //     {{#each}} 已在步驟1消化；這裡把剩下含「.」的點記法直接打到 state 上取值，找不到才留給步驟3 變 —
+        out = out.replace(/\{\{\s*([^#\/@{}][^{}]*?)\s*\}\}/g, (mm, expr) => {
+            const key = String(expr).trim();
+            if (key.indexOf('.') < 0) return mm;          // 扁平的（前面已處理／留給步驟3）
+            const val = _avsGetByPath(state, key);
+            if (val === undefined || val === null) return mm;
+            if (Array.isArray(val)) return _avsListText(val);   // 點記法取到清單(如 {{MC財富與交易.交易日誌}})→逐行,別吐 JSON
+            return (typeof val === 'object') ? _js(val) : f(val);
+        });
+        // 3. 殘留佔位符 → —
+        //    🚨 這行是「面板欄位不顯示」的黑洞：模板寫死的鍵名一旦跟資料對不上
+        //    （換過變數包／欄位改名／副模型換了寫法），佔位符會被靜默吃掉變「—」，
+        //    跟「這欄真的沒值」在畫面上長得一模一樣 → 每次都查半天。
+        //    → 把被吃掉的佔位符印出來，附上資料實際有的鍵，一眼看出是名字不合還是真的空。
+        const _eaten = [];
+        out = out.replace(/\{\{[^{}]+\}\}/g, (mm) => { _eaten.push(String(mm)); return '—'; });
+        if (_eaten.length) {
+            try {
+                const _keys = Object.keys(state || {}).map(k => {
+                    const v = state[k];
+                    if (Array.isArray(v)) return k + '[清單]';
+                    if (v && typeof v === 'object') return k + '{' + Object.keys(v).join('・') + '}';
+                    return k;
+                });
+                console.warn('[AVS UI] 這張面板有 ' + _eaten.length + ' 個佔位符對不上資料、被顯示成「—」：'
+                    + [...new Set(_eaten)].join(' ')
+                    + '\n   資料實際有的鍵：' + (_keys.join('｜') || '（空）')
+                    + '\n   ↑ 名字對得上就是真的沒值；對不上＝面板是舊 schema 煉的、資料已經換成新變數包了'
+                    + ' → 要重新煉丹一張面板（✏️ 微調只改外觀、補不回對不上的欄位）。');
+            } catch (e) {}
+        }
+        return out;
+    }
+
+    // ================================================================
+    // 單一角色卡：從啟用中的面板裡，只畫某一個角色那一格（{{#each 容器}} 那段）
+    //   給劇情雙擊立繪的角色卡用——面板做成什麼樣的角色卡，雙擊就顯示什麼樣。
+    //   做法：整張照常畫（同一支渲染引擎），每個角色那段前後插註解當記號，
+    //   畫完只撿這個角色那幾個節點；外面那幾層容器只複製外殼（保留 class，面板 CSS 才對得上），
+    //   版面由呼叫端歸零（class avs-one-anc）。
+    //   回 { css, html } ；沒有啟用的面板、面板沒有逐角色那段、或這個角色不在裡面 → null。
+    // ================================================================
+    function _avsScopeCss(css, scopeSel) {
+        // @keyframes 裡的 from/to/百分比不是選擇器：先整塊抽走，前綴加完再放回去
+        const kept = [];
+        let src = String(css || ''), out = '';
+        for (;;) {
+            const m = /@(?:-webkit-)?keyframes[^{]*\{/i.exec(src);
+            if (!m) { out += src; break; }
+            let i = m.index + m[0].length, depth = 1;
+            while (i < src.length && depth) { if (src[i] === '{') depth++; else if (src[i] === '}') depth--; i++; }
+            out += src.slice(0, m.index) + '/*AVSKF' + kept.length + '*/';
+            kept.push(src.slice(m.index, i));
+            src = src.slice(i);
+        }
+        out = out.replace(/([^{}]+)\{/g, (mm, sel) => {
+            // 抽走的 keyframes 記號會黏在下一段選擇器前面：原樣留著；@media / @supports 這種不是選擇器，不加前綴
+            const lead = (sel.match(/^(?:\s*\/\*AVSKF\d+\*\/)+/) || [''])[0];
+            const rest = sel.slice(lead.length).replace(/\/\*[\s\S]*?\*\//g, '');
+            if (/^\s*@/.test(rest)) return lead + rest + '{';
+            return lead + rest.split(',').map(s => {
+                const t = s.trim();
+                if (!t) return s;
+                if (/^(?::root|html|body)\b/i.test(t)) return t.replace(/^(?::root|html|body)\b/i, scopeSel);
+                return scopeSel + ' ' + t;
+            }).join(', ') + ' {';
+        });
+        return out.replace(/\/\*AVSKF(\d+)\*\//g, (mm, n) => kept[+n] || '');
+    }
+    async function _avsRenderEntityCard(name, scopeSel) {
+        const who = String(name || '').trim();
+        if (!who) return null;
+        let tpls = null;
+        try { if (win.OS_DB?.getAllUITemplates) tpls = ((await win.OS_DB.getAllUITemplates()) || []).filter(t => t.isActive); }
+        catch (e) { tpls = null; }
+        if (!tpls) { try { tpls = JSON.parse(localStorage.getItem('avs_active_ui_templates') || '[]'); } catch (e) { tpls = []; } }
+        tpls = tpls.filter(t => t && t.htmlContent && !t.isVNTag && !t.isBlock && !t.tagId);
+        if (!tpls.length) return null;
+        const state = win._AVS_ENGINE?.read?.() || {};
+        let packs = [];
+        try { packs = (await win.OS_DB?.getAllVarPacks?.()) || []; } catch (e) {}
+        const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v == null ? '' : v));
+        // 名字照狀態裡實際存的那把鑰匙找：劇情寫繁體（張偉）、面板存簡體（张伟）也是同一個人（10-13）
+        const Z = win.OS_ZH || window.OS_ZH;
+        const pickIn = (c) => (Z && Z.pick) ? Z.pick(c, who) : (Object.prototype.hasOwnProperty.call(c, who) ? who : null);
+        for (const tpl of tpls) {
+            const html = String(tpl.htmlContent);
+            let hitPath = null, hitKey = null;
+            html.replace(/\{\{#each\s+([^\s{}]+)\}\}/g, (m, p) => {
+                const c = _avsGetByPath(state, p);
+                if (!hitPath && c && typeof c === 'object' && !Array.isArray(c)) { const k = pickIn(c); if (k != null && k !== p) { hitPath = p; hitKey = k; } }
+                return m;
+            });
+            if (!hitPath) continue;
+            const esc = hitPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const marked = html.replace(new RegExp('(\\{\\{#each\\s+' + esc + '\\}\\})([\\s\\S]*?)(\\{\\{\\/each\\}\\})', 'g'),
+                (m, a, inner, b) => a + '<!--avs-one:{{@key}}-->' + inner + '<!--/avs-one-->' + b);
+            const pack = packs.find(p => p.id === tpl.packId);
+            const packVars = pack ? (pack.variables || []) : [];
+            let avMap = {};
+            try { avMap = (await _avsBuildAvatarMap(state, packVars)) || {}; } catch (e) {}
+            // 頭像是照劇情台上的名字存的：面板鑰匙是另一種寫法時，用台上那個名字再找一次
+            if (!avMap[hitKey] && hitKey !== who) {
+                try { const av = await win.VN_Cache?.get?.('avatar_cache', who); const u = win.VN_Cache?.headOf ? win.VN_Cache.headOf(av) : (av && av.url); if (u) avMap[hitKey] = u; } catch (e) {}
+            }
+            let rendered = '';
+            try { rendered = _avsRenderTemplate(marked, state, packVars, fmt, avMap); } catch (e) { continue; }
+            const box = document.createElement('template');
+            box.innerHTML = rendered;
+            // 🚨 挑節點、包外殼都在 <template> 自己那份惰性文件裡做：搬進主頁面的 fragment 會讓 <img onerror> 當場載入、跑起來
+            const idoc = box.content.ownerDocument || document;
+            const walker = document.createTreeWalker(box.content, NodeFilter.SHOW_COMMENT);
+            let start = null;
+            const mark = 'avs-one:' + _avsEsc(hitKey);   // 記號裡的名字是轉義過才填進去的
+            while (walker.nextNode()) { if (walker.currentNode.data === mark) { start = walker.currentNode; break; } }
+            if (!start) continue;
+            const picked = idoc.createDocumentFragment();
+            for (let n = start.nextSibling; n && !(n.nodeType === 8 && n.data === '/avs-one'); n = n.nextSibling) picked.appendChild(n.cloneNode(true));
+            // 外面那幾層：只要外殼（class、屬性），裡面別的區塊一律不帶
+            let shell = picked;
+            for (let a = start.parentNode; a && a.nodeType === 1; a = a.parentNode) {
+                const c = a.cloneNode(false);
+                c.classList.add('avs-one-anc');
+                c.appendChild(shell);
+                shell = c;
+            }
+            const wrap = idoc.createElement('div');
+            wrap.appendChild(shell);
+            return { css: _avsStyle(_avsScopeCss(tpl.cssContent || '', scopeSel)), html: _avsSafe(wrap.innerHTML) };
+        }
+        return null;
+    }
+
+    // 預撈出場角色頭像：{角色名 → 頭像URL}，給模板的 {{@avatar}} 用。async(VN_Cache 是 IndexedDB)。
+    async function _avsBuildAvatarMap(state, packVars) {
+        const map = {};
+        try {
+            if (!win.VN_Cache?.get) return map;
+            const names = new Set();
+            (packVars || []).forEach(v => {
+                if (v.type !== 'object') return;
+                const c = state && state[v.name];
+                if (c && typeof c === 'object') Object.keys(c).forEach(k => { if (k !== v.name) names.add(k); });
+            });
+            for (const n of names) {
+                try { const av = await win.VN_Cache.get('avatar_cache', n); const u = win.VN_Cache.headOf ? win.VN_Cache.headOf(av) : (av && av.url); if (u) map[n] = u; } catch (e) {}
+            }
+        } catch (e) {}
+        return map;
+    }
+
+    // ================================================================
+    // 物件型變數的「遞迴資料夾樹」GUI（小白友善，免手寫 JSON）
+    //   📁 資料夾 = 容器，底下可遞迴放東西；🏷️ 數值 = 葉節點（名稱=值）
+    //   GUI 任何改動即時 serialize 寫回隱藏 textarea（.var-default-obj）
+    // ================================================================
+    function _avsCoerceVal(raw) {
+        const s = String(raw == null ? '' : raw).trim();
+        if (s === '' || s === '{}') return {};
+        if (s === '[]') return [];
+        if (s === 'true')  return true;
+        if (s === 'false') return false;
+        if (/^-?\d+(\.\d+)?$/.test(s)) return parseFloat(s);
+        if (/^".*"$/.test(s) || /^'.*'$/.test(s)) return s.slice(1, -1);
+        return s;
+    }
+    function _avsValToStr(v) {
+        if (v == null) return '';
+        if (typeof v === 'object') return Array.isArray(v) ? '[]' : '{}';
+        return String(v);
+    }
+    // 讀 DOM 樹 → JS 物件
+    function _avsSerializeTree(childrenEl) {
+        const obj = {};
+        for (const node of childrenEl.children) {
+            if (node.classList.contains('avs-obj-folder')) {
+                const ki = node.querySelector('.avs-obj-folder-head .avs-obj-key');
+                const key = ki ? ki.value.trim() : '';
+                if (!key) continue;
+                const childEl = node.querySelector('.avs-obj-children');
+                obj[key] = childEl ? _avsSerializeTree(childEl) : {};
+            } else if (node.classList.contains('avs-obj-leaf')) {
+                const ki = node.querySelector('.avs-obj-key');
+                const key = ki ? ki.value.trim() : '';
+                if (!key) continue;
+                const vi = node.querySelector('.avs-obj-val');
+                obj[key] = _avsCoerceVal(vi ? vi.value : '');
+            }
+        }
+        return obj;
+    }
+    // 把整棵樹 serialize 寫回該 row 的隱藏 textarea
+    function _avsSyncTree(anyEl) {
+        const row = anyEl.closest('.avs-var-row');
+        if (!row) return;
+        const rootChildren = row.querySelector('.var-obj-gui > .avs-obj-children');
+        const ta = row.querySelector('.var-default-obj');
+        if (rootChildren && ta) {
+            try { ta.value = JSON.stringify(_avsSerializeTree(rootChildren), null, 2); } catch(e) {}
+        }
+    }
+    // 葉節點：名稱 = 值
+    function _avsMakeLeaf(key, val) {
+        const el = document.createElement('div');
+        el.className = 'avs-obj-leaf';
+        el.style.cssText = 'display:flex; gap:6px; align-items:center; margin:3px 0;';
+        el.innerHTML = `
+            <span style="flex-shrink:0;"><i class="fa-solid fa-tag"></i></span>
+            <input class="avs-input avs-obj-key" placeholder="名稱" style="flex:1; font-size:12px;">
+            <span style="flex-shrink:0; color:var(--os-ink-soft);">=</span>
+            <input class="avs-input avs-obj-val" placeholder="值（數字/文字/{}）" style="flex:1; font-size:12px;">
+            <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;"><i class="fa-solid fa-xmark"></i></span>
+        `;
+        el.querySelector('.avs-obj-key').value = key != null ? String(key) : '';
+        el.querySelector('.avs-obj-val').value = _avsValToStr(val);
+        el.querySelector('.avs-obj-key').addEventListener('input', () => _avsSyncTree(el));
+        el.querySelector('.avs-obj-val').addEventListener('input', () => _avsSyncTree(el));
+        el.querySelector('.avs-obj-del').addEventListener('click', () => { const p = el.parentElement; el.remove(); if (p) _avsSyncTree(p); });
+        return el;
+    }
+    // 資料夾節點：底下可遞迴
+    function _avsMakeFolder(key, dataObj) {
+        const el = document.createElement('div');
+        el.className = 'avs-obj-folder';
+        el.style.cssText = 'margin:4px 0; border:1px solid rgba(26,28,40,0.10); border-radius:4px; padding:4px 6px; background:rgba(0,0,0,0.15);';
+        el.innerHTML = `
+            <div class="avs-obj-folder-head" style="display:flex; gap:6px; align-items:center;">
+                <span style="flex-shrink:0;"><i class="fa-solid fa-folder"></i></span>
+                <input class="avs-input avs-obj-key" placeholder="項目名" style="flex:1; font-size:12px; font-weight:600;">
+                <span class="avs-obj-del" style="cursor:pointer; color:#e74c3c; flex-shrink:0; padding:0 4px;"><i class="fa-solid fa-xmark"></i></span>
+            </div>
+            <div class="avs-obj-children" style="margin-left:14px; border-left:1px solid rgba(var(--os-ink-rgb), 0.08); padding-left:8px; margin-top:2px;"></div>
+        `;
+        const headKey = el.querySelector('.avs-obj-folder-head .avs-obj-key');
+        headKey.value = key != null ? String(key) : '';
+        headKey.addEventListener('input', () => _avsSyncTree(el));
+        el.querySelector('.avs-obj-folder-head .avs-obj-del').addEventListener('click', () => { const p = el.parentElement; el.remove(); if (p) _avsSyncTree(p); });
+        _avsRenderTree(el.querySelector('.avs-obj-children'), dataObj || {});
+        return el;
+    }
+    // 「+ 新增」工具列
+    function _avsMakeAddBar(childrenEl) {
+        const bar = document.createElement('div');
+        bar.className = 'avs-obj-addbar';
+        bar.style.cssText = 'display:flex; gap:6px; margin:4px 0;';
+        bar.innerHTML = `
+            <button type="button" class="avs-obj-add-folder" style="font-size:11px; padding:2px 8px; background:rgba(var(--os-ink-rgb), 0.12); border:1px solid rgba(var(--os-ink-rgb), 0.15); color:var(--os-ink); border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-folder"></i> 資料夾</button>
+            <button type="button" class="avs-obj-add-leaf" style="font-size:11px; padding:2px 8px; background:rgba(var(--os-ink-rgb), 0.12); border:1px solid rgba(var(--os-ink-rgb), 0.15); color:var(--os-ink); border-radius:3px; cursor:pointer;">+ <i class="fa-solid fa-tag"></i> 數值</button>
+        `;
+        bar.querySelector('.avs-obj-add-folder').addEventListener('click', () => {
+            childrenEl.insertBefore(_avsMakeFolder('', {}), bar);
+            _avsSyncTree(childrenEl);
+        });
+        bar.querySelector('.avs-obj-add-leaf').addEventListener('click', () => {
+            childrenEl.insertBefore(_avsMakeLeaf('', ''), bar);
+            _avsSyncTree(childrenEl);
+        });
+        return bar;
+    }
+    // 遞迴渲染：JS 物件 → 樹，最後補一條 addbar
+    function _avsRenderTree(childrenEl, dataObj) {
+        childrenEl.innerHTML = '';
+        for (const [k, v] of Object.entries(dataObj || {})) {
+            if (v && typeof v === 'object' && !Array.isArray(v)) {
+                childrenEl.appendChild(_avsMakeFolder(k, v));
+            } else {
+                childrenEl.appendChild(_avsMakeLeaf(k, v));
+            }
+        }
+        childrenEl.appendChild(_avsMakeAddBar(childrenEl));
+    }
+
+    function addVarRow(container, name, val, desc, type) {
+        const row = document.createElement('div');
+        row.className = 'avs-var-row';
+        // 用 column flex，name+value+刪除 一行、desc 一行（折疊式：focus 才高展開）
+        row.style.cssText = 'flex-direction:column; align-items:stretch;';
+        row.innerHTML = `
+            <div style="display:flex; gap:10px; align-items:center; width:100%;">
+                <input class="avs-input var-name" placeholder="項目名" style="flex:2;">
+                <input class="avs-input var-default" placeholder="預設值" style="flex:1;">
+                <select class="avs-select var-type" style="flex:0 0 90px; font-size:12px;">
+                    <option value="string">字串</option>
+                    <option value="number">數字</option>
+                    <option value="list">陣列</option>
+                    <option value="enum">枚舉</option>
+                    <option value="object">物件（巢狀結構）</option>
+                </select>
+                <div style="color:#e74c3c; cursor:pointer; flex-shrink:0; padding:0 4px;" onclick="this.closest('.avs-var-row').remove()"><i class="fa-solid fa-xmark"></i></div>
+            </div>
+            <div class="var-obj-gui" style="display:none; margin-top:6px; padding:6px; background:rgba(0,0,0,0.2); border-radius:4px;">
+                <div class="avs-obj-children"></div>
+            </div>
+            <details class="var-obj-adv" style="display:none; margin-top:4px;">
+                <summary style="cursor:pointer; color:rgba(var(--os-ink-rgb), 0.72); font-size:11px;">▸ 進階：直接編 JSON（老手用，平常不用碰）</summary>
+                <textarea class="avs-textarea var-default-obj" placeholder="{}" style="font-size:11px; min-height:80px; font-family:monospace; white-space:pre; line-height:1.4; margin-top:4px;"></textarea>
+            </details>
+            <textarea class="avs-textarea var-desc" placeholder="說明（AI 跑團看這個約束這個項目，例：好感度 0-100，互動正面 +1~5）" style="font-size:12px; min-height:40px; opacity:0.7;" onfocus="this.style.opacity=1; this.style.minHeight='60px';" onblur="this.style.opacity=0.7;"></textarea>
+        `;
+        const typeSel  = row.querySelector('.var-type');
+        const defInput = row.querySelector('.var-default');
+        const objGui   = row.querySelector('.var-obj-gui');
+        const objAdv   = row.querySelector('.var-obj-adv');
+        const objArea  = row.querySelector('.var-default-obj');
+        const objChildren = row.querySelector('.var-obj-gui > .avs-obj-children');
+
+        // 物件型：隱藏單行 input，顯示資料夾樹 GUI + 進階 JSON 摺疊
+        const syncTypeUI = () => {
+            const isObj = typeSel.value === 'object';
+            defInput.style.display = isObj ? 'none' : '';
+            objGui.style.display   = isObj ? 'block' : 'none';
+            objAdv.style.display   = isObj ? 'block' : 'none';
+        };
+        typeSel.addEventListener('change', () => {
+            syncTypeUI();
+            // 切成 object 且 GUI 還空 → 依 textarea 初始化
+            if (typeSel.value === 'object' && !objChildren.children.length) {
+                let data = {};
+                try { data = objArea.value.trim() ? JSON.parse(objArea.value) : {}; } catch(e) {}
+                _avsRenderTree(objChildren, data);
+                _avsSyncTree(objChildren);
+            }
+        });
+        // 進階 textarea 手動編輯 → blur 重繪 GUI（JSON 壞了不重繪，保留編輯）
+        objArea.addEventListener('blur', () => {
+            let data;
+            try { data = objArea.value.trim() ? JSON.parse(objArea.value) : {}; } catch(e) { return; }
+            _avsRenderTree(objChildren, data);
+        });
+
+        row.querySelector('.var-name').value = name != null ? String(name) : '';
+        row.querySelector('.var-desc').value = desc != null ? String(desc) : '';
+        if (type) typeSel.value = type;
+
+        if (typeSel.value === 'object') {
+            // 載入既有資料：val 通常是 JSON 字串；舊縮排格式則 fallback 走 parseTree
+            let data = {};
+            if (val != null && String(val).trim()) {
+                try { data = JSON.parse(String(val)); }
+                catch(e) {
+                    try { data = win._AVS_ENGINE?.parseTree?.(String(val)) || {}; } catch(e2) { data = {}; }
+                }
+            }
+            objArea.value = JSON.stringify(data, null, 2);
+            _avsRenderTree(objChildren, data);
+        } else {
+            defInput.value = val != null ? String(val) : '';
+        }
+        syncTypeUI();
+        container.appendChild(row);
+    }
+
+    function openPackEditor(container, pack) {
+        activeEditingPack = pack;
+        container.querySelector('#avs-pack-list').style.display = 'none';
+        const editor = container.querySelector('#avs-pack-editor');
+        editor.style.display = 'block';
+        container.querySelector('#avs-pack-name').value = pack ? pack.name : '';
+        // 修 PWA「undefined」bug：notes 沒填時用空字串而不是 undefined → 字串
+        container.querySelector('#avs-pack-notes').value = (pack && pack.notes) || '';
+        const rows = container.querySelector('#avs-var-rows-container');
+        rows.innerHTML = '';
+        if (pack) pack.variables.forEach(v => addVarRow(rows, v.name, v.defaultValue, v.desc, v.type));
+        else addVarRow(rows, '', '', '', 'string');
+    }
+
+    function refreshFurnacePackSelect(container) {
+        const select = container.querySelector('#furnace-pack-select');
+        // 檔案名多半是模型取的；新版 Chrome 的 <option> 裡放 <img onerror> 也會跑
+        select.innerHTML = currentPacks.map(p => `<option value="${_avsEsc(p.id)}">${_avsEsc(p.name)}</option>`).join('');
+    }
+
+    // 🌍 當前世界觀：煉丹的參考素材是「這個世界長什麼樣」，不是使用者人設。
+    //   🚨以前一張角色卡配一本世界書，酒館的世界書觸發剛好等於當前世界，所以一直沒事；
+    //     世界門上線後所有世界擠在同一本【奧瑞亞-視差】裡當條目，而煉丹是工具型呼叫、沒有劇情文字去觸發關鍵字
+    //     → 一條都沒被撈進來，AI 手上只剩使用者人設。這裡直接跟世界門要，不繞世界書。
+    async function _worldContext(maxLen) {
+        try {
+            const WG = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            const w = WG && WG.getCurrentWorld ? await WG.getCurrentWorld() : null;
+            if (!w) return '';
+            const head = [w.genre, w.type, w.style].filter(Boolean).join('・');
+            return '【這個面板要放在哪個世界裡】' + w.name + (head ? '（' + head + '）' : '') + '\n' +
+                (w.concept ? w.concept + '\n' : '') +
+                [w.lure ? '這裡的人在追求：' + w.lure : '', w.danger ? '這裡的麻煩：' + w.danger : '']
+                    .filter(Boolean).join('　') + '\n' +
+                (w.entryText ? '【世界檔案節錄】\n' + w.entryText.slice(0, maxLen || 1800) + '\n' : '');
+        } catch (e) { return ''; }
+    }
+
+    // ── 🐚 世界貼紙：一張貼紙圖，格數由 AI 依這個世界拿得出的物件數決定 ──
+    //   不切圖：整張當 background，用 background-position 取單格（一張圖九用，也不必存九份）。
+    //   貼紙 CSS 在存檔時就併進模板自己的 cssContent → 渲染端（三個入口）完全不用改。
+    const _STICKER_SPEC =
+        '\n\n【🐚 這次要順便設計一組世界貼紙】\n' +
+        '在 <ui_template> 之前，先輸出一個 <世界貼紙> 區塊，裡面是給生圖模型看的英文 Prompt。\n' +
+        '我們會照它畫成一張貼紙圖，再切好讓你在面板裡用：<i class="wsk wsk-N"></i>，' +
+        'N=1 是左上，依序由左到右、由上到下。大小用 CSS 變數 --wsk-size 調（預設 72px），' +
+        '例如 .deco{--wsk-size:120px}；.wsk 這些 class 我們會定義好，你不要自己寫它的樣式。\n' +
+        '★ 貼紙畫什麼是你自己決定的，所以你在寫面板時就知道每一張是什麼、該擺哪裡。\n' +
+        // 🚨這幾條是重點：模型的預設反應是把貼紙當成小圖示塞進標題或欄位前面，
+        //   縮到 20~40px 之後整張圖糊成一團，等於白生。它是「裝飾物」不是「符號」。
+        '★ 貼紙是「貼在面板上的裝飾物」，不是圖示、不是符號：\n' +
+        '　 嚴禁拿它當欄位前的小圖標、項目符號、按鈕圖示、狀態指示，或排成一整排圖示牆。\n' +
+        '　 該用的地方是：壓在外框邊角當角飾、斜貼在標題旁邊、疊在分隔帶或封條上、擺在大片留白處當落款、' +
+        '半露在面板邊緣像真的貼歪的貼紙。可以旋轉、可以壓到外框線上，就是不要縮成小圖。\n' +
+        '　 尺寸不要小於 64px；當主要裝飾時 100~140px 才看得清楚。整張面板用兩三張就夠，不必每一張都用上。\n' +
+        '　 一律不要遮住資料與操作區。\n' +
+        '★ 生圖可能會失敗；失敗時那幾個 <i> 就是空的，所以面板的排版不可以依賴貼紙撐開。\n\n' +
+        '貼紙的規則：\n' +
+        // 🚨原規格是寫死九張。改成讓它自己決定：這個世界真正拿得出手的代表物件有幾個就畫幾張，
+        //   湊數的貼紙只會變成看不懂的小圖；而且格數越少每一張的解析度越高（同一張圖切九格 vs 切四格）。
+        '1. 先決定這次要畫幾張貼紙，版面只能是 1x1、2x1、2x2、3x2 或 3x3（也就是 1、2、4、6、9 張）。\n' +
+        '　 依這個世界「真正有代表性、輪廓又好認」的物件數量來選，不要為了填滿版面硬湊；寧可四張精準，也不要九張湊數。\n' +
+        '　 決定後在輸出的第一行寫成 Grid: 欄數x列數，接著每個位置都必須明確指定一個不同主體，不得缺少、重複或自行替換。\n' +
+        '2. 主體從當前世界觀提取，例如代表性道具、食物、動植物、交通工具、徽記、魔法物件、角色隨身配件或場景元素；不得殘留上一世界的物品。\n' +
+        // 🚨逐行寫（Row 1/Row 2…）不可以壓成一行清單：生圖模型是靠「第幾行、行內哪個位置」理解版面的，
+        //   把三行併成一句 Cells 之後實測整張排版就散了——大小不一、位置亂跑、根本不成網格。
+        '2b. 版面要逐行描述：每一列各寫一行 Row N，行內依「由左到右」列出該列每一格的位置詞與主體。\n' +
+        '3. 每格只能有一個主要物件。允許物件不可分離的構造，但禁止物件組、文件堆、道具套裝或多件物品聚在同一格。\n' +
+        // 🚨真正進生圖模型的只有 <世界貼紙> 裡那段英文；中文規則它看不到。
+        //   所以「別畫背景」不能只寫在規則裡——物件描述本身一帶氛圍詞，模型就自己補場景。
+        //   實測 "boat with glowing particles" → 畫出整片夜景海面；"glowing moss" → 畫出發光底板。
+        '3b. 每格的物件描述**只寫物件本身**：材質、造型、顏色可以，但嚴禁寫 glowing、particles、aura、mist、sparkles、' +
+        'light rays、reflection、floating、in the sky、on the water 這類氛圍或環境詞——寫了模型就會替它補一整片場景或發光底板。\n' +
+        '3c. 每個物件在描述裡都要自帶 die-cut sticker 這個說法（例如 a brass lantern die-cut sticker），一格一個，不要省略。\n' +
+        '4. 預設不生成完整人物。只有使用者明確要求角色貼紙時，才可加入當前名單中的角色，並使用簡化 chibi 造型；不得添加名單外人物。\n' +
+        '5. 所有主體必須輪廓差異明顯，縮小至 48–96px 時仍可辨識。避免過細線條、複雜內部構造與微小零件。\n' +
+        '6. 所有貼紙使用同一套畫風、線條粗細、光影方式與色彩邏輯；不得有的寫實、有的扁平、有的變成 3D。\n' +
+        '7. 使用 flat 2D illustration、clean cel shading、simple rounded shapes 與 limited color palette。除非世界觀明確需要，禁止寫實材質與高光塑膠感。\n' +
+        '8. 每個物件外圍必須有沿著實際輪廓延伸的 thick white die-cut border；不得使用圓形底座、徽章底板、盤子、相框或 App Icon 容器。\n' +
+        '8b. 白色描邊要貼著物件自己的外形走。物件底下不可以再墊任何色塊、圓盤、光暈或漸層——貼紙背後只有那片純色背景。\n' +
+        '9. 每個主體直接浮在純色中灰背景上。格子只是排列位置，不得畫出可見分隔線。只有一張時同樣置中、四周留白。\n' +
+        '10. 所有主體彼此不接觸、不重疊、不跨格、不裁切；**每一張的佔格比例要接近**（不可以一張塞滿整格、另一張只有一半大），四周保留充足去背空間。\n' +
+        '10b. 每個物件最多佔自己格子的七成，四周留出明顯空白，物件絕不碰到格線——寧可畫小一點也不要撐滿。\n' +
+        '11. 貼紙內禁止文字、字母、數字、Logo、水印、條碼與偽文字。需要標籤的位置保持空白或改成純色圖形。\n' +
+        '12. 不生成完整背景、桌面、房間、風景或情境插畫。畫面只能包含那幾張獨立貼紙與純色背景。\n' +
+        '13. 未指定風格時，依當前世界觀選擇最合適的可愛插畫風格；清新校園題材使用 soft pastel campus stationery style。\n' +
+        '14. 鏡頭固定為正面或輕微俯視的產品圖角度，不使用強透視，不讓物件變形。\n' +
+        '15. <世界貼紙> 區塊裡只能有英文 Prompt，不得附加中文、解釋或建議；區塊結束後緊接著照原本的規格輸出 <ui_template>。\n\n' +
+        '貼紙區塊的格式：\n\n' +
+        '<世界貼紙>\n' +
+        'Grid: [欄數]x[列數]\n\n' +
+        'Style: [unified illustration style], [current world aesthetic], [limited color palette], flat 2D illustration, clean cel shading, bold readable silhouettes, consistent line weight,\n\n' +
+        'Layout: a sticker sheet containing exactly [張數] separate die-cut stickers arranged in [列數] rows and [欄數] columns, equal spacing, equal cell size, solid neutral medium-gray background,\n\n' +
+        // 逐行寫，一列一行 Row N；欄數決定行內要寫幾格（左/中/右）。這是原本就驗證過有效的寫法，不要再壓成一行。
+        'Row 1: [位置] [object] die-cut sticker, [位置] [object] die-cut sticker, …（這一列由左到右的每一格）\n\n' +
+        'Row 2: …（有幾列就寫幾行 Row，只有一列就只寫 Row 1）\n\n' +
+        'Rendering: every sticker is one isolated object cut out on the flat background, centered and fully visible, comparable scale, each object fills at most 70% of its own cell with clear empty margin on all sides and never touches the cell boundary, minimal internal details, thick uniform white die-cut outline following the exact object silhouette, no cast shadow, no overlap, no cropped objects, no duplicate objects,\n\n' +
+        // 排除詞要把「會長出背景」的東西一起關掉：發光、粒子、光束、倒影、天空、水面、場景插畫
+        'Exclusions: no text, no letters, no numbers, no logo, no watermark, no fake writing, no object clusters, no visible grid lines, no circular backing, no badge base, no plate, no frame, no icon container, no background scene, no scenery, no landscape, no sky, no water, no glow, no glowing aura, no particles, no sparkles, no light rays, no lens flare, no reflections, no vignette, no gradient backdrop, no photorealism, no glossy 3D render,\n' +
+        '</世界貼紙>';
+    // 從 AI 產的 prompt 裡讀出版面與每一格畫什麼（不然煉丹那支只能亂放貼紙）
+    //   版面允許 1/2/4/6/9 張：湊數的貼紙沒有用，而且格數越少每張的解析度越高。
+    const _STICKER_GRIDS = { '1x1': [1, 1], '2x1': [2, 1], '1x2': [1, 2], '2x2': [2, 2], '3x2': [3, 2], '2x3': [2, 3], '3x3': [3, 3] };
+    function _parseSticker(prompt) {
+        const body = String(prompt || '');
+        const gm = body.match(/Grid:\s*(\d)\s*[x×]\s*(\d)/i);
+        let cols = gm ? Number(gm[1]) : 3, rows = gm ? Number(gm[2]) : 3;
+        if (!_STICKER_GRIDS[cols + 'x' + rows]) { cols = 3; rows = 3; }
+        // 逐行 Row N（現行格式）；舊的一行式 Cells 也留著相容
+        const rowLines = [...body.matchAll(/^[ \t]*Row\s*\d+\s*:\s*([^\n]+)/gim)].map(m => m[1]);
+        const cellsLine = rowLines.length ? rowLines.join(',') : ((body.match(/Cells:\s*([^\n]+)/i) || [])[1] || '');
+        let names = [];
+        if (cellsLine) {
+            names = cellsLine.split(',').map(s => s
+                .replace(/[\[\]]/g, '')
+                // 去掉開頭的位置詞（top-left / middle-right / center / upper left…），留下物件本身
+                .replace(/^\s*(?:top|bottom|middle|upper|lower|left|right|center|centre)(?:[\s-]+(?:left|right|center|centre))?\s+/i, '')
+                .trim()).filter(Boolean);
+        }
+        const need = cols * rows;
+        // 格數跟實際寫出來的數量對不上：以實際的為準往回推版面，免得 CSS 切在半張貼紙上
+        if (names.length !== need) {
+            const fit = Object.entries(_STICKER_GRIDS).find(([, g]) => g[0] * g[1] === names.length);
+            if (fit) { cols = fit[1][0]; rows = fit[1][1]; }
+            else return null;   // 連推都推不出來就別放貼紙，畫面切壞比沒有更糟
+        }
+        return { cols, rows, names };
+    }
+    // 貼紙的生圖接口與預設包：照裝扮室那條（來源＋預設包各自選、底詞來自包）。
+    //   🚨不可以走背景桶 generateBackgroundAsync：那會套上 VN 背景的底詞，貼紙會被拉成場景畫，
+    //     而且使用者完全沒得選風格。生圖一律「使用者選的接口＋使用者選的預設包」。
+    const STK_CFG = 'avs_sticker_gen_v1';
+    function _imgMgr() { return win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER || null; }
+    function _stkCfg() {
+        try { const o = JSON.parse(localStorage.getItem(STK_CFG) || '{}'); return (o && typeof o === 'object') ? o : {}; }
+        catch (e) { return {}; }
+    }
+    function _stkSave(patch) {
+        win.AUI.lsSet(STK_CFG, JSON.stringify(Object.assign(_stkCfg(), patch)), '貼紙生圖的設定');
+    }
+    function _stkPresets(src) {
+        const LD = win.LobbyDress || window.LobbyDress;
+        if (LD && typeof LD.listPresets === 'function') return LD.listPresets(src) || [];   // 大廳已經有一份取法，別再抄
+        const M = _imgMgr();
+        if (!M || !M.config) return [];
+        return src === 'novelai' ? ((M.config.novelai && M.config.novelai.naiPresets) || [])
+                                 : ((M.config.comfyuiDirect && M.config.comfyuiDirect.presets) || []);
+    }
+    function _stkPresetKey(p) {
+        const LD = win.LobbyDress || window.LobbyDress;
+        if (LD && typeof LD.presetKeyOf === 'function') return LD.presetKeyOf(p);
+        return (p && (p.id || p.name)) || '';
+    }
+    // 壓圖：長邊縮到 maxSide、轉 WebP（有 alpha 又比 PNG 小一個量級）。壓不動就回原圖讓上層擋。
+    // ✂️ 去背：從畫布四邊往內 flood fill，只清「連得到邊緣」的背景色。
+    //   🚨不靠大廳的 pixelify：那支掛在 LobbyStage 上，而煉丹跑在手機 App 裡，
+    //     win（window.parent）不一定拿得到它 —— 拿不到就整張沒去背，貼紙帶著灰方塊貼在面板上。
+    //   用 flood fill 而不是「整張掃同色」：貼紙內部若有跟背景同色的區域不會被打洞，
+    //   而且白色 die-cut 邊會自然擋住填充，邊界剛好落在描邊外緣。
+    async function _stkCutout(dataUrl) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return dataUrl;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const im = ctx.getImageData(0, 0, W, H), d = im.data;
+            const at = (x, y) => (y * W + x) * 4;
+            const cor = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]].map(([x, y]) => at(x, y));
+            if (cor.every(i => d[i + 3] < 16)) return dataUrl;   // 已經是透明背景，不用再做
+            let r = 0, g = 0, b = 0;
+            cor.forEach(i => { r += d[i]; g += d[i + 1]; b += d[i + 2]; });
+            r /= 4; g /= 4; b /= 4;
+            const TOL = 72;   // 顏色距離容差（三通道差值相加）
+            const seen = new Uint8Array(W * H);
+            // 🚨用 scanline 不要用四鄰逐點推：逐點推每個像素會塞四個座標進 stack，
+            //   九十萬像素的圖直接把 stack 撐到幾百萬筆、整個卡住。scanline 一次吃掉一整段，種子少一個數量級。
+            const ok = (p) => {
+                const i = p * 4;
+                if (d[i + 3] < 16) return true;   // 已經透明的也算通得過
+                return Math.abs(d[i] - r) + Math.abs(d[i + 1] - g) + Math.abs(d[i + 2] - b) <= TOL;
+            };
+            const stack = [];   // 存 packed index = y*W + x
+            for (let x = 0; x < W; x++) { stack.push(x, (H - 1) * W + x); }
+            for (let y = 0; y < H; y++) { stack.push(y * W, y * W + W - 1); }
+            let cleared = 0;
+            while (stack.length) {
+                const p0 = stack.pop();
+                if (seen[p0] || !ok(p0)) continue;
+                const y = (p0 / W) | 0, rowStart = y * W;
+                let xl = p0 - rowStart, xr = xl;
+                while (xl > 0 && !seen[rowStart + xl - 1] && ok(rowStart + xl - 1)) xl--;
+                while (xr < W - 1 && !seen[rowStart + xr + 1] && ok(rowStart + xr + 1)) xr++;
+                for (let x = xl; x <= xr; x++) {
+                    const p = rowStart + x;
+                    seen[p] = 1;
+                    if (d[p * 4 + 3] >= 16) { d[p * 4 + 3] = 0; cleared++; }
+                }
+                for (const ny of [y - 1, y + 1]) {
+                    if (ny < 0 || ny >= H) continue;
+                    const nRow = ny * W;
+                    for (let x = xl; x <= xr; x++) {
+                        const p = nRow + x;
+                        if (!seen[p] && ok(p)) stack.push(p);
+                    }
+                }
+            }
+            if (!cleared) { console.warn('[AVS 貼紙] 去背沒清掉任何像素，維持原圖'); return dataUrl; }
+            ctx.putImageData(im, 0, 0);
+            console.log('[AVS 貼紙] 去背清掉 ' + Math.round(cleared / (W * H) * 100) + '% 的畫面');
+            const webp = cv.toDataURL('image/webp', 0.9);
+            return (webp.indexOf('data:image/webp') === 0) ? webp : cv.toDataURL('image/png');
+        } catch (e) { console.warn('[AVS 貼紙] 去背失敗，用原圖', e); return dataUrl; }
+    }
+    const STK_PER_CELL = 288;           // 每格保留的像素：當裝飾可以放到 140px，高解析螢幕要兩倍
+    const STK_MAX_CHARS = 320 * 1024;   // 壓完還超過這個字數就不要了（面板樣式表不該有這種東西）
+    async function _stkShrink(dataUrl, maxSide) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const w = img.naturalWidth || 1, h = img.naturalHeight || 1;
+            const k = Math.min(1, (maxSide || 512) / Math.max(w, h));
+            const cw = Math.max(1, Math.round(w * k)), ch = Math.max(1, Math.round(h * k));
+            const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+            cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+            const webp = cv.toDataURL('image/webp', 0.82);
+            const out = (webp.indexOf('data:image/webp') === 0) ? webp : cv.toDataURL('image/png');
+            console.log('[AVS 貼紙] 壓圖 ' + w + '×' + h + ' → ' + cw + '×' + ch +
+                '，' + Math.round(dataUrl.length / 1024) + 'KB → ' + Math.round(out.length / 1024) + 'KB');
+            return out;
+        } catch (e) { console.warn('[AVS 貼紙] 壓圖失敗', e); return dataUrl; }
+    }
+    // 真正去生那張圖：ComfyUI 走預設包（尺寸用我們算的，蓋掉包裡的）；NAI 走快照→套包→生成→finally 還原
+    async function _stkRender(prompt, src, preset, w, h) {
+        const M = _imgMgr();
+        if (!M) throw new Error('生圖引擎還沒載入');
+        let url = '';
+        if (src === 'novelai') {
+            const nai = M.config.novelai || (M.config.novelai = {});
+            const KEYS = ['charBasePrompt', 'charNegPrompt', 'sampler', 'scale', 'steps', 'ucPreset'];
+            const snap = {}; KEYS.forEach(k => { snap[k] = nai[k]; });
+            KEYS.forEach(k => { if (preset[k] !== undefined) nai[k] = preset[k]; });
+            try { url = await M.generate(prompt, 'char', { provider: 'novelai', width: w, height: h }); }
+            finally { KEYS.forEach(k => { nai[k] = snap[k]; }); }   // transient 鐵律：借用完一定還原
+        } else {
+            // packSize 會讓它用「包裡的 width/height」→ 把包複製一份、尺寸換成貼紙要的比例
+            url = await M.previewComfyPreset(Object.assign({}, preset, { width: w, height: h }), prompt, { packSize: true });
+        }
+        if (!url) throw new Error('接口沒回圖（檢查連線與預設包）');
+        // 🚨🚨圖一定要壓過才准往下走：這張圖最後會變成 dataURL 寫進面板的樣式，
+        //   而狀態面板每次訊息更新都會重新解析一次樣式表 —— 實測一張沒壓的去背 PNG ＝ 1.39M 字的 CSS，
+        //   酒館打開狀態面板就整個卡死到要去工作管理員砍掉。
+        //   貼紙顯示大小才 44px（高解析螢幕算兩倍也就 88px），512 綽綽有餘。
+        if (/^(blob:|https?:)/i.test(String(url))) {   // blob 重載就失效，一律先轉成 dataURL
+            try {
+                const b = await (await fetch(url)).blob();
+                url = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result)); fr.onerror = () => r(''); fr.readAsDataURL(b); });
+            } catch (e) {}
+        }
+        if (!url) throw new Error('圖拿到了但轉不成可存的格式');
+        url = await _stkCutout(url);   // 去背：中灰底清掉，只留貼紙本體與白色描邊
+        // 縮圖上限跟著格數走：生圖是每格 384，保留每格 288 給高解析螢幕用（一格的圖就是 288）
+        url = await _stkShrink(url, Math.round(Math.max(w, h) * (STK_PER_CELL / 384)));
+        // 壓完還是太大就整張不要：寧可沒貼紙，也不要再把酒館搞死一次
+        if (url.length > STK_MAX_CHARS) {
+            throw new Error('貼紙圖壓完還有 ' + Math.round(url.length / 1024) + 'KB，太大了，這次不放貼紙');
+        }
+        return url;
+    }
+    // 從煉丹那一次的回覆裡把貼紙區塊挑出來生圖。
+    //   🚨貼紙與面板是同一次呼叫產出的：貼紙畫什麼是設計面板的那個 AI 自己決定的，
+    //     它當然知道哪一張要放哪裡——另外開一次呼叫去問「這個世界有什麼東西」是白燒一次模型。
+    async function _stickerFromReply(full, log, src, preset) {
+        if (!_imgMgr() || !preset) return null;
+        const m = String(full || '').match(/<世界貼紙>([\s\S]*?)<\/世界貼紙>/);
+        if (!m) { console.warn('[AVS 貼紙] 這次回覆裡沒有貼紙區塊'); return null; }
+        const imgPrompt = m[1].trim();
+        if (!imgPrompt || imgPrompt.length < 40) return null;
+        const info = _parseSticker(imgPrompt);
+        if (!info) { console.warn('[AVS 貼紙] 版面讀不出來，這次不放貼紙'); return null; }
+        if (log) log.innerHTML = '正在畫 ' + (info.cols * info.rows) + ' 張貼紙…';
+        let url = '';
+        // 尺寸跟著版面走：每格固定 384px，格子才不會被拉扁（一張圖切幾格由 AI 決定）
+        try { url = await _stkRender(imgPrompt, src, preset, info.cols * 384, info.rows * 384); }
+        catch (e) { console.warn('[AVS 貼紙] 生圖失敗', e && e.message); return null; }
+        if (!url) return null;
+        // 首選:連通域重排(物件越界也切得乾淨);失敗或超預算才退回逐格偵測
+        let boxes = null;
+        const rp = await _stkRepack(url, info.cols, info.rows);
+        if (rp && rp.url && rp.url.length <= STK_MAX_CHARS) { url = rp.url; boxes = rp.boxes; }
+        else boxes = await _stkBoxes(url, info.cols, info.rows);
+        return { url, cols: info.cols, rows: info.rows, names: info.names, boxes };
+    }
+    // 🔍 逐格找出「這張貼紙實際佔的範圍」：純 canvas，手機端一樣跑得動，而且只在生成當下算一次。
+    //   為什麼要偵測：生圖那端就算照網格畫，物件還是會偏移、撐邊、大小不一 —— 按格子硬切一定會把隔壁的角切進來。
+    //   去背過的圖看 alpha；沒去背的用四角像素當背景色比對。
+    //   取到的框會擴成正方形（容器是正方形，直接套長方形框會把船壓扁），再夾回格子內。
+    // 🧩 連通域重排：治「物件越界害切格切到隔壁」的根。
+    //   逐格 bbox 掃描（_stkBoxes）遇到越界物件必壞：自己伸出格外的部分被排除、鄰居伸進來的碎片被算進去。
+    //   這裡改成:去背後把「像素連通的塊」全找出來 → 依面積重心歸戶到格子 → 整張圖重新排版成
+    //   乾淨等距網格（每件置中、最多佔格 86%）。重排後按格硬切永遠精準，鄰居物理上進不來。
+    //   flood fill 一樣走 scanline（四鄰逐點推會把 stack 撐爆，_stkCutout 的老坑）。
+    async function _stkRepack(dataUrl, cols, rows) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return null;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const idata = ctx.getImageData(0, 0, W, H);
+            const d = idata.data;
+            const solid = (x, y) => d[(y * W + x) * 4 + 3] >= 16;
+
+            // scanline 連通域標記
+            const labels = new Int32Array(W * H);
+            const blobs = [];   // {minX,minY,maxX,maxY,area,sx,sy}
+            const stack = [];
+            for (let sy = 0; sy < H; sy++) {
+                for (let sx = 0; sx < W; sx++) {
+                    if (!solid(sx, sy) || labels[sy * W + sx]) continue;
+                    const id = blobs.length + 1;
+                    const b = { minX: sx, minY: sy, maxX: sx, maxY: sy, area: 0, sx: 0, sy: 0 };
+                    stack.length = 0; stack.push([sx, sy]);
+                    while (stack.length) {
+                        const [px, py] = stack.pop();
+                        if (labels[py * W + px] || !solid(px, py)) continue;
+                        let x0 = px; while (x0 > 0 && !labels[py * W + x0 - 1] && solid(x0 - 1, py)) x0--;
+                        let x1 = px; while (x1 < W - 1 && !labels[py * W + x1 + 1] && solid(x1 + 1, py)) x1++;
+                        for (let x = x0; x <= x1; x++) {
+                            labels[py * W + x] = id;
+                            b.area++; b.sx += x; b.sy += py;
+                            if (x < b.minX) b.minX = x; if (x > b.maxX) b.maxX = x;
+                            if (py < b.minY) b.minY = py; if (py > b.maxY) b.maxY = py;
+                        }
+                        for (const ny of [py - 1, py + 1]) {
+                            if (ny < 0 || ny >= H) continue;
+                            for (let x = x0; x <= x1; x++) {
+                                if (!labels[ny * W + x] && solid(x, ny)) { stack.push([x, ny]); while (x <= x1 && solid(x, ny) && !labels[ny * W + x]) x++; }
+                            }
+                        }
+                    }
+                    blobs.push(b);
+                }
+            }
+            const cw = W / cols, ch = H / rows;
+            const minArea = Math.max(120, cw * ch * 0.002);   // 雜訊塊丟掉(小於格子 0.2%)
+            // 依「面積重心」歸戶格子
+            const cellBlobs = Array.from({ length: cols * rows }, () => []);
+            blobs.forEach((b, bi) => {
+                if (b.area < minArea) return;
+                const cx = b.sx / b.area, cy = b.sy / b.area;
+                const c = Math.min(cols - 1, Math.max(0, Math.floor(cx / cw)));
+                const r = Math.min(rows - 1, Math.max(0, Math.floor(cy / ch)));
+                cellBlobs[r * cols + c].push(bi + 1);
+            });
+            const used = cellBlobs.filter(a => a.length).length;
+            if (!used) return null;
+
+            // 重新排版:每格 STK_PER_CELL,物件(該格所有連通塊的聯集)置中、最多佔 86%
+            const S = STK_PER_CELL;
+            const out = document.createElement('canvas'); out.width = cols * S; out.height = rows * S;
+            const octx = out.getContext('2d');
+            const idSetArr = cellBlobs.map(a => new Set(a));
+            for (let i = 0; i < cols * rows; i++) {
+                const ids = idSetArr[i];
+                if (!ids.size) continue;
+                let mnX = W, mnY = H, mxX = 0, mxY = 0;
+                cellBlobs[i].forEach(bid => {
+                    const b = blobs[bid - 1];
+                    if (b.minX < mnX) mnX = b.minX; if (b.maxX > mxX) mxX = b.maxX;
+                    if (b.minY < mnY) mnY = b.minY; if (b.maxY > mxY) mxY = b.maxY;
+                });
+                const bw = mxX - mnX + 1, bh = mxY - mnY + 1;
+                // 只搬「屬於這格的連通塊」的像素:聯集 bbox 裡混進來的鄰居像素全部歸零
+                const t = document.createElement('canvas'); t.width = bw; t.height = bh;
+                const tctx = t.getContext('2d');
+                const td = tctx.createImageData(bw, bh);
+                for (let y = 0; y < bh; y++) {
+                    const rowOff = (mnY + y) * W;
+                    for (let x = 0; x < bw; x++) {
+                        const lid = labels[rowOff + mnX + x];
+                        if (!lid || !ids.has(lid)) continue;
+                        const si = (rowOff + mnX + x) * 4, ti = (y * bw + x) * 4;
+                        td.data[ti] = d[si]; td.data[ti + 1] = d[si + 1]; td.data[ti + 2] = d[si + 2]; td.data[ti + 3] = d[si + 3];
+                    }
+                }
+                tctx.putImageData(td, 0, 0);
+                let k = Math.min((S * 0.86) / bw, (S * 0.86) / bh);
+                if (k > 1.75) k = 1.75;   // 小物件別放大到糊
+                const dw = bw * k, dh = bh * k;
+                const c = i % cols, r = Math.floor(i / cols);
+                octx.drawImage(t, c * S + (S - dw) / 2, r * S + (S - dh) / 2, dw, dh);
+            }
+            let outUrl = out.toDataURL('image/webp', 0.82);
+            if (outUrl.indexOf('data:image/webp') !== 0) outUrl = out.toDataURL('image/png');
+            // 重排後就是完美等距網格 → 直接按格切
+            const boxes = [];
+            for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+                boxes.push(idSetArr[r * cols + c].size ? { x: c / cols, y: r / rows, w: 1 / cols, h: 1 / rows } : null);
+            }
+            console.log('[AVS 貼紙] 連通域重排:' + blobs.length + ' 塊 → ' + used + '/' + (cols * rows) + ' 格');
+            return { url: outUrl, boxes };
+        } catch (e) { console.warn('[AVS 貼紙] 連通域重排失敗,退回逐格偵測', e); return null; }
+    }
+
+    async function _stkBoxes(dataUrl, cols, rows) {
+        try {
+            const img = await new Promise((res, rej) => {
+                const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
+            });
+            const W = img.naturalWidth, H = img.naturalHeight;
+            if (!W || !H) return null;
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(img, 0, 0);
+            const d = ctx.getImageData(0, 0, W, H).data;
+            const at = (x, y) => (y * W + x) * 4;
+            const corners = [[0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1]]
+                .map(([x, y]) => at(x, y)).filter(i => d[i + 3] >= 16);
+            const bg = corners.length ? [d[corners[0]], d[corners[0] + 1], d[corners[0] + 2]] : null;
+            const isBg = (i) => {
+                if (d[i + 3] < 16) return true;
+                if (!bg) return false;
+                return Math.abs(d[i] - bg[0]) + Math.abs(d[i + 1] - bg[1]) + Math.abs(d[i + 2] - bg[2]) < 60;
+            };
+            const cw = W / cols, ch = H / rows;
+            const boxes = [];
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < cols; c++) {
+                    const x0 = Math.floor(c * cw), x1 = Math.min(W, Math.floor((c + 1) * cw));
+                    const y0 = Math.floor(r * ch), y1 = Math.min(H, Math.floor((r + 1) * ch));
+                    let minX = x1, minY = y1, maxX = x0, maxY = y0, n = 0;
+                    for (let y = y0; y < y1; y++) {
+                        for (let x = x0; x < x1; x++) {
+                            if (isBg(at(x, y))) continue;
+                            n++;
+                            if (x < minX) minX = x; if (x > maxX) maxX = x;
+                            if (y < minY) minY = y; if (y > maxY) maxY = y;
+                        }
+                    }
+                    if (n < 60 || maxX <= minX || maxY <= minY) { boxes.push(null); continue; }
+                    const pad = Math.max(maxX - minX, maxY - minY) * 0.05;   // 白色描邊也算它的一部分，別切太緊
+                    let side = Math.min(Math.max(maxX - minX, maxY - minY) + pad * 2, x1 - x0, y1 - y0);
+                    let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+                    cx = Math.min(Math.max(cx, x0 + side / 2), x1 - side / 2);   // 夾回自己的格子裡，絕不越界
+                    cy = Math.min(Math.max(cy, y0 + side / 2), y1 - side / 2);
+                    boxes.push({ x: (cx - side / 2) / W, y: (cy - side / 2) / H, w: side / W, h: side / H });
+                }
+            }
+            const hit = boxes.filter(Boolean).length;
+            console.log('[AVS 貼紙] 邊界偵測：' + hit + '/' + (cols * rows) + ' 格找到主體');
+            return hit ? boxes : null;
+        } catch (e) { console.warn('[AVS 貼紙] 邊界偵測失敗，退回按格子切', e); return null; }
+    }
+    // 貼紙的 CSS：整張圖當背景，用 background-position 取單格（不切圖，一張圖幾格都行）。
+    //   🚨每格只取中間 INSET 的範圍，不切滿整格：生圖那端就算照著網格畫，物件也常常撐到格線邊上，
+    //     切滿整格會把隔壁那張的一角一起切進來。往內縮一點，寧可切掉自己的邊緣留白。
+    //   數學：背景放大成 (欄數/INSET)×100%，要讓第 i 格的中心落在容器中心，
+    //     位移百分比 p = (0.5 − t·k) / (1 − k)，其中 k = 欄數/INSET、t = (i+0.5)/欄數。
+    const STK_INSET = 0.86;   // 偵測失敗時的退路：按格子切但往內縮，寧可切掉自己的留白也不要切到隔壁
+    function _stickerCss(url, cols, rows, boxes) {
+        cols = cols || 3; rows = rows || 3;
+        const fmt = v => Number(v).toFixed(2).replace(/\.?0+$/, '');
+        const insetAt = (i, n) => {
+            const k = n / STK_INSET, t = (i + 0.5) / n;
+            return (k === 1) ? 50 : ((0.5 - t * k) / (1 - k)) * 100;
+        };
+        const rules = [];
+        for (let i = 0; i < cols * rows; i++) {
+            const b = boxes && boxes[i];
+            let rule;
+            if (b) {
+                // 讓這張貼紙的實際範圍剛好填滿容器：放大倍率＝1/範圍大小，位移＝範圍起點 ÷ (1−範圍大小)
+                rule = 'background-size:' + fmt(100 / b.w) + '% ' + fmt(100 / b.h) + '%;background-position:' +
+                    fmt(b.w < 1 ? (b.x / (1 - b.w)) * 100 : 0) + '% ' +
+                    fmt(b.h < 1 ? (b.y / (1 - b.h)) * 100 : 0) + '%;';
+            } else {
+                rule = 'background-position:' + fmt(insetAt(i % cols, cols)) + '% ' +
+                    fmt(insetAt(Math.floor(i / cols), rows)) + '%;';
+            }
+            rules.push('.custom-status-panel .wsk-' + (i + 1) + '{' + rule + '}');
+        }
+        return '\n/* 🐚 世界貼紙（' + cols + '×' + rows + '）：' +
+            (boxes ? '每張都照實際偵測到的邊界取，不會切到隔壁' : '偵測失敗，退回按格子往內縮 ' + Math.round(STK_INSET * 100) + '%') + ' */\n' +
+            '.custom-status-panel .wsk{display:inline-block;vertical-align:middle;flex:none;' +
+            'width:var(--wsk-size,72px);height:var(--wsk-size,72px);' +
+            'background-image:url("' + url + '");background-repeat:no-repeat;background-size:' +
+            fmt(cols / STK_INSET * 100) + '% ' + fmt(rows / STK_INSET * 100) + '%;}\n' + rules.join('\n') + '\n';
+    }
+
+    function _wskSay(m, ok) {
+        try { if (AUI.toastr) return ok ? AUI.toastr.success(m) : AUI.toastr.info(m); } catch (e) {}
+        try { AUI.alert(m); } catch (e) {}
+    }
+    // ── 🐚 貼紙微調：拖位置、調大小、轉角度，存回這張面板 ──
+    //   AI 放不準是常態（會壓到資料、會縮成小圖），所以留一個手動的最後一哩。
+    //   調整值寫成 [data-wsk-i="N"] 的規則，夾在標記之間，重調時整段換掉、不會越疊越多。
+    const WSK_MARK_A = '/* WSK-TUNE-START */', WSK_MARK_B = '/* WSK-TUNE-END */';
+    function _wskStripTune(css) {
+        const s = String(css || ''), a = s.indexOf(WSK_MARK_A), b = s.indexOf(WSK_MARK_B);
+        return (a >= 0 && b > a) ? (s.slice(0, a) + s.slice(b + WSK_MARK_B.length)).trim() : s;
+    }
+    function _wskReadTune(css) {
+        const out = {};
+        const s = String(css || '');
+        const a = s.indexOf(WSK_MARK_A), b = s.indexOf(WSK_MARK_B);
+        if (a < 0 || b <= a) return out;
+        for (const m of s.slice(a, b).matchAll(/\[data-wsk-i="(\d+)"\]\{([^}]*)\}/g)) {
+            const g = (re) => { const x = m[2].match(re); return x ? parseFloat(x[1]) : null; };
+            out[m[1]] = { x: g(/left:\s*(-?[\d.]+)%/), y: g(/top:\s*(-?[\d.]+)%/), s: g(/--wsk-size:\s*([\d.]+)px/), r: g(/rotate\((-?[\d.]+)deg\)/) };
+        }
+        return out;
+    }
+    function _wskBuildTune(tune) {
+        const keys = Object.keys(tune).filter(k => tune[k]);
+        if (!keys.length) return '';
+        // 絕對定位要有參考點；貼紙是裝飾，一律不吃點擊，免得蓋住底下的東西
+        let css = '\n' + WSK_MARK_A + '\n.custom-status-panel{position:relative;}\n' +
+            '.custom-status-panel .wsk[data-wsk-i]{pointer-events:none;}\n';
+        keys.forEach(k => {
+            const t = tune[k];
+            const bits = [];
+            if (t.x != null && t.y != null) bits.push('position:absolute', 'left:' + t.x.toFixed(2) + '%', 'top:' + t.y.toFixed(2) + '%', 'z-index:4');
+            if (t.s != null) bits.push('--wsk-size:' + Math.round(t.s) + 'px');
+            if (t.r) bits.push('transform:rotate(' + t.r.toFixed(1) + 'deg)');
+            if (bits.length) css += '.custom-status-panel .wsk[data-wsk-i="' + k + '"]{' + bits.join(';') + ';}\n';
+        });
+        return css + WSK_MARK_B + '\n';
+    }
+    // 模板裡的每個貼紙標上編號（迴圈裡的那顆會被複製成很多實例，它們共用同一個編號＝一起調，這是對的）
+    function _wskIndexHtml(html) {
+        try {
+            const doc = new DOMParser().parseFromString('<div id="wskroot">' + String(html || '') + '</div>', 'text/html');
+            const root = doc.getElementById('wskroot');
+            const list = root.querySelectorAll('.wsk');
+            if (!list.length) return null;
+            list.forEach((el, i) => el.setAttribute('data-wsk-i', String(i)));
+            return { html: root.innerHTML, count: list.length };
+        } catch (e) { return null; }
+    }
+
+    // 微調視窗：在真的面板上拖貼紙。座標一律換算成百分比，所以預覽縮放多少都不影響結果。
+    async function _openStickerTuner(container, tpl, pack) {
+        const idx = _wskIndexHtml(tpl.htmlContent);
+        if (!idx) { _wskSay('這張面板裡沒有貼紙'); return; }
+        if (idx.html !== tpl.htmlContent) { tpl.htmlContent = idx.html; try { await win.OS_DB.saveUITemplate(tpl); } catch (e) {} }
+        const tune = _wskReadTune(tpl.cssContent);
+        const doc = container.ownerDocument || document;
+        container.querySelector('.wsk-tuner')?.remove();
+        const back = doc.createElement('div');
+        back.className = 'wsk-tuner';
+        back.innerHTML =
+            '<div class="wsk-tuner-win">' +
+              '<div class="wsk-tuner-bar"><strong><i class="fa-solid fa-shapes"></i> 調整貼紙</strong>' +
+                '<span class="wsk-tuner-hint">拖曳搬位置，選中後用下面兩條調大小與角度</span>' +
+                '<button class="wsk-tuner-x">✕</button></div>' +
+              '<div class="wsk-stage-wrap"><div class="wsk-stage"></div></div>' +
+              '<div class="wsk-tuner-ctl">' +
+                '<div class="wsk-ctl-none">點一下面板上的貼紙來選它</div>' +
+                '<div class="wsk-ctl-on">' +
+                  '<label>大小 <input type="range" class="wsk-size" min="32" max="220" step="2"><b class="wsk-size-v"></b></label>' +
+                  '<label>角度 <input type="range" class="wsk-rot" min="-45" max="45" step="1"><b class="wsk-rot-v"></b></label>' +
+                  '<button class="avs-btn avs-btn-outline wsk-reset">還原這張</button>' +
+                '</div>' +
+              '</div>' +
+              '<div class="wsk-tuner-foot">' +
+                '<button class="avs-btn avs-btn-outline wsk-cancel">取消</button>' +
+                '<button class="avs-btn avs-btn-primary wsk-save">存起來</button>' +
+              '</div>' +
+            '</div>';
+        container.appendChild(back);
+
+        // 用跟卡片預覽同一套 scope 做法，避免面板的 CSS 外洩到工坊介面
+        const scopeId = 'wsk-stage-' + tpl.id;
+        const stage = back.querySelector('.wsk-stage');
+        stage.id = scopeId;
+        const scoped = String(tpl.cssContent || '').replace(/([^{}@][^{}]*)\{/g, (m, sel) =>
+            sel.trim().split(',').map(s => '#' + scopeId + ' ' + s.trim()).join(', ') + ' {');
+        const state = win._AVS_ENGINE?.read?.() || {};
+        const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
+        const _avCore2 = (win.VN_PLAYER || win.VN_Core) || {};
+        const avMem = Object.assign({}, _avCore2._avatarMemCache || {}, _avCore2._faceMemCache || {});   // 三合一生成的自拍頭像蓋過全身立繪
+        stage.innerHTML = '<style>' + _avsStyle(scoped) + '</style>' +
+            _avsSafe(_avsRenderTemplate(tpl.htmlContent || '', state, pack.variables || [], fmt, avMem));   // 面板是 AI 寫的：版面、貼紙的 data-wsk-i 都留著，會跑的拿掉
+
+        const root = stage.querySelector('.custom-status-panel') || stage.firstElementChild;
+        if (root) root.style.position = 'relative';
+        const stickers = [...stage.querySelectorAll('.wsk[data-wsk-i]')];
+        if (!stickers.length) { _wskSay('預覽裡看不到貼紙'); back.remove(); return; }
+
+        let cur = null;   // 目前選中的那顆
+        const rectOf = () => (root || stage).getBoundingClientRect();
+        // 還沒調過的貼紙：把它現在的位置換算成百分比當起點，之後就都是絕對定位
+        const ensure = (el) => {
+            const i = el.dataset.wskI;
+            if (!tune[i]) tune[i] = { x: null, y: null, s: null, r: null };
+            if (tune[i].x == null) {
+                const r = rectOf(), b = el.getBoundingClientRect();
+                tune[i].x = ((b.left - r.left) / r.width) * 100;
+                tune[i].y = ((b.top - r.top) / r.height) * 100;
+            }
+            if (tune[i].s == null) tune[i].s = Math.round(el.getBoundingClientRect().width) || 72;
+            if (tune[i].r == null) tune[i].r = 0;
+            return tune[i];
+        };
+        const paint = (el) => {
+            const t = tune[el.dataset.wskI];
+            if (!t) return;
+            el.style.position = 'absolute';
+            el.style.left = t.x.toFixed(2) + '%';
+            el.style.top = t.y.toFixed(2) + '%';
+            el.style.setProperty('--wsk-size', Math.round(t.s) + 'px');
+            el.style.transform = t.r ? 'rotate(' + t.r + 'deg)' : '';
+            el.style.zIndex = '4';
+        };
+        const ctlOn = back.querySelector('.wsk-ctl-on'), ctlNone = back.querySelector('.wsk-ctl-none');
+        const sizeEl = back.querySelector('.wsk-size'), rotEl = back.querySelector('.wsk-rot');
+        const sizeV = back.querySelector('.wsk-size-v'), rotV = back.querySelector('.wsk-rot-v');
+        const select = (el) => {
+            stickers.forEach(s => s.classList.remove('wsk-sel'));
+            cur = el;
+            if (!el) { ctlOn.style.display = 'none'; ctlNone.style.display = ''; return; }
+            el.classList.add('wsk-sel');
+            const t = ensure(el);
+            ctlOn.style.display = 'flex'; ctlNone.style.display = 'none';
+            sizeEl.value = Math.round(t.s); sizeV.textContent = Math.round(t.s) + 'px';
+            rotEl.value = Math.round(t.r); rotV.textContent = Math.round(t.r) + '°';
+        };
+        select(null);
+
+        stickers.forEach(el => {
+            el.style.cursor = 'grab';
+            el.style.pointerEvents = 'auto';   // 存檔後的規則會關掉點擊，編輯時要打開
+            let drag = null;
+            el.addEventListener('pointerdown', (ev) => {
+                ev.preventDefault(); ev.stopPropagation();
+                select(el);
+                const r = rectOf(), b = el.getBoundingClientRect();
+                drag = { dx: ev.clientX - b.left, dy: ev.clientY - b.top, r };
+                el.setPointerCapture(ev.pointerId);
+                el.style.cursor = 'grabbing';
+            });
+            el.addEventListener('pointermove', (ev) => {
+                if (!drag) return;
+                const t = tune[el.dataset.wskI];
+                const r = rectOf();
+                t.x = ((ev.clientX - drag.dx - r.left) / r.width) * 100;
+                t.y = ((ev.clientY - drag.dy - r.top) / r.height) * 100;
+                paint(el);
+            });
+            const stop = (ev) => { if (!drag) return; drag = null; el.style.cursor = 'grab'; try { el.releasePointerCapture(ev.pointerId); } catch (e) {} };
+            el.addEventListener('pointerup', stop);
+            el.addEventListener('pointercancel', stop);
+            if (tune[el.dataset.wskI]) paint(el);   // 之前調過的先套上
+        });
+
+        sizeEl.oninput = () => { if (!cur) return; tune[cur.dataset.wskI].s = Number(sizeEl.value); sizeV.textContent = sizeEl.value + 'px'; paint(cur); };
+        rotEl.oninput = () => { if (!cur) return; tune[cur.dataset.wskI].r = Number(rotEl.value); rotV.textContent = rotEl.value + '°'; paint(cur); };
+        back.querySelector('.wsk-reset').onclick = () => {
+            if (!cur) return;
+            delete tune[cur.dataset.wskI];
+            cur.style.cssText = 'cursor:grab;pointer-events:auto';
+            select(cur);   // 重新以現在的版位當起點
+        };
+        const close = () => back.remove();
+        back.querySelector('.wsk-tuner-x').onclick = close;
+        back.querySelector('.wsk-cancel').onclick = close;
+        back.addEventListener('pointerdown', (ev) => { if (ev.target === back) close(); });
+        back.querySelector('.wsk-save').onclick = async () => {
+            tpl.cssContent = _wskStripTune(tpl.cssContent) + _wskBuildTune(tune);
+            try {
+                await win.OS_DB.saveUITemplate(tpl);
+                currentTemplates = (await win.OS_DB.getAllUITemplates()) || [];
+                updateActiveTemplatesCache();
+                _wskSay('貼紙位置已存起來', 1);
+                close();
+                renderPackList(container);
+            } catch (e) { _wskSay('存不起來：' + ((e && e.message) || e)); }
+        };
+    }
+
+    // ── 🎨 美術方向（風格庫）──
+    //   風格庫只負責美術，工程規則（手機相容、佔位符、迴圈語法）永遠在它前面、不受它影響。
+    //   AVS 只吐 HTML+CSS、不能用外部圖片 → 一律以 cssOnly 模式挑包與組字。
+    let _furnaceArt = null;   // { styleId, layoutId }；null = 這次不用風格庫
+    function _uiStyle() { return win.OS_UI_STYLE || window.OS_UI_STYLE; }
+    function _refreshFurnaceArt(container, reroll) {
+        const S = _uiStyle();
+        const sel = container.querySelector('#furnace-art-select');
+        const note = container.querySelector('#furnace-art-note');
+        const wrap = container.querySelector('#furnace-art-wrap');
+        if (!sel || !note) return;
+        if (!S) { if (wrap) wrap.style.display = 'none'; _furnaceArt = null; return; }   // 風格庫沒載入就當沒這功能
+        if (!sel.options.length) {
+            // 🚨預設是「不套」：沒選就自動隨機挑一包＝她填的文字要跟一包沒點過的風格打架，
+            //   生出來的味道也不對（要空的，使用者自己在上面輸入）。
+            //   拿風格庫治「每次都同一種味道」是主動的選擇，不該替她決定。
+            sel.innerHTML = '<option value="none">不套，只照下面填的文字</option>' +
+                '<option value="auto">隨機挑一種（避開最近用過的）</option>' +
+                // 只標風格調性，不標用途：那是風格分類，不是「這個風格只能做任務／成就」的項目清單
+                S.packs().filter(p => p.cssOnly).map(p =>
+                    '<option value="' + p.id + '">' + p.name + (p.tone ? '｜' + p.tone : '') + '</option>').join('');
+        }
+        const v = sel.value || 'none';
+        if (v === 'none') { _furnaceArt = null; note.textContent = '這次不套風格庫，只照下面填的文字。'; return; }
+        if (v === 'auto') {
+            if (reroll || !_furnaceArt || !_furnaceArt.auto) _furnaceArt = Object.assign({ auto: true }, S.pick({ cssOnly: true }));
+        } else if (reroll || !_furnaceArt || _furnaceArt.styleId !== v) {
+            const p = S.get(v);
+            const ls = (p && p.layouts) || [];
+            const cur = _furnaceArt && _furnaceArt.styleId === v ? _furnaceArt.layoutId : '';
+            // 手選同一包時按「換一個」＝換版型骨架（同風格也不該每次長一樣）
+            _furnaceArt = { styleId: v, layoutId: ls.length ? (reroll ? ls[(ls.indexOf(cur) + 1) % ls.length] : ls[0]) : '' };
+        }
+        const p = S.get(_furnaceArt.styleId);
+        const L = S.layouts()[_furnaceArt.layoutId];
+        note.textContent = p ? ('這次用「' + p.name + '」＋' + (L ? L.name + '：' + L.desc : '預設骨架')) : '';
+    }
+    // 貼紙的接口/預設包下拉（同裝扮室：選了什麼下次記得）
+    function _refreshStickerUI(container) {
+        const srcSel = container.querySelector('#furnace-sticker-src');
+        const pSel = container.querySelector('#furnace-sticker-preset');
+        const note = container.querySelector('#furnace-sticker-note');
+        if (!srcSel || !pSel) return;
+        const src = srcSel.value;
+        if (src === 'none') {
+            pSel.style.display = 'none';
+            if (note) note.textContent = '這次不放貼紙。';
+            return;
+        }
+        pSel.style.display = '';
+        const list = _stkPresets(src);
+        const saved = _stkCfg()[src === 'novelai' ? 'naiPreset' : 'comfyPreset'] || '';
+        pSel.innerHTML = list.length
+            ? list.map((p, i) => '<option value="' + i + '"' + (_stkPresetKey(p) === saved ? ' selected' : '') + '>' +
+                String(p.name || ('預設 ' + (i + 1))).replace(/</g, '&lt;') + '</option>').join('')
+            : '<option value="" disabled selected>（這個接口還沒有預設包）</option>';
+        if (note) {
+            note.textContent = list.length
+                ? '貼紙的東西從這個世界裡挑，畫風由這個預設包決定。只當裝飾，不會壓到資料。'
+                : '這個接口還沒有預設包，先去圖片設置裡存一個，或改用另一個接口。';
+        }
+    }
+    // 更新煉丹爐風格建議列表（根據選中的 packId）
+    function _refreshFurnacePresets(container, packId) {
+        const wrap = container.querySelector('#furnace-presets-wrap');
+        const list = container.querySelector('#furnace-presets-list');
+        const styleInput = container.querySelector('#furnace-style-prompt');
+        if (!wrap || !list) return;
+
+        let presets = [];
+        try { presets = JSON.parse(localStorage.getItem('avs_furnace_presets') || '[]'); } catch(e) {}
+        const matched = presets.filter(p => p.packId === packId);
+
+        if (matched.length === 0) { wrap.style.display = 'none'; return; }
+        wrap.style.display = 'block';
+        list.innerHTML = matched.map(p => `
+            <div data-preset-id="${_avsEsc(p.id)}" style="
+                display:flex;align-items:flex-start;gap:8px;
+                background:rgba(212,175,55,0.06);border:1px solid rgba(212,175,55,0.18);
+                border-radius:6px;padding:9px 10px;cursor:pointer;
+                transition:background 0.15s;" class="furnace-preset-card">
+                <div style="flex:1;font-size:12px;color:rgba(var(--os-ink-rgb), 0.78);line-height:1.5;">
+                    ${_avsEsc(p.suggestion)}
+                </div>
+                <button data-del-preset="${_avsEsc(p.id)}" style="
+                    background:none;border:none;color:rgba(26,28,40,0.20);cursor:pointer;
+                    font-size:13px;padding:0 2px;flex-shrink:0;"
+                    title="刪除建議">✕</button>
+            </div>
+        `).join('');
+
+        // 點卡片 → 填入風格輸入框
+        list.querySelectorAll('.furnace-preset-card').forEach(card => {
+            card.onclick = (e) => {
+                if (e.target.closest('[data-del-preset]')) return;
+                styleInput.value = card.querySelector('div').textContent.trim();
+                card.style.border = '1px solid rgba(212,175,55,0.5)';
+                card.style.background = 'rgba(212,175,55,0.12)';
+                setTimeout(() => {
+                    card.style.border = '1px solid rgba(212,175,55,0.18)';
+                    card.style.background = 'rgba(212,175,55,0.06)';
+                }, 600);
+            };
+        });
+
+        // 刪除建議
+        list.querySelectorAll('[data-del-preset]').forEach(btn => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const id = btn.dataset.delPreset;
+                let all = [];
+                try { all = JSON.parse(localStorage.getItem('avs_furnace_presets') || '[]'); } catch(e) {}
+                if (!win.AUI.lsSet('avs_furnace_presets', JSON.stringify(all.filter(p => p.id !== id)), '風格建議清單')) return;
+                _refreshFurnacePresets(container, packId);
+            };
+        });
+    }
+
+    function bindFurnaceEvents(container) {
+        // 選包時更新風格建議列表
+        const packSelect = container.querySelector('#furnace-pack-select');
+        packSelect.onchange = () => _refreshFurnacePresets(container, packSelect.value);
+        // 初始載入
+        _refreshFurnacePresets(container, packSelect.value);
+        // 🎨 美術方向：換包重挑、「換一個」重擲（auto 換風格、手選換版型骨架）
+        const artSel = container.querySelector('#furnace-art-select');
+        if (artSel) artSel.onchange = () => _refreshFurnaceArt(container, true);
+        const artRe = container.querySelector('#furnace-art-reroll');
+        if (artRe) artRe.onclick = () => _refreshFurnaceArt(container, true);
+        _refreshFurnaceArt(container, false);
+        // 🐚 貼紙接口/預設包：換接口重列預設包，選了就記住（同裝扮室）
+        const stkSrc = container.querySelector('#furnace-sticker-src');
+        const stkPre = container.querySelector('#furnace-sticker-preset');
+        if (stkSrc) {
+            const c = _stkCfg();
+            if (c.src && stkSrc.querySelector('[value="' + c.src + '"]')) stkSrc.value = c.src;
+            stkSrc.onchange = () => { _stkSave({ src: stkSrc.value }); _refreshStickerUI(container); };
+        }
+        if (stkPre) stkPre.onchange = () => {
+            const src = stkSrc ? stkSrc.value : 'comfyui_direct';
+            const p = _stkPresets(src)[parseInt(stkPre.value, 10)];
+            if (p) _stkSave(src === 'novelai' ? { naiPreset: _stkPresetKey(p) } : { comfyPreset: _stkPresetKey(p) });
+        };
+        _refreshStickerUI(container);
+
+        container.querySelector('#furnace-start-btn').onclick = async () => {
+            // ✏️ 微調(diff)模式：走 find/replace、只改你說的；其他保留。跟「重新煉丹」全生成分流。
+            if (_furnaceRefineTpl) { await _runFurnaceRefine(container); return; }
+            const packId = container.querySelector('#furnace-pack-select').value;
+            const pack = currentPacks.find(p => p.id === packId);
+            if (!pack) return;
+            const log = container.querySelector('#furnace-log-output');
+            const stylePromptVal = container.querySelector('#furnace-style-prompt').value.trim();
+            // 🎨 美術方向文字：整個風格庫只送這一包（全部送進去會平均掉所有風格、還多燒 token）
+            let artText = '';
+            const S = _uiStyle();
+            if (S && _furnaceArt) {
+                try {
+                    artText = S.build(_furnaceArt.styleId, _furnaceArt.layoutId, { cssOnly: true });
+                    S.remember(_furnaceArt.styleId, _furnaceArt.layoutId);   // 記下來，下次隨機會避開
+                } catch (e) { console.warn('[AVS] 美術方向組字失敗', e); }
+            }
+            // 兩個都空才擋：有選美術方向就不必再打字
+            if (!stylePromptVal && !artText) { log.innerHTML = '請先選一個美術方向，或填寫風格要求'; return; }
+            // 按鈕在這裡就鎖：貼紙那段也要跑一趟文字模型加一次生圖，不鎖的話這段期間可以連按
+            const btn = container.querySelector('#furnace-start-btn');
+            btn.disabled = true;
+            const worldCtx = await _worldContext(1800);   // 沒 DIVE 進任何世界時是空字串，行為同以往
+            if (!worldCtx) console.warn('[AVS 煉丹] 沒抓到當前世界（沒進過世界門？）→ 這次只能靠變數與風格設計');
+            // 🐚 貼紙跟面板同一次生：這裡只先確認接口與預設包選好了，實際的貼紙內容由煉丹那次回覆一起帶回來
+            let sticker = null;
+            const _stkSrc = container.querySelector('#furnace-sticker-src')?.value || 'none';
+            let _stkPreset = null;
+            if (_stkSrc !== 'none') {
+                const _pi = parseInt(container.querySelector('#furnace-sticker-preset')?.value, 10);
+                _stkPreset = _stkPresets(_stkSrc)[_pi];
+                if (!_stkPreset) { log.innerHTML = '貼紙要先選一個預設包（或把上面的貼紙改成「不用」）'; btn.disabled = false; return; }
+            }
+
+            log.innerHTML = '火力全開，煉製中…';
+
+            try {
+                const flatVars = pack.variables.filter(v => v.type !== 'object');
+                const objVars  = pack.variables.filter(v => v.type === 'object');
+                // 分類 object 型變數（看「實際資料形狀」）：
+                //   值是物件 → 多實體（角色/NPC，用 {{#each}} 迴圈）
+                //   值是純量 → 單一群組（一組固定欄位，用 {{群組.欄位}} 點記法；用迴圈會整段空白）
+                let _curState = {};
+                try { _curState = win._AVS_ENGINE?.read?.() || {}; } catch(e) {}
+                const objInfo   = objVars.map(v => ({ v, ..._classifyObjVar(v, _curState) }));
+                const multiObj  = objInfo.filter(o => o.kind === 'multi');
+                const singleObj = objInfo.filter(o => o.kind === 'single');
+
+                let fullPrompt =
+                    `你是一個頂級 UI 設計師。嚴格遵守以下規則，不得輸出任何解釋或說明文字，只輸出指定格式。\n\n` +
+                    `輸出格式（不得更改標籤名稱，不得輸出標籤外的任何內容）：\n` +
+                    // 🚨骨架宣告要在 HTML 之前單獨寫一次。沒有這一步，模型讀完幾千字的構圖形容詞，
+                    //   動筆時還是會滑回它最熟的那副堆疊骨架——想過跟寫下來是兩回事，寫下來才會照著做。
+                    //   這段只給模型自己看，剝掉不進面板（同 <世界貼紙> 的做法）。
+                    `<版面骨架>\n` +
+                    `用幾句話講清楚這次要做的東西：它是什麼實體、它本身分成哪幾塊、每塊的大小與位置關係、哪些資料放進哪一塊。\n` +
+                    `講完檢查一次：如果這副骨架抽掉顏色和材質之後，就是「標題在上、內容在中、格子在下」，那它跟上一個面板一樣，換一個再寫。\n` +
+                    `</版面骨架>\n` +
+                    `<ui_template>\n` +
+                    `<style>\n/* 所有 CSS，父類必須是 .custom-status-panel */\n</style>\n` +
+                    `<!-- HTML 結構：必須跟上面宣告的骨架一致，不可以宣告完又寫回堆疊 -->\n` +
+                    `</ui_template>\n\n` +
+                    // 世界觀擺在最前面：面板長什麼樣要從「這是哪裡」推，不是從使用者人設推
+                    (worldCtx ? worldCtx + '\n' : '') +
+                    (stylePromptVal ? `風格要求：${stylePromptVal}\n\n` : '') +
+                    `【手機相容鐵則｜最優先，違反即失敗】面板最窄會被塞進約 320–390px 的手機框，絕對不能溢出或被裁切：\n` +
+                    `- 寬度一律響應式：width:100% / max-width / 百分比 / flex / grid / clamp()；嚴禁寫死大於螢幕的固定像素寬（如 width:600px 或過大的 min-width）。\n` +
+                    `- 根容器 .custom-status-panel 必須 box-sizing:border-box、width:100%、max-width:100%，不可橫向外溢。\n` +
+                    // 🚨這條以前只給 auto-fill+minmax 一種寫法，那產生的是「一排等大的格子」——
+                    //   跟骨架要求的主次差異（大格小格、跨欄）直接牴觸，而且它掛在「鐵則」下，模型一定聽這邊。
+                    //   相容性要守住，但不能順便把版面也釘成均勻網格。
+                    `- 多欄排版必須能在窄框收成單欄（minmax(min(100%,…),1fr)、auto-fit/auto-fill，或在窄寬度直接改單欄都可以）；橫向排列一律 flex-wrap:wrap。\n` +
+                    `　 格子不必等寬等高：要做出主次就用不等分的 grid-template-columns、grid-column:span N 或跨列，只要窄框下不溢出、不被裁切即可。\n` +
+                    `- 文字與數值用 word-break:break-word，避免 white-space:nowrap 撐破；圖片一律 max-width:100%。\n` +
+                    `- 必須在 320 / 390 / 1000 三種寬度下都排版正常、不溢出、不擠壞。\n\n` +
+                    `【一般變數】用 {{變數名}} 當佔位符：\n` +
+                    (flatVars.map(v => `  - {{${v.name}}}`).join('\n') || '  （無）');
+                if (multiObj.length) {
+                    fullPrompt +=
+                        `\n\n【多實體變數】內含多個實體（如多個角色/NPC），**必須用迴圈渲染，禁止直接寫 {{變數名}}**：\n` +
+                        multiObj.map(o => `  - 「${o.v.name}」（多個實體；每個實體的欄位數量與名稱都不盡相同）`).join('\n') + `\n` +
+                        `迴圈語法：{{#each 變數名}} ...單一實體的卡片HTML... {{/each}}\n` +
+                        `迴圈內可用：\n` +
+                        `  • {{@key}} ＝ 實體名\n` +
+                        `  • {{@avatar}} ＝ 該實體頭像URL（放進 <img src="{{@avatar}}">，無頭像自動帶透明圖、不破版）\n` +
+                        // 🚨頭像是人像，兩個方向都會壞：寬扁框把臉切成一條；細長框則是下半截全空。
+                        //   只講「高不小於寬」的話模型會往「越直越好」做，實測生出 1:2.5 的長條框。所以要鎖死區間。
+                        `★【頭像框鐵則】{{@avatar}} 是人物頭像，外框比例**只能落在 1:1 到 3:4 之間**：\n` +
+                        `　 用 aspect-ratio:1/1 或 3/4，配 object-fit:cover; object-position:top（優先保住臉）。\n` +
+                        `　 禁止寬大於高的寬扁框（臉會被切成一條），也禁止比 3:4 更高的細長條（下半截會是一片空白）。\n` +
+                        `　 頭像框的尺寸要自己決定（例如固定寬度加 aspect-ratio），` +
+                        `不可以讓它跟著卡片高度被拉長——放在 flex 容器裡時記得給頭像 flex:none、容器 align-items:flex-start，` +
+                        `否則預設的 stretch 會把框整個拉到跟卡片一樣高。\n` +
+                        `　 圓形、圓角方形、切角方形、加描邊都可以，就是不准壓扁也不准拉長。\n` +
+                        `  • {{#fields}} ...單一欄位的「列」HTML... {{/fields}} ＝ 系統會對「這個實體實際擁有的每個欄位」自動重複；列裡用 {{@label}} ＝ 欄位名、{{@value}} ＝ 欄位值\n` +
+                        `★【鐵則·防漏欄】每個實體的欄位都不一樣（有的多、有的少）。**嚴禁自己寫死任何欄位名當固定列**——所有資料列一律放進 {{#fields}}…{{/fields}} 交給系統逐欄位展開，這樣每張卡都會完整顯示「該實體自己的全部欄位」，跑團中途新增的欄位也會自動出現、絕不漏。\n` +
+                        `★ 你只負責設計「卡片外框」和「一個欄位列長怎樣」（用 {{@label}}/{{@value}}）；欄位有幾個、叫什麼，全交給 {{#fields}} 自動處理。\n` +
+                        `★ 迴圈會對每個實體自動重複，**絕對不要寫死實體名**`;
+                }
+                if (singleObj.length) {
+                    fullPrompt +=
+                        `\n\n【單一群組變數】是「一組固定欄位」、不是多個實體 → **一律用點記法 {{群組名.欄位名}} 直接取值，禁止用迴圈**（用迴圈整段會空白）：\n` +
+                        singleObj.map(o => `  - 「${o.v.name}」欄位：${o.fields.join('、') || '（動態）'}　→ 寫成 {{${o.v.name}.欄位名}}`).join('\n') + `\n` +
+                        `把每個欄位逐一放進版面（一個欄位一個 {{${singleObj[0].v.name}.欄位名}} 佔位符），不要包迴圈、不要寫死數值。\n` +
+                        `★★【欄位名必須逐字照抄，這是機器比對、不是給人看的】佔位符裡的群組名與欄位名，一個字都不能改：\n` +
+                        `  - 禁止翻譯（「魔力值」不可寫成 mana）、禁止縮寫（「魔力值」不可寫成 MP、「金錢餘額」不可寫成 gold）、禁止改用同義詞、禁止改大小寫、禁止加減空格或標點。\n` +
+                        `  - 想在畫面上顯示別的名字沒問題——**標籤文字**你可以自由命名（例如標籤寫「魔力源」），但**佔位符裡的欄位名**必須是上面清單裡的原字。\n` +
+                        `    ✓ <span>魔力源</span><b>{{MC生命與魔力.魔力值}}</b>\n` +
+                        `    ✗ <span>魔力源</span><b>{{MC生命與魔力.MP}}</b>　← 系統查不到這個鍵，欄位會變成「—」\n` +
+                        `  - 也不要自己發明清單上沒有的欄位（那種佔位符永遠是「—」）。`;
+                }
+
+                fullPrompt +=
+                    // 🚨這段以前只有禁令（禁卡中卡／禁堆疊／禁圓角列表），沒給任何要做的動作。
+                    //   禁掉三種錯的，模型避開「卡中卡」的辦法就是攤成一排卡片——照樣是同一副骨架。
+                    //   所以現在先逼它做一個決定：這是什麼實體物件、那個物件本身怎麼分塊，資料才跟著構造走。
+                    `\n\n【🧱 骨架先於裝飾｜最重要】\n` +
+                    `動手寫 HTML 之前先決定一件事：這個面板「是一件什麼東西」。是一張票、一台機器、一份卷宗、一個櫥窗、一面牆、一張攤開的地圖——講得出來的實體。\n` +
+                    `然後讓那個東西**本身的構造**決定版面：它天生分成幾塊？哪塊大哪塊小？哪塊是貫穿的、哪塊是嵌進去的、哪塊壓在別塊上面？\n` +
+                    `資料跟著構造走——先有構造，再把資料放進它本來就有的位置。**不是先切一排卡片再貼皮**。\n` +
+                    `一個東西如果拆解出來就是「上面標題、中間內容、下面一排格子」，那它跟上一個面板是同一副骨架，重挑一個。\n\n` +
+                    `【🚫 防無聊鐵則】你最大的老毛病＝把資料塞進「卡片裡再套卡片」、每次只換顏色和名稱。嚴禁：\n` +
+                    `- 禁止 card-in-card（卡中卡）、禁止單純 header+content+footer 堆疊、禁止一排圓角矩形列表、禁止只靠漸層＋陰影假裝高級。\n` +
+                    `- 嚴禁每次都長一樣、只換色票與欄位名——視覺主體必須隨「當前世界觀」與「這個面板要顯示的資料性質」重新設計，每次都不同。\n\n` +
+                    `【✨ 必須做成主題化資訊面板】\n` +
+                    `- 面板外形要呼應這個故事的世界觀與此面板的資料用途（由你依實際內容決定造型，不要套固定模板、不要每次同一個樣子）。\n` +
+                    `- 資訊要「融入」主體結構裡呈現，而不是另開一個方塊貼上去。\n` +
+                    `- 至少有一個 inline SVG 或純 CSS 造型元素當「視覺主體」（不是只當小圖示點綴）；不可引用外部圖檔。\n\n` +
+                    `【🧩 善用分層與互動結構｜純 CSS、模板不跑 JS】\n` +
+                    `- 資料多時別攤成一長條。整理層次的手段有兩個方向，不要只用縱向那一半：\n` +
+                    `　縱向＝分段、分層、分頁、折疊；橫向＝分欄、跨欄、並置、貼邊、包圍、互相壓住。\n` +
+                    `- 折疊用原生 <details><summary>；分頁／切換用隱藏 <input type="radio"> + <label> + :checked 兄弟選擇器純 CSS 實現。\n` +
+                    `- ⚠️ 模板只會套用 HTML+CSS、不會執行任何 <script> 或 JS；所有展開、切換、分頁一律純 CSS，寫了 JS 也不會運作。\n\n` +
+                    // 🚨這段以前寫死「有結構的用 flex-direction:column」——那是整份提示裡唯一一句可以直接抄進
+                    //   CSS 的版面指令，而它說的是「垂直堆疊」。旁邊講構圖的全是形容詞，模型當然選能落地的那句，
+                    //   於是骨架永遠是同一個縱向堆疊，風格庫只能在上面貼皮＝換皮不換骨。這裡只講目的，不給實作。
+                    `【📏 高度感】別讓面板「內容多高就多高」塌成一條：根容器給合理 min-height，長列表用 max-height + overflow:auto 內捲，維持刻意穩定的版面比例（仍須符合上方手機相容鐵則）。\n` +
+                    `　 用什麼方式搭骨架（grid、多欄、絕對定位、重疊）由下面的版面骨架決定，這裡不預設任何一種。\n\n` +
+                    `【文字規範】按鈕／標籤文字是純內容，不要在文字裡塞 [ ] / << >> / » 之類 ASCII 裝飾，裝飾一律用 CSS。\n\n` +
+                    `★ 以上只規範視覺與結構；上面的 {{佔位符}} / {{#each}} / {{群組.欄位}} 語法與手機相容鐵則完全照舊，不得更動或省略。`;
+
+                // 🎨 美術方向擺在最後、緊接著資料鐵則：
+                //   ①位置：夾在中段會被後面那句「外形自行設計、不要套固定模板」壓過去——
+                //     實測 AI 只拿了風格的形狀(票券外框、條碼)，色彩卻交還給「依世界觀決定」→ 整張變黑。
+                //     所以要放在那句之後，並明講這一次由美術方向接管造型。
+                //   ②資料：這段有八百字的構圖與留白指令，不補一句硬規則的話，AI 會為了版面把資料列做成裝飾。
+                if (artText) {
+                    fullPrompt +=
+                        `\n\n【本次美術方向｜取代上面「外形由你自行設計」那一段】\n` +
+                        `這次不要自創造型，也不要只借名詞卻套回原本的深色卡片：外形、材質、色彩、字體層級一律照下面走。\n` +
+                        `其餘規則（禁卡中卡、純 CSS 互動、高度感、文字規範、佔位符語法）完全不變。\n\n` +
+                        artText +
+                        `\n★★ 美術方向只決定長相，不決定內容：上面列出的每一個變數都必須出現在面板上，` +
+                        `不可以為了構圖、留白或視覺主體省略任何資料列與欄位。多實體一律 {{#each}} 配 {{#fields}}、` +
+                        `單一群組一律 {{群組.欄位}}——資料區空掉的面板一律視為失敗。`;
+                }
+                // 🐚 貼紙的設計指示跟面板寫在同一份 prompt：同一個 AI 一次想完，它自己決定畫什麼、自己知道放哪
+                if (_stkPreset) fullPrompt += _STICKER_SPEC;
+
+                // 使用與其他模組一致的 generateText 介面
+                const full = await (
+                    win.OS_API_ENGINE?.generateText?.('general_assistant', fullPrompt) ||
+                    Promise.reject(new Error('API 引擎未就緒'))
+                );
+
+                if (!full) throw new Error('AI 回傳空白');
+
+                // 提取 <ui_template> block（AI 可能在前面輸出 COT，用 greedy 找最後一個完整塊）
+                const matches = [...full.matchAll(/<ui_template>([\s\S]*?)<\/ui_template>/gi)];
+                const raw = matches.length ? matches[matches.length - 1][1] : null;
+
+                // 骨架宣告只給模型自己想清楚用，不進面板 —— log 出來才知道它到底決定了什麼，
+                //   下次面板又長回堆疊時，一眼就能分辨是「沒想」還是「想了沒照做」
+                try {
+                    const _sk = String(full).match(/<版面骨架>([\s\S]*?)<\/版面骨架>/);
+                    if (_sk) console.log('[AVS 煉丹] 這次的版面骨架：\n' + _sk[1].trim());
+                    else console.warn('[AVS 煉丹] AI 沒輸出 <版面骨架>（骨架多半又滑回堆疊了）');
+                } catch (e) {}
+
+                // fallback：若沒有 <ui_template> 標籤，嘗試直接抓 HTML 內容
+                //   ⚠️ 先把貼紙與骨架區塊剝掉，不然那些文字會被當成面板內容一起存進去
+                const _noStk = String(full)
+                    .replace(/<世界貼紙>[\s\S]*?<\/世界貼紙>/g, '')
+                    .replace(/<版面骨架>[\s\S]*?<\/版面骨架>/g, '');
+                const htmlFallback = !raw && _noStk.includes('<div') ? _noStk : null;
+                const content = raw || htmlFallback;
+
+                if (!content) throw new Error('AI 未輸出 <ui_template> 格式，請重試');
+
+                // 🧪 出爐即校驗：AI 常把欄位名改寫成自己習慣的縮寫（「魔力值」→ MP、「金錢餘額」→ gold），
+                //    而渲染引擎查不到鍵只會靜默顯示「—」→ 面板看起來就是「壞了但查不出原因」。
+                //    這裡當場把模板裡的 {{群組.欄位}} 抓出來跟已知欄位名對，不靠 AI 自律。
+                //    只提示不自動改：欄位名沒有可靠的機器對應（MP 到底是魔力值還是魔法點數？猜錯更糟）。
+                let _issues = [];
+                try { _issues = _auditTemplate(content, objInfo, flatVars); } catch (e) { console.warn('[AVS 煉丹] 校驗失敗', e); }
+
+                // 貼紙圖在這裡才生：面板已經寫好了，圖生不出來也只是那幾個 <i> 空著，不影響版面
+                if (_stkPreset) {
+                    try { sticker = await _stickerFromReply(full, log, _stkSrc, _stkPreset); }
+                    catch (e) { console.warn('[AVS 貼紙]', e); }
+                    if (!sticker) _issues.push('貼紙沒畫出來（面板本身沒問題，那幾個裝飾位置會空著）');
+                }
+
+                const styleMatch = content.match(/<style>([\s\S]*?)<\/style>/i);
+                // 🐚 貼紙 CSS 直接併進這張模板自己的樣式：渲染端（三個入口）完全不必知道有貼紙這回事，
+                //    微調(diff)也不會動到它，模板刪掉貼紙就跟著走。
+                let _css = (styleMatch ? styleMatch[1].trim() : '') +
+                    (sticker ? _stickerCss(sticker.url, sticker.cols, sticker.rows, sticker.boxes) : '');
+                let _html = content.replace(/<style>[\s\S]*?<\/style>/gi, '').trim();
+                // 🚨🚨最後一道防線：不管圖是貼紙放的還是 AI 自己寫死的 base64，太大一律剝掉。
+                //   狀態面板每次訊息更新都會重新解析整份樣式表，一張沒壓的圖＝一百多萬字的 CSS，
+                //   實測會讓酒館卡死到必須從工作管理員砍掉，而且刪除鈕就在那個打不開的面板裡。
+                const _TPL_MAX = 500 * 1024;
+                if (_css.length + _html.length > _TPL_MAX) {
+                    const _strip = s => s.replace(/data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+/g, '');
+                    const _before = _css.length + _html.length;
+                    _css = _strip(_css); _html = _strip(_html);
+                    console.warn('[AVS 煉丹] 這張面板太大（' + Math.round(_before / 1024) + 'KB），已把內嵌圖剝掉再存');
+                    _issues.push('面板裡有太大的圖（' + Math.round(_before / 1024) + 'KB），已經拿掉，不然酒館會被拖死');
+                }
+                await win.OS_DB.saveUITemplate({
+                    id: 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                    packId: pack.id,
+                    packName: pack.name,
+                    stylePrompt: stylePromptVal,
+                    cssContent: _css,
+                    htmlContent: _html,
+                    isActive: false,
+                    createdAt: Date.now(),
+                });
+
+                // 問題直接寫在爐口，不要只丟 console：面板「畫得漂亮但資料空白」時，
+                // 使用者手上沒有任何線索可以判斷是資料還沒進來、還是模板寫錯。
+                const _esc = s => String(s).replace(/[<>&]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c]));
+                log.innerHTML = _issues.length
+                    ? '煉好了，但這張面板有幾個地方接不到資料：\n' +
+                      _issues.slice(0, 6).map(s => '　• ' + _esc(s)).join('\n') +
+                      (_issues.length > 6 ? '\n　…還有 ' + (_issues.length - 6) + ' 項' : '') +
+                      '\n→ 按「重新煉丹」再來一次通常就好。'
+                    : '煉丹完成！已嵌入到檔案卡片中。';
+
+                // 刷新變數包列表（卡片底部 UI 面板區會自動顯示新煉的）
+                win.OS_DB.getAllUITemplates().then(tpls => {
+                    currentTemplates = tpls || [];
+                    renderPackList(container);
+                });
+                // 1.5 秒後自動關閉 modal
+                if (!_issues.length) setTimeout(() => closeFurnaceModal(container), 1500);   // 有問題就留著視窗，別讓警告一閃而過
+            } catch (e) {
+                console.error('[AVS Furnace]', e);
+                log.innerHTML = `炸鍋了：${_avsEsc(e && e.message)}`;   // 接口錯誤可能夾著伺服器回的字
+            } finally {
+                btn.disabled = false;
+            }
+        };
+    }
+
+    function renderStateView(container) {
+        const el = container.querySelector('#avs-view-state');
+        if (!el) return;
+
+        // 整個「目前狀態」分頁由 os_avs_state.js 統一渲染（亮色系 + 人性化狀態 + 進階摺疊）
+        try { win.OS_AVS_STATE?.renderInto?.(el, { packs: currentPacks }); }
+        catch (e) { console.warn('[AVS] OS_AVS_STATE.renderInto 失敗', e); el.innerHTML = '<div class="avs-st-err">狀態模組載入失敗，請重載一次。</div>'; }
+    }
+
+    // 啟用中的面板鏡一份進 localStorage，給 vn_inspect 在拿不到 OS_DB 時當退路。
+    // ⚠️ 面板的 html/css 動輒幾百 KB（這個 key 實測量到 861KB），localStorage 是全站共用 5MB。
+    //    這裡以前是裸的 setItem：額度一滿就 QuotaExceeded 當場炸，把呼叫它的整條 handler 一起帶走
+    //    → 「設為啟用」按了完全沒反應（IDB 其實已經存進去了，只是畫面永遠不重畫）。
+    //    真資料在 IDB，這份只是快取 → 寧可沒有，也不准拖死呼叫端。
+    function _saveActiveTplCache(list) {
+        const K = 'avs_active_ui_templates';
+        const arr = Array.isArray(list) ? list : [];
+        try { localStorage.setItem(K, JSON.stringify(arr)); return true; } catch (e) {}
+        try {   // 塞不下 → 先剝掉內嵌的 base64 圖（貼紙/背景，最肥的就是它們）再試一次
+            const _strip = v => String(v || '').replace(/data:image\/[^;]+;base64,[^"'()\s]+/g, '');
+            localStorage.setItem(K, JSON.stringify(arr.map(t => ({ ...t, cssContent: _strip(t.cssContent), htmlContent: _strip(t.htmlContent) }))));
+            console.warn('[AVS] 啟用面板快取塞不下 localStorage → 已剝掉內嵌圖片存簡版（IDB 那份仍是完整的）');
+            return true;
+        } catch (e) {}
+        try { localStorage.removeItem(K); } catch (e) {}
+        console.warn('[AVS] localStorage 已滿，啟用面板快取寫不進去 → 已清掉這個 key，面板一律改從 IDB 讀');
+        return false;
+    }
+    function updateActiveTemplatesCache() {
+        _saveActiveTplCache(currentTemplates.filter(t => t.isActive));
+        console.log('[AVS] 已更新全域活動模板快取。');
+    }
+
+    /**
+     * 依 packId 自動啟用對應的 UI 模板（供角色卡進入故事時呼叫）
+     * 若該包已有 isActive 的模板則不重複操作。
+     */
+    async function activateTemplateForPack(packId) {
+        if (!packId || !win.OS_DB) return;
+        try {
+            const allTpls = await win.OS_DB.getAllUITemplates?.() || [];
+            const packTpls = allTpls.filter(t => t.packId === packId);
+            if (!packTpls.length) return;                           // 此包無模板
+            if (packTpls.some(t => t.isActive)) return;            // 已有啟用的，不覆蓋
+
+            // 取最新的模板（createdAt 最大）啟用
+            packTpls.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            packTpls[0].isActive = true;
+            await win.OS_DB.saveUITemplate(packTpls[0]);
+
+            // 更新 localStorage 快取
+            const updated = await win.OS_DB.getAllUITemplates?.() || [];
+            _saveActiveTplCache(updated.filter(t => t.isActive));
+            console.log(`[AVS] 自動啟用展廳面板：packId=${packId}`);
+        } catch(e) {
+            console.warn('[AVS] activateTemplateForPack 失敗:', e);
+        }
+    }
+
+    // V3：規則 modal 內 inline onclick 呼叫的 helper
+    function _ruleModalContainer() {
+        // modal 在 launchApp container 內，但 id 唯一，用 document 抓即可
+        return document.querySelector('#avs-rules-modal')?.closest('.avs-container') || document;
+    }
+    function _editRule(id) { _editingRuleIdInModal = id; renderRulesModalList(_ruleModalContainer()); }
+    function _cancelEditRule() { _editingRuleIdInModal = null; renderRulesModalList(_ruleModalContainer()); }
+    function _toggleRule(id) {
+        win.OS_AVS_RULES?.toggleRule?.(id);
+        renderRulesModalList(_ruleModalContainer());
+    }
+    async function _delRule(id) {
+        if (!await AUI.confirm('刪除這條規則？')) return;
+        win.OS_AVS_RULES?.deleteRule?.(id);
+        if (_editingRuleIdInModal === id) _editingRuleIdInModal = null;
+        renderRulesModalList(_ruleModalContainer());
+    }
+    function _saveEditRule(id) {
+        const pack = _currentRulesPack;
+        if (!pack) return;
+        const card = document.querySelector(`.avs-card[data-rule-edit="${id}"]`);
+        if (!card) return;
+        const isNew = id === '__new__';
+        const name = (card.querySelector('[data-rule-key="name"]')?.value || '').trim();
+        const path = (card.querySelector('[data-rule-key="path"]')?.value || '').trim();
+        const op = (card.querySelector('[data-rule-key="op"]')?.value || '>=').trim();
+        const rawVal = (card.querySelector('[data-rule-key="value"]')?.value || '').trim();
+        const content = (card.querySelector('[data-rule-key="content"]')?.value || '').trim();
+        if (!path) { AUI.alert('請選擇項目'); return; }
+        if (!content) { AUI.alert('請填注入內容'); return; }
+        const n = parseFloat(rawVal);
+        const value = (!isNaN(n) && String(n) === rawVal) ? n : rawVal;
+        const data = { name: name || path, path, op, value, content, enabled: true, packId: pack.id };
+        const saved = isNew ? win.OS_AVS_RULES?.addRule?.(data) : win.OS_AVS_RULES?.updateRule?.(id, data);
+        if (saved === null || saved === false) return;   // 沒存下來：留著這張編輯卡，打的字不丟（存檔那邊已經跳過提示）
+        _editingRuleIdInModal = null;
+        renderRulesModalList(_ruleModalContainer());
+    }
+
+    // 🔬 本輪更新了什麼：狀態面板右上角一顆小鈕，點了跳小窗看這輪副模型改了哪些欄位
+    //   10-13：以前摺在面板最底下不美觀，而且每次打開資訊中心都被攤開。資訊中心（酒館）、資料中心（PWA）都叫這幾支
+    function _updEsc(s) { return String(s == null ? '' : s).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+    function _updList() {
+        const le = win.OS_STATE_RUNTIME?.getLastExtract?.();
+        const upd = le && le.updates;
+        if (!upd || typeof upd !== 'object' || !Object.keys(upd).length) {
+            return { n: 0, rows: [], empty: le ? '這輪沒有更新任何欄位' : '這輪沒有抽取紀錄（狀態是正文自己用 <vars> 寫的，或還沒生成過）' };
+        }
+        const rows = Object.entries(upd).map(([k, v]) => ({
+            k: String(k).replace(/^[^.]+\./, ''),   // 去掉容器前綴（角色狀態.），只留 角色.欄位
+            v: (v && typeof v === 'object') ? JSON.stringify(v) : String(v),
+        }));
+        return { n: rows.length, rows };
+    }
+    function updatesBtnHtml() {
+        const u = _updList();
+        return '<div class="avs-upd-dock"><button type="button" class="avs-upd-btn"><i class="fa-solid fa-microscope"></i>本輪更新' +
+            (u.n ? '<b>' + u.n + '</b>' : '') + '</button></div>';
+    }
+    // host＝小窗蓋在誰上面（資訊中心那一整個窗）
+    function openUpdates(host) {
+        const doc = (host && host.ownerDocument) || document;
+        const box = host || doc.body;
+        box.querySelectorAll(':scope > .avs-upd-mask').forEach(x => x.remove());
+        const u = _updList();
+        const m = doc.createElement('div');
+        m.className = 'avs-upd-mask';
+        m.innerHTML = '<div class="avs-upd-card"><div class="avs-upd-head"><span><i class="fa-solid fa-microscope"></i> 本輪更新了什麼</span>' +
+            '<button type="button" class="avs-upd-x" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
+            (u.n ? '<div class="avs-upd-list">' + u.rows.map(r => '<div class="avs-upd-row"><span class="avs-upd-k">' + _updEsc(r.k) + '</span><span class="avs-upd-v">' + _updEsc(r.v) + '</span></div>').join('') + '</div>'
+                 : '<div class="avs-upd-empty">' + _updEsc(u.empty) + '</div>') +
+            '</div>';
+        m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('.avs-upd-x')) m.remove(); });
+        box.appendChild(m);
+    }
+    function bindUpdatesBtn(root, host) {
+        const btn = root && root.querySelector('.avs-upd-btn');
+        if (btn) btn.addEventListener('click', (e) => { e.stopPropagation(); openUpdates(host); });
+    }
+
+    win.OS_AVS = {
+        launch: launchApp,
+        updatesBtnHtml, openUpdates, bindUpdatesBtn,   // 🔬 狀態面板右上角「本輪更新」鈕＋小窗（資訊中心／資料中心共用）
+        updList: _updList,   // 📜 同一份「本輪更新了什麼」給章末簡報卡的「狀態變化」那欄（{ n, rows:[{k,v}], empty }，字還沒轉義）
+        // 共用渲染引擎：給 vn_inspect 資訊中心、酒館資訊中心共用，保證兩邊一致。對外這份已經消毒好（值轉義＋面板過 AUI.safeHtml），拿去直接放
+        renderTemplate: function (html, state, packVars, fmt, avatarMap) { return _avsSafe(_avsRenderTemplate(html, state, packVars, fmt, avatarMap)); },
+        renderEntityCard: _avsRenderEntityCard,   // 只畫某一個角色那張卡(async)：劇情雙擊立繪的角色卡用
+        auditTemplate: _auditTemplate,
+        classifyObjVar: _classifyObjVar,      // 煉丹前 object 型變數分類＋欄位清單（劇情目標還是 {} 時也要列得出欄位）        // 出爐即校驗：模板接不接得到資料（煉丹後自動跑，也可單獨驗一張舊面板）
+        buildAvatarMap: _avsBuildAvatarMap,   // 預撈角色頭像(async) 給 {{@avatar}} 用
+        syncVarPackToLorebook,   // 對外暴露，方便其他模組或手動觸發（現為「清理舊世界書條目」）
+        buildVarDefsContent,     // 變數定義說明書內容→給 state_runtime.injectCurrent 即時注入主提示詞（取代寫世界書）
+        generateAndSaveSchema: _aiGenerateAndSavePack,   // 建檔畫面「開始追蹤狀態」共用此核心（生成+存+同步）
+        applySimplePreset,      // 建檔畫面「🪶 簡易預設」共用此實作
+        applyParallaxPreset,    // 建檔畫面「🌌 視差預設・稜鏡／柴郡」共用此實作（傳 skin 決定啟用哪張皮）
+        openNewPackEditor,      // 建檔畫面「自己建」共用此實作
+        // V3：規則 modal helper（給 inline onclick 呼叫）
+        _editRule, _cancelEditRule, _toggleRule, _delRule, _saveEditRule,
+        activateTemplateForPack,
+        saveActiveTplCache: _saveActiveTplCache,   // 啟用面板快取的唯一寫入口（會擋 localStorage 額度炸掉呼叫端）
+        /** 還原上一個 AVS 快照（可在 reroll/重試 時外部呼叫） */
+        restoreSnapshot: () => win._AVS_ENGINE?.restore?.() ?? null,
+        /** 取當前故事的 AVS 狀態 */
+        getState: () => win._AVS_ENGINE?.read?.() ?? {},
+        /** 以指定 pack 初始化當前故事狀態 */
+        initFromPack: (pack) => win._AVS_ENGINE?.initFromPack?.(pack),
+    };
+})();

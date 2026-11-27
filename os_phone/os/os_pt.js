@@ -1,0 +1,812 @@
+// ----------------------------------------------------------------
+// [檔案] os_pt.js
+// 路徑：os_phone/os/os_pt.js
+// 職責：視差城市「PT 正派經濟」——錢包存取層 + 大總結結算估值 + VN 結算卡 + 交易所面板 + 地塊 built 狀態。
+//   PT ＝交易區的正派貨幣，跟柴郡黑市的💎碎片(os_404_store)完全分開、互不換算。
+//   賺＝每份大總結生成後跑一次結算(副模型直連估值，不發 GENERATION_*、不觸發 AVS)。
+//   花＝走到城市交易所建築彈面板買房。存 OS_DB app_data store(不動 schema、免升版 deadlock)。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    console.log('[PT] 載入交易區經濟系統...');
+    const win = window.parent || window;
+
+    // ── 可調參數集中一處 ─────────────────────────────────
+    const PT_CFG = {
+        caps: { base: 40, progress: 30, goal: 30, event: 20 },   // 估值每格上限（achv 格已退役：成就改白兔櫃檯逐筆兌換，免雙重計價）
+        totalCap: 120,          // 單章總額上限
+        achvCaps: { normal: 15, great: 40, legend: 100 },   // 白兔成就估值量級（普通/亮眼/值得紀念）
+        fallbackPerK: 2,        // 解析失敗退機械底：每 1000 字給 2 PT
+        fallbackCap: 20,        // 機械底(字數部分)上限
+        housePrice: 1000,       // 玩家房價
+        ledgerCap: 100,         // ledger 保留筆數
+        cafeRate: 1,            // 書咖帳戶換 PT：幾塊書咖的錢換 1 PT（書咖菜單本來就照 PT 定價，一比一）
+        cafeDailyCap: 200,      // 書咖帳戶一天最多換幾 PT（約兩章結算；不讓書咖變印鈔機）
+    };
+
+    const APP_ID = 'pt_wallet';   // OS_DB app_data 命名空間
+    const K_BALANCE = 'balance';
+    const K_LEDGER = 'ledger';
+    const K_SETTLED = 'settled';  // 每卡已結算到的最高 summaryCount：settled::<chatId>
+    const K_PLOT = 'plot';        // 地塊 built 狀態：plot::<plotId> = true
+
+    function _db() { return win.OS_DB || (window.OS_DB); }
+
+    // ── 錢包存取層 ───────────────────────────────────────
+    async function getPT() {
+        try {
+            const db = _db();
+            if (!db?.getAppData) return 0;
+            const v = await db.getAppData(APP_ID, K_BALANCE);   // global scope：跨劇情共用一份
+            const n = Number(v);
+            return isFinite(n) && n > 0 ? Math.floor(n) : 0;
+        } catch (e) { console.warn('[PT] getPT 失敗', e); return 0; }
+    }
+
+    async function _setPT(n) {
+        const db = _db();
+        if (!db?.saveAppData) throw new Error('OS_DB.saveAppData 不存在');
+        await db.saveAppData(APP_ID, K_BALANCE, Math.max(0, Math.floor(n)));
+    }
+
+    async function getLedger() {
+        try {
+            const db = _db();
+            if (!db?.getAppData) return [];
+            const v = await db.getAppData(APP_ID, K_LEDGER);
+            return Array.isArray(v) ? v : [];
+        } catch (e) { return []; }
+    }
+
+    async function _pushLedger(entry) {
+        try {
+            const db = _db();
+            if (!db?.saveAppData) return;
+            const list = await getLedger();
+            list.unshift(entry);                        // 最新在前
+            if (list.length > PT_CFG.ledgerCap) list.length = PT_CFG.ledgerCap;
+            await db.saveAppData(APP_ID, K_LEDGER, list);
+        } catch (e) { console.warn('[PT] 寫 ledger 失敗', e); }
+    }
+
+    // ── 進出錢包排隊：一次只跑一筆 ──
+    //   addPT/spendPT 都是「讀餘額→算→寫回」；章總結結算和櫃檯兌換同時入帳時，兩邊讀到同一個舊餘額，後寫的蓋掉先寫的，少一筆。
+    let _walletQ = Promise.resolve();
+    function _serial(fn) {
+        const run = _walletQ.then(fn);
+        _walletQ = run.catch(() => {});
+        return run;
+    }
+
+    // ── 已付記號：同一筆（某份章總結、某個成就、某件戰利品、某段房租）重試幾次都只付一次 ──
+    //   { <txId>: { n: 已付多少, note, at } }。跟餘額同一筆交易寫進去（OS_DB.saveAppDataMany），
+    //   入帳後、標「已兌換」前當掉，下次再來會看到已付過，只補標記不再付錢。
+    const K_PAID = 'paid';
+    const PAID_CAP = 500;   // 只要撐過「入帳到標記」那一下；兌換完的東西不會再回來，舊的可以丟
+    async function _getPaid() {
+        try { const v = await _db().getAppData(APP_ID, K_PAID); return (v && typeof v === 'object' && !Array.isArray(v)) ? v : {}; }
+        catch (e) { return {}; }
+    }
+    async function paidOf(txId) {
+        if (!txId) return null;
+        const p = await _getPaid();
+        return p[txId] || null;
+    }
+
+    // 加 PT（reason 進 ledger；items＝結算明細，給 VN 卡攤開）
+    //   meta.tx = [{ id, n, note }]：照筆入帳；那一筆已付過的不再付（付過的比這次少，只補差額，像房租隔天再補算）。
+    //   帶 tx 時實際入帳 = 各筆差額加總，n 不看。
+    function addPT(n, meta) {
+        return _serial(async () => {
+            const tx = meta && Array.isArray(meta.tx) ? meta.tx.filter(t => t && t.id) : null;
+            const cur = await getPT();
+            let pay = Math.floor(Number(n) || 0);
+            let paid = null;
+            if (tx && tx.length) {
+                paid = await _getPaid();
+                pay = 0;
+                const at = _now();
+                tx.forEach(t => {
+                    const want = Math.max(0, Math.floor(Number(t.n) || 0));
+                    const had = paid[t.id] ? (Number(paid[t.id].n) || 0) : 0;
+                    if (want > had) pay += want - had;
+                    paid[t.id] = { n: Math.max(want, had), note: t.note != null ? String(t.note) : (paid[t.id] && paid[t.id].note) || '', at: at };
+                });
+                const keys = Object.keys(paid);
+                if (keys.length > PAID_CAP) {
+                    keys.sort((a, b) => (paid[a].at || 0) - (paid[b].at || 0)).slice(0, keys.length - PAID_CAP).forEach(k => { delete paid[k]; });
+                }
+            }
+            if (pay <= 0 && !paid) return cur;
+            const next = cur + Math.max(0, pay);
+            const db = _db();
+            if (paid && db && db.saveAppDataMany) {
+                await db.saveAppDataMany(APP_ID, [{ key: K_BALANCE, value: next }, { key: K_PAID, value: paid }]);
+            } else {
+                if (pay > 0) await _setPT(next);
+                if (paid && db && db.saveAppData) await db.saveAppData(APP_ID, K_PAID, paid);
+            }
+            if (pay > 0) await _pushLedger({ ts: _now(), delta: pay, reason: (meta && meta.reason) || '結算', items: (meta && meta.items) || null, balanceAfter: next });
+            return next;
+        });
+    }
+
+    // 花 PT：夠才扣，回傳 { ok, balance, short }
+    function spendPT(n, reason) {
+        return _serial(async () => {
+            n = Math.floor(Number(n) || 0);
+            const cur = await getPT();
+            if (n <= 0) return { ok: false, balance: cur, short: 0 };
+            if (cur < n) return { ok: false, balance: cur, short: n - cur };
+            const next = cur - n;
+            await _setPT(next);
+            await _pushLedger({ ts: _now(), delta: -n, reason: reason || '消費', balanceAfter: next });
+            return { ok: true, balance: next, short: 0 };
+        });
+    }
+
+    function _now() { try { return Date.now(); } catch (e) { return 0; } }
+    // 本地午夜換日（跟書咖同一套）
+    function _dayNum(ts) { return Math.floor((ts - new Date(ts).getTimezoneOffset() * 60000) / 86400000); }
+
+    // ── ☕ 書咖帳戶換 PT（單向；每天有上限、店裡至少留開張那筆底）──
+    //   書咖的鎖 → 錢包的隊 → 書咖帳戶、PT 餘額、今天換了多少，三筆同一個交易寫進去：不會扣了書咖沒進 PT，也不會進了 PT 沒扣書咖
+    const K_CAFE_DAY = 'cafe_xfer';   // { day, n }：今天已經換了幾 PT
+    async function cafeXferInfo() {
+        const cafe = win.OS_CAFE || window.OS_CAFE;
+        let coins = null;
+        const keep = cafe && cafe.fundKeep ? cafe.fundKeep() : 300;
+        try { if (cafe && cafe.getFund) coins = (await cafe.getFund()).coins; } catch (e) {}
+        let used = 0;
+        try { const v = await _db().getAppData(APP_ID, K_CAFE_DAY); if (v && v.day === _dayNum(_now())) used = Number(v.n) || 0; } catch (e) {}
+        const room = Math.max(0, PT_CFG.cafeDailyCap - used);
+        const spare = coins == null ? 0 : Math.max(0, coins - keep);
+        return { coins, keep, room, can: Math.min(room, Math.floor(spare / PT_CFG.cafeRate)) };
+    }
+    function cafeToPT(want) {
+        const cafe = win.OS_CAFE || window.OS_CAFE;
+        if (!cafe || !cafe.withdrawFund) return Promise.resolve({ ok: false, msg: '書咖還沒開張，這筆帳轉不了' });
+        return cafe.withdrawFund((f, keep, fundEntry) => _serial(async () => {
+            const db = _db();
+            if (!db || !db.saveAppDataMany) return { ok: false, msg: '帳本還沒準備好，晚點再來' };
+            const today = _dayNum(_now());
+            const xd = await db.getAppData(APP_ID, K_CAFE_DAY);
+            const used = xd && xd.day === today ? (Number(xd.n) || 0) : 0;
+            const room = PT_CFG.cafeDailyCap - used;
+            if (room <= 0) return { ok: false, msg: '今天的額度換完了，明天再來' };
+            const spare = Math.floor((Number(f.coins) || 0) - keep);
+            if (spare < PT_CFG.cafeRate) return { ok: false, msg: '書咖帳戶要留 ' + keep + ' 元備料，現在沒有多的可以換' };
+            let gain = Math.min(room, Math.floor(spare / PT_CFG.cafeRate));
+            if (want != null) gain = Math.min(gain, Math.max(0, Math.floor(Number(want) || 0)));
+            if (gain <= 0) return { ok: false, msg: '沒有可以換的' };
+            const nf = Object.assign({}, f, { coins: f.coins - gain * PT_CFG.cafeRate });
+            const next = (await getPT()) + gain;
+            await db.saveAppDataMany(APP_ID, [
+                { key: K_BALANCE, value: next },
+                { key: K_CAFE_DAY, value: { day: today, n: used + gain } },
+                fundEntry(nf),
+            ]);
+            await _pushLedger({ ts: _now(), delta: gain, reason: '書咖帳戶轉入', balanceAfter: next });
+            return { ok: true, gain, balance: next, cafeLeft: nf.coins, roomLeft: room - gain };
+        }));
+    }
+
+    // ── 🌱 後院金幣換 PT（11-18 起：兩種貨幣分開，但金幣可以換成 PT）──
+    //   錢包跟書咖、PT 各自分開；換的那一下在後院出貨箱做（farm_ship_core 的 toPT）：田那邊扣金幣、在田的帳本寫換匯單（type 'pt'）。
+    //   這裡照單入帳，跟書咖收後院送料（OS_CAFE.collectFromFarm）同一套：
+    //   - 田開了雲端存檔就等存上伺服器才收（伺服器那份蓋回來時換匯單跟著不見，就不會金幣退回來、PT 又多了）
+    //   - 只收這台換的（dev）：手機拉到同一份田，帳本裡也有這張單，但 PT 錢包是各台各一份，不能兩邊都入帳
+    //   - 每張單的 id 走已付記號（'farm:'+id），重試幾次都只付一次
+    const K_FARM_DEV = 'farm_dev';
+    function today() { return _dayNum(_now()); }
+    function farmDev() {
+        return _serial(async () => {
+            const db = _db();
+            let d = null;
+            try { d = await db.getAppData(APP_ID, K_FARM_DEV); } catch (e) {}
+            if (d) return String(d);
+            d = 'pd_' + _now().toString(36) + Math.random().toString(36).slice(2, 8);
+            await db.saveAppData(APP_ID, K_FARM_DEV, d);
+            return d;
+        });
+    }
+    function _lsJson(k) { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } }
+    async function collectFromFarm(opts) {
+        const FC = win.FarmCloud || window.FarmCloud;
+        const cloudOn = () => { const c = _lsJson('aurelia_farm_cloud') || {}; return !!(c.on && String(c.url || '').trim() && String(c.token || '').trim()); };
+        if (opts && opts.flush && FC && FC.enabled && FC.enabled()) {   // 剛換：先把田送上伺服器
+            for (let i = 0; i < 6; i++) { try { await FC.flush(); } catch (e) {} if (!(FC.meta() || {}).dirty) break; await new Promise(r => setTimeout(r, 700)); }
+        }
+        if (cloudOn() && (_lsJson('aurelia_farm_cloud_meta') || {}).dirty) return { ok: false, pending: true };
+        const farm = _lsJson('aurelia_farm_v1');
+        const notes = ((farm && farm.ledger) || []).filter(e => e && e.type === 'pt' && e.id && e.amount < 0);
+        if (!notes.length) return { ok: true, gain: 0 };
+        let dev = '';
+        try { dev = String(await _db().getAppData(APP_ID, K_FARM_DEV) || ''); } catch (e) {}
+        const mine = notes.filter(e => dev && e.dev === dev);
+        if (!mine.length) return { ok: true, gain: 0 };
+        const before = await getPT();
+        const after = await addPT(0, { reason: '後院金幣轉入', tx: mine.map(e => ({ id: 'farm:' + e.id, n: -e.amount, note: '後院金幣轉入' })) });
+        return { ok: true, gain: Math.max(0, after - before), balance: after };
+    }
+
+    // ── 地塊 built 狀態 ──────────────────────────────────
+    async function getPlotBuilt(plotId) {
+        try {
+            const db = _db();
+            if (!db?.getAppData) return false;
+            const v = await db.getAppData(APP_ID, K_PLOT + '::' + String(plotId || 'player'));
+            return v === true || v === 1 || v === 'true';
+        } catch (e) { return false; }
+    }
+    async function setPlotBuilt(plotId, built) {
+        const db = _db();
+        if (!db?.saveAppData) throw new Error('OS_DB.saveAppData 不存在');
+        await db.saveAppData(APP_ID, K_PLOT + '::' + String(plotId || 'player'), !!built);
+    }
+
+    // ── JSON 三段式容錯解析（仿 state_runtime.extractJSON）──
+    function _extractJSON(text) {
+        if (!text) return null;
+        try { return JSON.parse(text); } catch (e) {}
+        const fence = String(text).match(/```(?:json)?\s*([\s\S]*?)```/);
+        if (fence) { try { return JSON.parse(fence[1]); } catch (e) {} }
+        const brace = String(text).match(/\{[\s\S]*\}/);
+        if (brace) { try { return JSON.parse(brace[0]); } catch (e) {} }
+        return null;
+    }
+
+    // ── 估值 prompt（結構化，只寫規則+佔位，不塞任何範例故事）──
+    function _buildValuationPrompt(text) {
+        const c = PT_CFG.caps;
+        return [
+            '你是「交易區」的經濟監管系統。以下三引號內是一名玩家近期經歷的「大總結」全文。',
+            '請以系統監管、客觀第三方的角度，估算這段經歷值多少「正派貨幣 PT」。只輸出 JSON，不要任何解說文字。',
+            '',
+            '評分分五個區塊，各有上限；超過上限一律以上限計，沒有對應內容就給 0：',
+            `- base：只要這段有實質推進就給的基礎值，固定 ${c.base}`,
+            `- progress：劇情整體推進的幅度，0 ~ ${c.progress}`,
+            `- goal：明確目標或任務的達成程度，0 ~ ${c.goal}`,
+            `- event：關係轉折或重要事件的份量，0 ~ ${c.event}`,
+            '',
+            '嚴格只輸出這個 JSON 結構（數字自行依內容填）：',
+            '{"base":0,"progress":0,"goal":0,"event":0}',
+            '',
+            '大總結全文：',
+            '"""',
+            String(text || '').slice(0, 8000),
+            '"""',
+        ].join('\n');
+    }
+
+    // 機械底退路：只給 base + 依字數的小額（封頂）
+    function _mechanicalFallback(text) {
+        const words = String(text || '').length;
+        const bonus = Math.min(PT_CFG.fallbackCap, Math.floor(words / 1000) * PT_CFG.fallbackPerK);
+        return { base: PT_CFG.caps.base, progress: bonus, goal: 0, event: 0, _fallback: true };
+    }
+
+    // clamp 每格 + 加總封頂，回傳 { items:{...}, total }
+    function _scoreToTotal(raw) {
+        const c = PT_CFG.caps;
+        const clamp = (v, cap) => Math.max(0, Math.min(cap, Math.floor(Number(v) || 0)));
+        const items = {
+            base: clamp(raw.base, c.base),
+            progress: clamp(raw.progress, c.progress),
+            goal: clamp(raw.goal, c.goal),
+            event: clamp(raw.event, c.event),
+        };
+        let total = items.base + items.progress + items.goal + items.event;
+        total = Math.min(PT_CFG.totalCap, total);
+        return { items, total };
+    }
+
+    // ── 副模型直連估值（仿 _summarizeTheater：不發 GENERATION_*、不觸發 AVS/總結）──
+    async function _valuate(text) {
+        const api = win.OS_API || window.OS_API;
+        if (!api || !api.chat) return _mechanicalFallback(text);
+        try {
+            let config = {};
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            if (OS) {
+                const sec = OS.getSecondaryConfig ? OS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : OS.getConfig();
+            }
+            config = config || {};
+            config.route = 'pt_valuation';
+            const prompt = _buildValuationPrompt(text);
+            const raw = await new Promise((resolve, reject) => {
+                api.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'pt', label: 'PT結算估值', keepCodeFences: true });
+            });
+            const json = _extractJSON(raw);
+            if (!json || typeof json !== 'object') { console.warn('[PT] 估值回傳無法解析，退機械底'); return _mechanicalFallback(text); }
+            return json;
+        } catch (e) {
+            console.warn('[PT] 估值 API 失敗，退機械底', e);
+            return _mechanicalFallback(text);
+        }
+    }
+
+    // ── 結算入口：每份大總結生成後由 os_story_tools fire-and-forget 呼叫 ──
+    // 🚨 同時只結算一份，但後到的要排隊，不能直接丟掉——以前撞到正在結算就 return，那一份從此不會再結算
+    let _settleQ = Promise.resolve();
+    async function settleSummary(finalContent, ctx) {
+        ctx = ctx || {};
+        const chatId = String(ctx.chatId || '');
+        const summaryCount = Number(ctx.summaryCount || 0);
+        if (!chatId || !summaryCount) { console.warn('[PT] 結算缺 chatId/summaryCount，跳過'); return; }
+        const run = _settleQ.then(() => _settleSummaryOnce(finalContent, chatId, summaryCount));
+        _settleQ = run.catch(() => {});
+        return run;
+    }
+    async function _settleSummaryOnce(finalContent, chatId, summaryCount) {
+        try {
+            const db = _db();
+            // 去重：同一份大總結(chatId+summaryCount)只結算一次
+            const settledKey = K_SETTLED + '::' + chatId;
+            let lastSettled = 0;
+            try { lastSettled = Number(await db.getAppData(APP_ID, settledKey)) || 0; } catch (e) {}
+            if (summaryCount <= lastSettled) { console.log('[PT] 第' + summaryCount + '份已結算過，跳過'); return; }
+            // 錢付了、「已結算」沒寫進去就當掉：下次來這裡補寫記號就好，不再估一次、不再付一次
+            const txId = 'sum:' + chatId + '#' + summaryCount;
+            if (await paidOf(txId)) {
+                await db.saveAppData(APP_ID, settledKey, summaryCount);
+                console.log('[PT] 第' + summaryCount + '份上次已入帳，只補「已結算」記號');
+                return;
+            }
+
+            const raw = await _valuate(finalContent);
+            const { items, total } = _scoreToTotal(raw);
+            const balance = await addPT(total, { reason: '本章結算(第' + summaryCount + '份)', items, tx: [{ id: txId, n: total }] });
+            await db.saveAppData(APP_ID, settledKey, summaryCount);   // 標記已結算
+            console.log('[PT] ✅ 第' + summaryCount + '份結算 +' + total + ' PT（餘額 ' + balance + '）', items);
+            try { _showSettleCard({ items, total, balance, fallback: !!raw._fallback }); } catch (e) { console.warn('[PT] 結算卡失敗', e); }
+        } catch (e) {
+            console.error('[PT] 結算失敗', e);
+        }
+    }
+
+    // ── 樣式注入（一次；classes，不用 inline style=）──
+    function _injectStyle() {
+        if (document.getElementById('os-pt-style')) return;
+        const s = document.createElement('style');
+        s.id = 'os-pt-style';
+        s.textContent = [
+            // 🚨 別放畫面底部中央：那裡是 VN 的對話框與 LOG/COT/SKIP 那排，結算卡會整個壓上去。
+            //    改成右上角、退出鈕下面那塊空白；窄螢幕(手機)退回頂部橫幅，不去擠立繪。
+            // 🚨 position:fixed=釘整個瀏覽器視窗——PWA滿版沒差,酒館裡VN是窗口→卡片飄到窗口外。
+            //    掛進 #page-game 時改 absolute 貼舞台右上(設定/退出鈕下方);找不到舞台才退回 fixed。
+            '#page-game .os-pt-card{position:absolute;top:110px;right:14px;}',
+            '.os-pt-card{position:fixed;right:16px;top:84px;transform:translateY(-12px);',
+            'z-index:2147483600;min-width:240px;max-width:min(86vw,340px);opacity:0;pointer-events:auto;',
+            'background:linear-gradient(160deg,#2a2340,#1b1830);color:#f3eefe;border:1px solid rgba(180,150,255,.35);',
+            'border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.5);padding:16px 18px;font-size:14px;',
+            'transition:opacity .35s ease,transform .35s ease;font-family:inherit;}',
+            '.os-pt-card.on{opacity:1;transform:translateY(0);}',
+            '@media(max-width:620px){.os-pt-card{right:8px;left:8px;top:64px;max-width:none;min-width:0;}}',
+            '.os-pt-card-head{display:flex;align-items:center;gap:8px;font-weight:700;font-size:15px;margin-bottom:10px;color:#e9dcff;}',
+            '.os-pt-card-head i{color:#c9a6ff;}',
+            '.os-pt-card-close{margin-left:auto;cursor:pointer;opacity:.6;padding:2px 6px;border-radius:8px;}',
+            '.os-pt-card-close:hover{opacity:1;background:rgba(255,255,255,.1);}',
+            '.os-pt-row{display:flex;justify-content:space-between;align-items:center;padding:4px 0;color:#cfc4e6;}',
+            '.os-pt-row .v{font-variant-numeric:tabular-nums;color:#b9f6c8;}',
+            '.os-pt-row.zero .v{color:#8a8298;}',
+            '.os-pt-total{display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:10px;',
+            'border-top:1px solid rgba(180,150,255,.25);font-weight:700;font-size:16px;}',
+            '.os-pt-total .v{color:#ffe28a;font-variant-numeric:tabular-nums;}',
+            '.os-pt-bal{margin-top:8px;text-align:right;font-size:12px;color:#9d94b5;}',
+            '.os-pt-bal i{color:#ffe28a;margin-right:4px;}',
+            '.os-pt-note{margin-top:6px;font-size:11px;color:#8a8298;font-style:italic;}',
+            // 交易所面板的樣式在 css/os_exchange.css（阿洛拆件版），這裡只留 VN 結算卡
+        ].join('');
+        document.head.appendChild(s);
+    }
+
+    function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+    // ── VN 結算卡（自建浮層：不走 _showDomBlock 以免觸發 VN next() 續播）──
+    function _showSettleCard(data) {
+        _injectStyle();
+        const old = document.getElementById('os-pt-settle-card');
+        if (old) old.remove();
+        const it = data.items || {};
+        const rows = [
+            { k: 'base', label: '基礎', icon: 'fa-seedling' },
+            { k: 'progress', label: '推進', icon: 'fa-arrow-trend-up' },
+            { k: 'goal', label: '目標', icon: 'fa-bullseye' },
+            { k: 'event', label: '事件', icon: 'fa-bolt' },
+        ];
+        const rowHtml = rows.map(r => {
+            const v = Math.floor(Number(it[r.k]) || 0);
+            return '<div class="os-pt-row' + (v === 0 ? ' zero' : '') + '">' +
+                '<span><i class="fa-solid ' + r.icon + '"></i>&nbsp;' + r.label + '</span>' +
+                '<span class="v">+' + v + '</span></div>';
+        }).join('');
+        const card = document.createElement('div');
+        card.id = 'os-pt-settle-card';
+        card.className = 'os-pt-card';
+        card.innerHTML =
+            '<div class="os-pt-card-head"><i class="fa-solid fa-chart-line"></i><span>本章結算</span>' +
+            '<span class="os-pt-card-close" title="關閉"><i class="fa-solid fa-xmark"></i></span></div>' +
+            rowHtml +
+            '<div class="os-pt-total"><span>合計</span><span class="v">+' + Math.floor(data.total || 0) + ' PT</span></div>' +
+            '<div class="os-pt-bal"><i class="fa-solid fa-coins"></i>餘額 ' + Math.floor(data.balance || 0) + ' PT</div>' +
+            (data.fallback ? '<div class="os-pt-note">（估值離線，以基準值結算）</div>' : '');
+        (document.getElementById('page-game') || document.body).appendChild(card);
+        requestAnimationFrame(() => card.classList.add('on'));
+        let closed = false;
+        const close = () => {
+            if (closed) return; closed = true;
+            card.classList.remove('on');
+            setTimeout(() => card.remove(), 400);
+        };
+        card.querySelector('.os-pt-card-close').addEventListener('click', close);
+        setTimeout(close, 9000);   // 自動收
+    }
+
+    // ── 白兔成就估值：正派櫃檯收「非異常系」成就，換 PT ──────
+    // 分工：異常系(emotion 歸屬=cheshire)歸 404 柴郡換碎片(os_404_store)；其餘全歸這裡。
+    // list 可指定要兌換哪幾個(收藏冊單票領取用)；不給=撈全部白兔側 pending。
+    function _rabbitPending() {
+        const vp = window.VoidPanels || win.VoidPanels;
+        const ach = win.OS_ACHIEVEMENT || window.OS_ACHIEVEMENT;
+        const all = ach && ach.getPending ? ach.getPending() : [];
+        if (!vp || !vp.emotionOwner) return all;   // 分流表沒載到→照舊全收，別把兌換卡死
+        return all.filter(a => vp.emotionOwner(a.emotion) !== 'cheshire');
+    }
+    async function evaluateAchievementsPT(list) {
+        let pending = (Array.isArray(list) && list.length) ? list : _rabbitPending();
+        if (!pending.length) return { ok: false, msg: '目前沒有白兔要收的成就' };
+        // 上次已經付過錢、只差蓋「已兌換」的：直接補蓋，不再送去估、不再付
+        const achApi0 = win.OS_ACHIEVEMENT || window.OS_ACHIEVEMENT;
+        const paid0 = await _getPaid();
+        const done0 = pending.filter(a => paid0['ach:' + a.id]);
+        if (done0.length && achApi0) {
+            for (const a of done0) { const p = paid0['ach:' + a.id]; await achApi0.markRedeemed(a.id, p.n, 'pt', p.note); }
+            pending = pending.filter(a => !paid0['ach:' + a.id]);
+            if (!pending.length) return { ok: true, results: [], totalPT: 0 };
+        }
+        const api = win.OS_API || window.OS_API;
+        if (!api) return { ok: false, msg: 'API 尚未初始化' };
+
+        const cc = PT_CFG.achvCaps;
+        const achList = pending.map((a, i) =>
+            `${i + 1}. 成就名稱：「${a.name}」\n   描述：${a.desc || '（無描述）'}`
+        ).join('\n');
+        // 白兔的人格（點評口吻）：跟大廳那份同一個人，這裡只取估值櫃檯用得到的部分。
+        const RABBIT_VOICE =
+            '你不擺架子、不勸說、不奉承，只把價碼算清楚攤在客人面前。' +
+            '點評一句話講完：精算、守時、帶一點看戲的興味；漂亮的操作你不吝於承認，蠢事你也會禮貌地記上一筆。' +
+            '難聽的話要包成客氣的提醒，但不要因此說得含糊。';
+        const systemPrompt = '你是「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，斯文、守時、照章辦事。' +
+            RABBIT_VOICE +
+            `你的工作是替客人「估值」他們在故事中達成的成就，換算成正派貨幣「PT」。` +
+            `評分標準：日常小事 5~${cc.normal} PT，亮眼表現 ${cc.normal + 5}~${cc.great} PT，值得紀念的里程碑 ${cc.great + 10}~${cc.legend} PT。` +
+            '請以 JSON 陣列格式回覆，每筆格式如下：' +
+            '{"name":"成就名稱","pt":整數,"comment":"白兔先生的一句話點評"}' +
+            '只回傳 JSON 陣列，不要加任何 markdown 或說明文字。';
+        const userPrompt = `以下是待估值的成就清單：\n${achList}\n\n請逐一估值並回傳 JSON 陣列。`;
+
+        try {
+            // 估值是工具型呼叫：只送成就清單，不走 buildContext。
+            // buildContext 會把人設、整段劇情歷史、AVS 變數全塞進來（單次三萬多 token），
+            // 而待估值的成就是跨卡累積的，當前這張卡的劇情反而對不上多數成就。
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user',   content: userPrompt },
+            ];
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            const config = OS ? { ...OS.getConfig(), route: 'rabbit_eval' } : { route: 'rabbit_eval' };
+            const raw = await new Promise((res, rej) => api.chat(messages, config, null, res, rej, { task: 'achievement' }));
+
+            let results = null;
+            try {
+                const jsonMatch = String(raw || '').match(/\[[\s\S]*\]/);
+                results = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+            } catch (e) {
+                console.error('[PT] 白兔估值 JSON 解析失敗:', e, raw);
+                return { ok: false, msg: 'API 回傳格式錯誤，白兔先生先去對錶了' };
+            }
+            if (!results || !Array.isArray(results)) return { ok: false, msg: '白兔先生沒有回應…' };
+
+            const achApi = win.OS_ACHIEVEMENT || window.OS_ACHIEVEMENT;
+            // 對成就：名字一樣 → 洗掉空白標點再比 → 筆數一樣時照順序對（模型常把名字改寫一兩個字）
+            const _nk = (s) => String(s || '').replace(/[\s「」『』""''、，。,.!！?？:：]/g, '').toLowerCase();
+            const used = new Set(), picks = [];
+            results.forEach((r, i) => {
+                if (!r) return;
+                let a = pending.find(x => !used.has(x) && x.name === r.name)
+                    || pending.find(x => !used.has(x) && _nk(x.name) === _nk(r.name));
+                if (!a && results.length === pending.length && pending[i] && !used.has(pending[i])) a = pending[i];
+                if (!a) return;
+                used.add(a);
+                picks.push({ a: a, pt: Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0)), comment: r.comment });   // 單筆封頂防暴走
+            });
+            const totalPT = picks.reduce((s, p) => s + p.pt, 0);
+            // 🚨 先入帳、成功了才把成就標成已兌換：以前先標記再入帳，入帳失敗時成就被收走、PT 卻沒加
+            //   每個成就一筆已付記號（跟餘額同一筆寫入）：標記寫到一半當掉，下次那幾個只補標記、不重付
+            if (picks.length) await addPT(totalPT, { reason: '成就兌換（交易所）', tx: picks.map(p => ({ id: 'ach:' + p.a.id, n: p.pt, note: p.comment })) });
+            for (const p of picks) await achApi.markRedeemed(p.a.id, p.pt, 'pt', p.comment);
+            console.log(`[PT] 白兔估值完成，共兌換 ${totalPT} PT`);
+            return { ok: true, results, totalPT };
+        } catch (e) {
+            console.error('[PT] evaluateAchievementsPT 失敗:', e);
+            return { ok: false, msg: '系統異常：' + (e.message || e) };
+        }
+    }
+
+    // ── 🧳 視差帶回來的戰利品：撤離時「回程行李」選了換 PT 的那幾件，先放在白兔櫃檯，按「估值」才估 ──
+    //   撤離那一下不叫模型（os_wg_pack.js 只交到這裡）；估值跟成就同一套：一次把櫃檯上的全部送一通，白兔逐件開價。
+    const K_LOOT = 'loot';   // [{id,name,desc,world,at}]
+    async function getLoot() {
+        try { const db = _db(); const v = db?.getAppData ? await db.getAppData(APP_ID, K_LOOT) : null; return Array.isArray(v) ? v : []; }
+        catch (e) { return []; }
+    }
+    // 櫃檯清單是整份讀出來再整份寫回：兩件事同時改會互蓋（11-22 阿洛健檢：同時交兩份戰利品，櫃檯只剩一份）。
+    //   所有「讀櫃檯→改→寫回」排成一條隊，一次只跑一件；裡面一律現讀現寫，別拿隊伍外面讀到的舊清單寫回
+    let _lootQ = Promise.resolve();
+    function _lootLocked(fn) {
+        const run = _lootQ.then(fn, fn);
+        _lootQ = run.catch(() => {});
+        return run;
+    }
+    async function addLoot(list) {
+        const add = (Array.isArray(list) ? list : []).filter(x => x && x.name).map(x => ({
+            id: 'lt_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            name: String(x.name), desc: String(x.desc || ''), world: String(x.world || ''), at: _now() }));
+        if (!add.length) return 0;
+        const db = _db();
+        if (!db?.saveAppData) return 0;
+        await _lootLocked(async () => { await db.saveAppData(APP_ID, K_LOOT, (await getLoot()).concat(add)); });
+        return add.length;
+    }
+    async function evaluateLootPT() {
+        let pending = await getLoot();
+        if (!pending.length) return { ok: false, msg: '櫃檯上沒有等估值的東西' };
+        // 上次已經付過錢、還沒從櫃檯收走的：直接收走，不再估、不再付
+        const paid0 = await _getPaid();
+        if (pending.some(y => paid0['loot:' + y.id])) {
+            pending = pending.filter(y => !paid0['loot:' + y.id]);
+            await _lootLocked(async () => { await _db().saveAppData(APP_ID, K_LOOT, (await getLoot()).filter(y => !paid0['loot:' + y.id])); });   // 現讀現寫：這中間新交來的不能被蓋掉
+            if (!pending.length) return { ok: true, picks: [], totalPT: 0, left: 0 };
+        }
+        const api = win.OS_API || window.OS_API;
+        if (!api) return { ok: false, msg: 'API 尚未初始化' };
+        const cc = PT_CFG.achvCaps;
+        const list = pending.map((x, i) => `${i + 1}. 「${x.name}」（從視差世界「${x.world || '不明'}」帶回來）\n   說明：${x.desc || '（沒有說明）'}`).join('\n');
+        const systemPrompt = '你是「白兔先生 (Mr. White Rabbit)」——交易區「交易所」的職員，斯文、守時、照章辦事。' +
+            '你不擺架子、不勸說、不奉承，只把價碼算清楚攤在客人面前。點評一句話講完：精算、守時、帶一點看戲的興味。' +
+            '客人從視差世界撤離時，把在那裡拿到的東西交給交易所收購（實物留在交易所，客人拿 PT）。你的工作是逐件開收購價。' +
+            `評分標準：尋常的東西 5~${cc.normal} PT，少見或有用的 ${cc.normal + 5}~${cc.great} PT，稀有珍品 ${cc.great + 10}~${cc.legend} PT。` +
+            '請以 JSON 陣列格式回覆，每筆格式如下：{"name":"東西的名字","pt":整數,"comment":"白兔先生的一句話點評"}' +
+            '只回傳 JSON 陣列，不要加任何 markdown 或說明文字。';
+        try {
+            const messages = [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `以下是客人交到櫃檯的東西：\n${list}\n\n請逐件開價並回傳 JSON 陣列。` },
+            ];
+            const OS = win.OS_SETTINGS || window.OS_SETTINGS;
+            const config = OS ? { ...OS.getConfig(), route: 'rabbit_eval' } : { route: 'rabbit_eval' };
+            const raw = await new Promise((res, rej) => api.chat(messages, config, null, res, rej, { task: 'loot_eval' }));
+            let results = null;
+            try { const m = String(raw || '').match(/\[[\s\S]*\]/); results = m ? JSON.parse(m[0]) : null; } catch (e) { results = null; }
+            if (!results || !Array.isArray(results)) return { ok: false, msg: '白兔先生的估價單看不懂，再按一次' };
+            // 對東西：同成就那套（名字一樣 → 洗掉標點再比 → 筆數一樣照順序）
+            const _nk = (s) => String(s || '').replace(/[\s「」『』""''、，。,.!！?？:：]/g, '').toLowerCase();
+            const used = new Set(), picks = [];
+            results.forEach((r, i) => {
+                if (!r) return;
+                let x = pending.find(y => !used.has(y) && y.name === r.name) || pending.find(y => !used.has(y) && _nk(y.name) === _nk(r.name));
+                if (!x && results.length === pending.length && pending[i] && !used.has(pending[i])) x = pending[i];
+                if (!x) return;
+                used.add(x);
+                picks.push({ id: x.id, name: x.name, pt: Math.max(0, Math.min(cc.legend + 20, parseInt(r.pt) || 0)), comment: String(r.comment || '') });
+            });
+            if (!picks.length) return { ok: false, msg: '白兔先生的估價單對不上櫃檯上的東西，再按一次' };
+            const totalPT = picks.reduce((s, p) => s + p.pt, 0);
+            // 先入帳、成功了才從櫃檯收走（同成就那條）；每件一筆已付記號，收走前當掉也不會再付一次
+            await addPT(totalPT, { reason: '戰利品收購（交易所）', items: picks, tx: picks.map(p => ({ id: 'loot:' + p.id, n: p.pt })) });
+            const left = await _lootLocked(async () => {   // 估值那通要等一陣子，這段時間新交來的照樣留在櫃檯
+                const l = (await getLoot()).filter(y => !pending.some(p => used.has(p) && p.id === y.id));
+                await _db().saveAppData(APP_ID, K_LOOT, l);
+                return l;
+            });
+            return { ok: true, picks, totalPT, left: left.length };
+        } catch (e) {
+            console.error('[PT] evaluateLootPT 失敗:', e);
+            return { ok: false, msg: '系統異常：' + (e.message || e) };
+        }
+    }
+
+    // ── 交易所面板 ───────────────────────────────────────
+    let _shopOpen = false;
+    async function openExchange() {
+        if (_shopOpen) return;
+        _shopOpen = true;
+        _injectStyle();
+        const old = document.getElementById('os-pt-shop-dock');
+        if (old) old.remove();
+
+        const host = document.querySelector('.lobby-left') || document.body;   // 掛進遊戲容器→貼遊戲畫面內側(非整個視窗，才不會跑到黑邊)
+        host.classList.add('void-dock-open');   // 📱 手機:立繪退後變暗、面板站前排
+        const dock = document.createElement('div');
+        dock.id = 'os-pt-shop-dock';
+        // os-pt-dock＝大家共用的手機停靠版位（lobby.css）與舞台找白兔面板用的名字；
+        // 🚨 08 月圖片切件版改成只掛 osx-dock，那兩處從此對不上，手機停靠版位一直沒套到交易所。
+        dock.className = 'osx-dock os-pt-dock';
+        // 2026-09-11 起整張面板是 CSS 畫的（樣式在 css/os_exchange.css），不再用圖片切件；
+        // 文字、數字、按鈕都是 DOM，版位靠排版流而不是量出來的百分比。
+        dock.innerHTML =
+            '<div class="osx-frame" role="dialog" aria-label="量子交易所"><div class="osx-inner">' +
+              '<div class="osx-hd">' +
+                '<span class="osx-emblem" aria-hidden="true"></span>' +
+                '<div class="osx-title"><span class="zh">量子交易所</span><span class="en">AURELIA PARALLAX EXCHANGE</span></div>' +
+                '<button class="osx-close" type="button" title="關閉"><i class="fa-solid fa-xmark"></i></button>' +
+              '</div>' +
+              '<div class="osx-bal">' +
+                '<span class="osx-coin" aria-hidden="true"><span>PT</span></span>' +
+                '<div class="osx-bal-main"><span class="osx-bal-k">你的 PT</span><span class="osx-bal-n" id="os-pt-shop-bal">…</span></div>' +
+                '<div class="osx-msg"><i class="fa-solid fa-hourglass-half"></i><span class="m" id="os-pt-shop-msg">白兔先生在櫃檯，隨時可以替你估值。</span></div>' +
+              '</div>' +
+              '<div class="osx-cards" id="os-pt-shop-items"></div>' +
+            '</div></div>';
+        host.appendChild(dock);
+        requestAnimationFrame(() => dock.classList.add('on'));
+        dock.querySelector('.osx-close').addEventListener('click', () => {
+            try { if (window.LobbyStage && window.LobbyStage.endTalk) window.LobbyStage.endTalk(); } catch (e) {}   // ✕=離開白兔對話（連帶關面板）
+            closeExchange();
+        });
+
+        await _renderShopBody(dock);
+    }
+    // 收起交易所面板（endTalk 時由 lobby_stage 呼叫）
+    function closeExchange() {
+        _shopOpen = false;
+        try { document.querySelector('.lobby-left')?.classList.remove('void-dock-open'); } catch (e) {}
+        const el = document.getElementById('os-pt-shop-dock');
+        if (el) { el.classList.remove('on'); setTimeout(() => { try { el.remove(); } catch (e) {} }, 250); }
+    }
+
+    async function _renderShopBody(mask) {
+        const balEl = mask.querySelector('#os-pt-shop-bal');
+        const itemsEl = mask.querySelector('#os-pt-shop-items');
+        const msgEl = mask.querySelector('#os-pt-shop-msg');
+        const bal = await getPT();
+        if (balEl) balEl.textContent = String(bal);
+
+        const built = await getPlotBuilt('player');
+        const price = PT_CFG.housePrice;
+        const canBuy = !built && bal >= price;
+
+        const houseBtn = built
+            ? '<button class="osx-card-btn owned" disabled>已擁有</button>'
+            : '<button class="osx-card-btn" id="os-pt-buy-house"' + (canBuy ? '' : ' disabled') + '>' + price + ' PT</button>';
+
+        // 成就兌換：白兔只收「非異常系」成就，估值換 PT（異常系歸 404 柴郡換碎片）
+        const pendingN = _rabbitPending().length;
+        const achBtn = pendingN
+            ? '<button class="osx-card-btn gold" id="os-pt-redeem-ach">兌換 ' + pendingN + ' 個</button>'
+            : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
+        // 🧳 視差帶回來、回程行李選了換 PT 的東西
+        const lootN = (await getLoot()).length;
+        const lootBtn = lootN
+            ? '<button class="osx-card-btn gold" id="os-pt-redeem-loot">估值 ' + lootN + ' 件</button>'
+            : '<button class="osx-card-btn locked" disabled>沒有待估值</button>';
+        // 🌱 後院換好、當時田還沒存上伺服器的那幾張：打開交易所時補收（只付一次）
+        try { await collectFromFarm(); } catch (e) {}
+        // ☕ 書咖帳戶換 PT
+        const cx = await cafeXferInfo();
+        const cafeBtn = cx.coins == null ? '<button class="osx-card-btn locked" disabled>書咖還沒開張</button>'
+            : cx.can > 0 ? '<button class="osx-card-btn gold" id="os-pt-cafe-xfer">換 ' + cx.can + ' PT</button>'
+            : '<button class="osx-card-btn locked" disabled>' + (cx.room <= 0 ? '今天換完了' : '店裡沒有多的') + '</button>';
+        const cafeDesc = cx.coins == null ? '瀅瀅店裡賺的錢換成 PT'
+            : '店裡現有 ' + cx.coins + ' 元，需留 ' + cx.keep + ' 元備料。多餘的錢可以一比一換成 PT，今天還能換 ' + cx.room + ' PT。';
+
+        // 一張卡＝圖示、名字、一句它是做什麼的、按鈕（插圖圖片退役，圖示用 FA）
+        const card = (cls, icon, name, desc, btn) =>
+            '<div class="osx-card ' + cls + '">' +
+              '<span class="osx-card-ic"><i class="fa-solid ' + icon + '"></i></span>' +
+              '<div class="osx-card-tx"><span class="osx-card-name">' + name + '</span>' +
+                '<span class="osx-card-desc">' + desc + '</span></div>' +
+              btn +
+            '</div>';
+        itemsEl.innerHTML =
+            card('house' + (built ? ' done' : ''), 'fa-house-chimney', '蓋你的房', built ? '視差城市裡已經有你的家' : '在視差城市擁有一間自己的房子。', houseBtn) +
+            card('ach', 'fa-award', '成就兌換', '把成就交給白兔估價，換成 PT。異常成就請到 404 找柴郡。', achBtn) +
+            card('loot', 'fa-suitcase-rolling', '戰利品估值', '從視差世界帶回來、並選擇要換成 PT 的東西。', lootBtn) +
+            card('cafe' + (cx.can > 0 ? '' : ' locked'), 'fa-mug-hot', '書咖帳戶', cafeDesc, cafeBtn);
+
+        if (msgEl) {
+            msgEl.className = 'm';
+            msgEl.textContent = built
+                ? (pendingN ? ('白兔先生的櫃檯上有 ' + pendingN + ' 個成就等著估值。') : '白兔先生在櫃檯，隨時可以替你估值。')
+                : (canBuy ? '餘額足夠蓋房，隨時可以簽約。' : ('離蓋房還差 ' + (price - bal) + ' PT。'));
+        }
+
+        const buyBtn = mask.querySelector('#os-pt-buy-house');
+        if (buyBtn) buyBtn.addEventListener('click', async () => {
+            buyBtn.disabled = true;
+            const r = await spendPT(price, '購買玩家房');
+            if (!r.ok) {
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = '還差 ' + r.short + ' PT。'; }
+                buyBtn.disabled = false;
+                return;
+            }
+            await setPlotBuilt('player', true);
+            if (msgEl) { msgEl.className = 'm ok'; msgEl.textContent = '簽約完成，你在視差城市有家了。'; }
+            try { window.dispatchEvent(new CustomEvent('os-pt-plot-changed', { detail: { plotId: 'player', built: true } })); } catch (e) {}
+            await _renderShopBody(mask);   // 重繪：餘額↓、按鈕→已擁有
+        });
+
+        const cafeXBtn = mask.querySelector('#os-pt-cafe-xfer');
+        if (cafeXBtn) cafeXBtn.addEventListener('click', async () => {
+            cafeXBtn.disabled = true;
+            const r = await cafeToPT();
+            if (!r.ok) {
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = r.msg || '沒轉成，再試一次'; }
+                cafeXBtn.disabled = false;
+                return;
+            }
+            await _renderShopBody(mask);
+            const _m = mask.querySelector('#os-pt-shop-msg');
+            if (_m) { _m.className = 'm ok'; _m.textContent = '書咖帳戶轉入 ' + r.gain + ' PT，店裡還有 ' + r.cafeLeft + '。'; }
+        });
+
+        const redeemBtn = mask.querySelector('#os-pt-redeem-ach');
+        if (redeemBtn) redeemBtn.addEventListener('click', async () => {
+            redeemBtn.disabled = true;
+            redeemBtn.textContent = '估值中…';
+            if (msgEl) { msgEl.className = 'm'; msgEl.textContent = '白兔先生正在替你的成就估值，稍等…'; }
+            const r = await evaluateAchievementsPT();
+            if (!r.ok) {
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = r.msg || '估值失敗，再試一次'; }
+                redeemBtn.disabled = false;
+                redeemBtn.textContent = '兌換';
+                return;
+            }
+            try { window.VoidPanels?.refreshAchievement?.(); } catch (e) {}
+            await _renderShopBody(mask);   // 先重繪(會清 msg、更新錢包)再寫結果，成功訊息才留得住
+            const _m = mask.querySelector('#os-pt-shop-msg');
+            if (_m) { _m.className = 'm ok'; _m.textContent = '蓋章完成，入帳 ' + r.totalPT + ' PT。點評寫在成就票券上了。'; }
+        });
+
+        const lootRedeem = mask.querySelector('#os-pt-redeem-loot');
+        if (lootRedeem) lootRedeem.addEventListener('click', async () => {
+            lootRedeem.disabled = true;
+            lootRedeem.textContent = '估值中…';
+            if (msgEl) { msgEl.className = 'm'; msgEl.textContent = '白兔先生正在一件一件看，稍等…'; }
+            const r = await evaluateLootPT();
+            if (!r.ok) {
+                if (msgEl) { msgEl.className = 'm bad'; msgEl.textContent = r.msg || '估值失敗，再試一次'; }
+                lootRedeem.disabled = false;
+                lootRedeem.textContent = '估值';
+                return;
+            }
+            await _renderShopBody(mask);
+            const _m = mask.querySelector('#os-pt-shop-msg');
+            // 點評沒有票券可以寫：挑開價最高那件的那句講出來，其他的在帳本明細裡
+            const top = r.picks.slice().sort((a, b) => b.pt - a.pt)[0];
+            if (_m) { _m.className = 'm ok'; _m.textContent = '收購完成，入帳 ' + r.totalPT + ' PT。' + (top && top.comment ? '「' + top.name + '」：' + top.comment : ''); }
+        });
+    }
+
+    // ── 對外 API ─────────────────────────────────────────
+    win.OS_PT = {
+        getPT, addPT, spendPT, getLedger,
+        getPlotBuilt, setPlotBuilt,
+        settleSummary,
+        evaluateAchievementsPT,
+        getLoot, addLoot, evaluateLootPT,
+        cafeXferInfo, cafeToPT,
+        today, farmDev, collectFromFarm,   // 🌱 後院金幣換 PT（換的那一下在後院出貨箱）
+        openExchange, closeExchange,
+        _cfg: PT_CFG,
+        _showSettleCard,   // 診斷用：不跑結算也能把卡叫出來看位置
+    };
+    if (win !== window) { try { window.OS_PT = win.OS_PT; } catch (e) {} }
+
+    // 城市交易所門觸發 → 開面板（lobby_stage 走門時 dispatch）
+    window.addEventListener('lstage-open-exchange', () => { try { openExchange(); } catch (e) { console.warn('[PT] 開交易所失敗', e); } });
+
+    console.log('[PT] ✅ 交易區經濟系統就緒');
+})();

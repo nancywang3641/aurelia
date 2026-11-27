@@ -1,0 +1,984 @@
+'use strict';
+// VN_TTS — 專屬 VN 擴展的輕量 GPT-SoVITS TTS 引擎
+// 直連 GPT-SoVITS HTTP API，無需依賴 SillyTavern-GPT-SoVITS 擴展
+(function () {
+
+const VN_TTS = {
+    CONFIG_KEY: 'vn_tts_v1',
+
+    config: {
+        enabled:   false,
+        serverUrl: 'http://127.0.0.1:9880',
+        stRoot:    '',   // SillyTavern 根目錄，即酒館的安裝資料夾（掃描 models/ 用）
+        textLang:  'zh',
+        volume:    0.8,
+        
+        // 預設的情緒靈魂參數
+        speed:        1,
+        topK:         15,
+        topP:         1,
+        temperature:  1,
+
+        // V3/V4 Flow Matching 專屬：推理步數（4–100，越高越好但越慢；V1/V2 忽略此值）
+        sampleSteps:  32,
+
+        // 模型庫: id → { name, gptPath, sovitsPath, refAudioPath, refText, refLang, emotions: {...} }
+        models: {},
+
+        // 現行本機引擎（'sovits' | 'index'）。顯存只夠開一套，所以本機語音是二選一。
+        //   語音設定上層那兩顆大鈕、控制室的切換、播放時挑音色，全部認這一個值。
+        //   🚨 以前只有面板讀它，播放端完全不看 → 服務換成 SoVITS 之後，角色還指著 idx_* 的音色，
+        //      VN_TTS 照樣去打 IndexTTS 的埠，整場噴「服務沒開？」。
+        localEngine: 'sovits',
+
+        // 每個引擎各記一套指派。下面 charMappings / systemMappings / npcCategories /
+        //   narratorModel / npcLocks 這五個欄位是「現行引擎那一套」的視窗（存取器，見 _setupEngineSets），
+        //   存檔只存 engineSets 這一份。換引擎＝換一整套指派，不必重指派、也不會蓋掉另一邊。
+        engineSets: null,
+
+        // 角色對應: charName → modelId
+        charMappings: {},
+
+        // 系統語音對應: 系統名 → modelId（[Sys|系統名|訊息] 用；空字串 key = 預設系統音）
+        systemMappings: {},
+
+        // 旁白音色: modelId（SoVITS 旁白；指派了才念，空＝不念）
+        narratorModel: '',
+
+        // 旁白用 Kokoro 引擎（獨立小服務、OpenAI 相容；不碰 SoVITS GPU 佇列；enabled 時優先於 narratorModel）
+        narratorKokoro: { enabled: false, url: 'http://127.0.0.1:8880', voice: 'zf_xiaoxiao' },
+
+        // 旁白用 MiniMax（雲端，只要 API key、免本地；給不會弄電腦的朋友。enabled 時優先於 SoVITS narratorModel）
+        narratorMinimax: { enabled: false, voice: 'audiobook_female_1' },
+
+        // IndexTTS 的語氣強度（0~1，音色可用 emoAlpha 個別覆寫）。
+        //   實測 0.5 是甜蜜點：音高起伏 +18%、音域 +22%，而說話音高只升 2.3 半音（還是同一個人）。
+        //   往上就開始變成另一個人：專屬情緒音檔 1.0 升 6.5 半音，情緒權重對低沉的聲音更兇
+        //   （118Hz 的音色 1.0 會升到 251Hz，等於升 13 個半音，而且起伏反而掉）。
+        indexEmoAlpha: 0.5,
+
+        // IndexTTS 共用情緒對照（標籤→服務端情緒名）。匯入音色時每顆的表都一模一樣，
+        //   以前每顆存一份 ⇒ 287 顆疊出幾百 KB、把 localStorage 5MB 推爆（save 一炸面板全滅）。
+        //   現在只存這一份；音色自己帶 emotions（本人錄的情緒音檔那幾顆）才覆寫。
+        indexEmoShared: {},
+
+        // 旁白用 IndexTTS（本機獨立服務、OpenAI 相容；音色＝丟一段參考音檔就好，不用練模型）
+        //   voice 可帶情緒：'丹' 或 '丹:Angry'
+        narratorIndex: { enabled: false, url: 'http://127.0.0.1:8881', voice: '', speed: 1 },
+
+        // 角色別名: 主名 → [別名1, 別名2, ...]（不分大小寫匹配，AI 用全名/小名都能對到同一個模型）
+        charAliases: {},
+
+        // NPC 分類: [{ id, name, tags:[], modelIds:[] }]
+        npcCategories: [],
+
+        // 🔒 本卡 NPC 聲線鎖: cardId → { charName: modelId }
+        //   來源＝立繪雙擊「💾 保存 CV」（隨手鎖住某張卡裡某個 NPC 的音）。與「charMappings(使用者手填、全域、面板顯示)」分流：
+        //   不進面板、按角色卡 id 收著、換卡自動回歸抽池、同卡重玩還在。
+        npcLocks: {}
+    },
+
+    // 執行期狀態（不持久化）
+    _cache:          {},        // cacheKey → blob URL
+    _pending:        new Set(), // cacheKeys 正在生成中
+    _prewarmQueue:   [],
+    _prewarmRunning: false,
+    _currentAudio:   null,
+    _currentMsUrl:   null,
+    _loadedGpt:      null,     // 目前 GPU 上的模型路徑
+    _loadedSovits:   null,
+    _oggSupported:   null,
+    _npcSessionCache:{},       // 🎭 新增：記錄這局對話中，NPC 已經抽到的聲音 (charName → modelId)
+
+    // ── 初始化 ─────────────────────────────────────────────────────────
+    init() {
+        try {
+            const s = localStorage.getItem(this.CONFIG_KEY);
+            if (s) {
+                const saved = JSON.parse(s);
+                Object.assign(this.config, saved);
+                if (!this.config.models)         this.config.models = {};
+                if (!this.config.charMappings)   this.config.charMappings = {};
+                if (!this.config.systemMappings) this.config.systemMappings = {};
+                if (!this.config.narratorKokoro) this.config.narratorKokoro = { enabled:false, url:'http://127.0.0.1:8880', voice:'zf_xiaoxiao' };
+                if (!this.config.narratorMinimax) this.config.narratorMinimax = { enabled:false, voice:'audiobook_female_1' };
+                if (!this.config.narratorIndex)  this.config.narratorIndex = { enabled:false, url:'http://127.0.0.1:8881', voice:'', speed:1 };
+                if (!this.config.npcCategories)  this.config.npcCategories = [];
+                if (!this.config.npcLocks)       this.config.npcLocks = {};
+                if (!this.config.indexEmoShared) this.config.indexEmoShared = {};
+                // 舊資料瘦身：把每顆音色重複的那份情緒表收攏成共用一份（省下的空間就是 save 能不能活的差別）
+                if (this._dedupeIndexEmotions()) this.save();
+            }
+        } catch (e) {}
+        // 🚨 一定要在 try 外面：讀檔失敗也得把存取器裝上，否則 charMappings 這些欄位會停在
+        //    預設的空物件，寫進去的東西存不到 engineSets 裡。
+        this._setupEngineSets();
+        console.log('[VN_TTS] 初始化, 啟用:', this.config.enabled, '｜引擎:', this._eng());
+    },
+
+    // ── 兩套指派（每個引擎各一套）─────────────────────────────────────────
+    //   顯存只夠開一套本機語音，所以 IndexTTS 與 SoVITS 是二選一。以前指派只有一份，
+    //   把角色改綁 IndexTTS 音色就等於把 SoVITS 那套蓋掉，換回去只剩「服務沒開？」。
+    //   現在兩套各存各的，engineSets[引擎] 底下那一份才是真資料；
+    //   config.charMappings 這些同名欄位是「現行引擎那一套」的存取器，所有既有讀寫都不用改。
+    _ENGINE_SCOPED: ['charMappings', 'systemMappings', 'npcCategories', 'narratorModel', 'npcLocks'],
+    _emptySet() { return { charMappings: {}, systemMappings: {}, npcCategories: [], narratorModel: '', npcLocks: {} }; },
+    _eng() { return this.config.localEngine === 'index' ? 'index' : 'sovits'; },
+    _engineOfModel(id) {
+        const m = id && this.config.models && this.config.models[id];
+        return (m && m.engine === 'index') ? 'index' : 'sovits';
+    },
+    _set() {
+        const C = this.config;
+        if (!C.engineSets) C.engineSets = { index: this._emptySet(), sovits: this._emptySet() };
+        const e = this._eng();
+        if (!C.engineSets[e]) C.engineSets[e] = this._emptySet();
+        return C.engineSets[e];
+    },
+    // 只認現行引擎的音色：指到另一套的 id 一律當作「沒有這個指派」，
+    //   免得服務已經換掉了還照著舊指派去打另一個引擎的埠。
+    _curModel(id) {
+        const m = id && this.config.models && this.config.models[id];
+        if (!m) return null;
+        return ((m.engine === 'index' ? 'index' : 'sovits') === this._eng()) ? m : null;
+    },
+    _setupEngineSets() {
+        const C = this.config;
+        // 首次升級：把原本那一份指派，依「每個 id 自己屬於哪個引擎」歸位到兩個艙裡。
+        //   一筆都不丟：對不到音色的（音色被刪過）留在 sovits 那艙，跟升級前看到的一樣。
+        if (!C.engineSets) {
+            const sets = { index: this._emptySet(), sovits: this._emptySet() };
+            const bk = (id) => this._engineOfModel(id);
+            for (const [name, mid] of Object.entries(C.charMappings || {})) if (mid) sets[bk(mid)].charMappings[name] = mid;
+            for (const [name, mid] of Object.entries(C.systemMappings || {})) if (mid) sets[bk(mid)].systemMappings[name] = mid;
+            for (const [card, locks] of Object.entries(C.npcLocks || {})) {
+                for (const [name, mid] of Object.entries(locks || {})) {
+                    if (!mid) continue;
+                    const nl = sets[bk(mid)].npcLocks;
+                    (nl[card] || (nl[card] = {}))[name] = mid;
+                }
+            }
+            // 分類本身跟引擎無關（「男_少年」是個概念），兩邊各留一份，音色各自過濾到自己那邊
+            for (const cat of (C.npcCategories || [])) {
+                for (const e of ['index', 'sovits']) {
+                    sets[e].npcCategories.push(Object.assign({}, cat, {
+                        modelIds: (cat.modelIds || []).filter(id => bk(id) === e),
+                    }));
+                }
+            }
+            if (C.narratorModel) sets[bk(C.narratorModel)].narratorModel = C.narratorModel;
+            C.engineSets = sets;
+            // 升級當下停在哪個引擎：預設 sovits，但這邊一顆 SoVITS 音色都沒有、
+            //   而 IndexTTS 有的話就停在 IndexTTS，免得一升級整頁空白（同面板原本的推斷）。
+            const all = Object.values(C.models || {});
+            if (this._eng() === 'sovits'
+                && !all.some(m => m && m.engine !== 'index')
+                && all.some(m => m && m.engine === 'index')) C.localEngine = 'index';
+            console.log('[VN_TTS] 指派已分成兩套：SoVITS',
+                Object.keys(sets.sovits.charMappings).length, '個角色 /',
+                sets.sovits.npcCategories.reduce((n, c) => n + (c.modelIds || []).length, 0), '顆NPC音；IndexTTS',
+                Object.keys(sets.index.charMappings).length, '個角色 /',
+                sets.index.npcCategories.reduce((n, c) => n + (c.modelIds || []).length, 0), '顆NPC音');
+        }
+        // 裝上存取器。enumerable:false ＝ JSON.stringify 不會把它們再存一份，
+        //   否則下次載入 Object.assign 會把「上次那個引擎的表」倒進「這次這個引擎」的艙裡。
+        this._ENGINE_SCOPED.forEach(k => {
+            try { delete C[k]; } catch (e) {}
+            try {
+                Object.defineProperty(C, k, {
+                    configurable: true, enumerable: false,
+                    get: () => this._set()[k],
+                    set: (v) => { this._set()[k] = v; },
+                });
+            } catch (e) { console.warn('[VN_TTS] 裝存取器失敗', k, e); }
+        });
+        this.save();
+    },
+    // 換引擎（語音設定上層兩顆大鈕、控制室的切換都走這裡）
+    setLocalEngine(id) {
+        const e = (id === 'index') ? 'index' : 'sovits';
+        if (this._eng() === e) return e;
+        this.config.localEngine = e;
+        this._npcSessionCache = {};   // 本局抽到的音屬於上一個引擎 → 清掉重抽
+        this._prewarmQueue = [];      // 還沒生的預熱是舊引擎的，別再送出去
+        try { this._pending.clear(); } catch (e) {}   // 那些 key 沒人會去完成它，留著會讓同一句以後預熱不到
+        this.save();
+        console.log('[VN_TTS] 引擎切到', e);
+        return e;
+    },
+
+    // 匯入時代每顆 index 音色都存了一份一模一樣的情緒表 → 只留一份在 indexEmoShared，
+    //   跟共用表相同的刪掉；不同的（本人錄的情緒音檔）保留當覆寫。回傳有沒有改到東西。
+    _dedupeIndexEmotions() {
+        let changed = 0;
+        try {
+            const models = this.config.models || {};
+            let shared = (this.config.indexEmoShared && Object.keys(this.config.indexEmoShared).length)
+                ? this.config.indexEmoShared : null;
+            let sharedStr = shared ? JSON.stringify(shared) : '';
+            for (const m of Object.values(models)) {
+                if (!m || m.engine !== 'index' || !m.emotions || !Object.keys(m.emotions).length) continue;
+                const s = JSON.stringify(m.emotions);
+                if (!shared) { shared = m.emotions; sharedStr = s; this.config.indexEmoShared = shared; }
+                if (s === sharedStr) { delete m.emotions; changed++; }
+            }
+            if (changed) console.log(`[VN_TTS] 情緒表已收攏成共用一份（瘦身 ${changed} 顆音色）`);
+        } catch (e) {}
+        return changed > 0;
+    },
+
+    // 這個音色實際用的情緒對照：自帶的優先，IndexTTS 音色沒帶就用共用表
+    emoMapOf(model) {
+        if (model && model.emotions && Object.keys(model.emotions).length) return model.emotions;
+        if (model && model.engine === 'index') return this.config.indexEmoShared || {};
+        return (model && model.emotions) || {};
+    },
+
+    save() {
+        try {
+            localStorage.setItem(this.CONFIG_KEY, JSON.stringify(this.config));
+            return true;
+        } catch (e) {
+            // localStorage 滿了（5MB）最常見：以前這裡直接炸掉，面板按什麼都像沒反應。
+            //   現在大聲喊＋把兇手（最肥的 key）列在 console，設定留在記憶體、本頁還能用。
+            console.error('[VN_TTS] 設定存不進 localStorage：', e && e.message);
+            try {
+                const sizes = Object.keys(localStorage)
+                    .map(k => [k, (localStorage.getItem(k) || '').length])
+                    .sort((a, b) => b[1] - a[1]).slice(0, 10)
+                    .map(([k, n]) => `${k}=${Math.round(n / 1024)}KB`);
+                console.error('[VN_TTS] localStorage 最肥的 10 個 key：', sizes.join(', '));
+            } catch (e2) {}
+            try {
+                const w = window.parent || window;
+                const t = AUI.toastr;
+                if (t && t.error) t.error('瀏覽器儲存空間滿了，語音設定存不進去（重整後會消失）', 'TTS 存檔失敗');
+                const P = w.VN_TTS_Panel || window.VN_TTS_Panel;
+                if (P && P._toast) P._toast('✗ 存檔失敗：瀏覽器空間滿了');
+            } catch (e2) {}
+            return false;
+        }
+    },
+
+    // ── 本卡 NPC 聲線鎖（按穩定角色卡 id；與全域 charMappings 分流）──────────
+    // 穩定卡 id：優先角色卡檔名(avatar)＞群組 id＞聊天名去掉「 - 時間戳」。同卡重玩=同 id。
+    _cardId() {
+        try {
+            const w = window.parent || window;
+            const ctx = w.SillyTavern && w.SillyTavern.getContext && w.SillyTavern.getContext();
+            if (ctx) {
+                const chid = ctx.characterId;
+                if (chid != null && ctx.characters && ctx.characters[chid] && ctx.characters[chid].avatar) return 'char::' + String(ctx.characters[chid].avatar);
+                if (ctx.groupId) return 'group::' + String(ctx.groupId);
+                if (ctx.chatId) return 'chat::' + String(ctx.chatId).replace(/\s*-\s*\d{4}-\d{2}-\d{2}@.*$/, '').trim();
+            }
+        } catch(e){}
+        return 'card_default';
+    },
+    // 在「名字 → 聲音」的表裡找這個人：先一字不差，再簡繁折成同一把鑰匙（劇情寫繁體、設定存簡體也是同一個人；10-13）
+    _nameIn(obj, name) {
+        if (!obj || typeof obj !== 'object' || name == null) return null;
+        const Z = (window.parent || window).OS_ZH || window.OS_ZH;
+        if (Z && Z.pick) return Z.pick(obj, name);
+        return Object.prototype.hasOwnProperty.call(obj, name) ? name : null;
+    },
+    _cardLocks() {
+        const id = this._cardId();
+        if (!this.config.npcLocks) this.config.npcLocks = {};
+        if (!this.config.npcLocks[id]) this.config.npcLocks[id] = {};
+        return this.config.npcLocks[id];
+    },
+    lockNpcVoice(charName, modelId) {
+        if (!charName || !modelId) return;
+        const locks = this._cardLocks();
+        locks[this._nameIn(locks, charName) || charName] = modelId;   // 已經有另一種寫法的那筆就改那筆，不長第二筆
+        this.save();
+    },
+    unlockNpcVoice(charName) {
+        const locks = this._cardLocks();
+        const k = this._nameIn(locks, charName);
+        if (k != null && locks[k]) { delete locks[k]; this.save(); }
+    },
+    clearCardLocks() {
+        const id = this._cardId();
+        if (this.config.npcLocks && this.config.npcLocks[id]) { this.config.npcLocks[id] = {}; this.save(); }
+    },
+
+    // ── 能力偵測 ────────────────────────────────────────────────────────
+    _canStreamOgg() {
+        if (this._oggSupported !== null) return this._oggSupported;
+        try {
+            this._oggSupported = !!window.MediaSource &&
+                MediaSource.isTypeSupported('audio/ogg; codecs=vorbis');
+        } catch (e) { this._oggSupported = false; }
+        return this._oggSupported;
+    },
+
+    // ── 工具 ────────────────────────────────────────────────────────────
+    cleanText(t) {
+        return (t || '')
+            .replace(/^[。，、…‥「」『』【】〔〕！？!?,\s]+/, '') // 開頭的標點依然可以去掉
+            .replace(/[。，、「」『』【】〔〕,\s]+$/, '') // 🌟 結尾過濾：拿掉了 ！？!? 和 … ‥ ，讓語氣保留！
+            .replace(/[,，]/g, ' ') 
+            .replace(/\s+/g, ' ')   
+            .trim();
+    },
+
+    // Kokoro 用：保留逗號/句號（它靠標點抓停頓），只收斂空白 —— 不要拿 cleanText（那會把逗號拔掉給 SoVITS 不喘用）
+    _cleanForKokoro(t) {
+        return String(t || '').replace(/\s+/g, ' ').trim();
+    },
+
+    // 🚨 清法必須跟著「這句要用哪顆音色」走，不能在還不知道音色之前就先清。
+    //    SoVITS：她的模型看到逗號會發出古怪的呼吸聲 → cleanText 把逗號換成空格（原始理由，別拿掉）。
+    //    IndexTTS：靠標點斷句，逗號被換成空格就整段黏在一起、無法斷句 → 要原文標點。
+    //    ⚠️ 快取鍵是用清完的字算的，所以預熱／清快取也要用同一支，否則預熱好的音檔對不上鍵＝白生。
+    _cleanForModel(model, raw) {
+        return (model && model.engine === 'index') ? this._cleanForKokoro(raw) : this.cleanText(raw);
+    },
+
+    _cacheKey(modelId, text) { return `${modelId}\x00${text}`; },
+
+    // 🔬 診斷（預設關）：印出語音快取命中/現生/換模型/預熱耗時。
+    //    要查語音問題時把 === '1' 改成 !== '0' 就會預設開（TauriTavern 沒 console，改碼比設 localStorage 快）。
+    _trace() { try { return localStorage.getItem('aurelia_gpu_trace') === '1'; } catch (e) { return false; } },
+
+
+    // 收集本局「已被占用」的聲音模型 id：
+    //  - charMappings：手動綁定/標過模型的角色 → 這些音不讓隨機 NPC 共用
+    //  - _npcSessionCache：本局其他 NPC 已抽到的音 → 避免兩個 NPC 撞同一個、同時同音
+    _collectUsedModelIds(exceptChar) {
+        const used = new Set();
+        // 🔑 A 方案：避撞只看「當前卡在場角色」，不把全宇宙綁定都算進來（換卡舊綁定回歸抽池、不累積）。
+        //   在場名冊＝VN_Core 記憶體（[Avatar]聲線表 charVoices + 頭像表 avatars + 當前說話者）∪ 本局NPC ∪ 本卡鎖。
+        const roster = new Set();
+        try {
+            const VN = (window.parent || window).VN_Core;
+            if (VN) {
+                Object.keys(VN.charVoices || {}).forEach(n => roster.add(n));
+                Object.keys(VN.avatars || {}).forEach(n => roster.add(n));
+                if (VN.currentName) roster.add(VN.currentName);
+            }
+        } catch (e) {}
+        const cm = this.config.charMappings || {};
+        // 手動綁定：只排除「在場」那幾個（其他卡綁的不占當前卡的池）
+        roster.forEach(name => { if (name !== exceptChar && cm[name]) used.add(cm[name]); });
+        // 本卡 NPC 鎖
+        const locks = this._cardLocks();
+        Object.keys(locks).forEach(name => { if (name !== exceptChar && locks[name]) used.add(locks[name]); });
+        // 本局已抽到的 NPC
+        const cache = this._npcSessionCache || {};
+        Object.keys(cache).forEach(name => { if (name !== exceptChar && cache[name]) used.add(cache[name]); });
+        return used;
+    },
+    // 從池子隨機抽一個「沒被占用」的聲音；全被占用時才退回整池（總比沒聲音好）
+    _pickAvailable(modelIds, usedIds) {
+        if (!modelIds || !modelIds.length) return null;
+        const valid = modelIds.filter(id => this._curModel(id));
+        const free  = valid.filter(id => !usedIds || !usedIds.has(id));
+        const pool  = free.length ? free : valid;
+        if (!pool.length) return null;
+        return pool[Math.floor(Math.random() * pool.length)];
+    },
+
+    // ── 角色 → 模型解析 ─────────────────────────────────────────────────
+    _resolveModel(charName, typeHint) {
+        // 0. 別名 → 主名 normalize（不分大小寫；AI 流口水用全名/小名都能對到）
+        let lookupName = charName;
+        if (charName && this._nameIn(this.config.charMappings, charName) == null && this.config.charAliases) {
+            const lc = String(charName).toLowerCase();
+            for (const [main, aliases] of Object.entries(this.config.charAliases)) {
+                if (Array.isArray(aliases) && aliases.some(a => String(a).toLowerCase() === lc)) {
+                    lookupName = main;
+                    break;
+                }
+            }
+        }
+
+        // 🚨 以下每一段都走 _curModel：只認現行引擎的音色。指到另一套的（換引擎前留下的、
+        //    或本局稍早抽到的）一律當作沒有，繼續往下找，不會拿去打另一個引擎的埠。
+
+        // 1. 直接對應 (最優先：你手動綁死的角色，全域、面板顯示)
+        const _mk = this._nameIn(this.config.charMappings, lookupName);
+        const mid = _mk != null ? this.config.charMappings[_mk] : undefined;
+        const midM = this._curModel(mid);
+        if (midM) {
+            return { id: mid, ...midM };
+        }
+
+        // 1.5 本卡 NPC 聲線鎖（立繪 save CV，按角色卡 id；換卡不算）
+        const _locks = this._cardLocks();
+        const _lk = this._nameIn(_locks, charName) ?? this._nameIn(_locks, lookupName);
+        const lid = _lk != null ? _locks[_lk] : undefined;
+        const lidM = this._curModel(lid);
+        if (lidM) {
+            return { id: lid, ...lidM };
+        }
+
+        // 2. 檢查記憶體：這個 NPC 剛剛是不是已經抽過聲音了？
+        const _sk = this._nameIn(this._npcSessionCache, charName);
+        if (_sk != null && this._npcSessionCache[_sk]) {
+            const cachedId = this._npcSessionCache[_sk];
+            const cachedM = this._curModel(cachedId);
+            if (cachedM) {
+                return { id: cachedId, ...cachedM };
+            }
+        }
+
+        // 收集已被占用的聲音（綁定角色 + 本局其他 NPC），隨機分配時避開 → 標過模型的角色那份音不給 NPC 共用
+        const _usedIds = this._collectUsedModelIds(charName);
+
+        // 3. 🎭 優先匹配：如果有明確的 Type 標籤，去對應的池子抽卡！
+        if (typeHint) {
+            const lowerType = typeHint.toLowerCase();
+            for (const cat of this.config.npcCategories) {
+                // 🌟 核心修正：將 ID、名稱與 Tags 一起視為感知範圍
+                const matchers = [cat.id, cat.name, ...(cat.tags || [])].filter(Boolean);
+                const hit = matchers.some(m => {
+                    const lm = String(m).toLowerCase();
+                    return lowerType.includes(lm) || lm.includes(lowerType);
+                });
+
+                if (hit && cat.modelIds && cat.modelIds.length) {
+                    const rid = this._pickAvailable(cat.modelIds, _usedIds);
+                    const ridM = this._curModel(rid);
+                    if (ridM) {
+                        this._npcSessionCache[charName] = rid;
+                        return { id: rid, ...ridM };
+                    }
+                }
+            }
+        }
+
+        // 4. NPC 模糊匹配 (這局第一次開口，開始抽卡)
+        const lower = charName.toLowerCase();
+        for (const cat of this.config.npcCategories) {
+            // 🌟 核心修正：同理，讓主幹（ID/Name）與枝葉（Tags）一起參與模糊匹配
+            const matchers = [cat.id, cat.name, ...(cat.tags || [])].filter(Boolean);
+            const hit = matchers.some(m => {
+                const lm = String(m).toLowerCase();
+                return lower.includes(lm) || lm.includes(lower);
+            });
+
+            if (hit && cat.modelIds && cat.modelIds.length) {
+                // 隨機抽一個聲音（先濾掉不屬於現行引擎的，否則抽到舊引擎那顆就整個分類放棄）
+                const pool = cat.modelIds.filter(id => this._curModel(id));
+                const rid = pool[Math.floor(Math.random() * pool.length)];
+                const ridM = this._curModel(rid);
+                if (ridM) {
+                    // 鎖定這個聲音！記在腦子裡，下次同一個名字直接用它
+                    this._npcSessionCache[charName] = rid;
+                    return { id: rid, ...ridM };
+                }
+            }
+        }
+        return null;
+    },
+
+    // ── 模型切換（直連 GPT-SoVITS API）──────────────────────────────────
+    async _ensureModel(model) {
+        if (!model.gptPath && !model.sovitsPath) return; 
+        const base = this.config.serverUrl;
+        if (this._loadedGpt !== model.gptPath && model.gptPath) {
+            await fetch(`${base}/set_gpt_weights?weights_path=${encodeURIComponent(model.gptPath)}`);
+            this._loadedGpt = model.gptPath;
+        }
+        if (this._loadedSovits !== model.sovitsPath && model.sovitsPath) {
+            await fetch(`${base}/set_sovits_weights?weights_path=${encodeURIComponent(model.sovitsPath)}`);
+            this._loadedSovits = model.sovitsPath;
+        }
+    },
+
+    // ── 建立 TTS 請求 URL ────────────────────────────────────────────────
+    _buildUrl(model, text, emotion, streaming) {
+        const useOgg = streaming && this._canStreamOgg();
+
+        let rAudio = model.refAudioPath || '';
+        let rText  = model.refText || '';
+        let rLang  = model.refLang || 'zh';
+
+        if (emotion && emotion !== 'default' && model.emotions && model.emotions[emotion]) {
+            const emData = model.emotions[emotion];
+            if (emData.refAudioPath) {
+                rAudio = emData.refAudioPath;
+                rText  = emData.refText || '';
+                rLang  = emData.refLang || 'zh';
+            }
+        }
+
+        const p = new URLSearchParams({
+            text,
+            text_lang:      this.config.textLang,
+            ref_audio_path: rAudio,
+            prompt_text:    rText,
+            prompt_lang:    rLang,
+            media_type:     useOgg ? 'ogg' : 'wav',
+            streaming_mode: streaming ? 'true' : 'false',
+            parallel_infer: 'false',
+            split_bucket:   'true',
+            
+            top_k:          String(this.config.topK ?? 15),
+            top_p:          String(this.config.topP ?? 1),
+            temperature:    String(this.config.temperature ?? 1),
+            speed:          String(this.config.speed ?? 1),
+            sample_steps:   String(this.config.sampleSteps ?? 32),
+            text_split_method: 'cut5'
+        });
+
+        if (streaming)                        p.set('fragment_interval', '0.1');
+        if (emotion && emotion !== 'default') p.set('emotion', emotion);
+        
+        return `${this.config.serverUrl}/tts?${p}`;
+    },
+
+    // ── 停止當前播放 ────────────────────────────────────────────────────
+    stop() {
+        if (this._currentAudio) {
+            this._currentAudio.pause();
+            this._currentAudio.src = '';
+            this._currentAudio = null;
+        }
+        if (this._currentMsUrl) {
+            URL.revokeObjectURL(this._currentMsUrl);
+            this._currentMsUrl = null;
+        }
+    },
+
+    _playBlobUrl(blobUrl) {
+        this.stop();
+        const a = new Audio(blobUrl);
+        const _g = (window.parent || window).VN_AudioGain;
+        if (_g) _g.set(a, this.config.volume); else a.volume = this.config.volume; // iOS 走 GainNode
+        a.play().catch(e => console.warn('[VN_TTS] play error', e));
+        this._currentAudio = a;
+    },
+
+    // ── OGG 串流播放（MediaSource）──────────────────────────────────────
+    _playStreamingOgg(url, cacheKey) {
+        this.stop();
+        const ms    = new MediaSource();
+        const msUrl = URL.createObjectURL(ms);
+        const audio = new Audio(msUrl);
+        this._currentMsUrl = msUrl;
+        this._currentAudio = audio;
+        const _g = (window.parent || window).VN_AudioGain;
+        if (_g) _g.set(audio, this.config.volume); else audio.volume = this.config.volume; // iOS 走 GainNode
+        const chunks = [];
+
+        ms.addEventListener('sourceopen', async () => {
+            let sb;
+            try {
+                sb = ms.addSourceBuffer('audio/ogg; codecs=vorbis');
+            } catch (e) {
+                console.error('[VN_TTS] SourceBuffer 失敗', e);
+                this._pending.delete(cacheKey);
+                return;
+            }
+            const _W = (window.parent || window);
+            const _tag = '即時語音(串流)/' + String(cacheKey || '').split('\x00')[0];
+            if (this._trace()) console.log('[VN_TTS🔬] 現生（快取沒有）→ ' + _tag);
+            const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
+                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000, _tag)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
+                : (fn) => fn();
+            try {
+                await _runQ(async () => {
+                    const _light = _W.AURELIA_GPU_LIGHT;
+                    try {
+                        _light && _light.voiceStart();
+                        const resp = await fetch(url);
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        const reader   = resp.body.getReader();
+                        let firstChunk = true;
+                        let complete   = false;
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) { complete = true; try { ms.endOfStream(); } catch (e) {} break; }
+                            chunks.push(value);
+                            if (sb.updating) {
+                                await new Promise(r => sb.addEventListener('updateend', r, { once: true }));
+                            }
+                            // 塞不進去＝這段播放被 stop() 拆掉了（點了下一句）：後面不收，連線也放掉
+                            try { sb.appendBuffer(value); } catch (e) { reader.cancel().catch(() => {}); break; }
+                            if (firstChunk) { firstChunk = false; audio.play().catch(() => {}); }
+                        }
+                        // 只收完整的：半截存進去，之後同一句就永遠從快取播那半截、也不會再重生
+                        if (complete && cacheKey && chunks.length) {
+                            const blob = new Blob(chunks, { type: 'audio/ogg' });
+                            this._cache[cacheKey] = URL.createObjectURL(blob);
+                        }
+                    } finally {
+                        _light && _light.voiceEnd();
+                    }
+                });
+            } catch (e) {
+                console.error('[VN_TTS] streaming 錯誤', e);
+            } finally {
+                this._pending.delete(cacheKey);
+            }
+        });
+    },
+
+    // ── WAV 完整下載後播放（fallback）──────────────────────────────────
+    async _playWavFetch(url, cacheKey) {
+        const _W = (window.parent || window);
+        const _tag = '即時語音(WAV)/' + String(cacheKey || '').split('\x00')[0];
+        if (this._trace()) console.log('[VN_TTS🔬] 現生（快取沒有）→ ' + _tag);
+        const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
+            ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 0, 90000, _tag)   // 即時語音：最高優先（插隊），90 秒逾時防堵隊
+            : (fn) => fn();
+        try {
+            await _runQ(async () => {
+                const _light = _W.AURELIA_GPU_LIGHT;
+                try {
+                    _light && _light.voiceStart();
+                    const resp    = await fetch(url);
+                    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                    const blob    = await resp.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    this._cache[cacheKey] = blobUrl;
+                    this._playBlobUrl(blobUrl);
+                } finally {
+                    _light && _light.voiceEnd();
+                }
+            });
+        } catch (e) {
+            console.error('[VN_TTS] WAV fetch 錯誤', e);
+        } finally {
+            this._pending.delete(cacheKey);
+        }
+    },
+
+    // ── 播放入口 ────────────────────────────────────────────────────────
+    async play(charName, rawText, emotion, typeHint) {
+        if (!this.config.enabled) return;
+        const model = this._resolveModel(charName, typeHint);
+        if (!model) return;
+        const text = this._cleanForModel(model, rawText);
+        if (!text) return;
+
+        return this._speakWithModel(model, text, emotion);
+    },
+
+    // ── 系統語音解析（[Sys|系統名|訊息]）────────────────────────────────
+    // 系統名 → modelId；指定系統找不到時退回預設系統音（systemMappings[''] / ['*']）
+    _resolveSystemModel(sysName) {
+        const sm = this.config.systemMappings || {};
+        let mid = sysName && sm[sysName];
+        if (!mid && sysName) {
+            const lc = String(sysName).toLowerCase();
+            for (const [k, v] of Object.entries(sm)) {
+                if (k && String(k).toLowerCase() === lc) { mid = v; break; }
+            }
+        }
+        if (!mid) mid = sm[''] || sm['*'];   // 預設系統音
+        const m = this._curModel(mid);
+        if (m) return { id: mid, ...m };
+        return null;
+    },
+
+    // ── 系統語音播放入口 ────────────────────────────────────────────────
+    async playSystem(sysName, rawText, emotion) {
+        if (!this.config.enabled) return;
+        const model = this._resolveSystemModel(sysName);
+        if (!model) return;
+        const text = this._cleanForModel(model, rawText);
+        if (!text) return;
+
+        return this._speakWithModel(model, text, emotion);
+    },
+
+    // ── 旁白語音播放入口 ─────────────────────────────────────────────────
+    //   IndexTTS / Kokoro 開了優先（獨立小服務、不碰 SoVITS GPU 佇列）；否則退 SoVITS 旁白音色（指派了才念）
+    async playNarration(rawText, emotion) {
+        // 🚨 IndexTTS 旁白只在引擎是 IndexTTS 時才算數：本機二選一，服務換成 SoVITS 之後
+        //    這條還開著的話，旁白會繼續去打 8881（Kokoro／MiniMax 是另外的服務，不受影響）。
+        const ic = this.config.narratorIndex || {};
+        if (this._eng() === 'index' && ic.enabled && ic.url) return this._speakIndex(rawText);
+        const kc = this.config.narratorKokoro || {};
+        if (kc.enabled && kc.url) return this._speakKokoro(rawText);
+        const nm = this.config.narratorMinimax || {};
+        if (nm.enabled) return this._speakMinimax(rawText);
+        if (!this.config.enabled) return;
+        const mid = this.config.narratorModel;
+        const midM = this._curModel(mid);
+        if (!midM) return;   // 沒指派旁白音色 → 靜默（不像系統音退預設）
+        const _nm = { id: mid, ...midM };
+        const text = this._cleanForModel(_nm, rawText);
+        if (!text) return;
+        return this._speakWithModel(_nm, text, emotion);
+    },
+
+    // ── Kokoro 旁白合成（OpenAI 相容 /v1/audio/speech；獨立服務，不進 GPU 佇列）─
+    async _speakKokoro(rawText) {
+        const kc = this.config.narratorKokoro || {};
+        const base = String(kc.url || '').replace(/\/+$/, '');
+        if (!base) return;
+        const voice = kc.voice || 'zf_xiaoxiao';
+        const text = this._cleanForKokoro(rawText);
+        if (!text) return;
+        const k = this._cacheKey('kokoro:' + voice, text);
+        if (this._cache[k])       { this._playBlobUrl(this._cache[k]); return; }
+        if (this._pending.has(k)) { this._waitAndPlay(k); return; }
+        this._pending.add(k);
+        try {
+            const resp = await fetch(base + '/v1/audio/speech', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model: 'kokoro', input: text, voice, response_format: 'mp3', speed: kc.speed || 1 })
+            });
+            if (!resp.ok) { console.warn('[VN_TTS] Kokoro 回應異常', resp.status); return; }
+            const blob = await resp.blob();
+            const u = URL.createObjectURL(blob);
+            this._cache[k] = u;
+            this._playBlobUrl(u);
+        } catch (e) {
+            console.warn('[VN_TTS] Kokoro 旁白失敗（服務沒開？）', e);
+        } finally {
+            this._pending.delete(k);
+        }
+    },
+
+    // ── IndexTTS 角色音色 ───────────────────────────────────────────────
+    //   模型長相：{ name, engine:'index', url, voice, emotions:{ 情緒key:{emo:'服務端情緒名'} } }
+    //   沒有 gptPath/sovitsPath，所以 _ensureModel 會自己跳過換模型那段。
+
+    // 腳本的表情已被 _mapExprToEmotion 轉成 happy/sad/angry/… 或原樣自訂標籤。
+    // 音色自己的 emotions 表只是「這個角色有本人錄的情緒音檔」時的對照，
+    // 對不上不能就把情緒丟掉：服務端有一張情緒權重表（認得 happy/sad/生氣/Smirk…），
+    // 標籤原樣送過去就能套語氣，權重不帶別人的聲音所以不會變聲。
+    // （只靠對照表的話，285 個音色裡只有 4 個有表 ⇒ 其餘全部整場沒有語氣。）
+    _indexVoice(model, emotion) {
+        const base = model.voice || '';
+        if (!emotion || emotion === 'default') return base;
+        const em = this.emoMapOf(model);   // 自帶的優先，沒帶用共用表（匯入的音色已不再每顆存一份）
+        const hit = em[emotion]
+                 || em[String(emotion).toLowerCase()]
+                 || em[Object.keys(em).find(k => k.toLowerCase() === String(emotion).toLowerCase()) || ''];
+        return `${base}:${(hit && hit.emo) ? hit.emo : emotion}`;
+    },
+
+    async _fetchIndexBlob(model, text, emotion) {
+        const base = String(model.url || '').replace(/\/+$/, '');
+        if (!base) throw new Error('這個音色沒有服務網址');
+        // 語氣強度：面板那顆滑桿（音色可個別覆寫）。共用情緒音檔那條服務端還會再壓一次。
+        const alpha = (typeof model.emoAlpha === 'number') ? model.emoAlpha
+                    : (typeof this.config.indexEmoAlpha === 'number') ? this.config.indexEmoAlpha : 0.5;
+        const resp = await fetch(base + '/v1/audio/speech', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                model: 'indextts',
+                input: text,
+                voice: this._indexVoice(model, emotion),
+                response_format: 'mp3',
+                speed: model.speed || 1,
+                emo_alpha: alpha
+            })
+        });
+        if (!resp.ok) throw new Error('服務回應 ' + resp.status);
+        return await resp.blob();
+    },
+
+    // ── IndexTTS 旁白合成（本機獨立服務、OpenAI 相容；跟生圖同一張卡，進 GPU 佇列排隊）──
+    //   voice 帶冒號就是情緒，例：'丹:Angry'（情緒＝服務端 emotions/ 裡的檔名）
+    async _speakIndex(rawText) {
+        const ic = this.config.narratorIndex || {};
+        const base = String(ic.url || '').replace(/\/+$/, '');
+        if (!base) return;
+        const voice = ic.voice || '';
+        const text = this._cleanForKokoro(rawText);
+        if (!text) return;
+        const k = this._cacheKey('index:' + voice, text);
+        if (this._cache[k])       { this._playBlobUrl(this._cache[k]); return; }
+        if (this._pending.has(k)) { this._waitAndPlay(k); return; }
+        this._pending.add(k);
+        const _Wn = (window.parent || window);
+        const _runQn = (_Wn.AURELIA_GPU_QUEUE && _Wn.AURELIA_GPU_QUEUE.run)
+            ? (fn) => _Wn.AURELIA_GPU_QUEUE.run(fn, 0, 90000, '旁白語音(IndexTTS)')   // 即時語音：最高優先，90 秒逾時防堵隊
+            : (fn) => fn();
+        try {
+            await _runQn(async () => {
+                const resp = await fetch(base + '/v1/audio/speech', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: 'indextts', input: text, voice, response_format: 'mp3', speed: ic.speed || 1 })
+                });
+                if (!resp.ok) { console.warn('[VN_TTS] IndexTTS 回應異常', resp.status); return; }
+                const blob = await resp.blob();
+                const u = URL.createObjectURL(blob);
+                this._cache[k] = u;
+                this._playBlobUrl(u);
+            });
+        } catch (e) {
+            console.warn('[VN_TTS] IndexTTS 旁白失敗（服務沒開？）', e);
+        } finally {
+            this._pending.delete(k);
+        }
+    },
+
+    // ── MiniMax 旁白合成（雲端，走 OS_MINIMAX；不碰本機 GPU）─────────────
+    async _speakMinimax(rawText) {
+        const nm = this.config.narratorMinimax || {};
+        const voice = nm.voice || 'audiobook_female_1';
+        const text = this._cleanForKokoro(rawText);   // 保留標點（MiniMax 也靠標點抓語氣）
+        if (!text) return;
+        const W = (window.parent || window);
+        if (!W.OS_MINIMAX?.play) return;
+        try { await W.OS_MINIMAX.play(text, voice); } catch (e) { console.warn('[VN_TTS] MiniMax 旁白失敗（沒設 API key？）', e); }
+    },
+
+    // ── 共用：拿到模型後的快取/切換/播放流程 ─────────────────────────────
+    async _speakWithModel(model, text, emotion) {
+        const k = this._cacheKey(model.id, text);
+        const _tr = this._trace();
+        if (this._cache[k])    { if (_tr) console.log('[VN_TTS🔬] ✅ 快取命中（早鳥有效）[' + model.id + ']「' + String(text).slice(0, 14) + '…」'); this._playBlobUrl(this._cache[k]); return; }
+        if (this._pending.has(k)) { if (_tr) console.log('[VN_TTS🔬] ⏳ 這句正在生（預熱還沒生完）→ 等它 [' + model.id + ']「' + String(text).slice(0, 14) + '…」'); this._waitAndPlay(k); return; }
+        if (_tr) console.log('[VN_TTS🔬] ❌ 快取沒有，要現生 [' + model.id + ']「' + String(text).slice(0, 14) + '…」');
+
+        this._pending.add(k);
+
+        // IndexTTS 音色：獨立服務、不換模型；但跟生圖用同一張顯卡，一樣要進 GPU 佇列排隊
+        // （不排隊會跟 ComfyUI 直連生圖對撞：生圖從十幾秒被拖到 200 秒＋，2026-08-26 事故）
+        if (model.engine === 'index') {
+            const _Wi = (window.parent || window);
+            const _runQi = (_Wi.AURELIA_GPU_QUEUE && _Wi.AURELIA_GPU_QUEUE.run)
+                ? (fn) => _Wi.AURELIA_GPU_QUEUE.run(fn, 0, 90000, '即時語音(IndexTTS)/' + model.id)   // 即時語音：最高優先，90 秒逾時防堵隊
+                : (fn) => fn();
+            try {
+                const blob = await _runQi(() => this._fetchIndexBlob(model, text, emotion));
+                if (!blob) throw new Error('逾時被放行');
+                const u = URL.createObjectURL(blob);
+                this._cache[k] = u;
+                this._playBlobUrl(u);
+            } catch (e) {
+                console.warn('[VN_TTS] IndexTTS 合成失敗（服務沒開？）', model.id, e);
+            } finally {
+                this._pending.delete(k);
+            }
+            return;
+        }
+
+        try {
+            const _tSwap = Date.now();
+            const _need = (this._loadedGpt !== model.gptPath && !!model.gptPath) || (this._loadedSovits !== model.sovitsPath && !!model.sovitsPath);
+            await this._ensureModel(model);
+            if (_tr && _need) console.log('[VN_TTS🔬] ⚠️ 播放前換模型（在佇列外執行）→ ' + model.id + '　耗時 ' + ((Date.now() - _tSwap) / 1000).toFixed(1) + 's');
+        } catch (e) {
+            console.error('[VN_TTS] 模型切換失敗', e);
+            this._pending.delete(k);
+            return;
+        }
+
+        const streaming = this._canStreamOgg();
+        const url = this._buildUrl(model, text, emotion, streaming);
+        if (streaming) this._playStreamingOgg(url, k);
+        else           this._playWavFetch(url, k);
+    },
+
+    _waitAndPlay(k) {
+        let t = 0;
+        const iv = setInterval(() => {
+            if (this._cache[k]) { clearInterval(iv); this._playBlobUrl(this._cache[k]); }
+            else if (++t > 360)   clearInterval(iv);
+        }, 500);
+    },
+
+    // ── 預生成佇列（串行，非串流，只建快取）────────────────────────────
+    prewarm(lines) {
+        if (!this.config.enabled) return;
+        for (const { charName, text, emotion, typeHint } of lines) {
+            const model = this._resolveModel(charName, typeHint);
+            if (!model) continue;
+            const cleaned = this._cleanForModel(model, text);
+            if (!cleaned) continue;
+            const k = this._cacheKey(model.id, cleaned);
+            if (this._cache[k] || this._pending.has(k)) continue;
+            this._pending.add(k);
+            this._prewarmQueue.push({ model, text: cleaned, emotion: emotion || '', key: k });
+        }
+        if (!this._prewarmRunning) this._runPrewarm();
+    },
+
+    async _runPrewarm() {
+        this._prewarmRunning = true;
+        const _tr = this._trace();
+        const _t0 = Date.now();
+        let _n = 0, _swaps = 0;
+        if (_tr) console.log('[VN_TTS🔬] 預熱佇列啟動：待生 ' + this._prewarmQueue.length + ' 條');
+        while (this._prewarmQueue.length) {
+            const { model, text, emotion, key } = this._prewarmQueue.shift();
+            if (this._cache[key]) { this._pending.delete(key); continue; }
+
+            // IndexTTS 音色不用換模型，但一樣吃 GPU：預熱要用最低優先進佇列，讓生圖與即時語音先走
+            // （不排隊的話 36 連發會連續佔卡好幾分鐘，生圖全程被拖慢，2026-08-26 事故主嫌）
+            if (model.engine === 'index') {
+                const _Wp = (window.parent || window);
+                const _runQp = (_Wp.AURELIA_GPU_QUEUE && _Wp.AURELIA_GPU_QUEUE.run)
+                    ? (fn) => _Wp.AURELIA_GPU_QUEUE.run(fn, 2, 120000, '預熱語音(IndexTTS)/' + model.id)   // 預熱：最低優先，120 秒逾時防堵隊
+                    : (fn) => fn();
+                try {
+                    const blob = await _runQp(() => this._fetchIndexBlob(model, text, emotion));
+                    if (blob) { this._cache[key] = URL.createObjectURL(blob); _n++; }
+                } catch (e) {
+                    console.warn('[VN_TTS] prewarm 失敗（IndexTTS）', key, e);
+                } finally {
+                    this._pending.delete(key);
+                }
+                continue;
+            }
+
+            const _W = (window.parent || window);
+            const _runQ = (_W.AURELIA_GPU_QUEUE && _W.AURELIA_GPU_QUEUE.run)
+                ? (fn) => _W.AURELIA_GPU_QUEUE.run(fn, 2, 120000, '預熱語音/' + model.id)   // 預熱語音：最低優先（圖片/即時語音都先走），120 秒逾時防堵隊
+                : (fn) => fn();
+            const _needSwap = (this._loadedGpt !== model.gptPath && !!model.gptPath) || (this._loadedSovits !== model.sovitsPath && !!model.sovitsPath);
+            if (_needSwap) _swaps++;
+            const _tItem = Date.now();
+            try {
+                await _runQ(async () => {
+                    const _tSwap = Date.now();
+                    await this._ensureModel(model);
+                    if (_tr && _needSwap) console.log('[VN_TTS🔬] 　換模型 → ' + model.id + '　耗時 ' + ((Date.now() - _tSwap) / 1000).toFixed(1) + 's');
+                    const url  = this._buildUrl(model, text, emotion, false);
+                    const resp = await fetch(url);
+                    if (!resp.ok) return;
+                    const blob = await resp.blob();
+                    this._cache[key] = URL.createObjectURL(blob);
+                });
+                _n++;
+                if (_tr) console.log('[VN_TTS🔬] 　預熱好一條 [' + model.id + '] ' + ((Date.now() - _tItem) / 1000).toFixed(1) + 's（含排隊）　「' + String(text).slice(0, 14) + '…」　剩 ' + this._prewarmQueue.length + ' 條');
+            } catch (e) {
+                console.warn('[VN_TTS] prewarm 失敗', key, e);
+            } finally {
+                this._pending.delete(key);
+            }
+        }
+        this._prewarmRunning = false;
+        if (_tr) console.log('[VN_TTS🔬] 預熱佇列跑完：' + _n + ' 條／總計 ' + ((Date.now() - _t0) / 1000).toFixed(1) + 's／換模型 ' + _swaps + ' 次');
+    },
+
+    // ── 清除快取 ─────────────────────────────────────────────────────────
+    //   typeHint 要跟 play 帶的一樣：同一個人有聲線前綴時解析到的是另一副音色，鍵也就不同
+    clearCache(charName, text, typeHint) {
+        const model = this._resolveModel(charName, typeHint);
+        if (!model) return;
+        const k = this._cacheKey(model.id, this._cleanForModel(model, text));
+        if (this._cache[k]) { URL.revokeObjectURL(this._cache[k]); delete this._cache[k]; }
+        this._pending.delete(k);
+        this._prewarmQueue = this._prewarmQueue.filter(t => t.key !== k);
+    },
+
+    clearAll() {
+        Object.values(this._cache).forEach(u => URL.revokeObjectURL(u));
+        this._cache = {};
+        this._pending.clear();
+        this._prewarmQueue = [];
+        this._npcSessionCache = {}; // 🎭 同時清除 NPC 的聲音綁定記憶
+    }
+};
+
+window.VN_TTS = VN_TTS;
+VN_TTS.init();
+
+})();

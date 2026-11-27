@@ -1,0 +1,766 @@
+// ==SillyTavern Extension==
+// @name         多功能面板系統 - 精簡版 (RPG & WX & VN)
+// @version      4.3.0
+// @description  修復 CSS 破圖問題，刪除多餘 APP，專注於 RPG、微信與長線劇情。
+// @author       none
+// @license      免費使用、禁止販售與收費代裝（全文見同資料夾 LICENSE；11-26 前這行寫的 MIT 是舊樣板）
+
+// 🔥 0. 偵測載入來源，決定所有檔案（JS / CSS）要從哪裡載
+//    ① 原生擴展安裝（酒館 Extensions 直接裝）→ 偵測得到 index.js 的 script 標籤 → 走本地路徑（行為不變）
+//    ② 酒館助手匯入（朋友貼 JSON，從 CDN 載入）→ 偵測不到 → 走 GitHub CDN，113 個檔全部從 repo 載
+//    兩種裝法並存、互不影響；改動只多了一條 CDN fallback。
+// 🔥 CDN 來源 ref：助手 JSON 可在「動態 import 前」設 globalThis.__AURELIA_REF__='<commit hash>'，
+//    讓整包（index.js + 全部模組 + CSS）統一鎖那個不可變 commit —— jsdelivr 對 commit 永遠正確、零快取陳舊問題。
+//    沒設則預設 'main'（自動跟更新，但有 jsdelivr @main 邊緣快取延遲，更新約半天內生效）。
+const _AURELIA_REF = (function () {
+    try {
+        if (window.__AURELIA_REF__) return String(window.__AURELIA_REF__);
+        if (window.parent && window.parent !== window) { try { if (window.parent.__AURELIA_REF__) return String(window.parent.__AURELIA_REF__); } catch (e) {} }
+    } catch (e) {}
+    return 'main';
+})();
+// CDN base 可被 window.__AURELIA_CDN_BASE__ 覆寫：jsdelivr 限流/壞掉時改走 statically.io 等其他 CDN
+//   (statically 用 /ref/path、jsdelivr 用 @ref/path，覆寫值自帶完整前綴，下游一律 base + '/path' 接得上)
+const _AURELIA_CDN_OVERRIDE = (function () {
+    try { if (window.__AURELIA_CDN_BASE__) return String(window.__AURELIA_CDN_BASE__); } catch (e) {}
+    try { if (window.parent && window.parent !== window && window.parent.__AURELIA_CDN_BASE__) return String(window.parent.__AURELIA_CDN_BASE__); } catch (e) {}
+    return null;
+})();
+const _AURELIA_CDN_BASE = _AURELIA_CDN_OVERRIDE || ('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia@' + _AURELIA_REF);
+
+// 🔥 0a. 酒館助手把匯入的腳本丟進「沙盒 <iframe>」跑：裸 document 指向 iframe 自己，UI 注入不到主頁面（按鈕出不來）。
+//    對策：偵測到「自己不在主頁面、但 parent 才是主頁面」→ 把 index.js 重新注入主頁面以 classic script 執行，
+//    讓整個擴展（含 100+ 模組）都跑在主頁面，裸 document 自動＝主頁面、UI 正常注入；iframe 這份隨即停手。
+//    原生安裝時「自己就在主頁面」→ 不觸發，行為完全不變。
+let _AURELIA_SKIP = false;
+(function () {
+    try {
+        const _hasST = (d) => { try { return !!(d && (d.getElementById('chat') || d.getElementById('sheld') || d.querySelector('#send_form'))); } catch (e) { return false; } };
+        if (!_hasST(document) && window.parent && window.parent !== window && _hasST(window.parent.document)) {
+            _AURELIA_SKIP = true; // 我在酒館助手沙盒 iframe，主頁面在 parent
+            const pwin = window.parent, pdoc = pwin.document;
+            if (!pwin.__AURELIA_BOOTSTRAPPED__) {
+                pwin.__AURELIA_BOOTSTRAPPED__ = true;
+                pwin.__AURELIA_REF__ = _AURELIA_REF; // 把 ref 傳進主頁面，讓重注入的 index.js + 模組都鎖同一 commit
+                pwin.__AURELIA_FROM_CDN__ = true;    // 標記主頁面這份＝從 CDN 重注入 → 強制 CDN 模式，別誤抓同頁其他擴展(如 claude-codex-room)的 index.js 標籤當成自己的資料夾
+                if (_AURELIA_CDN_OVERRIDE) pwin.__AURELIA_CDN_BASE__ = _AURELIA_CDN_BASE; // 把 CDN 覆寫(statically.io 等)傳進主頁面，讓重注入的 index.js + 全部模組都走同一條 CDN
+                const s = pdoc.createElement('script');
+                s.src = _AURELIA_CDN_BASE + '/index.js?boot=' + Date.now();
+                // 🩹 注入腳本若載入失敗(jsdelivr 對剛 push 的新 commit 冷快取會 503/timeout) → 解鎖，
+                //    否則 __AURELIA_BOOTSTRAPPED__ 凍在 true，重跑同一個 ref 會「完全沒反應」(兩個分支都不走)。
+                //    解鎖後使用者重跑 import 即可重試(TauriTavern webview 不銷毀、不會自己歸零)。
+                s.onerror = function () {
+                    pwin.__AURELIA_BOOTSTRAPPED__ = false;
+                    pwin.__AURELIA_REF__ = undefined;
+                    pwin.__AURELIA_FROM_CDN__ = undefined;
+                    console.warn('[Aurelia] 重注入腳本載入失敗(多半 jsdelivr 冷快取 503) → 已解鎖，重跑 import 即可重試');
+                };
+                pdoc.head.appendChild(s);
+                console.log('[Aurelia] 偵測到酒館助手沙盒 → 已將擴展重新注入主頁面執行');
+            } else if (pwin.__AURELIA_REF__ !== _AURELIA_REF) {
+                // 🔁 換了 hash，但主頁面 webview 沒被銷毀、還凍結在舊 ref（TauriTavern 常見）→
+                //    一次性注入鎖會讓新 hash 永遠進不來。偵測到 ref 變更就強制重載主頁面：
+                //    重載後 __AURELIA_BOOTSTRAPPED__ 歸零，會用新 ref 重新 bootstrap。只觸發一次、不會無限重載。
+                console.log('[Aurelia] 偵測到 ref 變更（' + pwin.__AURELIA_REF__ + ' → ' + _AURELIA_REF + '）→ 強制重載主頁面套用新版');
+                try { pwin.location.reload(); } catch (e) { console.warn('[Aurelia] 強制重載失敗', e); }
+            }
+        }
+    } catch (e) { console.warn('[Aurelia] 沙盒偵測失敗，照原樣在當前環境執行', e); }
+})();
+
+// ⚠️ 同頁可能有別的 third-party 擴展(如「Claude/Codex 房間」claude-codex-room)也掛 index.js 標籤。
+//    舊版只取「最後一個」會誤抓到它 → 把奧瑞亞檔案往別人資料夾撈 → 整盤 404。
+//    改：① 經酒館助手 CDN 重注入(__AURELIA_FROM_CDN__) → 直接走 CDN，根本不掃本地標籤。
+//        ② 原生安裝 → 認自己的資料夾(優先 my-tavern-extension；排掉已知兄弟擴展)，都沒有就退 CDN。
+const _AURELIA_OTHER_EXTS = ['claude-codex-room'];   // 其他獨立擴展，別被當成奧瑞亞
+const _AURELIA_EXT_NAME = (() => {
+    try {
+        const fromCdn = window.__AURELIA_FROM_CDN__
+            || (() => { try { return !!(window.parent && window.parent !== window && window.parent.__AURELIA_FROM_CDN__); } catch (e) { return false; } })();
+        if (fromCdn) return null;
+        const names = [];
+        const scripts = document.getElementsByTagName('script');
+        for (let i = 0; i < scripts.length; i++) {
+            const m = (scripts[i].src || '').match(/scripts\/extensions\/third-party\/([^\/]+)\/index\.js/);
+            if (m) names.push(m[1]);
+        }
+        if (names.includes('my-tavern-extension')) return 'my-tavern-extension';   // 原生奧瑞亞資料夾
+        const own = names.filter(n => _AURELIA_OTHER_EXTS.indexOf(n) === -1);
+        return own.length ? own[own.length - 1] : null;   // 沒有自己的標籤 → null 退 CDN(總比往別人資料夾撈 404 好)
+    } catch (e) {}
+    return null; // 偵測不到 = 不是原生安裝（多半是酒館助手從 CDN 匯入）
+})();
+const _AURELIA_EXT_BASE = _AURELIA_EXT_NAME
+    ? './scripts/extensions/third-party/' + _AURELIA_EXT_NAME
+    : _AURELIA_CDN_BASE;
+// CDN 模式下 EXT_NAME 為 null；下游用到它的本地路徑（TTS 本機模型等）會自行 `|| 'my-tavern-extension'` fallback，
+// 那些是本機限定功能，朋友端載不到很正常（會優雅降級，不影響面板本體）。
+window.AURELIA_EXT_NAME = _AURELIA_EXT_NAME;
+window.AURELIA_EXT_BASE = _AURELIA_EXT_BASE;
+
+// 🔥 防快取參數開關：
+//   本機(原生安裝，EXT_NAME 有值) → 加 ?v=時間，方便你開發時即時看到改動。
+//   CDN(酒館助手，EXT_NAME 為 null) → 加 ?v=版本號 → 同版本內 jsdelivr/瀏覽器照樣快取(載入快)，
+//      但每次「改版 bump _AURELIA_VERSION」後，朋友的瀏覽器會自動重抓模組，不用手動清快取。
+//      （index.js 本身是 ?boot= 強制重抓的，所以這個版本號一改、下次載入就生效。）
+const _AURELIA_VERSION = '2026.07.22.16'; // ⚠️ 每次發佈更新就 bump 這個（CDN 朋友端靠它更新）
+const _AURELIA_CACHE_BUST = _AURELIA_EXT_NAME ? ('?v=' + Date.now()) : ('?v=' + _AURELIA_VERSION);
+
+// 🔥 2. 模組加載順序
+const MODULE_LOAD_ORDER = [
+    { name: 'debug_console', path: _AURELIA_EXT_BASE + '/core/debug_console.js', key: 'debugConsole' }, // 🐛 螢幕 console（無 devtools 環境用）— 最先載才攔得到後續 log
+    { name: 'aurelia_api', path: _AURELIA_EXT_BASE + '/core/aurelia_api.js', key: 'aureliaApi' }, // 📦 統一資料入口(備用版插座)— 必須最先載
+    { name: 'aurelia_dialog', path: _AURELIA_EXT_BASE + '/core/aurelia_dialog.js', key: 'aureliaDialog' },   // 💬 全站提示條/對話窗 AUI（取代原生 alert/confirm/prompt；酒館會攔 confirm），排前面讓各模組都用得到
+    { name: 'aurelia_tilefx', path: _AURELIA_EXT_BASE + '/core/aurelia_tilefx.js', key: 'aureliaTileFx' },   // 🧱 全螢幕窗口切塊進出場（control_center 開的窗口、故事日誌共用）
+    { name: 'ui_utilities', path: _AURELIA_EXT_BASE + '/core/ui_utilities.js', key: 'utilities' },
+    { name: 'void_frames', path: _AURELIA_EXT_BASE + '/core/void/frames.js', key: 'voidFrames' },   // 🖼 照窗大小畫的外框（小劇場、成就收藏冊；AURELIA_FRAMES）
+    { name: 'void_panels', path: _AURELIA_EXT_BASE + '/core/void/panels.js', key: 'voidPanels' },
+    { name: 'void_worldview', path: _AURELIA_EXT_BASE + '/core/void/worldview.js', key: 'voidWorldview' },
+    { name: 'void_prompts', path: _AURELIA_EXT_BASE + '/core/void/prompts.js', key: 'voidPrompts' },
+    { name: 'void_guide', path: _AURELIA_EXT_BASE + '/core/void/guide_map.js', key: 'voidGuide' },   // 🧭 大廳管理員的奧瑞亞導覽（被問在哪/怎麼用時才帶）
+    { name: 'void_worldgate', path: _AURELIA_EXT_BASE + '/core/void/worldgate.js', key: 'voidWorldgate' },   // 🌌 視差切書（②）：enterParallax/exitParallax/殘局對帳
+    { name: 'void_ambient', path: _AURELIA_EXT_BASE + '/core/void/ambient.js', key: 'voidAmbient' },
+    { name: 'void_ui_sfx', path: _AURELIA_EXT_BASE + '/core/void/ui_sfx.js', key: 'voidUiSfx' },   // 🔊 大廳介面音效（點擊/滑過/開關/面板開合）
+    { name: 'void_canvas', path: _AURELIA_EXT_BASE + '/core/void/canvas.js', key: 'voidCanvas' },
+    { name: 'void_lobby_stage', path: _AURELIA_EXT_BASE + '/core/void/lobby_stage.js', key: 'voidLobbyStage' },
+    { name: 'void_lobby_loom', path: _AURELIA_EXT_BASE + '/core/void/lobby_loom.js', key: 'voidLobbyLoom' },   // 🎩 帽匠工坊的造物儀會動（環轉、小卡繞圈；lobby_stage 掛造物儀時叫它）
+    { name: 'void_lobby_theater', path: _AURELIA_EXT_BASE + '/core/void/lobby_theater.js', key: 'voidLobbyTheater' },   // 🎭 小劇場（拆自 lobby_stage，靠 _b 橋，必須排它後面）
+    { name: 'void_lobby_dress', path: _AURELIA_EXT_BASE + '/core/void/lobby_dress.js', key: 'voidLobbyDress' },   // 👗 裝扮室/右鍵選單/對話紀錄窗（拆自 lobby_stage，靠 _b 橋，必須排它後面）
+    { name: 'void_lobby_doll_cut', path: _AURELIA_EXT_BASE + '/core/void/lobby_doll_cut.js', key: 'voidLobbyDollCut' },   // ✂ GPT 不倒翁切頭身（切圖小修搬來）、站著照衣櫥呼吸；靠 lobby_dress 的 dollKit
+    { name: 'void_lobby_editor', path: _AURELIA_EXT_BASE + '/core/void/lobby_editor.js', key: 'voidLobbyEditor' },   // 🖊 擺設模式編輯器（拆自 lobby_stage，靠 _b 橋，必須排它後面）
+    { name: 'void_lobby_npcs', path: _AURELIA_EXT_BASE + '/core/void/lobby_npcs.js', key: 'voidLobbyNpcs' },   // 🧑‍🤝‍🧑 NPC 生成/名冊（拆自 lobby_stage，靠 _b 橋，必須排它後面）
+    { name: 'void_lobby_cafe_pests', path: _AURELIA_EXT_BASE + '/core/void/lobby_cafe_pests.js', key: 'voidLobbyCafePests' },   // 🐀🪳 書咖店況畫在大廳（老鼠、蟑螂、髒汙）；常客那支 mount 時叫它
+    { name: 'void_lobby_cafe_regulars', path: _AURELIA_EXT_BASE + '/core/void/lobby_cafe_regulars.js', key: 'voidLobbyCafeRegulars' },   // ☕ 書咖常客在書咖場景進出（三視圖拼走路圖、跳著走）；靠 lobby_stage 的 _b 橋，必須排它後面
+    { name: 'void_lobby_ember', path: _AURELIA_EXT_BASE + '/core/void/lobby_ember.js', key: 'voidLobbyEmber' },   // 🫧 大廳小人接衣櫥活的那套（會呼吸、眨眼、吃東西）；拿不到衣櫥資料夾就不做事
+    { name: 'void_lobby_places', path: _AURELIA_EXT_BASE + '/core/void/lobby_places.js', key: 'voidLobbyPlaces' },   // 🧭 地點清單(單一真相)+立繪模式地點面板；讀 lobby_stage 的 _b 橋，必須排它後面
+    { name: 'void_lobby_memory', path: _AURELIA_EXT_BASE + '/core/void/lobby_memory.js', key: 'voidLobbyMemory' },   // 🍸 紫薇的記憶迴廊（記憶吧檯展示櫃：抽一張，走進角色的過去）
+    { name: 'void_lobby_decider', path: _AURELIA_EXT_BASE + '/core/void/lobby_decider.js', key: 'voidLobbyDecider' },   // 🎲 自己決定下一步的 NPC（書咖的丹：找路走路／小劇場／設置三格）；靠 lobby_stage 的 _b 橋，必須排它後面；整支拿掉＝丹回到站著
+    { name: 'void_npc_decide', path: _AURELIA_EXT_BASE + '/core/void/npc_decide.js', key: 'voidNpcDecide' },   // 🎲 NPC 決定下一步（Jev／副模型）；lobby_stage 用到時才讀 window.NPC_DECIDE
+    { name: 'void_lobby_workshop', path: _AURELIA_EXT_BASE + '/core/void/lobby_workshop.js', key: 'voidLobbyWorkshop' },   // 🎩 造物工坊面板本體（帽匠工坊/立繪模式共用；只用 window 上的 OS_STUDIO 與 APP_STORE，無載入順序要求）
+    { name: 'void_phone_shell', path: _AURELIA_EXT_BASE + '/core/void/phone_shell.js', key: 'voidPhoneShell' },
+    { name: 'app_runtime', path: _AURELIA_EXT_BASE + '/core/void/app_runtime.js', key: 'appRuntime' },
+    { name: 'void_terminal', path: _AURELIA_EXT_BASE + '/core/void_terminal.js', key: 'voidTerminal' },
+    { name: 'control_center', path: _AURELIA_EXT_BASE + '/core/control_center.js', key: 'controlCenter' },
+    { name: 'html_extractor', path: _AURELIA_EXT_BASE + '/core/html_extractor.js', key: 'htmlExtractor' },
+    { name: 'story_extractor', path: _AURELIA_EXT_BASE + '/core/story_extractor.js', key: 'storyExtractor' },
+    { name: 'story_entry_wizard', path: _AURELIA_EXT_BASE + '/core/story_entry_wizard.js', key: 'storyEntryWizard' },   // 🎫 藏書入場精靈（白金視差風,第0樓開局規劃）
+    { name: 'vn_free_mode', path: _AURELIA_EXT_BASE + '/core/vn_free_mode.js', key: 'vnFreeMode' },   // 🎲 自由模式（總綱二選一+歷史表情格剝除，藏書切換）
+
+    { name: 'regex_bridge', path: _AURELIA_EXT_BASE + '/core/aurelia_regex_bridge.js', key: 'regexBridge' },
+];
+
+// 🔥 [配置] 手機系統檔案列表 (已移除寵物/不夜城/育兒/刑偵/WB/錢包，且移除酒館不需要的 AVS 與獨立世界書)
+const PHONE_BASE_PATH = _AURELIA_EXT_BASE + '/os_phone/';
+const PHONE_FILES = [
+    // === 🟢 OS 層 (系統基礎) ===
+    'os/os_settings.js',
+    'os/os_phone_theme.js', // 🎨 手機主題工坊：說一句話，AI 填一套主題的格子（配色／應用圖標／底部導覽）
+    'os/os_settings_page.js', // 🧾 設置頁整頁的 HTML 範本（2026-11-17 自 os_settings.js 拆出；參數注入 ctx，launchApp 開頁時才呼叫）
+    'os/os_settings_backup.js', // 💾 設置頁「備份」分頁的按鈕（2026-11-17 自 os_settings.js 拆出）
+    'os/os_settings_comfyui.js', // 🧩 ComfyUI 直連設定（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
+    'os/os_settings_window.js', // ⚙️ 「設置」窗口：系統設置、大廳設置、劇情設定合成的那一個窗（大廳齒輪／劇情設置鈕／手機「設置」圖示都開它）
+    'os/os_settings_voice.js', // 🎵 語音清單：Minimax 音色檔案卡＋官方音色庫＋測試播放（自 os_settings.js 拆出；參數注入 ctx，launchApp 執行期才呼叫 wire）
+    'os/os_db.js',
+    'os/os_zh_fold.js',     // 簡繁折成同一把鑰匙（只比對不顯示）：記憶的人名、約定的標題
+    'os/app_store.js',
+    'os/os_widgets.js',
+    'os/os_wb_mount.js',    // 「關於我」的世界書分頁（只有酒館版）；排在 os_persona 前面，它建分頁時要看得到這支
+    'os/os_persona.js',
+    'os/os_prompts.js', // 提示詞底層需要保留，但 UI 按鈕已透過 isStandalone 隱藏
+    'os/os_vn_rules_data.js', // 🪶 VN 指令的內容（程式內建的 VN 主 prompt，原酒館全域世界書「-VN小說家-」）；須在 os_vn_rules 之前
+    'os/os_vn_foreign.js',    // 🌐 外語角色：名單＋給 VN 指令接一段「誰講哪種語言」
+    'os/os_vn_rules.js',      // 🪶 VN 指令：酒館每輪注入、PWA 組 context 讀、自動開關撥這份
+    'os/os_lorebook.js',
+    'os/os_contacts.js',
+    'os/os_tavern_bridge.js',
+    'os/os_avs_adapter.js',   // 雙端切換層：必須在 engine / rules 之前載入
+    'os/os_avs_engine.js',
+    'os/os_avs_rules.js',
+    'os/os_avs_state.js',     // STATE 管理 UI（從 status_panel 搬入；必須在 os_avs.js 之前）
+    'os/os_avs_memory.js',    // 📝 記憶 分頁 UI（向量記憶；必須在 os_avs.js 之前）
+    'os/os_avs_skins.js',     // 🎴 視差預設的兩張面板皮（稜鏡／柴郡；必須在 os_avs.js 之前）
+    'os/os_ui_style_packs.js',// 🎨 UI 風格 DNA 資料庫（煉丹爐與 VN 生成共用；必須在使用它的 UI 之前）
+    'os/os_avs.js',           // 變數工坊 UI（PWA / 酒館共用一套面板）
+    'os/os_studio.js',        // 靈感創作室（VN UI 煉丹，PWA / 酒館共用）
+    'os/os_studio_worldbook.js', // 🌍 世界書設計師（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
+    'os/os_studio_persona.js', // 🧑 我的角色人設寫作（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
+    'os/os_studio_vn_gallery.js', // 🧩 VN 組件展廳（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
+    'os/os_studio_diff_engine.js', // VN 煉丹 Diff-refine 引擎（自 os_studio.js 拆出；靠 OS_STUDIO._b 橋，必須在其後載入）
+    'os/os_studio_selfcheck.js', // VN 面板做完自己驗一輪的自檢引擎（靠 OS_STUDIO._b 橋，必須在 os_studio.js 之後載入）
+    'os/os_usage.js',        // 📊 用量記錄層：每次呼叫記一筆進自己的 IndexedDB（必須在 api_engine/image_manager 之前）
+    'os/os_api_engine.js',
+    'os/os_vector_engine.js', // 向量記憶引擎（embed/ingest/search；酒館原本沒載入，補上）
+    'os/os_inject_blocks.js', // 奧瑞亞每種注入包成一塊 <名字>…</名字>（要在所有注入器之前）
+    'os/os_vector_inject.js', // 酒館版記憶召回注入器（GENERATION_STARTED → injectPrompts）
+    'os/os_jev_conn.js', // 決策模型（Jev 那種）連到哪：設置→AI 模型→決策模型的網址、模型、鑰匙三格；以前填過鑰匙的裝置自動補上原本那組
+    'os/os_jev_usage.js', // Jev 呼叫的次數＋花費帳本（DEBUG 看）；記憶／立繪影子比對、書咖的丹都記在這
+    'os/os_jev_shadow.js', // 記憶召回的 Jev 影子比對：副模型挑完記憶後讓 Jev 也排一次，只記進 DEBUG 對照、不改送出的東西
+    'os/os_jev_stage.js', // 立繪什麼時候收交給 Jev：每章劇本載入時排好誰從第幾段起不在；Jev 沒回應就走舊的幾行沒開口自動收
+    'os/os_jev_sfx.js', // 音效和音樂交給 Jev 配（設置→素材的開關）：正文還在寫時就問、章節載入時排時間表；關著或沒鑰匙照舊
+    'os/os_phone_events.js',  // 手機事件簿：上一段劇情之後手機上發生的事，只交給劇情一次（酒館與 PWA 共用）
+    'os/os_app_memory_inject.js', // app→酒館 記憶反向注入器（在場角色的手機近況，唯讀注入不貼回 chat）
+    'os/os_summary_inject.js', // 酒館版大總結程式注入器（OS_DB tavern_summary → 壓縮 → injectPrompts；搬出世界書）
+    'os/phone_system.js',
+    'os/os_minimax.js',
+    'os/os_elevenlabs.js',       // 🔊 ElevenLabs 語音（瀏覽器直連，不需要伺服器）
+    'os/os_voice_cast.js',       // 🔊 角色配音名單：輪到誰講話用哪個聲音（雲端／本機／不念）的唯一入口
+    'os/translation_manager.js',
+    'os/os_image_manager.js',
+    'os/os_keyrun.js',           // 🔑 本機 AI 借用接口：限時開關＋通行碼，只收畫圖、念台詞（用到生圖、MiniMax，排在它們後面）
+    'os/os_relay.js',           // 📡 回覆交給伺服器跑（請求托管）：手機睡著也跑得完
+    'os/os_heartbeat.js',        // 💓 角色主動找使用者：一間一組開關/節奏/機率
+    'os/os_app_tools.js',        // 🧰 創作室 app 用的手機工具：故事時鐘、分享到聊天室、錢包、紅點、通知、自己動
+    'os/os_keepalive.js',        // ☕ 沒有伺服器的守候：靜音音訊／螢幕不關／畫中畫小窗＋本機通知
+    'os/os_phone_image.js',       // 手機類 app 共用的圖片描述→卡片→生圖管道
+    'os/os_voice_input.js',       // 🎙 麥克風錄音→轉成字（轉字方式可換；SenseVoice 在網頁裡跑，聲音不離開裝置）
+    'os/os_photo_viewer.js',      // 點圖放大看（iOS 相簿那樣：滑動換張、縮放、下拉關閉）
+    'os/os_expr_grid.js',         // 🎭 GPT 九宮格表情：圖鑑「生表情」的「立繪表情」選自訂接口時，一通畫七個表情、一通做嘴
+    'os/os_char_gallery.js',      // 🎭 角色圖鑑：每個角色舞台用哪張立繪、缺圖壞網址、上傳與改世界書條目（舞台讀它的本地上傳，排在 vn_core_stage 前）
+    'os/os_chat_tidy.js',         // 🧹 聊天記錄整理（酒館版）：列出每張卡的聊天、各佔幾張圖，連同奧瑞亞綁的資料一起刪；清掉聊天已不在的遺留圖
+    'os/os_control_room.js',     // 🎛️ 控制室：監控/遙控桌面控制塔（SoVITS+ComfyUI）
+    'os/os_dashboard.js',        // 🎛️ 控制台：大廳 dock 開啟的看板（每日用量／通道／呼叫記錄／系統訊息）
+
+    'os/os_achievement.js',
+    'os/os_backup.js',
+    'os/os_404_store.js',
+    'os/os_tarot.js',
+    'os/os_card_import.js',
+    'os/os_card_regex.js',
+    'os/nai_recipe.js',
+    'os/os_journal.js',
+    'os/os_story_tools.js',   // 故事管理（大總結 + 隱藏對話）— 從 RPG 面板 / VN 閱讀器搬來，掛進故事日誌
+    'os/os_pt.js',            // 🏦 交易區 PT 經濟：錢包+大總結結算估值+VN 結算卡+交易所面板（依賴 OS_DB/OS_API，排它們後面）
+    'os/os_cafe_regulars.js', // ☕ 書咖 12 位常客（只有資料：類型、習性、句子；要排在 os_cafe.js 前面）
+    'os/os_cafe.js',          // ☕ 書咖經營：調配台研發+上架命名+菜單/書單（依賴 OS_DB/OS_API；設計書 docs/book_cafe_design.md）
+    'os/os_cafe_kitchen.js',  // 🍳 書咖研發台：選底、疊料、規則試吃、器材（11-12 調配＋創想合一；要排在 os_cafe.js 後面）
+    'os/os_cafe_staff.js',    // 🧑‍🍳 書咖店員：她挑人、照時間上班、值班日記（要排在 os_cafe.js 後面）
+    'os/os_npc_brain.js',     // 🧠 NPC 共用大腦：個性、狀態、記憶、照分數挑事做（11-24；純函式，os_cafe_hire.js 用，之後後院小精靈也用）
+    'os/os_npc_life.js',      // 🏠 NPC 在家的生活清單：餓睏髒＋時間＋家具，問「現在他在做什麼」（11-26；純函式，要排在大腦後面；還沒接畫面）
+    'os/os_npc_life_lines.js', // 💬 在家生活的內建台詞包（11-27；由 tmp/npc_life_pack/make_lines.py 從台詞稿轉出，要排在 os_npc_life.js 後面）
+    'os/os_cafe_hire.js',     // 🧑‍🍳 書咖員工：徵人、面試、早班／晚班看帳備料（要排在 os_cafe.js 後面；結算時找它）
+    'os/os_sn_board.js',      // 🧑‍💼 SN 32 樓研討白板：值班、規則、收進世界（要排在 os_cafe_staff.js 後面：借它的時間表與描框）
+    'os/os_sn_board_ui.js',   // 🧑‍💼 白板的畫面（要排在 os_sn_board.js 後面）
+    'os/os_room_svg.js',      // 🏠 SVG 房間產生器（純幾何，無相依；供包租婆/城市共用）
+    'os/os_room_gen.js',      // 📦 整房生圖引擎：包裹訂單→英文布置提示詞→空房母圖一次 inpaint（依賴 OS_ROOM_SVG/OS_IMAGE_MANAGER/OS_API）
+    'os/os_landlord.js',      // 🏘️ 包租婆①：招租/入住/離線收租（依賴 OS_DB/OS_API/OS_PT/OS_ROOM_SVG/LobbyNpcs；設計書 docs/landlord_design.md）
+    'os/os_blueprints.js',    // 📘 設計藍圖：整房風格商品（取代家具商城）＋訂製＋套用一條龍（依賴 OS_DB/OS_PT/OS_API/OS_ROOM_GEN/OS_LANDLORD）
+    'os/os_landlord_room.js', // 📦 包租婆房間頁＋包裹配送 UI（依賴 OS_LANDLORD/OS_ROOM_GEN）
+    'os/os_landlord_book.js', // 🏢 房產手帳窗口：大廳 dock 開啟的獨立窗口＝收租帳+戶卡+藍圖冊（白藍視差皮）
+    'os/os_farm.js',          // 🌱 後院（農場＋牧場）入口：只登記這一支，os_phone/farm/ 那批與 farm.css 第一次打開才自己載
+    'os/os_worldgate.js',     // 🌌 世界門③：愛麗絲面板=種子抽選+世界落地視差書+旅人招募+DIVE（依賴 OS_DB/OS_API/AURELIA_WORLDGATE；設計書 docs/parallax_worldgate_design.md）
+    'os/os_wg_pack.js',       // 🧳 視差撤離前的回程行李頁＋紀念品清單（世界門 _leaveWorld 叫；我的家布置、交易所估值讀它存的）
+
+    // === 📖 VN 視覺小說系統 ===
+    'vn_story/vn_styles.js',
+    'vn_story/vn_settings.js',
+    'vn_story/vn_tts.js',
+    'vn_story/vn_tts_panel.js',
+    // vn_core 拆分後的底層工具（必須先於 vn_core.js 載入）
+    'vn_story/vn_cache.js',
+    'vn_story/vn_config.js',
+    'vn_story/vn_monitor.js',
+    'vn_story/vn_summary.js',
+    'vn_story/vn_sticker.js',
+    'vn_story/vn_panels.js',
+    'vn_story/vn_generator.js',
+    'vn_story/vn_panel_feed.js',       // 📖 VN 組件（共用面板）資料接口：正文全樓層區塊 + app 新增，程式合併給面板畫
+    'vn_story/vn_dynamic_parser.js',   // 創作室（展廳）動態標籤引擎 — 原本只有 PWA(index.html) 載，酒館漏載害自建 tag 摸不到 → 補上
+    'vn_story/vn_theme.js',            // VN 劇情面板主題（[World|] 驅動換樣式）— 須在 vn_core 前
+    'vn_story/vn_fx.js',               // ⚡ 畫面特效引擎（#fx-id# 標記由 vn_core 抽取路由過來）
+    'vn_story/vn_battle.js',           // ⚔️ 回合制戰鬥面板（<BattleStart> 區塊由 vn_core 攔截後叫起；純本地骰、零 API）
+    'vn_story/vn_chapter_warp.js',     // 🌀 進入章節的碎裂穿越轉場（vn_panels 載入前的演出層；純 canvas 零 API）
+    'vn_story/vn_loader_tips.js',      // 📜 Loading 的世界觀提示切句器（校準艙輪播用；零 API，須在其前）
+    'vn_story/vn_loader_chamber.js',   // 🛰 開場 Loading 的視差校準艙（vn_core 掛載時要用得到）
+    'vn_story/vn_core.js',
+    'vn_story/vn_core_images.js',      // 🖼️ 背景/場景CG/道具生圖管線（自 vn_core.js 拆出；Object.assign 掛回 VN_Core，必須在其後載入）
+    'vn_story/vn_core_stage.js',       // 🎭 雙格立繪舞台＋角色卡（自 vn_core.js 拆出；同上，排 vn_core 之後）
+    'vn_story/vn_scene_insert.js',     // 副模型場景插圖渲染器（state_runtime.extractOnce → splice 進 VN 劇本）
+    'vn_story/vn_avatar_earlybird.js', // 頭像早鳥：串流/訊息落地搶先生成 ChapterCard 的 [Avatar|...]（須在 vn_core 後）
+    'vn_story/vn_end_panel.js',        // 🎴 劇情末尾的視差世界活動面板（渲染 AI 生成的外觀；沒資料就退回原本那四顆鍵）
+    'vn_story/vn_end_show.js',         // 🎬 視差世界的結局片尾＋岔路圖導覽（借 vn_end_panel 的岔路圖畫法，須在其後）
+    'vn_story/vn_end_brief.js',        // 📜 章末簡報卡：沒有世界面板時把章名、這一章、新線索、下一件行程填進卡片（須在 vn_core 後）
+    'vn_story/vn_inspect.js',
+    'vn_story/vn_phone.js',
+    'vn_story/vn_browser.js',
+    'vn_story/vn_nav.js',
+    'vn_story/vn_moments.js',          // 🫂 劇情手機的朋友圈（畫法借 wx/wx_moments.js）
+    'vn_story/vn_reader.js',
+
+    // === 🛡️ RPG 狀態系統 ===
+    'rpg/state_schema.js',         // Stage 1：主模型生 schema
+    'rpg/npc_dossier.js',          // 📇 NPC 長期人物檔案（群像卡防失憶；state_runtime 搭便車建檔＋名冊/名字觸發注入）
+    'rpg/mc_status.js',           // 🕰 主角狀態與故事時鐘：模型回報變化、程式記住倒數、下一輪塞回去；日曆 app 讀同一份
+    'rpg/story_threads.js',        // 🧵 線索帳：已經發生、還沒有下文的事；搭副模型那通記、每輪送回、劇情末尾「線索」看圖譜挑線
+    'rpg/state_runtime.js',        // Stage 2：副模型抽 + patch + injectPrompts
+    'rpg/blacklist_injector.js',   // 每輪 inject 黑名單條目（避免世界書 keys 觸發漏掉）
+    'rpg/avatar_rules_injector.js', // 依選的頭像產圖器，自動翻「-VN小說家-」世界書三條目(依名字)的開關
+    'rpg/world_rules_injector.js',  // 🌍 依這個聊天室所在世界的題材，自動翻戰鬥/手機/BGM 那幾條的開關（同上，只動 enabled）
+    // 'rpg/summary_core.js',  // ⛔ 已刪(2026-06-19)：舊「<summary>→[RPG_LOG]世界書」自動寫入，key 從不觸發=寫了沒人讀，已被 AVS+向量+大總結取代
+
+    // === 🗺️ MAP 地圖系統 ===
+    'map/map_icons.js',     // 地圖區域／設施／地標圖示統一走 FA（舊世界的 emoji 也在這換），map_data 前載
+    'map/map_data.js',
+    'map/world_runtime.js',
+    'map/world_painter.js', // 🗺 世界地圖繪製（模型只列清單、程式畫，不生圖），world_generator 前載
+    'map/world_generator.js',
+    'map/schedule_engine.js',
+    'map/scene_painter.js', // 🗺 直接畫的世界：進設施的小地圖也由程式畫（俯視平面圖），scene_map_engine 前載
+    'map/scene_map_engine.js',
+    'map/vn_map_link.js',   // 🗺 劇情→地圖：每章的地點與在場的人交給地圖（vn_core 新的一章時呼叫），map_core 前載
+    'map/map_image.js',     // 🗺 奧瑞亞預設世界的斜俯視圖片地圖（全城＋七區，五時段），map_core 前載
+    'map/map_core.js',
+
+    // === 🔵 微信 (WeChat) ===
+    'wx/wx_zh.js', 'wx/wx_user_profile.js', 'wx/wx_theme.js',
+    'wx/wx_contacts.js', 'wx/wx_chat_settings.js', 'wx/wx_bubble_settings.js', 'wx/wx_bubble_ai.js',
+    'wx/wx_summary.js', 'wx/wx_wallet.js', 'wx/wx_avatar_ai.js', 'wx/wx_chat_media.js', 'wx/wx_cards.js', 'wx/wx_takeout.js', 'wx/wx_theme_pack.js', 'wx/wx_message_manager.js', 'wx/wx_view.js', 'wx/wx_profile.js', 'wx/wx_notebook.js', 'wx/wx_moments.js', 'os/os_aurelia_tools.js', 'os/os_aurelia_edit.js', 'os/os_aurelia_preset.js', 'os/os_aurelia_vn.js', 'os/os_aurelia_theme.js', 'os/os_aurelia_fx.js', 'os/os_aurelia_vnrule.js', 'os/os_aurelia_bubble.js', 'os/os_xiaoji_lessons.js', 'os/os_xiaoji_make.js', 'os/os_xiaoji_sandbox.js', 'os/os_xiaoji_memory.js', 'os/os_xiaoji.js', 'wx/wx_tools.js', 'wx/wx_core.js',
+
+    // === 📞 電話 (dialer) ===
+    'os/os_dialer.js',
+
+    // === 🎬 404 混沌片場 ===
+    // 🚨 它的 CSS 早就在酒館這邊載了、JS 卻只掛在 PWA 的 index.html → 兩份載入清單漂移的典型案例
+    //    （2026-08-27 回報：禁書功能整個失效）。這支必須留著載。
+    // 入口：2026-09-02 起不再掛在「禁庫」上（那顆是共用的視差入場規劃窗口，不能被換掉），
+    //    改成走近柴郡的面板鈕（lobby_stage.js 的 PANEL_OF.cheshire，窗位同世界門）。
+    'qb/os_404_chaos.js',
+
+
+    // === 🟣 微薄 (Weibo) — 搬回酒館（順序同 PWA index.html）===
+    'wb/wb_account.js', 'wb/wb_theme.js',
+    'wb/wb_view.js', 'wb/wb_core.js',
+    'os/os_calendar.js',         // 📅 日曆 app（讀 OS_MC_STATUS）
+];
+
+// CSS 內相對 url() 改寫成絕對(相對 CSS 檔自己的目錄)。
+//   inline <style> 的相對 url 會相對「文件根」而非 CSS 檔→打斷資產路徑，故改絕對。
+function _absolutizeCssUrls(css, cssPath) {
+    const dir = cssPath.replace(/[?#].*$/, '').replace(/[^/]*$/, '');   // 去 query/hash 後留到最後一個 /
+    return css.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/g, (m, q, u) => {
+        const t = u.trim();
+        if (/^(https?:|data:|blob:|#|\/)/i.test(t)) return m;   // 絕對 / data / blob / 錨點不動
+        try { return 'url(' + q + new URL(dir + t, document.baseURI).href + q + ')'; }
+        catch (e) { return m; }
+    });
+}
+
+// CDN 重試：jsdelivr 各節點的邊緣快取各自獨立。剛 push 的 commit 在某節點冷快取時會連續回錯(錯誤也會被快取一下)，
+//   只加 ?rt= 參數騙不過邊緣 → 重試時輪流換節點(同一個 commit、同一份檔，內容一模一樣)。覆寫成別家 CDN 的只加參數。
+//   以前 3 次共等 2.4 秒就放棄，冷快取還沒暖好 → wx_core 這種整支沒載到；現在共等約 15 秒。
+const _JSD_NODES = ['testingcf.jsdelivr.net', 'fastly.jsdelivr.net', 'cdn.jsdelivr.net'];
+const _CDN_RETRY_WAITS = [500, 1000, 2000, 4000, 8000];
+function _cdnRetryUrl(url, attempt) {
+    if (attempt <= 0) return url;
+    let out = url;
+    const m = out.match(/^https:\/\/([a-z0-9.-]+\.jsdelivr\.net)\//i);
+    if (m) {
+        const i = Math.max(0, _JSD_NODES.indexOf(m[1].toLowerCase()));
+        out = 'https://' + _JSD_NODES[(i + attempt) % _JSD_NODES.length] + out.slice(m[0].length - 1);
+    }
+    return out + (out.indexOf('?') >= 0 ? '&' : '?') + 'rt=' + attempt;
+}
+
+// 載入 CSS 工具 (🔥 修復酒館模式破圖的關鍵)
+//   改 fetch→inline <style> 而非 <link rel=stylesheet>：酒館某些版本把 .css 回成 text/plain，
+//   瀏覽器開 strict MIME(nosniff) 後 <link> 會被拒套("Refused to apply style")；純文字注入 <style>
+//   不做 MIME 檢查，繞過。同時相容本地/CDN(jsdelivr 帶 CORS)。
+function loadCSS(path) {
+    return new Promise((resolve) => {
+        const WAITS = _AURELIA_EXT_NAME ? [600, 1200] : _CDN_RETRY_WAITS;   // 本機照舊短等；CDN 換節點等久一點
+        const MAX = WAITS.length + 1;
+        let attempt = 0;
+        // 先同步插空 <style> 佔位 → 保 cascade 順序＝呼叫順序(平行 fetch 完成順序不定)
+        const style = document.createElement('style');
+        style.setAttribute('data-aurelia-css', path);
+        document.head.appendChild(style);
+        const tryLoad = () => {
+            attempt++;
+            // 重試時加唯一參數繞過瀏覽器對「上次失敗」的快取；CDN 再換節點(見 _cdnRetryUrl)
+            const url = _cdnRetryUrl(path + _AURELIA_CACHE_BUST, attempt - 1);
+            fetch(url)
+                .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
+                .then(css => { style.textContent = _absolutizeCssUrls(css, path); resolve(); })
+                .catch(() => {
+                    if (attempt < MAX) {
+                        setTimeout(tryLoad, WAITS[attempt - 1]);   // 退避重試(jsdelivr 新 commit 並行冷載常少數檔噴錯，稍等就好)
+                    } else {
+                        console.error(`[Aurelia] 核心樣式載入失敗(已重試 ${MAX} 次): ${path}`);
+                        resolve();
+                    }
+                });
+        };
+        tryLoad();
+        if (!_AURELIA_EXT_NAME) resolve(); // CDN 模式：立即放行讓 CSS 平行下載(失敗的會在背景自動重試、自癒，不阻塞初始化)
+    });
+}
+
+// 載入模組工具（本機）
+//   🚨 失敗回 false、不 reject：以前一支載不到就 reject，外層 for 迴圈整個中斷、後面的模組和手機全沒載，
+//      畫面上連 🏰 都沒有。CDN 那條一直是 resolve(false) 繼續往下載，兩邊對齊；載不到的最後統一跳一句（_reportLoadFails）。
+async function loadModule(conf) {
+    return new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = conf.path + _AURELIA_CACHE_BUST;
+        s.async = false;
+        s.onload = () => resolve(true);
+        s.onerror = () => { console.error(`載入失敗: ${conf.name}`); try { s.remove(); } catch (e) {} resolve(false); };
+        document.head.appendChild(s);
+    });
+}
+
+// 手機腳本載入工具
+function loadPhoneScript(path) {
+    return new Promise((resolve) => {
+        const s = document.createElement('script');
+        s.src = PHONE_BASE_PATH + path + _AURELIA_CACHE_BUST;
+        s.onload = () => resolve(true);
+        s.onerror = () => { console.error(`[PhoneOS] 缺失腳本: ${path}`); resolve(false); };
+        document.head.appendChild(s);
+    });
+}
+
+// 有模組怎樣都載不到：其他照常跑，但要讓她知道少了東西（只寫在 console 的話，她只會看到某個功能點了沒反應）
+function _reportLoadFails(names) {
+    if (!names.length) return;
+    console.error('[Aurelia] 這幾支沒載到：', names.join('、'));
+    try { window.AUI?.toast?.('有 ' + names.length + ' 個功能沒載入成功，重新整理頁面再試一次', { type: 'error' }); } catch (e) {}
+}
+
+// CDN 並行載入器：一次插入全部 <script>，async=false → 平行下載、依插入順序執行(保留依賴順序)
+//   ⚠️ jsdelivr 對「剛 push 的新 commit」冷啟動抓檔時，並行請求會隨機 403/限流掉幾個檔
+//      → 那個模組整個沒了→大廳死。故失敗要自動重試(退避 + 換 jsdelivr 節點，見 _cdnRetryUrl)，
+//        而非一次 onerror 就放掉。重試是自我註冊型 IIFE、依賴在 runtime 才解，遲到幾秒無妨。
+function _loadOne(item, attempt) {
+    return new Promise((resolve) => {
+        const s = document.createElement('script');
+        const src = _cdnRetryUrl(item.src, attempt);
+        s.src = src;
+        s.async = false;
+        s.onload = () => resolve(true);
+        s.onerror = () => {
+            try { s.remove(); } catch (e) {}
+            if (attempt < _CDN_RETRY_WAITS.length) {
+                const wait = _CDN_RETRY_WAITS[attempt];
+                console.warn(`[Aurelia] 載入失敗(第${attempt + 1}次)，${wait}ms 後換節點重試:`, src);
+                setTimeout(() => { _loadOne(item, attempt + 1).then(resolve); }, wait);
+            } else {
+                console.error(`[Aurelia] 並行載入失敗(重試${_CDN_RETRY_WAITS.length}次仍失敗):`, item.src);
+                resolve(false);
+            }
+        };
+        document.head.appendChild(s);
+    });
+}
+function _loadBatchOrdered(list) {
+    return Promise.all(list.map(item => _loadOne(item, 0)));
+}
+
+// 讀取設置：讀法只有一份，在 core/ui_utilities.js（AureliaUIUtils.getExtensionSettings），這裡只補掛載點的預設。
+//   呼叫時模組都載完了（只有 smartToggle 會叫）；以前這裡自己抄一份，跟兩個抽取器各讀各的，重整後掛載點對不上
+function getExtensionSettings() {
+    const settings = window.AureliaUIUtils?.getExtensionSettings?.() || null;
+    return settings || { mount: { selector: '#sheld', placement: 'bottom' } };
+}
+
+// 🔥 核心：監聽酒館消息 (已移除金錢與物品解析，僅保留成就解鎖)
+function setupMessageListener() {
+    console.log('[System] 啟動結算監聽器 (僅成就)...');
+    
+    if (window.eventOn) {
+        window.eventOn('message_received', async (messageId) => {
+            setTimeout(async () => {
+                try {
+                    const context = window.SillyTavern.getContext();
+                    const chat = context.chat;
+                    const lastMsg = chat[messageId];
+                    if (!lastMsg || !lastMsg.mes) return;
+
+                    const content = lastMsg.mes;
+                    
+                    // 🏆 成就解鎖（全局監聽）
+                    //   新格式：[Achievement|emotion|名|描述]   (V1.2+)
+                    //   舊格式：[Achievement|名|描述]           (向下相容)
+                    const achRegex = /\[Achievement\|([^\]]+)\]/g;
+                    let achMatch;
+                    while ((achMatch = achRegex.exec(content)) !== null) {
+                        const parts = achMatch[1].split('|').map(s => s.trim());
+                        let achEmotion = null, achName = '', achDesc = '';
+                        if (parts.length >= 3) {
+                            achEmotion = parts[0] || null;
+                            achName    = parts[1] || '';
+                            achDesc    = parts[2] || '';
+                        } else {
+                            achName = parts[0] || '';
+                            achDesc = parts[1] || '';
+                        }
+                        if (achName && window.OS_ACHIEVEMENT?.unlock) {
+                            window.OS_ACHIEVEMENT.unlock(achEmotion, achName, achDesc);
+                        }
+                    }
+                } catch (err) { console.error('監聽錯誤:', err); }
+            }, 500);
+        });
+    }
+}
+
+// 核心初始化
+async function initializeExtension() {
+    // 單實例守衛：原生安裝(my-tavern-extension/index.js) 與酒館助手 CDN 重注入那份可能同時在主頁面 →
+    //   只讓先到的一份跑(兩份都是完整奧瑞亞、誰贏都行)，避免雙載重複注入 UI。
+    if (window.__AURELIA_INITIALIZED__) { console.warn('[Aurelia] 已有一份在執行 → 這份跳過(避免 native+助手雙載)'); return; }
+    window.__AURELIA_INITIALIZED__ = true;
+    window.__AURELIA_LOADED_BASE__ = _AURELIA_CDN_BASE;   // boot.js 靠它判斷「同一版已經在跑」
+    try {
+        setupEventBridge();
+
+        // 🔥 1. 強制載入核心 CSS，解決大廳與設置破圖問題
+        console.log('[System] 正在載入核心樣式 (CSS)...');
+        await loadCSS(_AURELIA_EXT_BASE + '/aurelia_core_st.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/core/void/lobby.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/core/void/lobby_stage.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/phone_shell.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/app_store.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/lobby_memory.css');   // 🍸 紫薇的記憶迴廊
+
+        // core 模組 CSS（兩版共用，selector 已 scoped 不污染酒館）
+        await loadCSS(_AURELIA_EXT_BASE + '/css/story_extractor.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/story_entry_wizard.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/html_extractor.css');
+
+        // os_phone/os 模組 CSS
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_settings_window.css');   // 「設置」窗口
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_keyrun.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_phone_theme.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_control_room.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_dashboard.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_keepalive.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_profile.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_notebook.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_takeout.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_theme_pack.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_moments.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_studio.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_worldbook.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_persona.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_wb_mount.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_prompts.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_avs.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_journal.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_exchange.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_wg_pack.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_story_tools.css');
+
+        // vn_story / qb / wx / map / rpg 模組 CSS
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_styles.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_end_show.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_fx.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_battle.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_gallery.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/vn_tts_panel.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/qb_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/qb_os_404_chaos.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/wx_chat_settings.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/map_core.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/void_achievement.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_sn_board.css');
+
+        // 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後才蓋得掉各自的舊頭
+        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_theme.css');   // 主題一包（要在各面板樣式之前）
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_sys_chrome.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_dialog.css');
+        await loadCSS(_AURELIA_EXT_BASE + '/css/aurelia_tilefx.css');   // 全螢幕窗口切塊進出場的格線畫布
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_char_gallery.css');   // 角色圖鑑
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_chat_tidy.css');      // 聊天記錄整理
+        await loadCSS(_AURELIA_EXT_BASE + '/css/os_photo_viewer.css');   // 點圖放大看   // 全站提示條/對話窗（取代原生 alert/confirm/prompt）
+
+        const loadFails = [];
+        if (_AURELIA_EXT_NAME) {
+            // 本機：逐支串行載(本地讀檔極快)；載不到的記下來、繼續載下一支
+            for (const conf of MODULE_LOAD_ORDER) { if (!(await loadModule(conf))) loadFails.push(conf.name); }
+            console.log('[System] 正在掛載手機模組...');
+            for (const file of PHONE_FILES) { if (!(await loadPhoneScript(file))) loadFails.push(file); }
+        } else {
+            // CDN：並行下載、依序執行 → 解決 130 個檔排隊造成的數秒延遲
+            console.log('[System] CDN 並行載入核心模組...');
+            const coreOk = await _loadBatchOrdered(MODULE_LOAD_ORDER.map(c => ({ src: c.path + _AURELIA_CACHE_BUST, key: c.key })));
+            coreOk.forEach((ok, i) => { if (!ok) loadFails.push(MODULE_LOAD_ORDER[i].name); });
+            console.log('[System] CDN 並行載入手機模組...');
+            const phoneOk = await _loadBatchOrdered(PHONE_FILES.map(f => ({ src: PHONE_BASE_PATH + f + _AURELIA_CACHE_BUST })));
+            phoneOk.forEach((ok, i) => { if (!ok) loadFails.push(PHONE_FILES[i]); });
+        }
+        _reportLoadFails(loadFails);
+        
+        // 延遲執行：確保 PhoneSystem 和各個 App 模組都載入完畢後再註冊圖標
+        setTimeout(() => {
+            if (window.PhoneSystem) {
+                // 賽博塔羅 11-26 拿掉：個人占卜搬進紫薇的記憶吧檯（lobby_memory.js），os_tarot.js 只剩占卜引擎
+
+                // 註冊地圖系統
+                if (window.OS_MAP) {
+                    window.PhoneSystem.install('地圖', '🗺️', '#2f9544', window.OS_MAP.launchApp);
+                }
+
+                // 設置不再註冊成手機 app（11-17）：手機的「設置」圖示、大廳齒輪、劇情「設定」鈕都開「設置」窗口（os/os_settings_window.js）
+            }
+            
+            // 啟動監聽器
+            setupMessageListener();
+
+        }, 1500);
+
+        installAPI();
+
+        setTimeout(() => {
+            if (window.AureliaUIUtils) {
+                window.AureliaUIUtils.init();
+                overrideToggleLogic();
+            }
+        }, 1000);
+
+        console.log('✅ 多功能面板系統 (V4.3 Clean) 已就緒');
+    } catch (e) { console.error('啟動錯誤:', e); }
+}
+
+function overrideToggleLogic() {
+    const originalToggle = window.AureliaControlCenter ? window.AureliaControlCenter.toggle : null;
+
+    const smartToggle = () => {
+        const settings = getExtensionSettings();
+        const mount = settings.mount || { selector: '#sheld', placement: 'bottom' };
+        // 掛載方式只剩內嵌一種（浮窗那條早就移除了）。舊存檔裡殘留的 mount.mode 一律忽略——
+        //   以前那個 modal→embedded 的遷移住在酒館抽屜的 settings.html 裡，要她親手打開那頁才會跑；
+        //   現在不看 mode，存的是什麼都直接走內嵌，不需要誰去點一下才修好。
+        const target = document.querySelector(mount.selector) ||
+                       document.querySelector('#sheld') ||
+                       document.querySelector('#chat') ||
+                       document.querySelector('.chat-body');
+
+        if (target) {
+            if (window.AureliaControlCenter && window.AureliaControlCenter.mountEmbedded) {
+                if (!window.AureliaControlCenter.isEmbeddedMounted()) {
+                    const useFixed = mount.placement === 'bottom';
+                    window.AureliaControlCenter.mountEmbedded(target, mount.placement, useFixed);
+                } else {
+                    if (originalToggle) originalToggle.call(window.AureliaControlCenter);
+                }
+                return;
+            }
+        }
+
+        console.log('[Aurelia] 尚未找到掛載點，啟動監聽器...');
+        const obs = new MutationObserver(() => {
+            const t = document.querySelector(mount.selector) || document.querySelector('#sheld') || document.querySelector('#chat');
+            if (t && window.AureliaControlCenter) {
+                const useFixed = mount.placement === 'bottom';
+                window.AureliaControlCenter.mountEmbedded(t, mount.placement, useFixed);
+                obs.disconnect();
+            }
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
+        setTimeout(() => obs.disconnect(), 10000);
+    };
+
+    if (window.AureliaControlCenter) window.AureliaControlCenter.toggle = smartToggle;
+}
+
+function installAPI() {
+    window.toggleHtmlExtractor = () => window.AureliaHtmlExtractor?.show();
+    // ⛔ toggleSettingsPanel 已移除：AureliaSettingsManager(core/settings_manager.js) 早就退役，
+    //    這行只是 `?.` 吞掉的空動作。設置＝手機的「⚙️ 設置」app(OS_SETTINGS.launchApp)。
+}
+
+function setupEventBridge() {
+    console.log("🔥 [Aurelia] 初始化通訊橋樑...");
+    if (!window.eventEmit) {
+        window.eventEmit = function(eventName, data) {
+            if (window.eventSource && typeof window.eventSource.emit === 'function') {
+                window.eventSource.emit(eventName, data);
+            }
+            const payload = { type: eventName, data: data };
+            document.querySelectorAll('iframe').forEach(iframe => {
+                try { iframe.contentWindow.postMessage(payload, '*'); } catch(e){}
+            });
+            window.dispatchEvent(new CustomEvent(eventName, { detail: data }));
+        };
+    }
+    // 📦 「統一資料入口 / 備用版插座」已搬到獨立模塊 core/aurelia_api.js（它在模組載入第一個就跑）。
+    //    那裡負責設好 window.AureliaAPI + window.TavernHelper fallback —— 助手在用助手、不在走原生備用。
+    //    要補更多原生備用方法，只改 aurelia_api.js 一處，不再散落在 index.js。
+
+    function tryBridgeEventSource() {
+        if (window.SillyTavern?.getContext) {
+            try {
+                const ctx = window.SillyTavern.getContext();
+                if (ctx.eventSource) {
+                    window.eventSource = ctx.eventSource;
+                    window.event_types = ctx.eventTypes;
+                    window.eventOn = (t, h) => ctx.eventSource.on(t, h);
+                    window.eventOnce = (t, h) => ctx.eventSource.once(t, h);
+                    window.eventOnButton = (n, h) => ctx.eventSource.on(`button_${n}`, h);
+                    window.tavern_events = ctx.eventTypes;
+                    return true;
+                }
+            } catch (e) {}
+        }
+        return false;
+    }
+    if (!tryBridgeEventSource()) {
+        let n = 0;
+        const i = setInterval(() => { if (tryBridgeEventSource() || ++n > 20) clearInterval(i); }, 500);
+    }
+    setTimeout(() => {
+        if (window.eventEmit) {
+            console.log("🔔 [Aurelia] System Ready");
+            window.eventEmit('APP_READY'); 
+            window.eventEmit('VN_PANEL_READY');
+            window.eventEmit('CHAT_CHANGED');
+        }
+
+        function updateControlCenterTitle() {
+            if (!window.AureliaControlCenter || !window.AureliaControlCenter.setChatTitle) return false;
+            if (window.SillyTavern && window.SillyTavern.getContext) {
+                const ctx = window.SillyTavern.getContext();
+                if (ctx.chatId) {
+                    let fullPath = ctx.chatId;
+                    let fileName = fullPath.split(/[\\/]/).pop();
+                    let finalName = fileName.replace(/\.jsonl?$/i, '').replace(/\.json$/i, '');
+                    window.AureliaControlCenter.setChatTitle(finalName);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        // 換聊天／載角色／存檔事件：酒館事件橋可能晚幾秒才接上（tryBridgeEventSource 在重試），接上那一刻才掛
+        let hooked = false;
+        const hookEvents = () => {
+            if (!hooked && window.eventSource && window.eventOn) {
+                const refresh = () => setTimeout(updateControlCenterTitle, 200);
+                window.eventOn('chat_id_changed', refresh);
+                window.eventOn('character_loaded', refresh);
+                window.eventOn('chat_saved', refresh);
+                hooked = true;
+            }
+            return hooked;
+        };
+        hookEvents();
+        updateControlCenterTitle();
+
+        // 每秒補一次，直到標題寫上去、事件也掛好為止；之後靠事件＋點擊更新。以前這個計時器永遠不清，每秒白跑一次
+        const retryTimer = setInterval(() => {
+            const ok = updateControlCenterTitle();
+            if (hookEvents() && ok) clearInterval(retryTimer);
+        }, 1000);
+
+        window.addEventListener('click', () => setTimeout(updateControlCenterTitle, 200));
+
+    }, 2000);
+}
+
+if (!_AURELIA_SKIP) {
+    // 沙盒 iframe 那份(_AURELIA_SKIP=true)不啟動；真正執行的是被重新注入主頁面的那份
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initializeExtension);
+    else initializeExtension();
+}

@@ -1,0 +1,1044 @@
+// ----------------------------------------------------------------
+// [檔案] os_backup.js (V2.0 - 終極全量備份版：支援 AVS 與 VN V16)
+// 路徑：os_phone/os/os_backup.js
+// 職責：統一資料備份引擎
+//   - 備份目標：IndexedDB 所有重要倉庫 + localStorage 設定
+//   - 雲端自動備份：托管伺服器或 GitHub 私人倉庫，分塊勾選（cloudBackup；10-04 起，舊的 Gist 拿掉了）
+//   - 本地：JSON 檔案匯出入（100% 包含 AVS、VN章節、聊天紀錄等大型資料）
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    const LSKEY = 'os_backup_settings';
+
+    // 🔥 V2.0 升級：加入所有 AVS 與系統核心的 LocalStorage Keys
+    const LS_BACKUP_KEYS = [
+        'os_global_config',           // 主模型設定
+        'os_secondary_llm_config',    // 副模型設定
+        'os_image_config',            // 圖片生成設定
+        'os_minimax_config',          // Minimax 語音設定
+        'os_elevenlabs_config',       // ElevenLabs 語音設定
+        'os_voice_cast',              // 角色配音名單（誰用哪個聲音）
+        'os_vn_foreign',              // 外語角色名單（誰講哪種語言）
+        'os_worldbook_books',         // 世界書書包清單
+        'vn_cfg_v4',                  // VN 面板設定
+        'os_personas',                // 人設
+        'avs_condition_rules',        // [AVS] 條件規則
+        'aurelia_rules_tavern',       // [AVS] 酒館版規則
+        'avs_current_state',          // [AVS] 當前全局動態變數 JSON 狀態
+        'avs_active_ui_templates',    // [AVS] 當前啟用的美化面板快取
+        'vn_current_story_id',        // [VN] 當前故事 ID
+        'vn_current_story_title',     // [VN] 當前故事顯示名
+        'vn_prompt_order',            // [VN] 提示詞順序
+        'wx_phone_api_config',        // 微信設定
+        // ── 10-19 對帳補上的（全倉庫寫進 localStorage 的 key 一個一個看過）──
+        //   🚨 新功能寫進 localStorage 的東西，是使用者的資料或使用者調的設定，就加在這裡，也排進下面 PARTS 的哪一塊；
+        //      沒排進哪一塊的會自動跟著「設定」那塊走（預設不勾，因為可能有金鑰）。
+        //   不收的：快取、畫面狀態（捲到哪、開哪個分頁、預覽大小）、一次性記號、預覽暫存、十四天就丟的草稿、
+        //      紀錄檔（思考過程、決策用量、世界頻道）、這台自己的（大廳版面、後院跟伺服器對到哪一版、小機白板看玩家還是作者）、
+        //      圖片的索引（圖本體不進備份，只還原索引會變成「生過了」卻沒圖：大廳裝扮室 lobby_stage_skins_v1、朋友圈封面）
+        // 叫模型、接口（含金鑰）
+        'os_llm_channels',            // 我的通道
+        'os_llm_routes',              // 哪件事走哪個模型
+        'os_vision_mode',             // 看圖三選一
+        'os_vector_config',           // 向量記憶的接口
+        'os_voice_input_config',      // 語音轉字
+        'vn_tts_v1',                  // 本機語音（SoVITS、IndexTTS）
+        'dlr_voice_mode',             // 電話的聲音模式
+        'npc_decide_url', 'npc_decide_model', 'npc_decide_key',   // 大廳決策模型
+        'npc_decide_on', 'npc_decide_mins', 'npc_decide_fallback',
+        'jev_stage_on', 'jev_shadow_on_v2', 'jev_sfx_on',          // 決策模型管的立繪、記憶影子、音效
+        'aurelia_relay_cfg',          // 回覆交給伺服器跑（網址、通行碼）
+        'aurelia_keepalive_cfg',      // 背景保活
+        'aurelia_push_cfg',           // 手機通知的伺服器（網址、通行碼）
+        'aurelia_farm_cloud',         // 後院連伺服器（網址、通行碼）
+        // 生圖
+        'os_img_routes',              // 生圖名冊：哪個用途走哪個接口
+        'os_img_styles',              // 畫風頁
+        'os_img_capi_base_packs',     // 底詞包
+        'os_img_nai_nodes', 'os_img_capi_nodes',                    // 生圖節點清單
+        'os_sprite_tpl_prefix', 'os_sprite_tpl_suffix', 'os_sprite_tpl_neg',
+        'os_sprite_size', 'os_sprite_hires', 'os_sprite_upscale_ratio', 'os_trio_tpl', 'os_trio_tpl_gpt', 'os_trio_tpl_split', 'os_doll_tpl',   // 立繪工作室（三格提示詞兩份＋分兩份那天搬過的記號）
+        'wg_sprite_pack_v1',          // 世界門旅人畫風
+        'acg_expr_style', 'acg_expr_mouth', 'acg_expr_lay',       // 角色圖鑑生表情：每個角色選一般還是內收、要不要順便做動嘴、嘴和眼睛小圈拖到哪（含側臉關掉的眼睛、圈轉的角度）
+        'acg_expr_look',                                           // 角色圖鑑生表情：每個角色的眼睛顏色、臉上要留著的東西（眼鏡、眼罩…）
+        'aurelia_room_style_preset', 'aurelia_room_route',          // 包租婆房間的畫風、接口
+        'lstage_dress_gen_v1',        // 大廳裝扮室生小人用哪個接口
+        'avs_sticker_gen_v1',         // 變數工坊的世界貼紙
+        'vn_ws_img_provider',         // 面板工坊生圖用哪個
+        // 提示詞（跟 vn_prompt_order 同一份東西）
+        'os_prompt_entries',          // 提示詞窗口的條目
+        'os_prompt_bundles',          // 提示詞預設包
+        'os_universal_cot',
+        'os_iris_persona', 'os_cheshire_persona', 'os_rabbit_persona', 'os_alice_persona',
+        'os_zhiwei_persona', 'os_hatter_persona', 'os_lobby_world',  // 大廳的人和世界觀的補充：11-17 那頁拿掉、程式不再讀，使用者以前寫的字照舊跟著備份走
+        'os_vn_rules_custom',         // VN 指令自己改的
+        'sp_summary_tpl',             // 大總結的模板
+        'os_vn_extra_tags_prompt', 'os_vn_tags_keyword',            // 創作室：自訂標籤的教學
+        // 開關、偏好
+        'os_vn_rules_on', 'os_vn_rules_book_off_v1', 'os_vn_rules_phone_auto_off',
+        'os_fx_disabled', 'os_fx_groups',                           // VN 特效
+        'vn_game_settings', 'vn_ctx_limit', 'vn_reader_sum_open', 'vn_reader_sum_close',   // 遊戲內設定、摘要標籤
+        'sp_autosum_on', 'sp_autosum_every', 'sp_memtidy_on', 'sp_memtidy_every', 'sp_director_on', 'sp_endcheck_on', 'aurelia_scene_log',
+        'sp_story_threads', 'sp_summary_autohide', 'sp_summary_keep_recent',
+        'aurelia_state_runtime_enabled', 'aurelia_scene_backdrop_auto', 'aurelia_reveal_fx', 'os_app_mem_inject_enabled',
+        'aurelia_app_wake', 'aurelia_app_prompt_bundle',            // 手機 app 自己動、吃哪個提示詞包
+        'wx_avatar_ai_enabled', 'wx_avatar_ai_provider', 'wx_seeme_enabled', 'wx_theme', 'wx_dark_mode', 'wx_tp_active',
+        'wb_dark_mode', 'os_sticker_ai_lib',
+        'aurelia_bgm_enabled', 'lobby_ui_sfx_on', 'lobby_ui_sfx_vol',
+        'lobby_stage_on', 'lobby_theater_on', 'lobby_theater_freq', 'lobby_weather_v1',
+        'lobby_worldview_use_lorebook', 'lobby_npc_see_current_story', 'cafe_offline_visits',   // 大廳設置
+        'lobby_guest_unblock_v1',   // 大廳設置「不會刷成客人的名字」：放行的名字（11-23）
+        'studio_active_features', 'studio_autofix', 'swb_model', 'story_extractor_theme',
+        // 劇情、書架
+        'os_persona_current',         // 現在用哪個人設
+        'vn_current_world_id',        // 現在開的是哪本書
+        'vn_story_index',             // 每篇故事屬於哪本書、掛哪些書包
+        'os_vn_gen_presets',          // 具名開場白
+        'vn_free_history',            // 過往開場紀錄
+        'aurelia_greet_replace_rules',// 開場白取代規則
+        'vn_active_wb_packs', 'vn_global_wb_packs',                 // 掛著的世界書書包
+        'avs_furnace_presets',        // [AVS] 煉丹爐預設
+        'avs_init_my_chips',          // [AVS] 常用追蹤項
+        // 手機 app
+        'aurelia_phone_apps', 'aurelia_phone_layout', 'aurelia_phone_theme',
+        'aurelia_widgets', 'aurelia_widget_cfg',                    // 手機桌面、組件
+        'os_unified_contacts',        // 手機通訊錄
+        'wx_custom_contacts_v1', 'wx_contact_tags',                 // 聊天 app 通訊錄（沒分故事的那份）
+        'wx_user_profile', 'wx_room_fix', 'wx_room_id_remap', 'wx_story_money_done',
+        'wb_accounts', 'wb_user_profile', 'wb_unfollowed',          // 微博
+        'aurelia_farm_v1',            // 後院（連了伺服器的，伺服器那份比較新時會蓋過來）
+        // 大廳
+        'lobby_city_plots_v1',        // 城裡的地塊誰住
+        'lobby_home_guest',           // 我的家請進來的人
+        'cheshire_shards', 'cheshire_items', 'cheshire_paid',       // 黑市：碎片、買的東西、兌換時的已付記號
+        // 創作室
+        'studio_quick_chips',         // 自訂的要求
+        'vn_component_groups'         // VN 組件的分組
+    ];
+    // 只有本地全量匯出才收的（可能很大：書的封面、每本故事的狀態）
+    const LS_FULL_ONLY_KEYS = [
+        'aurelia_custom_worlds',      // 書架上的書
+        'aurelia_phone_user_themes',  // 自己做的手機主題
+        'os_sticker_libs',            // 表情包庫
+        'wx_bubble_gallery',          // 泡泡收藏
+        'vn_theme_gallery',           // 劇情主題收藏
+        'lobby_theater_log',          // 小劇場（重看用）
+        'aurelia_map_theater_log',    // 地圖番外記事
+        'aurelia_change_log'          // 小機改東西的修改紀錄
+    ];
+    // 開頭符合就收（每本故事一個 key），也只在全量匯出
+    const LS_BACKUP_PREFIXES = [
+        'avs_state_',                 // [AVS] 各故事的狀態數值
+        'vn_charvoices::',            // 角色的固定聲線（每本故事）
+        'vn_theme_css::',             // 劇情面板的自訂樣式（每本故事）
+        'vn_free_mode_',              // 這張卡的自由模式（酒館）
+        'sp_director_focus::',        // 這個故事的導演重點、劇情推進力道（設置 → 劇情 → 導演）
+        'vn_expr_side_', 'vn_expr_px_',                            // 這張卡的表情交給副模型（主世界、視差世界各一把）
+        'wx_custom_contacts_v1__', 'wx_contact_tags__',             // 聊天 app 通訊錄、標籤（每本故事、常駐角色）
+        'wx_chat_settings_',          // 每間聊天室的設定
+        'wx_bubble_style_', 'vn_bubble_room::',                     // 每間聊天室的泡泡
+        'wx_cards_', 'wx_redpacket_', 'wx_transfer_',               // 紅包和轉帳的領取紀錄（新帳本＋舊鍵）
+        'wx_removed::',               // 刪好友的紀錄
+        'wx_seeme_memory::',          // 角色對使用者頭像的印象
+        'wb_unfollowed__',            // 微博取消關注（每本故事）
+        'vn_sticker_ai_lib__',        // 這本故事 AI 用哪包表情包
+        'aurelia_appdata_',           // 創作室做的 app 自己存的資料
+        'os_app_mem_plugin_',         // 各 app「記憶回傳酒館」的開關
+        'lobby_stage_layout_',        // 大廳各場景使用者排的擺設
+        'lstage_hist_',               // 跟大廳 NPC 的對話
+        'os_studio_parsed_',          // 創作室每個對話最後一版的面板（改過的版本靠它，不然退回初版）
+        'studio_panel_type_'          // 創作室每個對話選的面板類型
+    ];
+
+    // 全量備份收的 IndexedDB 倉庫：OS_DB 除了圖片（images 存的是二進位，另外一張一張轉，見下面 IMG）以外全部
+    //   🚨 OS_DB 新增倉庫時這裡也要加一列，不然備份不到
+    const FULL_STORES = [
+        'var_packs', 'ui_templates', 'vn_chapters', 'api_chats', 'wb_posts', 'lobby_history',
+        'map_data', 'studio_chats', 'studio_drafts', 'vn_memories', 'vn_grand_summaries', 'state_data',
+        'lobby_summary_index', 'phone_apps', 'app_memory', 'tavern_summary', 'app_data', 'lobby_npc_memory'
+    ];
+    // 🧩 小機（宿舍的 API 小機）：記憶與對話在 app_data／studio_chats 裡會跟著備份，
+    //   但「宿舍名冊上有這隻」（os_claude_room_config 的 residents）和「它有哪幾串對話」（xiaoji_convs）在房間的 localStorage，
+    //   以前沒備到——從備份還原，小機會不見（10-06 查到）。這裡只收小機那幾筆，不整份備份那個共用設定（裡面有橋的設定）。
+    //   照意思找的向量（app_data 的 xiaoji_vec::）不收：還原後在本機重新算（不花錢），算完之前照字找照常。
+    const XJ = {
+        roster() {
+            let cfg = null, convs = [];
+            try { cfg = JSON.parse(localStorage.getItem('os_claude_room_config') || 'null'); } catch (e) {}
+            try { convs = JSON.parse(localStorage.getItem('xiaoji_convs') || '[]') || []; } catch (e) {}
+            const residents = ((cfg && Array.isArray(cfg.residents)) ? cfg.residents : []).filter(r => r && r.provider === 'xiaoji');
+            const ids = new Set(residents.map(r => r.id));
+            const active = {};
+            ids.forEach(id => { const v = localStorage.getItem('xiaoji_active__' + id); if (v !== null) active['xiaoji_active__' + id] = v; });
+            return { residents, convs: (Array.isArray(convs) ? convs : []).filter(c => c && ids.has(c.residentId)), active };
+        },
+        restore(r) {
+            if (!r || !Array.isArray(r.residents) || !r.residents.length) return 0;
+            let cfg = {};
+            try { cfg = JSON.parse(localStorage.getItem('os_claude_room_config') || '{}') || {}; } catch (e) {}
+            const list = Array.isArray(cfg.residents) ? cfg.residents : [];
+            let n = 0;
+            r.residents.forEach(x => { if (x && x.id && !list.some(y => y && y.id === x.id)) { list.push(x); n++; } });
+            cfg.residents = list;
+            if (!win.AUI.lsSet('os_claude_room_config', JSON.stringify(cfg), '還原的小機名冊')) return 0;   // 名冊沒寫進去，對話接回來也沒人認
+            let convs = [];
+            try { convs = JSON.parse(localStorage.getItem('xiaoji_convs') || '[]') || []; } catch (e) {}
+            (r.convs || []).forEach(c => { if (c && c.id && !convs.some(y => y && y.id === c.id)) convs.push(c); });
+            win.AUI.lsSet('xiaoji_convs', JSON.stringify(convs), '還原的小機對話');
+            Object.keys(r.active || {}).forEach(k => { if (localStorage.getItem(k) === null) win.AUI.lsSet(k, r.active[k], '還原的小機對話'); });
+            return n;
+        },
+        skip(store, e) { return store === 'app_data' && /^xiaoji_vec::/.test(String((e && e.id) || '')); },
+        // 還原到一台已經有同一隻小機的裝置（終審 #3）：備份裡有它的經歷簿，就先把這台的那隻整隻清掉再寫——
+        //   不然這台比備份多出來的經歷塊、對不上的向量會殘留，編號跟著錯。回清了幾隻
+        async dropBeforeRestore(entries) {
+            const M = win.OS_XIAOJI_MEM;
+            if (!M || !M.drop) return 0;
+            const rids = [];
+            (entries || []).forEach(e => { const m = /^xiaoji_life::global::(.+):head$/.exec(String((e && e.id) || '')); if (m && rids.indexOf(m[1]) === -1) rids.push(m[1]); });
+            for (const rid of rids) await M.drop(rid, []);
+            return rids.length;
+        }
+    };
+    // ⭐ 收藏的語音（房間長按語音泡泡「收藏語音」，10-06）：清單在 app_data（room_fav_voice::global::<住戶 id>），
+    //   聲音在 images 倉庫（aud_fav_…，二進位，上面那條「圖片不收」本來會漏掉）。收藏語音也要跟備份走。
+    //   → 只收清單上點名的那幾段，轉成 base64 放在 db.fav_voices，跟著清單那塊（手機 app）走；
+    //   還原時這台沒有的才寫回 images（同 OS_DB.saveImage 的格式 {id, data: Blob}）。
+    //   10-20 起本機完整匯出勾「帶圖片」時整個 images 倉庫都帶（下面 IMG），這段只剩雲端那條和沒勾的時候用。
+    const FAV = {
+        PRE: 'room_fav_voice::',
+        ids(appData) {
+            const out = [];
+            (appData || []).forEach(e => {
+                if (String((e && e.id) || '').indexOf(FAV.PRE) !== 0 || !Array.isArray(e.value)) return;
+                e.value.forEach(v => { const a = v && v.audio; if (a && /^aud_fav_/.test(a) && out.indexOf(a) === -1) out.push(a); });
+            });
+            return out;
+        },
+        async collect(appData) {
+            const out = [];
+            for (const id of FAV.ids(appData)) {
+                try {
+                    const e = await _getOne('images', id);
+                    if (!e || !(e.data instanceof Blob)) continue;
+                    const bytes = new Uint8Array(await e.data.arrayBuffer());
+                    let bin = '';
+                    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+                    out.push({ id: id, type: e.data.type || 'audio/mpeg', b64: btoa(bin) });
+                } catch (err) { console.warn('[OS_BACKUP] 收藏的語音讀不出來，這段沒帶：', id, err); }
+            }
+            return out;
+        },
+        async restore(list) {
+            let n = 0;
+            for (const v of (list || [])) {
+                if (!v || !/^aud_fav_/.test(String(v.id || '')) || typeof v.b64 !== 'string') continue;
+                try {
+                    if (await _getOne('images', v.id)) continue;   // 這台已經有
+                    const bin = atob(v.b64), bytes = new Uint8Array(bin.length);
+                    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+                    await _putStore('images', { id: v.id, data: new Blob([bytes], { type: v.type || 'audio/mpeg' }) });
+                    n++;
+                } catch (err) { console.warn('[OS_BACKUP] 收藏的語音沒還原成：', v.id, err); }
+            }
+            return n;
+        }
+    };
+    // 🖼 images 倉庫跟著本機完整匯出走（10-20）：好友頭像、聊天背景、聊天傳的照片和語音、朋友圈／記事本照片、
+    //   畫風參考圖、NAI 縮圖與 vibe、角色圖鑑（使用者角色的長相，重生要花錢、也生不回一模一樣的）。
+    //   以前一張都不收，而「格式化」會整個刪掉 → 還原後聊天照片變灰框、頭像回預設（整條跑過實測）。
+    //   不帶的只有：手機 app 生的圖（img_gen_）沒被任何資料用到的那些（貼文刪了留下的孤兒）。雲端那條不帶（太大）。
+    //   🚨 iPhone 匯出要省記憶體：一張一張讀、一張轉完就包成小 Blob，不先把全部圖組成一整個大字串（見 exportLocal）。
+    //   還原時這台沒有的才寫回（跟收藏語音同一套）。設置頁有「帶圖片」的勾，手機撐不住可以取消。
+    const IMG = {
+        GEN: /^img_gen_/,
+        async keys() {
+            try {
+                if (!win.OS_DB) return [];
+                const db = await win.OS_DB.init();
+                return await new Promise((res) => {
+                    const q = db.transaction('images', 'readonly').objectStore('images').getAllKeys();   // 只拿鑰匙，不讀圖
+                    q.onsuccess = () => res((q.result || []).map(String));
+                    q.onerror = () => res([]);
+                });
+            } catch (e) { return []; }
+        },
+        // 要帶哪幾張：refText＝備份裡其他資料轉成的文字，img_gen_ 有在裡面出現才帶
+        pick(keys, refText) {
+            const used = new Set((String(refText || '').match(/img_gen_[A-Za-z0-9_]+/g) || []));
+            return keys.filter(k => !IMG.GEN.test(k) || used.has(k));
+        },
+        async _b64(blob) {
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            let bin = '';
+            for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+            return btoa(bin);
+        },
+        _unb64(b64, type) {
+            const bin = atob(b64), bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            return new Blob([bytes], { type: type || '' });
+        },
+        // 一筆轉成能寫進 JSON 的樣子：裡面的 Blob（通常是 .data）換成 { __blob: base64, type }
+        async pack(entry) {
+            const walk = async (v, depth) => {
+                if (v instanceof Blob) return { __blob: await IMG._b64(v), type: v.type || '' };
+                if (!v || typeof v !== 'object' || depth > 3) return v;
+                const o = Array.isArray(v) ? [] : {};
+                for (const k of Object.keys(v)) o[k] = await walk(v[k], depth + 1);
+                return o;
+            };
+            return walk(entry, 0);
+        },
+        unpack(v, depth) {
+            depth = depth || 0;
+            if (!v || typeof v !== 'object' || depth > 4) return v;
+            if (typeof v.__blob === 'string') return IMG._unb64(v.__blob, v.type);
+            const o = Array.isArray(v) ? [] : {};
+            Object.keys(v).forEach(k => { o[k] = IMG.unpack(v[k], depth + 1); });
+            return o;
+        },
+        async restore(list) {
+            let n = 0;
+            for (let i = 0; i < (list || []).length; i++) {
+                const v = list[i];
+                list[i] = null;   // 寫完一張就放掉，大檔還原時記憶體不要一直疊
+                const id = v && v.id;
+                if (id == null) continue;
+                try {
+                    if (await _getOne('images', id)) continue;   // 這台已經有
+                    await _putStore('images', IMG.unpack(v));
+                    n++;
+                } catch (err) { console.warn('[OS_BACKUP] 這張圖沒還原成：', id, err); }
+            }
+            return n;
+        }
+    };
+    // 舊版備份檔（V3）用的欄位名 → 倉庫名；還原舊檔時用
+    const LEGACY_FIELDS = {
+        varPacks: 'var_packs', uiTemplates: 'ui_templates', vnChapters: 'vn_chapters',
+        apiChats: 'api_chats', wbPosts: 'wb_posts', lobbyHistory: 'lobby_history'
+    };
+
+    // ── 設定讀寫 ─────────────────────────────────────────────────────
+    function getSettings() {
+        try { return JSON.parse(localStorage.getItem(LSKEY) || '{}'); } catch(e) { return {}; }
+    }
+    function saveSettings(s) { return win.AUI.lsSet(LSKEY, JSON.stringify(s), '備份設定'); }
+    // 10-04 拿掉 Gist：以前存在這裡的 GitHub 金鑰與 Gist 編號清掉，不要留一把沒在用的金鑰在瀏覽器裡
+    try { const _o = getSettings(); if (_o.token || _o.gistId) { delete _o.token; delete _o.gistId; saveSettings(_o); } } catch (e) {}
+
+    // ── 通用 IndexedDB 方法 ──────────────────────────────────────────
+    function _getStore(storeName) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                if (!win.OS_DB) return resolve([]);
+                const db = await win.OS_DB.init();
+                const tx = db.transaction(storeName, 'readonly');
+                const req = tx.objectStore(storeName).getAll();
+                req.onsuccess = () => resolve((req.result || []).filter(e => !XJ.skip(storeName, e)));
+                req.onerror = e => reject(e.target.error);
+            } catch(e) { resolve([]); } // 若該倉庫不存在則回傳空陣列
+        });
+    }
+
+    function _getOne(storeName, key) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                if (!win.OS_DB) return resolve(null);
+                const db = await win.OS_DB.init();
+                const req = db.transaction(storeName, 'readonly').objectStore(storeName).get(key);
+                req.onsuccess = () => resolve(req.result || null);
+                req.onerror = e => reject(e.target.error);
+            } catch (e) { resolve(null); }
+        });
+    }
+
+    function _putStore(storeName, entry) {
+        return new Promise(async (resolve, reject) => {
+            try {
+                const db = await win.OS_DB.init();
+                const tx = db.transaction(storeName, 'readwrite');
+                tx.objectStore(storeName).put(entry);
+                tx.oncomplete = () => resolve();
+                tx.onerror = e => reject(e.target.error);
+                tx.onabort = () => reject(tx.error || new Error('寫入被中止'));   // 空間滿這類中止只發 abort，不接的話這次等待永遠不會結束
+            } catch(e) { reject(e); }
+        });
+    }
+
+    // ── 資料收集 ─────────────────────────────────────────────────────
+    async function collectDB(opts) {
+        const out = {};
+        try {
+            // 🌟 1. 世界書與成就
+            if (opts.worldbook !== false) out.worldbook = await _getStore('world_book_entries');
+            if (opts.achievements !== false) out.achievements = await _getStore('achievements');
+
+            // 🌟 2. 全量資料 (僅限本地 JSON 打包)
+            if (opts.fullExport) {
+                out.stores = {};
+                for (const name of FULL_STORES) out.stores[name] = await _getStore(name);
+                out.xiaoji_roster = XJ.roster();
+                if (!opts.images) out.fav_voices = await FAV.collect(out.stores.app_data);   // 帶圖片時收藏的語音已經在 images 裡，不重複帶
+            }
+        } catch(e) { console.warn('[OS_BACKUP] DB 收集部分失敗:', e); }
+        return out;
+    }
+
+    function collectLocalStorage(full) {
+        const out = {};
+        LS_BACKUP_KEYS.concat(full ? LS_FULL_ONLY_KEYS : []).forEach(k => {
+            const v = localStorage.getItem(k);
+            if (v !== null) out[k] = v; 
+        });
+        if (full) for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && LS_BACKUP_PREFIXES.some(p => k.startsWith(p))) out[k] = localStorage.getItem(k);
+        }
+        return out;
+    }
+
+    // ── 全量資料打包（本地匯出用） ────────────────────────────────────
+    async function collectAll(opts = {}) {
+        // 強制開啟全量收集模式
+        const dbData = await collectDB({ ...opts, fullExport: true });
+        return {
+            version: 4, // V4：倉庫收在 db.stores（舊的 V3 檔照樣能還原）
+            exportedAt: new Date().toISOString(),
+            type: 'full',
+            db: dbData,
+            localStorage: collectLocalStorage(true)
+        };
+    }
+
+    // ── 還原資料 ──────────────────────────────────────────────────────
+    // 還原失敗時講給使用者聽的資料類別（沒列的歸「其他資料」）
+    const STORE_LABEL = {
+        world_book_entries: '世界書', achievements: '成就', vn_chapters: '劇情章節', vn_memories: '劇情記憶',
+        vn_grand_summaries: '大總結', api_chats: '聊天', var_packs: '狀態', ui_templates: '狀態', state_data: '狀態', app_data: '手機 app',
+    };
+    async function applyData(data, opts = {}) {
+        let restored = { worldbook: 0, achievements: 0, localStorage: 0, avs: 0, vn: 0, chats: 0, failed: {} };
+        // 一筆一筆寫、照「真的寫進去的」算（小斐／阿洛 11-22 健檢：以前吞掉錯誤、用備份裡有幾筆當還原數，寫失敗的也報成功）
+        const putAll = async (name, list) => {
+            let ok = 0;
+            for (const e of list) {
+                try { await _putStore(name, e); ok++; }
+                catch (err) {
+                    const k = STORE_LABEL[name] || '其他資料';
+                    const f = restored.failed[k] || (restored.failed[k] = { n: 0, why: '' });
+                    f.n++;
+                    if (!f.why) f.why = String((err && (err.name === 'QuotaExceededError' ? '本機空間滿了' : (err.message || err.name))) || '寫不進去');
+                }
+            }
+            return ok;
+        };
+
+        // IndexedDB 恢復
+        if (data.db) {
+            const d = data.db;
+            
+            // 恢復基礎資料
+            if (d.worldbook?.length) restored.worldbook = await putAll('world_book_entries', d.worldbook);
+            if (d.achievements?.length) restored.achievements = await putAll('achievements', d.achievements);
+
+            // 其他倉庫：新檔在 d.stores，舊檔（V3）是幾個分開的欄位
+            const stores = Object.assign({}, d.stores || {});
+            Object.keys(LEGACY_FIELDS).forEach(f => { if (Array.isArray(d[f]) && !stores[LEGACY_FIELDS[f]]) stores[LEGACY_FIELDS[f]] = d[f]; });
+            if (Array.isArray(stores.app_data)) { try { await XJ.dropBeforeRestore(stores.app_data); } catch (e) { console.warn('[OS_BACKUP] 小機還原前清不乾淨:', e); } }
+            for (const name of Object.keys(stores)) {
+                if (!FULL_STORES.includes(name) || !Array.isArray(stores[name])) continue;
+                const n = await putAll(name, stores[name]);
+                if (name === 'var_packs' || name === 'ui_templates' || name === 'state_data') restored.avs += n;
+                else if (name === 'vn_chapters' || name === 'vn_memories' || name === 'vn_grand_summaries') restored.vn += n;
+                else if (name === 'api_chats') restored.chats += n;
+            }
+            if (d.xiaoji_roster) { try { restored.xiaoji = XJ.restore(d.xiaoji_roster); } catch (e) { console.warn('[OS_BACKUP] 小機名冊沒還原成:', e); } }
+            if (Array.isArray(d.fav_voices)) restored.favVoices = await FAV.restore(d.fav_voices);
+            if (Array.isArray(d.images)) restored.images = await IMG.restore(d.images);
+        }
+
+        // LocalStorage 恢復：一項寫不進去照樣接著寫下一項（不中斷），寫不進去的數目回給畫面講（lsFailed）
+        if (data.localStorage && opts.restoreSettings !== false) {
+            restored.lsFailed = 0;
+            Object.entries(data.localStorage).forEach(([k, v]) => {
+                if (data.secretsStripped) v = _keepSecrets(k, v);   // 沒帶金鑰的備份：這台原本的金鑰不被蓋掉
+                if (win.AUI.lsSet(k, v, '還原的設定')) restored.localStorage++;
+                else restored.lsFailed++;
+            });
+        }
+
+        return restored;
+    }
+
+    // ── 本地匯出入 ────────────────────────────────────────────────────
+    // opts.images：帶不帶 images 倉庫（沒給就照設置頁那個勾，預設帶）。回檔案大小（KB）；帶了幾張圖在 OS_BACKUP.lastExport
+    // opts.parts：勾了哪幾塊（沒給就照設置頁記的，沒記過＝全勾）。全勾時跟以前的完整備份一樣（同一套 PARTS，沒排進哪塊的都歸到「設定」或「手機 app」）
+    const IMG_SLOT = '__AURELIA_IMAGES_SLOT__';
+    let lastExport = null;
+    async function exportLocal(opts = {}) {
+        const withImages = (typeof opts.images === 'boolean') ? opts.images : getSettings().exportImages !== false;
+        const withSecrets = (typeof opts.secrets === 'boolean') ? opts.secrets : exportSecretsOn();   // 預設不帶金鑰（見 _stripSecrets）
+        const picked = opts.parts || exportPartsGet();
+        if (!partsHere().some(p => picked[p.k])) throw new Error('一塊都沒勾');
+        const data = await collectParts(picked, { type: 'full', images: withImages });
+        if (!withSecrets && data.localStorage) {
+            Object.keys(data.localStorage).forEach(k => {
+                const v = _stripSecrets(k, data.localStorage[k]);
+                if (v === null) delete data.localStorage[k]; else data.localStorage[k] = v;
+            });
+            data.secretsStripped = true;   // 還原時看到這個：這台原本的金鑰留著
+        }
+        if (withImages) data.db.images = IMG_SLOT;
+        const content = JSON.stringify(data, null, 2);
+        let parts = [content], nImg = 0;
+        if (withImages) {
+            // 圖片一張一張讀、一張轉完就包成小 Blob 丟進 parts，字串馬上可以放掉；
+            //   以前那種「整份 JSON.stringify 成一個字串」帶上圖會是幾十上百 MB 的單一字串，iPhone 會撐爆記憶體整頁重開
+            const cut = content.indexOf('"' + IMG_SLOT + '"');
+            parts = [content.slice(0, cut), '['];
+            const keys = IMG.pick(await IMG.keys(), content);
+            for (const k of keys) {
+                try {
+                    const e = await _getOne('images', k);
+                    if (!e) continue;
+                    parts.push(new Blob([(nImg ? ',' : '') + JSON.stringify(await IMG.pack(e))]));
+                    nImg++;
+                } catch (err) { console.warn('[OS_BACKUP] 這張圖讀不出來，沒帶：', k, err); }
+            }
+            parts.push(']', content.slice(cut + IMG_SLOT.length + 2));
+        }
+        const blob = new Blob(parts, { type: 'application/json' });
+        const sizeKB = Math.round(blob.size / 1024);
+        lastExport = { kb: sizeKB, images: withImages ? nImg : null };
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'aurelia-' + (_isPwa() ? '' : 'tavern-') + 'backup-' + new Date().toISOString().slice(0, 10) + '.json';
+        a.click();
+        try { const s = getSettings(); s.lastExportAt = Date.now(); saveSettings(s); } catch (e) {}   // 打開 app 時「多久沒備份」看這個
+        return sizeKB;
+    }
+
+    async function importLocal(file, opts = {}) {
+        const text = await file.text();
+        let data;
+        try { data = JSON.parse(text); } catch (e) { throw new Error('這個檔讀不出來，不是奧瑞亞的備份檔'); }   // 以前直接把瀏覽器的英文錯誤丟到畫面上
+        if (!data || !data.version || !data.db) throw new Error('無法識別的備份格式');
+        return applyData(data, opts);
+    }
+
+    // ── 還原完一律馬上重新整理（10-20 整條跑過抓到的）────────────────
+    //   開著的畫面（聊天 app、宿舍…）記憶體裡還是還原前那份；不重整的話，使用者在那裡的下一個動作就把舊的整份寫回去，
+    //   蓋掉剛還原的（實測：聊天室還原成備份那版，接著在那間多一行系統訊息，資料庫又變回這台原本那版）。
+    //   以前雲端那條問「現在重新整理？」可以按不要，本機檔那條連問都沒問。
+    //   不先跳窗等使用者按：等的那段背景的計時器（心跳、主動傳訊）一樣會寫回舊的。結果記在 sessionStorage，重整後再講
+    const RESTORED_KEY = 'os_backup_restored';
+    function afterRestore(res, title) {
+        res = res || {};
+        const _bad = !!(res.failed && Object.keys(res.failed).length);
+        const msg = (_bad ? '只還原了一部分（聊天 ' : '還原好了（聊天 ') + (res.chats || 0) + '、劇情 ' + (res.vn || 0) + '、世界書 ' + (res.worldbook || 0) + '、設定 ' + (res.localStorage || 0)
+            + (res.favVoices ? '、收藏的語音 ' + res.favVoices : '') + (res.images ? '、圖片和語音 ' + res.images : '') + '）'
+            + (res.lsFailed ? '，另有 ' + res.lsFailed + ' 項設定沒存下來（本機空間滿了）' : '')
+            + (res.failed && Object.keys(res.failed).length ? '。有些沒寫進去：' + Object.keys(res.failed).map(k => k + ' ' + res.failed[k].n + ' 筆（' + res.failed[k].why + '）').join('、') + '；同一份備份可以再還原一次' : '') + '。';
+        try { sessionStorage.setItem(RESTORED_KEY, JSON.stringify({ title: title || '還原', msg: msg })); } catch (e) {}
+        location.reload();
+    }
+    try {
+        const r = JSON.parse(sessionStorage.getItem(RESTORED_KEY) || 'null');
+        if (r) {
+            sessionStorage.removeItem(RESTORED_KEY);
+            setTimeout(() => { const A = win.AUI || window.AUI; try { if (A && A.alert) A.alert(r.msg, { title: r.title, modal: true }); } catch (e) {} }, 2500);
+        }
+    } catch (e) {}
+
+    // ── 儲存空間 ────────────────────────────────────────────────────
+    // 分項（掃描鈕）：文字資料算大小，圖片只算張數——圖的大小要把圖讀出來才量得到，整庫讀一遍會撐爆記憶體。
+    //   張數走 VN_Cache.getAllMeta(partial)＝只看鑰匙，不讀圖。名字一律給人看的，不顯示倉庫代號。
+    const SIZE_STORES = [
+        ['vn_chapters', '劇情章節'], ['api_chats', '聊天 app 的對話'], ['world_book_entries', '世界書'],
+        ['var_packs', '變數包'], ['ui_templates', '劇情面板'], ['achievements', '成就']
+    ];
+    const IMAGE_STORES = [['scene_cache', '插圖'], ['bg_cache', '背景'], ['avatar_cache', '頭像與直生立繪'], ['sprite_cache', '立繪'], ['item_cache', '物品圖']];
+    async function estimateSize() {
+        const results = {};
+        const C = win.VN_Cache || window.VN_Cache;
+        if (C && C.getAllMeta) {
+            let n = 0; const parts = [];
+            for (const [s, label] of IMAGE_STORES) {
+                try { const k = (await C.getAllMeta(s, { partial: true })).length; if (k) { n += k; parts.push(label + ' ' + k); } } catch (e) {}
+            }
+            results['圖片'] = { count: n, unit: '張', note: parts.join('、') };
+        }
+        for (const [s, label] of SIZE_STORES) {
+            try {
+                const items = await _getStore(s);
+                const kb = Math.round(new Blob([JSON.stringify(items)]).size / 1024);
+                results[label] = { count: items.length, kb };
+            } catch(e) { results[label] = { count: 0, kb: 0 }; }
+        }
+        return results;
+    }
+
+    // 整個站在這台裝置上用了多少、瀏覽器給多少、資料有沒有受保護。
+    //   瀏覽器空間吃緊時是「整個站的資料一起丟」，不是只丟圖；受保護（persist）之後瀏覽器不會自己動手清，
+    //   只有使用者自己去清。酒館桌面版的資料在電腦資料夾裡、本來就不會被清，叫了也無害，所以不分版本都叫。
+    async function storageStatus() {
+        const st = { supported: false, usage: 0, quota: 0, ratio: 0, persisted: null };
+        const ns = win.navigator && win.navigator.storage;
+        if (!ns) return st;
+        try { if (ns.estimate) { const e = await ns.estimate(); st.supported = true; st.usage = e.usage || 0; st.quota = e.quota || 0; st.ratio = st.quota ? st.usage / st.quota : 0; } } catch (e) {}
+        try { if (ns.persisted) st.persisted = await ns.persisted(); } catch (e) {}
+        return st;
+    }
+    async function requestPersist() {
+        const ns = win.navigator && win.navigator.storage;
+        if (!ns || !ns.persist) return null;
+        try { if (ns.persisted && await ns.persisted()) return true; return await ns.persist(); } catch (e) { return false; }
+    }
+    // 開機後自己申請一次保護；用到八成以上一天提醒一次（不擋畫面）
+    const WARN_KEY = 'os_storage_warn_day';
+    async function _bootCheck() {
+        await requestPersist();
+        const st = await storageStatus();
+        if (!st.supported || st.ratio < 0.8) return;
+        const _d = new Date(), today = _d.getFullYear() + '-' + (_d.getMonth() + 1) + '-' + _d.getDate();
+        try { if (localStorage.getItem(WARN_KEY) === today) return; } catch (e) {}
+        win.AUI.lsSet(WARN_KEY, today, '空間提醒');
+        const A = win.AUI || window.AUI;
+        // 「系統/備份」那一頁 10-20 起酒館也有
+        const msg = '這台裝置留給奧瑞亞的空間已經用了 ' + Math.round(st.ratio * 100) + '%。'
+                  + '到 設置 → 備份與系統 先匯出一份備份，再到相簿壓縮或清掉不要的圖。';
+        try { if (A && A.toast) A.toast(msg, { type: 'warn' }); } catch (e) {}
+    }
+    try { setTimeout(() => { _bootCheck().catch(() => {}); }, 6000); } catch (e) {}
+
+    // ── 雲端自動備份（托管伺服器，2026-10-04）──────────────────────────
+    //   需求：PWA 的備份要有自動備份開關，上傳可以逐塊勾選要的部分。
+    //   用「回覆交給伺服器跑」那組網址與通行碼（aurelia_relay_cfg），伺服器 POST /v1/backup 收、留最近七份。
+    //   一塊一塊勾：設定那塊有 API 金鑰，預設不勾（托管伺服器的原則是不存使用者的金鑰）。勾選只管上傳，本地匯出照舊整份。
+    //   開著時：打開 app 距離上次超過一天備份一次；切出去時距離上次「看過」超過六小時也備一次。內容沒變不上傳。
+    //   沒伺服器（或沒開）：打開 app 時超過七天沒匯出就問一次要不要匯出，「之後再說」三天後再問（只在手機版）。
+    const AUTO_KEY = 'os_backup_auto';
+    const PARTS = [
+        //   tavernLabel：酒館裡顯示的名字（章節、書架、人設在酒館是酒館自己的）；tavern:false＝酒館裡不列（那塊是酒館在管的）
+        { k: 'story', label: '劇情（章節、記憶、大總結、書架、人設）', tavernLabel: '劇情（記憶、大總結、地圖、角色的聲線）',
+          stores: ['vn_chapters', 'vn_memories', 'vn_grand_summaries', 'tavern_summary', 'map_data'],
+          ls: ['aurelia_custom_worlds', 'vn_current_story_id', 'vn_current_story_title', 'os_personas',
+               'os_persona_current', 'vn_current_world_id', 'vn_story_index', 'os_vn_gen_presets', 'vn_free_history',
+               'aurelia_greet_replace_rules', 'aurelia_map_theater_log'],
+          prefixes: ['vn_charvoices::', 'vn_theme_css::', 'vn_free_mode_', 'vn_expr_side_', 'vn_expr_px_', 'sp_director_focus::'] },
+        { k: 'phone', label: '手機 app（聊天、微博、各 app 的資料、收藏的語音）', stores: ['api_chats', 'wb_posts', 'phone_apps', 'app_memory', 'app_data'],
+          ls: ['aurelia_phone_apps', 'aurelia_phone_layout', 'aurelia_phone_theme', 'aurelia_phone_user_themes', 'aurelia_widgets', 'aurelia_widget_cfg',
+               'os_unified_contacts', 'wx_custom_contacts_v1', 'wx_contact_tags', 'wx_user_profile', 'wx_room_fix', 'wx_room_id_remap',
+               'wx_story_money_done', 'wx_bubble_gallery', 'os_sticker_libs', 'wb_accounts', 'wb_user_profile', 'wb_unfollowed',
+               'aurelia_change_log', 'aurelia_farm_v1'],
+          prefixes: ['wx_custom_contacts_v1__', 'wx_contact_tags__', 'wx_chat_settings_', 'wx_bubble_style_', 'vn_bubble_room::',
+                     'wx_cards_', 'wx_redpacket_', 'wx_transfer_', 'wx_removed::', 'wx_seeme_memory::', 'wb_unfollowed__',
+                     'vn_sticker_ai_lib__', 'aurelia_appdata_'] },
+        { k: 'wb', label: '世界書', worldbook: true, tavern: false, ls: ['os_worldbook_books', 'vn_active_wb_packs', 'vn_global_wb_packs'] },
+        // 提示詞是使用者自己寫的東西、沒有金鑰：10-19 從「設定」那塊（預設不勾）拆出來，雲端備份預設就收
+        { k: 'prompts', label: '提示詞（條目、預設包、大廳的人設）',
+          ls: ['vn_prompt_order', 'os_prompt_entries', 'os_prompt_bundles', 'os_universal_cot', 'os_vn_rules_custom', 'sp_summary_tpl',
+               'os_vn_extra_tags_prompt', 'os_vn_tags_keyword',
+               'os_iris_persona', 'os_cheshire_persona', 'os_rabbit_persona', 'os_alice_persona', 'os_zhiwei_persona', 'os_hatter_persona', 'os_lobby_world'] },
+        { k: 'avs', label: '狀態與面板', stores: ['var_packs', 'ui_templates', 'state_data'],
+          ls: ['avs_condition_rules', 'aurelia_rules_tavern', 'avs_current_state', 'avs_active_ui_templates', 'avs_furnace_presets', 'avs_init_my_chips'],
+          prefixes: ['avs_state_'] },
+        { k: 'lobby', label: '大廳', stores: ['lobby_history', 'lobby_summary_index', 'lobby_npc_memory'],
+          ls: ['lobby_city_plots_v1', 'lobby_home_guest', 'lobby_theater_log', 'cheshire_shards', 'cheshire_items', 'cheshire_paid'],
+          prefixes: ['lobby_stage_layout_', 'lstage_hist_'] },
+        { k: 'studio', label: '創作室', stores: ['studio_chats', 'studio_drafts'],
+          ls: ['studio_quick_chips', 'vn_component_groups', 'vn_theme_gallery'], prefixes: ['os_studio_parsed_', 'studio_panel_type_'] },
+        { k: 'ach', label: '成就', achievements: true },
+        // 其他塊沒收的 LS_BACKUP_KEYS 全部歸這塊（下面那段自動補），這裡只列原本那幾個
+        { k: 'settings', label: '設定（圖片、語音、接口…）', tavernLabel: '設定（圖片、語音、接口）', off: true,
+          ls: ['os_global_config', 'os_secondary_llm_config', 'os_image_config', 'os_minimax_config', 'os_elevenlabs_config',
+               'os_voice_cast', 'os_vn_foreign', 'vn_cfg_v4', 'wx_phone_api_config'] },
+    ];
+    // FULL_STORES 之後新加的倉庫沒排進哪一塊：先跟著「手機 app」走，不要默默漏掉
+    (function () {
+        const claimed = [].concat.apply([], PARTS.map(p => p.stores || []));
+        const phone = PARTS.find(p => p.k === 'phone');
+        FULL_STORES.forEach(s => { if (claimed.indexOf(s) === -1) phone.stores.push(s); });
+    })();
+    // localStorage 的 key、前綴也一樣：沒排進哪一塊的跟著「設定」走（預設不勾，因為可能有金鑰）
+    (function () {
+        const set = PARTS.find(p => p.k === 'settings');
+        const claimed = [].concat.apply([], PARTS.map(p => p.ls || []));
+        LS_BACKUP_KEYS.concat(LS_FULL_ONLY_KEYS).forEach(k => { if (claimed.indexOf(k) === -1) set.ls.push(k); });
+        const claimedP = [].concat.apply([], PARTS.map(p => p.prefixes || []));
+        LS_BACKUP_PREFIXES.forEach(x => { if (claimedP.indexOf(x) === -1) (set.prefixes = set.prefixes || []).push(x); });
+    })();
+
+    function autoGet() {
+        let a = {};
+        try { a = JSON.parse(localStorage.getItem(AUTO_KEY) || '{}') || {}; } catch (e) {}
+        const parts = {};
+        PARTS.forEach(p => { parts[p.k] = (a.parts && typeof a.parts[p.k] === 'boolean') ? a.parts[p.k] : !p.off; });
+        return Object.assign({ on: false, dest: 'relay', lastAt: 0, lastHash: '', lastTryAt: 0, lastErr: '', lastSize: 0 }, a, { parts });
+    }
+    function autoSave(patch) {
+        const a = Object.assign(autoGet(), patch || {});
+        win.AUI.lsSet(AUTO_KEY, JSON.stringify(a), '自動備份的設定');
+        return a;
+    }
+    // 托管伺服器那組（「回覆交給伺服器跑」填的）；網址與通行碼都有才算
+    //   🚨 網址一律照 OS_RELAY.base() 整理：使用者沒打 https:// 時那邊會補上、回覆照常跑，
+    //      這裡以前自己讀原字串沒補 → 被當成手機版網站底下的路徑，備份打到自己網站回 404（明明「交給伺服器跑」那邊連得上）
+    function relayOf() {
+        try {
+            const R = win.OS_RELAY;
+            const c = (R && R.cfg) ? R.cfg() : (JSON.parse(localStorage.getItem('aurelia_relay_cfg') || '{}') || {});
+            let url = (R && R.base) ? R.base() : String(c.url || '').trim().replace(/\/+$/, '');
+            if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+            url = url.replace(/\/v1$/, '');
+            const token = String(c.token || '').trim();
+            return (url && token) ? { url, token } : null;
+        } catch (e) { return null; }
+    }
+    // ── 這一邊列哪幾塊（10-20 定的）──
+    //   酒館的聊天、角色卡、世界書、預設、正則是酒館在管、酒館自己有匯出；酒館這頁只收奧瑞亞自己存的，所以世界書那塊不列。
+    function partsHere() {
+        const pwa = _isPwa();
+        return PARTS.filter(p => pwa || p.tavern !== false)
+            .map(p => Object.assign({}, p, { label: (!pwa && p.tavernLabel) || p.label }));
+    }
+    // 酒館裡用「酒館的連線」叫模型時，那份 API 設定不收：金鑰在酒館那邊，可以跳過
+    function _tavernSkip() {
+        if (_isPwa()) return [];
+        const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null') || {}; } catch (e) { return {}; } };
+        const main = read('os_global_config'), sec = read('os_secondary_llm_config');
+        const out = [];
+        if (main.useSystemApi) out.push('os_global_config');
+        if (sec.useSystemApi || (sec.syncWithPrimary && main.useSystemApi)) out.push('os_secondary_llm_config');
+        return out;
+    }
+    // 匯出要勾哪幾塊（記在這台）；沒記過＝全勾
+    function exportPartsGet() {
+        const saved = getSettings().exportParts || {};
+        const out = {};
+        partsHere().forEach(p => { out[p.k] = (typeof saved[p.k] === 'boolean') ? saved[p.k] : true; });
+        return out;
+    }
+    function exportPartsSave(parts) {
+        const s = getSettings(); s.exportParts = Object.assign({}, s.exportParts || {}, parts); return saveSettings(s);
+    }
+    function _selLsKeys(sel) {
+        const skip = _tavernSkip(), keys = [];
+        sel.forEach(p => {
+            (p.ls || []).forEach(k => { if (skip.indexOf(k) === -1 && localStorage.getItem(k) !== null) keys.push(k); });
+            if (p.prefixes) for (let i = 0; i < localStorage.length; i++) {
+                const k = localStorage.key(i);
+                if (k && p.prefixes.some(x => k.startsWith(x))) keys.push(k);
+            }
+        });
+        return keys;
+    }
+    async function collectParts(parts, opts) {
+        opts = opts || {};
+        const shown = partsHere().map(p => p.k);
+        const sel = PARTS.filter(p => parts[p.k] && shown.indexOf(p.k) !== -1);
+        const db = { stores: {} }, ls = {};
+        for (const p of sel) {
+            if (p.worldbook) db.worldbook = await _getStore('world_book_entries');
+            if (p.achievements) db.achievements = await _getStore('achievements');
+            for (const s of (p.stores || [])) db.stores[s] = await _getStore(s);
+        }
+        _selLsKeys(sel).forEach(k => { ls[k] = localStorage.getItem(k); });
+        if (sel.some(p => (p.stores || []).indexOf('app_data') !== -1)) {
+            db.xiaoji_roster = XJ.roster();
+            if (!opts.images) db.fav_voices = await FAV.collect(db.stores.app_data);   // ⭐ 收藏的語音跟著它的清單走（帶圖片時已經在 images 裡）
+        }
+        return { version: 4, exportedAt: new Date().toISOString(), type: opts.type || 'cloud', parts: sel.map(p => p.k), db, localStorage: ls };
+    }
+
+    // 🔑 要匯出的設定裡有沒有金鑰、通行碼（設定帶 key 匯出時要給提醒）。回有幾項設定帶著
+    const SECRET_FIELD = /^(key|api_?key|token|secret|password|passcode|pwd)$|(api_?key|token|secret|password|passcode)$/i;
+    function _hasSecret(lsKey, raw) {
+        if (raw == null || raw === '') return false;
+        let v;
+        try { v = JSON.parse(raw); } catch (e) { v = raw; }
+        if (typeof v !== 'object' || v === null) return /(_key|token|secret|password|passcode)$/i.test(lsKey) && String(v).trim().length >= 6;
+        const walk = (o, d) => {
+            if (!o || typeof o !== 'object' || d > 5) return false;
+            return Object.keys(o).some(k => {
+                const x = o[k];
+                if (typeof x === 'string') return SECRET_FIELD.test(k) && x.trim().length >= 6;
+                return walk(x, d + 1);
+            });
+        };
+        return walk(v, 0);
+    }
+    function secretsIn(parts) {
+        const shown = partsHere().map(p => p.k);
+        const sel = PARTS.filter(p => parts[p.k] && shown.indexOf(p.k) !== -1);
+        return _selLsKeys(sel).filter(k => _hasSecret(k, localStorage.getItem(k))).length;
+    }
+    // 🔑 本地備份預設不帶金鑰（11-17 發現「設定（含 API 金鑰）」預設勾著，檔案一分享金鑰就跟著出去）。
+    //   「設定」那塊照樣帶（圖片、語音、接口那一大堆設定換手機還要用），只把裡面的金鑰欄位挖掉；要帶得自己勾「帶 API 金鑰」。
+    //   還原這種挖過的備份時，這台原本有的金鑰留著，不被空的蓋掉（_keepSecrets）。
+    function _secretWalk(o, fn, d) {
+        if (!o || typeof o !== 'object' || (d || 0) > 5) return;
+        Object.keys(o).forEach(k => {
+            const x = o[k];
+            if (typeof x === 'string') { if (SECRET_FIELD.test(k) && x.trim().length >= 6) fn(o, k); }
+            else _secretWalk(x, fn, (d || 0) + 1);
+        });
+    }
+    // 回 null＝整個 key 就是一把金鑰，別帶；其餘回挖掉金鑰欄位之後的字串
+    function _stripSecrets(lsKey, raw) {
+        if (!_hasSecret(lsKey, raw)) return raw;
+        let v;
+        try { v = JSON.parse(raw); } catch (e) { return null; }
+        if (typeof v !== 'object' || v === null) return null;
+        _secretWalk(v, (o, k) => { delete o[k]; });
+        return JSON.stringify(v);
+    }
+    // 還原挖過金鑰的備份：這台現在那份裡的金鑰欄位，備份那份沒有的話補回去
+    function _keepSecrets(lsKey, incoming) {
+        const cur = localStorage.getItem(lsKey);
+        if (!cur || !_hasSecret(lsKey, cur)) return incoming;
+        let a, b;
+        try { a = JSON.parse(cur); b = JSON.parse(incoming); } catch (e) { return incoming; }
+        if (!a || !b || typeof a !== 'object' || typeof b !== 'object') return incoming;
+        const put = (src, dst, d) => {
+            if (!src || !dst || typeof src !== 'object' || typeof dst !== 'object' || d > 5) return;
+            Object.keys(src).forEach(k => {
+                const x = src[k];
+                if (typeof x === 'string') { if (SECRET_FIELD.test(k) && x.trim().length >= 6 && !(typeof dst[k] === 'string' && dst[k].trim())) dst[k] = x; }
+                else if (x && typeof x === 'object' && dst[k] && typeof dst[k] === 'object') put(x, dst[k], d + 1);
+            });
+        };
+        put(a, b, 0);
+        return JSON.stringify(b);
+    }
+    function exportSecretsOn() { return getSettings().exportSecrets === true; }
+    // 匯出前問一聲：有金鑰才問；回 false＝使用者不要了
+    async function confirmSecrets(parts) {
+        const n = secretsIn(parts);
+        if (!n) return true;
+        const A = win.AUI || window.AUI;
+        if (!A || !A.confirm) return true;
+        return A.confirm('這份備份裡有 API 金鑰或通行碼（' + n + ' 項設定）。檔案別傳給別人，也別放到公開的地方。\n若不要匯出金鑰，請先取消「匯出時包含金鑰」。',
+            { title: '備份裡有金鑰', okText: '照樣匯出', cancelText: '先不要', danger: false });
+    }
+    async function _sha(text) {
+        try {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        } catch (e) { return ''; }   // 不安全的網址沒有 crypto.subtle：照傳，伺服器那邊就不會擋重複
+    }
+    function _device() {
+        const u = (win.navigator && win.navigator.userAgent) || '';
+        return /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad' : /Android/.test(u) ? 'Android' : /Mac/.test(u) ? 'Mac' : /Windows/.test(u) ? 'Windows' : 'web';
+    }
+    // ── 備份到哪裡：托管伺服器（relay）或 GitHub 私人倉庫（github）────────
+    //   沒有伺服器的使用者也要能自動備份到 GitHub → 舊的 Gist 拿掉（只收一小部分、要自己按；
+    //   Gist 設成秘密也是拿到網址就看得到），改成朋友自己的私人倉庫：每備份一次就是一次更新，以前的版本 GitHub 自己記著。
+    //   金鑰存在這台的瀏覽器裡（跟 API 金鑰一樣），說明叫他們把權限開成只碰那一個倉庫。
+    const GH_KEY = 'os_backup_github';   // { repo: 'owner/name', token }
+    const GH_FILE = 'aurelia-backup.json';
+    function _repoOf(v) {
+        const m = String(v || '').trim().replace(/\.git$/, '').replace(/\/+$/, '').match(/(?:github\.com[\/:])?([\w.-]+)\/([\w.-]+)$/);
+        return m ? m[1] + '/' + m[2] : '';
+    }
+    function ghGet() {
+        let g = {};
+        try { g = JSON.parse(localStorage.getItem(GH_KEY) || '{}') || {}; } catch (e) {}
+        return { repo: _repoOf(g.repo), token: String(g.token || '').trim() };
+    }
+    function ghSave(patch) {
+        const g = Object.assign(ghGet(), patch || {});
+        g.repo = _repoOf(g.repo); g.token = String(g.token || '').trim();
+        win.AUI.lsSet(GH_KEY, JSON.stringify(g), '備份用的倉庫和金鑰');
+        return g;
+    }
+    // 現在選的那個地方填好了沒
+    function destReady(a) {
+        a = a || autoGet();
+        if (a.dest === 'github') { const g = ghGet(); return !!(g.repo && g.token); }
+        return !!relayOf();
+    }
+    async function _gh(path, opt) {
+        opt = opt || {};
+        const g = ghGet();
+        if (!g.repo || !g.token) throw new Error('還沒填 GitHub 倉庫和金鑰');
+        let res;
+        try {
+            res = await fetch('https://api.github.com/repos/' + g.repo + path, {
+                method: opt.method || 'GET', body: opt.body,
+                headers: Object.assign({ 'Authorization': 'Bearer ' + g.token, 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }, opt.headers || {})
+            });
+        } catch (e) { throw new Error('連不上 GitHub'); }
+        if (res.status === 401) throw new Error('GitHub 金鑰不對，或已經過期');
+        if (res.status === 403) throw new Error('這把金鑰沒有寫這個倉庫的權限（Contents 要開「讀寫」）');
+        if (res.status === 404 && !opt.allow404) throw new Error('找不到這個倉庫（名字打錯，或金鑰沒開放給它）');
+        return res;
+    }
+    function _b64(str) {
+        const bytes = new TextEncoder().encode(str);
+        let bin = '';
+        for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        return btoa(bin);
+    }
+    async function _ghUpload(body, hash) {
+        // 更新要帶現在那份的 sha；沒有＝倉庫裡還沒有，第一次
+        const r0 = await _gh('/contents/' + GH_FILE, { allow404: true });
+        let sha;
+        if (r0.ok) sha = ((await r0.json().catch(() => ({}))) || {}).sha;
+        else if (r0.status !== 404) throw new Error('GitHub 回了 ' + r0.status);
+        const msg = '奧瑞亞備份 ' + _device() + ' ' + new Date().toISOString().slice(0, 16).replace('T', ' ') + (hash ? ' #' + hash.slice(0, 8) : '');
+        const r = await _gh('/contents/' + GH_FILE, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: msg, content: _b64(body), sha: sha || undefined }) });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error((r.status === 409 || r.status === 422) ? '另一台剛好也在傳，等一下再試' : (j.message || ('GitHub 回了 ' + r.status)));
+        return { id: j.commit && j.commit.sha, size: body.length };
+    }
+    async function _ghList() {
+        const r = await _gh('/commits?path=' + encodeURIComponent(GH_FILE) + '&per_page=10', { allow404: true });
+        if (r.status === 404) return [];
+        const list = await r.json().catch(() => []);
+        return (Array.isArray(list) ? list : []).map(c => {
+            const m = String((c.commit && c.commit.message) || '').match(/^奧瑞亞備份 (\S+)/);
+            const t = c.commit && (c.commit.committer || c.commit.author);
+            return { id: c.sha, at: t ? Date.parse(t.date) / 1000 : 0, device: m ? m[1] : '' };
+        });
+    }
+    async function _ghFetch(id) {
+        const r = await _gh('/contents/' + GH_FILE + '?ref=' + encodeURIComponent(id), { headers: { 'Accept': 'application/vnd.github.raw+json' } });
+        if (!r.ok) throw new Error('拿不到這一份（' + r.status + '）');
+        return JSON.parse(await r.text());
+    }
+
+    // 回 { same } 或那一份的資料；失敗丟錯（中文）
+    let _cloudBusy = null;
+    function cloudBackup(opt) {
+        if (_cloudBusy) return _cloudBusy;
+        _cloudBusy = (async () => {
+            opt = opt || {};
+            const a = autoGet();
+            const gh = a.dest === 'github';
+            const r = gh ? null : relayOf();
+            if (gh ? !destReady(a) : !r) throw new Error(gh ? '還沒填 GitHub 倉庫和金鑰' : '還沒填托管伺服器的網址與通行碼');
+            if (!PARTS.some(p => a.parts[p.k])) throw new Error('一塊都沒勾');
+            const data = await collectParts(a.parts);
+            const body = JSON.stringify(data);
+            const hash = await _sha(JSON.stringify(Object.assign({}, data, { exportedAt: '' })));
+            autoSave({ lastTryAt: Date.now() });
+            if (!opt.force && hash && hash === a.lastHash) return { same: true, size: body.length };
+            let out;
+            try {
+                if (gh) out = await _ghUpload(body, hash);
+                else {
+                    let res, j = {};
+                    try {
+                        res = await fetch(r.url + '/v1/backup?hash=' + hash + '&device=' + encodeURIComponent(_device()), {
+                            method: 'POST', headers: { 'Authorization': 'Bearer ' + r.token, 'Content-Type': 'application/json' }, body
+                        });
+                        j = await res.json().catch(() => ({}));
+                    } catch (e) { throw new Error('連不上托管伺服器'); }
+                    if (!res.ok) throw new Error(res.status === 401 ? '通行碼不對' : (j.error || ('伺服器回了 ' + res.status)));
+                    out = j;
+                }
+            } catch (e) { autoSave({ lastErr: e.message }); throw e; }
+            autoSave({ lastAt: Date.now(), lastHash: hash, lastErr: '', lastSize: body.length });
+            return out;
+        })().finally(() => { _cloudBusy = null; });
+        return _cloudBusy;
+    }
+    async function cloudList() {
+        if (autoGet().dest === 'github') return _ghList();
+        const r = relayOf();
+        if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
+        const res = await fetch(r.url + '/v1/backups', { headers: { 'Authorization': 'Bearer ' + r.token } }).catch(() => null);
+        if (!res) throw new Error('連不上托管伺服器');
+        if (res.status === 401) throw new Error('通行碼不對');
+        if (res.status === 404) throw new Error('托管伺服器還沒有備份的功能（要更新伺服器那支）');
+        const j = await res.json().catch(() => ({}));
+        return j.items || [];
+    }
+    async function cloudGet(id) {
+        let data;
+        if (autoGet().dest === 'github') data = await _ghFetch(id);
+        else {
+            const r = relayOf();
+            if (!r) throw new Error('還沒填托管伺服器的網址與通行碼');
+            const res = await fetch(r.url + '/v1/backup/' + encodeURIComponent(id), { headers: { 'Authorization': 'Bearer ' + r.token } }).catch(() => null);
+            if (!res || !res.ok) throw new Error(res ? '拿不到這一份（' + res.status + '）' : '連不上托管伺服器');
+            data = await res.json();
+        }
+        if (!data || !data.version || !data.db) throw new Error('這一份不是奧瑞亞的備份');
+        return data;
+    }
+
+    // 自動：只在手機版（酒館的資料在電腦資料夾裡，本來就不會被清）
+    function _isPwa() { try { return !!(win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()); } catch (e) { return false; } }
+    const DAY = 86400000;
+    const REMIND_KEY = 'os_backup_remind_snooze';
+    async function _autoBoot() {
+        if (!_isPwa()) return;
+        // 🎮 模擬市民模式（os_sims.js）：疊在遊戲上的小窗，市民的記憶和來往遊戲外的小程式都記一份、自己有備份；
+        //   這裡跳「還沒備份過」只會擋在遊戲畫面上
+        if (win.OS_SIMS && win.OS_SIMS.active) return;
+        const a = autoGet();
+        if (a.on && destReady(a)) {
+            if (Date.now() - (a.lastAt || 0) > DAY) cloudBackup().catch(e => console.warn('[OS_BACKUP] 自動備份沒成功：', e.message));
+            // 開著卻三天以上沒成功：一天講一次
+            if (a.lastAt && Date.now() - a.lastAt > 3 * DAY && a.lastErr) {
+                const _d = new Date(), today = _d.getFullYear() + '-' + (_d.getMonth() + 1) + '-' + _d.getDate();
+                try { if (localStorage.getItem('os_backup_fail_day') !== today) { win.AUI.lsSet('os_backup_fail_day', today, '備份提醒');
+                    const A = win.AUI || window.AUI; if (A && A.toast) A.toast('自動備份已經 ' + Math.floor((Date.now() - a.lastAt) / DAY) + ' 天沒成功：' + a.lastErr, { type: 'warn' }); } } catch (e) {}
+            }
+            return;
+        }
+        // 沒開自動：太久沒匯出就問一次
+        const s = getSettings();
+        let snooze = 0; try { snooze = Number(localStorage.getItem(REMIND_KEY) || 0); } catch (e) {}
+        if (Date.now() < snooze) return;
+        const last = s.lastExportAt || 0;
+        if (last && Date.now() - last < 7 * DAY) return;
+        if (!last) {   // 從沒匯出過：有玩過東西才問（剛裝好什麼都沒有就別吵）
+            const has = (await _getStore('vn_chapters')).length || (await _getStore('api_chats')).length;
+            if (!has) return;
+        }
+        const A = win.AUI || window.AUI;
+        if (!A || !A.confirm) return;
+        const ok = await A.confirm((last ? '已經 ' + Math.floor((Date.now() - last) / DAY) + ' 天沒備份了。' : '還沒備份過。')
+            + '故事現在只存在這支手機裡，清掉瀏覽器或換手機就會不見。要先存一份嗎？',
+            { title: '備份', okText: '匯出', cancelText: '之後再說', danger: false });   // 句子裡有「清掉」會被判成危險、按鈕變紅
+        if (ok) { try { if (!exportSecretsOn() || await confirmSecrets(exportPartsGet())) await exportLocal(); } catch (e) {} }
+        else win.AUI.lsSet(REMIND_KEY, String(Date.now() + 3 * DAY), '「之後再說」');
+    }
+    try { setTimeout(() => { _autoBoot().catch(() => {}); }, 20000); } catch (e) {}
+    try {
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState !== 'hidden' || !_isPwa()) return;
+            const a = autoGet();
+            if (a.on && destReady(a) && Date.now() - (a.lastTryAt || 0) > 6 * 3600000) cloudBackup().catch(() => {});
+        });
+    } catch (e) {}
+
+    // ── 對外接口 ──────────────────────────────────────────────────────
+    win.OS_BACKUP = {
+        _xj: XJ,
+        _fav: FAV,
+        _img: IMG,
+        get lastExport() { return lastExport; },
+        PARTS, autoGet, autoSave, relayOf, ghGet, ghSave, destReady, cloudBackup, cloudList, cloudGet, collectParts,
+        partsHere, exportPartsGet, exportPartsSave, secretsIn, confirmSecrets, exportSecretsOn,
+        getSettings,
+        saveSettings,
+        applyData,
+        afterRestore,
+        exportLocal,
+        importLocal,
+        estimateSize,
+        storageStatus,
+        requestPersist,
+        collectAll,
+    };
+
+    console.log('[PhoneOS] ✅ 統一備份引擎 (OS_BACKUP V2.0 - 支援 AVS 與 VN) 已載入');
+})();

@@ -1,0 +1,461 @@
+// ----------------------------------------------------------------
+// [檔案] vn_styles.js
+// 路徑：os_phone/vn_story/vn_styles.js
+// 職責：VN 播放器 - UI 樣式定義 & HTML 模板
+// ⚠️ 此檔案必須在 vn_core.js 之前載入
+// ----------------------------------------------------------------
+(function () {
+    // === CSS 樣式 ===
+
+
+    // === HTML 模板 ===
+    const vnHTML = `
+    <div class="vn-root">
+        <div class="vn-container">
+            <div id="page-game" class="page hidden">
+                <button id="btn-home" onclick="window.VN_PLAYER.stopGame()" title="Home">退出</button>
+                <button id="btn-settings" onclick="window.VN_PLAYER.openGameSettings()" title="Config">設定</button>
+                <button id="btn-phone" onclick="window.VoidPhoneShell && window.VoidPhoneShell.open()" title="應用（手機）"><i class="fa-solid fa-mobile-screen"></i></button>
+                <div id="stream-header" class="hidden">
+                    <div id="stream-live-badge"><div class="stream-live-dot"></div><span id="stream-live-text">LIVE</span></div>
+                    <span id="stream-title-text"></span>
+                    <div class="stream-divider"></div>
+                    <span id="stream-host-text"></span>
+                    <div id="stream-stats">
+                        <span class="stream-stat"><span class="stream-stat-icon"><i class="fa-solid fa-eye"></i></span><span class="stream-stat-val" id="stream-viewers"></span></span>
+                        <span class="stream-stat"><span class="stream-stat-icon"><i class="fa-solid fa-heart"></i></span><span class="stream-stat-val" id="stream-followers"></span></span>
+                        <span class="stream-stat"><span class="stream-stat-icon"><i class="fa-solid fa-trophy"></i></span><span class="stream-rank-val" id="stream-rank"></span></span>
+                    </div>
+                </div>
+                <div id="stream-rank-panel" class="hidden">
+                    <div id="stream-rank-header"><i class="fa-solid fa-medal"></i> 粉絲榜</div>
+                    <div class="stream-rank-row">
+                        <span class="stream-rank-medal"><i class="fa-solid fa-medal"></i></span>
+                        <div class="stream-rank-info">
+                            <span class="stream-rank-name" id="sr-name-1"></span>
+                            <span class="stream-rank-title" id="sr-title-1"></span>
+                        </div>
+                        <span class="stream-rank-score">▲<span id="sr-score-1"></span></span>
+                    </div>
+                    <div class="stream-rank-row">
+                        <span class="stream-rank-medal"><i class="fa-solid fa-medal"></i></span>
+                        <div class="stream-rank-info">
+                            <span class="stream-rank-name" id="sr-name-2"></span>
+                            <span class="stream-rank-title" id="sr-title-2"></span>
+                        </div>
+                        <span class="stream-rank-score">▲<span id="sr-score-2"></span></span>
+                    </div>
+                    <div class="stream-rank-row">
+                        <span class="stream-rank-medal"><i class="fa-solid fa-medal"></i></span>
+                        <div class="stream-rank-info">
+                            <span class="stream-rank-name" id="sr-name-3"></span>
+                            <span class="stream-rank-title" id="sr-title-3"></span>
+                        </div>
+                        <span class="stream-rank-score">▲<span id="sr-score-3"></span></span>
+                    </div>
+                    <div id="stream-scene-row" class="hidden">
+                        <span id="stream-scene-icon"><i class="fa-solid fa-location-dot"></i></span>
+                        <span id="stream-scene-label"></span>
+                    </div>
+                </div>
+                <div id="game-bg"></div>
+                <div id="game-char-container"><img id="game-char" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(0)" ontouchend="window.VN_Core._spriteTap(0,event)"><img id="game-char-2" src="" alt="character" onerror="window.VN_Core.handleImgError(this)" ondblclick="window.VN_Core.openCharCard(1)" ontouchend="window.VN_Core._spriteTap(1,event)"></div>
+                <div id="scene-cg-overlay" onclick="window.VN_Core.next()"><img id="scene-cg-img" src="" alt="scene cg"><button id="scene-cg-retry" onclick="event.stopPropagation(); window.VN_Core.retrySceneCg()" title="重新生成這張插圖（不重跑劇情 AI，只重生圖）"><i class="fa-solid fa-rotate"></i></button></div>
+
+                <div id="top-badge"></div>
+
+                <!-- 📖 章節卡（內建固定版型）：<ChapterCard> 每輪必出，這裡把它演成一張卡。
+                     視覺吃跟對話框同一組主題變數（--vn-dialog-bg / --gold / --text-color / --font-classic），
+                     在應用工坊換劇情主題時會一起變。做了自訂 VN 組件的話由組件優先接管，這張不出場。 -->
+                <div id="vn-chapter-card" class="hidden">
+                    <div id="vncc-box">
+                        <div id="vncc-story"></div>
+                        <div id="vncc-num"></div>
+                        <div id="vncc-title"></div>
+                        <div id="vncc-rule"></div>
+                        <div id="vncc-preface"></div>
+                        <div id="vncc-meta"></div>
+                        <button id="vncc-enter" type="button" onclick="window.VN_Core.closeChapterCard()">開始閱讀</button>
+                    </div>
+                </div>
+
+                <div id="danmu-container"></div>
+                <img id="char-portrait" src="" alt="">
+
+                <div id="text-panel-wrapper" onclick="window.VN_Core.handlePanelClick()">
+                    <div id="text-panel">
+                        <div id="speaker-name">System</div>
+
+                        <!-- 🍔 手機上五顆橫排會擠成一團：常用的兩顆留在外面，其餘收進上拉浮窗（阿洛的提案）。
+                             浮窗裡的鈕沿用同一個 .vn-panel-btn，主題套什麼它們就長什麼，不必為它另外設計。 -->
+                        <div id="vn-panel-controls">
+                            <button class="vn-panel-btn" id="vn-btn-log" onclick="window.VN_Core.showLog(); event.stopPropagation();">LOG</button>
+                            <button class="vn-panel-btn" id="vn-btn-skip" onclick="window.VN_Core.toggleSkip(); event.stopPropagation();">SKIP</button>
+                            <button class="vn-panel-btn" id="vn-btn-more" onclick="window.VN_Core.toggleMore(); event.stopPropagation();" title="其他"><i class="fa-solid fa-bars"></i></button>
+                            <div id="vn-more-menu" onclick="event.stopPropagation()">
+                                <button class="vn-panel-btn" id="vn-btn-think" onclick="window.VN_PLAYER.showThinkPopup(); window.VN_Core.closeMore(); event.stopPropagation();" title="本章思考鏈">COT</button>
+                                <button class="vn-panel-btn" id="vn-btn-ctx" onclick="window.VN_Core.toggleCtx(); window.VN_Core.closeMore(); event.stopPropagation();">CTX</button>
+                                <button class="vn-panel-btn" id="vn-btn-regen" style="display:none;color:#f6ad55;" onclick="window.VN_Core.regenCurrentTTS(); window.VN_Core.closeMore(); event.stopPropagation();" title="清除快取並重新生成當前語音">↺ TTS</button>
+                                <button class="vn-panel-btn" id="vn-btn-cgretry" onclick="window.VN_Core.retrySceneCgFromMenu(); event.stopPropagation();" title="重新生成這張插圖（不重跑劇情，只重生圖）"><i class="fa-solid fa-rotate"></i> 插圖</button>
+                            </div>
+                        </div>
+
+                        <div id="dialogue-text"></div>
+                        <div class="hint-text">▼</div>
+                    </div>
+                </div>
+
+                <!-- 📊 CTX 浮窗：移出對話面板(會被隱藏)，當 #page-game 直屬置中 modal；對話/末尾 CTX 共用、不再搬元素 -->
+                <div id="vn-ctx-popup" onclick="event.stopPropagation()">
+                    <div class="ctx-title"><span><i class="fa-solid fa-chart-simple"></i> 上下文</span><span class="ctx-close" onclick="window.VN_Core.closeCtx(); event.stopPropagation();">✕</span></div>
+                    <div class="ctx-bar-wrap">
+                        <div class="ctx-bar-track"><div class="ctx-bar-fill" id="ctx-bar-fill"></div></div>
+                        <div class="ctx-usage-text" id="ctx-usage-text">—</div>
+                    </div>
+                    <div class="ctx-row"><span class="ctx-label">↑ 發送 Tokens</span><span class="ctx-val" id="ctx-tokens">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">↑ 發送 Chars</span><span class="ctx-val" id="ctx-chars">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">↓ 回應 Tokens</span><span class="ctx-val" id="ctx-recv-tokens">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">↓ 回應 Chars</span><span class="ctx-val" id="ctx-recv-chars">—</span></div>
+                    <div class="ctx-row"><span class="ctx-label">訊息數</span><span class="ctx-val" id="ctx-msgs">—</span></div>
+                    <div class="ctx-row" id="ctx-unsum-row"><span class="ctx-label">未總結樓層</span><span class="ctx-val" id="ctx-unsum">—</span></div>
+                    <div class="ctx-row" id="ctx-sumcount-row"><span class="ctx-label">總結次數</span><span class="ctx-val" id="ctx-sumcount">—</span></div>
+                    <div class="ctx-autosum-row off" id="ctx-autosum-row">
+                        <span class="ctx-limit-label"><i class="fa-solid fa-arrows-rotate"></i> 自動總結</span>
+                        <input type="checkbox" class="ctx-autosum-on" id="ctx-autosum-on" onchange="window.VN_CtxMonitor._setAutoSum('on', this.checked)" />
+                        <span class="ctx-autosum-unit">每</span>
+                        <input class="ctx-limit-input ctx-autosum-every" id="ctx-autosum-every" type="number" min="2" max="200" value="20" onchange="window.VN_CtxMonitor._setAutoSum('every', this.value)" />
+                        <span class="ctx-autosum-unit">樓</span>
+                    </div>
+                    <div class="ctx-autosum-row off" id="ctx-memtidy-row">
+                        <span class="ctx-limit-label"><i class="fa-solid fa-compress"></i> 自動整理記憶</span>
+                        <input type="checkbox" class="ctx-autosum-on" id="ctx-memtidy-on" onchange="window.VN_CtxMonitor._setMemTidy('on', this.checked)" />
+                        <span class="ctx-autosum-unit">每</span>
+                        <input class="ctx-limit-input ctx-autosum-every" id="ctx-memtidy-every" type="number" min="5" max="500" value="30" onchange="window.VN_CtxMonitor._setMemTidy('every', this.value)" />
+                        <span class="ctx-autosum-unit">輪</span>
+                        <span class="ctx-autosum-unit" id="ctx-memtidy-left"></span>
+                    </div>
+                    <div class="ctx-expr-row" id="ctx-expr-row">
+                        <span class="ctx-limit-label"><i class="fa-regular fa-face-smile"></i> 表情</span>
+                        <button class="ctx-expr-btn" type="button" data-mode="main" onclick="window.VN_CtxMonitor._setExpr('main'); event.stopPropagation();">主模型</button>
+                        <button class="ctx-expr-btn" type="button" data-mode="side" onclick="window.VN_CtxMonitor._setExpr('side'); event.stopPropagation();">副模型</button>
+                        <button class="ctx-expr-btn" type="button" data-mode="off" onclick="window.VN_CtxMonitor._setExpr('off'); event.stopPropagation();">不寫</button>
+                    </div>
+                    <div class="ctx-row" id="ctx-usage-row"><span class="ctx-label">本輪 API · 生圖</span><span class="ctx-val" id="ctx-usage-cnt">—</span></div>
+                    <div id="ctx-breakdown" class="ctx-breakdown">
+                        <div class="ctx-bd-head"><span>上下文組成</span><button class="ctx-bd-all" type="button" onclick="window.VN_CtxMonitor.showSegments(); event.stopPropagation();">逐段看 <i class="fa-solid fa-chevron-right"></i></button></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-system"><span class="ctx-bd-label">系統提示</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-system"></span></span><span class="ctx-bd-val" id="ctx-bd-system">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-character"><span class="ctx-bd-label">角色卡</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-character"></span></span><span class="ctx-bd-val" id="ctx-bd-character">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-world"><span class="ctx-bd-label">世界資訊</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-world"></span></span><span class="ctx-bd-val" id="ctx-bd-world">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-examples"><span class="ctx-bd-label">對話範例</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-examples"></span></span><span class="ctx-bd-val" id="ctx-bd-examples">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-chat"><span class="ctx-bd-label">聊天記錄</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-chat"></span></span><span class="ctx-bd-val" id="ctx-bd-chat">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-persona"><span class="ctx-bd-label">使用者角色</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-persona"></span></span><span class="ctx-bd-val" id="ctx-bd-persona">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-note"><span class="ctx-bd-label">作者備註</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-note"></span></span><span class="ctx-bd-val" id="ctx-bd-note">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-inject"><span class="ctx-bd-label">注入/擴充</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-inject"></span></span><span class="ctx-bd-val" id="ctx-bd-inject">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-recall"><span class="ctx-bd-label">┗ 記憶召回</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-recall"></span></span><span class="ctx-bd-val" id="ctx-bd-recall">—</span></div>
+                        <div class="ctx-bd-item" id="ctx-bd-i-gsummary"><span class="ctx-bd-label">┗ 大總結注入</span><span class="ctx-bd-bar"><span class="ctx-bd-fill" id="ctx-bd-bar-gsummary"></span></span><span class="ctx-bd-val" id="ctx-bd-gsummary">—</span></div>
+                        <div class="ctx-bd-total"><span class="ctx-bd-label">合計</span><span class="ctx-bd-val" id="ctx-bd-total-val">—</span></div>
+                    </div>
+                    <div class="ctx-limit-row">
+                        <span class="ctx-limit-label"><i class="fa-solid fa-triangle-exclamation"></i> 警戒 Tokens</span>
+                        <input class="ctx-limit-input" id="ctx-limit-input" type="number" min="1000" max="2000000" value="50000" onchange="window.VN_Core._saveCtxLimit(this.value)" />
+                    </div>
+                    <div class="ctx-time" id="ctx-time">尚未偵測到數據</div>
+                    <div id="ctx-summary-wrap" style="display:none; margin-top:9px; border-top:1px solid rgba(246,173,85,0.2); padding-top:9px;">
+                        <div style="font-size:10px; color:#888; letter-spacing:0.5px;">Token 已達警戒，建議執行大總結</div>
+                    </div>
+                    <button id="ctx-summary-btn" onclick="window.VN_Core.openStoryTools(); event.stopPropagation();" style="width:100%; margin-top:9px; padding:8px 4px; background:rgba(246,173,85,0.08); border:1px solid rgba(246,173,85,0.35); border-radius:4px; color:#f6ad55; font-size:12px; cursor:pointer; font-family:inherit; letter-spacing:1px; transition:0.2s;"><i class="fa-solid fa-screwdriver-wrench"></i> 故事管理</button>
+                </div>
+
+                <div id="vn-end-overlay">
+                    <!-- 🎴 視差世界的活動面板掛載點：有生成過就蓋掉下面那組基本鍵，沒有就空著 -->
+                    <div id="vn-end-panel"></div>
+                    <!-- 📜 章末簡報（11-08）：沒有世界面板時整張卡（.vne-brief）；有世界面板時只把它漏做的那幾顆照舊直排補上來。
+                         六顆鈕的編號沿用舊的：劇情主題（創作室）是照這些編號上樣式的 -->
+                    <div id="vn-end-basic">
+                        <span class="vne-cn vne-tl"></span><span class="vne-cn vne-tr"></span><span class="vne-cn vne-bl"></span><span class="vne-cn vne-br"></span>
+                        <div class="vne-crest"><b></b><i></i><b></b></div>
+                        <div class="vne-head">
+                            <div class="vne-kicker"></div>
+                            <div class="vne-title"></div>
+                            <div class="vne-meta"></div>
+                            <div class="vne-divider"><span></span></div>
+                        </div>
+                        <div class="vne-sum"><div class="vne-sec">這一章</div><ol class="vne-points"></ol></div>
+                        <div class="vne-tiles"></div>
+                        <button id="vn-end-btn-go" type="button">繼續<i class="fa-solid fa-play"></i></button>
+                        <div class="vne-ents">
+                            <button id="vn-end-btn-data" type="button"><span class="vne-ring"><i class="fa-solid fa-box-archive"></i></span><span class="vne-lb">資料中心</span></button>
+                            <button id="vn-end-btn-journal" type="button"><span class="vne-ring"><i class="fa-solid fa-book-open"></i></span><span class="vne-lb">日誌</span></button>
+                            <button id="vn-end-btn-threads" type="button"><span class="vne-ring"><i class="fa-solid fa-diagram-project"></i><span class="vne-dot"></span></span><span class="vne-lb">線索</span></button>
+                            <button id="vn-end-btn-map" type="button"><span class="vne-ring"><i class="fa-solid fa-map-location-dot"></i></span><span class="vne-lb">地圖</span></button>
+                            <button id="vn-end-btn-ctx" type="button"><span class="vne-ring vne-ctx"><i class="fa-solid fa-layer-group"></i></span><span class="vne-lb">CTX</span><small class="vne-pct"></small></button>
+                        </div>
+                        <div class="vne-foot"><button id="vn-end-btn-regen" type="button"><i class="fa-solid fa-rotate"></i> 重新生成</button></div>
+                    </div>
+                    <!-- 📜 簡報卡旁邊那一欄（11-09 加）：線索、今天的行程、狀態變化、日誌在這裡打開，不跳窗。
+                         寬的畫面在卡片右邊；窄的畫面卡片縮成一條（章名＋繼續），這欄拿上面整塊。內容由 vn_end_brief.js 填。
+                         11-15 起世界門的世界（自己的章末面板亮著）也用這一欄：當成小窗浮在正中間，後面墊 #vn-end-scrim（點一下收起來） -->
+                    <div id="vn-end-scrim"></div>
+                    <div id="vn-end-side">
+                        <button type="button" class="vne-side-back" title="返回"><i class="fa-solid fa-chevron-left"></i></button>
+                        <div class="vne-side-body"></div>
+                    </div>
+                </div>
+
+                <div id="vn-log-overlay">
+                    <div id="vn-log-header">
+                        <div id="vn-log-title">對話紀錄</div>
+                        <div class="vn-log-close" onclick="window.VN_Core.hideLog()">✕</div>
+                    </div>
+                    <div id="vn-log-content"></div>
+                </div>
+
+                <!-- 📝 大總結 overlay -->
+                <div id="vn-summary-overlay">
+                    <div id="vn-summary-header">
+                        <div id="vn-summary-title"><i class="fa-solid fa-pen-to-square"></i> 大總結</div>
+                        <div class="vn-log-close" onclick="window.VN_Summary.hideResult()">✕</div>
+                    </div>
+                    <div id="vn-summary-content"></div>
+                </div>
+
+                <!-- 💭 思考鏈小窗 -->
+                <div id="vn-think-popup">
+                    <div id="vn-think-popup-header">
+                        <span id="vn-think-popup-title">本章思考鏈</span>
+                        <span id="vn-think-popup-close" onclick="window.VN_PLAYER.hideThinkPopup()">✕</span>
+                    </div>
+                    <div id="vn-think-popup-body"></div>
+                </div>
+
+
+                <div id="sys-overlay" onclick="window.VN_Core.next()">
+                    <div id="sys-box">
+                        <div id="sys-title"></div>
+                        <div id="sys-text"></div>
+                    </div>
+                </div>
+
+                <div id="quest-toast-stack"></div>
+                <div id="mc-status-hud" hidden></div>
+
+                <div id="trans-overlay" onclick="window.VN_Core.next()">
+                    <div id="trans-text"></div>
+                </div>
+
+                <div id="item-overlay" onclick="window.VN_Core.next()">
+                    <div id="item-stage">
+                        <div id="item-halo"></div>
+                        <div id="item-loading"></div>
+                        <img id="item-img">
+                    </div>
+                    <div id="item-caption">
+                        <div id="item-kicker">獲 得 物 品</div>
+                        <div id="item-title"></div>
+                        <div id="item-desc"></div>
+                    </div>
+                    <div id="item-hint"><i class="fa-solid fa-chevron-down"></i> 點擊任意處繼續</div>
+                </div>
+
+                <div id="vn-bgm-toast">
+                    <div id="vn-bgm-card">
+                        <div id="vn-bgm-icon"><i class="fa-solid fa-music"></i></div>
+                        <div id="vn-bgm-body">
+                            <div id="vn-bgm-label">NOW PLAYING</div>
+                            <div id="vn-bgm-name"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="phone-overlay">
+                    <!-- 外框跟應用那支手機同一套（金屬邊、側鍵、膠囊島、狀態列、底部橫槓），顏色吃手機主題 -->
+                    <div id="phone-device">
+                      <div id="phone-screen">
+                        <div class="vnp-notch"></div>
+                        <div class="vnp-statusbar"><span class="vnp-sb-time">--:--</span><span class="vnp-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>
+                        <div class="vnp-homebar"></div>
+                        <!-- 聊天室整頁跟聊天 app 同一套 class（.wx-shell／.wx-header／.wx-input-bar）：
+                             顏色、黑夜模式、她做的聊天 app 主題包全都吃得到，兩邊長一樣 -->
+                        <div id="phone-chat" class="hidden wx-shell" onclick="window.VN_Core.next()">
+                            <img id="chat-bg-img" src="" style="display:none;">
+                            <div id="chat-header" class="wx-header">
+                                <div class="wx-back-btn show" role="button" aria-label="返回" onclick="window.VN_Core.closeChat(); event.stopPropagation()"></div>
+                                <div id="chat-title" class="wx-header-title">Name</div>
+                                <div id="chat-more-btn" class="wx-head-menu-btn" role="button" onclick="window.VN_PLAYER.openChatBgPanel(); event.stopPropagation()">···</div>
+                            </div>
+                            <div id="chat-body"></div>
+
+                            <div id="chat-footer" class="wx-footer-wrapper" onclick="event.stopPropagation()">
+                                <!-- 劇情手機是展示正文用的：輸入列只是樣子，按了不會發東西 -->
+                                <div class="wx-input-bar">
+                                    <span class="wx-icon-btn wx-trigger-btn"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                                    <div class="wx-input-box"><input class="wx-input-real" id="chat-input" readonly tabindex="-1"><span class="wx-hold-btn"><i class="fa-solid fa-microphone"></i></span></div>
+                                    <span class="wx-icon-btn wx-sticker-btn"><i class="fa-solid fa-face-smile"></i></span>
+                                    <span class="wx-icon-btn wx-plus-btn"><i class="fa-solid fa-circle-plus"></i></span>
+                                </div>
+                            </div>
+
+                            <div id="chat-bg-panel" onclick="event.stopPropagation()">
+                                <div id="chat-bg-window">
+                                    <div id="chat-bg-titlebar">
+                                        <div id="chat-more-tabs">
+                                            <button class="chat-more-tab active" data-tab="bg" onclick="window.VN_Panels.switchChatMoreTab('bg')">背景</button>
+                                            <button class="chat-more-tab" data-tab="bubble" onclick="window.VN_Panels.switchChatMoreTab('bubble')">泡泡</button>
+                                            <button class="chat-more-tab" data-tab="sticker" onclick="window.VN_Panels.switchChatMoreTab('sticker')">表情包</button>
+                                        </div>
+                                        <button id="chat-bg-close" onclick="window.VN_PLAYER.closeChatBgPanel()">✕</button>
+                                    </div>
+                                    <div id="chat-more-bg">
+                                        <div id="chat-bg-hint"></div>
+                                        <div id="chat-bg-grid">
+                                            <input type="file" id="chat-bg-file" accept="image/*" style="display:none;" onchange="window.VN_PLAYER.handleChatBgFile(this)">
+                                            <div class="chat-bg-add" onclick="document.getElementById('chat-bg-file').click()">+</div>
+                                        </div>
+                                        <div id="chat-bg-url-row">
+                                            <input type="text" id="chat-bg-url-input" placeholder="輸入圖片 URL...">
+                                            <button id="chat-bg-url-btn" onclick="window.VN_PLAYER.applyChatBgUrl()">確定</button>
+                                        </div>
+                                        <button id="chat-bg-clear-btn" onclick="window.VN_PLAYER.clearChatBg()">清除背景</button>
+                                    </div>
+                                    <!-- 泡泡：從微信氣泡設置的主題庫挑一套給這間聊天室 -->
+                                    <div id="chat-more-bubble" hidden>
+                                        <div id="chat-bubble-hint"></div>
+                                        <div id="chat-bubble-list"></div>
+                                    </div>
+                                    <!-- 表情包：這個故事裡角色的手機用哪一包（一個故事一個選擇，庫本身在微信） -->
+                                    <div id="chat-more-sticker" hidden>
+                                        <div id="chat-sticker-hint"></div>
+                                        <div id="chat-sticker-list"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- 🫂 朋友圈（vn_moments.js）：裡面整份借聊天 app 朋友圈的畫法；🚨 要排在 #phone-chat（.wx-shell）後面，聊天 app 的主題才罩得到 -->
+                        <div id="phone-moments" class="hidden" onclick="window.VN_Moments && window.VN_Moments.tap()"></div>
+                        <div id="phone-browser" class="hidden" onclick="window.VN_Browser && window.VN_Browser.tap()">
+                            <div id="br-home">
+                                <div id="br-clock"></div>
+                                <div id="br-date"></div>
+                                <div id="br-pill"><i class="fa-solid fa-magnifying-glass"></i><span>搜尋</span></div>
+                            </div>
+                            <div id="br-app">
+                                <div id="br-bar">
+                                    <button id="br-back" onclick="window.VN_Browser.back(); event.stopPropagation()"><i class="fa-solid fa-chevron-left"></i></button>
+                                    <div id="br-url"><i class="fa-solid fa-magnifying-glass"></i><span id="br-q"></span></div>
+                                </div>
+                                <div id="br-results"></div>
+                                <div id="br-page">
+                                    <div id="br-page-head"><div id="br-page-site"></div><div id="br-page-title"></div></div>
+                                    <div id="br-page-body"></div>
+                                </div>
+                                <div id="br-nar" class="hidden"></div>
+                                <div id="br-hint"><i class="fa-solid fa-chevron-down"></i></div>
+                            </div>
+                        </div>
+                        <div id="phone-nav" class="hidden" onclick="window.VN_Nav && window.VN_Nav.tap()">
+                            <div id="nv-home">
+                                <div id="nv-clock"></div>
+                                <div id="nv-date"></div>
+                                <div id="nv-apps"><span class="nv-app"></span><span class="nv-app nv-app-map"><i class="fa-solid fa-location-dot"></i></span><span class="nv-app"></span></div>
+                            </div>
+                            <div id="nv-map">
+                                <svg id="nv-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 600" preserveAspectRatio="xMidYMid slice"></svg>
+                                <button id="nv-back" onclick="window.VN_Nav.back(); event.stopPropagation()"><i class="fa-solid fa-chevron-left"></i></button>
+                                <div id="nv-nar" class="hidden"></div>
+                                <div id="nv-card">
+                                    <div id="nv-eta"></div>
+                                    <div id="nv-meta"></div>
+                                    <div id="nv-step"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="phone-call" class="hidden">
+                            <div id="call-status">來電</div>
+                            <div id="call-caller">
+                                <div id="call-avatar-wrap"><span id="call-avatar-initial"></span><img id="call-avatar" src="" onerror="window.VN_Core.handleImgError(this)"></div>
+                                <div id="call-name">Name</div>
+                            </div>
+
+                            <div id="call-subtitle-box" class="hidden" onclick="window.VN_Core.next()">
+                                <div id="call-sub-name"></div>
+                                <div id="call-sub-text"></div>
+                            </div>
+
+                            <div class="call-btn-group" id="call-incoming-btns">
+                                <div class="call-btn-wrap">
+                                    <button class="c-btn btn-red" onclick="window.VN_Core.rejectCall()">✕</button>
+                                </div>
+                                <div class="call-btn-wrap">
+                                    <button class="c-btn btn-green" onclick="window.VN_Core.answerCall()"><i class="fa-solid fa-phone"></i></button>
+                                </div>
+                            </div>
+                            <div class="call-btn-group hidden" id="call-active-btns">
+                                <div class="call-btn-wrap">
+                                    <button class="c-btn btn-gray" onclick="window.VN_Core.next()"><i class="fa-solid fa-volume-xmark"></i></button>
+                                </div>
+                                <div class="call-btn-wrap">
+                                    <button class="c-btn btn-gray" onclick="window.VN_Core.next()"><i class="fa-solid fa-bullhorn"></i></button>
+                                </div>
+                                <div class="call-btn-wrap">
+                                    <button class="c-btn btn-red" onclick="window.VN_Core.hangUpCall()">✕</button>
+                                </div>
+                            </div>
+                        </div>
+                      </div>
+                    </div>
+                </div>
+
+                <audio id="bgm-player" loop></audio>
+
+                <!-- 第三方插件 HTML block 展示層 -->
+                <div id="html-block-overlay" style="display:none;"></div>
+
+                <!-- ⚙ 設定窗（#game-settings-overlay）11-17 拿掉了：右上「設定」鈕改開「設置」窗口的「劇情→畫面與聲音」（VN_Settings.mountInto，vn_panels.js） -->
+            </div>
+
+            <div id="chapter-overlay">
+                <div id="chapter-window">
+                    <div class="chx-bg"></div>
+                    <div class="chx-veil"></div>
+                    <div class="chx-top">
+                        <img class="chx-top-rail" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/01-header-star-rail.png" alt="">
+                        <div class="chx-top-name">WORLDLINE ARCHIVE</div>
+                        <button class="chx-close" onclick="window.VN_PLAYER.closeChapterPanel()" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button>
+                    </div>
+                    <div class="chx-title">
+                        <div class="chx-title-zh">章節選擇</div>
+                        <div class="chx-title-sub" id="chapter-subheader">酒館數據庫</div>
+                        <img class="chx-title-divider" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/02-title-divider.png" alt="">
+                    </div>
+                    <div class="chx-stage">
+                        <button class="chx-nav chx-nav-prev" id="ch-nav-prev" aria-label="上一章"><img src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/12-nav-left.png" alt=""></button>
+                        <div id="chapter-list" class="chx-track"></div>
+                        <button class="chx-nav chx-nav-next" id="ch-nav-btn" aria-label="下一章"><img src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/chapter_ui/13-nav-right.png" alt=""></button>
+                    </div>
+                    <div class="chx-dots" id="ch-dots"></div>
+                    <div class="chx-info" id="chx-info">
+                        <div class="chx-info-main">
+                            <div class="chx-info-label">CHAPTER <span id="chx-info-num"></span></div>
+                            <div class="chx-info-title" id="chx-info-title"></div>
+                        </div>
+                        <div class="chx-info-meta">
+                            <div class="chx-meta-row"><i class="fa-solid fa-location-dot"></i><span class="chx-meta-k">地點</span><span class="chx-meta-v" id="chx-info-place"></span></div>
+                            <div class="chx-meta-row"><i class="fa-solid fa-globe"></i><span class="chx-meta-k">世界</span><span class="chx-meta-v" id="chx-info-world"></span></div>
+                        </div>
+                        <div class="chx-status"><i class="fa-solid fa-circle-check"></i><span>已完成</span></div>
+                        <button class="chx-enter" id="chx-enter"><span>進入章節</span></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 生成面板已移除：入口統一在書架的自由劇情，生成走 VN_Core.runFreeDive / runCardDive -->
+
+        </div>
+    </div>
+    `;
+
+    // === 導出供 vn_core.js 使用 ===
+    window.VN_STYLES = { vnHTML };
+
+    console.log('[PhoneOS] vn_styles.js 已載入 (完美層次黑金版 + SFX 音效 + 主頁背景音樂支援)');
+})();

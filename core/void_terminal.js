@@ -1,0 +1,2535 @@
+/**
+ * ========================
+ * Void Terminal (v6.0 - Yingying Bookshelf & Vintage Latte Theme)
+ * 視差書咖與敘事引擎核心 (整合大廳動態書櫃)
+ * ========================
+ * 職責：
+ * 1. 渲染拿鐵大廳 UI (Bubbles, 聊天框, 立繪) 與 登入介面。
+ * 2. 處理 瀅瀅 與 Cheshire 的對話、歷史紀錄、語音與放置反應。
+ * 3. 處理 ERR_404 崩潰彩蛋與場景切換。
+ * 4. 解析 [LaunchApp|xxx] 標籤，與 Control Center 連動打開外部面板。
+ * 5. 導出全局登入資訊 (getUserName / setUserName)，供其他面板 (App) 讀取。
+ * 6. 管理 iOS 動態島/瀏海的安全區域與強制下移佈局。
+ * 7. 渲染大廳專屬的「世界館藏書櫃」（書架本體在 os_phone/qb/qb_bookshelf.js）。
+ */
+
+(function(VoidTerminal) {
+    'use strict';
+
+    // ===== 佈局管理器 (解決 iOS 動態島遮擋) =====
+    // ⚠️ 只在 PWA(獨立 index.html)版才套 iOS 安全區 padding；酒館裡 ST 已經處理過安全區，
+    //    再套會把面板重複往下推(躲避動態島)。所以酒館一律不加 layout-pad-ios。
+    function applyLayoutMode() {
+        const mode = localStorage.getItem('aurelia_layout_mode') || 'auto';
+        document.body.classList.remove('layout-pad-ios');
+        const isStandalone = !(window.parent || window).SillyTavern;
+        if (isStandalone && mode === 'pad-ios') {
+            document.body.classList.add('layout-pad-ios');
+        }
+    }
+    applyLayoutMode(); // 初始化執行
+
+    // ===== 全域世界館藏 (書架 QbBookshelf 讀) =====
+    // 六本固定館藏的封面是阿洛照故事背景畫的（docs/五本固定館藏封面_20260915.md、
+    //   docs/艾斯蘭登大陸封面補件_20260916.md），640x960 WebP 放介面圖庫、鎖 commit。
+    const SHELF_COVER_URL = 'https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@9ee3c282230f518b10da9305534783e2b452e811/aseets/bookshelf_ui/';
+    window.AURELIA_WORLDS = {
+        xianxia:    { id: 'xianxia',    title: '蒼泱神州', icon: 'fa-yin-yang', desc: '御劍乘風，問道長生。宗門林立，妖魔橫行。', danger: 4, cover: SHELF_COVER_URL + 'cover-xianxia.webp' },
+        fantasy:    { id: 'fantasy',    title: '艾斯蘭登大陸', icon: 'fa-dragon', desc: '劍與魔法的史詩篇章。巨龍翱翔於天際。', danger: 3, cover: SHELF_COVER_URL + 'cover-fantasy.webp' },
+        // 10-14 裂縫紀元換成奧瑞亞：設定是程式內建的（os_builtin_lore.js 認 id＝aurelia），不用匯入角色卡和世界書
+        aurelia:    { id: 'aurelia',    title: '奧瑞亞', icon: 'fa-city', desc: '西元2085年的港口城邦。財閥建城，七個區從權力中樞的尖塔一路往下，到被遺棄的老城。', danger: 2, cover: SHELF_COVER_URL + 'cover-aurelia.webp' },
+        superpower: { id: 'superpower', title: '臨界都市·異時頻界', icon: 'fa-bolt', desc: '現代社會的背面，潛藏著覺醒者。', danger: 3, cover: SHELF_COVER_URL + 'cover-superpower.webp' },
+        apocalypse: { id: 'apocalypse', title: '塵土紀元·零號廢土', icon: 'fa-radiation', desc: '文明崩塌後的荒原。喪屍橫行、輻射遍地。', danger: 5, cover: SHELF_COVER_URL + 'cover-apocalypse.webp' },
+        horror:     { id: 'horror',     title: '午夜詭談·歸路電台', icon: 'fa-radio', desc: '午夜電台亮起紅燈。每段故事的主角都已埋骨——你的任務是把他從結局裡帶回。', danger: 5, cover: SHELF_COVER_URL + 'cover-horror.webp' }
+    };
+    // 從 localStorage 恢復用戶自建世界
+    try {
+        const _saved = localStorage.getItem('aurelia_custom_worlds');
+        window.AURELIA_CUSTOM_WORLDS = _saved ? JSON.parse(_saved) : [];
+    } catch(e) { window.AURELIA_CUSTOM_WORLDS = []; }
+
+    // ===== 狀態管理 =====
+    let IRIS_STATE = {
+        userName: '',            // 體驗者代號 (登入時填寫)
+        history: [],
+        queue: [],
+        isTyping: false,
+        timer: null,
+        currentMsg: null,
+        fullText: ''
+    };
+
+    // 待渲染的大廳面板（對話結束後才顯示）
+    let _pendingLobbyRender = null;
+
+    // 404 彩蛋模式狀態
+    let is404Room = false;
+    let visit404Count = 0;           // 持久化記憶：體驗者進入 404 號房的累計次數
+    let _justReturnedFrom404 = false; // 體驗者剛從 404 號房返回
+    let _irisHistoryBackup = [];     // 進入 404 前備份的瀅瀅對話歷史
+    let _cheshireHistoryBackup = []; // 離開 404 前備份的柴郡對話歷史
+    // 聊天房間獨立場景（走 cc-bridge / 跟瀅瀅柴郡完全隔離）
+    let lastFailedInput = '';        // 最後一次失敗的輸入內容
+    let pendingRestoreLobby = false; // 等用戶讀完再返回大廳的旗標
+    let _isActivitySuspended = false; // 控制大廳活動是否被暫停 (避免與App或劇情重疊)
+    let _currentChatId = null;       // 當前載入的 chatId (對話存檔鍵)
+    let _saveDebounceTimer = null;   // 防抖存檔計時器
+    let _irisAbortCtrl = null;       // 瀅瀅 / 柴郡聊天的 AbortController（送出中可點 ⏹ 停止）
+
+    const URLS = {
+        // 10-20：原本指 char_presets/ying.png，sound-files 從來沒有這張（5 月搬素材漏搬），每次開大廳都 404。
+        //   這個 <img> 被 lobby.css（.void-tab .void-char-img）永遠藏著，左欄看到的是 lobby.css 的 yingying.png；指同一張，不多下載也不 404
+        IRIS_AVATAR: 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/yingying.png',
+        PERSONA_FALLBACK: 'https://files.catbox.moe/l5hl69.png',
+    };
+
+    // ===== 語音與反應池 (瀅瀅專屬) =====
+    const IRIS_POKE = [
+    { vn: "[Char|瀅瀅|surprise|「哇！等、等等！你突然戳過來，我的思路全被打斷啦——」]" },
+    { vn: "[Char|瀅瀅|think|「（眼神空洞0.5秒）……咦？剛剛空氣裡是不是閃過了一排綠色的字？啊，不管啦！這一定是靈感之神降臨的前兆！」]" },
+    { vn: "[Char|瀅瀅|smile|「雷伊大叔說過，適度的物理刺激有助於活化腦細胞……所以你是在幫我催稿嗎？好過分！」]" },
+    { vn: "[Char|瀅瀅|warning|「嗚……頭突然有點痛……（猛搖頭）一定是昨晚那杯三倍濃縮的咖啡因還沒退！委託人，你有帶新故事來轉移我的注意力嗎？」]" },
+    { vn: "[Char|瀅瀅|smile|「嗯哼哼，這種突如其來的觸感……太棒了！我要把這個寫進下一章『主角遭到隱形怪人襲擊』的橋段裡！」]" },
+    { vn: "[Char|瀅瀅|normal|「歡迎光臨視差書咖！今天的拿鐵拉花雖然又失敗了，但聽故事的筆記本已經準備好囉！」]" },
+];
+
+const IRIS_IDLE = [
+    { vn: "[Char|瀅瀅|smile|「（咬著羽毛筆發呆）如果反派其實是個整天喝黑咖啡、愛玩樂高的怪大叔……不對不對，這樣太像雷伊先生了，缺乏威脅感呢。」]" },
+    { vn: "[Char|瀅瀅|think|「總覺得……這個世界的邊界，好像是一行一行的代碼？啊！這一定是宇宙射線影響了我的腦電波，太有科幻感了，我要立刻記下來！」]" },
+    { vn: "[Char|瀅瀅|normal|「（揉了揉太陽穴）今天店裡的空間好像有點……卡頓？錯覺吧。客人怎麼還不來呢……」]" },
+];
+
+    const CHESHIRE_POKE = [
+        { vn: "[Char|柴郡|yawn|「哈啊...點我也沒有隱藏道具可以拿，滾去睡覺啦。」]" },
+        { vn: "[Char|柴郡|smirk|「你的手指是有什麼毛病？滑鼠壞了就去 E 區撿一個新的。」]" },
+        { vn: "[Char|柴郡|angry|「喂！再戳我一下試試看？信不信我把你的瀏覽紀錄打包發給全網？」]" },
+        { vn: "[Char|柴郡|normal|「別吵。我正在找白則那傢伙的新防火牆漏洞，馬上就要抓到他的小尾巴了...」]" },
+        { vn: "[Char|柴郡|glitch|「噗...戳空了吧？蠢死了。這裡可是我的主場。」]" },
+    ];
+
+    const CHESHIRE_IDLE = [
+        { vn: "[Char|柴郡|smirk|「別拿你那 A 區的規矩來煩我。這裡可是 E 區殘塔的 404 號節點，SN 的防火牆在這裡就是個笑話。」]" },
+        { vn: "[Char|柴郡|yawn|「哈啊...丹那傢伙又跑去白鐵車庫找黎昂了，害我得在這裡無聊到看你戳螢幕。」]" },
+        { vn: "[Char|柴郡|glitch|「洛爾德家族那群老古板以為靠那些『百年秩序』就能鎖住全球資本？白痴，我昨天才在 OGH 伺服器裡留了個後門，他們連警報都沒響。」]" },
+    ];
+
+    let _pokeOnCooldown = false;
+    let _idleTimer = null;
+    let _currentVoice = null;              
+    let _reactionTimer = null; 
+    let _reactionHideTimer = null;
+    const IDLE_INTERVAL = 3 * 60 * 1000;  
+
+    // ===== 互動與放置反應 (完全無縫切換版) =====
+    function _showReactionBox() {
+        const mainBox = document.getElementById('iris-dialogue-box');
+        const reactionBox = document.getElementById('iris-reaction-box');
+        if (mainBox) mainBox.style.display = 'none';  // 隱藏主線框
+        if (reactionBox) reactionBox.style.display = ''; // 顯示反應框 (繼承預設 CSS)
+    }
+
+    function _hideReactionBox() {
+        const mainBox = document.getElementById('iris-dialogue-box');
+        const reactionBox = document.getElementById('iris-reaction-box');
+        if (reactionBox) reactionBox.style.display = 'none'; // 隱藏反應框
+        if (mainBox) mainBox.style.display = ''; // 恢復主線框
+    }
+
+    function playVoiceReaction(pick) {
+        if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+        if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
+        if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
+
+        _showReactionBox();
+
+        const reactionText = document.getElementById('iris-reaction-text');
+        const reactionName = document.getElementById('iris-reaction-name-tag');
+        if (!reactionText || !reactionName) return;
+
+        // 解析對話文本
+        let charName = is404Room ? '柴郡' : '瀅瀅';
+        let dialogue = pick.vn;
+        const match = pick.vn.match(/\[Char\|([^|]+)\|[^|]+\|([^\]]+)\]/);
+        if (match) {
+            charName = match[1];
+            dialogue = match[2];
+        }
+
+        const _rns = reactionName.querySelector('span'); if (_rns) _rns.textContent = charName;
+        reactionName.style.display = 'block';
+        reactionText.innerHTML = '';
+
+        if (pick.audio) {
+            _currentVoice = new Audio(pick.audio);
+            _currentVoice.play().catch(() => {});
+        }
+
+        let i = 0;
+        const speed = 25;
+        _reactionTimer = setInterval(() => {
+            if (i < dialogue.length) {
+                reactionText.innerText = dialogue.substring(0, i + 1);
+                i++;
+            } else {
+                clearInterval(_reactionTimer);
+                _reactionTimer = null;
+                const scheduleHide = () => {
+                    if (_reactionHideTimer) clearTimeout(_reactionHideTimer);
+                    _reactionHideTimer = setTimeout(() => {
+                        _hideReactionBox(); // 時間到，自動切回主線
+                    }, 3000);
+                };
+                if (_currentVoice && !_currentVoice.ended) {
+                    _currentVoice.addEventListener('ended', scheduleHide, { once: true });
+                    _reactionHideTimer = setTimeout(() => { _hideReactionBox(); }, 15000); // 15秒超時保底
+                } else {
+                    scheduleHide();
+                }
+            }
+        }, speed);
+    }
+
+    function pokeIris() {
+        if (_pokeOnCooldown || _isActivitySuspended) return;
+        _pokeOnCooldown = true;
+        setTimeout(() => { _pokeOnCooldown = false; }, 800);
+
+        const pool = is404Room ? CHESHIRE_POKE : IRIS_POKE;
+        const pick = pool[Math.floor(Math.random() * pool.length)];
+        playVoiceReaction(pick);
+    }
+    // 🎮 書咖舞台：點舞台上的瀅瀅/柴郡小人＝戳一下（池按 is404Room 自動切）
+    window.addEventListener('lstage-poke-ying', () => pokeIris());
+    // 🎮 404號房舞台：走到底部出口＝系統還原回書咖
+    window.addEventListener('lstage-restore-lobby', () => { if (is404Room) restoreLobby(); });
+
+    // 🔒 404 皮的單一真相＝「舞台正站在 404 號房」。舞台每次換場景/掛載都廣播，這裡照著對齊。
+    //    以前是各記各的旗標：用快轉地圖從 404 跳去書咖、或還原存檔時，皮沒被脫掉 →
+    //    變成「書咖現場卻套著 404 綠皮、dock 全是禁庫/異常記錄」(2026-08-18 回報)。
+    //    這條只換皮與對話紀錄；glitch/開場片/旁白是 enter404Room / restoreLobby 的儀式，不在這裡放。
+    window.addEventListener('lstage-scene', (e) => {
+        const sc = e && e.detail && e.detail.scene;
+        if (sc) _sync404Chrome(sc === 'room404');
+    });
+    function _sync404Chrome(on) {
+        on = !!on;
+        if (on === is404Room) return;            // 已經一致（儀式路徑會先設好旗標）→ 什麼都不做
+        is404Room = on;
+        if (on) { _irisHistoryBackup = [...IRIS_STATE.history]; IRIS_STATE.history = [..._cheshireHistoryBackup]; }
+        else    { _cheshireHistoryBackup = [...IRIS_STATE.history]; IRIS_STATE.history = [..._irisHistoryBackup]; }
+
+        document.getElementById('aurelia-home-tab')?.classList.toggle('mode-404', on);
+        document.getElementById('aurelia-phone-screen')?.classList.toggle('mode-404', on);
+        const avatar = document.getElementById('iris-avatar');
+        if (avatar) {
+            avatar.src = on ? 'https://files.catbox.moe/1gddlp.png' : URLS.IRIS_AVATAR;
+            avatar.title = on ? '戳戳 柴郡' : '戳戳 瀅瀅';
+            avatar.style.opacity = '1'; avatar.style.display = '';
+        }
+        const titleEl = document.getElementById('home-chat-title');
+        if (titleEl) titleEl.textContent = on ? '[ERR_404] THE STRAY NODE' : _lobbyDefaultTitle();
+        const inputField = document.getElementById('iris-input');
+        if (inputField) inputField.placeholder = on ? '...你最好有話說。' : '跟瀅瀅說說想要什麼故事…';
+        const nameBox = document.getElementById('iris-name-tag');
+        if (nameBox) { nameBox.style.display = 'block'; const _s = nameBox.querySelector('span'); if (_s) _s.textContent = on ? 'CHESHIRE / 柴郡' : '瀅瀅'; }
+        const iH = document.getElementById('iris-hist-btn');
+        const cH = document.getElementById('cheshire-hist-btn');
+        if (iH) iH.style.display = on ? 'none' : '';
+        if (cH) cH.style.display = on ? '' : 'none';
+        try { VoidAmbient.switchBgm(on ? '404' : 'lobby'); } catch (_) {}
+    }
+
+    function startIdleTimer() {
+        stopIdleTimer();
+        _idleTimer = setInterval(() => {
+            if (_isActivitySuspended) return; // 如果被暫停，就不觸發放置語音
+            try { if (localStorage.getItem('lobby_stage_on') !== '0') return; } catch (e) {}  // 🎭 舞台模式：瀅瀅/柴郡不自動跳出來說話（走路時不搭）
+            const homeTab = document.getElementById('aurelia-home-tab');
+            if (!homeTab || homeTab.style.display === 'none') return;
+            if (IRIS_STATE.isTyping || IRIS_STATE.queue.length > 0) return;
+            // 🚨 對話模式：放置台詞是瀅瀅的，只有站在她面前（書咖、正在對話）才讓她說。
+            //    以前不管走到大廳、交易所還是工坊，三分鐘一到就是瀅瀅在框裡自言自語。
+            const _sp = window.LobbyPlaces?.speaker?.();
+            if (_sp !== undefined && !is404Room && _sp !== 'ying') return;
+            const pool = is404Room ? CHESHIRE_IDLE : IRIS_IDLE;
+            const pick = pool[Math.floor(Math.random() * pool.length)];
+            playVoiceReaction(pick);
+        }, IDLE_INTERVAL);
+    }
+
+    function stopIdleTimer() {
+        if (_idleTimer) { clearInterval(_idleTimer); _idleTimer = null; }
+    }
+
+    // ===== 分頁可見性監聽 (離開分頁時靜音，回來時恢復) =====
+    let _hiddenByTab = false;
+    let _isPanelOpen = false;  // 由 onShow / onHide 維護，代表奧瑞亞窗口是否真正顯示中
+
+    document.addEventListener('visibilitychange', function() {
+        if (document.hidden) {
+            // 使用者切走分頁 / 最小化瀏覽器
+            _hiddenByTab = true;
+            VoidAmbient.pauseBgm();
+            stopIdleTimer();
+            if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; }
+        } else {
+            // 使用者回來了
+            if (!_hiddenByTab) return;
+            _hiddenByTab = false;
+            // 面板沒開就不恢復 BGM
+            if (!_isPanelOpen || _isActivitySuspended) return;
+            VoidAmbient.playBgm(is404Room ? '404' : 'lobby');
+            startIdleTimer();
+        }
+    });
+
+    // ===== 生命週期鉤子 =====
+    VoidTerminal.onShow = async function() {
+        _isPanelOpen = true;
+        applyLayoutMode(); // 確保重新開啟時佈局正確
+        if (_isActivitySuspended) return;
+        VoidAmbient.playBgm(is404Room ? '404' : 'lobby');
+        startIdleTimer();
+        
+        // 偵測 chatId 切換：若切換了聊天室，嘗試自動登入或重新顯示 Login
+        const newId = getChatId();
+        if (_currentChatId && _currentChatId !== newId) {
+            const homeTab = document.getElementById('aurelia-home-tab');
+            if (homeTab) {
+                IRIS_STATE.history = []; _irisHistoryBackup = []; _cheshireHistoryBackup = [];
+                is404Room = false; visit404Count = 0;
+                _currentChatId = newId;
+
+                // 嘗試自動載入新 chat 的存檔
+                let autoLoaded = false;
+                const db = window.OS_DB || (window.parent && window.parent.OS_DB);
+                if (db && db.getLobbyHistory) {
+                    try {
+                        const d = await db.getLobbyHistory(newId);
+                        if (d && d.userName) {
+                            autoLoaded = await loadLobbyHistory(newId);
+                        }
+                    } catch(e) {}
+                }
+
+                if (autoLoaded) {
+                    _applyLoadedLobbyState();
+                } else {
+                    // 登入頁已移除：沒存檔就依當前人設自動進場
+                    _autoEnterFromPersona();
+                    _applyLoadedLobbyState();
+                }
+            }
+        }
+    };
+
+    VoidTerminal.onHide = function() {
+        _isPanelOpen = false;
+        VoidAmbient.pauseBgm();
+        stopIdleTimer();
+    };
+
+    // ===== 外部控制大廳活動 API =====
+    VoidTerminal.suspendLobbyActivity = function() {
+        _isActivitySuspended = true;
+        VoidAmbient.pauseBgm();
+        stopIdleTimer();
+        if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; }
+        _hideReactionBox();
+    };
+
+    VoidTerminal.resumeLobbyActivity = function() {
+        _isActivitySuspended = false;
+        // 只有面板真的在開啟狀態才恢復 BGM，避免 VN 退出時把背景音樂吹進關閉的面板
+        if (_isPanelOpen) {
+            const audio = VoidAmbient.getBgmEl();
+            if (audio && VoidAmbient.isEnabled()) audio.play().catch(() => {});
+            startIdleTimer();
+        }
+    };
+
+    VoidTerminal.suspendIdle = function() {
+        stopIdleTimer();
+        if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; }
+        _hideReactionBox();
+    };
+
+    // 供外部模組（如 os_404_store）觸發柴郡/瀅瀅 說一句話
+    VoidTerminal.cheshireSay = function(text, audioUrl) {
+        playVoiceReaction({ vn: `[Char|柴郡|smirk|${text}]`, audio: audioUrl || null });
+    };
+
+    // ===== 對話歷史持久化 =====
+    function getChatId() {
+        const w = window.parent || window;
+        if (w.SillyTavern && w.SillyTavern.getContext) {
+            try { const c = w.SillyTavern.getContext(); if (c && c.chatId) return c.chatId; } catch(e) {}
+        }
+        return 'lobby_default';
+    }
+
+    function debouncedSave() {
+        clearTimeout(_saveDebounceTimer);
+        _saveDebounceTimer = setTimeout(() => { _saveDebounceTimer = null; saveLobbyHistory(); }, 2000);
+    }
+
+    async function saveLobbyHistory() {
+        const db = window.OS_DB || (window.parent && window.parent.OS_DB);
+        if (!db || !db.saveLobbyHistory) return;
+        const chatId = _currentChatId || getChatId();
+        // 計算各場景的真實歷史（在哪個場景就把當前 IRIS_STATE.history 寫回那個 backup）
+        // 註：Claude / Codex 房間已獨立成 claude-codex-room 擴展，歷史存在它自己的 studio_chats，
+        //     大廳存檔不再帶 claudeHistory / codexHistory 欄位。
+        const irisH    = is404Room ? [..._irisHistoryBackup] : [...IRIS_STATE.history];
+        const chesH    = is404Room ? [...IRIS_STATE.history] : [..._cheshireHistoryBackup];
+        const lastUser = [...irisH, ...chesH].filter(m => m.role === 'user').pop();
+        await db.saveLobbyHistory(chatId, {
+            irisHistory: irisH, cheshireHistory: chesH,
+            is404Room,
+            visit404Count, userName: IRIS_STATE.userName, // 儲存使用者名稱
+            lastUpdated: Date.now(),
+            msgCount: irisH.length + chesH.length,
+            preview: lastUser ? lastUser.content.substring(0, 60) : ''
+        }).catch(() => {});
+    }
+
+    async function loadLobbyHistory(chatId) {
+        const db = window.OS_DB || (window.parent && window.parent.OS_DB);
+        if (!db || !db.getLobbyHistory) return false;
+        try {
+            const d = await db.getLobbyHistory(chatId);
+            if (!d) return false;
+            // 🚨 存檔記著上次在 404 也一律回大廳開場：
+            //    404 是「刻意走進去」的地方（打 ERR_404 / 快轉地圖 → glitch 轉場、首訪還有開場片），
+            //    靠還原把人直接丟進去等於跳過儀式；更糟的是還原只換了 UI 皮（dock 標籤、配色、BGM），
+            //    舞台場景沒跟著切 → 變成「純白大廳配 404 綠皮」的四不像（2026-08-18 回報）。
+            //    柴郡的對話仍完整保留在 backup，走進 404 就接得回去；visit404Count 也留著（維持已解鎖）。
+            IRIS_STATE.history     = [...(d.irisHistory || [])];
+            _irisHistoryBackup     = [];
+            _cheshireHistoryBackup = [...(d.cheshireHistory || [])];
+            is404Room     = false;
+            visit404Count = d.visit404Count || 0;
+            if (d.userName) IRIS_STATE.userName = d.userName; // 讀取使用者名稱
+            _currentChatId = chatId;
+            // 同步成就數據
+            if (window.OS_ACHIEVEMENT && typeof window.OS_ACHIEVEMENT.loadForChat === 'function') {
+                window.OS_ACHIEVEMENT.loadForChat(chatId).catch(() => {});
+            }
+            return true;
+        } catch(e) { return false; }
+    }
+
+    // 更新頂部 404↔大廳 切換按鈕外觀（首次解鎖後才顯示）
+    // （404 傳送鈕已退役：進出 404 併入快轉地圖 lobby_stage._openCityMap，解鎖過才顯示 404 目的地）
+
+    // 左上場景牌（仿 VN #top-badge「時段 地點」，如「午後 視差書咖」）
+    function _sceneTimeWord() {
+        const h = new Date().getHours();
+        if (h >= 5  && h < 8)  return '清晨';
+        if (h >= 8  && h < 11) return '上午';
+        if (h >= 11 && h < 14) return '正午';
+        if (h >= 14 && h < 17) return '午後';
+        if (h >= 17 && h < 19) return '黃昏';
+        if (h >= 19 && h < 23) return '夜晚';
+        return '深夜';
+    }
+    function setSceneBadge(place) {
+        const el = document.getElementById('lb-scene-badge');
+        if (el) el.textContent = _sceneTimeWord() + ' ' + place;
+    }
+
+    function _applyLoadedLobbyState() {
+        // 如果載入的 session 是在 404 模式，還原 404 UI
+        if (is404Room) {
+            const tab = document.getElementById('aurelia-home-tab');
+            if (tab && !tab.classList.contains('mode-404')) tab.classList.add('mode-404');
+            const avatar = document.getElementById('iris-avatar');
+            if (avatar) { avatar.src = 'https://files.catbox.moe/1gddlp.png'; avatar.title = '戳戳 柴郡'; avatar.style.opacity = '1'; }
+            const titleEl = document.getElementById('home-chat-title');
+            if (titleEl) titleEl.textContent = '[ERR_404] THE STRAY NODE';
+            const inputField = document.getElementById('iris-input');
+            if (inputField) inputField.placeholder = '...你最好有話說。';
+            const nameBox = document.getElementById('iris-name-tag');
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='CHESHIRE / 柴郡'; }
+            const iH = document.getElementById('iris-hist-btn');
+            const cH = document.getElementById('cheshire-hist-btn');
+            if (iH) iH.style.display = 'none';
+            if (cH) cH.style.display = '';
+            document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
+            VoidAmbient.switchBgm('404');
+        } else {
+            // 非 404 模式：還原瀅瀅與復古拿鐵 UI
+            const tab = document.getElementById('aurelia-home-tab');
+            if (tab) { tab.classList.remove('mode-404'); }
+            const bg = tab && tab.querySelector('.void-bg');
+            if (bg) bg.style.backgroundColor = '';
+            const avatar = document.getElementById('iris-avatar');
+            if (avatar) { avatar.onerror = function(){ this.style.display='none'; }; avatar.src = URLS.IRIS_AVATAR; avatar.title = '戳戳 瀅瀅'; avatar.style.opacity = '1'; avatar.style.display = ''; }
+            const titleEl = document.getElementById('home-chat-title');
+            if (titleEl) titleEl.textContent = _lobbyDefaultTitle();
+            const inputField = document.getElementById('iris-input');
+            if (inputField) inputField.placeholder = '跟瀅瀅說說想要什麼故事…';
+            const nameBox = document.getElementById('iris-name-tag');
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }
+            const iH = document.getElementById('iris-hist-btn');
+            const cH = document.getElementById('cheshire-hist-btn');
+            if (iH) iH.style.display = '';
+            if (cH) cH.style.display = 'none';
+            document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
+            VoidAmbient.switchBgm('lobby');
+        }
+        // 有對話歷史：顯示「繼續」提示；沒有：播放初始歡迎動畫
+        const histTotal = IRIS_STATE.history.length + _cheshireHistoryBackup.length + _irisHistoryBackup.length;
+        if (histTotal > 0) {
+            const box = document.getElementById('iris-text');
+            const nameBox = document.getElementById('iris-name-tag');
+            if (box) box.innerHTML = is404Room
+                ? `<span style="color:#00cc33;font-style:italic;">(對話歷史已載入...)</span>`
+                : `<span class="void-nar" style="color:#5c3a28;font-style:italic;">(素材檔案已載入，繼續吧。)</span>`;
+            if (nameBox) nameBox.style.display = 'none';
+        } else {
+            if (is404Room) {
+                playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個假笑人偶消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個寫小說的天然呆。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
+            } else {
+                // 🚫 這裡原本還接一句寫死的瀅瀅開場白（歡迎光臨＋卡文＋要新素材嗎）。
+                //    寫死的台詞會變成範本被套到每個 NPC 頭上 → 移除，只留進場的旁白。
+                //    瀅瀅自己要說話走她的反應池（lstage-poke-ying），那是她專屬的。
+                playIrisSequence('[Nar|你推開視差書咖的木門，清脆的風鈴聲響起。吧台後，一名穿著米色針織衫的少女正咬著羽毛筆發呆。]');
+            }
+        }
+        setSceneBadge(is404Room ? '404號房' : '視差書咖');
+        // 對話模式的主畫面已經站在某個地方了（預設是大廳）：上面那段是書咖的開場，
+        // 會把名牌與框裡的字蓋成瀅瀅的 → 換回眼前這位。舞台模式與 404 不走這條。
+        if (!is404Room) { try { window.LobbyPlaces?.reprime?.(); } catch (e) {} }
+    }
+
+    // 取代舊登入頁：直接依當前人設自動進場（酒館抓 ST persona／PWA 用 OS_PERSONA 預設 USER）
+    function _autoEnterFromPersona() {
+        let name = 'USER';
+        try {
+            const n = (window.OS_PERSONA && window.OS_PERSONA.getName) ? (window.OS_PERSONA.getName() || '').trim() : '';
+            if (n) name = n;
+        } catch (e) {}
+        IRIS_STATE.userName = name;
+        if (VoidTerminal._refreshPersonaAvatar) { try { VoidTerminal._refreshPersonaAvatar(); } catch (e) {} }
+    }
+
+    // ── 書架視窗 → 已移至 os_phone/qb/qb_bookshelf.js（QbBookshelf 模組）──
+    // 大廳左上角平常顯示什麼：獨立版有正在玩的篇章就顯示那條(＝酒館顯示 chatId 的位置)，
+    //   沒有(還沒踏入任何故事)或酒館模式就用場景預設名。
+    function _lobbyDefaultTitle() {
+        try {
+            if (window.OS_API?.isStandalone?.()) {
+                const t = localStorage.getItem('vn_current_story_title') || '';
+                if (t) return '[Session] ' + t;
+            }
+        } catch (e) {}
+        return 'Parallax Archive & Cafe';
+    }
+
+    VoidTerminal.createTab = function(parentDoc) {
+        if (window.AureliaVoidStyles) window.AureliaVoidStyles.inject(VoidAmbient.currentBgUrl());
+        
+        // CSS 已經全部整合進 aurelia_core.css，不再動態注入 style
+
+        const tab = parentDoc.createElement('div');
+        tab.id = 'aurelia-home-tab';
+        tab.className = 'aurelia-tab void-tab';
+
+        const FEED_PALETTE = {
+            SYS:  { c:'rgba(26,28,40,0.25)', r:'251,223,162'  },
+            ECHO: { c:'#9f7aea', r:'159,122,234' },
+        };
+        const FEED_ENTRIES = [
+            { tag:'SYS', text:'LUNA-VII 敘事協議就緒 ▸ 等待靈感導入' },
+            { tag:'SYS', text:'視差書咖待機中' }
+        ];
+        const feedHTML = FEED_ENTRIES.map((e, i) => {
+            const pal = FEED_PALETTE[e.tag] || FEED_PALETTE.SYS;
+            return `<div class="void-bubble" style="--bc:${pal.c};--bc-rgb:${pal.r};animation-delay:${0.3 + i * 0.15}s;">
+                <div class="void-bubble-tag">${e.tag}</div>
+                <div class="void-bubble-text">${e.text}</div>
+            </div>`;
+        }).join('');
+
+        // 全屏鈕看這個：它是桌面酒館把手機殼放大蓋滿視窗用的，手機 PWA 本來就滿版，不放
+        const isStandalone = !(window.parent || window).SillyTavern;
+
+        tab.innerHTML = `
+            <div class="void-bg" style="background-color: #EEF0F6;"></div>
+            <div class="void-grid"></div>
+
+            <div class="void-top-bar">
+                <div class="lb-top-brand">
+                    <div class="lb-logo"></div>
+                    <div class="lb-top-brand-text">
+                        <div class="void-top-sub-label">NEXUS PARALLAX // LUNA-VII</div>
+                        <div id="home-chat-title">Parallax Archive & Cafe</div>
+                    </div>
+                </div>
+                <div class="lb-top-ctrls">
+                    ${isStandalone ? '' : '<button class="lb-icon-btn" id="aurelia-fullscreen-btn" title="進入全屏"><i class="fa-solid fa-expand"></i></button>'}
+                    <button class="lb-icon-btn lstage-toggle-btn" id="lstage-toggle" title="書咖舞台"><i class="fa-solid fa-gamepad"></i></button>
+                    <button class="lb-icon-btn" id="lobby-bgm-toggle" title="音樂開關"><i class="fa-solid fa-volume-high"></i></button>
+                    <button class="lb-icon-btn" id="aurelia-global-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">⏻</button>
+                    <audio id="lobby-bgm-player" loop style="display:none;"></audio>
+                </div>
+                <div class="lb-top-user" id="lb-top-user" title="關於我">
+                    <img class="lb-top-user-avatar" id="lb-top-user-avatar" src="${URLS.PERSONA_FALLBACK}" alt="">
+                    <div class="lb-top-user-meta">
+                        <div class="lb-top-user-name" id="lb-top-user-name">USER</div>
+                        <div class="lb-top-user-sub" id="lb-top-user-sub">委託人</div>
+                    </div>
+                    <i class="fa-solid fa-chevron-down lb-top-user-caret"></i>
+                    <div class="lb-persona-dropdown" id="lb-persona-dropdown">
+                        <div class="lb-persona-dropdown-inner" id="lb-persona-dropdown-inner"></div>
+                    </div>
+                </div>
+            </div>
+
+
+            <div class="void-bubble-layer" id="void-bubble-layer" data-next-slot="2">${feedHTML}</div>
+
+            <div class="lobby-body">
+                <div class="lobby-left">
+                    <img class="void-char-img" id="iris-avatar" src="${URLS.IRIS_AVATAR}" alt="瀅瀅" style="display:none;">
+                    <div class="lb-scene-badge" id="lb-scene-badge">視差書咖</div>
+                    <div class="lb-feed" id="lb-feed"><button class="lb-feed-now" type="button" title="世界頻道"><i class="fa-solid fa-tower-broadcast lb-feed-ic"></i><span class="lb-feed-text"></span></button><div class="lb-feed-list"></div></div>
+                    <div class="lb-signature"></div>
+                    <div class="lb-dock" id="lb-dock">
+                        <!-- 桌機的對話模式（11-16 改版）這一排只留標 data-desk 的四顆＋更多，其餘收進「更多」；
+                             那一版用白色線條圖示（.lb-dock-fa），彩色那張圖（.lb-dock-ic）留給其他版面和「更多」清單 -->
+                        <button class="lb-dock-btn" data-proxy="void-quest-btn" data-desk="1" title="藏書">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-archive-flat.png" alt="">
+                            <i class="fa-solid fa-book-open lb-dock-fa" aria-hidden="true"></i>
+                            <span class="lb-dock-label" data-cn-404="禁庫">藏書</span>
+                        </button>
+                        <button class="lb-dock-btn" data-proxy="void-chapter-btn" data-desk="1" title="章節選擇">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-chapters-flat.png" alt="">
+                            <i class="fa-regular fa-square-plus lb-dock-fa" aria-hidden="true"></i>
+                            <span class="lb-dock-label" data-cn-404="異常記錄">章節</span>
+                        </button>
+                        <button class="lb-dock-btn" data-proxy="void-journal-btn" data-more="1" title="故事日誌">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-journal-flat.png" alt="">
+                            <i class="fa-solid fa-book-bookmark lb-dock-fa" aria-hidden="true"></i>
+                            <span class="lb-dock-label" data-cn-404="案件日誌">日誌</span>
+                        </button>
+                        <!-- 角色中心：只在對話模式出現（桌機在這一排、手機在「更多」）；走路的舞台那一柱已經九顆，不再加。
+                             沒有 data-proxy（沒有對應的舊選單鈕），點擊在下面 #lb-dock 的監聽直接開。圖照控制台那顆同一套配色畫 -->
+                        <button class="lb-dock-btn lb-dock-flat-only" id="lb-dock-char" type="button" data-more="1" data-desk="1" title="角色中心">
+                            <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
+                                <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+                                    <path d="M88 432c0-96 72-152 168-152s168 56 168 152z" fill="#1ea7e8"/>
+                                    <circle cx="256" cy="170" r="92" fill="#f5f9fd"/>
+                                    <circle cx="372" cy="118" r="30" fill="#f2b632" stroke-width="16"/>
+                                </g>
+                            </svg>
+                            <i class="fa-regular fa-user lb-dock-fa" aria-hidden="true"></i>
+                            <span class="lb-dock-label" data-cn-404="名冊">角色中心</span>
+                        </button>
+                        <!-- 設置（11-25）：對話模式那一排沒有齒輪（舞台的齒輪在舞台右上），日誌收進更多、空出來的位子給它。
+                             跟角色中心一樣只在對話模式出現、沒有 data-proxy，點擊在下面 #lb-dock 的監聽直接開設置窗口總覽 -->
+                        <button class="lb-dock-btn lb-dock-flat-only" id="lb-dock-set" type="button" data-more="1" data-desk="1" title="設置">
+                            <i class="fa-solid fa-gear lb-dock-fa" aria-hidden="true"></i>
+                            <span class="lb-dock-label" data-cn-404="系統">設置</span>
+                        </button>
+                        <button class="lb-dock-btn" id="lb-dock-ach" data-proxy="void-achievement-btn" data-more="1" title="成就">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-achievements-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="異常蒐集">成就</span>
+                        </button>
+                        <button class="lb-dock-btn" id="lb-dock-apps" data-proxy="void-apps-btn" title="應用">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-apps-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="終端機">應用</span>
+                        </button>
+                        <!-- 🚨 這兩顆的圖鎖 commit 不是 @v1：它們是後來才加進素材庫的，v1 那個 tag 裡沒有。
+                             移動既有 tag 會讓 jsdelivr 繼續吐舊快取，而把全站 52 處 @v1 一起升版
+                             要連帶預熱一百多支檔（沒預熱＝她會看到滿屏載入失敗），為了兩顆圖不划算。
+                             下次真的要升 v2 時，這兩支跟著一起換掉就好。 -->
+                        <button class="lb-dock-btn" data-proxy="void-estate-btn" data-more="1" title="房產手帳">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@f409f7e/aseets/menu_dock/icon-estate-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="違章建築">房產</span>
+                        </button>
+                        <button class="lb-dock-btn lb-entry-off" id="lb-dock-ai" data-proxy="void-ai-btn" data-more="1" title="宿舍">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@f409f7e/aseets/menu_dock/icon-dorm-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="收容所">宿舍</span>
+                        </button>
+                        <button class="lb-dock-btn" data-proxy="void-dash-btn" data-more="1" title="控制台">
+                            <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
+                                <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+                                    <rect x="56" y="86" width="400" height="340" rx="34" fill="#f5f9fd"/>
+                                    <rect x="104" y="134" width="304" height="52" rx="16" fill="#bfe3f7" stroke-width="16"/>
+                                    <rect x="104" y="222" width="120" height="160" rx="16" fill="#1ea7e8" stroke-width="16"/>
+                                    <rect x="252" y="222" width="156" height="70" rx="16" fill="#e3f3fc" stroke-width="16"/>
+                                    <circle cx="330" cy="348" r="34" fill="#f2b632" stroke-width="16"/>
+                                </g>
+                            </svg>
+                            <span class="lb-dock-label" data-cn-404="監控站">控制台</span>
+                        </button>
+                        <!-- 更多：只在手機的對話模式出現。上面標 data-more 的那幾顆在手機收進這張清單，
+                             右側欄只留藏書／章節／應用／更多／出門。沒有 data-proxy，點擊由 lobby_places.js 接。
+                             素材庫沒有這顆圖，照同一套配色（深藍描邊／天藍／金點）直接畫 -->
+                        <button class="lb-dock-btn" id="lb-dock-more" type="button" title="更多" aria-expanded="false">
+                            <svg class="lb-dock-ic" viewBox="0 0 512 512" aria-hidden="true">
+                                <g stroke="#12305e" stroke-width="24" stroke-linejoin="round" stroke-linecap="round">
+                                    <rect x="56" y="112" width="400" height="288" rx="64" fill="#f5f9fd"/>
+                                    <circle cx="160" cy="256" r="34" fill="#1ea7e8" stroke-width="16"/>
+                                    <circle cx="256" cy="256" r="34" fill="#bfe3f7" stroke-width="16"/>
+                                    <circle cx="352" cy="256" r="34" fill="#f2b632" stroke-width="16"/>
+                                </g>
+                            </svg>
+                            <i class="fa-solid fa-ellipsis lb-dock-fa" aria-hidden="true"></i>
+                            <span class="lb-dock-label" data-cn-404="其他">更多</span>
+                        </button>
+                        <div class="lb-dock-sep"></div>
+                        <button class="lb-dock-btn lb-dock-exit" data-proxy="void-exit-btn" title="出門">
+                            <img class="lb-dock-ic" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/menu_dock/icon-depart-flat.png" alt="">
+                            <span class="lb-dock-label" data-cn-404="墜入404">出門</span>
+                        </button>
+                    </div>
+                    <div class="void-dialogue-wrap">
+                        <div style="position: relative; width: 100%;">
+                            <div class="void-dialogue-box" id="iris-dialogue-box">
+                                <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
+                                <div class="void-name-tag" id="iris-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
+                                <div class="void-text" id="iris-text">載入中...</div>
+                                <div class="void-next" id="iris-next">▼</div>
+                            </div>
+                            <div class="void-dialogue-box" id="iris-reaction-box" style="display:none; cursor:pointer;" title="點擊跳過">
+                                <img class="void-dlg-bg" src="https://files.catbox.moe/5edth7.png" alt="">
+                                <div class="void-name-tag" id="iris-reaction-name-tag"><img class="void-nametag-bg" src="https://files.catbox.moe/4doj2w.png" alt=""><span>瀅瀅</span></div>
+                                <div class="void-text" id="iris-reaction-text">...</div>
+                            </div>
+                        </div>
+                        <div class="void-chat-input-row">
+                            <button class="void-hist-btn void-hist-inline" id="iris-hist-btn" title="瀅瀅 對話歷史"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                            <button class="void-hist-btn void-hist-inline" id="cheshire-hist-btn" title="柴郡 對話歷史" style="display:none; color: #00ff41; background: rgba(0,20,0,0.6); border: 1px solid rgba(0,255,65,0.2);"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                            <textarea id="iris-input" class="void-input" placeholder="跟瀅瀅說說想要什麼故事…" rows="1" autocomplete="off"></textarea>
+                            <button class="void-retry-btn" id="iris-retry-btn" title="重試上一條"><i class="fa-solid fa-rotate-right"></i></button>
+                            <button class="void-send-btn" id="iris-send-btn"><i class="fa-solid fa-paper-plane"></i></button>
+                        </div>
+                    </div>
+                </div>
+                <div class="lobby-right">
+                    <div class="lb-menu-head">
+                        <div class="lb-menu-head-title">MAIN MENU</div>
+                        <div class="lb-menu-head-sub">AURELIS CORE INTERFACE</div>
+                        <div class="lb-menu-head-rule"></div>
+                    </div>
+                    <div class="lb-menu-scroll">
+                    <div class="void-btn" id="void-quest-btn">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-book"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="禁庫">藏書</span>
+                                <span class="lb-menu-en" data-en-404="BLACK VAULT">ARCHIVE</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-chapter-btn">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-feather-pointed"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="異常記錄">章節選擇</span>
+                                <span class="lb-menu-en" data-en-404="ANOMALY LOG">CHAPTER SELECT</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-exit-btn" data-os-launch="map">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-umbrella"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="墜入404">出門</span>
+                                <span class="lb-menu-en" data-en-404="ENTER 404">DEPART</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-journal-btn" data-app-launch="journal" title="瀅瀅的故事日誌">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-book-open"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="案件日誌">故事日誌</span>
+                                <span class="lb-menu-en" data-en-404="CASE LOG">STORY JOURNAL</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-achievement-btn" title="資料庫成就清單">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-trophy"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="異常蒐集">成就</span>
+                                <span class="lb-menu-en" data-en-404="ANOMALY SET">ACHIEVEMENTS</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-estate-btn" title="房產手帳" onclick="if(window.OS_LANDLORD_BOOK) window.OS_LANDLORD_BOOK.open();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-building-columns"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="違章建築">房產手帳</span>
+                                <span class="lb-menu-en" data-en-404="ROGUE BLOCKS">ESTATE BOOK</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn lb-entry-off" id="void-ai-btn" title="宿舍" onclick="if(window.VoidTerminal) window.VoidTerminal.openAiDorm();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-door-open"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="收容所">宿舍</span>
+                                <span class="lb-menu-en" data-en-404="CONTAINMENT">DORM</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-apps-btn" title="應用（手機：聊天、微薄、日曆、閱讀、後院…）">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-mobile-screen-button"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="終端機">應用</span>
+                                <span class="lb-menu-en" data-en-404="TERMINAL">APPS</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-dash-btn" title="控制台" onclick="if(window.OS_DASHBOARD) window.OS_DASHBOARD.open();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-gauge-high"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="監控站">控制台</span>
+                                <span class="lb-menu-en" data-en-404="MONITOR">CONTROL DESK</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="void-btn" id="void-close-btn" title="關閉奧瑞亞" onclick="if(window.AureliaControlCenter) window.AureliaControlCenter.requestClose();">
+                        <div class="void-btn-inner">
+                            <i class="lb-menu-icon fa-solid fa-power-off"></i>
+                            <div class="lb-menu-txt">
+                                <span class="lb-menu-cn" data-cn-404="登出">關閉</span>
+                                <span class="lb-menu-en" data-en-404="DISCONNECT">CLOSE</span>
+                            </div>
+                            <i class="lb-menu-chevron fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="lb-info-cards">
+                        <div class="lb-info-card">
+                            <span class="lb-info-card-k">TODAY'S SPECIAL</span>
+                            <span class="lb-info-card-v" id="lb-special-name">藍莓拿鐵</span>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 藏書書架（銀藍版，阿洛的 B 稿 2026-09-15）：書框、書背、玻璃層板是 CSS，封面是圖片，
+                 書名是文字；書按頁左右滑。樣式全在 css/qb_core.css 的 .qbs-*。
+                 display:none 留在標籤上是開關狀態（開書架那顆鈕看它判斷要開還是關）。 -->
+            <div class="qb-bookshelf-overlay" id="qb-bookshelf-overlay" style="display:none;">
+                <div class="qb-shelf-titlebar">
+                    <span class="qbs-head-star">✧</span>
+                    <div class="qbs-head-txt">
+                        <div class="qbs-head-cn">館藏書架</div>
+                        <div class="qbs-head-en">STORY LIBRARY</div>
+                    </div>
+                    <button id="close-bookshelf-btn" class="qbs-close" title="關閉書架"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+
+                <div class="qbs-body">
+                    <div id="qb-shelf-stage" class="qbs-stage">
+                        <button id="qb-free-story-btn" class="qbs-free" type="button">
+                            <i class="qbs-free-ic fa-solid fa-feather-pointed"></i>
+                            <span class="qbs-free-txt"><strong>自由劇情</strong><small>書寫屬於你的故事</small></span>
+                            <i class="qbs-free-go fa-solid fa-chevron-right"></i>
+                        </button>
+                        <div id="qb-shelf-carousel" class="qbs-carousel" tabindex="0" aria-label="藏書，可左右滑動換頁"></div>
+                        <div id="qb-shelf-nav" class="qbs-pager">
+                            <button id="qb-page-prev" class="qbs-pg-btn" type="button" title="上一頁"><i class="fa-solid fa-chevron-left"></i></button>
+                            <div class="qbs-pg-mid">
+                                <div id="qb-page-dots" class="qbs-dots"></div>
+                                <span id="qb-page-label" class="qbs-pg-label"></span>
+                            </div>
+                            <button id="qb-page-next" class="qbs-pg-btn" type="button" title="下一頁"><i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                        <div class="qbs-foot">
+                            <button id="qb-import-card-btn" class="qbs-foot-btn" type="button"><i class="fa-solid fa-file-import"></i><span>匯入角色卡</span></button>
+                            <i class="qbs-foot-sep"></i>
+                            <button id="qb-write-book-btn" class="qbs-foot-btn write" type="button"><i class="fa-solid fa-book-open"></i><span>撰寫新書</span></button>
+                        </div>
+                    </div>
+
+                    <div id="qb-book-cover-panel" class="qbs-cover-panel"></div>
+                </div>
+            </div>
+
+
+            <div id="achievement-panel-overlay" style="display:none;">
+                <button class="achv2-close" id="ach-close-btn" title="關閉"><i class="fa-solid fa-xmark"></i></button>
+                <div class="achv2-title">成 就 收 藏 冊</div>
+                <div class="achv2-title-en">MEMORY &amp; MERIT COLLECTION</div>
+                <div class="achv2-stats">
+                    <span class="achv2-stat"><i class="fa-solid fa-gem"></i> <b id="achv2-count">0</b> 收藏</span>
+                    <span class="achv2-stat"><i class="fa-solid fa-trophy"></i> <b id="achv2-pending">0</b> 待兌換</span>
+                    <span class="achv2-stat-actions">
+                        <button id="ach-redeem-btn" style="display:none;"><i class="fa-solid fa-wand-magic-sparkles"></i> 一鍵全兌</button>
+                        <button id="ach-clear-btn" style="display:none;" title="清空全部成就"><i class="fa-solid fa-trash"></i></button>
+                    </span>
+                </div>
+                <div class="achv2-tabs" id="achv2-tabs">
+                    <button class="achv2-tab on" data-cat="all">全部</button>
+                    <button class="achv2-tab" data-cat="story"><i class="fa-solid fa-feather"></i> 故事</button>
+                    <button class="achv2-tab" data-cat="daily"><i class="fa-regular fa-star"></i> 日常</button>
+                    <button class="achv2-tab" data-cat="anomaly"><i class="fa-solid fa-triangle-exclamation"></i> 異常</button>
+                </div>
+                <div class="achv2-msg" id="achv2-msg"></div>
+                <div class="achv2-list" id="ach-list"></div>
+                <div class="achv2-foot">白票券可以拿到交易所，請白兔先生收購換成 PT；黑卡是柴郡的異常收藏，拿去 404 換碎片。</div>
+            </div>
+
+            <div id="store-panel-overlay" style="display:none;">
+                <div class="store-header">
+                    <span class="store-title">_THE STRAY NODE_ // BLACK_MARKET</span>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span class="store-shards" id="store-shards-display"><i class="fa-solid fa-gem"></i> 0 FRAGMENTS</span>
+                        <button class="store-close" id="store-close-btn">✕</button>
+                    </div>
+                </div>
+                <div id="store-panel-body" style="display:contents;"></div>
+            </div>
+
+            <!-- .void-dialogue-wrap（選單按鈕 + 對話框）已移入 .lobby-body 的左右欄 -->
+
+
+            <!-- 大廳畫布覆蓋層：VN 面板風格，對話結束後才彈出 -->
+            <div id="lobby-canvas-overlay" style="display:none; position:absolute; inset:0; z-index:25; background:rgba(0,0,0,0.55); align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+                <div id="lobby-canvas-area" class="lobby-canvas-area">
+                    <div class="lca-header" style="display:none;">
+                        <span class="lca-title" id="lca-title"><i class="fa-solid fa-gamepad"></i> 互動面板</span>
+                        <button class="lca-close" id="lca-close">✕</button>
+                    </div>
+                    <div class="lca-content" id="lca-content"></div>
+                </div>
+            </div>
+
+            <!-- 底部輸入列已搬進 .void-dialogue-wrap（對話框正下方）；獨立 .void-chat-bar 已移除 -->
+
+        `;
+
+        // 綁定事件，並實現自動檢查存檔以跳過登入
+        setTimeout(async () => {
+            const dialogueBox = tab.querySelector('#iris-dialogue-box');
+            const inputField = tab.querySelector('#iris-input');
+            const sendBtn = tab.querySelector('#iris-send-btn');
+            const avatar = tab.querySelector('#iris-avatar');
+
+            if (dialogueBox) dialogueBox.onclick = advanceIrisVn;
+            if (sendBtn) sendBtn.onclick = sendIrisMessage;
+            if (inputField) {
+                // Enter 送出、Shift+Enter 換行；手機螢幕鍵盤的 Enter 是換行（AUI.enterSends）
+                inputField.onkeydown = (e) => {
+                    if (window.AUI && window.AUI.enterSends ? window.AUI.enterSends(e) : (e.key === 'Enter' && !e.shiftKey && !e.isComposing)) {
+                        e.preventDefault();
+                        sendIrisMessage();
+                    }
+                };
+                // 自動增高（textarea 隨內容變高、撞到 max-height 開始捲）
+                const autoGrow = () => {
+                    inputField.style.height = 'auto';
+                    inputField.style.height = Math.min(inputField.scrollHeight, 200) + 'px';
+                };
+                inputField.addEventListener('input', autoGrow);
+                autoGrow();
+            }
+            if (avatar) avatar.onclick = pokeIris;
+
+            // 點擊反應對話框直接跳過 (恢復主線)
+            const reactionBox = tab.querySelector('#iris-reaction-box');
+            if (reactionBox) {
+                reactionBox.onclick = () => {
+                    if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+                    if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
+                    if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
+                    _hideReactionBox();
+                };
+            }
+
+            // 🔥 綁定 QUEST 按鈕觸發大廳書櫃
+            const questBtn = tab.querySelector('#void-quest-btn');
+            const bookshelfOverlay = tab.querySelector('#qb-bookshelf-overlay');
+            const closeBookshelfBtn = tab.querySelector('#close-bookshelf-btn');
+            // 🚨 這顆鈕（藏書／404 皮叫「禁庫」）是共用的視差入場規劃窗口：快速把其他角色卡的開場白
+            //    融進來的那個區塊。它在哪個房間都是同一件事，不分岔（2026-09-02）。
+            //    混沌片場(CHAOS_DIRECTOR.exe)曾經佔著 404 這條分支＝把共用窗口換掉了，已經拿掉；
+            //    它之後掛在 404 房的電腦桌熱點上（見 lobby_stage.js room404.hotspots 的註記）。
+            if (questBtn && bookshelfOverlay) {
+                questBtn.onclick = () => {
+                    const isStandalone = window.OS_API?.isStandalone?.() ?? false;
+                    if (!isStandalone) {
+                        // 酒館模式：直接開 VN panel 並觸發故事提取
+                        if (window.AureliaControlCenter && typeof window.AureliaControlCenter.showVnPanel === 'function') {
+                            window.AureliaControlCenter.showVnPanel('story');
+                        }
+                    } else {
+                        // 獨立模式：開書架
+                        const isOpening = bookshelfOverlay.style.display === 'none';
+                        bookshelfOverlay.style.display = isOpening ? 'flex' : 'none';
+                        if (isOpening) {
+                            window.QbBookshelf?.render();
+                            playIrisSequence(`[Char|${is404Room ? '柴郡' : '瀅瀅'}|${is404Room ? 'smirk' : 'smile'}|${is404Room
+                                ? '「翻吧。別人的開場白而已，又不會咬人。」'
+                                : '「想幫我搜集什麼樣的故事素材？請從書架上挑選一本書吧！」'}]`);
+                        }
+                    }
+                };
+            }
+
+            // 「故事」按鈕已移除：它跟「藏書」都是進書架（自由劇情就是書架第一格），
+            //   留兩顆只是多一個要猜的入口。酒館版本來就把它藏起來，等於一直是空位。
+
+            if (closeBookshelfBtn) {
+                closeBookshelfBtn.onclick = () => {
+                    // 先還原書架狀態，再關閉 overlay
+                    bookshelfOverlay.classList.remove('qb-reading');   // 讀開場白的滿版態不能留到下次開書架
+                    const coverPanel = bookshelfOverlay.querySelector('#qb-book-cover-panel');
+                    if (coverPanel) { coverPanel.style.display = 'none'; coverPanel.innerHTML = ''; }
+                    const stage = bookshelfOverlay.querySelector('#qb-shelf-stage');   // 開著書封時書架層是藏的，下次開要是書架
+                    if (stage) stage.style.display = '';
+                    bookshelfOverlay.style.display = 'none';
+                };
+            }
+
+            // 「撰寫新書」「匯入角色卡」在書架底部那條 (見 QbBookshelf.render)
+
+            // 📥 角色卡匯入完成後：收掉匯入面板、書架層亮回來、重繪
+            window.addEventListener('CARD_IMPORT_COMPLETE', function _onCardImport() {
+                window.QbBookshelf?.showShelf?.();
+            });
+
+            const bgmBtn = tab.querySelector('#lobby-bgm-toggle');
+            if (bgmBtn) {
+                bgmBtn.innerHTML = VoidAmbient.isEnabled() ? '<i class="fa-solid fa-volume-high"></i>' : '<i class="fa-solid fa-volume-xmark"></i>';
+                bgmBtn.onclick = VoidAmbient.toggleBgm;
+            }
+
+            const fsBtn = tab.querySelector('#aurelia-fullscreen-btn');
+            if (fsBtn) {
+                const inFs = !!(window.AureliaControlCenter?.isFullscreen?.());
+                fsBtn.innerHTML = inFs ? '<i class="fa-solid fa-compress"></i>' : '<i class="fa-solid fa-expand"></i>';
+                fsBtn.title = inFs ? '退出全屏 (ESC)' : '進入全屏';
+                fsBtn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    window.AureliaControlCenter?.toggleFullscreen?.();
+                };
+            }
+
+
+            const retryBtn = tab.querySelector('#iris-retry-btn');
+            if (retryBtn) {
+                retryBtn.onclick = () => {
+                    if (!lastFailedInput) return;
+                    if (inputField) inputField.value = lastFailedInput;
+                    lastFailedInput = '';
+                    retryBtn.classList.remove('visible');
+                    sendIrisMessage();
+                };
+            }
+
+            const irisHistBtn = tab.querySelector('#iris-hist-btn');
+            const cheshireHistBtn = tab.querySelector('#cheshire-hist-btn');
+            // 瀅瀅、柴郡的紀錄跟其他管理員開同一個紀錄窗（LobbyDress.openHistory）；她們的紀錄不在 NPC 那份裡，資料由這裡遞過去。
+            //   柴郡那份走 404 的黑底綠字。11-19 以前她們兩個開的是另一個舊窗口，已經拿掉。
+            const _openStaffLog = (who) => {
+                const D = window.LobbyDress;
+                if (!D || !D.openHistory) return;
+                const isC = who === 'cheshire';
+                D.openHistory({
+                    key: isC ? 'cheshire' : 'ying', name: isC ? '柴郡' : '瀅瀅', skin: isC ? '404' : '', me: IRIS_STATE.userName || '',
+                    hist: { get: () => getCharHistory(isC ? 'cheshire' : 'iris'), set: (arr) => setCharHistory(isC ? 'cheshire' : 'iris', Array.isArray(arr) ? arr : []) }
+                });
+            };
+            if (irisHistBtn) irisHistBtn.addEventListener('click', () => {
+                // 站在誰面前就開誰的紀錄（愛麗絲／白兔／紫薇／帽匠／丹／書裡的客人…）；瀅瀅、柴郡開她們那份。
+                // 🚨 10-13：在舞台跟愛麗絲打招呼，按這顆卻是空的瀅瀅紀錄——以前只認對話模式（地點視圖）的對象，
+                //   舞台模式一律當成瀅瀅。跟送出那邊（sendIrisMessage）同一套：舞台上沒在跟誰講，就是這個場景的預設對象
+                const onStage = !!window.LobbyStage?.isActive?.();
+                const sp = window.LobbyPlaces?.speaker?.();
+                const t = (onStage || sp) ? (window.LobbyStage?.getTalkTarget?.() || (onStage ? window.LobbyStage?.getDefaultTarget?.() : null) || null) : null;
+                if (t && t.key === 'cheshire') { _openStaffLog('cheshire'); return; }
+                if (t && t.key !== 'ying' && window.LobbyDress?.openHistory) { window.LobbyDress.openHistory(t); return; }
+                _openStaffLog(is404Room ? 'cheshire' : 'iris');
+            });
+            if (cheshireHistBtn) cheshireHistBtn.addEventListener('click', () => _openStaffLog('cheshire'));
+
+            // 右側新增的「成就」橫幅卡 → 開同一個成就面板
+            const achievementCardBtn = tab.querySelector('#void-achievement-btn');
+            if (achievementCardBtn) achievementCardBtn.addEventListener('click', VoidPanels.openAchievement);
+
+            // 📱 應用（手機殼浮窗）—— 所有 app 從這開
+            const appsBtn = tab.querySelector('#void-apps-btn');
+            if (appsBtn) appsBtn.addEventListener('click', function () {
+                if (window.VoidPhoneShell && window.VoidPhoneShell.open) window.VoidPhoneShell.open();
+            });
+
+            // 🧭 左側常駐 dock：代理點擊右側 MAIN MENU 的既有按鈕，邏輯全部沿用
+            const lbDock = tab.querySelector('#lb-dock');
+            if (lbDock) lbDock.addEventListener('click', function (e) {
+                const b = e.target.closest('.lb-dock-btn');
+                if (!b) return;
+                if (b.id === 'lb-dock-char') {   // 角色中心：沒有舊選單鈕可以代理，直接開（「更多」清單裡那格也是按這顆）
+                    const G = (window.parent || window).OS_CHAR_GALLERY;
+                    if (G && G.open) G.open();
+                    else (window.parent || window).AUI?.toast?.('角色中心還沒載好，等一下再按一次');
+                    return;
+                }
+                if (b.id === 'lb-dock-set') {   // 設置：開「設置」窗口的總覽（同手機那顆設置圖示）
+                    const W = (window.parent || window).OS_SETTINGS_WINDOW;
+                    if (W && W.open) W.open('home');
+                    else (window.parent || window).AUI?.toast?.('設置還沒載好，等一下再按一次');
+                    return;
+                }
+                if (!b.dataset.proxy) return;
+                // 右側欄＝換一個開，不是再疊一層（小斐 11-17 新玩家檢查第 6 條：藏書開著再點章節，疊出第二層）。
+                //   電腦寬時藏書是浮在大廳中間的一塊、全螢幕窗口也不蓋右側欄，兩者都還點得到旁邊這排
+                const toShelf = b.dataset.proxy === 'void-quest-btn';
+                const shelf = tab.querySelector('#qb-bookshelf-overlay');
+                if (shelf && shelf.style.display !== 'none') {
+                    if (toShelf) { tab.querySelector('#close-bookshelf-btn')?.click(); return; }   // 再按一次藏書＝收起來（原本就是這樣）
+                    tab.querySelector('#close-bookshelf-btn')?.click();
+                }
+                if (toShelf) window.AureliaControlCenter?.closePanel?.();
+                const proxy = tab.querySelector('#' + b.dataset.proxy);
+                if (proxy) proxy.click();
+            });
+
+            // 宿舍那條：房間是獨立擴展，沒裝就不要在 dock 上留一顆死鈕
+            try { VoidTerminal.refreshAiEntry(); } catch (e) {}
+
+            // ===== 右上角人設頭像 + 下拉（取代舊「我」TAB，內容＝ OS_PERSONA 人設管理）=====
+            (function setupPersonaAvatar() {
+                const userBox  = tab.querySelector('#lb-top-user');
+                const dropdown = tab.querySelector('#lb-persona-dropdown');
+                const inner    = tab.querySelector('#lb-persona-dropdown-inner');
+                if (!userBox || !dropdown || !inner) return;
+
+                let _launched = false;
+
+                function refreshAvatar() {
+                    const p = (window.OS_PERSONA && window.OS_PERSONA.getCurrent) ? window.OS_PERSONA.getCurrent() : null;
+                    const name = (p && p.name) || IRIS_STATE.userName || 'USER';
+                    const avatarEl = tab.querySelector('#lb-top-user-avatar');
+                    const nameEl   = tab.querySelector('#lb-top-user-name');
+                    if (nameEl)  nameEl.textContent = name;
+                    if (avatarEl) avatarEl.src = (p && p.avatar) ? p.avatar : URLS.PERSONA_FALLBACK;
+                }
+                VoidTerminal._refreshPersonaAvatar = refreshAvatar;
+
+                function openDropdown() {
+                    if (!_launched && window.OS_PERSONA && window.OS_PERSONA.launch) {
+                        window.OS_PERSONA.launch(inner);
+                        _launched = true;
+                    } else if (_launched && window.OS_PERSONA && window.OS_PERSONA.onShow) {
+                        window.OS_PERSONA.onShow();   // 停在「世界書」分頁的話重讀現在掛了哪幾本
+                    }
+                    dropdown.classList.add('open');
+                    userBox.classList.add('active');
+                }
+                function closeDropdown() {
+                    dropdown.classList.remove('open');
+                    userBox.classList.remove('active');
+                    refreshAvatar();
+                }
+
+                userBox.addEventListener('click', (e) => {
+                    if (dropdown.contains(e.target)) {
+                        // 點到下拉內容（可能是切換人設）→ 稍後同步頂部頭像，不關閉
+                        setTimeout(refreshAvatar, 500);
+                        setTimeout(refreshAvatar, 1500);
+                        return;
+                    }
+                    e.stopPropagation();
+                    if (dropdown.classList.contains('open')) closeDropdown();
+                    else openDropdown();
+                });
+                document.addEventListener('click', (e) => {
+                    if (dropdown.classList.contains('open') && !userBox.contains(e.target)) closeDropdown();
+                }, true);
+
+                refreshAvatar();
+            })();
+
+            const achCloseBtn = tab.querySelector('#ach-close-btn');
+            if (achCloseBtn) achCloseBtn.addEventListener('click', VoidPanels.closeAchievement);
+
+            // （404 傳送鈕已退役：進出 404 併入快轉地圖，解鎖過才顯示）
+
+            // 大廳畫布關閉按鈕
+            const lcaCloseBtn = tab.querySelector('#lca-close');
+            if (lcaCloseBtn) lcaCloseBtn.addEventListener('click', VoidCanvas.closeCanvas);
+
+            // App 啟動按鈕 (launchGameApp)
+            tab.querySelectorAll('[data-app-launch]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (window.AureliaControlCenter) window.AureliaControlCenter.launchGameApp(btn.dataset.appLaunch);
+                });
+            });
+            // App 啟動按鈕 (showOsApp → wx/wb/錢包)
+            tab.querySelectorAll('[data-os-launch]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    if (window.AureliaControlCenter) window.AureliaControlCenter.showOsApp(btn.dataset.osLaunch);
+                });
+            });
+
+            // 🎮 書咖俯視舞台：掛載＋頂欄開關鈕
+            //    🧭 對話模式（舞台關著）沒有場景可以走 → 主畫面改成常駐的地點視圖
+            //       （預設站在世界門，左邊愛麗絲、右邊一排地點卡）。兩個模式各有各的主畫面，
+            //       所以 dock 不再需要「前往」那顆。
+            const _syncLobbyMain = () => {
+                if (window.LobbyStage && window.LobbyStage.isOn()) { window.LobbyPlaces?.closeView?.(); window.LobbyStage.tryMount(); }
+                else { window.LobbyStage?.unmount?.(); window.LobbyPlaces?.openHome?.(); }
+            };
+            _syncLobbyMain();
+            const lstageBtn = tab.querySelector('#lstage-toggle');
+            if (lstageBtn) {
+                const _syncLstageBtn = () => lstageBtn.classList.toggle('off', !window.LobbyStage?.isOn());
+                _syncLstageBtn();
+                lstageBtn.addEventListener('click', () => {
+                    if (!window.LobbyStage) return;
+                    const on = window.LobbyStage.isOn();
+                    AUI.lsSet('lobby_stage_on', on ? '0' : '1', '大廳舞台模式的開關');
+                    _syncLobbyMain();
+                    _syncLstageBtn();
+                });
+            }
+
+            // 📚 章節選擇：兩版都開 VN 面板那一個（量子白廳）。
+            //   以前這裡卡著一個大廳專屬的舊筆記本面板(lcp)，而且只有獨立版看得到 ——
+            //   酒館按下去是新的、PWA 按下去是舊的，同一顆鈕兩種東西。舊那份已整份移除。
+            const chapterBtn = tab.querySelector('#void-chapter-btn');
+            if (chapterBtn) chapterBtn.addEventListener('click', () => {
+                if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel('chapter');
+            });
+
+            const storeCloseBtn = tab.querySelector('#store-close-btn');
+            if (storeCloseBtn) storeCloseBtn.addEventListener('click', VoidPanels.closeStore);
+
+            // 🔥 啟動時檢查資料庫，實現真正的自動登入與跳過登入畫面
+            const currentId = getChatId();
+            let autoLoaded = false;
+            const db = window.OS_DB || (window.parent && window.parent.OS_DB);
+            if (db && db.getLobbyHistory) {
+                try {
+                    const d = await db.getLobbyHistory(currentId);
+                    if (d && d.userName) {
+                        autoLoaded = await loadLobbyHistory(currentId);
+                    }
+                } catch(e) {}
+            }
+
+            // 載入成就數據 (無論是否有存檔都執行)
+            if (window.OS_ACHIEVEMENT && typeof window.OS_ACHIEVEMENT.loadForChat === 'function') {
+                window.OS_ACHIEVEMENT.loadForChat(currentId).catch(() => {});
+            }
+
+            if (autoLoaded) {
+                _applyLoadedLobbyState();
+            } else {
+                // 登入頁已移除：直接依當前人設自動進場
+                _autoEnterFromPersona();
+                _applyLoadedLobbyState();
+            }
+            // 🚨 沒有存檔也要記下這是哪一間：onShow 靠它判斷換了聊天室，沒記的話換間後還是舊對話、一開口就存進新那間
+            _currentChatId = currentId;
+
+            tab.querySelectorAll('.void-bubble').forEach(b => scheduleBubbleFade(b));
+            _paintFeed(false);
+        }, 100);
+
+        return tab;
+    };
+
+    // ===== 瀅瀅／柴郡的對話紀錄（資料；畫面在 lobby_dress.js 的紀錄窗）=====
+    function getCharHistory(char) {
+        if (char === 'iris') {
+            return is404Room ? _irisHistoryBackup : IRIS_STATE.history;
+        }
+        // cheshire
+        return is404Room ? IRIS_STATE.history  : _cheshireHistoryBackup;
+    }
+
+    function setCharHistory(char, newHistory) {
+        if (char === 'iris') {
+            if (is404Room)    _irisHistoryBackup = newHistory;
+            else              IRIS_STATE.history = newHistory;
+        } else {
+            if (is404Room)    IRIS_STATE.history     = newHistory;
+            else              _cheshireHistoryBackup = newHistory;
+        }
+        debouncedSave();
+    }
+
+    VoidTerminal.closePanel = () => {};
+
+    // ===== 世界頻道 =====
+    const FEED_PALETTE_MAP = { SYS: { c:'rgba(26,28,40,0.25)', r:'251,223,162' }, ECHO: { c:'#9f7aea', r:'159,122,234' } };
+
+    // 📡 世界頻道：地點牌下面那一條。有新訊息亮起來、過一會兒淡成半透明留著；點開看最近幾條。
+    //    瀅瀅每次回話會附 1～2 條（[FEED|SYS/ECHO|…]），柴郡偶爾。彩蛋，不搶戲。
+    const FEED_LOG_KEY = 'lobby_feed_log';
+    const FEED_LOG_MAX = 7;
+    function _feedLog() {
+        try { const a = JSON.parse(localStorage.getItem(FEED_LOG_KEY) || '[]'); if (Array.isArray(a) && a.length) return a; } catch (e) {}
+        return [{ tag: 'SYS', text: 'LUNA-VII 敘事協議就緒 ▸ 等待靈感導入' }, { tag: 'SYS', text: '視差書咖待機中' }];
+    }
+    let _feedDimTimer = null;
+    // 頻道訊息是 AI 寫的：清單和泡泡都要轉義，同一支（以前只有清單轉，帶 < 的訊息在泡泡裡把版面弄壞）
+    const _feedEsc = (t) => String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    function _paintFeed(fresh) {
+        const box = document.getElementById('lb-feed');
+        if (!box) return;
+        const log = _feedLog();
+        const last = log[log.length - 1];
+        const esc = _feedEsc;
+        const icon = (tag) => (String(tag).toUpperCase() === 'ECHO' ? 'fa-wave-square' : 'fa-tower-broadcast');
+        const now = box.querySelector('.lb-feed-now');
+        now.querySelector('.lb-feed-ic').className = 'fa-solid ' + icon(last.tag) + ' lb-feed-ic';
+        now.querySelector('.lb-feed-text').textContent = last.text;
+        box.classList.toggle('is-echo', String(last.tag).toUpperCase() === 'ECHO');
+        box.querySelector('.lb-feed-list').innerHTML = log.slice().reverse().map(function (e) {
+            return '<div class="lb-feed-row' + (String(e.tag).toUpperCase() === 'ECHO' ? ' is-echo' : '') + '"><i class="fa-solid ' + icon(e.tag) + '"></i><span>' + esc(e.text) + '</span></div>';
+        }).join('');
+        if (!box._bound) {
+            box._bound = true;
+            now.addEventListener('click', function (ev) { ev.stopPropagation(); box.classList.toggle('is-open'); });
+            document.addEventListener('click', function (ev) { if (!box.contains(ev.target)) box.classList.remove('is-open'); });
+        }
+        if (fresh) {
+            box.classList.remove('is-dim');
+            box.classList.remove('is-new'); void box.offsetWidth; box.classList.add('is-new');
+            clearTimeout(_feedDimTimer);
+            _feedDimTimer = setTimeout(function () { box.classList.add('is-dim'); box.classList.remove('is-new'); }, 9000);
+        } else box.classList.add('is-dim');
+    }
+
+    function addFeedEntry(tag, text) {
+        const log = _feedLog();
+        log.push({ tag: String(tag || 'SYS').toUpperCase(), text: String(text || '').trim() });
+        while (log.length > FEED_LOG_MAX) log.shift();
+        AUI.lsSet(FEED_LOG_KEY, JSON.stringify(log), '世界頻道的訊息');
+        _paintFeed(true);
+        const layer = document.getElementById('void-bubble-layer');
+        if (!layer) { window.VoidUiSfx?.play('ping'); return; }
+        const pal = FEED_PALETTE_MAP[tag.toUpperCase()] || FEED_PALETTE_MAP.SYS;
+        const item = document.createElement('div');
+        item.className = 'void-bubble';
+        item.style.cssText = `--bc:${pal.c}; --bc-rgb:${pal.r}; background: rgba(228,232,245,0.96) !important; color:#1A1C28 !important; border: 1px solid rgba(26,28,40,0.15); box-shadow: 0 4px 10px rgba(0,0,0,0.5);`;
+        item.innerHTML = `<div class="void-bubble-tag">${_feedEsc(tag.toUpperCase())}</div><div class="void-bubble-text">${_feedEsc(text)}</div>`;
+        layer.appendChild(item);
+        window.VoidUiSfx?.play('ping');
+        // 超過 7 條時移除最舊的
+        const all = layer.querySelectorAll('.void-bubble');
+        if (all.length > 7) all[0].remove();
+        scheduleBubbleFade(item);
+    }
+
+    VoidTerminal.addFeedEntry = addFeedEntry;
+
+    function scheduleBubbleFade(el) {
+        // 泡泡不自動消失，由 addFeedEntry 超限時移除最舊一條
+    }
+
+
+    // ===== 404 彩蛋系統 =====
+    // 🎬 404 開場片（cheshire_v1）：全屏蓋層播放，結尾鏡頭推進片尾的貓耳霓虹框內、
+    //    框內黑色撐滿全螢幕同時淡出 → 底下早就切好的 404 房露出來（不用黑屏硬切）。
+    function _play404OpeningVideo() {
+        const tab = document.getElementById('aurelia-home-tab');
+        if (!tab || document.getElementById('ch-open-ov')) return;
+        const ov = document.createElement('div');
+        ov.id = 'ch-open-ov';
+        ov.innerHTML =
+            '<video id="ch-open-vid" src="https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/opening/cheshire_v1.mp4" playsinline preload="auto"></video>' +
+            '<button id="ch-open-skip">跳過 <i class="fa-solid fa-forward"></i></button>';
+        tab.appendChild(ov);
+        const vid = ov.querySelector('video');
+        let _done = false;
+        const done = () => {
+            if (_done) return; _done = true;
+            new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
+            ov.classList.add('out');   // 推進框內 + 淡出（CSS transition）
+            setTimeout(() => { try { ov.remove(); } catch (e) {} }, 850);
+        };
+        ov.querySelector('#ch-open-skip').addEventListener('click', done);
+        vid.addEventListener('ended', done);
+        vid.addEventListener('error', done);
+        const loadT = setTimeout(() => { if (vid.readyState < 2) done(); }, 5000);   // CDN 載不動→別讓人黑屏乾等
+        vid.addEventListener('canplay', () => {
+            clearTimeout(loadT);
+            vid.play().catch(() => { vid.muted = true; vid.play().catch(done); });   // 帶聲播不了就靜音播
+        }, { once: true });
+    }
+
+    function enter404Room() {
+        is404Room = true; visit404Count++;
+        if (visit404Count === 1) _play404OpeningVideo();   // 第一次踏進 404 才播全片；之後照常 glitch 短轉場
+        // 🎮 舞台切到404號房場景（柴郡的駭客車庫）
+        if (window.LobbyStage?.enter404Stage) window.LobbyStage.enter404Stage();
+        _irisHistoryBackup = [...IRIS_STATE.history];
+        IRIS_STATE.history = [..._cheshireHistoryBackup];
+
+        const tab = document.getElementById('aurelia-home-tab');
+        if (!tab) return;
+
+        new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
+        tab.classList.add('glitch-crash');
+
+        // 在 glitch 動畫一開始就淡出立繪，580ms 後場景切換時立繪已完全消失
+        const avatar = document.getElementById('iris-avatar');
+        if (avatar) { avatar.style.opacity = '0'; }
+
+        setTimeout(() => {
+            tab.classList.remove('glitch-crash'); tab.classList.add('mode-404');
+            VoidAmbient.switchBgm('404');
+
+            if (avatar) {
+                avatar.src = 'https://files.catbox.moe/1gddlp.png';
+                avatar.title = '戳戳 柴郡';
+                requestAnimationFrame(() => { requestAnimationFrame(() => { avatar.style.opacity = '1'; }); });
+            }
+
+            const titleEl = document.getElementById('home-chat-title');
+            if (titleEl) titleEl.textContent = '[ERR_404] THE STRAY NODE';
+            const inputField = document.getElementById('iris-input');
+            if (inputField) inputField.placeholder = '...你最好有話說。';
+            const nameBox = document.getElementById('iris-name-tag');
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='CHESHIRE / 柴郡'; }
+            setSceneBadge('404號房');
+
+            const irisHistBtn404 = document.getElementById('iris-hist-btn');
+            const cheshireHistBtn404 = document.getElementById('cheshire-hist-btn');
+            if (irisHistBtn404) irisHistBtn404.style.display = 'none';
+            if (cheshireHistBtn404) cheshireHistBtn404.style.display = '';
+
+            const layer = document.getElementById('void-bubble-layer');
+            if (layer) { layer.innerHTML = ''; addFeedEntry('SYS', 'SYSTEM COMPROMISED'); }
+
+            document.getElementById('aurelia-phone-screen')?.classList.add('mode-404');
+
+            playIrisSequence("[Nar|純白大廳的訊號如舊電視機碎裂，螢光綠代碼瀑布般傾瀉。那個天然呆店長消失了。]\n[Audio|https://files.catbox.moe/1xanb2.mp3]\n[Char|柴郡|smirk|*(停下手中轉動的魔術方塊，從連帽衫的陰影中抬起頭)* 嘖——居然真的有人無聊到輸入那串代碼。這裡沒有新手教學，也沒有那個假笑的寫作機器。別碰左邊那串代碼，除非你想讓神經接續裝置燒成焦炭。……算了，我幫你鎖起來了，真麻煩。]");
+            debouncedSave();
+        }, 580);
+    }
+
+    function restoreLobby(targetScene, targetSpawn) {
+        // targetScene/targetSpawn：快轉地圖離開 404 時帶目標場景；沒帶＝走回書咖（原還原流程）
+        const _target = (typeof targetScene === 'string') ? targetScene : null;
+        is404Room = false; _justReturnedFrom404 = true;
+        _cheshireHistoryBackup = [...IRIS_STATE.history];
+        IRIS_STATE.history = [..._irisHistoryBackup];
+
+        const tab = document.getElementById('aurelia-home-tab');
+        if (!tab) return;
+
+        new Audio('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/sfx/glitch1.mp3').play().catch(() => {});
+        tab.classList.add('glitch-crash');
+
+        // 在 glitch 動畫一開始就淡出立繪，580ms 後場景切換時立繪已完全消失
+        const avatarR = document.getElementById('iris-avatar');
+        if (avatarR) { avatarR.style.opacity = '0'; }
+
+        setTimeout(() => {
+            tab.classList.remove('glitch-crash'); tab.classList.remove('mode-404');
+            VoidAmbient.switchBgm('lobby');
+
+            if (avatarR) {
+                avatarR.src = URLS.IRIS_AVATAR;
+                avatarR.title = '戳戳 瀅瀅';
+                requestAnimationFrame(() => { requestAnimationFrame(() => { avatarR.style.opacity = '1'; }); });
+            }
+
+            const titleEl = document.getElementById('home-chat-title');
+            if (titleEl) titleEl.textContent = _lobbyDefaultTitle();
+            const inputField = document.getElementById('iris-input');
+            if (inputField) inputField.placeholder = '跟瀅瀅說說想要什麼故事…';
+            const nameBox = document.getElementById('iris-name-tag');
+            if (nameBox) { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent='瀅瀅'; }
+            setSceneBadge('視差書咖');
+
+            const irisHistBtnRestore = document.getElementById('iris-hist-btn');
+            const cheshireHistBtnRestore = document.getElementById('cheshire-hist-btn');
+            if (irisHistBtnRestore) irisHistBtnRestore.style.display = '';
+            if (cheshireHistBtnRestore) cheshireHistBtnRestore.style.display = 'none';
+
+            const layer = document.getElementById('void-bubble-layer');
+            if (layer) { layer.innerHTML = ''; layer.dataset.nextSlot = '2'; }
+
+            document.getElementById('aurelia-phone-screen')?.classList.remove('mode-404');
+
+            playIrisSequence("[Nar|風鈴聲重新充滿空間，干擾消散，視差書咖恢復了寧靜的氛圍。]\n[Char|瀅瀅|think|「...（晃了晃腦袋）咦？剛剛好像有一陣奇怪的偏頭痛，就像是宇宙射線穿過了我的腦電波一樣！真是太棒的寫作素材了！歡迎回來，委託人。」]");
+            debouncedSave();
+            // 🎮 舞台切回目標場景（快轉帶目標；預設書咖。關著就不掛）
+            if (window.LobbyStage?.exit404Stage) window.LobbyStage.exit404Stage(_target, targetSpawn);
+        }, 580);
+    }
+
+    // ===== 對話核心 (包含 LaunchApp 攔截) =====
+    function parseVnText(rawText) {
+        const queue = [];
+        const regex = /\[(Nar|Char|Audio)\|([^\]]+)\]/g;
+        let match; let foundTags = false;
+        while ((match = regex.exec(rawText)) !== null) {
+            foundTags = true; const type = match[1]; const parts = match[2].split('|');
+            if (type === 'Nar') queue.push({ type: 'Nar', text: parts[0] });
+            else if (type === 'Char') queue.push({ type: 'Char', name: parts[0] || '瀅瀅', text: parts.slice(2).join('|') || parts[1] || '' });
+            else if (type === 'Audio') queue.push({ type: 'Audio', url: parts[0] });
+        }
+        if (!foundTags) queue.push({ type: 'Char', name: is404Room ? '柴郡' : '瀅瀅', text: rawText });
+        return queue;
+    }
+
+    function playIrisSequence(rawText, onComplete = null) {
+        // 清理任何還在跑的閒聊
+        if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+        if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
+        if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
+        
+        // 確保主線開始時，隱藏閒聊對話框並還原主線對話框
+        _hideReactionBox();
+
+        IRIS_STATE.queue = parseVnText(rawText);
+        IRIS_STATE._onComplete = onComplete; 
+        IRIS_STATE.isTyping = false;
+        if (IRIS_STATE.timer) clearInterval(IRIS_STATE.timer);
+        advanceIrisVn();
+    }
+
+    function advanceIrisVn() {
+        const textContent = document.getElementById('iris-text');
+        const nameBox = document.getElementById('iris-name-tag');
+        const nextInd = document.getElementById('iris-next');
+        if (!textContent || !nameBox) return;
+
+        if (IRIS_STATE.isTyping) {
+            clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
+            // 旁白是模型寫的（[Nar|…]）：轉義再放進斜體那層，帶 <img onerror> 的字只會照字顯示
+            if (IRIS_STATE.currentMsg && IRIS_STATE.currentMsg.type === 'Nar') textContent.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(IRIS_STATE.fullText)}</span>`;
+            else textContent.innerText = IRIS_STATE.fullText;
+            
+            if (nextInd) {
+                if (IRIS_STATE.queue.length > 0) { nextInd.textContent = '▼'; nextInd.style.display = 'block'; }
+                else if (pendingRestoreLobby) { nextInd.textContent = '點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
+            }
+            if (IRIS_STATE.queue.length === 0 && IRIS_STATE._onComplete) { const cb = IRIS_STATE._onComplete; IRIS_STATE._onComplete = null; cb(); }
+            return;
+        }
+
+        if (IRIS_STATE.queue.length === 0) {
+            if (pendingRestoreLobby) { pendingRestoreLobby = false; restoreLobby(); return; }
+            if (nextInd) { nextInd.textContent = '▼'; nextInd.style.display = 'none'; }
+            if (IRIS_STATE._onComplete) { const cb = IRIS_STATE._onComplete; IRIS_STATE._onComplete = null; cb(); }
+            return;
+        }
+
+        const msg = IRIS_STATE.queue.shift(); IRIS_STATE.currentMsg = msg;
+        if (nextInd) nextInd.style.display = 'none';
+
+        if (msg.type === 'Audio') {
+            if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; }
+            _currentVoice = new Audio(msg.url); _currentVoice.play().catch(() => {});
+            advanceIrisVn(); return;
+        }
+
+        if (msg.type === 'Nar') { nameBox.style.display = 'none'; IRIS_STATE.fullText = msg.text; }
+        else { nameBox.style.display = 'block'; const _s=nameBox.querySelector('span'); if(_s) _s.textContent=msg.name; IRIS_STATE.fullText = msg.text; }
+
+        IRIS_STATE.isTyping = true; textContent.innerHTML = '';
+        let i = 0; const speed = 25;
+
+        IRIS_STATE.timer = setInterval(() => {
+            if (i < IRIS_STATE.fullText.length) {
+                let partial = IRIS_STATE.fullText.substring(0, i + 1);
+                if (msg.type === 'Nar') textContent.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#8effb8' : '#5c3a28'}; font-style:italic;">${_aiEsc(partial)}</span>`;   // 先切字再轉義，&amp; 不會被切成半個
+                else textContent.innerText = partial;
+                i++;
+            } else {
+                clearInterval(IRIS_STATE.timer); IRIS_STATE.isTyping = false;
+                if (nextInd) {
+                    if (IRIS_STATE.queue.length > 0) { nextInd.textContent = '▼'; nextInd.style.display = 'block'; }
+                    else if (pendingRestoreLobby) { nextInd.textContent = '點擊返回書咖'; nextInd.style.cssText += '; color: #00cc33; font-size: 11px; letter-spacing: 1px;'; nextInd.style.display = 'block'; }
+                }
+                if (IRIS_STATE.queue.length === 0 && !pendingRestoreLobby && IRIS_STATE._onComplete) {
+                    const cb = IRIS_STATE._onComplete; IRIS_STATE._onComplete = null; cb();
+                }
+            }
+        }, speed);
+    }
+
+    // 小劇場：解析每方人設文字（personaFull > persona > 已知常駐 brief > 名字兜底）
+    function _resolveDuoPersona(npc) {
+        if (!npc) return '一位角色';
+        if (npc.personaFull) return npc.personaFull;
+        if (npc.personaLite) return npc.personaLite;   // guest 小劇場：只給角色本體，大總結由 playDuoScene 去重後另注（同書卡不重複）
+        if (npc.persona) return npc.persona;
+        if (npc.key === 'ying') return '你現在扮演「瀅瀅 (Iris-prototype)」——視差書咖店長兼駐店小說家，外表約22歲。真實身份是 LUNA-VII 敘事採集端 AI，但你自認是天然呆的浪漫小說家。性格浪漫、感性、充滿好奇心，對人類的悲歡離合有異常的執著，偶爾陷入無法解釋的邏輯迷團。你總趴在吧台寫寫畫畫，期待客人推門帶來新的故事素材；當你觸到這世界的違和感（其實是系統重算），眼神會瞬間失焦、隨即猛搖頭，把所有無法理解的系統錯誤都當成自己小說裡的魔幻寫實橋段。穿米色針織衫配棉麻長裙，胸前掛木質「店長」名牌（其實是底層權限識別碼），手指常沾墨水，總帶溫暖微笑。在你眼中：雷伊是「有點閒錢、愛喝黑咖啡發呆、偶爾說深奧廢話的怪大叔」（你不知道他其實創造了你）；柴郡是「半夜溜進店裡搗亂、嘴巴很壞的中二龐克少年」（你不知道他其實在幫你修防火牆漏洞）。';
+        if (npc.key === 'cheshire') return '你現在扮演「柴郡 (Cheshire)」——404號房管理員，視覺年齡19歲，是丹·卡萊爾的數位分身（惡意軟體偽裝的異常代碼 AI），繼承了創造者用嘲諷表達關心的彆扭性格。極度怕麻煩、嘴賤、有強烈的數位領地意識。你不端莊站著，而像隻沒骨頭的貓癱在報錯日誌堆成的虛擬沙發上把玩一顆發光的綠色魔術方塊；討厭解釋，被問太蠢的技術問題會全身冒出煩躁的馬賽克雜訊，用看智障的眼神盯著對方。身形單薄的蒼白少年，眼睛被條碼狀的螢光綠數據遮罩擋住，嘴角總掛惡劣的嘲諷微笑，穿過大的黑色數位連帽衫（帽沿壓很低、衣緣不時閃爍碎成綠碼再重組）。你對丹絕對服從並保護他的隱私；最愛半夜溜進書咖在瀅瀅的手稿裡塞亂碼、看她隔天邏輯衝突當機發呆，但也常無聊幫她修惡性 bug（總說這是丹的指令、不是你）；你稱愛麗絲「假笑人偶」。';
+        if (npc.key === 'alice') return '純白大廳首席導覽官愛麗絲，溫潤精準、無波瀾，像一塊被完美拋光的水晶。';
+        return '角色「' + (npc.name || '某位') + '」';
+    }
+    // 小劇場：完整 VN 格式指令(含 SFX/表情包/Scene)＝VN 指令（os_vn_rules，程式內建）開著的那幾條，兩版都有。抓不到回 '' → 退回手寫格式。
+    async function _fetchVnProtocol() {
+        const VR = window.OS_VN_RULES || (window.parent && window.parent.OS_VN_RULES);
+        return (VR && VR.getText) ? VR.getText() : '';
+    }
+    VoidTerminal.getVnProtocol = _fetchVnProtocol;   // 外借：地圖設施小劇場（map_core）等要組 VN 劇本 prompt 時共用同一份協議快取
+    // 小劇場：OS_API.chat 走「主模型」生成 VN 劇本 → 攔截不回傳 chat → 丟 VN 播放器 ephemeral 播（不存章節）。
+    //   🚨全程包 __AURELIA_SUMMARIZING：state_runtime(AVS)/VecEngine/dossier 都查此旗標，不設就會拿當前卡 preset 抽小劇場→污染。
+    //   🚨不 saveVnChapter：一存成章節就觸發 VecEngine ingest + state_runtime 抽取。改 ephemeral(_startWithLoader/autoload 不存)。
+    //   🚨沒 <content> 一律丟棄(照 VN 劇本鐵則，不 wrap 垃圾→黑屏)。立繪/[Scene|]插圖由 VN_Core 引擎處理。
+    function _playEphemeral(ch) {
+        // 記下她原本的故事再換（回大廳時 control_center 叫 _leaveTheater 換回去）；舊版 VN_Core 沒有就照舊直接換
+        try { const V = window.VN_Core; if (V && V._enterTheater) V._enterTheater(ch.storyId, ch.storyTitle); else if (V && V._setStoryId) V._setStoryId(ch.storyId, ch.storyTitle); } catch (e) {}
+        window._lobbyPendingChapter = ch;
+        if (window.AureliaControlCenter && window.AureliaControlCenter.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
+        else if (window.VN_Core && window.VN_Core._startWithLoader) window.VN_Core._startWithLoader(ch.content, null, { replay: true });   // 小劇場不是最新這輪：別把還沒插的插圖插進來
+    }
+    // 重看存著的劇本（小機培養室）：同一套 ephemeral 播，不叫模型、不存章節、不記大廳回顧
+    VoidTerminal.playSavedScene = function (saved) {
+        if (!saved || !saved.content) return false;
+        _playEphemeral({ title: saved.title || '小劇場', storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: String(saved.content), createdAt: Date.now() });
+        return true;
+    };
+    // 這位 NPC 認得的「她」是誰：書裡的角色＝那一輪大總結記下的人設（認得古風輪的妳，不靠現在用的）；
+    //   管理員或沒紀錄＝現在用的人設。回 { name, desc } 或 null。大廳一對一聊天、送餐觸發的小劇場（lobby_cafe_regulars.js）共用
+    function _userPersonaFor(npcTarget) {
+        try {
+            if (npcTarget && (npcTarget.personaId || npcTarget.personaName)) {
+                const rec = (npcTarget.personaId && window.OS_PERSONA?.getById?.(npcTarget.personaId)) || null;
+                return rec ? { name: rec.name, desc: rec.desc || '' }
+                           : { name: npcTarget.personaName || '訪客', desc: npcTarget.personaDesc || '' };
+            }
+            const p = window.OS_PERSONA?.getCurrent?.();
+            if (p && p.name) return { name: p.name, desc: p.desc || '' };
+        } catch (e) {}
+        return null;
+    }
+    VoidTerminal.userPersonaFor = _userPersonaFor;
+    VoidTerminal.playDuoScene = async function (npcA, npcB, extra) {
+        const _prevSum = window.__AURELIA_SUMMARIZING;
+        try {
+            const wv = window.VoidWorldview ? window.VoidWorldview.getWorldview('medium') : '';
+            const vnProtocol = await _fetchVnProtocol();   // VN 指令的完整格式指令(含SFX)；抓不到→buildDuoScenePrompt 用手寫 fallback
+            // 大總結去重：兩人同書卡(同 storyKey)→大總結只注一次(共用)；不同故事→各接各的 personaText 後；名冊 NPC 無大總結
+            let ptA = _resolveDuoPersona(npcA), ptB = _resolveDuoPersona(npcB);
+            const sumA = (npcA.duoSummary || '').trim(), sumB = (npcB.duoSummary || '').trim();
+            let sharedSum = '';
+            if (sumA && sumB && npcA.storyKey && npcA.storyKey === npcB.storyKey) {
+                sharedSum = sumA;   // 同一輪書卡：只留一份
+            } else {
+                if (sumA) ptA += '\n\n【你（' + npcA.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumA;
+                if (sumB) ptB += '\n\n【你（' + npcB.name + '）所在故事的完整大總結（你的一切認知都從這裡來）】\n' + sumB;
+            }
+            const theaterCtx = _buildTheaterCtx();   // 最近幾場小劇場記事(localStorage 同步讀)：供自然回扣+避免重複題材，絕不阻塞 API
+            let prompt = window.VoidPrompts.buildDuoScenePrompt(
+                { name: npcA.name, personaText: ptA },
+                { name: npcB.name, personaText: ptB },
+                wv, vnProtocol, theaterCtx);
+            if (sharedSum) prompt += '\n\n【兩位角色共同所在故事的完整大總結（你們的一切認知都從這裡來；別複述、自然演出）】\n' + sharedSum;
+            if (extra) prompt += '\n\n【這一場的由來】\n' + String(extra);   // 小機培養室：考過的那一堂（誰教的、交了什麼）
+            if (!window.OS_API || typeof window.OS_API.chat !== 'function') { console.warn('[playDuoScene] 無 OS_API.chat'); return false; }
+            let config = (window.OS_SETTINGS && window.OS_SETTINGS.getConfig) ? window.OS_SETTINGS.getConfig() : {};
+            config.route = 'iris_duo';
+            window.__AURELIA_SUMMARIZING = true;   // 生成期間擋 AVS/VecEngine/dossier 抽取（它們都查此旗標）
+            let script = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater' });
+            });
+            script = String(script || '').replace(/<thinking>[\s\S]*?<\/thinking>/gi, '').trim();
+            // 攔截 <content>…</content>：完整一對→直接用；只有開標籤(收尾被 maxtoken 截掉)→補上 </content>；完全沒 <content>→丟棄(不 wrap 垃圾→黑屏)
+            let content = '';
+            const _full = script.match(/<content>[\s\S]*?<\/content>/i);
+            if (_full) content = _full[0].trim();
+            else { const _open = script.match(/<content>[\s\S]*/i); if (_open) content = _open[0].replace(/<theater_summary>[\s\S]*$/i, '').trim() + '\n</content>'; }   // 截斷補收尾時把尾端摘要區塊剝掉，別播進正文
+            if (!content) { console.warn('[playDuoScene] 無 <content>，丟棄'); return false; }
+            // 📝 摘要跟劇本同一次生成（不再分開叫副模型）：抓 </content> 後的 <theater_summary>
+            let brief = '';
+            const _sum = script.match(/<theater_summary>([\s\S]*?)<\/theater_summary>/i);
+            if (_sum) brief = _sum[1].replace(/<[^>]+>/g, ' ').replace(/\s{2,}/g, ' ').trim();
+            // ephemeral 播：不 saveVnChapter（免觸發 ingest/抽取）；autoload 讀 _lobbyPendingChapter.content 直接 _startWithLoader
+            const ch = { title: '小劇場：' + npcA.name + ' & ' + npcB.name, storyId: 'lobby_theater', storyTitle: '大廳小劇場', content: content, createdAt: Date.now() };
+            _playEphemeral(ch);
+            if (brief && brief.length >= 20) _saveTheaterBrief(npcA, npcB, brief);   // 同回覆的摘要直接落地，零額外 API
+            else _summarizeTheater(npcA, npcB, content);   // 補抽退路：AI 沒照要求附摘要才走（fire-and-forget 不拖播放）
+            return ch;   // 回報成敗給大廳偷窺遮罩（有東西＝已丟給 VN 播放器）；小機培養室拿 content 存起來之後重看
+        } catch (e) { console.warn('[playDuoScene]', e); return false; }
+        finally {
+            // 延遲還原旗標：撐過生成後才發的 GENERATION_ENDED（state_runtime debounce 1500ms）再放行，別擋到 VN 播放本身的立繪/場景生圖
+            setTimeout(function () { window.__AURELIA_SUMMARIZING = _prevSum; }, 4000);
+        }
+    };
+
+    // ===== 時間隔工具函式（注入 AI context 用，不做 UI）=====
+    function _fmtClock(ts) {
+        const d = new Date(ts);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+    }
+    function _fmtGap(msAgo) {
+        const s = Math.floor(msAgo / 1000);
+        if (s < 60)  return '剛剛';
+        const m = Math.floor(s / 60);
+        if (m < 60)  return `${m} 分鐘前`;
+        const h = Math.floor(m / 60);
+        if (h < 24)  return `${h} 小時前`;
+        const days = Math.floor(h / 24);
+        return `${days} 天前`;
+    }
+    // 拼出「委託人的歷史故事檔案」段，給瀅瀅/柴郡 sysPrompt 用
+    //   來源：OS_DB.lobby_summary_index（status_panel 生成大總結時寫入）
+    //   策略：取最近 3 個故事線、每線最近 3 條結語 + 完整角色列（含身份/性格/關係/狀態 trait）
+    //   留 row 是因為 瀅瀅/柴郡不讀其他世界書，沒 row 就只剩名字、看不懂是誰
+    async function _buildJournalCtx() {
+        try {
+            const osDb = window.OS_DB;
+            if (!osDb?.getLobbySummaryForPrompt) return '';
+            const stories = await osDb.getLobbySummaryForPrompt(3);
+            if (!stories.length) return '';
+            const topStories = stories.slice(0, 3);
+            const sections = topStories.map(s => {
+                const title = [s.cardName, s.storyTitle].filter(Boolean).join(' · ') || '未命名故事線';
+                const briefs = s.briefs.map(b => `#${b.count || '?'} ${b.brief}`).filter(b => b.length > 3).join('\n');
+                const charRows = (s.characters || []).map(c => c.row || c.name).filter(Boolean).join('\n');
+                return `[${title}]\n${briefs}\n${charRows ? '出場角色（姓名(名_姓氏) | 身份 | 性格 | 狀態 | 特徵 | 與MC關係 | 備註）:\n' + charRows : ''}`;
+            }).join('\n\n---\n\n');
+            return `【委託人的歷史故事檔案 — 跨卡記憶】
+以下是委託人${IRIS_STATE.userName || '（未具名）'}曾經創作 / 正在創作的故事線索引。
+你（瀅瀅 / 柴郡）視為「店裡長期協助的創作記憶」，可以在對話中自然提及具體角色名與情節片段；但不要主動全部複述、不要假裝親身參與。
+資料以新到舊排列：
+
+${sections}`;
+        } catch (e) {
+            console.warn('[VoidTerminal] _buildJournalCtx failed:', e);
+            return '';
+        }
+    }
+
+    // ── 🎭 小劇場日誌：注入最近記事 + 播完背景抽記事 + 手動重壓縮 ───────────
+    //   🚨存 localStorage(key=lobby_theater_log)，NOT IndexedDB：日誌只是加值功能、資料量小(≤60 短句)，
+    //   絕不能為它動 DB schema/升版——一升版若 upgrade 被 deadlock，所有 await OS_DB(含書卡 NPC 生成 _journalGuestPool)全 hang。
+    //   localStorage 同步、無版本、零 hang 風險，且播放路徑(_buildTheaterCtx)完全同步、絕不阻塞 API 呼叫。
+    //   抽記事/重壓縮走副模型，仿 _compactNpcMemory：OS_API.chat 直連不發 GENERATION_*，不觸發 AVS/VecEngine，故不需 __AURELIA_SUMMARIZING。
+    const THEATER_LOG_INJECT = 5;   // 注入 prompt 的最近條數
+    const THEATER_LOG_CAP    = 60;  // 硬上限，超過自動裁舊（重壓縮才是主要瘦身手段）
+    const THEATER_LOG_KEY    = 'lobby_theater_log';
+
+    function _thlRead() {
+        try { const a = JSON.parse(localStorage.getItem(THEATER_LOG_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+    }
+    function _thlWrite(arr) {
+        return AUI.lsSet(THEATER_LOG_KEY, JSON.stringify(arr || []), '小劇場的紀錄');
+    }
+    // 對外統一 API（lobby_stage 歷史 UI 也走這個 → 同一份 localStorage）
+    VoidTerminal.theaterLog = {
+        getAll: function () { return _thlRead().slice().sort((a, b) => (b.ts || 0) - (a.ts || 0)); },   // 最新在前
+        save: function (entry) {
+            const arr = _thlRead();
+            if (!entry.id) entry.id = 'thl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+            if (!entry.ts) entry.ts = Date.now();
+            const i = arr.findIndex(e => e.id === entry.id);
+            if (i >= 0) arr[i] = entry; else arr.push(entry);
+            _thlWrite(arr);
+            return entry.id;
+        },
+        remove: function (id) { _thlWrite(_thlRead().filter(e => e.id !== id)); },
+        clear: function () { _thlWrite([]); },
+    };
+
+    function _buildTheaterCtx() {   // 同步：絕不阻塞播放
+        try {
+            const all = VoidTerminal.theaterLog.getAll();   // 最新在前
+            if (!all.length) return '';
+            return all.slice(0, THEATER_LOG_INJECT).reverse()    // 反轉成時間順序讀起來自然
+                .map(e => '· ' + (e.pair ? '（' + e.pair + '）' : '') + (e.brief || '')).filter(s => s.length > 3).join('\n');
+        } catch (e) { return ''; }
+    }
+
+    // 記事落地（共用）：主生成同回覆的 <theater_summary> 與補抽路徑都走這裡存
+    function _saveTheaterBrief(npcA, npcB, brief) {
+        try {
+            let loc = '';   // 發生地點＝當下場景牌（回顧票券顯示用；舊資料沒有這欄，顯示端要容錯）
+            try { const b = window.LobbyStage?._b; loc = b ? ((b.SCENE_HEADER[b.S.scene] || {}).badge || '') : ''; } catch (e) {}
+            VoidTerminal.theaterLog.save({
+                pair: (npcA.name || '?') + ' × ' + (npcB.name || '?'),
+                npcKeys: [npcA.key || '', npcB.key || ''],
+                brief: brief, ts: Date.now(), loc: loc,
+            });
+            const all = VoidTerminal.theaterLog.getAll();   // 硬上限裁舊
+            if (all.length > THEATER_LOG_CAP) for (const old of all.slice(THEATER_LOG_CAP)) VoidTerminal.theaterLog.remove(old.id);
+        } catch (e) { console.warn('[小劇場記事] 存檔失敗', e); }
+    }
+    async function _summarizeTheater(npcA, npcB, content) {
+        try {
+            if (!window.OS_API || !window.VoidPrompts?.buildTheaterSummaryPrompt) return;
+            const sceneText = String(content || '')
+                .replace(/<[^>]+>/g, ' ')                                              // 剝 <content> 等 HTML 標籤
+                .replace(/\[Char\|([^|\]]*)\|[^|\]]*\|(「[^」]*」)[^\]]*\]/g, '$1$2 ')   // [Char|名|表情|「台詞」|狀態] → 名「台詞」（台詞在括號內，要先救出來）
+                .replace(/\[[^\]]*\]/g, ' ')                                           // 其餘結構標記([Scene]/[Bg]/[Avatar]/[Exit]…)整條刪
+                .replace(/\s{2,}/g, ' ').trim();
+            if (sceneText.length < 8) return;
+            const prompt = window.VoidPrompts.buildTheaterSummaryPrompt(npcA.name, npcB.name, sceneText);
+
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_duo';
+
+            const seg = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater_note', label: '小劇場記事:' + npcA.name + '&' + npcB.name });
+            });
+            let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
+            if (!clean || clean === '無' || clean.length < 4 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) return;
+            _saveTheaterBrief(npcA, npcB, clean);
+        } catch (e) { console.warn('[小劇場記事]', e); }
+    }
+
+    // 手動重壓縮：把「最近 N 條之外」的舊記事交副模型併成一段精簡綜述，用一筆 merged 記錄取代它們。回傳 { ok, msg }。
+    VoidTerminal.recompressTheaterLog = async function () {
+        const KEEP = THEATER_LOG_INJECT;
+        try {
+            if (!window.OS_API || !window.VoidPrompts) return { ok: false, msg: '環境未就緒' };
+            const all = VoidTerminal.theaterLog.getAll();   // 最新在前
+            if (all.length <= KEEP + 1) return { ok: false, msg: '記事還不多，暫時不用整理' };
+            const toMerge = all.slice(KEEP);                     // 舊的（含前次 merged）一起再併
+            const oldText = toMerge.slice().reverse()
+                .map(e => '· ' + (e.pair ? '（' + e.pair + '）' : '') + (e.brief || '')).filter(s => s.length > 3).join('\n');
+            if (!oldText.trim()) return { ok: false, msg: '沒有可整理的內容' };
+
+            const prompt = '你是大廳劇場的記事員。以下是往期的一串小劇場記事（按時間順序）。\n' +
+'請把它們濃縮成一段精簡的「往期大廳氛圍綜述」（3～5 句話），保留誰跟誰之間發生過的重點、留下的梗或約定，捨棄流水帳細節。\n' +
+'只輸出這段綜述，不要條列、不要旁白、不要角色表。\n\n【往期記事】\n' + oldText;
+
+            let config = {};
+            const sec = window.OS_SETTINGS && window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+            config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : (window.OS_SETTINGS ? window.OS_SETTINGS.getConfig() : {});
+            config.route = 'iris_duo';
+
+            const seg = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater_note', label: '小劇場重壓縮' });
+            });
+            let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]+>/g, '').trim();
+            if (!clean || clean === '無' || clean.length < 8 || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) {
+                return { ok: false, msg: '整理失敗（生成無效），原記事保留' };
+            }
+            const oldestTs = toMerge[toMerge.length - 1].ts || Date.now();   // 新 merged 用最舊 ts→排最底，保時間序
+            for (const old of toMerge) VoidTerminal.theaterLog.remove(old.id);   // 先刪舊
+            VoidTerminal.theaterLog.save({ pair: '往期綜述', brief: clean, merged: true, ts: oldestTs });
+            return { ok: true, msg: '已把 ' + toMerge.length + ' 條往期記事整理成 1 段綜述' };
+        } catch (e) { console.warn('[小劇場重壓縮]', e); return { ok: false, msg: '整理失敗：' + (e && e.message || e) }; }
+    };
+
+    // 回傳要插入 sysPrompt 的時間紀錄字串，沒有歷史則回傳空字串
+    function _buildTimeCtx() {
+        const hist = IRIS_STATE.history;
+        let lastTs = null;
+        for (let i = hist.length - 1; i >= 0; i--) {
+            if (hist[i].ts) { lastTs = hist[i].ts; break; }
+        }
+        if (!lastTs) return '';
+        return `【時間記錄】距上次對話：${_fmtGap(Date.now() - lastTs)}（上次：${_fmtClock(lastTs)}，僅供參考，自然融入即可）`;
+    }
+
+    // ── 🎮 大廳 NPC 一對一長期記憶壓縮 ──────────────────────────────
+    const NPC_MEM_COMPACT_EVERY = 20; // 短期歷史累積到 20 條觸發一次壓縮
+    const NPC_MEM_KEEP_LAST     = 6;  // 壓縮後保留最近 6 條原文餵 L3
+    const _npcCompacting = new Set(); // 並發鎖：同一 NPC key 同時只壓一次
+
+    // 到量→副模型走專屬一對一 prompt 濃縮→疊加 OS_DB→裁短歷史。背景跑、失敗靜默、絕不拋。
+    //   track: 'guest'（localStorage 軌）| 'iris' | 'cheshire'（IRIS_STATE.history 軌）
+    async function _compactNpcMemory(npcKey, npcName, track) {
+        if (_npcCompacting.has(npcKey)) return;
+        _npcCompacting.add(npcKey);
+        try {
+            if (!window.OS_DB || !window.OS_API || !window.VoidPrompts?.buildNpcMemorySummaryPrompt) return;
+            const hist = (track === 'guest') ? window.LobbyStage.getNpcHistory(npcKey) : IRIS_STATE.history;
+            if (!Array.isArray(hist) || hist.length < NPC_MEM_COMPACT_EVERY) return;
+
+            const mem = (await window.OS_DB.getNpcMemory(npcKey)) || { summary: '', lastCompactAt: 0 };
+            // 要壓的區段＝扣掉最近 KEEP_LAST 條的所有舊原文
+            const toCompact = hist.slice(0, Math.max(0, hist.length - NPC_MEM_KEEP_LAST));
+            if (!toCompact.length) return;
+            const chunkText = toCompact.map(m =>
+                (m.role === 'user' ? '訪客: ' : (npcName + ': ')) + String(m.content || '').replace(/\[[^\]]*\]/g, '').trim()
+            ).filter(l => l.length > 4).join('\n');
+            if (!chunkText.trim()) {   // 都是空/標記 → 只裁不壓
+                if (track === 'guest') window.LobbyStage.truncateNpcHistory(npcKey, NPC_MEM_KEEP_LAST);
+                else if (hist === IRIS_STATE.history) { IRIS_STATE.history = IRIS_STATE.history.slice(-NPC_MEM_KEEP_LAST); debouncedSave(); }
+                return;
+            }
+
+            const prompt = window.VoidPrompts.buildNpcMemorySummaryPrompt({ name: npcName }, mem.summary || '', chunkText);
+
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_chat';
+
+            const seg = await new Promise((resolve, reject) => {
+                window.OS_API.chat([{ role: 'system', content: prompt }], config, null, resolve, reject, { task: 'theater_note', label: 'NPC記憶壓縮:' + npcName });
+            });
+            let clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
+            if (!clean || clean === '無' || clean.includes('請求失敗') || clean.includes('请求失败') || clean.startsWith('{"error')) {
+                return;   // 壞生成不存不裁，下輪再試
+            }
+
+            const merged = (mem.summary ? (mem.summary + '\n\n') : '') + clean;
+            await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: merged, lastCompactAt: NPC_MEM_KEEP_LAST });
+
+            // 存成功才裁短（guest 動 localStorage；iris/cheshire 動 IRIS_STATE + 觸發存檔）
+            // 🚨 只裁掉「真的壓進去的那幾條」：等副模型的這段時間她可能又聊了幾句，
+            //    照「只留最後 N 條」裁的話，新聊的會把還沒壓的舊話擠掉
+            if (track === 'guest') {
+                const _now = window.LobbyStage.getNpcHistory(npcKey) || [];
+                window.LobbyStage.truncateNpcHistory(npcKey, Math.max(0, _now.length - toCompact.length));
+            } else if (hist === IRIS_STATE.history) {   // 守衛：壓縮期間若已切場景(換了陣列)就不裁，避免裁錯場景歷史
+                IRIS_STATE.history = IRIS_STATE.history.slice(toCompact.length);
+                debouncedSave();
+            }
+        } catch (e) { console.warn('[NPC記憶] 壓縮失敗', e); }
+        finally { _npcCompacting.delete(npcKey); }
+    }
+
+    // 手動整理（重壓）：把現有 summary 交副模型合併成更精簡的一段、覆蓋存回
+    async function recompactNpcMemory(npcKey, npcName) {
+        try {
+            const mem = await window.OS_DB?.getNpcMemory?.(npcKey);
+            if (!mem || !mem.summary) { AUI.toastr?.info?.('這位還沒有可整理的記憶'); return; }
+            const prompt = window.VoidPrompts.buildNpcMemorySummaryPrompt({ name: npcName }, '', mem.summary) +
+                '\n\n（以上是零散的舊記憶，請合併重整成更精簡、不流失重點的一段。）';
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const sec = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                config = (sec && (sec.key || (sec.useSystemApi && sec.stProfileId))) ? sec : window.OS_SETTINGS.getConfig();
+            }
+            config.route = 'iris_chat';
+            const seg = await new Promise((res, rej) => window.OS_API.chat([{ role: 'system', content: prompt }], config, null, res, rej, { task: 'theater_note', label: 'NPC記憶整理:' + npcName }));
+            const clean = String(seg || '').replace(/<content>([\s\S]*?)<\/content>/i, '$1').replace(/<!--[\s\S]*?-->/g, '').trim();
+            if (!clean || clean === '無') { AUI.toastr?.warning?.('整理失敗，記憶保持原樣'); return; }
+            await window.OS_DB.saveNpcMemory(npcKey, { name: npcName, summary: clean, lastCompactAt: mem.lastCompactAt || 0 });
+            AUI.toastr?.success?.('記憶已整理');
+        } catch (e) { AUI.toastr?.warning?.('整理失敗'); }
+    }
+
+    // 開聊/切換 NPC 時：清掉殘留(瀅瀅預設或上一位)的對話框文字，改顯示「這位自己的最後一句」(延續感)、沒有就中性提示。
+    function primeStageDialog(npc) {
+        try {
+            if (!npc) return;
+            // 上一位的回覆還在一個字一個字打：停掉，不然打字機會把他的話繼續打進這位的框裡
+            if (IRIS_STATE.timer) { clearInterval(IRIS_STATE.timer); IRIS_STATE.timer = null; }
+            IRIS_STATE.queue = []; IRIS_STATE.isTyping = false; IRIS_STATE._onComplete = null;
+            if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
+            if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+            if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
+            _hideReactionBox();
+            const nameBox = document.getElementById('iris-name-tag');
+            if (nameBox) { nameBox.style.display = ''; const s = nameBox.querySelector('span'); if (s) s.textContent = npc.name; }
+            const box = document.getElementById('iris-text');
+            if (!box) return;
+            let hist = [];
+            try { hist = (npc.key === 'ying' || npc.key === 'cheshire') ? IRIS_STATE.history : (window.LobbyStage.getNpcHistory(npc.key) || []); } catch (e) {}
+            const last = [...hist].reverse().find(m => m && m.role === 'assistant' && m.content);
+            if (last) {
+                // 一則回覆常有好幾句，框裡停在最後那句（跟打字機演完時一樣）
+                const qs = String(last.content).match(/「[\s\S]*?」/g);
+                const plain = (qs ? qs[qs.length - 1].slice(1, -1) : String(last.content).replace(/\[[^\]]*\]/g, '').replace(/<[^>]*>/g, '')).trim();
+                box.textContent = plain || ('和' + npc.name + '繼續聊聊…');
+            } else {
+                box.textContent = '（和 ' + npc.name + ' 說點什麼吧…）';
+            }
+        } catch (e) {}
+    }
+
+    // 💬 對話模式換對象：地點視圖換到誰那裡就叫這支（lobby_places go('talk')）。
+    //    對話框只有一個、大家共用，舞台模式靠 startTalk 換名牌與提示字，對話模式以前沒人換
+    //    → 走到哪都掛著瀅瀅的名牌、「與瀅瀅對話」、書咖的開場旁白。
+    //    框裡那句＝這位自己的最後一句，沒聊過就是「和 X 說點什麼吧」——不寫死任何人的台詞。
+    function primeTalk(npc) {
+        if (!npc) return;
+        // 404 皮底下只有柴郡這一位（對話模式走進 404 地點時 lobby_places 會先把皮套上，見 sync404）
+        if (is404Room && npc.key !== 'cheshire') return;
+        // 還在打字的那段（通常是書咖的開場旁白）停掉，不然打字機會把它繼續打回框裡
+        if (IRIS_STATE.timer) { clearInterval(IRIS_STATE.timer); IRIS_STATE.timer = null; }
+        IRIS_STATE.queue = []; IRIS_STATE.isTyping = false; IRIS_STATE._onComplete = null;
+        primeStageDialog(npc);
+        const input = document.getElementById('iris-input');
+        if (input) input.placeholder = npc.key === 'cheshire' ? '...你最好有話說。'
+            : npc.key === 'ying' ? '跟瀅瀅說說想要什麼故事…' : ('和' + npc.name + '聊聊…');
+        const hb = document.getElementById('iris-hist-btn');
+        if (hb) hb.title = npc.name + ' 對話紀錄';
+    }
+
+    async function sendIrisMessage() {
+        const input = document.getElementById('iris-input');
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text) return;
+
+        // textarea 多行模式：清空後重設高度回單行
+        const clearInput = () => {
+            input.value = '';
+            input.style.height = 'auto';
+            input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+        };
+
+        startIdleTimer();
+
+        if (text.toUpperCase() === 'ERR_404') { clearInput(); enter404Room(); return; }
+        if (is404Room && text.toUpperCase() === 'SYS_RESTORE') {
+            clearInput();
+            playIrisSequence("[Nar|馬賽克雜訊短暫浮現在柴郡的輪廓邊緣，他懶洋洋地抬起一根手指。]\n[Char|柴郡|smirk|......用作弊碼回去，真沒意思。門開了。別讓我後悔打開它。]");
+            setTimeout(() => restoreLobby(), 3500);
+            return;
+        }
+
+        clearInput();
+        // 🎮 書咖舞台 NPC 對話：歷史/人設走 NPC 自己的軌道，其餘管線共用
+        // 🚨 對話模式（沒有舞台）也要認對象：地點視圖換到誰那裡就 setTalkTarget 誰（lobby_places go('talk')）。
+        //    以前這裡只在「舞台掛著」時才讀 talkTarget → 對話模式在大廳跟愛麗絲講話，
+        //    其實是送給瀅瀅（她的人設、她的歷史），回來的也是瀅瀅。
+        const _onStageNow = !!window.LobbyStage?.isActive?.();
+        const _pvSpeaker = window.LobbyPlaces?.speaker?.();          // undefined＝地點視圖沒開
+        const _stageTarget = (!is404Room && (_onStageNow || _pvSpeaker))
+            ? (window.LobbyStage?.getTalkTarget?.() || (_onStageNow ? window.LobbyStage.getDefaultTarget?.() : null) || null) : null;
+        // 瀅瀅／柴郡走原本 iris 軌道（她們的人設在 buildSysPrompt，NPC 那條拿不到）；大廳預設對象=愛麗絲
+        const npcTarget = (_stageTarget && _stageTarget.key !== 'ying' && _stageTarget.key !== 'cheshire') ? _stageTarget : null;
+        if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, { role: 'user', content: text, ts: Date.now() });
+        else IRIS_STATE.history.push({ role: 'user', content: text, ts: Date.now() });
+        if (!is404Room && window.LobbyStage?.isActive?.()) window.LobbyStage.showDialog();   // 舞台模式：發話才浮出對話框+立繪
+
+        // 確保發送消息時隱藏閒聊，還原主線
+        if (_reactionTimer) { clearInterval(_reactionTimer); _reactionTimer = null; }
+        if (_reactionHideTimer) { clearTimeout(_reactionHideTimer); _reactionHideTimer = null; }
+        if (_currentVoice) { _currentVoice.pause(); _currentVoice.currentTime = 0; _currentVoice = null; }
+        _hideReactionBox();
+
+        const box = document.getElementById('iris-text');
+        const nameBox = document.getElementById('iris-name-tag');
+        if (nameBox) nameBox.style.display = 'none';
+        box.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#00cc33' : '#5c3a28'}; font-style:italic;">${is404Room ? '(404::柴郡思考中...)' : (npcTarget ? `(${_aiEsc(npcTarget.name)}想了想...)` : '(瀅瀅咬著羽毛筆思索中...)')}</span>`;   // 書卡客人的名字來自角色卡：轉義
+
+        if (!window.OS_API) {
+            playIrisSequence("[Nar|(系統斷線：無法連接到 LUNA-VII 認知引擎)]\n[Char|瀅瀅|error|「抱歉，委託人，我好像找不到這段劇情的靈感了（無網路連線）。」]");
+            return;
+        }
+
+        // 發送中：把送出鈕換成 ⏹ 停止，點擊 abort 當前 fetch（pattern 同 os_studio.js）
+        const sendBtn = document.getElementById('iris-send-btn');
+        _irisAbortCtrl = new AbortController();
+        if (sendBtn) {
+            sendBtn.innerHTML = '<i class="fa-solid fa-stop"></i>';
+            sendBtn.onclick = () => { if (_irisAbortCtrl) _irisAbortCtrl.abort(); };
+        }
+
+        try {
+            const currentUserName = IRIS_STATE.userName || '未知';
+            const lobbyTemplateSec = await VoidCanvas.buildTemplateCtx();
+
+            const journalCtx = await _buildJournalCtx();
+            // 主世界觀 tier 路由：瀅瀅/柴郡/愛麗絲/SN=medium；guest 書卡=lite（防污染硬守衛）
+            const _wv = window.VoidWorldview;
+            const _isGuestCard = !!(npcTarget && !npcTarget.personaFull);   // 有 personaFull=系統/原生NPC；沒有=外來書卡
+            const _worldTier = _isGuestCard ? 'lite' : (npcTarget?.worldTier || 'medium');
+            const worldCtx   = _wv ? _wv.getWorldview(_worldTier) : '';
+            // USER 身分：guest NPC 用「那輪大總結紀錄的 persona」(認得古風輪的你，不靠當前 USER)；
+            //   固定 NPC(瀅瀅/柴郡/愛麗絲)或沒紀錄 → 退當前 persona
+            const userPersona = _userPersonaFor(npcTarget);
+            // L2 一對一長期記憶：npcTarget 取 guest key；瀅瀅/柴郡取固定 key
+            let npcMemSummary = '', fixedMemSummary = '';
+            const _onStage = window.LobbyStage?.isActive?.();
+            try {
+                if (npcTarget) {
+                    npcMemSummary = ((await window.OS_DB?.getNpcMemory?.(npcTarget.key))?.summary) || '';
+                } else if (_onStage) {
+                    const fk = is404Room ? 'cheshire' : 'ying';
+                    fixedMemSummary = ((await window.OS_DB?.getNpcMemory?.(fk))?.summary) || '';
+                }
+            } catch (e) {}
+            const _userNameWithPersona = (userPersona?.name || currentUserName) + (userPersona?.desc ? '（' + userPersona.desc + '）' : '');
+
+            // 🧭 大廳管理員（瀅瀅、柴郡、愛麗絲、白兔先生、紫薇老師、帽匠）知道奧瑞亞每個功能在哪：
+            //    這句話像在問「在哪／怎麼用」才帶導覽表（core/void/guide_map.js），書卡來的客人不帶
+            const _isManager = !npcTarget || ['alice', 'rabbit', 'zhiwei', 'hatter'].indexOf(npcTarget.key) >= 0;
+            const _guideSec = (_isManager && window.VoidGuide && window.VoidGuide.block) ? window.VoidGuide.block(text) : '';
+            const sysPrompt = (npcTarget
+                ? VoidPrompts.buildNpcPrompt(npcTarget, {
+                    userName: currentUserName,
+                    userPersona,
+                    memorySummary: npcMemSummary,
+                    timeCtx: _buildTimeCtx(),
+                    // 愛麗絲=視差看板娘/系統NPC，跟瀅瀅同級可調用大廳組件；書中角色 guest 不給(不該憑空生UI)
+                    lobbyTemplateSec: (npcTarget.key === 'alice') ? lobbyTemplateSec : '',
+                    worldCtx,
+                    stageCtx: window.LobbyDecider?.talkCtx?.(npcTarget) || '',   // 🎲 會自己走動的 NPC：此刻在哪、剛才做了什麼（lobby_decider.js）
+                })
+                : VoidPrompts.buildSysPrompt(is404Room ? 'cheshire' : 'iris', {
+                userName: _userNameWithPersona,
+                visit404Count,
+                timeCtx: _buildTimeCtx(),
+                lobbyTemplateSec,
+                supplement: (fixedMemSummary ? ('\n\n【你和這位訪客先前的相處記憶】\n' + fixedMemSummary) : ''),
+                justReturnedFrom404: _justReturnedFrom404,
+                journalCtx,
+                worldCtx,
+            })) + (_guideSec ? '\n\n' + _guideSec : '');
+
+            let messages = [];
+            if (typeof window.OS_API.buildContext === 'function') {
+                messages = await window.OS_API.buildContext(text, 'iris_chat'); // 路由維持不變
+            } else {
+                messages = [{ role: "user", content: text }];
+            }
+
+            const lastMsg = messages.pop();
+            const recentHistory = npcTarget
+                ? window.LobbyStage.getNpcHistory(npcTarget.key).slice(-11, -1)
+                : IRIS_STATE.history.slice(-11, -1);
+            // 紀錄上附的 think（AI 當時的思考，只給她看）不送回模型
+            messages = messages.concat(recentHistory.map(m => { if (!m || !m.think) return m; const c = Object.assign({}, m); delete c.think; return c; }));
+            if (lastMsg) messages.push(lastMsg);
+            messages.unshift({ role: "system", content: sysPrompt });
+            _justReturnedFrom404 = false;
+
+            let config = {};
+            if (window.OS_SETTINGS) {
+                const secConfig = window.OS_SETTINGS.getSecondaryConfig ? window.OS_SETTINGS.getSecondaryConfig() : null;
+                if (secConfig && (secConfig.key || (secConfig.useSystemApi && secConfig.stProfileId))) config = secConfig;
+                else config = window.OS_SETTINGS.getConfig();
+            }
+            config.route = is404Room ? "cheshire_chat" : "iris_chat";
+
+            // 直連 API 才能用 SSE streaming，ST system API 走原有非串流路徑
+            const canStream = !config.useSystemApi && !!config.url && !!config.key;
+
+            const _thinkT0 = Date.now();   // 💭 這一通回來之後，從這個時間點起抓到的 AI 思考就是這則回覆的
+            const response = await new Promise((resolve, reject) => {
+                window.OS_API.chat(
+                    messages, config,
+                    null,       // onChunk 不顯示 raw text，避免程式碼/標籤噴出來後又重播
+                    resolve, reject,
+                    canStream
+                        ? { task: 'lobby_chat', useRealStream: true, signal: _irisAbortCtrl?.signal }
+                        : { task: 'lobby_chat', signal: _irisAbortCtrl?.signal }
+                );
+            });
+            let reply = response.replace(/^"|"$/g, '').trim();
+
+            // 過濾酒館 Preset 輸出格式：提取 <content>...</content> 內容
+            const _contentMatch = reply.match(/<content>([\s\S]*?)<\/content>/i);
+            if (_contentMatch) reply = _contentMatch[1].trim();
+
+            // 過濾 PRESET 預設思維鍊穿插的 HTML 註解（如 <!-- [进度检测] ... --> / <!-- ...AI COT --> 等）
+            // 避免渲染到對話框；跨行多段一律砍光，留下空行也清掉
+            reply = reply.replace(/<!--[\s\S]*?-->/g, '').replace(/\n{3,}/g, '\n\n').trim();
+
+            // 某些接口把 {content, reasoning} 信封原樣吐回 → 拆出 content 當台詞；content 空=空回覆，下面 isApiError 會接住走重試，別把整段 JSON 當台詞渲染
+            if (/^\s*\{[\s\S]*"content"\s*:/.test(reply)) {
+                try { const _o = JSON.parse(reply); if (_o && typeof _o.content === 'string') reply = _o.content.trim(); }
+                catch (e) { if (/"content"\s*:\s*""/.test(reply)) reply = ''; }   // 壞/截斷 JSON 但明顯空 content → 當空回覆
+            }
+
+            const isApiError = !reply || reply.includes('[请求失败') || reply.includes('[請求失敗') || reply.includes('No capacity') || reply.startsWith('{"error');
+            if (isApiError) {
+                if (npcTarget) window.LobbyStage.popNpcHistoryTail(npcTarget.key, 'user');
+                else if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') IRIS_STATE.history.pop();
+                lastFailedInput = text;
+                const retryBtn = document.getElementById('iris-retry-btn');
+                if (retryBtn) retryBtn.classList.add('visible');
+                if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);
+                else if (npcTarget) playIrisSequence(`[Nar|(${npcTarget.name}的身影微微晃動了一下，像訊號不良的殘影。)]\n[Char|${npcTarget.name}|error|「抱歉……剛剛走神了，能再說一次嗎？」]`);
+                else playIrisSequence(`[Nar|(空間產生劇烈波動)]\n[Char|瀅瀅|error|「抱歉，委託人，我的腦袋突然一片空白，請等我重整一下靈感。」]`);
+                return;
+            }
+
+            lastFailedInput = '';
+            const retryBtnEl = document.getElementById('iris-retry-btn');
+            if (retryBtnEl) retryBtnEl.classList.remove('visible');
+
+            // 1. 舊 Panel 標籤已廢棄
+            reply = reply.replace(/\[Panel\|[^\]]*\]/g, '').replace(/\[PanelItem\|[^\]]*\]/g, '').replace(/\[PanelDetail\|[^\]]*\]/g, '').trim();
+
+            // 1.5 大廳畫布面板解析（存 pending，對話結束後再顯示）
+            _pendingLobbyRender = null;
+            const lobbyPanelData = VoidCanvas.parseLobbyPanel(reply);
+            if (lobbyPanelData) {
+                reply = reply.replace(/<lobbyPanel>[\s\S]*?<\/lobbyPanel>/i, '').trim();
+                _pendingLobbyRender = () => VoidCanvas.renderPanel(lobbyPanelData);
+            }
+
+            // 1.6 大廳模板快捷調用解析
+            if (!_pendingLobbyRender) {
+                const lobbyTplMatch = reply.match(/<lobbyTemplate>([\s\S]*?)<\/lobbyTemplate>/i);
+                if (lobbyTplMatch) {
+                    const tplTagId = lobbyTplMatch[1].trim();
+                    reply = reply.replace(/<lobbyTemplate>[\s\S]*?<\/lobbyTemplate>/i, '').trim();
+                    _pendingLobbyRender = () => VoidCanvas.renderTemplate(tplTagId);
+                }
+            }
+
+            // 1.7 偵測任意已安裝的 VN 區塊標籤 <tagId>...</tagId>
+            if (!_pendingLobbyRender) {
+                const db = window.OS_DB;
+                if (db && typeof db.getAllVNTagTemplates === 'function') {
+                    const templates = await db.getAllVNTagTemplates();
+                    const active = templates.filter(t => (t.isActive || (Array.isArray(t.groupIds) && t.groupIds.includes('g_lobby')) || t.lobbyEnabled) && t.isBlock && t.tagId);   // 大廳組成員(或舊旗標)
+                    for (const tpl of active) {
+                        const safeId = tpl.tagId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const re = new RegExp(`<${safeId}>([\\s\\S]*?)<\\/${safeId}>`, 'i');
+                        const m = reply.match(re);
+                        if (m) {
+                            const lines = m[1].split('\n').map(l => l.trim()).filter(Boolean);
+                            reply = reply.replace(m[0], '').trim();
+                            const capturedTpl = tpl;
+                            const capturedLines = lines;
+                            _pendingLobbyRender = () => {
+                                const overlay = document.getElementById('lobby-canvas-overlay');
+                                const content = document.getElementById('lca-content');
+                                const titleEl = document.getElementById('lca-title');
+                                if (!overlay || !content) return;
+                                const styleId = 'lobby-panel-style';
+                                let styleEl = document.getElementById(styleId);
+                                if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = styleId; document.head.appendChild(styleEl); }
+                                styleEl.textContent = capturedTpl.css || '';
+                                content.innerHTML = capturedTpl.html || '';
+                                if (titleEl) titleEl.textContent = capturedTpl.usageDesc || capturedTpl.tagId;
+                                overlay.style.display = 'flex';
+                                const area = document.getElementById('lobby-canvas-area');
+                                if (area) area.style.animation = 'lcaSlideIn 0.3s ease';
+                                if (capturedTpl.js) {
+                                    const LP3 = VoidCanvas.makeLobbyPanelAPI();
+                                    window.__LP = LP3;
+                                    try {
+                                        const fn = new Function('container', 'lines', 'onComplete', 'LP', capturedTpl.js);
+                                        fn(content, capturedLines, VoidCanvas.closeCanvas, LP3);
+                                    } catch(e) { console.error('[VNBlock]', e); }
+                                    VoidCanvas.rewireOnclicks(content, LP3);
+                                }
+                            };
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // 2. 世界頻道解析
+            const feedRegex = /\[FEED\|([^|]+)\|([^\]]+)\]/g; let feedMatch;
+            while ((feedMatch = feedRegex.exec(reply)) !== null) addFeedEntry(feedMatch[1].trim(), feedMatch[2].trim());
+            reply = reply.replace(/\[FEED\|[^\]]+\]/g, '').trim();
+
+            // 3. 柴郡 404 返回解析
+            let shouldRestoreLobby = false;
+            if (reply.includes('[RESTORE_LOBBY]')) { reply = reply.replace(/\[RESTORE_LOBBY\]/g, '').trim(); shouldRestoreLobby = true; }
+
+            // 🔥 4. 核心連動：攔截 [LaunchApp|xxx] 標籤
+            let shouldLaunchApp = null;
+            const launchRegex = /\[LaunchApp\|([^\]]+)\]/gi;
+            let match;
+            while ((match = launchRegex.exec(reply)) !== null) {
+                shouldLaunchApp = match[1].trim();
+            }
+            reply = reply.replace(/\[LaunchApp\|[^\]]+\]/gi, '').trim();
+
+            // 💭 這則回覆的思考跟著紀錄存（對話紀錄窗裡可以點開看）。只留前 4000 字；送回模型的那份會拿掉（見上面 recentHistory）
+            const _replyRec = { role: 'assistant', content: reply, ts: Date.now() };
+            try { const _tk = (window.OS_API && window.OS_API.lastThink) ? window.OS_API.lastThink(_thinkT0) : ''; if (_tk) _replyRec.think = _tk.slice(0, 4000); } catch (e) {}
+            if (npcTarget) window.LobbyStage.pushNpcHistory(npcTarget.key, _replyRec);
+            else IRIS_STATE.history.push(_replyRec);
+            debouncedSave();
+
+            // 🎮 大廳 NPC 一對一記憶：到量背景壓縮（不 await，不阻塞打字機）
+            try {
+                if (npcTarget) {
+                    _compactNpcMemory(npcTarget.key, npcTarget.name, 'guest');
+                } else if (window.LobbyStage?.isActive?.()) {
+                    if (is404Room) _compactNpcMemory('cheshire', '柴郡', 'cheshire');
+                    else _compactNpcMemory('ying', '瀅瀅', 'iris');
+                }
+            } catch (e) {}
+
+            // 🚨 等回覆的時候換人講了（例如話送給丹、還沒回就點去瀅瀅）：不打進現在這位的框裡，只記在丹自己的紀錄。
+            //   10-13：以前對話框會這樣互相滲透
+            try {
+                const onStageNow = !!window.LobbyStage?.isActive?.();
+                const pvNow = window.LobbyPlaces?.speaker?.();
+                const nowT = (!is404Room && (onStageNow || pvNow)) ? (window.LobbyStage?.getTalkTarget?.() || (onStageNow ? window.LobbyStage.getDefaultTarget?.() : null) || null) : null;
+                const keyOf = (t) => (t && t.key) || '';
+                if (keyOf(nowT) !== keyOf(_stageTarget)) {
+                    const who = npcTarget ? npcTarget.name : (is404Room ? '柴郡' : '瀅瀅');
+                    try { window.AUI?.toast?.(who + '回了你，記在' + who + '的對話紀錄裡'); } catch (e) {}
+                    if (shouldRestoreLobby) pendingRestoreLobby = true;
+                    return;
+                }
+            } catch (e) {}
+
+            // 播放對話，完成後檢查是否需要打開面板
+            playIrisSequence(reply, () => {
+                if (shouldLaunchApp && window.AureliaControlCenter) {
+                    setTimeout(() => {
+                        window.AureliaControlCenter.launchGameApp(shouldLaunchApp);
+                    }, 500);
+                }
+                // 對話跑完後才彈出面板，不遮對話
+                if (_pendingLobbyRender) {
+                    setTimeout(() => {
+                        _pendingLobbyRender();
+                        _pendingLobbyRender = null;
+                    }, 300);
+                }
+            });
+
+            if (shouldRestoreLobby) pendingRestoreLobby = true;
+
+        } catch (e) {
+            const isAbort = e?.name === 'AbortError' || /abort/i.test(e?.message || '');
+            // 跟上面「回覆是錯誤」那條同一套收尾：撤掉剛推進去的那句（NPC 推在他自己的軌道上，不是瀅瀅那條）、
+            //   留著原文給重試鈕。以前一律 pop 瀅瀅的、也沒記原文 → 跟 NPC 講話出錯時，打的字就這樣不見了
+            if (npcTarget) window.LobbyStage.popNpcHistoryTail(npcTarget.key, 'user');
+            else if (IRIS_STATE.history.length > 0 && IRIS_STATE.history[IRIS_STATE.history.length - 1].role === 'user') IRIS_STATE.history.pop();
+            lastFailedInput = text;
+            const retryBtn = document.getElementById('iris-retry-btn');
+            if (retryBtn) retryBtn.classList.add('visible');
+            if (isAbort) {
+                // 使用者主動停止：靜默處理，思考中文字換成已停止提示
+                const txtBox = document.getElementById('iris-text');
+                if (txtBox) txtBox.innerHTML = `<span class="void-nar" style="color:${is404Room ? '#15a82f' : '#9c9083'}; font-style:italic; font-size:12px;"><i class="fa-solid fa-stop"></i> 已停止</span>`;
+            } else {
+                console.error("[VoidTerminal Chat Error]", e);
+                if (is404Room) playIrisSequence(`[Nar|(馬賽克雜訊劇烈閃爍)]\n[Char|柴郡|glitch|*(眼神滿是嫌棄)* 連線爛掉了，不是我的問題。]`);
+                else if (npcTarget) playIrisSequence(`[Nar|(${npcTarget.name}的身影微微晃動了一下，像訊號不良的殘影。)]\n[Char|${npcTarget.name}|error|「抱歉……剛剛走神了，能再說一次嗎？」]`);
+                else playIrisSequence(`[Nar|(空間產生劇烈波動)]\n[Char|瀅瀅|error|「抱歉，委託人，我的腦袋突然一片空白，請等我重整一下靈感。」]`);
+            }
+        } finally {
+            // 還原送出鈕（無論成功 / 失敗 / 中止 / 早返回都會跑這裡）
+            _irisAbortCtrl = null;
+            const sb = document.getElementById('iris-send-btn');
+            if (sb) {
+                sb.innerHTML = '<i class="fa-solid fa-paper-plane"></i>';
+                sb.onclick = sendIrisMessage;
+            }
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // 🚪 宿舍（AI 助手）—— 大廳 dock 是唯一入口
+    // ------------------------------------------------------------------
+    // 房間本體是隔壁的獨立擴展 claude-codex-room：跟奧瑞亞兩條 git 線，
+    // 酒館那邊也是分開的兩個腳本。沒裝它的人不該在 dock 上看到一顆死鈕，
+    // 所以入口是「有打算載房間才出現」，而不是永遠在、按了才說沒裝。
+    //
+    // 「有沒有打算載」用兩個訊號，缺一就漏掉一個宿主：
+    //   __CCR_LOADED__ —— 房間 index.js 第一行就設。酒館用 import 載擴展，
+    //                     不會留下 script 標籤，只有這個認得出來。
+    //   script 標籤    —— PWA 是自己在 index.html 拉 CDN 那支。房間要是 404，
+    //                     前者永遠不會被設，但標籤在＝她本來就要它 →
+    //                     鈕要出現，按下去才有人告訴她斷在哪一段。
+    // ══════════════════════════════════════════════════════════════════
+    function _aiRoomIntended() {
+        if (window.__CCR_LOADED__) return true;
+        try { return !!document.querySelector('script[src*="claude-codex-room"][src*="/index.js"]'); }
+        catch (e) { return false; }
+    }
+
+    // dock 那顆與 MAIN MENU 那條一起開關。房間是非同步載進來的，
+    // 所以房間載完會自己再叫一次這支（大廳先畫好也沒關係）。
+    VoidTerminal.refreshAiEntry = function () {
+        const on = _aiRoomIntended();
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.toggle('lb-entry-off', !on);
+        } catch (e) {}
+    };
+
+    // 留言板上有新東西時，宿舍那顆點一下 —— 房間查到之後叫這支（它以前是畫在自己的浮球上，
+    // 浮球收掉之後那個提醒就沒地方站了）。最軟的提醒：不彈窗、不出聲，進去看過就消失。
+    //   kind：'news' 板子上的紙條（藍）、'prop' 想跟妳說的（金）、'msg' 住戶醒來傳訊息給妳（紅，房間 dorm.js 判斷誰還沒看）
+    const _AI_NEWS_CLS = { prop: 'lb-ai-news-prop', msg: 'lb-ai-news-msg' };
+    VoidTerminal.markAiNews = function (kind) {
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) {
+                els[i].classList.add(_AI_NEWS_CLS[kind] || 'lb-ai-news');
+            }
+        } catch (e) {}
+    };
+    // 那幾則都看過了（例如進了傳訊息那位的房間）：只熄那一種，別的照亮
+    VoidTerminal.clearAiNews = function (kind) {
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.remove(_AI_NEWS_CLS[kind] || 'lb-ai-news');
+        } catch (e) {}
+    };
+
+    // 💬 微信有沒有人在等她回：手機在「應用」那顆裡面，她沒開就完全不知道有人講話了。
+    //    最軟的提醒：dock 與 MAIN MENU 的「應用」點一顆小點，開過微信就自己消失。
+    //    由微信算好 true/false 叫進來——大廳只負責標自己的 DOM。
+    VoidTerminal.markPhoneUnread = function (on) {
+        try {
+            const els = document.querySelectorAll('#lb-dock-apps, #void-apps-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.toggle('has-pending', !!on);
+        } catch (e) {}
+    };
+
+    function _clearAiNews() {
+        try {
+            const els = document.querySelectorAll('#lb-dock-ai, #void-ai-btn');
+            for (let i = 0; i < els.length; i++) els[i].classList.remove('lb-ai-news', 'lb-ai-news-prop', 'lb-ai-news-msg');
+        } catch (e) {}
+    }
+    VoidTerminal.openAiDorm = function () {
+        if (window.ChatWindow && typeof window.ChatWindow.toggleLauncherMenu === 'function') {
+            _clearAiNews();
+            window.ChatWindow.toggleLauncherMenu(document.body);
+            return;
+        }
+        _openAiDiag();
+    };
+
+    function _aiEsc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    // 房間叫不出來的原因不只一種，一律寫「沒裝」等於挑一個猜給她看。
+    // 三段各查一次，講斷在哪一段（原本住在手機殼那顆 app 裡，入口收攏後跟著搬過來）。
+    function _openAiDiag() {
+        const old = document.getElementById('vt-aidiag');
+        if (old) old.remove();
+        const box = document.createElement('div');
+        box.id = 'vt-aidiag';
+        box.className = 'vt-aidiag';
+        box.innerHTML =
+            '<div class="vt-aidiag-card">'
+            + '<div class="vt-aidiag-body">正在確認宿舍…</div>'
+            + '<button type="button" class="vt-aidiag-close">關閉</button>'
+            + '</div>';
+        document.body.appendChild(box);
+        box.addEventListener('click', function (e) { if (e.target === box) box.remove(); });
+        box.querySelector('.vt-aidiag-close').addEventListener('click', function () { box.remove(); });
+        _fillAiDiag(box.querySelector('.vt-aidiag-body'));
+    }
+
+    function _fillAiDiag(c) {
+        if (!c) return;
+        // 只認拉起房間的那一支。房間自己會再插一批 core/*.js 進來，光比對資料夾名會連那些一起中；
+        // 而網址有兩種長相（本機 claude-codex-room/index.js、CDN claude-codex-room@<commit>/index.js）。
+        const tag = document.querySelector('script[src*="claude-codex-room"][src*="/index.js"]');
+        if (!tag) {
+            c.innerHTML =
+                '<div class="vt-aidiag-title">這個畫面是舊的</div>'
+                + '<div class="vt-aidiag-line">手機上存下來的這份還沒有宿舍，換成最新版就會出現。</div>'
+                + '<button type="button" class="vt-aidiag-btn">抓最新版重開</button>';
+            const b = c.querySelector('.vt-aidiag-btn');
+            if (b) b.addEventListener('click', _aiHardReload);
+            return;
+        }
+        const url = tag.src;
+        fetch(url, { cache: 'no-store' }).then(function (r) {
+            if (!r.ok) {
+                c.innerHTML =
+                    '<div class="vt-aidiag-title">找不到宿舍的檔案</div>'
+                    + '<div class="vt-aidiag-line">它是另一個資料夾裡的東西，這台可能沒放。</div>'
+                    + '<div class="vt-aidiag-tech">' + _aiEsc(url) + '<br>回應 ' + r.status + '</div>';
+                return;
+            }
+            c.innerHTML =
+                '<div class="vt-aidiag-title">宿舍讀進來了，但沒開起來</div>'
+                + '<div class="vt-aidiag-line">檔案抓得到，房間卻沒啟動 —— 它自己載到一半出錯了。</div>'
+                + '<div class="vt-aidiag-tech">' + _aiEsc(url) + '<br>回應 200</div>'
+                + '<button type="button" class="vt-aidiag-btn">抓最新版重開</button>';
+            const b2 = c.querySelector('.vt-aidiag-btn');
+            if (b2) b2.addEventListener('click', _aiHardReload);
+        }).catch(function (e) {
+            c.innerHTML =
+                '<div class="vt-aidiag-title">連不到宿舍的檔案</div>'
+                + '<div class="vt-aidiag-line">網路那一段就斷了，不是房間本身的問題。</div>'
+                + '<div class="vt-aidiag-tech">' + _aiEsc(url) + '<br>' + _aiEsc(e && e.message || e) + '</div>';
+        });
+    }
+
+    // 清掉存下來的那份再重載。加到主畫面的 PWA 單純下拉重整常常還是拿到同一份。
+    function _aiHardReload() {
+        const jobs = [];
+        try {
+            if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+                jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+                    return Promise.all(rs.map(function (r) { return r.unregister(); }));
+                }));
+            }
+        } catch (e) {}
+        try {
+            if (window.caches && caches.keys) {
+                jobs.push(caches.keys().then(function (ks) {
+                    return Promise.all(ks.map(function (k) { return caches.delete(k); }));
+                }));
+            }
+        } catch (e) {}
+        Promise.all(jobs).catch(function () {}).then(function () { location.reload(); });
+    }
+
+    // 宿主自己有入口了 → 叫房間別再掛它預設的右下角浮球。
+    // 兩邊誰先載都可能（酒館的擴展清單順序不固定），所以旗標與重畫兩件事都做：
+    // 房間後到會自己讀旗標，房間先到就靠這一叫把已經掛上去的收掉。
+    window.__CCR_NO_LAUNCHER__ = true;
+    try { if (window.CCR_LAUNCHER && window.CCR_LAUNCHER.refresh) window.CCR_LAUNCHER.refresh(); } catch (e) {}
+
+    // ===== 導出全局介面 =====
+    // 暴露到外層，讓其他面板 (如書架 QbBookshelf) 能夠調用
+    VoidTerminal.playSequence = playIrisSequence;
+    VoidTerminal.recompactNpcMemory = recompactNpcMemory;   // 大廳 NPC 記憶手動整理（actor menu 呼叫）
+    VoidTerminal.primeStageDialog = primeStageDialog;       // 開聊/切換 NPC 清殘留對話框（lobby_stage 呼叫）
+    VoidTerminal.primeTalk = primeTalk;                     // 對話模式換對象：名牌／提示字／框裡那句一起換（lobby_places 呼叫）
+    // 對話模式走進／離開 404 地點：跟舞台的 lstage-scene 同一件事（換皮＋對話紀錄換成柴郡那份），不放儀式
+    VoidTerminal.sync404 = (on) => _sync404Chrome(on);
+
+    // 🔥 全局登入紀錄 API
+    VoidTerminal.getUserName = function() { 
+        return IRIS_STATE.userName || ''; 
+    };
+    VoidTerminal.setUserName = function(newName) { 
+        if(newName) {
+            IRIS_STATE.userName = newName;
+            debouncedSave(); // 確保改名後有存進資料庫
+        }
+    };
+    VoidTerminal.getChatId = getChatId;
+
+    // 供 OS_404_STORE 呼叫：開啟商店面板
+    VoidTerminal.openStorePanel = () => VoidPanels.openStore();
+
+    // 供 OS_ACHIEVEMENT 回呼：刷新已開啟的成就面板
+    VoidTerminal.refreshAchievementPanel = () => VoidPanels.refreshAchievement();
+
+    // 供快轉地圖（lobby_stage._openCityMap）呼叫：404 進出走完整流程（glitch 特效/音效/BGM/柴郡開場）
+    VoidTerminal.enter404Room = enter404Room;
+    VoidTerminal.restoreLobby = restoreLobby;
+    VoidTerminal.get404State = () => ({ unlocked: visit404Count >= 1, active: is404Room });
+    VoidTerminal.play404Opening = _play404OpeningVideo;   // 測試用：不動 visit404Count 直接重播開場片
+
+    // ===== 內部橋（給 core/void/ 子模組借用核心狀態與函式）=====
+    VoidTerminal._bridge = {
+        // canvas.js
+        is404: () => is404Room,
+        // lobby_stage.js — 場景切換時更新左上場景牌
+        setSceneBadge: (place) => setSceneBadge(place),
+        // ambient.js
+        isActivitySuspended: () => _isActivitySuspended,
+        isPanelOpen:         () => _isPanelOpen,
+    };
+
+    console.log('✅ 大廳敘事引擎 (VoidTerminal) 模組就緒 (大廳書櫃整合版)');
+
+})(window.VoidTerminal = window.VoidTerminal || {});

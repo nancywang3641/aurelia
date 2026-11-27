@@ -1,0 +1,517 @@
+// os_phone/os/app_store.js
+// 🛒 應用商店：手機殼裡「貼上匯入」或「開創作室生成」完整 HTML 功能型 app，安裝到桌面。
+// UI：首頁總覽（AI生成→OS_STUDIO / 匯入）+ 匯入 view + 我的應用 view + 底部 nav。
+(function () {
+    'use strict';
+    const win = window;
+
+    // ❔ 設定旁邊問號點開的說明（AUI.helpBtn），面板上不掛說明文字
+    try {
+        if (win.AUI && win.AUI.registerHelp) win.AUI.registerHelp({
+            as_wake: { title: '自動產生', body: '開啟後，這個應用會依「間隔」和「機率」自動產生新內容，並在桌面圖示顯示紅點、發送通知。\n時間從開啟時起算；僅在手機開著時運作。' },
+            as_bundle: { title: '提示詞包', body: '選一個提示詞包後，這個應用呼叫模型時會一併帶上包內條目。選「不用」則只帶角色卡、世界書和近期劇情。\n包的內容在「提示詞」修改，改完不需重選。' }
+        });
+    } catch (e) {}
+    const INSTALLED_KEY = 'aurelia_phone_apps';      // 與 phone_shell.js 同 key：[{id,name,emoji,iconUrl}]
+    const OPENED_KEY = 'aurelia_app_opened';         // {id: timestamp} —— 最近使用，phone_shell 開 app 時寫
+    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+    function _loadList() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
+    // 寫不進去 lsSet 會跳「○○沒存下來」；回 true／false（安裝那裡拿它決定要不要報「已安裝到桌面」）
+    function _saveList(list) { return win.AUI.lsSet(INSTALLED_KEY, JSON.stringify(list), '桌面上的應用清單'); }
+    function _loadOpened() { try { return JSON.parse(win.localStorage.getItem(OPENED_KEY)) || {}; } catch (e) { return {}; } }
+    function _markOpened(id) { var m = _loadOpened(); m[id] = Date.now(); win.AUI.lsSet(OPENED_KEY, JSON.stringify(m), '最近用過的應用'); }
+    function _relTime(ts) {
+        if (!ts) return '尚未使用';
+        var d = Date.now() - ts, m = 60000, h = 3600000, day = 86400000;
+        if (d < m) return '剛剛使用';
+        if (d < h) return Math.floor(d / m) + ' 分鐘前';
+        if (d < day) return Math.floor(d / h) + ' 小時前';
+        return Math.floor(d / day) + ' 天前';
+    }
+    function _toast(c, msg) { AUI.toast(msg); }
+    // 應用圖示：自己挑的 emoji 照用；沒挑的用 FA（創作室做的記在 icon 欄）。📦／🧩 是舊版塞的預設值，當作沒挑
+    function _appEm(a) { const e = String((a && a.emoji) || '').trim(); return (e && e !== '📦' && e !== '🧩') ? e : ''; }
+    function _appIcHTML(a) {
+        if (_appEm(a)) return _esc(_appEm(a));
+        const i = /^fa-[a-z0-9-]+$/.test(String(a && a.icon || '')) ? a.icon : ((a && a.emoji === '🧩') ? 'fa-puzzle-piece' : 'fa-cube');
+        return '<i class="fa-solid ' + i + '"></i>';
+    }
+
+    // ── 孤兒數據清理：app 自己存的資料散在四處（localStorage aurelia_appdata_<id>_*、
+    //    OS_DB app_data 的 <id>::、OS_DB app_memory 的 <id>::、記憶開關旗標 os_app_mem_plugin_<id>）。
+    //    卸載只刪安裝記錄、這些資料桶全留下 → 孤兒。卸載與「清理殘留資料」都靠這組按 appId 全清。──
+    function _purgeLocalAppData(id) {
+        try {
+            const pre = 'aurelia_appdata_' + id + '_';
+            const kill = [];
+            for (let i = 0; i < win.localStorage.length; i++) { const k = win.localStorage.key(i); if (k && k.indexOf(pre) === 0) kill.push(k); }
+            kill.forEach(function (k) { win.localStorage.removeItem(k); });
+        } catch (e) {}
+    }
+    async function _purgeAppData(id) {
+        try { if (win.OS_DB && win.OS_DB.deleteAppDataByApp) await win.OS_DB.deleteAppDataByApp(id); } catch (e) {}
+        try { if (win.OS_DB && win.OS_DB.deleteAppMemoryByApp) await win.OS_DB.deleteAppMemoryByApp(id); } catch (e) {}
+        _purgeLocalAppData(id);
+        try { win.localStorage.removeItem('os_app_mem_plugin_' + id); } catch (e) {}
+    }
+    // localStorage 裡有資料的 appId（id 格式固定 app_<時間>_<亂碼> 或 preview 預覽）
+    function _lsAppIds() {
+        const out = {};
+        try {
+            for (let i = 0; i < win.localStorage.length; i++) {
+                const k = win.localStorage.key(i);
+                const m = k && k.match(/^aurelia_appdata_(app_\d+_[a-z0-9]+|preview)_/);
+                if (m) out[m[1]] = 1;
+            }
+        } catch (e) {}
+        return Object.keys(out);
+    }
+    // 掃出「孤兒」：三個資料桶裡出現過、但已不在已安裝清單的 appId（排除 preview 預覽暫存）
+    // 🚨🚨 只認應用的 id 格式（app_<時間>_<亂碼>，os_db.js 安裝時唯一的產生方式）。
+    //    app_data 這個桶不只應用在用：PT 餘額(pt_wallet)、房產與藍圖(landlord)、書咖櫃檯(book_cafe)、
+    //    主角狀態(mc_status)、世界門(worldgate)、微信錢包(wx_wallet)、外送店家(wx_takeout)、聊天 app 主題(wx_theme_pack)、家具(furniture)、角色卡正則(aurelia_card_regex)、
+    //    VN 組件的資料(vnpanel:<tag>)、創作室預覽(studio_preview)、宿舍 API 小機每隻的存檔(xiaoji) 全都住在這裡。
+    //    以前任何「不在已安裝清單」的 id 都算孤兒 → 這些系統資料全被列進「清理殘留資料」，一按就刪光，
+    //    而且因為它們永遠不會是已安裝的應用，那一條永遠清不掉、一直冒出來。
+    const APP_ID_RE = /^app_\d+_[a-z0-9]+$/;
+    async function _scanOrphans(installedSet) {
+        const ids = {};
+        try { if (win.OS_DB && win.OS_DB.listAppDataAppIds) (await win.OS_DB.listAppDataAppIds()).forEach(function (x) { ids[String(x)] = 1; }); } catch (e) {}
+        try { if (win.OS_DB && win.OS_DB.getAllAppMemory) (await win.OS_DB.getAllAppMemory()).forEach(function (r) { if (r && r.appId) ids[String(r.appId)] = 1; }); } catch (e) {}
+        _lsAppIds().forEach(function (x) { ids[x] = 1; });
+        return Object.keys(ids).filter(function (id) { return APP_ID_RE.test(id) && !installedSet.has(id); });
+    }
+
+    // 素材圖：GPT 工坊插畫，host 在獨立 sound-files 素材庫（code repo 有 jsdelivr 50MB 上限、aseets 不追蹤）
+    const ASSET_BASE = 'https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio-ui/';
+    const ASSET_MAP = {
+        'im-icon': 'workshop-import.png',   // 匯入應用（資料箱；卡片搬去帽匠工坊後這張只剩匯入頁的頭圖在用）
+    };
+    function _applyAssets(c) {
+        c.querySelectorAll('[data-asset]').forEach(function (img) {
+            var k = img.dataset.asset, v = ASSET_MAP[k];
+            if (!v) { img.remove(); return; }                       // 沒對應素材 → 拿掉，不留破圖
+            img.onerror = function () { img.classList.add('ws-img-broken'); };   // 載入失敗也隱藏（卡片文字照常可用）
+            img.src = /^https?:/i.test(v) ? v : ASSET_BASE + v;     // 完整網址直接用，否則接 studio-ui base
+        });
+    }
+
+    const STORE_HTML =
+        '<div class="ws-app">'
+      +   '<div class="ws-views">'
+      // ── 首頁 ──
+      +     '<div class="ws-view active" data-view="home">'
+      +       '<div class="ws-home-hd"><button class="ws-back ws-home-back" type="button" title="返回桌面"><i class="fa-solid fa-chevron-left"></i></button><div class="ws-home-hd-tx"><div class="ws-home-title">應用工坊 <i class="fa-solid fa-wand-magic-sparkles ws-spark"></i></div><div class="ws-home-sub">創造屬於你的專屬應用</div></div></div>'
+      // 🎩 做給劇情用的那半（VN 組件／製作互動面板／特效工坊／劇情主題）2026-08-26 搬去廣場的
+      //    帽匠工坊（core/void/lobby_workshop.js）＝走得進去的一間店。
+      //    世界書／我的角色 2026-09-20 搬去書咖那張單人沙發組（沙發＝我的角色、圓几＝世界書），
+      //    兌現上一版註解裡那句「書咖還沒做，現在搬過去會變孤兒」—— 書咖做好了。
+      //    🚨 入口跟著東西走，不留第二份：走進書咖、點沙發就是唯一的入口。
+      //    匯入應用留在這裡：匯進來的是「手機上的應用」，安裝完就住手機桌面。
+      +       '<button class="ws-card ws-card-sm ws-card-im" data-go="import" type="button"><img class="ws-card-ic" data-asset="im-icon" alt=""><span class="ws-card-tx"><span class="ws-card-t">匯入應用</span><span class="ws-card-d">貼上或載入現成 HTML，安裝到手機桌面</span></span><span class="ws-card-go"><i class="fa-solid fa-chevron-right"></i></span></button>'
+      +     '</div>'
+      // ── 匯入 ──
+      +     '<div class="ws-view" data-view="import">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button"><i class="fa-solid fa-chevron-left"></i></button><span class="ws-vhd-t">匯入應用</span></div>'
+      +       '<div class="ws-vbody">'
+      +         '<div class="ws-hero"><img class="ws-hero-img ws-hero-sm" data-asset="im-icon" alt=""></div>'
+      +         '<div class="ws-field-lab">應用名稱</div>'
+      +         '<input class="ws-input" id="as-im-name" type="text" placeholder="例：恐怖電台">'
+      +         '<div class="ws-field-lab">圖標 emoji</div>'
+      +         '<input class="ws-input ws-emoji" id="as-im-emoji" type="text" maxlength="2" placeholder="可留空">'
+      +         '<div class="ws-field-lab">貼上完整 HTML（或上傳 .html 檔）</div>'
+      +         '<label class="ws-file-btn" for="as-im-file"><i class="fa-solid fa-folder-open"></i> 選擇 .html 檔</label><input class="ws-file" id="as-im-file" type="file" accept=".html,.htm,text/html">'
+      +         '<textarea class="ws-ta ws-ta-code" id="as-im-html" placeholder="&lt;!DOCTYPE html&gt; ... &lt;/html&gt;"></textarea>'
+      +         '<button class="ws-btn ws-btn-line" id="as-im-prev-btn" type="button">預覽</button>'
+      +         '<div class="ws-prev-wrap hidden" id="as-im-prev-wrap"><div class="ws-prev-lab">預覽</div><div class="ws-prev" id="as-im-prev"></div></div>'
+      +         '<button class="ws-btn ws-btn-ok" id="as-im-install" type="button">安裝到桌面</button>'
+      +       '</div>'
+      +     '</div>'
+      // ── 我的應用 ──
+      +     '<div class="ws-view" data-view="mine">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="home" type="button"><i class="fa-solid fa-chevron-left"></i></button><span class="ws-vhd-t">我的應用</span></div>'
+      +       '<div class="ws-vbody"><div class="ws-mine-list" id="as-mine-list"></div></div>'
+      +     '</div>'
+      // ── app 操作詳情（第二層：從我的應用點一條進來，換頁、不摺疊）──
+      +     '<div class="ws-view" data-view="appdetail">'
+      +       '<div class="ws-vhd"><button class="ws-back" data-go="mine" type="button"><i class="fa-solid fa-chevron-left"></i></button><span class="ws-vhd-t" id="as-detail-title">應用</span></div>'
+      +       '<div class="ws-vbody"><div id="as-detail-body"></div></div>'
+      +     '</div>'
+      +   '</div>'
+      // ── 底部 nav ──
+      +   '<div class="ws-nav">'
+      +     '<button class="ws-nav-b active" data-go="home" type="button"><span class="ws-nav-ic"><i class="fa-solid fa-house"></i></span><span class="ws-nav-t">首頁</span></button>'
+      +     '<button class="ws-nav-b" data-go="mine" type="button"><span class="ws-nav-ic"><i class="fa-solid fa-table-cells-large"></i></span><span class="ws-nav-t">我的</span></button>'
+      +   '</div>'
+      // ── 安裝成功覆蓋 + toast ──
+      +   '<div class="ws-success hidden" id="ws-success"><div class="ws-suc-check"><i class="fa-solid fa-check"></i></div><div class="ws-suc-t">安裝成功！</div><div class="ws-suc-name"></div></div>'
+      + '</div>';
+
+    // 🔐 匯入框裡她按過「打開」的那一份 HTML：同一份再預覽不再問、裝上桌面時記成已同意（app_runtime.js 的 askToRun）。
+    //   內容改過就是另一份，再問一次。從「原始碼」載進來的是她已經在跑的 app，直接算同意過。
+    let _okHtml = '';
+
+    function launch(c) {
+        if (!c) return;
+        _okHtml = '';
+        c.innerHTML = STORE_HTML;
+        _applyAssets(c);
+        // 首頁返回鈕：退出工坊 app 回手機桌面（phone_shell 已把 PhoneSystem.goHome 接成回桌面）
+        var _homeBack = c.querySelector('.ws-home-back');
+        if (_homeBack) _homeBack.addEventListener('click', function () {
+            if (win.PhoneSystem && win.PhoneSystem.goHome) win.PhoneSystem.goHome();
+            else if (win.VoidPhoneShell && win.VoidPhoneShell.home) win.VoidPhoneShell.home();
+        });
+        // 導覽：所有 data-go（卡片/返回/查看全部/底部 nav）
+        c.querySelectorAll('[data-go]').forEach(function (b) {
+            b.addEventListener('click', function () { _go(c, b.dataset.go); });
+        });
+        _bindImport(c);
+    }
+
+    // 切換視圖
+    function _go(c, view) {
+        // 空字串／不存在的目標（例：VN組件卡 data-go 被解除成 ''，但通用監聽仍會帶 '' 進來）
+        // 不可硬切——否則所有 .ws-view 都被關掉，開完創作室返回工坊就整片空白（nav 還在、內容沒了）。
+        if (!view || !c.querySelector('.ws-view[data-view="' + view + '"]')) return;
+        c.querySelectorAll('.ws-view').forEach(function (v) { v.classList.toggle('active', v.dataset.view === view); });
+        c.querySelectorAll('.ws-nav-b').forEach(function (b) { b.classList.toggle('active', b.dataset.go === view); });
+        var body = c.querySelector('.ws-view[data-view="' + view + '"] .ws-vbody') || c.querySelector('.ws-view[data-view="' + view + '"]');
+        if (body) body.scrollTop = 0;
+        if (view === 'mine') renderMine(c);
+    }
+
+    // ── 安裝 / 卸載（共用）──
+    async function _install(c, rec) {
+        if (!win.OS_DB || !win.OS_DB.savePhoneApp) { _toast(c, '儲存層未就緒'); return; }
+        const id = await win.OS_DB.savePhoneApp(rec);
+        rec.id = id;
+        const list = _loadList().filter(function (m) { return m.id !== id; });
+        list.push({ id: id, name: rec.name, emoji: rec.emoji, iconUrl: rec.iconUrl || '' });
+        const listSaved = _saveList(list);
+        _markOpened(id);
+        if (win.VoidPhoneShell && win.VoidPhoneShell.addApp) win.VoidPhoneShell.addApp({ id: id, name: rec.name, emoji: rec.emoji, icon: rec.icon || '', iconUrl: rec.iconUrl || '' });
+        if (!listSaved) { _go(c, 'mine'); return; }   // 桌面清單沒存成（提示已跳）：不報「已安裝到你的桌面」，重整後圖標會不見
+        _showSuccess(c, rec.name);
+    }
+    async function _uninstall(id, c) {
+        // 先抓安裝記錄：創作室生成的 app 帶 srcTplId，卸載要連它的 VN 組件模板一起清（共用＝一個東西、整個移除、不留 VN組件孤兒）
+        let _rec = null;
+        try { _rec = (win.OS_DB && win.OS_DB.getPhoneApp) ? await win.OS_DB.getPhoneApp(id) : null; } catch (e) {}
+        if (win.OS_DB && win.OS_DB.deletePhoneApp) await win.OS_DB.deletePhoneApp(id);
+        await _purgeAppData(id);   // 連同 app 自己存的資料（面板/記憶/旗標）一起刪，兌現對話框承諾的「內容刪除」、不留孤兒
+        if (_rec && _rec.srcTplId && win.OS_STUDIO && win.OS_STUDIO.purgeTemplateFully) {
+            try { await win.OS_STUDIO.purgeTemplateFully(_rec.srcTplId); } catch (e) {}   // 連 VN 組件模板＋酒館殘留一起清
+        }
+        _saveList(_loadList().filter(function (m) { return m.id !== id; }));
+        if (win.VoidPhoneShell && win.VoidPhoneShell.removeApp) win.VoidPhoneShell.removeApp(id);
+        renderMine(c);
+    }
+    function _showSuccess(c, name) {
+        var ov = c.querySelector('#ws-success'); if (!ov) { _go(c, 'mine'); return; }
+        var nm = ov.querySelector('.ws-suc-name'); if (nm) nm.textContent = '「' + (name || 'App') + '」已安裝到你的桌面';
+        ov.classList.remove('hidden');
+        setTimeout(function () { ov.classList.add('hidden'); _go(c, 'mine'); }, 1600);
+    }
+
+    // ── 我的應用 列：第一層只乾淨一條（圖示＋名稱＋›），點整列換頁進操作頁，不摺疊 ──
+    function _mineRow(c, a, opened) {
+        const row = document.createElement('div');
+        row.className = 'ws-mine-row ws-mine-row-clean';
+        row.innerHTML =
+            '<span class="ws-mine-ic">' + _appIcHTML(a) + '</span>'
+          + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span><span class="ws-mine-sub">' + _esc(_relTime(opened[a.id])) + '</span></span>'
+          + '<span class="ws-mine-go"><i class="fa-solid fa-chevron-right"></i></span>';
+        row.addEventListener('click', function () { _openAppDetail(c, a); });
+        return row;
+    }
+
+    // ── 第二層：單一 app 操作頁（換頁到 appdetail），操作分組成乾淨的列，記憶用 toggle ──
+    function _openAppDetail(c, a) {
+        const body = c.querySelector('#as-detail-body');
+        const titleEl = c.querySelector('#as-detail-title');
+        if (!body) return;
+        if (titleEl) titleEl.innerHTML = _appIcHTML(a) + ' ' + _esc(a.name || '應用');
+        body.innerHTML = '';
+        const isStudio = !!a.srcTplId;
+        const S = win.OS_STUDIO || {};
+
+        const mkRow = function (icon, label, onclick, opts) {
+            opts = opts || {};
+            const r = document.createElement('div');
+            r.className = 'ws-act-row' + (opts.danger ? ' danger' : '');
+            const right = opts.toggle
+                ? '<span class="ws-act-tog' + (opts.on ? ' on' : '') + '"><span class="ws-act-knob"></span></span>'
+                : '<span class="ws-act-go">' + (opts.noChev ? '' : '<i class="fa-solid fa-chevron-right"></i>') + '</span>';
+            r.innerHTML = '<i class="fa-solid ' + icon + ' ws-act-ico"></i><span class="ws-act-label">' + _esc(label) + '</span>' + right;
+            if (onclick) r.addEventListener('click', onclick);
+            return r;
+        };
+        const mkGroup = function (rows) {
+            const g = document.createElement('div');
+            g.className = 'ws-act-group';
+            rows.filter(Boolean).forEach(function (r) { g.appendChild(r); });
+            if (g.children.length) body.appendChild(g);
+        };
+
+        mkGroup([
+            isStudio ? mkRow('fa-pen-to-square', '編輯', function () { if (S.openEditApp) S.openEditApp(a.srcTplId, c); else _toast(c, '創作室未就緒'); }) : null,
+            mkRow('fa-code', '原始碼', function () {
+                const ta = c.querySelector('#as-im-html'); if (ta) ta.value = a.html || '';
+                const nmI = c.querySelector('#as-im-name'); if (nmI) nmI.value = a.name || '';
+                if (!(win.AppRuntime && win.AppRuntime.needsConsent && win.AppRuntime.needsConsent(a))) _okHtml = String(a.html || '').trim();   // 預覽時比的是 trim 過的框內容
+                _go(c, 'import'); _toast(c, '原始碼已載入「匯入」框，可全選複製');
+            }),
+            mkRow('fa-pen', '改名', async function () {
+                const nm = await AUI.prompt('新名稱', a.name || ''); if (nm == null) return;
+                a.name = nm.trim() || a.name; await win.OS_DB.savePhoneApp(a); _syncMeta(a);
+                if (titleEl) titleEl.innerHTML = _appIcHTML(a) + ' ' + _esc(a.name);
+            }),
+            mkRow('fa-face-smile', '換圖標', async function () {
+                const em = await AUI.prompt('新圖標 emoji（單一符號）', _appEm(a)); if (em == null) return;
+                a.emoji = (em.trim() || a.emoji || '').slice(0, 2); await win.OS_DB.savePhoneApp(a); _syncMeta(a);   // 沒挑過圖標的 app 沒有 emoji 欄，空白送出別丟錯
+                if (titleEl) titleEl.innerHTML = _appIcHTML(a) + ' ' + _esc(a.name || '應用');
+            })
+        ]);
+
+        if (isStudio) {
+            const memOn = !!(win.OS_APP_MEMORY_INJECT && win.OS_APP_MEMORY_INJECT.isPluginEnabled && win.OS_APP_MEMORY_INJECT.isPluginEnabled(a.id));
+            mkGroup([
+                mkRow('fa-brain', '記憶回傳酒館', function () {
+                    const M = win.OS_APP_MEMORY_INJECT; if (!M || !M.setPluginEnabled) { _toast(c, '記憶模組未就緒'); return; }
+                    const cur = M.isPluginEnabled ? M.isPluginEnabled(a.id) : false;
+                    M.setPluginEnabled(a.id, !cur);
+                    _openAppDetail(c, a);
+                    _toast(c, '這個 app 的記憶' + (!cur ? '會' : '不會') + '回傳酒館');
+                }, { toggle: true, on: memOn }),
+                mkRow('fa-file-import', '載入酒館', function () { if (S.injectAppToTavern) { S.injectAppToTavern(a.srcTplId); _toast(c, '已寫入酒館正則，純文字也能跑'); } }),
+                mkRow('fa-house', '放進大廳', async function () { if (S.toggleAppLobby) { const on = await S.toggleAppLobby(a.srcTplId); _toast(c, '大廳：' + (on ? '已啟用' : '已關閉')); } }),
+                mkRow('fa-box-archive', '匯出 .json', function () { if (S.exportApp) S.exportApp(a.srcTplId); })
+            ]);
+        }
+
+        // 📦 提示詞包：這個 app 叫 AI 的時候要不要多帶一包條目（她在「提示詞」那邊建的那些）。
+        //    只有會叫 AI 的 app 才給這一列 —— 純展示的 app 挑了也沒地方用（判斷方式同「自己動」那條）。
+        const TB = win.OS_APP_TOOLS;
+        if (TB && TB.canCallAI && TB.canCallAI(a)) {
+            const bundles = (function () {
+                try { return (win.OS_PROMPTS && win.OS_PROMPTS.getBundles) ? (win.OS_PROMPTS.getBundles() || []) : []; }
+                catch (e) { return []; }
+            })();
+            const curB = TB.promptBundle ? TB.promptBundle(a.id) : '';
+            const r = document.createElement('div');
+            r.className = 'ws-act-row ws-act-selrow';
+            const bHelp = (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('as_bundle') : '';
+            const opts = ['<option value="">不用</option>'].concat(bundles.map(function (b) {
+                return '<option value="' + _esc(b.id) + '"' + (b.id === curB ? ' selected' : '') + '>' + _esc(b.name || '未命名') + '</option>';
+            })).join('');
+            r.innerHTML = '<i class="fa-solid fa-scroll ws-act-ico"></i>'
+                + '<span class="ws-act-label">提示詞包' + bHelp + '</span>'
+                + '<select class="ws-act-sel">' + opts + '</select>';
+            const sel = r.querySelector('select');
+            sel.addEventListener('change', function () {
+                if (TB.setPromptBundle) TB.setPromptBundle(a.id, sel.value);
+                _toast(c, sel.value ? ('這個 app 會帶「' + sel.options[sel.selectedIndex].text + '」') : '這個 app 不帶提示詞包');
+            });
+            mkGroup([r]);
+        }
+
+        // ⏰ 自己動：app 有寫「被叫醒時要做的事」才給這組（沒寫的開了也不會動）。
+        //    跟聊天室「他會主動找我」同一套：開關＋多久一次（自己打分鐘）＋機率，打字中不夾不存，離開格子或按 Enter 才收。
+        const T = win.OS_APP_TOOLS;
+        if (T && T.canWake && T.canWake(a)) {
+            const cfg = T.wakeCfg(a.id);
+            const help = (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn('as_wake') : '';
+            const tog = mkRow('fa-clock-rotate-left', '自動產生', null, { toggle: true, on: cfg.on });
+            const lab = tog.querySelector('.ws-act-label'); if (lab && help) lab.insertAdjacentHTML('beforeend', help);
+            tog.addEventListener('click', async function (e) {
+                if (e.target && e.target.closest && e.target.closest('.aui-help')) return;
+                const on = !T.wakeCfg(a.id).on;
+                // 🔐 開了它會在背景自己跑：別人做的、還沒同意過的，開之前先問（背景跑的時候問不了）
+                if (on && win.AppRuntime && win.AppRuntime.ensureConsent && !(await win.AppRuntime.ensureConsent(a))) return;
+                T.setWakeCfg(a.id, { on: on });
+                const t = tog.querySelector('.ws-act-tog'); if (t) t.classList.toggle('on', on);
+            });
+            const numRow = function (icon, label, val, lo, hi, def, unit, key) {
+                const r = document.createElement('div');
+                r.className = 'ws-act-row ws-act-numrow';
+                r.innerHTML = '<i class="fa-solid ' + icon + ' ws-act-ico"></i><span class="ws-act-label">' + _esc(label) + '<span class="ws-act-sub"></span></span>'
+                    + '<input type="number" class="ws-act-num" inputmode="numeric" min="' + lo + '" max="' + hi + '" step="1" value="' + val + '"><span class="ws-act-unit">' + _esc(unit) + '</span>';
+                const inp = r.querySelector('input'), sub = r.querySelector('.ws-act-sub');
+                const paint = function () {
+                    if (key !== 'mins' || !sub) return;
+                    const m = parseInt(inp.value, 10);
+                    sub.textContent = (isFinite(m) && m >= 60) ? (m % 60 ? Math.floor(m / 60) + ' 小時 ' + (m % 60) + ' 分' : (m / 60) + ' 小時') : '';
+                };
+                inp.addEventListener('input', paint);
+                inp.addEventListener('change', function () {
+                    let n = parseInt(inp.value, 10);
+                    n = isFinite(n) ? Math.min(hi, Math.max(lo, n)) : def;
+                    inp.value = n; paint();
+                    const p = {}; p[key] = n; T.setWakeCfg(a.id, p);
+                });
+                inp.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); inp.blur(); } });
+                paint();
+                return r;
+            };
+            const D = T.wakeDefaults();
+            mkGroup([
+                tog,
+                numRow('fa-hourglass-half', '間隔', cfg.mins, 1, 1440, D.mins, '分鐘', 'mins'),
+                numRow('fa-dice', '機率', cfg.chance, 0, 100, D.chance, '%', 'chance')
+            ]);
+        }
+
+        mkGroup([
+            mkRow('fa-trash', '卸載', async function () {
+                const ok = await AUI.confirm('卸載「' + (a.name || '這個應用') + '」？\n' + (a.srcTplId
+                    ? '資料、VN 組件與劇情裡的版本會一起移除。'
+                    : '桌面圖標與資料會一起刪除。'), { okText: '卸載' });
+                if (!ok) return;
+                // 先回清單頁，再等卸載跑完（它最後會再畫一次清單；renderMine 只認最新那次，不會疊兩份）
+                _go(c, 'mine');
+                try { await _uninstall(a.id, c); }
+                catch (e) { console.error('[AppStore] 卸載失敗', e); _toast(c, '「' + (a.name || '這個應用') + '」沒有卸載乾淨，再試一次'); renderMine(c); }
+            }, { danger: true, noChev: true })
+        ]);
+
+        _go(c, 'appdetail');
+    }
+
+    // 第幾次畫清單：等 DB 的時候又叫了一次（例如卸載途中先切頁、卸載完再畫），只讓最新那次動手，
+    //   不然舊的那次回來會把卸載前的清單、殘留資料那條再疊一份上去
+    let _mineGen = 0;
+    async function renderMine(c) {
+        const list = c.querySelector('#as-mine-list'); if (!list) return;
+        const gen = ++_mineGen;
+        list.innerHTML = '<div class="ws-empty">載入中…</div>';
+        let apps = [], appsOk = false;
+        try { apps = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? await win.OS_DB.getAllPhoneApps() : []; appsOk = true; } catch (e) { appsOk = false; }
+        if (gen !== _mineGen) return;
+        const opened = _loadOpened();
+        list.innerHTML = '';
+        _appendHidden(c, list);   // 從桌面拿掉的（長按圖標按「−」）排最上面，可以放回去
+        if (!apps.length) {
+            list.insertAdjacentHTML('beforeend', '<div class="ws-empty">還沒安裝任何應用。<br>去工坊生成、或從匯入貼一個吧。</div>');   // 用 append：上面可能已經放了「不在桌面上」那一區
+        } else {
+            apps.forEach(function (a) { list.appendChild(_mineRow(c, a, opened)); });
+        }
+        _appendMaintenance(c, list, apps, appsOk, gen);   // 殘留資料清理入口（有孤兒才顯示）；即使一個 app 都沒裝也能清
+    }
+
+    // ── 不在桌面上的：主畫面長按圖標按「−」拿掉的（內建的也算），一條一條，按「放回桌面」就回去 ──
+    //   沒有拿掉任何東西就整區不出現。
+    function _appendHidden(c, list) {
+        const PS = win.VoidPhoneShell;
+        const hidden = (PS && PS.hiddenApps) ? PS.hiddenApps() : [];
+        if (!hidden.length) return;
+        const hd = document.createElement('div');
+        hd.className = 'ws-mine-sec';
+        hd.textContent = '不在桌面上';
+        list.appendChild(hd);
+        hidden.forEach(function (a) {
+            const row = document.createElement('div');
+            row.className = 'ws-mine-row';
+            row.innerHTML = '<span class="ws-mine-ic" data-ic="' + _esc(a.id) + '">' + _appIcHTML(a) + '</span>'
+                + '<span class="ws-mine-info"><span class="ws-mine-name">' + _esc(a.name || 'App') + '</span></span>'
+                + '<button class="ws-mine-back" type="button"><i class="fa-solid fa-arrow-rotate-left"></i> 放回桌面</button>';
+            row.querySelector('.ws-mine-back').addEventListener('click', function () {
+                PS.unhide(a.id);
+                _toast(c, '「' + (a.name || 'App') + '」放回桌面了');
+                renderMine(c);
+            });
+            list.appendChild(row);
+        });
+        const hd2 = document.createElement('div');
+        hd2.className = 'ws-mine-sec';
+        hd2.textContent = '已安裝';
+        list.appendChild(hd2);
+    }
+
+    // ── 殘留資料清理入口：掃到「已卸載卻留著資料」的孤兒就在底部顯示一條，點了確認後全清 ──
+    async function _appendMaintenance(c, list, apps, appsOk, gen) {
+        // 🛡️ 安裝清單沒讀成功就別掃：否則 installedSet 為空 → 把在裝的 app 全誤判成孤兒、一鍵刪光（資料災難）
+        if (!appsOk) return;
+        // 已安裝＝OS_DB ∪ localStorage 雙來源聯集（兩邊可能漂移，取聯集才不會誤刪在裝的）
+        const installed = new Set();
+        (apps || []).forEach(function (a) { installed.add(String(a.id)); });
+        try { _loadList().forEach(function (m) { installed.add(String(m.id)); }); } catch (e) {}
+        let orphans = [];
+        try { orphans = await _scanOrphans(installed); } catch (e) { return; }
+        if (gen && gen !== _mineGen) return;   // 掃的時候清單已經重畫了：交給新的那次
+        if (!orphans.length) return;   // 沒孤兒就不顯示、不打擾
+        const g = document.createElement('div');
+        g.className = 'ws-act-group';
+        const r = document.createElement('div');
+        r.className = 'ws-act-row danger';
+        const label0 = '清理已卸載應用的資料（' + orphans.length + '）';
+        r.innerHTML = '<i class="fa-solid fa-broom ws-act-ico"></i><span class="ws-act-label">' + label0 + '</span><span class="ws-act-go"></span>';
+        r.addEventListener('click', async function () {
+            if (!(await AUI.confirm('清除 ' + orphans.length + ' 個已卸載應用留下的資料？\n無法復原。', { okText: '清除' }))) return;
+            _purgeOrphans(c, orphans);
+        });
+        g.appendChild(r);
+        list.appendChild(g);
+    }
+    async function _purgeOrphans(c, orphans) {
+        if (!orphans || !orphans.length) { _toast(c, '沒有殘留資料'); return; }
+        for (var i = 0; i < orphans.length; i++) { await _purgeAppData(orphans[i]); }
+        _toast(c, '已清除 ' + orphans.length + ' 筆殘留資料');
+        renderMine(c);
+    }
+
+    // 首頁的「我的應用」預覽（最近 3 個 + 查看全部）
+    // 改名/換圖標後同步 localStorage 清單 + 重註冊桌面 meta
+    function _syncMeta(a) {
+        const list = _loadList().map(function (m) { return m.id === a.id ? { id: a.id, name: a.name, emoji: a.emoji, icon: a.icon || '', iconUrl: a.iconUrl || '' } : m; });
+        _saveList(list);
+        if (win.VoidPhoneShell) { win.VoidPhoneShell.removeApp(a.id); win.VoidPhoneShell.addApp({ id: a.id, name: a.name, emoji: a.emoji, icon: a.icon || '', iconUrl: a.iconUrl || '' }); }
+    }
+
+    // ── 匯入 ──
+    function _bindImport(c) {
+        const prevBtn = c.querySelector('#as-im-prev-btn');
+        const installBtn = c.querySelector('#as-im-install');
+        const fileInput = c.querySelector('#as-im-file');
+        if (fileInput) fileInput.addEventListener('change', function () {
+            var f = this.files && this.files[0]; if (!f) return;
+            var r = new FileReader();
+            r.onload = function () {
+                c.querySelector('#as-im-html').value = String(r.result || '');
+                var nmI = c.querySelector('#as-im-name'); if (nmI && !nmI.value) nmI.value = f.name.replace(/\.html?$/i, '');
+                _toast(c, '已讀入檔案，可按預覽');
+            };
+            r.readAsText(f);
+        });
+        let asking = false;   // 問的窗還開著時又按一次預覽，別疊第二個窗
+        prevBtn.addEventListener('click', async function () {
+            const html = (c.querySelector('#as-im-html').value || '').trim();
+            if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '看起來不是完整 HTML 面板'); return; }
+            const R = win.AppRuntime;
+            if (!R) return;
+            // 🔐 貼進來的是別人做的：這一份第一次跑之前先問，按「先不要」就不預覽
+            if (html !== _okHtml && R.askToRun) {
+                if (asking) return;
+                asking = true;
+                let ok = false;
+                try { ok = await R.askToRun((c.querySelector('#as-im-name').value || '').trim()); } finally { asking = false; }
+                if (!ok) return;
+                _okHtml = html;
+            }
+            c.querySelector('#as-im-prev-wrap').classList.remove('hidden');
+            R.mountAppIframe(c.querySelector('#as-im-prev'), html, { preview: true });
+        });
+        installBtn.addEventListener('click', function () {
+            const name = (c.querySelector('#as-im-name').value || '').trim();
+            const emoji = (c.querySelector('#as-im-emoji').value || '').trim().slice(0, 2);   // 空的＝桌面用盒子圖示
+            const html = (c.querySelector('#as-im-html').value || '').trim();
+            if (!name) { _toast(c, '請填應用名稱'); return; }
+            if (!/<body|<html|<div|<!doctype/i.test(html)) { _toast(c, '請貼上完整 HTML'); return; }
+            // trusted：預覽時按過「打開」的同一份＝已同意；沒預覽就裝的記 false，第一次從桌面打開再問
+            _install(c, { name: name, emoji: emoji, iconUrl: '', html: html, source: 'import', trusted: html === _okHtml });
+        });
+    }
+
+    win.APP_STORE = { launch: launch };
+    console.log('✅ APP_STORE（應用工坊）模組就緒');
+})();

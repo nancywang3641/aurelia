@@ -1,0 +1,1408 @@
+// ----------------------------------------------------------------
+// [檔案] vn_panels.js
+// 路徑：os_phone/vn_story/vn_panels.js
+// 職責：VN 視覺小說播放器 - 遊戲內設定 + 各類面板開關
+//       (遊戲內設定 / 聊天背景 / 角色快取 / 背景快取 / 章節面板)
+// 自 vn_core.js V8.6 拆分出獨立模組
+// 依賴：VN_Cache, VN_Image（皆需先載入）；運行期使用 window.VN_Core / window.VN_PLAYER
+// 暴露：window.VN_Settings, window.VN_Panels
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    console.log('[PhoneOS] 載入 VN 面板模組 (vn_panels.js)...');
+    const win = window.parent || window;
+    const VN_Cache = window.VN_Cache;
+    const VN_Image = window.VN_Image;
+    // 放進 HTML 的外來字（標題、id、錯誤訊息）一律過這支：引號也要轉，不然名字帶 " 會把 data-id 這種屬性截斷
+    const _esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+    /* =========================================
+       🔊 iOS 音量修正：Web Audio GainNode
+       iOS / iPadOS 把 HTMLMediaElement.volume 設成唯讀，JS 寫了不生效（音量只能靠機身實體鍵）。
+       唯一能用程式控制音量的辦法是把音訊接進 Web Audio 的 GainNode 調增益。
+       非 iOS 平台 .volume 本來就能用，這裡完全不碰，零回歸風險。
+       ========================================= */
+    const VN_AudioGain = (function () {
+        let ctx = null;
+        let hooked = false;
+        const routed = new WeakMap();   // audioEl -> GainNode
+
+        function isIOS() {
+            const ua = navigator.userAgent || '';
+            return /iPhone|iPad|iPod/i.test(ua) ||
+                   (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1); // iPadOS 偽裝成 Mac
+        }
+        function _AC() { return win.AudioContext || win.webkitAudioContext; }
+        function _ensureCtx() {
+            if (ctx) return ctx;
+            const AC = _AC();
+            if (!AC) return null;
+            try { ctx = new AC(); } catch (e) { return null; }
+            return ctx;
+        }
+        // iOS 的 AudioContext 一開始是 suspended，必須在使用者手勢內 resume 才會出聲。
+        function _hookUnlock() {
+            if (hooked) return;
+            hooked = true;
+            const unlock = () => {
+                const c = _ensureCtx();
+                if (c && c.state === 'suspended') c.resume().catch(() => {});
+            };
+            const docs = (win.document === document) ? [document] : [win.document, document];
+            docs.forEach(d => ['touchend', 'pointerup', 'mousedown', 'keydown'].forEach(ev =>
+                d.addEventListener(ev, unlock, { passive: true })));
+        }
+        function _route(el) {
+            if (!el) return null;
+            if (routed.has(el)) return routed.get(el);
+            const c = _ensureCtx();
+            if (!c) return null;
+            let gain;
+            try {
+                const src = c.createMediaElementSource(el);
+                gain = c.createGain();
+                src.connect(gain);
+                gain.connect(c.destination);
+            } catch (e) {
+                console.warn('[VN_AudioGain] 接線失敗（可能跨域未開 CORS）:', e);
+                return null;
+            }
+            routed.set(el, gain);
+            return gain;
+        }
+        // iOS 一載入就掛手勢解鎖：使用者第一次點擊（進故事/翻頁）後 context 就 running，
+        // 之後 BGM / TTS 播放才不會因 context 還 suspended 而靜音。
+        if (isIOS() && _AC()) _hookUnlock();
+
+        return {
+            isIOS,
+            // 設音量 0..1。非 iOS 走原生 .volume；iOS 走 GainNode。
+            set: function (el, v) {
+                if (!el) return;
+                v = Math.max(0, Math.min(1, Number(v) || 0));
+                try { el.volume = v; } catch (e) {}   // 非 iOS 有效；iOS 無效但無害
+                if (!isIOS()) return;
+                const gain = _route(el);
+                if (gain && ctx) {
+                    gain.gain.value = v;
+                    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+                }
+            }
+        };
+    })();
+    win.VN_AudioGain = VN_AudioGain;
+
+    /* =========================================
+       ⚙ 遊戲內設定
+       11-17 起畫面搬進「設置」窗口的「劇情→畫面與聲音」（os_phone/os/os_settings_window.js 叫 mountInto）；
+       以前劇情畫面裡自己有一個黑金的設定窗（#game-settings-overlay），拿掉了。劇情右上「設定」鈕改開那個窗口。
+       欄位的 id（gs-*）沒變，所以 _syncUI／apply*／renderWorldQuick 照舊認得；零件的樣式（.asw-*）在 css/os_settings_window.css。
+       這頁在大廳也開得到（沒進劇情）：那時畫面上沒有台詞框，所有「當場套用」都要先看元素在不在。
+       ========================================= */
+    const VN_Settings = {
+        defaults: { fontSize: 19, twSpeed: 30, danmuSpeed: 18, bgmVolume: 10, sfxVolume: 50, ttsVolume: 80, textColor: '#dddddd', innerColor: '#c9aaff', nameColor: '#d4af37' },
+        data: {},
+        load: function() { const saved = localStorage.getItem('vn_game_settings'); this.data = saved ? { ...this.defaults, ...JSON.parse(saved) } : { ...this.defaults }; this._syncUI(); this._applyAll(); },
+        // 還沒進過劇情（load 沒跑過）就開設置：先把存檔讀進來，別拿空的蓋掉存檔
+        ensure: function() {
+            if (this.data && this.data.fontSize != null) return;
+            try { const s = localStorage.getItem('vn_game_settings'); this.data = s ? { ...this.defaults, ...JSON.parse(s) } : { ...this.defaults }; }
+            catch (e) { this.data = { ...this.defaults }; }
+        },
+        save: function() { return win.AUI.lsSet('vn_game_settings', JSON.stringify(this.data), '遊戲內設定'); },
+        // 🔊 語音面板（VN_TTS_Panel）那顆音量也寫進這裡：語音音量以這份為準，每次開 VN 都拿它蓋回本機語音的設定，
+        //    以前語音面板只改自己那份，下次開 VN 就被這裡的舊值蓋掉。這份還沒讀過（沒開過 VN）就先從存檔讀，別拿空的蓋存檔
+        syncTtsVolume: function(vol) {
+            if (!this.data || this.data.ttsVolume == null) this.ensure();
+            this.data.ttsVolume = Math.round(Math.max(0, Math.min(1, Number(vol) || 0)) * 100);
+            win._vnTtsVolume = this.data.ttsVolume / 100;
+            return this.save();
+        },
+        // 滑桿旁邊那個字：大小寫數字、音量寫百分比、速度寫快／中／慢（存的是「一個字隔幾毫秒」「飄過去要幾秒」，數字小＝快）
+        _valText: function(k, v) {
+            v = parseInt(v, 10);
+            if (k === 'twSpeed') return v <= 20 ? '快' : (v <= 45 ? '中' : '慢');
+            if (k === 'danmuSpeed') return v <= 12 ? '快' : (v <= 22 ? '中' : '慢');
+            if (k === 'fontSize') return String(v);
+            return v + '%';
+        },
+        _setVal: function(id, k, v) { const el = document.getElementById(id); if (el) el.textContent = this._valText(k, v); },
+        _syncUI: function() {
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            set('gs-font-size', this.data.fontSize);     this._setVal('gs-font-size-val', 'fontSize', this.data.fontSize);
+            set('gs-tw-speed',  this.data.twSpeed);      this._setVal('gs-tw-speed-val', 'twSpeed', this.data.twSpeed);
+            set('gs-danmu-speed', this.data.danmuSpeed); this._setVal('gs-danmu-speed-val', 'danmuSpeed', this.data.danmuSpeed);
+            set('gs-bgm-vol',   this.data.bgmVolume);    this._setVal('gs-bgm-vol-val', 'bgmVolume', this.data.bgmVolume);
+            set('gs-sfx-vol',   this.data.sfxVolume);    this._setVal('gs-sfx-vol-val', 'sfxVolume', this.data.sfxVolume);
+            set('gs-tts-vol',   this.data.ttsVolume);    this._setVal('gs-tts-vol-val', 'ttsVolume', this.data.ttsVolume);
+            set('gs-text-color',  this.data.textColor); set('gs-inner-color', this.data.innerColor); set('gs-name-color',  this.data.nameColor);
+            this._previewFont(this.data.fontSize);
+        },
+        _applyAll: function() { this._applyFontSize(this.data.fontSize); this._applyTwSpeed(this.data.twSpeed); this._applyDanmuSpeed(this.data.danmuSpeed); this._applyBgmVol(this.data.bgmVolume); this._applyTtsVol(this.data.ttsVolume); this._applyColors(); },
+        // 設置窗口裡那句預覽台詞跟著字級變（窗口蓋住劇情，調的時候看不到真的台詞框）
+        _previewFont: function(v) { document.querySelectorAll('.asw-vnpv-text').forEach(el => { el.style.fontSize = parseInt(v, 10) + 'px'; }); },
+        _applyFontSize: function(v) { const dt = document.getElementById('dialogue-text'); if (dt) dt.style.fontSize = v + 'px'; this._previewFont(v); },
+        // VN_Core 在運行期已載入（vn_core.js 後於本檔），透過 window 取
+        _applyTwSpeed: function(v) { if (window.VN_Core) window.VN_Core._twSpeed = parseInt(v); },
+        _applyDanmuSpeed: function(v) { if (window.VN_Core) window.VN_Core._danmuSpeed = parseInt(v); },
+        _applyBgmVol: function(v) {
+            const el = document.getElementById('bgm-player');
+            if (el) VN_AudioGain.set(el, parseInt(v) / 100); // iOS 走 GainNode，其他平台走原生 .volume
+        },
+        _applyTtsVol: function(v) {
+            const vol = parseInt(v) / 100;
+            // ① 雲端聲音（MiniMax／ElevenLabs）：播放前讀此值
+            win._vnTtsVolume = vol;
+            ['os-minimax-tts-player', 'os-elevenlabs-tts-player'].forEach(id => {
+                const el = win.document.getElementById(id);
+                if (el) VN_AudioGain.set(el, vol); // 即時更新正在播放的音量（iOS 走 GainNode）
+            });
+            // ② GPT-SoVITS（VN_TTS）引擎：有自己的 config.volume，這裡一併同步並即時套到正在播的音訊
+            const tts = win.VN_TTS || window.VN_TTS;
+            if (tts && tts.config) {
+                tts.config.volume = vol;
+                if (typeof tts.save === 'function') tts.save();
+                if (tts._currentAudio) VN_AudioGain.set(tts._currentAudio, vol);
+            }
+        },
+        _applyColors: function() {
+            const root = document.documentElement;
+            root.style.setProperty('--text-color', this.data.textColor);
+            root.style.setProperty('--em-color',   this.data.innerColor);
+            root.style.setProperty('--name-color',  this.data.nameColor);
+            // clear any leftover inline styles so CSS vars take effect
+            const dt = document.getElementById('dialogue-text');
+            const sn = document.getElementById('speaker-name');
+            if (dt) dt.style.color = '';
+            if (sn) sn.style.color = '';
+        },
+        applyFontSize: function(v) { this.data.fontSize = parseInt(v); this._setVal('gs-font-size-val', 'fontSize', v); this._applyFontSize(v); this.save(); },
+        applyTwSpeed: function(v) { this.data.twSpeed = parseInt(v); this._setVal('gs-tw-speed-val', 'twSpeed', v); this._applyTwSpeed(v); this.save(); },
+        applyDanmuSpeed: function(v) { this.data.danmuSpeed = parseInt(v); this._setVal('gs-danmu-speed-val', 'danmuSpeed', v); this._applyDanmuSpeed(v); this.save(); },
+        applyBgmVol: function(v) { this.data.bgmVolume = parseInt(v); this._setVal('gs-bgm-vol-val', 'bgmVolume', v); this._applyBgmVol(v); this.save(); },
+        applySfxVol: function(v) { this.data.sfxVolume = parseInt(v); this._setVal('gs-sfx-vol-val', 'sfxVolume', v); this.save(); },
+        applyTtsVol: function(v) { this.data.ttsVolume = parseInt(v); this._setVal('gs-tts-vol-val', 'ttsVolume', v); this._applyTtsVol(v); this.save(); },
+        applyTextColor: function(v) { this.data.textColor = v; this._applyColors(); this.save(); },
+        applyInnerColor: function(v) { this.data.innerColor = v; this._applyColors(); this.save(); },
+        applyNameColor: function(v) { this.data.nameColor = v; this._applyColors(); this.save(); },
+        resetColors: function() {
+            this.data.textColor = this.defaults.textColor; this.data.innerColor = this.defaults.innerColor; this.data.nameColor = this.defaults.nameColor;
+            const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+            set('gs-text-color', this.data.textColor); set('gs-inner-color', this.data.innerColor); set('gs-name-color', this.data.nameColor);
+            this._applyColors(); this.save();
+        },
+
+        // 🪟 畫進「設置」窗口的「劇情→畫面與聲音」。最上面一句預覽台詞：拉字級、改顏色時它跟著變。拉了就存、當場生效。
+        mountInto: function(box) {
+            const H = (k) => (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn(k) : '';
+            const slide = (label, id, min, max, flip) => '<div class="asw-row asw-row-slide"><span class="asw-row-tx">' + label + '</span>' +
+                '<input type="range" class="asw-range" id="' + id + '" min="' + min + '" max="' + max + '"' + (flip ? ' dir="rtl"' : '') + ' aria-label="' + label + '">' +
+                '<span class="asw-val" id="' + id + '-val"></span></div>';
+            const color = (label, id) => '<label class="asw-color"><input type="color" class="asw-color-in" id="' + id + '"><span>' + label + '</span></label>';
+            const chips = (label, id, help) => '<div class="asw-chiprow"><span class="asw-chiprow-tx">' + label + (help ? H(help) : '') + '</span><div class="asw-chips" id="' + id + '"></div></div>';
+            box.innerHTML =
+                '<div class="asw-vnpv">' +
+                  '<div class="asw-vnpv-cap">調整時看這裡，就是劇情裡會看到的樣子。</div>' +
+                  '<div class="asw-vnpv-name">愛麗絲</div>' +
+                  '<div class="asw-vnpv-text">「歡迎回來。」<em>（她今天看起來心情不錯。）</em></div>' +
+                '</div>' +
+                '<div class="asw-cols">' +
+                  '<div class="asw-col">' +
+                    '<section class="asw-group"><h3 class="asw-group-title">字</h3>' +
+                      slide('字級', 'gs-font-size', 12, 24) +
+                      // 這兩格存的是「隔多久」，數字小＝快；滑桿反過來擺，往右＝快
+                      slide('文字速度', 'gs-tw-speed', 10, 100, true) +
+                      slide('彈幕速度', 'gs-danmu-speed', 6, 30, true) +
+                      '<div class="asw-row"><span class="asw-row-tx">顏色</span><span class="asw-colors">' +
+                        color('台詞', 'gs-text-color') + color('心聲', 'gs-inner-color') + color('名字', 'gs-name-color') + '</span></div>' +
+                      '<div class="asw-row asw-row-end"><button type="button" class="asw-btn" data-vnset="reset-colors">還原預設顏色</button></div>' +
+                    '</section>' +
+                    '<div class="asw-note"><b class="asw-note-title">拉桿後立刻生效</b>修改後立即套用，不需保存。</div>' +
+                  '</div>' +
+                  '<div class="asw-col">' +
+                    '<section class="asw-group"><h3 class="asw-group-title">聲音</h3>' +
+                      slide('背景音樂', 'gs-bgm-vol', 0, 100) +
+                      slide('音效', 'gs-sfx-vol', 0, 100) +
+                      slide('角色語音', 'gs-tts-vol', 0, 100) +
+                    '</section>' +
+                    '<section class="asw-group"><h3 class="asw-group-title">這個世界</h3>' +
+                      chips('題材', 'gs-world-themes') +
+                      chips('音樂', 'gs-world-bgm') +
+                      chips('音效增補', 'gs-world-sfx') +
+                      '<div class="asw-hint" id="gs-world-note"></div>' +
+                      chips('內建格式', 'gs-builtin', 'vn_builtin') +
+                    '</section>' +
+                  '</div>' +
+                '</div>';
+            this.ensure();
+            this._applyColors();   // 預覽那句的顏色吃的是整頁的 --text-color／--em-color／--name-color；沒進過劇情時還沒設過
+            this._syncUI();
+            this.renderWorldQuick();
+            const on = (id, fn) => { const el = box.querySelector('#' + id); if (el) el.addEventListener('input', () => fn.call(this, el.value)); };
+            on('gs-font-size', this.applyFontSize); on('gs-tw-speed', this.applyTwSpeed); on('gs-danmu-speed', this.applyDanmuSpeed);
+            on('gs-bgm-vol', this.applyBgmVol); on('gs-sfx-vol', this.applySfxVol); on('gs-tts-vol', this.applyTtsVol);
+            on('gs-text-color', this.applyTextColor); on('gs-inner-color', this.applyInnerColor); on('gs-name-color', this.applyNameColor);
+            const rst = box.querySelector('[data-vnset="reset-colors"]');
+            if (rst) rst.addEventListener('click', () => this.resetColors());
+        },
+
+        // 🌍 世界題材／BGM／音效增補快捷（取代原本「開啟應用」那顆鈕，2026-09-16）
+        //   開關狀態全在 OS_VN_RULES（手機格式跟著 BGM 走也在那邊），這裡只負責畫與轉發點擊
+        renderWorldQuick: function() {
+            const boxT = document.getElementById('gs-world-themes');
+            const boxB = document.getElementById('gs-world-bgm');
+            const boxS = document.getElementById('gs-world-sfx');
+            const note = document.getElementById('gs-world-note');
+            if (!boxT || !boxB || !boxS) return;
+            const VR = win.OS_VN_RULES || window.OS_VN_RULES;
+            if (!VR || !VR.quickState) { boxT.textContent = '還沒準備好，稍後再打開一次設置'; boxB.textContent = ''; boxS.textContent = ''; return; }
+            const st = VR.quickState();
+            const chip = (label, on, fn) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'asw-chip' + (on ? ' is-on' : '');
+                b.textContent = label;
+                b.onclick = () => { try { fn(); } catch (e) { console.warn('[VN設定] 世界題材切換失敗', e); } this.renderWorldQuick(); };
+                return b;
+            };
+            boxT.replaceChildren(...st.themes.map(t => chip(t.label, st.theme === t.key, () => VR.setTheme(t.key))));
+            boxB.replaceChildren(...st.bgm.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
+            boxS.replaceChildren(...st.sfx.map(x => chip(x.label, x.on, () => VR.setQuick(x.id, !x.on))));
+            if (note) { note.textContent = st.phoneAutoOff ? '手機格式已自動關閉（音樂沒開「現代一般」）' : ''; note.hidden = !st.phoneAutoOff; }
+            // 🧩 內建格式：手機格式、直播彈幕、戰鬥、主角狀態，一個一個開關
+            const boxI = document.getElementById('gs-builtin');
+            if (boxI && VR.builtinState) boxI.replaceChildren(...VR.builtinState().map(x => chip(x.label, x.on, () => VR.setBuiltin(x.key, !x.on))));
+        }
+    };
+
+    // ❔ 「內建格式」旁問號的說明
+    try {
+        const _A = win.AUI || window.AUI;
+        if (_A && _A.registerHelp) _A.registerHelp({ vn_builtin: { title: '內建格式', body: '寫死在 VN 指令裡的幾種格式，只能開關。\n手機格式：劇情裡的通話和手機聊天。\n直播彈幕：畫面上飄過的彈幕。\n戰鬥：打起來時交給系統擲骰。\n主角狀態：左上的日期、HP、狀態效果；關掉就不記也不顯示，之前的資料留著。' } });
+    } catch (e) {}
+
+    // 劇情右上的「設定」鈕、章末面板的設定鍵：開「設置」窗口、停在「劇情→畫面與聲音」。窗口蓋在劇情上面，關掉就回到剛才那一句
+    function openGameSettings() {
+        const W = win.OS_SETTINGS_WINDOW || window.OS_SETTINGS_WINDOW;
+        if (W && W.open) W.open('story', { sub: 'view' });
+        else { try { (win.AUI || window.AUI).toast('設置還沒載入完整，請重新整理一次', { type: 'warn' }); } catch (e) {} }
+    }
+    function closeGameSettings() { const W = win.OS_SETTINGS_WINDOW || window.OS_SETTINGS_WINDOW; if (W && W.close) W.close(); }
+
+    /* =========================================
+       📱 聊天背景面板
+       ========================================= */
+    async function openChatBgPanel() {
+        // 不等縮圖：舊圖第一次要現做縮圖，面板先開、縮圖一張張補上
+        _refreshChatBgThumbs().catch(e => console.warn('[VN_PLAYER] 聊天背景縮圖讀取失敗', e));
+        // 停在泡泡分頁時要重畫：換了一間聊天室，「使用中」那張就不一樣了
+        const bub = document.getElementById('chat-more-bubble');
+        if (bub && !bub.hidden) _renderBubbleList();
+        const stk = document.getElementById('chat-more-sticker');
+        if (stk && !stk.hidden) _renderStickerPick();   // 換了故事，選的那一包就不一樣
+        document.getElementById('chat-bg-panel').classList.add('active');
+    }
+    function closeChatBgPanel() { document.getElementById('chat-bg-panel').classList.remove('active'); }
+    // 🖼 縮圖另存一筆（鑰匙 thumb:原鑰匙）：從相簿上傳的是整張原圖 dataURL，一張幾 MB。
+    //    以前每次打開面板就 getAll 把每張原圖一起讀進記憶體，存越多張越容易撐爆。
+    //    現在列表只拿鑰匙、一張一張讀縮圖；沒縮圖的舊圖讀一次原圖做好存起來，下次就不用再讀；原圖等按下去才讀。
+    //    「使用中」那張用指紋比（原圖長度＋結尾一段），不必為了比對把原圖讀回來。
+    const _BG_THUMB = 'thumb:';
+    let _bgThumbGen = 0;
+    function _bgSig(url) { const s = String(url || ''); return s.length + ':' + s.slice(-48); }
+    function _makeBgThumb(src) {
+        return new Promise(res => {
+            const im = new Image();
+            im.onload = () => {
+                try {
+                    const k = Math.min(1, 240 / Math.max(im.naturalWidth || 1, im.naturalHeight || 1));
+                    const c = document.createElement('canvas');
+                    c.width = Math.max(1, Math.round((im.naturalWidth || 1) * k));
+                    c.height = Math.max(1, Math.round((im.naturalHeight || 1) * k));
+                    c.getContext('2d').drawImage(im, 0, 0, c.width, c.height);
+                    res(c.toDataURL('image/jpeg', 0.75));
+                } catch (e) { res(''); }
+            };
+            im.onerror = () => res('');
+            im.src = src;
+        });
+    }
+    async function _bgThumbFor(key, keySet) {
+        if (keySet.has(_BG_THUMB + key)) {
+            const t = await VN_Cache.getRaw('chat_bg', _BG_THUMB + key);
+            if (t && t.url) return t;
+        }
+        const v = await VN_Cache.getRaw('chat_bg', key);
+        const url = (v && v.url) || '';
+        if (!url) return null;
+        if (!url.startsWith('data:')) return { url: url, sig: _bgSig(url) };   // 貼網址的那種本身就只是一行字，不用縮
+        const thumb = await _makeBgThumb(url);
+        if (!thumb) return { url: url, sig: _bgSig(url) };                      // 縮不出來就照舊放原圖
+        const rec = { url: thumb, sig: _bgSig(url) };
+        await VN_Cache.setRaw('chat_bg', _BG_THUMB + key, rec);
+        return rec;
+    }
+    async function _refreshChatBgThumbs() {
+        const my = ++_bgThumbGen;   // 上傳完會再叫一次：舊的那趟還在一張張讀的話就停手，免得縮圖重複
+        const grid = document.getElementById('chat-bg-grid'); const addBtn = grid.querySelector('.chat-bg-add');
+        grid.querySelectorAll('.chat-bg-thumb').forEach(t => t.remove());
+        const current = await VN_Cache.get('chat_bg', '_current'); const curSig = (current && current.url) ? _bgSig(current.url) : '';
+        const keys = (await VN_Cache.rawKeys('chat_bg')).map(String);
+        if (my !== _bgThumbGen) return;
+        const keySet = new Set(keys);
+        for (const key of keys) {
+            if (key === '_current' || key.startsWith(_BG_THUMB)) continue;
+            const img = document.createElement('img'); img.className = 'chat-bg-thumb';
+            img.onclick = async () => { const v = await VN_Cache.getRaw('chat_bg', key); if (v && v.url) _setChatBg(v.url); };
+            grid.insertBefore(img, addBtn);
+            const t = await _bgThumbFor(key, keySet);
+            if (my !== _bgThumbGen) return;
+            if (!t) { img.remove(); continue; }
+            img.src = t.url;
+            if (curSig && t.sig === curSig) img.classList.add('selected');
+        }
+    }
+    async function handleChatBgFile(input) {
+        const file = input.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = async (e) => { const dataUrl = e.target.result; const key = 'local_' + Date.now(); await VN_Cache.set('chat_bg', key, { url: dataUrl }); await _setChatBg(dataUrl); await _refreshChatBgThumbs(); };
+        reader.readAsDataURL(file); input.value = '';
+    }
+    async function applyChatBgUrl() {
+        const url = document.getElementById('chat-bg-url-input').value.trim(); if (!url) return;
+        const key = 'url_' + Date.now(); await VN_Cache.set('chat_bg', key, { url }); document.getElementById('chat-bg-url-input').value = ''; await _setChatBg(url); await _refreshChatBgThumbs();
+    }
+    async function _setChatBg(url) {
+        const img = document.getElementById('chat-bg-img'); img.src = url; img.style.display = url ? 'block' : 'none';
+        document.getElementById('phone-chat').classList.toggle('has-bg', !!url); await VN_Cache.set('chat_bg', '_current', { url }); closeChatBgPanel();
+    }
+    async function clearChatBg() {
+        const img = document.getElementById('chat-bg-img'); img.src = ''; img.style.display = 'none';
+        document.getElementById('phone-chat').classList.remove('has-bg'); await VN_Cache.set('chat_bg', '_current', { url: '' }); closeChatBgPanel();
+    }
+    // 📱 這間 VN 聊天室的背景：對得到同名聯絡人就吃他在微信那邊設的那張（同一個人兩邊一樣），
+    //    對不到（群聊、路人）才用使用者在這個面板自己挑的那張。跟泡泡主題同一套優先序。
+    let _chatBgFrom = '';   // 現在這張是跟著微信哪一位來的（空＝這裡自己挑的）
+    async function applyChatBgForRoom(roomName, roomKey) {
+        const img = document.getElementById('chat-bg-img');
+        const box = document.getElementById('phone-chat');
+        if (!img || !box) return '';
+        let url = '', from = '';
+        try {
+            const B = win.WX_BUBBLE_SETTINGS, S = win.WX_CHAT_SETTINGS;
+            const id = (B && B._contactIdByName) ? B._contactIdByName(roomName) : '';
+            if (id && S && S.bgUrlFor) {
+                const u = await S.bgUrlFor(id);
+                if (u) { url = u; from = roomName; }
+            }
+        } catch (e) {}
+        if (!url) {
+            try { const cur = await VN_Cache.get('chat_bg', '_current'); url = (cur && cur.url) || ''; } catch (e) {}
+        }
+        img.src = url; img.style.display = url ? 'block' : 'none';
+        box.classList.toggle('has-bg', !!url);
+        _chatBgFrom = from;
+        _paintChatBgHint();
+        return from;
+    }
+    function _paintChatBgHint() {
+        const h = document.getElementById('chat-bg-hint');
+        if (!h) return;
+        h.textContent = _chatBgFrom
+            ? ('跟微信的「' + _chatBgFrom + '」同一張，要換去那間的聊天設置換')
+            : '';
+    }
+
+    async function loadSavedChatBg() {
+        const current = await VN_Cache.get('chat_bg', '_current');
+        if (current && current.url) { const img = document.getElementById('chat-bg-img'); img.src = current.url; img.style.display = 'block'; document.getElementById('phone-chat').classList.add('has-bg'); }
+    }
+
+    /* =========================================
+       📱 聊天泡泡：從微信的主題庫挑一套給這間
+       主題庫、注入、提權都在微信那邊（WX_BUBBLE_SETTINGS / WX_BUBBLE_AI），這裡只畫清單。
+       對得到同名聯絡人的聊天室，挑了會寫進他的微信設定——同一個人兩邊同款。
+       ========================================= */
+    function switchChatMoreTab(tab) {
+        const panes = { bg: 'chat-more-bg', bubble: 'chat-more-bubble', sticker: 'chat-more-sticker' };
+        if (!panes[tab]) tab = 'bg';
+        Object.keys(panes).forEach(k => { const el = document.getElementById(panes[k]); if (el) el.hidden = (k !== tab); });
+        document.querySelectorAll('.chat-more-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+        if (tab === 'bg') _paintChatBgHint();
+        else if (tab === 'bubble') _renderBubbleList();
+        else _renderStickerPick();
+    }
+
+    /* =========================================
+       😺 表情包：這個故事的角色，手機裡用哪一包
+       一個故事一個選擇（奇幻、古風那種故事根本沒手機，使用者不會打開這裡＝不選＝不送給 AI）。
+       庫的匯入與管理都在微信；這裡只挑。挑了之後正文生成前才把那一包的名字送給主模型。
+       ========================================= */
+    function _renderStickerPick() {
+        const list = document.getElementById('chat-sticker-list');
+        const hint = document.getElementById('chat-sticker-hint');
+        if (!list || !hint) return;
+        const W = win.WX_STICKER;
+        if (!W || !W.storyLibId) { list.innerHTML = '<div class="chat-bubble-empty">表情包沒載入到，重整一次看看</div>'; hint.textContent = ''; return; }
+        let libs = [];
+        try { libs = JSON.parse(localStorage.getItem('os_sticker_libs') || '[]'); } catch (e) {}
+        if (!libs.length) {
+            hint.textContent = '';
+            list.innerHTML = '<div class="chat-bubble-empty">還沒有表情包，去微信的表情包設定匯入</div>';
+            return;
+        }
+        const on = W.storyLibId();
+        hint.textContent = '這個故事裡，角色的手機用哪一包';
+        const esc = _esc;
+        const rows = [{ id: '', name: '不用表情包', count: '' }].concat(libs.map(l => ({ id: l.id, name: l.name, count: (l.stickers || []).length + ' 張' })));
+        list.innerHTML = rows.map(r => `<div class="chat-sticker-row${r.id === on ? ' selected' : ''}" data-id="${esc(r.id)}">` +
+            `<span class="chat-sticker-name">${esc(r.name)}</span><span class="chat-sticker-count">${esc(r.count)}</span>` +
+            `<i class="fa-solid ${r.id === on ? 'fa-circle-check' : 'fa-circle'} chat-sticker-mark"></i></div>`).join('');
+        list.querySelectorAll('.chat-sticker-row').forEach(el => {
+            el.onclick = () => { W.setStoryLib(el.dataset.id || ''); _renderStickerPick(); };
+        });
+    }
+    function _vnRoom() {
+        const P = window.VN_Phone || win.VN_Phone;
+        const name = (document.getElementById('chat-title')?.innerText || '').trim();
+        return { name, key: (P && P.currentChatroom) || name };
+    }
+    function _renderBubbleList() {
+        const list = document.getElementById('chat-bubble-list');
+        const hint = document.getElementById('chat-bubble-hint');
+        const B = win.WX_BUBBLE_SETTINGS, AI = win.WX_BUBBLE_AI;
+        hint.classList.remove('error'); hint.textContent = '';
+        if (!B || !AI || !B.roomState) { list.innerHTML = '<div class="chat-bubble-empty">泡泡主題沒載入到，重整一次看看</div>'; return; }
+
+        const room = _vnRoom();
+        const st = B.roomState(room.name, room.key);
+        if (st.via === 'contact') hint.textContent = `跟微信的「${room.name}」同一套，這裡換了那邊也會換`;
+
+        const esc = _esc;
+        const gal = AI.galLoad();
+        // 第一張是預設；其餘照主題庫的順序
+        const items = [{ id: '', name: '預設', css: '' }].concat(gal);
+        const isOn = (t) => t.id ? (st.mode === 'ai' && st.css === t.css) : st.mode === 'default';
+        list.innerHTML = items.map(t => `<div class="chat-bubble-card${isOn(t) ? ' selected' : ''}">
+                <iframe sandbox="allow-same-origin" scrolling="no" tabindex="-1"></iframe>
+                <div class="chat-bubble-name"><span>${esc(t.name)}</span>${isOn(t) ? '<i class="fa-solid fa-check"></i>' : ''}</div>
+            </div>`).join('')
+            + (gal.length ? '' : '<div class="chat-bubble-empty">在微信的氣泡設置裡收藏過的主題，會出現在這裡</div>');
+
+        const cards = list.querySelectorAll('.chat-bubble-card');
+        items.forEach((t, i) => {
+            const card = cards[i]; if (!card) return;
+            try { card.querySelector('iframe').srcdoc = AI.buildThumb(t.css); } catch (e) {}
+            card.onclick = () => {
+                if (!B.setRoomTheme(room.name, room.key, t.id ? t : null)) {
+                    hint.classList.add('error'); hint.textContent = '存不進去，瀏覽器的空間滿了';
+                    return;
+                }
+                closeChatBgPanel();
+            };
+        });
+    }
+
+    /* =========================================
+       系統設置：圖片快取管理（🌍 世界感知 · 圖片網格畫廊）
+       縮圖為主、右上「⋯」選單操作；依當前世界(chatId)分組，舊圖歸「未分類」。
+       ========================================= */
+    const _mgrState = {};   // listId -> { world, filter }
+    function _worldLabel(world, curWorld) {
+        if (!world) return '未分類（舊資料）';
+        const short = world.length > 24 ? ('…' + world.slice(-22)) : world;
+        return (world === curWorld ? '當前世界 · ' : '') + short;
+    }
+    async function _imgToDataUrl(raw) {
+        try {
+            const res = await fetch(raw); const blob = await res.blob();
+            return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(''); fr.readAsDataURL(blob); });
+        } catch (e) { return ''; }
+    }
+    // 把一張 dataURL 重編成 WebP（保留透明、~80%+ 縮小；瀏覽器不支援 WebP 就放棄、不轉 JPEG 免毀透明）
+    function _imgCompressDataUrl(dataUrl, quality) {
+        if (typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) return Promise.resolve('');
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    const cv = document.createElement('canvas');
+                    cv.width = img.naturalWidth || 512; cv.height = img.naturalHeight || 512;
+                    cv.getContext('2d').drawImage(img, 0, 0);
+                    let out = '';
+                    try { out = cv.toDataURL('image/webp', quality); } catch (e) {}
+                    resolve((out && out.indexOf('image/webp') !== -1) ? out : '');
+                } catch (e) { resolve(''); }
+            };
+            img.onerror = () => resolve('');
+            img.src = dataUrl;
+        });
+    }
+    // 批次壓縮一組圖片（序列、一張一張來→峰值記憶體只有一張，不會 OOM）；已壓過/太小的略過。回 {done,saved,skipped}
+    async function _vngCompressEntries(cfg, entries, btn) {
+        const orig = btn ? btn.textContent : '';
+        let done = 0, saved = 0, skipped = 0;
+        for (const entry of entries) {
+            done++;
+            if (entry.compressed || !_vngHasImg(entry)) { skipped++; continue; }   // 壓過/沒圖 → 跳過(免越壓越糊)
+            const _st = _vngStoreOf(cfg, entry);
+            const full = await VN_Cache.getRaw(_st, entry.key);   // 列表只有中繼資料 → 壓的時候才撈這一張的圖
+            const url = full && full.url;
+            if (!url || typeof url !== 'string' || !url.startsWith('data:') || url.indexOf('image/webp') !== -1) { skipped++; continue; }
+            if (btn) btn.textContent = `壓縮中 ${done}/${entries.length}…`;
+            const out = await _imgCompressDataUrl(url, 0.85);
+            if (out && out.length < url.length * 0.92) {   // 至少省 8% 才換，免反而變大
+                saved += (url.length - out.length);
+                await VN_Cache.setRaw(_st, entry.key, { ...full, url: out, compressed: 1 });
+                entry.compressed = 1;
+            } else { skipped++; }
+            await new Promise(r => setTimeout(r, 0));   // 讓出主執行緒 + 讓上一張的 canvas/img 被 GC
+        }
+        if (btn) btn.textContent = orig;
+        return { done, saved, skipped };
+    }
+    function _closeCardMenus() { document.querySelectorAll('.vng-menu').forEach(m => m.remove()); }
+    function _vngLightbox(url) {
+        const ov = document.createElement('div'); ov.className = 'vng-lightbox';
+        const img = document.createElement('img'); img.src = url; ov.appendChild(img);
+        ov.onclick = () => ov.remove();
+        document.body.appendChild(ov);
+    }
+    function _vngEditModal(initial, onOk) {
+        const ov = document.createElement('div'); ov.className = 'vng-modal';
+        const box = document.createElement('div'); box.className = 'vng-modal-box';
+        const h = document.createElement('h4'); h.textContent = '編輯 Prompt 後重生成';
+        const ta = document.createElement('textarea'); ta.value = initial || '';
+        const acts = document.createElement('div'); acts.className = 'vng-modal-actions';
+        const cancel = document.createElement('button'); cancel.className = 'vng-btn-cancel'; cancel.textContent = '取消'; cancel.onclick = () => ov.remove();
+        const ok = document.createElement('button'); ok.className = 'vng-btn-ok'; ok.textContent = '重生成'; ok.onclick = () => { const v = ta.value.trim(); ov.remove(); if (v) onOk(v); };
+        acts.appendChild(cancel); acts.appendChild(ok);
+        box.appendChild(h); box.appendChild(ta); box.appendChild(acts);
+        ov.appendChild(box); ov.onclick = (e) => { if (e.target === ov) ov.remove(); };
+        document.body.appendChild(ov); setTimeout(() => ta.focus({ preventScroll: true }), 50);
+    }
+    async function _vngRegen(cfg, fullKey, val, prompt) {
+        // force=true：頭像走 generate() 會查記憶體快取(_urlCache)，同 prompt 會吐舊圖 → 重生必須強制繞過
+        let raw, _trio = null;
+        if (cfg.kind === 'bg') raw = await VN_Image.getBg(prompt, {});
+        else if (cfg.kind === 'scene') {
+            // 場景插圖：同 getScene 的尺寸設定，但帶 force 繞過記憶體快取
+            const _W = window.parent || window;
+            let _sw = 1024, _sh = 1024;
+            try {
+                const _sz = (JSON.parse(localStorage.getItem('os_image_config') || '{}').sceneGen || {}).size || '1024x1024';
+                const _p = String(_sz).split('x').map(Number);
+                if (_p[0] && _p[1]) { _sw = _p[0]; _sh = _p[1]; }
+            } catch (e) {}
+            // 相簿存著「畫到誰」就一起帶（帶參考圖用）
+            const _cast = (val && Array.isArray(val.cast)) ? val.cast : undefined;
+            raw = _W.OS_IMAGE_MANAGER ? await _W.OS_IMAGE_MANAGER.generate(prompt, 'scene', { width: _sw, height: _sh, force: true, refCast: _cast, use: 'scene' }) : '';
+        }
+        else {
+            // 🚨 走 _makeCharImage 而不是寫死 getAvatar：立繪模式開著的時候，
+            //    這顆「重生」以前永遠吐頭像回來（「勾了立繪還是給頭像」就是按到這裡）。
+            //    走共用咽喉才會跟著拉桿換模板、順便做 AI 去背。
+            const _mk = (window.VN_Core || (window.parent || window).VN_Core);
+            const _img = _mk && _mk._makeCharImage ? await _mk._makeCharImage(prompt, 'Neutral', true) : null;
+            raw = _img ? (_img.dataUrl || _img.objUrl) : await VN_Image.getAvatar(prompt, 'Neutral', true);
+            _trio = _img;
+        }
+        if (!raw) return '';
+        const url = (await _imgToDataUrl(raw)) || raw;
+        const _isSprite = (window.VN_Config || (window.parent || window).VN_Config)?.data?.spriteDirect === true;
+        // 三合一生成的自拍頭像、Q版跟著這張一起換；重生成單張時舊的對不上新立繪，不留（undefined）
+        const _three = cfg.kind === 'avatar' ? { face: (_trio && _trio.face) || undefined, chibi: (_trio && _trio.chibi) || undefined, chibiSide: (_trio && _trio.chibiSide) || undefined, chibiBack: (_trio && _trio.chibiBack) || undefined } : {};
+        await VN_Cache.setRaw(cfg.store, fullKey, _isSprite && cfg.kind === 'avatar'
+            ? { ...val, prompt, url, isSprite: true, ..._three }
+            : { ...val, prompt, url, ..._three });   // 不再存 rawUrl(只寫不讀的死資料、徒增 DB+記憶體)
+        // 已轉成持久 dataURL → 釋放暫時的 blob 與 OS_IMAGE_MANAGER 快取，免 NAI blob 永久洩漏
+        try {
+            if (typeof raw === 'string' && raw.startsWith('blob:') && raw !== url) URL.revokeObjectURL(raw);
+            const _W = window.parent || window;
+            if (cfg.kind === 'scene' && _W.OS_IMAGE_MANAGER && _W.OS_IMAGE_MANAGER.evict) _W.OS_IMAGE_MANAGER.evict('scene', prompt, { use: 'scene' });   // 跟上面 generate 同一個 use，鍵才對得上
+        } catch (e) {}
+        return url;
+    }
+    function _vngCardMenu(anchor, cfg, entry, curWorld, st, rerender) {
+        _closeCardMenus();
+        const store = _vngStoreOf(cfg, entry), fullKey = entry.key, bare = VN_Cache.bareKeyOf(entry);
+        // 畫廊列表只帶中繼資料（大圖不進記憶體）→ 動作當下才回 IDB 撈完整值。
+        // ⚠️ 寫回絕不能用列表的 entry 展開（沒有 url，會把圖洗掉），一律以 _fullVal() 為底。
+        const _fullVal = async () => { const v = await VN_Cache.getRaw(store, fullKey); return (v && typeof v === 'object') ? v : {}; };
+        const hasImg = _vngHasImg(entry);
+        const menu = document.createElement('div'); menu.className = 'vng-menu';
+        const add = (txt, fn, danger) => { const b = document.createElement('button'); if (danger) b.className = 'danger'; b.textContent = txt; b.onclick = (e) => { e.stopPropagation(); _closeCardMenus(); fn(); }; menu.appendChild(b); };
+        if (hasImg) add('查看大圖', async () => { const v = await _fullVal(); if (v.url) _vngLightbox(v.url); });
+        if (!cfg.noRegen) {
+            // 重生只換這一張卡的圖(_vngSetCardImg)，不呼叫 rerender() 整庫重渲染 → 不再把整庫大圖重 decode 害 OOM
+            add('編輯重生', () => _vngEditModal(entry.prompt, async (p) => {
+                const card = anchor.closest('.vng-card');
+                const newUrl = await _vngRegen(cfg, fullKey, await _fullVal(), p);
+                if (newUrl) { entry.prompt = p; _vngSetCardImg(card, newUrl, cfg.kind); }
+            }));
+            add('↻ 直接重生', async () => {
+                if (!entry.prompt) return;
+                const card = anchor.closest('.vng-card');
+                const newUrl = await _vngRegen(cfg, fullKey, await _fullVal(), entry.prompt);
+                if (newUrl) _vngSetCardImg(card, newUrl, cfg.kind);
+            });
+            // 從頭像快取轉立繪：把這張頭像設成同名同世界的立繪（VN 顯示時最優先用立繪）
+            if (cfg.kind === 'avatar' && hasImg) add('設為立繪', async () => {
+                const v = await _fullVal(); if (!v.url) return;
+                await VN_Cache.setRaw('sprite_cache', fullKey, { url: v.url, prompt: v.prompt || entry.prompt || '', chatId: VN_Cache.worldOf(entry), createdAt: Date.now(), fromAvatar: true });
+                AUI.alert('已把「' + bare + '」設為立繪（限此世界）。\nVN 會優先用立繪顯示；要透明去背可到「立繪面板」處理。');
+            });
+        }
+        add(entry.favorite ? '取消收藏' : '☆ 加入收藏', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, fullKey, { ...v, favorite: !entry.favorite }); rerender(); });
+        if (st.world === '') {
+            add('→ 移到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); await VN_Cache.deleteRaw(store, fullKey); rerender(); });
+        } else if (st.world !== curWorld) {
+            add('⧉ 複製到當前世界', async () => { const v = await _fullVal(); await VN_Cache.setRaw(store, VN_Cache.scopedKey(curWorld, bare), { ...v, chatId: curWorld }); AUI.alert('已複製到當前世界'); });
+        }
+        add('刪除', async () => {
+            await VN_Cache.deleteRaw(store, fullKey);
+            // 本局的頭像記憶體快取在 VN_Core 上（VN_PLAYER 只是對外的按鈕集合，沒有這份）：不清的話這一局還是顯示舊圖
+            const _vc = window.VN_Core || (window.parent || window).VN_Core;
+            if (store === 'avatar_cache' && _vc) { try { delete _vc._avatarMemCache[bare]; delete _vc._faceMemCache[bare]; } catch (e) {} }
+            if (cfg.kind === 'scene' && window.VN_Core) { try { delete window.VN_Core._sceneMemCache[bare]; } catch (e) {} }
+            rerender();
+        }, true);
+        document.body.appendChild(menu);
+        const r = anchor.getBoundingClientRect();
+        let left = r.right - menu.offsetWidth; if (left < 6) left = 6;
+        let top = r.bottom + 4; if (top + menu.offsetHeight > window.innerHeight - 6) top = Math.max(6, r.top - menu.offsetHeight - 4);
+        menu.style.left = left + 'px'; menu.style.top = top + 'px';
+        setTimeout(() => document.addEventListener('click', _closeCardMenus, { once: true }), 0);
+    }
+    function _vngPh(kind) {
+        const d = document.createElement('div'); d.className = 'vng-ph';
+        d.innerHTML = '<i class="fa-solid ' + (kind === 'bg' ? 'fa-mountain-sun' : (kind === 'scene' ? 'fa-clapperboard' : (kind === 'sprite' ? 'fa-masks-theater' : 'fa-user'))) + '"></i>';
+        return d;
+    }
+    function _vngImg(url, kind) {
+        const img = document.createElement('img');
+        img.loading = 'lazy'; img.decoding = 'async';   // 延後/非同步 decode → 降低同時解碼一堆大圖的記憶體尖峰
+        img.src = url; img.onerror = () => img.replaceWith(_vngPh(kind));
+        return img;
+    }
+    // 只換「這一張卡」的圖（重生用）→ 不整庫 rerender，避免整庫大圖重 decode 害 TauriTavern OOM
+    function _vngSetCardImg(card, url, kind) {
+        if (!card) return;
+        const old = card.querySelector(':scope > img, :scope > .vng-ph');
+        const ok = !!(url && !String(url).startsWith('blob:'));
+        const node = ok ? _vngImg(url, kind) : _vngPh(kind);
+        card._vngLoaded = ok ? 1 : 0;   // 給視口觀察器判斷「有圖可釋放」
+        if (old) old.replaceWith(node); else card.insertBefore(node, card.firstChild);
+    }
+    // 圖片虛擬化：卡片捲進視口才從 IDB 撈「這一張」的圖、滑遠了換回佔位符釋放
+    // → 整庫幾百張 base64 大圖不再同時常駐記憶體（插圖庫一開就 OOM 的真凶）
+    function _vngMakeLazyIO(store, kind) {
+        if (!('IntersectionObserver' in window)) return null;
+        return new IntersectionObserver((recs) => {
+            recs.forEach(async (rec) => {
+                const card = rec.target;
+                card._vngVisible = rec.isIntersecting ? 1 : 0;
+                if (rec.isIntersecting) {
+                    if (card._vngLoaded || card._vngLoading) return;
+                    card._vngLoading = 1;
+                    const v = await VN_Cache.getRaw(card._vngStore || store, card._vngKey);
+                    delete card._vngLoading;
+                    if (!card.isConnected || !card._vngVisible) return;   // 撈回來時已滑走/已重渲染 → 不塞
+                    if (v && v.url) _vngSetCardImg(card, v.url, kind);
+                } else if (card._vngLoaded) {
+                    _vngSetCardImg(card, '', kind);
+                }
+            });
+        }, { rootMargin: '500px 0px 500px 0px' });
+    }
+    // 卡片可能來自別的 store（立繪 tab 併入 avatar_cache 的直生立繪）→ 一律走這裡取，別直接讀 cfg.store
+    function _vngStoreOf(cfg, entry) { return (entry && entry._st) || cfg.store; }
+    function _vngHasImg(entry) { return entry.hasUrl !== undefined ? !!entry.hasUrl : !!(entry.url && !String(entry.url).startsWith('blob:')); }
+    function _vngCard(cfg, entry, curWorld, st, rerender) {
+        const bare = VN_Cache.bareKeyOf(entry);
+        const card = document.createElement('div'); card.className = 'vng-card' + ((cfg.kind === 'bg' || cfg.kind === 'scene') ? ' kind-bg' : '') + (cfg.kind === 'sprite' ? ' kind-sprite' : '');
+        card.appendChild(_vngPh(cfg.kind));
+        card._vngKey = entry.key;
+        card._vngStore = _vngStoreOf(cfg, entry);
+        const hasImg = _vngHasImg(entry);
+        if (hasImg) {
+            if (st.io) st.io.observe(card);
+            else VN_Cache.getRaw(card._vngStore, entry.key).then(v => { if (v && v.url && card.isConnected) _vngSetCardImg(card, v.url, cfg.kind); });   // 沒有 IntersectionObserver 的舊環境退回逐張直載
+        }
+        if (entry._st === 'avatar_cache') { const s2 = document.createElement('div'); s2.className = 'vng-badge src'; s2.textContent = '直生'; card.appendChild(s2); }
+        if (entry.favorite) { const b = document.createElement('div'); b.className = 'vng-badge fav'; b.textContent = '收藏'; card.appendChild(b); }
+        else if (st.world === '') { const b = document.createElement('div'); b.className = 'vng-badge unclassed'; b.textContent = '未分類'; card.appendChild(b); }
+        const foot = document.createElement('div'); foot.className = 'vng-foot'; foot.textContent = bare; card.appendChild(foot);
+        const more = document.createElement('button'); more.className = 'vng-more'; more.textContent = '⋯';
+        more.onclick = (e) => { e.stopPropagation(); _vngCardMenu(more, cfg, entry, curWorld, st, rerender); };
+        card.appendChild(more);
+        card.onclick = async (e) => {
+            if (e.target.closest('.vng-more') || !hasImg) return;
+            const v = await VN_Cache.getRaw(card._vngStore, entry.key);   // 大圖看的時候才撈
+            if (v && v.url) _vngLightbox(v.url);
+        };
+        return card;
+    }
+    async function _renderImgMgr(cfg) {
+        const list = document.getElementById(cfg.listId); if (!list) return;
+        const store = cfg.store, curWorld = VN_Cache.getCurrentWorld();
+        // 清單不讀任何一張圖（鑰匙 × 圖庫小帳）；圖等卡片進視口才逐張載。
+        // 改版前就存在、小帳還沒記到的舊圖：先照鑰匙列出來（不等），背景一張張補記，補完重排一次。
+        let all = await VN_Cache.getAllMeta(store, { partial: true });
+        const pending = all.pending || [];
+        // spriteDirect(直生立繪)生的圖存同一個 avatar_cache（供遊戲重用、切拉桿不重生＝定案），但相簿「頭像」tab 排除它(isSprite)→不再被全身立繪污染
+        if (cfg.kind === 'avatar') all = all.filter(e => !e.isSprite);
+        // 直生立繪(spriteDirect)存在 avatar_cache 但被頭像 tab 濾掉、立繪 tab 又只讀 sprite_cache
+        // → 兩邊都不顯示＝孤兒、刪不掉。使用者看到的就是立繪，所以併進立繪 tab（不搬 store，切拉桿仍不重生）
+        const fills = pending.length ? [[store, pending]] : [];
+        if (cfg.kind === 'sprite') {
+            const _av = await VN_Cache.getAllMeta('avatar_cache', { partial: true });
+            if ((_av.pending || []).length) fills.push(['avatar_cache', _av.pending]);   // 還沒補記的看不出是不是直生立繪，補完重排時才會出現
+            const _direct = _av.filter(e => e.isSprite);
+            _direct.forEach(e => { e._st = 'avatar_cache'; });
+            all = all.concat(_direct);
+        }
+        const groups = {};
+        all.forEach(e => { const w = VN_Cache.worldOf(e); (groups[w] = groups[w] || []).push(e); });
+        const st = _mgrState[cfg.listId] || (_mgrState[cfg.listId] = { world: curWorld, filter: 'all' });
+        if (groups[st.world] === undefined && st.world !== curWorld) st.world = curWorld;
+        const rerender = () => _renderImgMgr(cfg);
+        if (st.io) { try { st.io.disconnect(); } catch (e) {} }
+        st.io = _vngMakeLazyIO(store, cfg.kind);
+        list.innerHTML = '';
+
+        // 工具列：世界選擇 + 篩選
+        const bar = document.createElement('div'); bar.className = 'vng-bar';
+        const sel = document.createElement('select'); sel.className = 'vng-sel';
+        const wkeys = Object.keys(groups).sort((a, b) => {
+            if (a === curWorld) return -1; if (b === curWorld) return 1;
+            if (a === '') return 1; if (b === '') return -1; return a < b ? -1 : 1;
+        });
+        if (!wkeys.includes(curWorld)) wkeys.unshift(curWorld);
+        wkeys.forEach(w => { const o = document.createElement('option'); o.value = w; o.textContent = _worldLabel(w, curWorld) + ` (${(groups[w] || []).length})`; if (w === st.world) o.selected = true; sel.appendChild(o); });
+        sel.onchange = () => { st.world = sel.value; rerender(); };
+        bar.appendChild(sel);
+        const chips = document.createElement('div'); chips.className = 'vng-chips';
+        [['all', '全部'], ['fav', '收藏'], ['unused', '未收藏']].forEach(([k, label]) => {
+            const c = document.createElement('button'); c.className = 'vng-chip' + (st.filter === k ? ' active' : ''); c.textContent = label;
+            c.onclick = () => { st.filter = k; rerender(); }; chips.appendChild(c);
+        });
+        bar.appendChild(chips);
+        list.appendChild(bar);
+
+        // 舊圖補記：背景跑、這裡只給一行進度；補完（而且這段時間使用者沒自己換過篩選）就重排一次
+        const token = st.token = (st.token || 0) + 1;
+        if (fills.length) {
+            const note = document.createElement('div'); note.className = 'vng-indexing';
+            const say = (i, n) => { note.textContent = `正在整理舊圖 ${i} / ${n}（只有這一次，可以先照常看）`; };
+            say(0, fills[0][1].length); list.appendChild(note);
+            (async () => {
+                for (const [s, ks] of fills) await VN_Cache.indexMissing(s, ks, say);
+                if (st.token !== token || !list.isConnected) return;
+                let sc = list; while (sc && sc.scrollHeight <= sc.clientHeight + 1) sc = sc.parentElement;
+                const top = sc ? sc.scrollTop : 0;
+                await rerender();
+                if (sc && sc.isConnected) sc.scrollTop = top;
+            })();
+        }
+
+        let entries = (groups[st.world] || []).slice();
+        if (st.filter === 'fav') entries = entries.filter(e => e.favorite);
+        else if (st.filter === 'unused') entries = entries.filter(e => !e.favorite);
+        // 收藏置頂，其餘照時間新→舊（lastUsed 寫入時自動蓋章；舊資料沒章的沉底）
+        entries.sort((a, b) =>
+            ((b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)) ||
+            ((b.lastUsed || b.createdAt || 0) - (a.lastUsed || a.createdAt || 0)));
+
+        if (!entries.length) {
+            const em = document.createElement('div'); em.className = 'vng-empty';
+            em.textContent = st.world === '' ? '未分類沒有圖片' : (st.filter !== 'all' ? '沒有符合的圖片' : '這個世界還沒有插圖。劇情裡出現畫面時，就會自動畫出來。');
+            list.appendChild(em); return;
+        }
+        // 🗜️ 壓縮鈕：把目前這個世界的圖批次轉成更小的 WebP（省空間/記憶體；輕微失真、畫質幾乎不變）
+        const compressBtn = document.createElement('button');
+        compressBtn.className = 'vng-chip'; compressBtn.textContent = '壓縮';
+        compressBtn.title = '把這個世界的圖片壓成更小的 WebP，省空間與記憶體（畫質幾乎看不出差別、輕微失真）';
+        compressBtn.onclick = async () => {
+            if (compressBtn.dataset.busy) return;
+            if (!await AUI.confirm('把目前這個世界的圖片壓成更小的 WebP？\n畫質幾乎看不出差別，但能省下不少空間與記憶體、也比較不會卡。\n（輕微失真壓縮，已壓過的會自動略過）')) return;
+            compressBtn.dataset.busy = '1';
+            try {
+                const r = await _vngCompressEntries(cfg, entries, compressBtn);
+                const mb = (r.saved * 0.75 / 1048576);
+                const win = window.parent || window;
+                const msg = `壓縮完成：${r.done - r.skipped} 張壓縮、${r.skipped} 張略過，約省 ${mb.toFixed(1)} MB`;
+                try { if (AUI.toastr) AUI.toastr.success(msg); else AUI.alert(msg); } catch (e) { AUI.alert(msg); }
+            } catch (e) { AUI.alert('壓縮失敗：' + (e.message || e)); }
+            delete compressBtn.dataset.busy;
+            rerender();
+        };
+        chips.appendChild(compressBtn);
+
+        const grid = document.createElement('div'); grid.className = 'vng-grid';
+        entries.forEach(entry => grid.appendChild(_vngCard(cfg, entry, curWorld, st, rerender)));
+        list.appendChild(grid);
+    }
+    async function loadAvatarManager(listId) { return _renderImgMgr({ store: 'avatar_cache', listId: listId || 'avatar-mgr-list', kind: 'avatar' }); }
+    async function loadSpriteManager(listId) { return _renderImgMgr({ store: 'sprite_cache', listId: listId || 'sprite-list', kind: 'sprite', noRegen: true }); }
+
+    async function loadBgManager(listId) { return _renderImgMgr({ store: 'bg_cache', listId: listId || 'bg-mgr-list', kind: 'bg' }); }
+    async function loadSceneManager(listId) { return _renderImgMgr({ store: 'scene_cache', listId: listId || 'scene-mgr-list', kind: 'scene' }); }
+
+    // 章節縮圖：從 mem / IDB 取存過的場景圖，縮成小圖再塗上去（尺寸/裁切都在 CSS，這裡只換圖）
+    //   🚨這裡以前是「每張卡都直接塞原圖」——原圖是場景背景(常是 1024px 以上的 dataURL)，
+    //     33 章就是 33 張全尺寸圖同時解碼躺在記憶體裡，開著章節面板整個酒館都會卡。
+    //     現在：①只有「看得到的那幾張」才載入，離開視窗就放掉 ②載入時先縮成 360px 小圖再用。
+    const THUMB_W = 360;
+    const _thumbSmall = {};     // cacheId → 縮好的小圖（字串很小，可以一直留著）
+    const _thumbBusy = {};      // cacheId → 進行中的 Promise（同一張不重複解碼）
+    let _thumbTurn = Promise.resolve();   // 還沒縮過的排隊，一次只做一張
+    // 圖庫裡某個場景被重畫或刪掉（VN_Cache 喊 vn-cache-changed）：記憶體裡那張小圖丟掉，下次貼的時候重新對指紋（存起來的那份靠指紋自己作廢）
+    const _onBgChanged = (e) => {
+        const d = e && e.detail;
+        if (!d || d.store !== 'bg_cache') return;
+        const k = String(d.key || ''), i = k.indexOf('::'), bare = i >= 0 ? k.slice(i + 2) : k;
+        delete _thumbSmall[bare]; delete _thumbBusy[bare];
+    };
+    try { window.addEventListener('vn-cache-changed', _onBgChanged); if (win !== window) win.addEventListener('vn-cache-changed', _onBgChanged); } catch (e) {}
+    // 縮好的小圖記下來（上限 60 張，超過丟掉最早那批）
+    function _thumbKeep(cacheId, out) {
+        _thumbSmall[cacheId] = out;
+        const keys = Object.keys(_thumbSmall);
+        if (keys.length > 60) keys.slice(0, 20).forEach(k => { delete _thumbSmall[k]; delete _thumbBusy[k]; });
+        return out;
+    }
+    // 🐢 11-16：以前一律走下面那條（new Image 解碼＋畫布縮＋toDataURL），整張原圖（常常兩三 MB）的解碼和壓圖都卡在畫面這條線上，
+    //    一次七張＝每次開酒館第一次開章節都卡兩下。現在先走這條：解碼（createImageBitmap）和壓圖（toBlob）都在背後做，畫面不停。
+    //    抓不到的（別的網域沒開放、太舊的瀏覽器）回 ''，退回原本那條。
+    async function _shrinkOff(url) {
+        if (typeof createImageBitmap !== 'function') return '';
+        try {
+            const blob = await (await fetch(url)).blob();
+            const bmp = await createImageBitmap(blob);
+            const s = Math.min(1, THUMB_W / (bmp.width || THUMB_W));
+            const cv = document.createElement('canvas');
+            cv.width = Math.max(1, Math.round(bmp.width * s)); cv.height = Math.max(1, Math.round(bmp.height * s));
+            cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+            try { bmp.close(); } catch (e) {}
+            const small = await new Promise(r => cv.toBlob(r, 'image/webp', 0.72));
+            cv.width = cv.height = 1;
+            if (!small) return '';
+            return await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(String(fr.result || '')); fr.onerror = () => r(''); fr.readAsDataURL(small); });
+        } catch (e) { return ''; }
+    }
+    // 💾 縮好的小圖存起來（11-16：第一次載入圖片會比窗口慢顯示）：重開酒館之後再開章節，小圖跟窗口一起出來，
+    //    不用再把兩三 MB 的原圖讀出來重縮。只有每一章第一次看、或場景被重畫過，才要等動畫演完再縮。
+    //    存在自己一個小資料庫（aurelia_chx_thumbs）：不動圖庫那個 9GB 的庫、不升任何版本；是照原圖做出來的，不進備份，丟了會自己重做。
+    //    一筆＝{ url 小圖, sig 原圖的指紋, t 存的時間 }，鑰匙＝世界::場景（同圖庫 bg_cache 的鑰匙）。
+    //    認原圖還是不是同一張：比圖庫小帳的指紋（VN_Cache.metaOf(...).us）。場景重畫＝指紋變了、刪掉＝小帳沒了，舊小圖就不用。
+    let _thumbDbP = null;
+    function _thumbDb() {
+        if (_thumbDbP) return _thumbDbP;
+        const p = new Promise((res, rej) => {
+            const req = indexedDB.open('aurelia_chx_thumbs', 1);
+            req.onupgradeneeded = e => { const db = e.target.result; if (!db.objectStoreNames.contains('thumbs')) db.createObjectStore('thumbs'); };
+            req.onsuccess = e => { const db = e.target.result; db.onversionchange = () => { try { db.close(); } catch (er) {} if (_thumbDbP === p) _thumbDbP = null; }; db.onclose = () => { if (_thumbDbP === p) _thumbDbP = null; }; res(db); _thumbPrune(db); };
+            req.onerror = () => rej(req.error);
+        });
+        p.catch(() => { if (_thumbDbP === p) _thumbDbP = null; });
+        _thumbDbP = p;
+        return p;
+    }
+    const _thumbKey = (cacheId) => { const VC = win.VN_Cache; return VC && VC.scopedKey && VC.getCurrentWorld ? VC.scopedKey(VC.getCurrentWorld(), cacheId) : cacheId; };
+    function _thumbLoad(cacheId) {
+        return _thumbDb().then(db => new Promise(res => {
+            const req = db.transaction('thumbs', 'readonly').objectStore('thumbs').get(_thumbKey(cacheId));
+            req.onsuccess = () => res(req.result || null); req.onerror = () => res(null);
+        })).catch(() => null);
+    }
+    function _thumbSave(cacheId, url, sig) {
+        if (!url || !String(url).startsWith('data:') || url.length > 400000) return Promise.resolve(false);   // 沒縮成（退回原圖那種）不存
+        return _thumbDb().then(db => new Promise(res => {
+            const tx = db.transaction('thumbs', 'readwrite'); tx.objectStore('thumbs').put({ url, sig: sig || '', t: Date.now() }, _thumbKey(cacheId));
+            tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
+        })).catch(() => false);
+    }
+    function _thumbForget(cacheId) {
+        return _thumbDb().then(db => new Promise(res => {
+            const tx = db.transaction('thumbs', 'readwrite'); tx.objectStore('thumbs').delete(_thumbKey(cacheId));
+            tx.oncomplete = () => res(true); tx.onerror = tx.onabort = () => res(false);
+        })).catch(() => false);
+    }
+    // 存太多（超過 800 張）就把最久以前存的丟到剩 500 張。每次開這個小資料庫看一次，不擋別人。
+    function _thumbPrune(db) {
+        try {
+            const os = db.transaction('thumbs', 'readonly').objectStore('thumbs'), cnt = os.count();
+            cnt.onsuccess = () => {
+                if (cnt.result <= 800) return;
+                const all = [], cur = db.transaction('thumbs', 'readonly').objectStore('thumbs').openCursor();
+                cur.onsuccess = (e) => {
+                    const c = e.target.result;
+                    if (c) { all.push([c.key, (c.value && c.value.t) || 0]); c.continue(); return; }
+                    all.sort((a, b) => a[1] - b[1]);
+                    const tx = db.transaction('thumbs', 'readwrite'), st = tx.objectStore('thumbs');
+                    all.slice(0, all.length - 500).forEach(x => st.delete(x[0]));
+                };
+            };
+        } catch (e) {}
+    }
+    // 存好的那張還能不能用：圖庫裡這個場景還在，而且指紋沒變（小帳沒記指紋的舊資料＝沒辦法比，當作沒變；之後它一被重畫就會有指紋）
+    async function _thumbStored(cacheId) {
+        const rec = await _thumbLoad(cacheId);
+        if (!rec || !rec.url) return { rec: null, meta: null };
+        let meta = null;
+        try { meta = await (win.VN_Cache?.metaOf?.('bg_cache', cacheId)); } catch (e) {}
+        const ok = !!meta && (meta.us == null || meta.us === rec.sig);
+        return { rec, meta, ok };
+    }
+    // 從大廳打開章節時切塊還在演（面板被剪著）：等它演完才做重的。最多等 4 秒。
+    function _tilesDone() {
+        return new Promise((res) => {
+            const t0 = Date.now();
+            const chk = () => {
+                const p = document.getElementById('aurelia-vn-panel');
+                if (!(p && (p.classList.contains('aurelia-tilefx-on') || p.style.clipPath)) || Date.now() - t0 > 4000) res();
+                else setTimeout(chk, 80);
+            };
+            setTimeout(chk, 0);   // 切塊是「面板內容出來的下一步」才開始演，先讓那一步跑完再看
+        });
+    }
+    function _shrink(cacheId, url) {
+        if (_thumbSmall[cacheId]) return Promise.resolve(_thumbSmall[cacheId]);
+        if (_thumbBusy[cacheId]) return _thumbBusy[cacheId];
+        _thumbBusy[cacheId] = _shrinkOff(url).then((off) => off ? _thumbKeep(cacheId, off) : new Promise((resolve) => {
+            const img = new Image();   // 🚨不設 crossOrigin：設了會變成另一份請求、快取全落空
+            img.onload = () => {
+                let out = url;
+                try {
+                    const w = img.naturalWidth || THUMB_W, h = img.naturalHeight || THUMB_W;
+                    const s = Math.min(1, THUMB_W / w);
+                    const cv = document.createElement('canvas');
+                    cv.width = Math.max(1, Math.round(w * s));
+                    cv.height = Math.max(1, Math.round(h * s));
+                    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+                    out = cv.toDataURL('image/webp', 0.72);   // 跨網域圖會在這裡丟例外 → 退回原圖
+                } catch (e) { out = url; }
+                resolve(_thumbKeep(cacheId, out));
+            };
+            img.onerror = () => resolve('');
+            img.src = url;
+        }));
+        return _thumbBusy[cacheId];
+    }
+    async function _fillSceneImg(sceneEl, cacheId) {
+        if (!sceneEl || !cacheId) return;
+        if (sceneEl.dataset.thumbOn === cacheId) return;      // 已經塗好同一張
+        sceneEl.dataset.thumbOn = cacheId;
+        if (_thumbSmall[cacheId]) {
+            sceneEl.style.setProperty('--chx-thumb-img', `url('${_thumbSmall[cacheId]}')`);
+            return;
+        }
+        // 以前存過的小圖：只讀兩筆小東西（小圖本身、圖庫小帳），不用等切塊演完，窗口一出來就貼上
+        let stored = { rec: null, meta: null, ok: false };
+        try { stored = await _thumbStored(cacheId); } catch (e) {}
+        if (sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
+        if (stored.ok) {
+            _thumbKeep(cacheId, stored.rec.url);
+            sceneEl.style.setProperty('--chx-thumb-img', `url('${stored.rec.url}')`);
+            return;
+        }
+        await _tilesDone();   // 沒存過、或原圖換過的才會走到這：等切塊演完再讀原圖、縮圖
+        // 一張一張排隊做：一次七張原圖（一張兩三 MB 的字串）同時從圖庫讀出來，光是讀就會卡一下
+        const turn = _thumbTurn; let done; _thumbTurn = new Promise(r => { done = r; });
+        let small = '';
+        try {
+            await turn;
+            if (sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
+            // 一律從圖庫讀（不拿播放器手上那張 blob: 的）：指紋要照存在圖庫裡的那張算，下次才對得上
+            let url = '';
+            try {
+                const cached = await (win.VN_Cache?.get?.('bg_cache', cacheId));
+                url = (cached && cached.url) || '';
+            } catch (e) {}
+            if (!url) url = win.VN_Core?._bgMemCache?.[cacheId] || '';
+            if (!url) { delete sceneEl.dataset.thumbOn; if (stored.rec) _thumbForget(cacheId); return; }   // 圖庫裡沒有這個場景了：舊小圖一起丟
+            const sig = (win.VN_Cache?.urlSig?.(url)) || '';
+            if (stored.rec && sig && stored.rec.sig === sig) small = _thumbKeep(cacheId, stored.rec.url);   // 小帳還沒整理到這張，但原圖沒變：存好的照用，不重縮
+            else {
+                small = await _shrink(cacheId, url);
+                if (small && small !== url) _thumbSave(cacheId, small, sig);
+            }
+        } finally { setTimeout(done, 0); }   // 讓畫面先喘一格再換下一張
+        // 縮圖做好之前可能已經滑出視窗（被 _dropSceneImg 清掉）→ 別再塗回去
+        if (!small || sceneEl.dataset.thumbOn !== cacheId || !sceneEl.isConnected) return;
+        sceneEl.style.setProperty('--chx-thumb-img', `url('${small}')`);
+    }
+    function _dropSceneImg(sceneEl) {
+        if (!sceneEl || !sceneEl.dataset.thumbOn) return;
+        delete sceneEl.dataset.thumbOn;
+        sceneEl.style.removeProperty('--chx-thumb-img');      // 放掉解碼後的點陣圖，只留底色漸層
+    }
+
+    /* =========================================
+       🔥 終極解析器：嚴格要求 <content> 標籤
+       ========================================= */
+    async function openChapterPanel() {
+        const list = document.getElementById('chapter-list');
+        const subheader = document.getElementById('chapter-subheader');
+        const overlay = document.getElementById('chapter-overlay');
+        overlay.classList.add('active');
+        // 轉場語音在玩家還在挑卡片時就抓好：點下去才 new Audio 要下載＋解碼，聲音會慢畫面一拍
+        // 🚨 掛在本層 window，不是 win（win = window.parent＝酒館主頁，那邊沒有這個模組）
+        try { window.VN_ChapterWarp && window.VN_ChapterWarp.prime && window.VN_ChapterWarp.prime(); } catch (e) {}
+
+        // 獨立模式：從 OS_DB 讀取本地存檔（故事資料夾列表；輪播底欄/頁點由 chx-mode-list 收起）
+        const isStandalone = win.OS_API?.isStandalone?.() ?? false;
+        overlay.classList.toggle('chx-mode-list', isStandalone);
+        if (isStandalone) {
+            list.className = 'chx-track';
+            list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-hourglass-half"></i><div>讀取本地存檔中…</div></div>';
+            if (subheader) subheader.textContent = '本地存檔';
+
+            try {
+                if (!win.OS_DB) throw new Error('OS_DB 未載入');
+                const chapters = await win.OS_DB.getAllVnChapters();
+                list.innerHTML = '';
+
+                if (!chapters.length) {
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>尚無存檔記錄<br>按「踏入故事」生成第一章吧</div></div>';
+                    return;
+                }
+
+                // 只顯示「當前這個故事」的章節（同酒館版只看當前聊天）。
+                //   以前這裡把每一本故事都攤成一個資料夾列出來 —— 分艙鍵明明有了，就不該再端出別本書的存檔。
+                //   換故事的入口是藏書的「篇章目錄」（那邊接著玩會一起把世界書／世界 id 帶回來），不是這裡。
+                const currentStoryId = win.OS_AVS_ADAPTER?.getStoryId?.()
+                    || window.VN_Core?._currentStoryId
+                    || localStorage.getItem('vn_current_story_id') || '';
+
+                if (!currentStoryId) {
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>還沒有進行中的故事<br>回藏書挑一本踏進去</div></div>';
+                    return;
+                }
+
+                const mine = chapters.filter(ch => ch && ch.storyId === currentStoryId)
+                    .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 舊→新：第一章在最上面
+
+                if (!mine.length) {
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>這個故事還沒有章節<br>按「踏入故事」生成第一章吧</div></div>';
+                    return;
+                }
+
+                const storyTitle = mine[mine.length - 1].storyTitle
+                    || localStorage.getItem('vn_current_story_title') || '目前故事';
+                const maxTime = Math.max(...mine.map(c => c.createdAt || 0));
+                const dateStr = maxTime ? new Date(maxTime).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+                if (subheader) subheader.textContent = storyTitle;
+
+                // 只有一條故事＝沒有東西可以摺，標題列只剩「這是哪一條、幾章、整條刪掉」
+                const header = document.createElement('div');
+                header.className = 'ch-story-header active';
+                header.innerHTML = `
+                    <span class="ch-story-title">${_esc(storyTitle)}</span>
+                    <span class="ch-story-meta">${dateStr}${dateStr ? ' · ' : ''}${mine.length} 章</span>
+                    <button class="ch-story-del" title="刪除整個劇情"><i class="fa-solid fa-trash-can"></i></button>
+                `;
+                const body = document.createElement('div');
+                body.className = 'ch-story-body';
+                body.style.display = 'block';
+
+                header.querySelector('.ch-story-del').onclick = async (e) => {
+                    e.stopPropagation();
+                    if (!await AUI.confirm(`確定刪除「${storyTitle}」的所有章節？\n（開場白預設不受影響）`)) return;
+                    // 🚨 統一走 VN_Core.deleteStoryLine：章節、向量記憶、人物檔案、AVS 數值與快照、
+                    //    書架「歷史篇章」的索引一次清乾淨。少一環就會留下打開來是空的幽靈篇章。
+                    await window.VN_Core.deleteStoryLine(currentStoryId);
+                    list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>這個故事已經刪掉了<br>回藏書挑一本踏進去</div></div>';
+                };
+
+                mine.forEach(ch => {
+                    const item = document.createElement('div');
+                    item.className = 'ch-item';
+                    item.innerHTML = `
+                        <span class="ch-name">${_esc(ch.title)}</span>
+                        <button class="ch-item-del" data-id="${_esc(ch.id)}" title="刪除此章"><i class="fa-solid fa-trash-can"></i></button>
+                    `;
+                    // 點擊載入
+                    item.onclick = (e) => {
+                        if (e.target.closest('.ch-item-del')) return;
+                        window.VN_Core._setStoryId(ch.storyId || '', ch.storyTitle || '');
+                        if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game');
+                        closeChapterPanel();
+                        try { window.VN_Core.earlybirdFromText(ch.content); } catch (e) {}  // 頭像早鳥：先開生
+                        window.VN_Core._startWithLoader(ch.content, null, { replay: true });   // 載入→loading 等全部圖片→開播；replay＝最新這輪的插圖不插進舊章
+                        // 獨立版章節的插圖存在 ch.scenes（生成時 _persistToLatestChapter 寫的）→ 載入後插回
+                        try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
+                    };
+                    // 刪除單章
+                    item.querySelector('button[data-id]').onclick = async (e) => {
+                        e.stopPropagation();
+                        if (!await AUI.confirm(`確定刪除「${ch.title}」？\n\n這章的記憶會一起清掉，數值會退回這章開始前再把之後幾章重算一次，人物檔案也會跟著對帳。`)) return;
+                        // 🚨 一律走 VN_READER.deleteChapter：直接叫 OS_DB.deleteVnChapter 會漏掉
+                        //    記憶清理 / 人物檔案對帳 / 數值重放（被刪的角色下一輪會原樣復活）。
+                        //    所以模組不在就「不刪」，不留那條會把資料刪成半套的退路。
+                        if (!win.VN_READER?.deleteChapter) { AUI.alert('劇情閱讀器模組還沒載入，先進一次閱讀器再回來刪。'); return; }
+                        const r = await win.VN_READER.deleteChapter(ch.id);
+                        if (!r || !r.ok) { AUI.alert('刪不掉：' + ((r && r.why) || '未知原因')); return; }
+                        item.remove();
+                        const remaining = body.querySelectorAll('.ch-item').length;
+                        header.querySelector('.ch-story-meta').textContent = `${dateStr}${dateStr ? ' · ' : ''}${remaining} 章`;
+                        if (remaining === 0) list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>這個故事還沒有章節<br>按「踏入故事」生成第一章吧</div></div>';
+                    };
+                    body.appendChild(item);
+                });
+
+                list.appendChild(header);
+                list.appendChild(body);
+
+            } catch(e) {
+                console.error('[VN_PLAYER] 讀取本地存檔失敗:', e);
+                list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${_esc(e && e.message)}</div></div>`;
+            }
+            return;
+        }
+
+        // 酒館模式：從 ST 聊天歷史讀取，渲染量子薄片輪播（選中置中，底欄「進入章節」）
+        list.className = 'chx-track';
+        list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-hourglass-half"></i><div>讀取中…</div></div>';
+        if (subheader) subheader.textContent = '酒館數據庫';
+        const FRAMES = window.AURELIA_FRAMES || win.AURELIA_FRAMES;   // core/void/frames.js（兩份載入清單都排在這支前面）
+
+        const TIME_GRAD = {
+            '黎明': 'linear-gradient(160deg,#c4a68a,#e8c4a0)',
+            '上午': 'linear-gradient(160deg,#b8cce0,#dce8f0)',
+            '下午': 'linear-gradient(160deg,#8aaac5,#b0c8de)',
+            '黃昏': 'linear-gradient(160deg,#c4785a,#e8a878)',
+            '晚上': 'linear-gradient(160deg,#2a3a5a,#3a4a7a)',
+            '午夜': 'linear-gradient(160deg,#1a2540,#2a3560)',
+            '凌晨': 'linear-gradient(160deg,#2a3a5a,#5a4a7a)',
+        };
+        const SEASON_GRAD = {
+            '春': 'linear-gradient(160deg,#8ab898,#c0e0b0)',
+            '夏': 'linear-gradient(160deg,#5a9ab5,#a0c8e0)',
+            '秋': 'linear-gradient(160deg,#c47a3a,#e0a870)',
+            '冬': 'linear-gradient(160deg,#8a9ab5,#c0cee0)',
+        };
+        function _parseBg(text) {
+            const m = text.match(/\[Bg\|([^|]*)\|([^|]*)\|/);
+            if (!m) return { place: '', bg: 'linear-gradient(160deg,#7a8a9a,#5a6a7a)', cacheId: '' };
+            const season = m[1].trim();
+            const cacheIdRaw = m[2].trim();  // 例：黃昏_卡萊爾大宅後花園
+            const [time, place] = cacheIdRaw.split('_');
+            const bg = TIME_GRAD[time] || SEASON_GRAD[season] || 'linear-gradient(160deg,#7a8a9a,#5a6a7a)';
+            return { place: place || '', bg, cacheId: cacheIdRaw };
+        }
+        function _parseWorld(text) {
+            const m = text.match(/\[World\|([^\]]+)\]/);
+            return m ? m[1].trim() : '';
+        }
+
+        // ── 薄片輪播：全部章節排一列，選中置中放大、±2 張退後、更遠的淡出 ──
+        // 桌機互動＝瀏覽（點旁卡/頁點/箭頭選）→ 操作（點選中卡或「進入章節」載入）兩段式；
+        // 手機 CSS 把輪播攤平成垂直列表、藏底欄 → 點卡直接載入。
+        let _chs = [], _sel = 0;
+        const _isMobile = () => window.matchMedia('(max-width: 768px)').matches;
+
+        function _loadChapter(ch, thumbEl) {
+            // 每一步都具名：任何一步掛掉都要講得出「是哪一步、什麼錯」。
+            // 🚨 以前整段裸奔，轉場的 catch 只 console.error 一行 —— 玩家看到的是
+            //    「點了進入章節→演完→回到章節選擇」，沒有任何線索（使用者看不到 console）。
+            const _step = (name, fn) => {
+                try { return fn(); } catch (e) { throw new Error(name + '｜' + (e && e.message ? e.message : e)); }
+            };
+            const doLoad = () => {
+                if (!window.VN_Core) throw new Error('劇情引擎未載入');
+                _step('解析劇本', () => window.VN_Core.loadScript(ch.content, ch.message_id, { replay: true }));   // replay＝最新這輪的插圖不插進舊章
+                // 回放也把這章存檔的插圖插回（生成當時已寫進 ch.scenes）；圖檔在硬碟、不重生
+                try { window.VN_SceneInsert && ch.scenes && window.VN_SceneInsert.applyChapterScenes(ch.scenes); } catch (e) {}
+                _step('切到劇情頁', () => { if (window.VN_PLAYER?.switchPage) window.VN_PLAYER.switchPage('page-game'); });
+                _step('收起章節面板', () => closeChapterPanel());
+                _step('開播', () => window.VN_Core.next());
+            };
+            // 🌀 穿越轉場：縮圖碎裂 zoom-in，白閃高峰才真的換場景（底下換完由校準艙接手）。
+            //    canvas 掛在 chapter-window 外層的 vn-container：closeChapterPanel 收掉 overlay 時
+            //    演出還在最上層，玩家看不到切換的瞬間。轉場自帶 3 秒保險絲，掛了照樣放行載入。
+            const host = document.querySelector('.vn-container') || document.getElementById('chapter-window');
+            const zoomEl = document.getElementById('chapter-window');   // 整個面板（卡片+UI+背景）一起衝，不是只有縮圖
+            if (window.VN_ChapterWarp && host) window.VN_ChapterWarp.play({ thumb: thumbEl, host, zoomEl, bg: ch.bg }, doLoad);
+            else {
+                // 沒有轉場時也不能靜默失敗（轉場那條路徑自己會把錯誤彈出來）
+                try { doLoad(); } catch (e) {
+                    console.error('[VN_PLAYER] 章節載入失敗', e);
+                    try {
+                        const T = AUI.toastr;
+                        if (T && T.error) T.error('章節載入失敗：' + e.message, '', { timeOut: 12000 });
+                        else AUI.alert('章節載入失敗：' + e.message);
+                    } catch (_) {}
+                }
+            }
+        }
+
+        // 手機把輪播攤平成一條可捲動的清單＝看得到的不是「選中附近那幾張」→ 改用捲動可視範圍判斷
+        let _thumbIo = null;
+        function _watchThumbs(cards) {
+            if (_thumbIo) { _thumbIo.disconnect(); _thumbIo = null; }
+            if (!_isMobile() || typeof IntersectionObserver !== 'function') return;
+            _thumbIo = new IntersectionObserver((ents) => {
+                ents.forEach(en => {
+                    const t = en.target.querySelector('.chx-thumb');
+                    if (en.isIntersecting) _fillSceneImg(t, en.target.dataset.cid || '');
+                    else _dropSceneImg(t);
+                });
+            }, { root: list, rootMargin: '300px 0px' });
+            cards.forEach(c => _thumbIo.observe(c));
+        }
+
+        // 選誰＝重算每張卡的 data-off（CSS 吃這個做位移縮放）＋底欄資訊＋頁點
+        function _applySelection() {
+            const cards = list.querySelectorAll('.chx-card');
+            const windowed = !_isMobile();   // 桌機只有選中附近 5 張看得到
+            cards.forEach((card, i) => {
+                const off = i - _sel;
+                if (Math.abs(off) <= 2) {
+                    card.dataset.off = String(off);
+                    card.classList.remove('chx-far');
+                    card.removeAttribute('data-side');
+                } else {
+                    card.classList.add('chx-far');
+                    card.removeAttribute('data-off');
+                    card.dataset.side = off > 0 ? 'r' : 'l';
+                }
+                // 縮圖只餵看得到的那幾張（多帶一張當預備，翻頁時不會空一格才補上）
+                if (windowed) {
+                    const t = card.querySelector('.chx-thumb');
+                    if (Math.abs(off) <= 3) _fillSceneImg(t, card.dataset.cid || '');
+                    else _dropSceneImg(t);
+                }
+            });
+            const ch = _chs[_sel];
+            if (ch) {
+                const numEl = document.getElementById('chx-info-num');
+                const titleEl = document.getElementById('chx-info-title');
+                const placeEl = document.getElementById('chx-info-place');
+                const worldEl = document.getElementById('chx-info-world');
+                if (numEl) numEl.textContent = String(ch.index).padStart(2, '0');
+                if (titleEl) titleEl.textContent = ch.title;
+                if (placeEl) placeEl.textContent = ch.place || '—';
+                if (worldEl) worldEl.textContent = ch.world || '—';
+            }
+            const dotsEl = document.getElementById('ch-dots');
+            if (dotsEl) {
+                dotsEl.querySelectorAll('.chx-dot').forEach((d, i) =>
+                    d.classList.toggle('active', i === _sel));
+            }
+        }
+
+        function _renderCarousel() {
+            list.innerHTML = '';
+            _chs.forEach((ch, i) => {
+                const card = document.createElement('div');
+                card.className = 'chx-card chx-far';
+                // 卡框（內線、凹角小星、選中那張上下的小菱形）由 AURELIA_FRAMES 照卡片大小畫，不再貼角花／星飾／稜鏡圖
+                card.innerHTML = `
+                    <div class="chx-card-glass"></div>
+                    <div class="chx-card-cap">CHAPTER</div>
+                    <div class="chx-card-num">${String(ch.index).padStart(2, '0')}</div>
+                    <div class="chx-thumb"></div>
+                    <div class="chx-card-title">${_esc(ch.title)}</div>`;
+                card.onclick = () => {
+                    if (_isMobile() || i === _sel) { _loadChapter(ch, card.querySelector('.chx-thumb')); return; }
+                    _sel = i;
+                    _applySelection();
+                };
+                card.dataset.cid = ch.cacheId || '';
+                list.appendChild(card);
+                if (FRAMES) FRAMES.mount(card, 'chapterCard');
+                // 場景縮圖：先鋪時段/季節漸層打底；真實快取圖由 _applySelection／捲動觀察者按需補上
+                const thumb = card.querySelector('.chx-thumb');
+                if (thumb && ch.bg) thumb.style.setProperty('--chx-thumb-base', ch.bg);
+            });
+            const dotsEl = document.getElementById('ch-dots');
+            if (dotsEl) {
+                dotsEl.innerHTML = '';
+                _chs.forEach((_, i) => {
+                    const dot = document.createElement('button');
+                    dot.className = 'chx-dot';
+                    dot.onclick = () => { _sel = i; _applySelection(); };
+                    dotsEl.appendChild(dot);
+                });
+            }
+            const navBtn = document.getElementById('ch-nav-btn');
+            if (navBtn) navBtn.onclick = () => { _sel = (_sel + 1) % _chs.length; _applySelection(); };
+            const prevBtn = document.getElementById('ch-nav-prev');
+            if (prevBtn) prevBtn.onclick = () => { _sel = (_sel - 1 + _chs.length) % _chs.length; _applySelection(); };
+            const enterBtn = document.getElementById('chx-enter');
+            if (enterBtn && FRAMES) FRAMES.mount(enterBtn, 'chapterEnter');
+            if (enterBtn) enterBtn.onclick = () => {
+                if (!_chs[_sel]) return;
+                const selCard = list.querySelectorAll('.chx-card')[_sel];
+                _loadChapter(_chs[_sel], selCard && selCard.querySelector('.chx-thumb'));
+            };
+            _applySelection();
+            _watchThumbs(list.querySelectorAll('.chx-card'));
+        }
+
+        try {
+            const helper = win.TavernHelper;
+            if (!helper) throw new Error("TavernHelper 未載入");
+
+            const lastId = helper.getLastMessageId();
+            const allMsgs = helper.getChatMessages(`0-${lastId}`, { role: 'assistant' });
+
+            let chapters = [], index = 1;
+            allMsgs.forEach(m => {
+                const text = m.message || "";
+                if (!text.includes('<content>')) return;
+                let chTitle = `對話紀錄 ${index}`;
+                const chMatch = text.match(/\[Chapter\|(?:\d+\|)?([^\]|]+)\]/i);
+                const storyMatch = text.match(/\[Story\|([^\]]+)\]/i);
+                if (chMatch) chTitle = chMatch[1].trim();
+                else if (storyMatch) chTitle = storyMatch[1];
+                const { place, bg, cacheId } = _parseBg(text);
+                chapters.push({ title: chTitle, content: text, index: index++, message_id: m.message_id,
+                    place, bg, cacheId, world: _parseWorld(text) });
+            });
+
+            if (!chapters.length) {
+                list.innerHTML = '<div class="chx-empty"><i class="fa-solid fa-book-open"></i><div>未找到含 &lt;content&gt; 標籤的劇情</div></div>';
+                return;
+            }
+
+            _chs = chapters;
+            _sel = chapters.length - 1;   // 預設選最新一章：回放通常是接著最近的進度
+            _renderCarousel();
+
+        } catch (e) {
+            console.error('[VN_PLAYER] 讀取酒館歷史失敗:', e);
+            list.innerHTML = `<div class="chx-empty"><i class="fa-solid fa-triangle-exclamation"></i><div>讀取失敗: ${_esc(e && e.message)}</div></div>`;
+        }
+    }
+
+    function closeChapterPanel() {
+        document.getElementById('chapter-overlay').classList.remove('active');
+        // 面板收起來就把縮圖的點陣圖放掉（卡片還留在 DOM 裡，圖不清會一直佔著記憶體）。
+        //   縮好的小圖有快取，下次打開是直接貼回去，不會重解一次原圖。
+        try {
+            document.querySelectorAll('#chapter-list .chx-thumb').forEach(t => {
+                delete t.dataset.thumbOn;
+                t.style.removeProperty('--chx-thumb-img');
+            });
+        } catch (e) {}
+        const pageGame = document.getElementById('page-game');
+        if (pageGame && pageGame.classList.contains('hidden')) {
+            if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
+        }
+    }
+
+    // === 暴露到全域 ===
+    window.VN_Settings = VN_Settings;
+    window.VN_Panels = {
+        openGameSettings, closeGameSettings,
+        openChatBgPanel, closeChatBgPanel, handleChatBgFile, applyChatBgUrl, clearChatBg, loadSavedChatBg, switchChatMoreTab,
+        applyChatBgForRoom,
+        loadAvatarManager, 
+        loadBgManager, loadSpriteManager,
+        loadSceneManager,
+        openChapterPanel, closeChapterPanel
+    };
+})();

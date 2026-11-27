@@ -1,0 +1,1002 @@
+/* 大廳「📱 手機殼」浮窗 —— 置中、手機造型外框 + app 切換 */
+.aps-overlay {
+    position: fixed; inset: 0; z-index: 99990;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+}
+.aps-frame {
+    /* 動態島佔掉的那塊。app 自己把標頭往上延伸這麼多，島底下那條就是 app 自己的顏色 ——
+       真手機就是這樣，不是系統畫一條黑的蓋住。全螢幕那版是 0（那邊有裝置真正的安全區）。 */
+
+    position: relative;
+    width: 360px; height: 720px; max-height: 92vh;
+    /* 金屬邊框：一層固定的光澤疊在主題自己的框色上 —— 這樣四套各有各的金屬（鈦灰、玫瑰銀、
+       暖銀、冷鋼），不必每套各寫一份漸層。斜角 118 度是讓高光落在左上與右下兩個對角。 */
+    background:
+        linear-gradient(118deg,
+            rgba(255, 255, 255, 0.50) 0%,
+            rgba(0, 0, 0, 0.22) 24%,
+            rgba(255, 255, 255, 0.10) 58%,
+            rgba(0, 0, 0, 0.14) 78%,
+            rgba(255, 255, 255, 0.58) 100%),
+        var(--aps-frame-bg);
+    border-radius: 48px;
+    padding: 10px;
+    display: flex; flex-direction: column;
+    font-family: var(--aps-font);
+    box-shadow:
+        0 30px 55px -22px rgba(20, 26, 32, 0.45),
+        0 4px 10px rgba(20, 26, 32, 0.18),
+        inset 0 0 0 1.5px rgba(255, 255, 255, 0.42),
+        inset 0 0 0 3px var(--aps-frame-line);
+    isolation: isolate;
+}
+/* 側邊實體鍵：左邊那條用漸層一次畫出靜音、音量＋、音量−三段，右邊是電源。
+   顏色用框線色 —— 它本來就是這套主題的金屬邊緣色，按鍵跟著邊框同一種金屬。 */
+.aps-frame::before, .aps-frame::after {
+    content: ""; position: absolute; width: 3px; border-radius: 3px; pointer-events: none;
+}
+.aps-frame::before {
+    left: -3px; top: 116px; height: 112px;
+    background: linear-gradient(to bottom,
+        var(--aps-frame-line) 0 26px, transparent 26px 40px,
+        var(--aps-frame-line) 40px 74px, transparent 74px 88px,
+        var(--aps-frame-line) 88px 112px);
+}
+.aps-frame::after { right: -3px; top: 178px; height: 64px; background: var(--aps-frame-line); }
+.aps-frame, .aps-frame * { box-sizing: border-box; }
+/* 狀態列（時間 + 訊號/wifi/電池）—— 永遠在最上層；底色與字色跟著主題走，
+   透明時上半截露出外框色、下半截露出桌布，跟瀏海連成一條 */
+.aps-statusbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 40px; z-index: 4;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 26px 0; font-size: 12px; font-weight: 600;
+    background: var(--aps-sb-bg); color: var(--aps-sb-color); font-family: var(--aps-font);
+    pointer-events: none; letter-spacing: 0.5px;
+}
+.aps-sb-icons { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+/* 狀態列的字是疊在 app 自己的標頭上的，而每個 app 的標頭深淺不一（微信還有自己的深色模式），
+   所以字色不能寫死、也不能只跟著主題走。開 app 時程式會量一次島底下那塊真正的底色，
+   把 data-sb 設成 light 或 dark；主畫面沒有 data-sb，維持主題自己那個顏色。 */
+.aps-frame[data-sb="light"] .aps-statusbar { color: #ffffff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35); }
+.aps-frame[data-sb="dark"] .aps-statusbar { color: #16181a; text-shadow: none; }
+/* 小螢幕等比縮 */
+@media (max-height: 760px) { .aps-frame { transform: scale(0.9); } }
+@media (max-height: 680px) { .aps-frame { transform: scale(0.8); } }
+@media (max-height: 600px) { .aps-frame { transform: scale(0.7); } }
+
+.aps-notch {
+    position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+    width: 98px; height: 22px; background: #0c0f13;
+    border-radius: 999px; z-index: 9;
+}
+/* 島上那顆鏡頭。淺色主題也是黑的 —— 它是螢幕上挖掉的一塊，本來就不跟著配色走 */
+.aps-notch::after {
+    content: ""; position: absolute; right: 8px; top: 6px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: #18263a;
+    box-shadow: inset 0 0 0 1.5px #24384c, inset 0 2px 3px rgba(255, 255, 255, 0.12);
+}
+.aps-screen {
+    position: relative; flex: 1;
+    border-radius: 38px; overflow: hidden; background: var(--aps-wallpaper);
+}
+/* 面板邊：畫成蓋在最上層的一圈內陰影。寫成 .aps-screen 自己的 inset 陰影會被子元素蓋掉，
+   因為 inset 陰影畫在背景層、子元素畫在它上面。 */
+.aps-screen::after {
+    content: ""; position: absolute; inset: 0; z-index: 6;
+    border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 0 0 2px rgba(12, 16, 20, 0.45);
+}
+
+/* 主畫面（時鐘 / widget / 圖標格 / dock）—— top:40 讓給狀態列與動態島
+   四段用 grid 的列高排，每一列的高度都是主題可換的格子；圖標格吃剩下的空間並自己捲。
+   螢幕被 max-height 壓矮時，被壓到的是圖標格那一列（minmax(0,1fr)），其他三段不變形。 */
+.aps-home {
+    position: absolute; top: 40px; left: 0; right: 0; bottom: 0;
+    display: grid;
+    /* 🧩 以前上面有兩條固定的列：大時鐘與拍立得。兩個現在都是格子裡的組件、位置她自己決定，
+       所以主畫面只剩「格子」跟「底部那排」兩列。主題裡的 --aps-widget-height 留著沒人用，不影響；
+       --aps-lock-height 還有用，大時鐘組件拿它當高度。 */
+    /* 🪧 底排不一定在最底下。四列：上面那條（平常 0）／格子／頁點／下面那條。
+       底排自己用 --aps-dock-row 選它站哪一列，主題只要說「上面／下面／浮著」，
+       那三格由 os_phone_theme.js 翻出來（同 --os-nav-on-ink 的做法：AI 填人話，程式算值）。 */
+    grid-template-rows: var(--aps-row-top, 0px) minmax(0, 1fr) auto var(--aps-row-bot, var(--aps-dock-height));
+    /* 🚨 列與列之間的空隙不能用 gap：多了一列空的（高 0）就會多一道 gap，底排永遠差 10px。
+       改成下面那兩列自己帶 margin，空列就真的不佔任何空間。 */
+    gap: 0;
+    padding: 12px 18px 24px;
+    background: var(--aps-wallpaper);
+    font-family: var(--aps-font);
+    overflow: hidden;
+    isolation: isolate;
+}
+/* 主題的裝飾層（雲、星、弧線、縫線…）一律畫在這兩個偽元素上，不另外加節點。
+   🚨 這裡只給定位與「不擋點擊」，不給尺寸也不給底色 —— 沒有主題時什麼都不會出現。
+      基底若先畫了一個形狀，主題只覆蓋一部分屬性時，沒被覆蓋的那幾條會留在裝飾上（泡泡主題踩過同一個坑）。 */
+/* 🪧 四套內建主題一直是直接在這兩層寫整條規則（雲、虛線框、光暈、小點）；
+      她自己做的主題以前一格都拿不到，所以怎麼換都只有顏色在變。現在兩層各開一組格子，
+      AI 填「多大、擺哪、什麼形狀、什麼顏色、轉幾度」就能畫出一塊裝飾，
+      仍然碰不到版面（這兩層永遠在最底下、永遠不吃點擊，下面四條寫死）。
+   🚨 內建四套的規則權重比這裡高、又在後面載入，所以它們照舊贏，一條都不用改。
+   🚨 位置用 inset 簡寫，內建那幾套寫 top/left 或 bottom/right 才不會互相打架。 */
+.aps-home::before, .aps-home::after {
+    content: ""; position: absolute; pointer-events: none; z-index: -1;
+}
+/* 🚨 寬高的預設一定是 auto 不是 0：奶油貼紙那圈虛線框沒寫寬高，靠 inset 四邊撐出大小，
+      這裡給 0 會把它整個壓沒（量出來 282×488 變成 0×0）。沒填就是 auto ＋ 沒有內容＝看不見。 */
+.aps-home::before {
+    inset: var(--aps-deco1-top, auto) auto auto var(--aps-deco1-left, auto);
+    width: var(--aps-deco1-w, auto); height: var(--aps-deco1-h, auto);
+    background: var(--aps-deco1-bg, transparent);
+    border: var(--aps-deco1-border, 0 solid transparent);
+    border-radius: var(--aps-deco1-radius, 0);
+    box-shadow: var(--aps-deco1-shadow, none);
+    transform: rotate(var(--aps-deco1-rot, 0deg));
+}
+.aps-home::after {
+    inset: var(--aps-deco2-top, auto) auto auto var(--aps-deco2-left, auto);
+    width: var(--aps-deco2-w, auto); height: var(--aps-deco2-h, auto);
+    background: var(--aps-deco2-bg, transparent);
+    border: var(--aps-deco2-border, 0 solid transparent);
+    border-radius: var(--aps-deco2-radius, 0);
+    box-shadow: var(--aps-deco2-shadow, none);
+    transform: rotate(var(--aps-deco2-rot, 0deg));
+}
+
+/* ── 時鐘區：時間 / 日期 / 心情，三者的相對位置由 --aps-clock-areas 決定 ── */
+.aps-lock {
+    position: relative;
+    display: grid;
+    grid-template-areas: var(--aps-clock-areas);
+    grid-template-columns: var(--aps-clock-columns);
+    align-content: center;
+    justify-items: var(--aps-clock-align);
+    color: var(--aps-label-color);
+}
+.aps-lock-time {
+    grid-area: clock;
+    font-family: var(--aps-clock-font);
+    font-size: var(--aps-clock-size);
+    font-weight: var(--aps-clock-weight);
+    letter-spacing: var(--aps-clock-spacing);
+    line-height: 1; font-variant-numeric: tabular-nums;
+}
+.aps-lock-date {
+    grid-area: date; align-self: center;
+    max-width: var(--aps-date-width);
+    margin-top: 6px;
+    font-size: 11px; letter-spacing: 1px; line-height: 1.8;
+    word-break: keep-all;
+}
+/* 今日心情：點一下換下一個。
+   🚨 它是按鈕不是標籤 —— 高度至少 32 才點得到，不管主題想多低調都不准比這矮。 */
+.aps-mood {
+    grid-area: mood; justify-self: var(--aps-mood-align);
+    display: inline-flex; align-items: center; gap: 6px;
+    margin-top: 9px; padding: 7px 12px; min-height: 32px;
+    border: 1px solid var(--aps-mood-line);
+    border-radius: var(--aps-mood-radius);
+    background: var(--aps-mood-bg);
+    color: var(--aps-muted);
+    font: inherit; font-size: 11px; letter-spacing: 0.5px;
+    cursor: pointer;
+    transition: filter 0.15s, transform 0.12s;
+}
+.aps-mood:hover { filter: brightness(0.97); }
+.aps-mood:active { transform: scale(0.96); }
+.aps-mood-em { font-size: 13px; line-height: 1; color: var(--aps-accent); }
+.aps-mood-em > i { font-size: 13px; }
+.aps-mood-em[data-mood="0"] > i { color: #ffc53d; }
+.aps-mood-em[data-mood="1"] > i { color: #9fb4c9; }
+.aps-mood-em[data-mood="2"] > i { color: #8cc4f5; }
+.aps-mood-em[data-mood="3"] > i { color: #c9a94e; }
+.aps-mood-em[data-mood="4"] > i { color: #e0b93f; }
+.aps-mood-em[data-mood="5"] > i { color: #ff9cc6; }
+.aps-mood-em[data-mood="6"] > i { color: #c08d62; }
+.aps-mood-em[data-mood="7"] > i { color: #9d95d8; }
+.aps-mood-em[data-mood="8"] > i { color: #ff8a4c; }
+.aps-mood-em[data-mood="9"] > i { color: #6fc0e8; }
+
+/* 🧩 這裡本來是「拍立得那一列」與拍立得自己的樣式。拍立得現在是格子裡的一個組件
+   （見檔案最後面的 .aps-w 那一區、以及 os_widgets.js），那一列與這批樣式都沒有東西用了。
+   主題裡的 --aps-photo-* 變數留著 —— 新的拍立得組件照樣吃它們畫那張示意風景。 */
+
+/* ── 圖標格 ── */
+/* 📄 好幾頁：一頁一屏、左右滑、放手貼齊。一頁太擠，要有第二頁第三頁。
+   🚨 只有這一層會左右捲；每一頁裡面的格子照舊上下捲。 */
+.aps-pages {
+    grid-row: 2;
+    display: flex; min-width: 0; min-height: 0;
+    overflow-x: auto; overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+}
+.aps-pages::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+.aps-page { flex: 0 0 100%; min-width: 0; display: flex; scroll-snap-align: start; }
+.aps-page > .aps-grid { flex: 1; min-width: 0; }
+/* 現在在第幾頁。只有一頁時整排不畫（一顆孤零零的點看起來像壞掉），那一列自然沒高度 */
+/* 🚨 列與列的 10px 空隙掛在這一列的上下，不能掛在底排身上：
+      底排那一列的高度就是 --aps-dock-height，底排自己再帶 margin-top 會把自己壓矮 10px（量出來 64 變 54）。 */
+.aps-dots {
+    grid-row: 3; margin: var(--aps-dots-mt, 10px) 0 var(--aps-dots-mb, 10px);
+    display: flex; justify-content: center; align-items: center;
+    gap: var(--aps-dots-gap, 7px); padding: 5px 0 1px;
+}
+.aps-dot {
+    width: var(--aps-dot-w, 8px); height: var(--aps-dot-h, 8px);   /* 主題沒指定時 8px（6px 在手機上幾乎看不到，VER-1122 #4）；主題自己填的照舊 */
+    border-radius: var(--aps-dot-radius, 50%);
+    background: var(--aps-dot-bg, var(--aps-label-color));
+    opacity: var(--aps-dot-opacity, 0.26); cursor: pointer;
+    transition: opacity 0.18s, width 0.18s;
+    position: relative;
+}
+/* 點本身只有 6px，手指點不到：看不見的點擊範圍撐到 44px 高（不影響排版，MOB-1121） */
+.aps-dot::before { content: ''; position: absolute; left: -6px; right: -6px; top: -19px; bottom: -19px; }
+/* 現在這一頁那顆可以自己一種長相（變長條、換顏色）—— 沒填就跟其他那幾顆一樣、只是比較清楚 */
+.aps-dot.on {
+    opacity: var(--aps-dot-on-opacity, 0.75);
+    width: var(--aps-dot-on-w, var(--aps-dot-w, 8px));
+    background: var(--aps-dot-on-bg, var(--aps-dot-bg, var(--aps-label-color)));
+}
+
+.aps-grid {
+    display: grid;
+    grid-template-columns: repeat(var(--aps-grid-columns), minmax(0, 1fr));
+    gap: var(--aps-grid-gap);
+    align-content: start;
+    /* 底排浮起來蓋在格子上的時候，最後一列要留出它的高度，不然最下面那排點不到 */
+    min-height: 0; overflow-y: auto; padding: 4px 1px var(--aps-grid-pad-bot, 4px);
+    scrollbar-width: none;
+}
+.aps-grid::-webkit-scrollbar { width: 0; height: 0; background: transparent; }
+/* ── 底排 dock：設置/樣式/相簿/電話，不隨圖標格捲動 ── */
+/* 🪧 它站哪裡是主題說了算：預設最底下那一列（4），也可以站到最上面那一列（1），
+      或者整個浮起來蓋在格子上（position 換成 absolute）。三格都由 os_phone_theme.js 算，
+      AI 只說「上面／下面／浮著」。 */
+.aps-dock {
+    grid-row: var(--aps-dock-row, 4);
+    position: var(--aps-dock-pos, relative);
+    left: var(--aps-dock-l, auto); right: var(--aps-dock-r, auto); bottom: var(--aps-dock-b, auto);
+    margin: var(--aps-dock-mt, 0px) var(--aps-dock-inset, 0px) var(--aps-dock-mb, 0px);
+    display: flex; justify-content: space-around; align-items: center; gap: 4px;
+    padding: var(--aps-dock-padding);
+    border: var(--aps-dock-border);
+    border-top: var(--aps-dock-top);
+    border-radius: var(--aps-dock-radius);
+    background: var(--aps-dock-bg);
+    box-shadow: var(--aps-dock-shadow);
+}
+/* 🪧 一格裡面「圖標」跟「名字」怎麼擺也是主題的事：預設圖標在上名字在下（column），
+      也可以圖標在左名字在右（row）。名字整個不要就把 --aps-label-display 給 none。 */
+.aps-icon {
+    display: flex; flex-direction: var(--aps-icon-dir, column);
+    align-items: var(--aps-icon-align, center); gap: var(--aps-icon-gap);
+    min-width: 0; align-self: start; padding: 0;
+    background: transparent; border: none; cursor: pointer;
+    color: var(--aps-label-color); font-family: inherit;
+}
+.aps-icon-em {
+    display: flex; align-items: center; justify-content: center;
+    width: var(--aps-icon-size); height: var(--aps-icon-height);
+    border-radius: var(--aps-icon-radius);
+    background: var(--aps-icon-bg);
+    border: 1px solid var(--aps-icon-line);
+    box-shadow: var(--aps-icon-shadow);
+    color: var(--aps-icon-color);
+    transition: transform 0.15s ease;
+}
+.aps-icon-em > i { font-size: var(--aps-glyph-size); line-height: 1; }
+.aps-icon:hover .aps-icon-em { transform: translateY(-2px); }
+.aps-icon:active .aps-icon-em { transform: scale(0.94); }
+.aps-dock .aps-icon { flex: 1; align-self: center; gap: 3px; }
+/* 🚨 框線與陰影以前寫死沒有：做主題的說明卻要求「常用列那四顆跟主畫面圖標同一種做法」，
+      選了有框線的做法時這裡做不到 —— 規則要它做一件沒給工具做的事。改成也吃格子，預設仍是沒有。 */
+.aps-dock .aps-icon-em {
+    width: 40px; height: 36px;
+    border: var(--aps-dock-icon-border, 0 solid transparent);
+    box-shadow: var(--aps-dock-icon-shadow, none);
+    border-radius: var(--aps-dock-icon-radius); background: var(--aps-dock-icon-bg); color: var(--aps-dock-icon-color);
+}
+.aps-dock .aps-icon-em > i { font-size: 18px; }
+.aps-dock .aps-icon-name { font-size: 10px; line-height: 14px; }
+.aps-icon-em.aps-icon-img { font-size: 0; background-size: cover; background-position: center; background-repeat: no-repeat; }
+/* 內建 app 的圖標是 Font Awesome（使用者自己裝的 app 還是它挑的 emoji）；換了圖庫圖片就把圖示藏掉 */
+.aps-icon-em > i { font-size: 25px; line-height: 1; }
+.aps-icon-em.aps-icon-img > i { display: none; }
+.aps-set-icprev > i { font-size: 17px; }
+/* 每個 app 原本各有各的品牌色（微信綠、日曆紅…）。那組顏色會蓋過主題挑的圖標色，
+   三套主題套上去全部變成同一盤彩色，主題之間只剩桌布在變。
+   所以收成一個開關：預設關（圖標跟著主題走，就是選定的那版稿子的樣子），
+   想要原本的彩色就在「樣式」裡打開，class 掛在手機殼上。 */
+.aps-icon-colorful [data-ic="wx"] > i, .aps-icon-colorful [data-ic="phone"] > i { color: #22b35e; }
+.aps-icon-colorful [data-ic="wb"] > i { color: #e8582f; }
+.aps-icon-colorful [data-ic="cal"] > i { color: #e5484d; }
+.aps-icon-colorful [data-ic="appstore"] > i { color: #2f7cf6; }
+.aps-icon-colorful [data-ic="reader"] > i { color: #d9822b; }
+.aps-icon-colorful [data-ic="ctrlroom"] > i, .aps-icon-colorful [data-ic="avsvar"] > i { color: #6d5bd6; }
+.aps-icon-colorful [data-ic="lorebook"] > i { color: #1f9d74; }
+.aps-icon-colorful [data-ic="prompts"] > i { color: #b7791f; }
+.aps-icon-colorful [data-ic="sysset"] > i { color: #6b7280; }
+.aps-icon-colorful [data-ic="settings"] > i { color: #e0508f; }
+.aps-icon-colorful [data-ic="album"] > i { color: #f29d0b; }
+.aps-icon-colorful .aps-icon-em > i.fa-cube { color: #7b8194; }
+.aps-icon-colorful .aps-icon-em > i.fa-puzzle-piece { color: #8a6fd8; }
+
+/* ── 長按編輯主畫面：圖標搖晃、左上角「−」、右上角「完成」、拖著換位置 ── */
+.aps-icon { position: relative; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+.aps-icon-del {
+    position: absolute; top: 0; left: calc(50% - 37px); z-index: 3;
+    width: 21px; height: 21px; border-radius: 50%;
+    display: none; align-items: center; justify-content: center;
+    font-size: 10px; color: #fff; background: rgba(58, 60, 72, 0.86);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.aps-home.aps-editing .aps-icon-del { display: flex; }
+.aps-home.aps-editing .aps-icon { touch-action: none; }   /* 編輯中從圖標起手＝拖，不捲動 */
+.aps-home.aps-editing .aps-icon-em { animation: apsJiggle 0.26s ease-in-out infinite alternate; }
+.aps-home.aps-editing .aps-icon:nth-child(2n) .aps-icon-em { animation-duration: 0.3s; animation-delay: -0.13s; }
+.aps-home.aps-editing .aps-icon:nth-child(3n) .aps-icon-em { animation-duration: 0.28s; animation-delay: -0.07s; }
+.aps-home.aps-editing .aps-icon:active .aps-icon-em { transform: none; }
+@keyframes apsJiggle { from { transform: rotate(-2.2deg); } to { transform: rotate(2.2deg); } }
+.aps-edit-done {
+    position: absolute; top: 14px; right: 16px; z-index: 5;
+    display: none; padding: 6px 16px; border: 0; border-radius: 999px;
+    font: inherit; font-size: 13px; font-weight: 700; letter-spacing: 1px;
+    color: #1a1c28; background: rgba(255, 255, 255, 0.88); cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.aps-home.aps-editing .aps-edit-done { display: block; }
+.aps-icon.aps-drag-src { visibility: hidden; }            /* 拖走的那格留一個空位 */
+.aps-drag-ghost { position: absolute; z-index: 20; pointer-events: none; margin: 0; }
+.aps-drag-ghost .aps-icon-em { animation: none !important; transform: scale(1.12); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35); }
+.aps-drag-ghost .aps-icon-del { display: none !important; }
+/* 🚨 名字一律單行、放不下就尾端省略 —— 跟 iOS 一樣。
+   格子是 grid，列高由那一列最高的格子決定：只要有一個 app 的名字折成兩行，
+   整列就變高，下面每一列都被推下去，看起來就是「字被擠下去、位置跑掉」。 */
+.aps-icon-name {
+    display: var(--aps-label-display, block); max-width: 100%;
+    font-size: var(--aps-label-size, 11px); line-height: var(--aps-label-lh, 18px);
+    font-weight: var(--aps-label-weight, 400); letter-spacing: 0.3px;
+    /* 圖標在左名字在右的時候，名字要靠左、而且吃掉剩下的寬度 */
+    text-align: var(--aps-label-align, center); flex: var(--aps-label-flex, 0 1 auto); min-width: 0;
+    color: var(--aps-label-color);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 桌布換成她自己貼的照片時，主題為淺色底挑的字色在照片上常常整個讀不出來
+   → 名字戴回毛玻璃小膠囊、時間與日期加暗影。這個 class 由程式判斷「桌布是不是一張圖」時掛上；
+     漸層與純色不掛（那些是主題自己配好的，戴膠囊反而破壞版面）。 */
+.aps-wp-photo .aps-icon-name {
+    padding: 2px 8px; border-radius: 11px; color: #fff;
+    background: rgba(30, 32, 44, 0.24);
+    -webkit-backdrop-filter: blur(10px) saturate(1.3); backdrop-filter: blur(10px) saturate(1.3);
+    border: 0.5px solid rgba(255, 255, 255, 0.16);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.aps-wp-photo .aps-lock-time,
+.aps-wp-photo .aps-lock-date {
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45), 0 2px 12px rgba(0, 0, 0, 0.38), 0 0 26px rgba(0, 0, 0, 0.30);
+}
+/* 狀態列有一半疊在桌布上：淺色主題的深色時間字碰到深色照片會整個不見 */
+.aps-wp-photo .aps-statusbar {
+    color: #fff;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   內建主題 —— 一套主題就是一整組格子。
+   預設「留白相片」的值寫在這支檔最上面的 .aps-frame，所以這裡只列另外兩套。
+   稿子出自阿洛（參考資料/aurelia_phone_theme_lab），接進來時改了兩處：
+     ・心情那顆在原稿裡小到看不見也點不到 → 尺寸與觸控區改由 .aps-mood 統一保底。
+     ・霧夜薄荷原稿一排四個，九個 app 剛好讓最後一個孤零零掉在第三排 → 改成一排三個。
+   🚨 加一套：複製一組 .aps-frame.theme-<id> 把格子填滿，裝飾畫在
+      .theme-<id> .aps-home::before/::after 上；程式那邊 THEMES 加一列就會出現在設置裡。
+   🚨 backdrop-filter 只准加在葉子節點（dock、心情膠囊、拍立得框這種）。
+      加在 .aps-screen / .aps-home / .aps-app 這幾層，會把裡面所有 position:fixed 的浮層
+      困在那一層裡面，選單與彈窗整個跑位。
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ── 奶油貼紙 ── */
+
+
+/* ── 留白相片（預設）：格子的值在最上面的 .aps-frame，這裡只補它的裝飾 ── */
+
+/* ── 霧夜薄荷 ── */
+
+@media (prefers-reduced-motion: reduce) { .aps-icon-em { transition: none; } }
+/* 字體「硬套用」：蓋掉所有 app(連寫死字體的)，只放過 fa 圖標/svg 不破壞 */
+.aps-frame.aps-font-on .aps-app-body *:not(i):not(svg):not([class*="fa-"]) { font-family: var(--aps-font) !important; }
+
+/* app 內頁（用 app 自己的 header/返回；手機殼不加自己的 chrome）—— top:30 留瀏海，內容撐滿 */
+/* 🚨 z-index:1 是關鍵：手機殼自己那三件東西（狀態列、瀏海、底部橫條）永遠要在 app 上面，
+   像真手機一樣。沒有這一行的時候，app 裡任何一個比 4 大的層級——微信標頭 20、微博標頭 10、
+   朋友圈/記事本/個人檔案那幾張整頁 60、聊天設置 500、閱讀器 200——都會把狀態列整條蓋掉，
+   畫面上就變成「上面空一條、但時間訊號電池都不見了」。
+   給 .aps-app 一個層級之後，它自己變成一個獨立的疊放範圍，裡面寫多大都只在它自己裡面比，
+   蓋不到外面的狀態列。新 app 想疊什麼上去都不必再登記一次。 */
+.aps-app {
+    position: absolute; inset: 0; z-index: 1;
+    display: none; background: var(--os-page-bg, #fff);
+}
+/* 🚨 開啟那一瞬間容器是空的，底色就是上面那個（淺色主題＝白），而 app 自己的底要等它畫完才蓋上
+      → 畫面上「閃白一下才出現面板」。手機殼開之前會先標出正在開哪一個（phone_shell.js 的
+      appEl.dataset.open），這裡照那個先把底鋪對。
+   🚨 只有「自己不吃 --os-page-bg」的 app 需要列在這裡：聊天 app 有自己那組顏色，微博是世界裡的
+      一支 app、一律白底。其他 app 本來就吃 --os-page-bg，上面那行就對了。 */
+.aps-app[data-open="wx"] { background: var(--wx-page, #ededed); }
+.aps-app[data-open="wb"] { background: #ffffff; }
+/* 📶 狀態列（09-27 改成預設、不再列清單）：
+   以前是每個 app 的標頭自己往上長 40px 墊到狀態列底下，靠下面那張清單一個一個登記——
+   新開的窗口、面板裡的子頁一漏登記就跟狀態列疊在一起，每開一個新窗口都要重調一次。
+   現在反過來：app 區整個從狀態列底下開始（top），裡面把「狀態列高度」歸零，
+   以前寫著「原本內距＋狀態列高度」的標頭自動變回原本的樣子；狀態列那條由手機殼照正下方那塊的顏色塗
+   （phone_shell.js 的 _syncStatusBar）。新 app、新面板什麼都不用做。 */
+.aps-app-body {
+    position: absolute; inset: var(--aps-safe-top) 0 0 0; overflow: auto; font-family: var(--aps-font); scrollbar-width: none;
+}
+.aps-app-body > * { --aps-safe-top: 0px; --safe-top: 0px; }
+/* app 開著的時候，狀態列塗成它正下方那塊的顏色（橫向漸層連漸層一起抄） */
+.aps-frame[data-sb-paint] .aps-statusbar {
+    background-color: var(--aps-sb-app-bg, transparent);
+    background-image: var(--aps-sb-app-img, none);
+}
+/* 📱 聊天 app 整頁自己排好（標頭、列表或訊息區、輸入列），捲動只在它裡面那塊。
+   外面這層以前照樣能捲：套了主題或 iPhone 叫出鍵盤，聊天 app 比這層高一點點，
+   在標頭或輸入列上一滑就把整支 app 推歪，標頭跑到狀態列底下（09-19 回報）。 */
+.aps-app-body:has(> .aps-mount > .wx-shell) { overflow: hidden; overscroll-behavior: none; }
+/* 手機內所有 app 的滾動條隱形(像手機、不像桌面那條粗的) */
+.aps-app-body, .aps-app-body * { scrollbar-width: none; -ms-overflow-style: none; }
+.aps-app-body::-webkit-scrollbar, .aps-app-body *::-webkit-scrollbar { width: 0 !important; height: 0 !important; background: transparent !important; }
+/* 手機殼內：app 自己的 header 已在手機殼狀態列下方，不該再加 device 安全區(env safe-area-inset-top)，
+   否則 header 上方會留一大塊白。歸零(高優先級蓋過 wx/wb theme 與 aurelia_core 的 env padding)。 */
+.aps-app-body .wx-header, .aps-app-body .wb-shell .wb-header {
+    padding-top: var(--aps-safe-top) !important;
+    height: calc(45px + var(--aps-safe-top)) !important;
+}   /* 只限微博：世界書也叫 .wb-header，它的頭歸 .sysh 管 */
+.aps-app-body .ps-header {
+    padding-top: var(--aps-safe-top) !important;
+    height: calc(56px + var(--aps-safe-top)) !important;
+}
+/* 下面這幾條是以前「標頭往上長」那張清單。app 區裡狀態列高度已經歸零（見 .aps-app-body > *），
+   它們現在算出來就是各自原本的內距；留著是因為也順便把真手機的安全區（env）壓成 0。
+   🚨 新 app 不用再加進來。 */
+.aps-app-body .ws-app .ws-home-hd { padding-top: calc(18px + var(--aps-safe-top)) !important; }
+.aps-app-body .ws-app .ws-vhd     { padding-top: calc(12px + var(--aps-safe-top)) !important; }
+.aps-app-body #vn-reader-sa-hd    { padding-top: calc(14px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxmo-bar {
+    height: calc(48px + var(--aps-safe-top)) !important;
+    padding-top: var(--aps-safe-top) !important;
+}
+.aps-app-body .wxnb-head { padding-top: calc(10px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxnb-edit-bar { padding-top: calc(10px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxto-head { padding-top: calc(10px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxtp-head, .aps-app-body .wxtp-sheet-bar { padding-top: calc(10px + var(--aps-safe-top)) !important; }
+.aps-app-body .wxpf-x    { top: calc(14px + var(--aps-safe-top)) !important; }
+.aps-app-body .ws-overlay > .ws-header {
+    height: calc(50px + var(--aps-safe-top)) !important;
+    padding-top: var(--aps-safe-top) !important;
+}
+.aps-mount { position: relative; width: 100%; height: 100%; }
+/* ⬇ 底部那條橫槓是壓在最上層的，每個 app 都要讓出它那塊，不然橫槓會壓在分頁列、輸入列上面
+   （實測看到聊天那條的「通訊錄」被橫槓劃掉）。
+   讓位寫在「app 自己的最外層」而不是外面的容器上：內距是長在 app 自己身上的，
+   它自己的底色會鋪滿那一塊，不會在底下露出一條跟 app 無關的顏色。
+   🚨 只有這一個地方在讓底部那塊。各 app 的分頁列、內容區都不要再自己加一次，會變兩倍高。 */
+.aps-app-body > .aps-mount > * {
+    padding-bottom: var(--aps-safe-bottom, 0px);
+    box-sizing: border-box;
+}
+/* 商城裝的 app 跑在自己的窗口裡，窗口本身吃不了內距 → 改成整個往上縮 */
+.aps-app-body > .aps-mount > .app-iframe { padding-bottom: 0; }
+/* 聊天 app 右上「＋」、通訊錄長按那種小選單也掛在這層（主題才罩得到），它們不是整頁、不用讓底部 */
+.aps-app-body > .aps-mount > .wx-plus-menu-pop { padding-bottom: 5px; }
+.aps-app-body > .aps-mount > .wx-context-menu { padding-bottom: 0; }
+.aps-fail { padding: 24px 18px; text-align: center; color: #999; font-size: 13px; }
+.aps-fail b { display: block; color: #c0392b; font-size: 14px; margin-bottom: 10px; }
+.aps-fail-why {
+    margin: 0 0 10px; padding: 9px 11px; max-height: 46vh; overflow: auto;
+    text-align: left; white-space: pre-wrap; word-break: break-word;
+    background: rgba(0, 0, 0, .05); border-radius: 6px;
+    font: 11px/1.6 ui-monospace, Consolas, monospace; color: #444;
+    -webkit-user-select: text; user-select: text;
+}
+.aps-fail-copy {
+    padding: 7px 16px; border: 1px solid rgba(0, 0, 0, .2); border-radius: 16px;
+    background: #fff; color: #333; font-size: 12px; cursor: pointer; font-family: inherit;
+}
+
+.aps-loading { padding: 30px; text-align: center; color: #999; font-size: 13px; }
+/* app 商店裝的功能型 app（iframe 執行）—— 填滿容器、無邊框 */
+.app-iframe { width: 100%; height: 100%; border: 0; display: block; background: #fff; }
+/* 她自己做的那些 app 是一整頁跑在自己的窗口裡，吃不了內距，所以底部那塊改成整個往上縮。
+   頂端不用管：整個 app 區本來就從狀態列底下開始，狀態列的顏色由手機殼進窗口裡量（_syncStatusBar）。
+   🚨 只挑手機桌面直接開的那個 iframe：應用工坊裡的預覽框也叫 .app-iframe，它在工坊頁面裡面。 */
+.aps-app-body > .aps-mount > .app-iframe {
+    margin-bottom: var(--aps-safe-bottom);
+    height: calc(100% - var(--aps-safe-bottom));
+}
+/* 借大廳/自建單例的 app(閱讀 #vn-reader-sa)塞進手機時，強制填滿、不偏移 */
+.aps-app-body #vn-reader-sa {
+    position: absolute !important;
+    left: 0 !important; top: 0 !important; right: 0 !important; bottom: 0 !important;
+    width: 100% !important; max-width: none !important; height: 100% !important;
+    transform: none !important; border-radius: 0 !important; margin: 0 !important;
+}
+
+/* 底部 home bar */
+/* 底部橫條：iPhone 那條是壓在畫面最上層的，不是待在框底下的一條下巴。
+   改成絕對定位之後它離開了 flex 流，螢幕自己往下吃掉那 32px。
+   整條不吃點擊，只有中間那根短棒吃 —— 不然它會擋住底排 app 的上緣。 */
+.aps-homebar {
+    position: absolute; left: 0; right: 0; bottom: 20px; z-index: 9;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+}
+.aps-home-btn {
+    pointer-events: auto;
+    width: 116px; height: 5px; border-radius: 8px;
+    background: var(--aps-homebar-color); border: none; cursor: pointer; padding: 0;
+    transition: filter 0.15s;
+}
+.aps-home-btn:hover { filter: brightness(1.25); }
+
+/* ── 📞 電話 dialer ── */
+.dlr-wrap { position: relative; display: flex; flex-direction: column; height: 100%; background: var(--os-page-bg); color: var(--os-ink); }
+.dlr-head { padding: 16px 18px 8px; font-size: 22px; font-weight: 800; letter-spacing: 1px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dlr-back { background: transparent; border: none; color: #2a6ad0; font-size: 26px; line-height: 1; font-weight: 400; cursor: pointer; padding: 0 4px 0 0; flex-shrink: 0; }
+.dlr-head-title { flex: 1; }
+.dlr-list { flex: 1; overflow-y: auto; padding: 0 10px 70px; }
+.dlr-empty { text-align: center; color: rgba(var(--os-ink-rgb), 0.4); font-size: 13px; padding: 60px 20px; line-height: 1.9; }
+.dlr-row { display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 10px; background: transparent; border: none; border-bottom: 0.5px solid rgba(var(--os-ink-rgb), 0.08); cursor: pointer; text-align: left; color: var(--os-ink); }
+.dlr-row:active { background: rgba(var(--os-ink-rgb), 0.05); }
+.dlr-ava { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; background: linear-gradient(135deg,#7a9cc6,#5a7aa8); }
+.dlr-row-main { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dlr-row-name { font-size: 15px; font-weight: 600; }
+.dlr-row-num { font-size: 12px; color: rgba(var(--os-ink-rgb), 0.45); letter-spacing: 0.5px; }
+.dlr-row-call { font-size: 16px; flex-shrink: 0; color: #22b35e; opacity: 0.85; }
+.dlr-pad-inner { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; overflow-y: auto; padding: 10px 0; }
+/* 底部分頁列（iOS 風：通訊錄 / 鍵盤）*/
+/* 電話的底部導覽：跟其他 app 底下那條同一組格子（--os-nav-*，定義在 css/aurelia_theme.css）*/
+/* 🪧 order：9＝貼著畫面底（預設），-1＝跑到最上面。見 app_store.css 的 .ws-nav 同一條 */
+.dlr-tabbar {
+    order: var(--os-nav-order, 9);
+    flex-shrink: 0; display: flex; box-sizing: border-box;
+    height: var(--os-nav-height, 52px);
+    margin: 0 var(--os-nav-inset, 0) var(--os-nav-gap-bottom, 0px);
+    background: var(--os-nav-bg, rgba(244,245,248,0.97));
+    border: var(--os-nav-border, 0 solid transparent);
+    border-top: var(--os-nav-top, 0.5px solid rgba(var(--os-ink-rgb), 0.12));
+    border-radius: var(--os-nav-radius, 0);
+    box-shadow: var(--os-nav-shadow, none);
+}
+.dlr-tab { flex: 1; display: flex; flex-direction: var(--os-nav-item-dir, column); align-items: center; justify-content: center; gap: 2px; padding: 4px 0; background: transparent; border: none; cursor: pointer; color: var(--os-nav-ink, rgba(var(--os-ink-rgb), 0.45)); }
+.dlr-tab.on { color: var(--os-nav-ink-on, #2a6ad0); }
+/* 墊的那塊只在圖標後面（同 wb-tab-icon 那條的理由）*/
+.dlr-tab-ic { font-size: var(--os-nav-icon-size, 19px); line-height: 1; padding: 3px 13px; border-radius: var(--os-nav-on-radius, 0); }
+.dlr-tab.on .dlr-tab-ic { background: var(--os-nav-on-bg, transparent); color: var(--os-nav-on-ink, var(--os-nav-ink-on, #2a6ad0)); }
+.dlr-tab-tx { font-size: var(--os-nav-label-size, 10px); display: var(--os-nav-label-display, block); }
+.dlr-num-disp { font-size: 30px; font-weight: 300; letter-spacing: 2px; min-height: 44px; margin: 18px 0 6px; word-break: break-all; text-align: center; padding: 0 16px; }
+.dlr-keys { display: grid; grid-template-columns: repeat(3, 72px); gap: 16px; justify-content: center; margin-top: 8px; }
+.dlr-key { width: 72px; height: 72px; border-radius: 50%; border: none; background: rgba(var(--os-ink-rgb), 0.06); font-size: 28px; cursor: pointer; transition: background 0.1s; color: var(--os-ink); }
+.dlr-key:active { background: rgba(var(--os-ink-rgb), 0.16); }
+.dlr-pad-actions { display: flex; align-items: center; justify-content: center; gap: 22px; margin: 22px 0 16px; }
+.dlr-call-btn { padding: 14px 30px; border-radius: 28px; border: none; background: linear-gradient(135deg,#34c759,#28a048); color: #fff; font-size: 17px; font-weight: 600; cursor: pointer; box-shadow: 0 6px 16px rgba(40,160,72,0.35); }
+.dlr-del { width: 48px; height: 48px; border-radius: 50%; border: none; background: transparent; font-size: 22px; color: rgba(var(--os-ink-rgb), 0.5); cursor: pointer; }
+.dlr-call { display: flex; flex-direction: column; height: 100%; background: linear-gradient(160deg,#2b3550,#1a1f30); color: #fff; }
+.dlr-call-dialing { align-items: center; justify-content: center; gap: 14px; text-align: center; }
+.dlr-call-ava { width: 96px; height: 96px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 700; background: linear-gradient(135deg,#7a9cc6,#5a7aa8); animation: dlr-pulse 1.6s ease-out infinite; }
+.dlr-call-ava.big { width: 110px; height: 110px; font-size: 46px; animation: none; }
+@keyframes dlr-pulse { 0% { box-shadow: 0 0 0 0 rgba(122,156,198,0.55); } 70% { box-shadow: 0 0 0 22px rgba(122,156,198,0); } 100% { box-shadow: 0 0 0 0 rgba(122,156,198,0); } }
+.dlr-call-name { font-size: 24px; font-weight: 600; }
+.dlr-call-num { font-size: 14px; opacity: 0.6; letter-spacing: 1px; }
+.dlr-call-status { font-size: 14px; opacity: 0.75; margin-top: 4px; }
+/* 沒接、但補了一則訊息過來：那句話就寫在未接聽下面，她不用切去微信才知道 */
+.dlr-call-note { margin-top: 14px; max-width: 78%; font-size: 12px; line-height: 1.5; opacity: 0.6; text-align: center; }
+.dlr-call-note span { display: block; margin-top: 4px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,0.10); opacity: 0.95; word-break: break-word; }
+.dlr-dots { animation: dlr-blink 1.2s steps(1) infinite; }
+@keyframes dlr-blink { 50% { opacity: 0.2; } }
+.dlr-hang { margin-top: 30px; width: 66px; height: 66px; border-radius: 50%; border: none; background: #ff3b30; color: #fff; font-size: 13px; cursor: pointer; box-shadow: 0 6px 16px rgba(255,59,48,0.4); }
+.dlr-hang.big { margin-top: 0; }
+.dlr-call-timer { font-size: 14px; opacity: 0.7; }
+/* 撥通：VN call 字幕通話（深色舞台 + 字幕 + 說話輸入），不再嵌微信 */
+.dlr-call-stage { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 10px; width: 100%; padding: 40px 20px 0; overflow-y: auto; }
+.dlr-call-sub { margin-top: 26px; width: 100%; max-width: 320px; }
+.dlr-sub-name { font-size: 13px; opacity: 0.6; margin-bottom: 6px; }
+.dlr-sub-text { font-size: 17px; line-height: 1.7; white-space: pre-wrap; word-break: break-word; min-height: 30px; }
+.dlr-call-foot { flex-shrink: 0; width: 100%; padding: 12px 16px 18px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.dlr-say-bar { display: flex; gap: 8px; width: 100%; max-width: 340px; }
+.dlr-say { flex: 1; height: 42px; border-radius: 21px; border: none; padding: 0 16px; font-size: 15px; background: rgba(var(--os-ink-rgb), 0.06); color: var(--os-ink); outline: none; }
+.dlr-say::placeholder { color: rgba(var(--os-ink-rgb), 0.4); }
+.dlr-say:disabled { opacity: 0.5; }
+.dlr-say-btn { flex-shrink: 0; padding: 0 20px; height: 42px; border-radius: 21px; border: none; background: linear-gradient(135deg,#34c759,#28a048); color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
+.dlr-say-btn:disabled { opacity: 0.5; cursor: default; }
+/* 已經送過幾句、輸入框空著時，同一顆鈕變成「說完了」：換個顏色，一眼看得出按下去是把話交出去 */
+.dlr-say-btn.done { background: linear-gradient(135deg,#0a84ff,#0060df); padding: 0 16px; }
+/* 🎙 直接說話：左邊一顆切換鈕（麥克風⇄鍵盤），切到說話時打字框換成「正在聽」那一條 */
+.dlr-mode-btn { flex-shrink: 0; width: 42px; height: 42px; border-radius: 50%; border: none; background: rgba(var(--os-ink-rgb), 0.06); color: var(--os-ink); font-size: 17px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.dlr-say-bar[data-mode="voice"] .dlr-mode-btn { background: rgba(52,199,89,0.14); color: #1f9a47; }
+.dlr-say-bar[data-mode="voice"] .dlr-say, .dlr-say-bar[data-mode="voice"] .dlr-say-btn { display: none; }
+.dlr-listen { display: none; flex: 1; min-width: 0; height: 42px; border-radius: 21px; padding: 0 8px 0 16px; background: rgba(var(--os-ink-rgb), 0.06); align-items: center; gap: 10px; }
+.dlr-say-bar[data-mode="voice"] .dlr-listen { display: flex; }
+.dlr-listen-text { flex: 1; min-width: 0; font-size: 14px; color: rgba(var(--os-ink-rgb), 0.65); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
+.dlr-listen-bars { display: none; align-items: center; gap: 3px; height: 22px; flex-shrink: 0; }
+.dlr-listen[data-phase="listening"] .dlr-listen-bars, .dlr-listen[data-phase="heard"] .dlr-listen-bars { display: flex; }
+.dlr-listen-bars i { display: block; width: 3px; height: 4px; border-radius: 2px; background: #34c759; transition: height 0.1s; }
+.dlr-listen-bars[data-lv="1"] i { height: 7px; }
+.dlr-listen-bars[data-lv="2"] i { height: 12px; }
+.dlr-listen-bars[data-lv="3"] i { height: 17px; }
+.dlr-listen-bars[data-lv="4"] i { height: 22px; }
+.dlr-listen-bars[data-lv] i:nth-child(odd) { transform: scaleY(0.6); }
+.dlr-listen[data-phase="listening"] .dlr-listen-bars i { background: rgba(var(--os-ink-rgb), 0.3); }
+.dlr-listen[data-phase="heard"] .dlr-listen-text { color: #1f9a47; }
+.dlr-listen[data-phase="error"] .dlr-listen-text { color: #d64545; }
+.dlr-listen-prog { display: none; width: 70px; height: 5px; flex-shrink: 0; -webkit-appearance: none; appearance: none; border: none; border-radius: 3px; overflow: hidden; background: rgba(var(--os-ink-rgb), 0.1); }
+.dlr-listen-prog::-webkit-progress-bar { background: rgba(var(--os-ink-rgb), 0.1); }
+.dlr-listen-prog::-webkit-progress-value { background: #34c759; }
+.dlr-listen-prog::-moz-progress-bar { background: #34c759; }
+.dlr-listen[data-phase="downloading"] .dlr-listen-prog { display: block; }
+.dlr-listen-dl { display: none; flex-shrink: 0; height: 30px; padding: 0 14px; border-radius: 15px; border: none; background: linear-gradient(135deg,#34c759,#28a048); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; }
+.dlr-listen[data-phase="download"] .dlr-listen-dl { display: block; }
+
+/* 通話紀錄（歷史對話）列表 + 多選清除 */
+.dlr-sel-actions { display: flex; align-items: center; }
+.dlr-sel-toggle { background: transparent; border: none; color: #2a6ad0; font-size: 14px; font-weight: 500; cursor: pointer; padding: 4px 2px; }
+.dlr-sel-cancel { display: none; }
+.dlr-wrap.selmode .dlr-sel-toggle { display: none; }
+.dlr-wrap.selmode .dlr-sel-cancel { display: inline-block; }
+/* 選取中的第二列：全選／清除（標頭右邊只留「取消」，標題才不會被擠偏） */
+.dlr-sel-tools { display: none; align-items: center; justify-content: space-between; padding: 8px 18px; flex-shrink: 0; background: rgba(228,232,245,0.6); border-bottom: 1px solid rgba(var(--os-ink-rgb), 0.1); }
+.dlr-wrap.selmode .dlr-sel-tools { display: flex; }
+.dlr-sel-btn { background: transparent; border: none; font-size: 14px; cursor: pointer; padding: 4px 2px; color: var(--os-ink); }
+.dlr-sel-btn.danger { color: #ff3b30; font-weight: 600; }
+.dlr-sel-btn:disabled { opacity: 0.4; cursor: default; }
+.dlr-row-prev { font-size: 12px; color: rgba(var(--os-ink-rgb), 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dlr-row-time { font-size: 11px; color: rgba(var(--os-ink-rgb), 0.4); flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+.dlr-check { display: none; width: 20px; height: 20px; border-radius: 50%; border: 1.5px solid rgba(var(--os-ink-rgb), 0.3); flex-shrink: 0; align-items: center; justify-content: center; }
+.dlr-wrap.selmode .dlr-check { display: flex; }
+.dlr-hrow.sel-on .dlr-check { background: #2a6ad0; border-color: #2a6ad0; }
+.dlr-hrow.sel-on .dlr-check::after { content: '✓'; color: #fff; font-size: 12px; line-height: 1; }
+
+/* 歷史對話 transcript（唯讀檢視） */
+/* 這頁的標頭是自己的、不是電話其他頁共用的那條 → 上緣自己讓出狀態列，不然標題跟時間疊在一起 */
+.dlr-tx-head { display: flex; align-items: center; gap: 8px; padding: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px))) 12px 10px; border-bottom: 0.5px solid rgba(var(--os-ink-rgb), 0.1); flex-shrink: 0; background: var(--os-page-bg); }
+.dlr-tx-back { background: transparent; border: none; color: var(--os-accent-strong, var(--os-accent)); font-size: 15px; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+.dlr-tx-title { flex: 1; text-align: center; font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--os-ink); }
+.dlr-tx-call { background: transparent; border: none; font-size: 17px; color: #22b35e; cursor: pointer; padding: 2px 4px; flex-shrink: 0; }
+.dlr-tx-wrap { flex: 1; overflow-y: auto; padding: 14px 14px 24px; display: flex; flex-direction: column; gap: 12px; background: var(--os-page-bg); }
+/* 逐字稿按「一通」分段：每段自己一張淺卡，右上角一顆垃圾桶，整段一起刪 */
+.dlr-tx-group { display: flex; flex-direction: column; gap: 12px; padding: 10px 10px 12px; border-radius: 14px; background: rgba(var(--os-ink-rgb), 0.05); border: 0.5px solid rgba(var(--os-ink-rgb), 0.08); }   /* 以前是半透明白：深色主題下疊出一塊灰，上面的淺字就看不清 */
+.dlr-tx-ghead { display: flex; align-items: center; gap: 8px; font-size: 11px; color: rgba(var(--os-ink-rgb), 0.6); }
+.dlr-tx-ghead span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlr-tx-gdel { flex-shrink: 0; border: none; background: transparent; color: var(--os-danger); font-size: 13px; line-height: 1; padding: 4px 6px; border-radius: 8px; cursor: pointer; opacity: 0.6; }
+.dlr-tx-gdel:hover { opacity: 1; background: rgba(255,59,48,0.12); }
+/* 段落內的分隔線本來就置中，在卡片裡不用再拉長線 */
+.dlr-tx-group .dlr-tx-time { margin: 2px 0; }
+.dlr-tx-group .dlr-tx-time::before, .dlr-tx-group .dlr-tx-time::after { display: none; }
+.dlr-tx-msg { display: flex; flex-direction: column; align-items: flex-start; max-width: 80%; }
+.dlr-tx-msg.me { align-self: flex-end; align-items: flex-end; }
+.dlr-tx-who { font-size: 11px; color: rgba(var(--os-ink-rgb), 0.6); margin: 0 4px 3px; }
+.dlr-tx-bubble { padding: 9px 13px; border-radius: 16px; font-size: 15px; line-height: 1.5; background: var(--os-surface); color: var(--os-ink); box-shadow: 0 1px 2px rgba(var(--os-ink-rgb), 0.06); white-space: pre-wrap; word-break: break-word; }
+.dlr-tx-msg.me .dlr-tx-bubble { background: linear-gradient(135deg,#34c759,#28a048); color: #fff; }
+/* 通話開始／結束、未接聽這些分隔：置中小字，左右各拉一條細線，一眼看得出「這裡換一通了」 */
+.dlr-tx-time {
+    align-self: stretch; display: flex; align-items: center; gap: 10px;
+    font-size: 11px; color: rgba(26,28,40,0.4); margin: 10px 0; text-align: center;
+}
+.dlr-tx-time::before, .dlr-tx-time::after {
+    content: ''; flex: 1; height: 1px; background: rgba(26,28,40,0.12);
+}
+
+/* 正在通話：泡泡聊天式（與通話紀錄/微信一致） */
+.dlr-incall { display: flex; flex-direction: column; height: 100%; background: var(--os-page-bg); color: var(--os-ink); }
+.dlr-call-top { display: flex; align-items: center; gap: 10px; padding: 12px 14px; flex-shrink: 0; background: linear-gradient(135deg,#2b3550,#1a1f30); color: #fff; }
+.dlr-call-top-ava { width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700; background: linear-gradient(135deg,#7a9cc6,#5a7aa8); }
+.dlr-call-top-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dlr-call-top-name { font-size: 16px; font-weight: 600; }
+.dlr-call-top-timer { font-size: 12px; opacity: 0.7; }
+.dlr-call-log { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.dlr-call-foot.light { background: var(--os-page-bg); border-top: 0.5px solid rgba(var(--os-ink-rgb), 0.1); }
+.dlr-typing-bubble { display: flex; gap: 5px; align-items: center; padding: 12px 14px; }
+.dlr-typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: rgba(var(--os-ink-rgb), 0.35); animation: dlr-blink 1.2s infinite; }
+.dlr-typing-bubble span:nth-child(2) { animation-delay: 0.2s; }
+.dlr-typing-bubble span:nth-child(3) { animation-delay: 0.4s; }
+/* 電話裡叫了工具：一條「查了：」摺疊，點開看查了什麼、查到什麼（跟聊天室那條同一種；那條吃聊天 app 的色票，這裡照手機的） */
+.dlr-tool-fold { align-self: flex-start; max-width: 80%; box-sizing: border-box; padding: 5px 10px; border-radius: 10px; background: var(--os-surface); border: 0.5px solid rgba(var(--os-ink-rgb), 0.12); color: rgba(var(--os-ink-rgb), 0.7); font-size: 12px; }
+.dlr-tool-head { display: flex; align-items: center; gap: 6px; min-width: 0; cursor: pointer; user-select: none; }
+.dlr-tool-head > i { opacity: .7; flex-shrink: 0; }
+.dlr-tool-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dlr-tool-arrow { font-size: 9px; transition: transform .2s; }
+.dlr-tool-fold.open .dlr-tool-arrow { transform: rotate(90deg); }
+.dlr-tool-body { display: none; margin-top: 6px; padding-top: 6px; border-top: 0.5px solid rgba(var(--os-ink-rgb), 0.15); max-height: 240px; overflow-y: auto; overscroll-behavior: contain; user-select: text; }
+.dlr-tool-fold.open .dlr-tool-body { display: block; }
+.dlr-tool-item + .dlr-tool-item { margin-top: 8px; }
+.dlr-tool-name { font-weight: 700; line-height: 1.5; color: var(--os-ink); }
+.dlr-tool-arg { font-weight: 400; margin-left: 6px; opacity: .75; }
+.dlr-tool-res { margin-top: 2px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+.dlr-tool-res.is-bad { color: var(--os-danger); }
+
+/* 關閉鈕（手機右上外緣） */
+.aps-close {
+    position: absolute; top: -14px; right: -14px;
+    width: 34px; height: 34px; border-radius: 50%;
+    background: #1b1b1f; color: #ccc;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    font-size: 15px; cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4); z-index: 5;
+}
+.aps-close:hover { color: #fff; }
+
+/* 設置 app 面板（主題、拍立得照片、背景、圖標、字體）
+   🚨 這一頁的顏色一律吃 --os-* 色票：她就是在這頁換主題的，頁面自己不跟著變的話，
+      按下去只有頂欄變色、底下整片還是白的，看起來就像沒換成功。 */
+.aps-set { padding: 18px 16px; color: var(--os-ink); background: var(--os-page-bg); min-height: 100%; font-family: var(--aps-font); }
+.aps-set-top { display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+.aps-set-back { background: transparent; border: none; font-size: 26px; line-height: 1; color: var(--os-ink-dim); cursor: pointer; padding: 0 4px; }
+.aps-set-h { font-size: 16px; font-weight: 700; }
+.aps-set-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.aps-set-chip { padding: 7px 13px; border: 1px solid var(--os-line); border-radius: 16px; background: var(--os-surface); font-size: 12px; cursor: pointer; color: var(--os-ink); }
+.aps-set-chip:hover { border-color: var(--os-accent); }
+.aps-set-chip.on { border-color: var(--os-accent-strong); color: var(--os-accent-strong); box-shadow: inset 0 0 0 1px var(--os-accent-strong); font-weight: 700; }
+.aps-set-iclist { display: flex; flex-direction: column; gap: 8px; }
+.aps-set-icrow { display: flex; align-items: center; gap: 8px; }
+.aps-set-icprev { width: 34px; height: 34px; flex-shrink: 0; border-radius: 8px; background: rgba(0,0,0,0.06) center/cover no-repeat; display: flex; align-items: center; justify-content: center; font-size: 18px; }
+.aps-set-icname { width: 44px; flex-shrink: 0; font-size: 12px; color: var(--os-ink-soft); }
+.aps-set-ichint { margin-left: auto; font-family: 'Courier New', monospace; font-size: 11px; color: var(--os-ink-soft); }
+.aps-set-subnote { font-size: 11px; color: var(--os-ink-soft); margin: 6px 0 8px; line-height: 1.5; }
+.aps-set-sec { font-size: 12px; color: var(--os-ink-soft); letter-spacing: 1px; margin: 16px 0 8px; }
+.aps-set-swgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.aps-set-sw {
+    height: 64px; border-radius: 12px; border: 2px solid rgba(0, 0, 0, 0.08);
+    cursor: pointer; position: relative; overflow: hidden;
+    display: flex; align-items: flex-end; justify-content: center; padding-bottom: 6px;
+}
+.aps-set-sw span { font-size: 11px; color: #fff; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); font-weight: 600; }
+.aps-set-row { display: flex; gap: 8px; margin-top: 12px; }
+.aps-set-input { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--os-line); border-radius: 6px; background: var(--os-surface); color: var(--os-ink); font-size: 12px; outline: none; }
+.aps-set-btn { padding: 8px 14px; border: none; border-radius: 6px; background: var(--os-accent-strong); color: var(--os-on-accent); font-size: 12px; cursor: pointer; flex-shrink: 0; }
+.aps-set-btn.ghost { background: transparent; color: var(--os-ink-soft); border: 1px solid var(--os-line); }
+.aps-set-note { font-size: 11px; color: var(--os-ink-soft); margin-top: 16px; line-height: 1.6; }
+
+/* 主題那一排：一顆＝一套。小圓是三段色的預覽（桌布／底排／重點色），選中的那顆描邊 */
+.aps-set-ths { display: flex; gap: 10px; flex-wrap: wrap; }
+.aps-set-th { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 8px 6px 7px; min-width: 76px; border: 1px solid var(--os-line); border-radius: 12px; background: var(--os-surface); color: var(--os-ink); font: inherit; font-size: 11px; cursor: pointer; transition: border-color 0.15s, transform 0.12s; }
+.aps-set-th:hover { border-color: var(--os-accent); }
+.aps-set-th:active { transform: scale(0.97); }
+.aps-set-th.on { border-color: var(--os-accent); box-shadow: inset 0 0 0 1px var(--os-accent); }
+.aps-set-th-sw { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--os-line); }
+/* 四顆預覽小圓的顏色定義在 css/aurelia_theme.css 的 :root。加新主題時這裡也要多一條。 */
+.aps-th-sw-clean { background: var(--aps-swatch-clean); }
+.aps-th-sw-cute  { background: var(--aps-swatch-cute); }
+.aps-th-sw-glass { background: var(--aps-swatch-glass); }
+.aps-th-sw-dark  { background: var(--aps-swatch-dark); }
+.aps-set-th-name { letter-spacing: 0.5px; }
+/* 她自己做的那幾套右上角有個叉，點它是刪掉那一套（內建四套沒有）*/
+.aps-set-th { position: relative; }
+.aps-set-th-del {
+    position: absolute; top: 2px; right: 4px;
+    width: 18px; height: 18px; line-height: 17px; text-align: center;
+    border-radius: 50%; font-size: 13px;
+    color: var(--os-ink-soft); background: var(--os-hover);
+    opacity: 0; transition: opacity 0.15s;
+}
+.aps-set-th:hover .aps-set-th-del, .aps-set-th.on .aps-set-th-del { opacity: 1; }
+
+/* 📱 手機直立：別在手機裡再畫一個置中的小手機框 —— 手機瀏覽器上它會吃 vh/網址列那塊、
+   被頂歪夾在頂部(看起來像「出窗」)。改讓 app 視窗用 100dvh 直接填滿可見螢幕，像原生全螢幕 app。
+   電腦端(>768px)維持手機造型浮窗不變。 */
+@media (max-width: 768px) {
+    /* 內縮在 overlay 上加 safe-area padding：整個 app 框(含狀態列)一起往內縮，
+       避開 iOS 動態島(上)、home 指示條(下)、圓角螢幕(左右)；沒 safe-area 的裝置只留基本 8px 邊。 */
+    .aps-overlay {
+        align-items: stretch; justify-content: stretch; background: #000;
+        padding: calc(env(safe-area-inset-top, 0px) + 8px)
+                 calc(env(safe-area-inset-right, 0px) + 8px)
+                 calc(env(safe-area-inset-bottom, 0px) + 8px)
+                 calc(env(safe-area-inset-left, 0px) + 8px);
+        box-sizing: border-box;
+    }
+    .aps-frame {
+        width: 100%; max-width: none;
+        height: 100%; max-height: none;      /* 填滿內縮後的 overlay，不再吃滿整個 100dvh */
+        border-radius: 22px; padding: 0;     /* 內縮成卡片 → 給圓角更像獨立 app */
+        transform: none !important;          /* 蓋掉 max-height 那三條 scale */
+        box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+        overflow: hidden;
+    }
+    .aps-screen { border-radius: 0; }
+    .aps-screen::after { display: none; }    /* 面板邊那圈也不要：全螢幕時它會變成畫面裡一圈方框 */
+    /* 🚨 讓開島與橫槓那兩格在這裡「不能」歸零：島是藏了，但狀態列（時間、訊號、關閉鈕都在那條）跟
+       底部橫槓（回主畫面那顆）在這個版本照樣畫著。之前歸零過一次，結果每個 app 的標頭跟狀態列疊在一起。 */
+    .aps-notch { display: none; }            /* 全螢幕不需要動態島 —— 她真的手機自己有一個 */
+    .aps-frame::before, .aps-frame::after { display: none; }   /* 側邊實體鍵同理，沒有框就沒有邊可以掛 */
+    .aps-close { top: 10px; right: 10px; }   /* 關閉鈕收進畫面內，免在框外被切掉 */
+    /* 主畫面底下那排：浮窗版有螢幕邊框隔開，撐滿版沒有 → 橫槓（回主畫面那顆）會壓在底排的字上，
+       底部多讓出橫槓那格。app 裡面的內容區早就讓了（os_sys_chrome），主畫面自己這裡才是漏掉的那個。 */
+    .aps-home { padding-bottom: calc(var(--aps-safe-bottom, 26px) + 8px); }
+
+    /* ⌨️ 鍵盤升起來（core/aurelia_dialog.js 的鍵盤跟隨，AUI）：整個手機殼縮到鍵盤上面，輸入框貼著鍵盤。
+       頂和高是程式照「看得到的那塊」量好放進 --aui-kb-top／--aui-kb-h 的；底下那段安全區、
+       回主畫面橫槓、它讓的那條空白，鍵盤都蓋住了，全部收掉。下緣不留圓角（直接接鍵盤）。 */
+    .aps-overlay.aui-kb-open {
+        top: var(--aui-kb-top, 0px); bottom: auto; height: var(--aui-kb-h, 100%);
+        padding-bottom: 0;
+    }
+    .aps-overlay.aui-kb-slide { transition: top 220ms ease-out, height 220ms ease-out; }   /* 220＝AUI 的 KB_SLIDE_MS */
+    .aps-overlay.aui-kb-open, .aps-overlay.aui-kb-open .aps-frame { --aps-safe-bottom: 0px; }
+    .aps-overlay.aui-kb-open .aps-frame { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+    .aps-overlay.aui-kb-open .aps-homebar { display: none; }
+}
+
+/* ── 白瓷玻璃 ──
+   跟留白相片同樣是淺色，所以版面刻意拉開：拍立得排在最上面、時鐘在它下面
+   （上面那條 grid-template-rows 的順序在這裡被換過來），心情是右側一顆直的長丸。
+   🚨 桌布不能是一片純白：玻璃靠的是「透出底下的東西」，底下什麼都沒有的話
+      模糊與亮邊完全看不出來，只會變成一層灰。所以底加了兩團很淡的冷暖光暈。
+   🚨 模糊只加在葉子節點（圖標、底排、心情、拍立得），不准往上加到整個螢幕或主畫面那層 ——
+      那會把裡面所有貼著螢幕的浮層（選單、彈窗、長按小窗）困在那一層裡面。 */
+
+/* 換順序：第一列放拍立得、第二列放時鐘。兩列的高度也跟著對調，不然拍立得會被塞進時鐘那一列的高度裡 */
+/* 玻璃本體：只有這四個葉子節點模糊 */
+/* 心情做成直的長丸，跟時間日期並排在右邊 */
+/* 玻璃要有東西可以透，才看得出是玻璃：兩團很淡的冷暖光暈墊在底下 */
+/* 光暈要墊在「玻璃真的蓋住的地方」：一團在拍立得與上半排圖標後面、一團在底排後面。
+   放在角落沒有用 —— 玻璃透出來的是它正下方那一塊，角落的暈它照不到，畫面就只是一片白。 */
+/* 整支手機唯一一塊實心黑：底排最後那顆 */
+/* 相片下面那行手寫字在玻璃上要站得住，改成近黑 */
+
+/* ══ 🧩 主畫面組件（widget）══════════════════════════════════════════════
+   組件跟圖標住同一個格子、用同一個 .aps-icon 殼，所以長按編輯、拖著換位置、
+   左上角減號移除那一整套完全沿用 —— 這裡只負責「它比較寬、裡面是一塊畫面」。
+   大小只有三種，高度用比例算，不去對圖標的行高（圖標高度會隨主題變）。 */
+.aps-w {
+    /* 兩欄寬、比一排圖標高一點的橫卡片；主題想改就在自己那組蓋掉這兩個 */
+    --aps-w-h: 128px;
+    --aps-w-h-l: 200px;
+    position: relative;
+    align-self: start;
+    padding: 0;
+    /* 🚨 底不能吃圖標那組（--aps-icon-bg）：預設主題的圖標方塊是「故意全透明」的，
+       組件吃了就變成一塊浮在桌布上的字，看不出是一張卡片。底排那組也一樣（預設主題是 transparent）。
+       所以組件有自己的一組，四套主題各給一次（aurelia_theme.css 的 --aps-w-bg／line／radius）。 */
+    border-radius: var(--aps-w-radius, 18px);
+    background: var(--aps-w-bg, rgba(255,255,255,0.6));
+    border: 1px solid var(--aps-w-line, rgba(0,0,0,0.07));
+    overflow: hidden;
+}
+/* 🚨 高度要給明確值，不能用 aspect-ratio：aspect-ratio 算出來的高度「不參與 grid 的列高計算」，
+   grid 會按內容（0）排完列，組件再照比例畫出來 → 三個組件會疊在一起。實測就是這樣壞的。 */
+.aps-w[data-w-size="s"] { grid-column: span 2; height: var(--aps-w-h); }
+.aps-w[data-w-size="w"] { grid-column: span 3; height: var(--aps-w-h); }
+.aps-w[data-w-size="l"] { grid-column: span 3; height: var(--aps-w-h-l); }
+.aps-w:hover { transform: translateY(-2px); }
+.aps-w:active { transform: scale(0.98); }
+.aps-w-body { display: block; width: 100%; height: 100%; min-width: 0; }
+.aps-w-body > * { width: 100%; height: 100%; }
+/* 編輯模式那顆齒輪：這個組件自己的設定（拍立得的照片就在這裡換）。
+   平常不在畫面上 —— 組件是拿來看的，不該一直掛著一顆按鈕。 */
+.aps-w-cog {
+    position: absolute; z-index: 4; right: -6px; top: -6px;
+    width: 22px; height: 22px; display: none;
+    align-items: center; justify-content: center;
+    border-radius: 50%;
+    background: var(--aps-label-color); color: var(--aps-icon-bg);
+    font-size: 11px; box-shadow: 0 1px 4px rgba(0,0,0,.28);
+}
+.aps-editing .aps-w-cog { display: flex; }
+
+/* ── 不要那層卡片殼的組件（拍立得）：它自己就是一張相紙 ──────────────
+   🚨 相紙是直角的，別給它圓角；紙膠帶要露到框外，所以不能裁切。
+   高度也交給內容決定（照片＋底下那行字），不吃組件那個固定高。 */
+.aps-w[data-w-bare] {
+    background: none; border: 0; box-shadow: none;
+    border-radius: 0; overflow: visible;
+    height: auto; align-self: start;
+}
+.aps-w[data-w-bare]:hover, .aps-w[data-w-bare]:active { transform: none; }
+/* 裡面那層本來被撐成滿版高（給一般組件用的），相紙要讓內容自己決定高度 */
+.aps-w[data-w-bare] .aps-w-body,
+.aps-w[data-w-bare] .aps-w-body > * { height: auto; }
+
+/* ── 內建：拍立得。長相照原本那張相紙，一模一樣 ─────────────────────
+   直角、紙膠帶、微微歪一點、底下一行手寫字置中，顏色全部跟著主題走。
+   🚨 歪的那一下掛在相紙自己身上，不掛在外面那格 —— 外面那格的位移是換位置的
+   滑動動畫在用的，掛同一層會互相蓋掉。 */
+.aps-w-pol {
+    position: relative;
+    padding: var(--aps-photo-padding);
+    background: var(--aps-paper);
+    border: 1px solid var(--aps-paper-line);
+    box-shadow: var(--aps-paper-shadow);
+    transform: rotate(var(--aps-photo-rotate));
+    box-sizing: border-box;
+    transition: transform 0.15s;
+}
+.aps-w:active .aps-w-pol { transform: rotate(var(--aps-photo-rotate)) scale(0.97); }
+/* 紙膠帶：寬度 0 的主題等於沒有，不必另外藏 */
+.aps-w-pol::before {
+    content: ""; position: absolute; z-index: 3;
+    width: var(--aps-tape-width); height: 20px; left: 50%; top: -9px;
+    transform: translateX(-50%) rotate(-5deg);
+    background: var(--aps-tape-bg); opacity: 0.88;
+    clip-path: polygon(3% 0, 98% 0, 95% 25%, 100% 49%, 96% 76%, 99% 100%, 1% 100%, 4% 72%, 0 46%, 5% 22%);
+}
+.aps-w-pol-ph {
+    position: relative; height: var(--aps-photo-height);
+    overflow: hidden; background: var(--aps-photo-sky); isolation: isolate;
+}
+.aps-w-pol-img { position: absolute; inset: 0; z-index: 4; width: 100%; height: 100%; object-fit: cover; display: block; }
+.aps-w-pol-sun { position: absolute; width: 38px; height: 38px; top: 16%; left: 61%; border-radius: 50%; background: var(--aps-photo-sun); box-shadow: 0 0 30px var(--aps-photo-glow); }
+.aps-w-pol-hill { position: absolute; width: 145%; height: 100%; border-radius: 48% 58% 0 0; background: var(--aps-photo-back); left: -55%; top: 49%; transform: rotate(18deg); }
+.aps-w-pol-hill2 { background: var(--aps-photo-front); left: 25%; top: 58%; transform: rotate(-22deg); }
+.aps-w-pol-sea { position: absolute; inset: 76% 0 0; background: var(--aps-photo-water); opacity: 0.72; }
+.aps-w-pol-cap { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 1px; color: #635954; white-space: nowrap; }
+.aps-w-pol-cap > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; font: 13px/1.3 var(--aps-caption-font); }
+.aps-w-pol-cap > time { font: 9px/1.5 "Segoe UI", sans-serif; letter-spacing: 1.3px; color: #6b6259; }
+
+/* ── 內建：時鐘 ─────────────────────────────────────────────────────── */
+.aps-w-clock {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    color: var(--aps-label-color);
+}
+.aps-w-clock-t { font-size: 30px; font-weight: 300; letter-spacing: 1px; line-height: 1; }
+.aps-w-clock-d { font-size: 11px; opacity: 0.66; }
+
+/* ── 內建：便條 ─────────────────────────────────────────────────────── */
+.aps-w-note {
+    display: flex; align-items: flex-start;
+    padding: 12px 14px; box-sizing: border-box;
+    color: var(--aps-label-color);
+}
+.aps-w-note-tx {
+    margin: 0; font-size: 13px; line-height: 1.5;
+    display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.aps-w-note-empty { opacity: 0.42; }
+
+/* ── 她自己做的組件：那段畫面就塞在這裡面，超出的裁掉 ──────────────── */
+.aps-w-user { overflow: hidden; }
+
+/* ── 組件在編輯模式也要會搖，不然看不出它跟圖標一樣能拖 ──────────────
+   🚨 搖的是裡面那層，不是組件本身：換位置的滑動動畫是給組件本身設 transform 的，
+   搖晃如果掛在同一層會把它蓋掉，位置就變成瞬移。圖標也是同一個道理（它搖的是那顆方塊）。 */
+.aps-home.aps-editing .aps-w-body { animation: apsJiggle 0.28s ease-in-out infinite alternate; transform-origin: 50% 50%; }
+.aps-home.aps-editing .aps-w:nth-child(2n) .aps-w-body { animation-duration: 0.31s; animation-delay: -0.12s; }
+.aps-home.aps-editing .aps-w:nth-child(3n) .aps-w-body { animation-duration: 0.25s; animation-delay: -0.06s; }
+/* 編輯中不要再疊上滑與縮小：那兩個會跟換位置的滑動打架 */
+.aps-home.aps-editing .aps-w:hover,
+.aps-home.aps-editing .aps-w:active { transform: none; }
+/* 跟著手指走的那一份：不要搖、加深陰影看得出被拿起來 */
+/* 🚨🚨 跟著手指走的那一份「一定要脫離版面」。
+   上面那條 .aps-drag-ghost 是絕對定位，但組件那條 .aps-w 的相對定位寫在它後面、權重又一樣
+   → 組件的贏。於是被拿起來的組件變成主畫面上一個真的格子，還帶著「跨兩欄」，
+   主畫面那層就被它開出新的欄：圖標全擠到左半邊、底部那排被推到畫面中間。
+   每拖一次拍立得就爆一次，就是這個。這裡把定位與跨欄一起收回來。 */
+.aps-drag-ghost.aps-w {
+    position: absolute;
+    grid-column: auto; grid-row: auto;
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+}
+.aps-drag-ghost .aps-w-body { animation: none !important; }
+.aps-drag-ghost .aps-w-cog { display: none !important; }
+
+/* 大時鐘組件：高度沿用主題原本給那一條列的值，長相完全靠 .aps-lock 那套（四套皮都寫在那個名字上） */
+/* 🚨 要壓過上面那條「不要那層卡片殼的組件高度交給內容」——大時鐘的高度是主題給的，
+   不能由內容決定，不然四套皮對它的排法（時間／日期／心情膠囊怎麼擺）會全部擠成一團。 */
+.aps-w[data-w-bare] .aps-w-body > .aps-w-lock { height: var(--aps-lock-height); }
+
+/* 🔴 桌面圖標紅點（app 自己說有幾件新的；OS_APP_TOOLS.badge） */
+.aps-badge {
+    position: absolute; top: -3px; left: calc(50% + 17px); z-index: 2;
+    min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box;
+    border-radius: 9px; background: var(--aps-badge-bg, #f23f3f); color: var(--aps-badge-color, #fff);
+    font-size: 11px; font-weight: 700; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums;
+    box-shadow: 0 0 0 1.5px var(--aps-badge-ring, rgba(0, 0, 0, 0.12));
+    pointer-events: none;
+}
+.aps-badge[hidden] { display: none; }
+.aps-dock .aps-badge { top: -4px; left: calc(50% + 12px); }
+.aps-home.aps-editing .aps-badge { display: none; }
+/* ⏰ 「自己動」在背景叫醒 app 的那格：看不見、不佔版面、不擋點擊 */
+.aps-wake-host { position: fixed; left: -10000px; top: 0; width: 390px; height: 700px; visibility: hidden; pointer-events: none; }

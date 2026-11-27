@@ -1,0 +1,1039 @@
+// ----------------------------------------------------------------
+// [檔案] core/void/lobby_places.js — 🧭 地點清單（單一真相）＋ 立繪模式的地點面板
+// 職責：所有「可以去的地方」只定義在這一份 PLACES。
+//   舞台模式：lobby_stage 的快轉地圖（_openCityMap）讀這份畫 chip 與建築熱點。
+//   立繪模式：沒有場景可以走，同一份改畫成一排按鈕，直接開該地點的面板。
+//   → 新增一間店只寫一筆，兩邊自動都有。
+//
+// 🚨 為什麼獨立成檔而不是塞進 lobby_stage：
+//   立繪模式時 lobby_stage 是「卸載」狀態（S.root/CFG 都是 null），
+//   清單必須活在它的掛載狀態之外，否則不走路的人就拿不到地點。
+//
+// 🚨 為什麼要有這份：入口以前散在三處（快轉 chip、地圖熱點、各面板自己的鈕），
+//   加一個地方就得記得改三處——占卜小屋上線時就漏過快轉鈕的白名單。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window;
+
+    const _stage = () => win.LobbyStage || null;
+    const _st404 = () => {
+        try { return (win.VoidTerminal?.get404State?.()) || { unlocked: false }; }
+        catch (e) { return { unlocked: false }; }
+    };
+    const _fire = (ev) => { try { win.dispatchEvent(new CustomEvent(ev)); } catch (e) {} };
+
+    // ── 地點清單 ────────────────────────────────────────────────
+    // id       場景 id 或邏輯 id
+    // name     舞台（地圖）上的名字
+    // flatName 立繪模式按鈕上的名字；沒給就用 name
+    //          （差別在於：舞台上你是「去一個地方」，立繪模式你是「辦一件事」）
+    // icon     Font Awesome（🚨圖標一律 FA、禁 emoji）
+    // obj      廣場上對應建築的檔名片段 → 地圖熱點靠它認人
+    // scene    舞台模式要跳的場景；沒給就不出現在地圖 chip
+    // open()   直接開這個地點的面板（自己開浮窗）；沒給就不出現在立繪模式
+    // full     true＝整個畫面換掉（紫薇的記憶吧檯）：大按鈕直接 open()，不進右邊窗格
+    // openIn(c) 把面板畫進指定容器 → 地點視圖的「應用」窗格用這個。
+    //          沒有的地方會退回 open() 開浮窗（之後逐個補，見 docs 的推廣順序）
+    // when()   要不要顯示（鎖住/沒解鎖/沒蓋房就整顆收起來）
+    // npc      這個地方的管理員 key（決定立繪是誰、對話跟誰講）；路人不在此列
+    // bg       立繪模式的地點背景圖（平視版，放在 CDN）
+    // ready()  這個面板現在開得起來嗎（模組載入了沒）
+    //          🚨 一定要有：open 裡面全是 `?.`，模組沒載入時呼叫不會報錯也不會有反應，
+    //             那顆鈕就變成「點了什麼都沒發生」的死鈕。寧可不顯示也不要給死鈕。
+    // chip     沒有 scene 也要在快轉地圖給一顆（點了直接 open）
+    // who()    地點卡上那行字（沒有管理員的地點用這個講現況）；沒給就用管理員名字
+    // slogan   桌機對話模式右邊那顆大按鈕上面的一句話（11-16 改版）；沒給就不放
+    const PLACES = [
+        {
+            id: 'cafe', name: '書咖', flatName: '書咖櫃檯', icon: 'fa-mug-hot', npc: 'ying', bg: 'lobby_pv_bg_cafe_v1.jpg',
+            obj: 'book_cafe', scene: 'cafe',
+            ready: () => !!win.OS_CAFE?.openWorkshop,
+            open: () => win.OS_CAFE.openWorkshop(),
+            openIn: (c) => _mountFloating(c, () => win.OS_CAFE.openWorkshop(), '.oc-win', () => win.OS_CAFE.closeWorkshop && win.OS_CAFE.closeWorkshop()),
+        },
+        {
+            id: 'hall', name: '大廳', flatName: '世界門', icon: 'fa-globe', npc: 'alice', bg: 'lobby_pv_bg_hall_v1.jpg',
+            obj: 'lobby_day', scene: 'hall', slogan: '下一段故事，等你開場。',
+            ready: () => !!win.OS_WORLDGATE?.openGate,
+            open: () => win.OS_WORLDGATE.openGate(),
+            openIn: (c) => _mountFloating(c, () => win.OS_WORLDGATE.openGate(), '.wg-win', () => win.OS_WORLDGATE.closeGate && win.OS_WORLDGATE.closeGate()),
+        },
+        {
+            id: 'exchange', name: '交易所', icon: 'fa-right-left', npc: 'rabbit', bg: 'lobby_pv_bg_exchange_v1.jpg',
+            scene: 'exchange',
+            ready: () => !!win.OS_PT?.openExchange,
+            open: () => win.OS_PT.openExchange(),
+            openIn: (c) => _mountFloating(c, () => win.OS_PT.openExchange(), '#os-pt-shop-dock', () => win.OS_PT.closeExchange && win.OS_PT.closeExchange()),
+        },
+        {
+            id: 'tarot', name: '記憶吧檯', icon: 'fa-moon', npc: 'zhiwei', bg: 'lobby_pv_bg_tarot_v1.jpg',
+            obj: 'tarot_hut', scene: 'tarot', full: true,
+            // 🍸 11-26 占卜和記憶迴廊併成一個入口（lobby_memory.js）：整個畫面換成紫薇的吧檯，她問完再分兩顆鈕；舊的賽博塔羅窗格拿掉
+            ready: () => !!(_stage()?.openMemory && window.LobbyMemory),
+            open: () => _stage().openMemory(),
+        },
+        {
+            id: 'workshop', name: '奇想工坊', flatName: '造物工坊', icon: 'fa-hat-wizard', npc: 'hatter', bg: 'lobby_pv_bg_workshop_v1.jpg',
+            obj: 'hatter_shop', scene: 'workshop',
+            ready: () => !!(win.LobbyWorkshop?.ready?.()),
+            open: () => _stage()?.openWorkshopPanel?.(),
+            openIn: (c) => win.LobbyWorkshop.mount(c),   // 面板本來就吃容器，直接畫進窗格
+        },
+        {
+            // 舞台上＝走進去擺家具的場景（要先有房子）；對話模式＝一張家的背景＋你請進來的看板娘（不必有房子）
+            id: 'myhome', name: '我的家', icon: 'fa-house-chimney', bg: 'lobby_pv_bg_myhome_v1.jpg',
+            obj: 'player_house',
+            when: () => !!_stage()?.plotOccupied?.('player'),
+            flatWhen: () => true,
+            guest: () => _guestNpc(),
+            open: () => _fire('lstage-open-myhome'),
+            openIn: (c) => _mountHomeGuest(c),
+        },
+        {
+            // 🧑‍💼 SN 32 樓研討白板（os_sn_board.js）：沒有走得進去的場景，快轉地圖那顆、立繪模式那張卡都直接開白板
+            id: 'sn32', name: 'SN 32 樓', flatName: '研討白板', icon: 'fa-building', bg: 'lobby_pv_bg_sn32_v1.jpg',
+            chip: true,
+            who: () => { const n = win.OS_SN_BOARD?.waitingNow?.() || 0; return n ? n + ' 份等妳看' : '研討白板'; },
+            ready: () => !!win.OS_SN_BOARD?.open,
+            open: () => win.OS_SN_BOARD.open(),
+            openIn: (c) => _mountFloating(c, () => win.OS_SN_BOARD.open(), '.snb-win', () => win.OS_SN_BOARD.close && win.OS_SN_BOARD.close()),
+        },
+        {
+            // 🌱 LUNA 苗圃＝小機的家，走進去就是後院（os_farm.js）。廣場上那棟在帽匠工坊左邊（原本 npc01 那塊地），
+            //    門是 panel 型（lstage-open-garden，下面接）；快轉地圖點那棟或那顆、立繪模式那張卡都直接開後院。
+            //    後院是自己走的舞台、要整個畫面（同手機殼那顆 mode:'out'），不搬進窗格。
+            id: 'garden', name: 'LUNA 苗圃', flatName: '後院', icon: 'fa-seedling', bg: 'farm/farm_base_v2_svg.svg',
+            obj: 'luna_nursery', chip: true,
+            who: () => '後院',
+            ready: () => !!(win.OS_FARM?.launch && win.AureliaControlCenter?.launchGameApp),
+            open: () => win.AureliaControlCenter.launchGameApp('farm'),
+            openIn: (c) => _openFull(c, () => win.AureliaControlCenter.launchGameApp('farm')),
+        },
+        {
+            id: 'room404', name: '404', flatName: '黑市', icon: 'fa-ghost', npc: 'cheshire', bg: 'lobby_pv_bg_room404_v1.jpg',
+            scene: 'room404',
+            when: () => !!_st404().unlocked,
+            ready: () => !!win.VoidTerminal?.enter404Room && !!win.VoidPanels?.openStore,
+            open: () => win.VoidTerminal.enter404Room(),
+            openIn: (c) => _mountFloating(c, () => win.VoidPanels.openStore(), '#store-panel-overlay', () => win.VoidPanels.closeStore && win.VoidPanels.closeStore()),
+        },
+        {
+            // 廣場只有走路才有意義：立繪模式沒有「站在廣場上」這件事 → 不給 open
+            id: 'city', name: '廣場', icon: 'fa-tree-city',
+            scene: 'city',
+            when: () => !_stage()?._b?.cityLocked?.(),
+        },
+    ];
+
+    function list() {
+        return PLACES.filter(p => {
+            try {
+                if (p.when && !p.when()) return false;
+                if (p.ready && !p.ready()) return false;   // 模組沒載入→不給死鈕
+                return true;
+            } catch (e) { return false; }
+        });
+    }
+    function get(id) { return PLACES.find(p => p.id === id) || null; }
+
+    // ── 🏛 地點視圖（立繪模式的主畫面）──────────────────────────
+    //   對話模式沒有場景可以走，所以「主頁」本身就是一個地點：
+    //   背景是那個地方、左邊站它的管理員、右邊一排常駐的地點卡、底下是既有的對話框。
+    //   🚨 地點卡是常駐的，不是按了「前往」才展開——2026-08-31 定：按前往還得展開太麻煩。
+    //      所以 dock 那顆前往整顆拿掉了（舞台模式它跟右上的快轉地圖重複，對話模式它變成這排卡）。
+    //   🚨 窗格「要嘛對話、要嘛應用」，不同時存在——同一個人一邊在面板裡講話、
+    //      底下對話框也在講話＝很割裂。對話那半是把既有的 .void-dialogue-wrap 用 CSS
+    //      搬進版位，不動 DOM、不另做一套聊天。
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
+    const HOME_ID = 'hall';      // 主頁預設站的地方（愛麗絲＋視差大廳）
+    let _view = null;            // 關掉整個視圖
+    let _paint = null;           // 換到別的地點（不重建外殼）
+    let _curId = null;           // 現在站在哪（換場景面板要標「使用中」）
+    let _speakerOf = null;       // 現在在跟誰講話（對話框的主人）；沒開視圖時是 null
+    let _reprime = null;         // 把對話框重新換成眼前這位的（開場流程晚一步蓋掉時用）
+
+    // 🪟 把既有的浮窗（世界門／交易所／書咖櫃檯／黑市）搬進窗格：照常叫它開，
+    //    等它的 DOM 生出來就整個搬進容器；離開時叫它關，關不掉就搬回原位。
+    //    🚨 08-31 地點視圖改版（44666a1）時這支被整段刪掉，四個地點的 openIn 卻還在叫它
+    //       → 對話模式點「開啟」一律 ReferenceError、顯示「這個面板現在打不開」。原樣補回。
+    function _mountFloating(c, open, sel, close) {
+        const place = () => {
+            const el = document.querySelector(sel);
+            if (!el) return false;
+            const orig = el.parentElement;
+            c.appendChild(el);
+            // 🚨 這四個面板都有自己的 ✕，按了是把自己從畫面上拿掉——但沒人告訴外面這個窗格，
+            //    窗格就留著、裡面空了，變成一個空的黑窗。盯著它：一離開容器就通知窗格收起來。
+            //    （交易所是先淡出、250ms 後才拿掉，所以窗格會晚那一下才收，是正常的）
+            //    🚨 404 黑市的 ✕ 不拿掉自己、只是 display:none → 也要算關掉，不然留一個空窗格
+            const hidden = () => { try { return el.style.display === 'none' || getComputedStyle(el).display === 'none'; } catch (e) { return false; } };
+            const mo = new MutationObserver(() => {
+                if (c.contains(el) && !hidden()) return;
+                mo.disconnect();
+                c._pvRestore = null;
+                // 只是藏起來的：搬回原位，下次從別的入口打開還找得到它
+                if (el.isConnected && c.contains(el) && orig) { try { orig.appendChild(el); } catch (e) {} }
+                try { c.dispatchEvent(new CustomEvent('pv-panel-gone')); } catch (e) {}
+            });
+            mo.observe(c, { childList: true });
+            mo.observe(el, { attributes: true, attributeFilter: ['style', 'class'] });
+            c._pvRestore = () => {
+                mo.disconnect();   // 是我們自己在收（換地點／回對話），不算它自己關掉
+                try { close && close(); } catch (e) {}
+                // close 通常會把它移除；萬一沒有就搬回原位，別留在已經消失的容器裡
+                if (el.isConnected && orig) { try { orig.appendChild(el); } catch (e) {} }
+            };
+            return true;
+        };
+        let tries = 0, cancelled = false;
+        // 還沒搬進來就換走了（快速連點別的地點）：停掉等待、叫它關。
+        //   不然它晚一步生出來，會被塞進這個窗格——那時窗格已經是下一個地點的了。搬進來之後 place 會換成正式的收法。
+        c._pvRestore = () => { cancelled = true; try { close && close(); } catch (e) {} };
+        const tick = () => {
+            if (cancelled) return;
+            if (place()) return;
+            if (++tries > 40) { c.innerHTML = '<div class="lb-pv-fail">面板沒開起來</div>'; return; }
+            // 🚨 用 setTimeout 不用 requestAnimationFrame：等的是「DOM 生出來沒」不是畫面，
+            //    而 rAF 在頁面沒在合成時（分頁切到背景、視窗被遮住）根本不會 fire，
+            //    面板就永遠搬不進來、離開時也不會被清掉。
+            setTimeout(tick, 30);
+        };
+        try { open(); } catch (e) { console.warn('[LobbyPlaces] 面板開啟失敗', sel, e); }
+        tick();
+    }
+
+    // 🖥 要整個畫面的地方（後院）：直接開，窗格當場收回去——不然它關掉之後，這裡還留著一個空的窗格。
+    //    pv-panel-gone 就是面板自己關掉時通知窗格收起來的那個事件（見 _mountFloating）。
+    function _openFull(c, open) {
+        open();
+        try { c.dispatchEvent(new CustomEvent('pv-panel-gone')); } catch (e) {}
+    }
+    // 🚪 廣場上 LUNA 苗圃的門（lobby_stage 的 panel 型門）→ 開後院
+    win.addEventListener('lstage-open-garden', () => {
+        const p = get('garden');
+        try { if (p && (!p.ready || p.ready())) p.open(); } catch (e) { console.warn('[LobbyPlaces] 後院開不起來', e); }
+    });
+
+    // ── 🏠 我的家 · 看板娘 ──────────────────────────────────────
+    //   我的家在舞台上是「走進去擺家具」的場景，那整套建立在小人有地板可以走；
+    //   對話模式沒有地板，所以這裡是另一件事：一張家的背景，加一個你請進來站著的人。
+    //   🚨 舞台那條一個字都不動——open() 照舊發 lstage-open-myhome，走進去擺家具是它的事。
+    const GUEST_KEY = 'lobby_home_guest';
+
+    function _guestGet() {
+        try { const v = JSON.parse(localStorage.getItem(GUEST_KEY) || 'null'); return (v && v.key) ? v : null; }
+        catch (e) { return null; }
+    }
+    // 🚨 只存「是誰」，不存圖。頭像是 base64 大圖，寫進 localStorage 會啃掉全站共用的 5MB
+    //    （這個專案為了同一件事壞過四次）。圖留在 IDB，這裡只放引用。
+    function _guestSet(v) {
+        if (v) return win.AUI.lsSet(GUEST_KEY, JSON.stringify({ src: v.src, key: v.key, name: v.name }), '請進家裡的看板娘');
+        try { localStorage.removeItem(GUEST_KEY); } catch (e) {}
+        return true;
+    }
+
+    // 目前請進來的那位 → 組成跟 staff 同形狀的對話對象（setTalkTarget 吃這個形狀）
+    async function _guestNpc() {
+        const g = _guestGet();
+        if (!g) return null;
+        if (g.src === 'staff') return win.LobbyNpcs?.staff?.(g.key) || null;
+        // 站出來的圖：有立繪用立繪（裝扮室生的 → 劇情生的），沒有用他的小人（Q版）；頭像（自拍）不用（11-25 起）
+        let url = '';
+        try { const sp = await win.VN_Cache?.getRaw?.('sprite_cache', g.key); url = (sp && sp.url) || ''; } catch (e) {}
+        // 劇情生過的圖：.url 就是全身立繪（自拍在 .face，不用）；沒有才用 Q版
+        if (!url) try { const v = await win.VN_Cache?.getRaw?.('avatar_cache', g.key); url = (v && (v.url || v.chibi)) || ''; } catch (e) {}
+        return { key: 'home_guest_' + g.key, name: g.name || '客人', subTitle: '我的家 · 看板娘', portrait: url };
+    }
+
+    // 可以請誰：大廳的管理員 ＋ 這個故事裡出現過、而且有頭像的角色（自建的 OC 出場過就在裡面）
+    async function _guestCandidates() {
+        const out = (win.LobbyNpcs?.staffKeys?.() || []).map(k => {
+            const s = win.LobbyNpcs.staff(k) || {};
+            return { src: 'staff', key: k, name: s.name || k, sub: s.subTitle || '', portrait: s.portrait || '' };
+        });
+        try {
+            const C = win.VN_Cache;
+            if (C && C.getAllMeta) {
+                const world = C.getCurrentWorld ? C.getCurrentWorld() : '';
+                const all = (await C.getAllMeta('avatar_cache')) || [];
+                all.filter(e => e.hasUrl && !e.isSprite && C.worldOf(e) === world)
+                   .forEach(e => out.push({ src: 'cache', key: e.key, name: C.bareKeyOf(e), sub: '', portrait: '' }));
+            }
+        } catch (e) { console.warn('[LobbyPlaces] 讀角色名冊失敗', e); }
+        return out;
+    }
+
+    // 看板娘面板：上面是現在站著的人，下面是可以請的人
+    // 🚨 頭像逐張從 IDB 撈、面板關掉就停：一次把整庫 base64 塞進 DOM 是相簿當初 OOM 的原因。
+    function _mountHomeGuest(c) {
+        let alive = true;
+        // 🚨 c 是地點視圖共用的那個窗格，每次 go('app') 都會再進來這裡：監聽要在收掉時拿掉。
+        //    以前一直疊上去，點一下跑好幾次——偶數個時一個請進來、下一個當成「再點一次＝請他離開」又清掉。
+        const onClick = (e) => {
+            const out = e.target.closest('.lb-guest-out');
+            if (out) { _guestSet(null); if (_paint) _paint('myhome', 'app'); return; }
+            const b = e.target.closest('.lb-guest-c');
+            if (!b) return;
+            const pick = { src: b.dataset.src, key: b.dataset.key, name: b.dataset.name };
+            const same = (() => { const g = _guestGet(); return g && g.src === pick.src && g.key === pick.key; })();
+            _guestSet(same ? null : pick);        // 再點一次同一個人＝請他離開（不用特地去按那顆）
+            if (_paint) _paint('myhome', 'app');
+        };
+        c._pvRestore = () => { alive = false; c.removeEventListener('click', onClick); };
+
+        // 故事角色的名字是模型取的（頭像庫裡的名冊）：塞進 HTML／屬性前轉義
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const render = async () => {
+            const cur = _guestGet();
+            const cands = await _guestCandidates();
+            if (!alive) return;
+            c.innerHTML =
+                '<div class="lb-guest">' +
+                  '<div class="lb-guest-now">' +
+                    (cur
+                      ? '<span class="lb-guest-now-t">現在站在家裡的是 <b>' + esc(cur.name) + '</b></span>' +
+                        '<button class="lb-guest-out" type="button">請他離開</button>'
+                      : '<span class="lb-guest-now-t">家裡現在沒有人。挑一個請進來。</span>') +
+                  '</div>' +
+                  '<div class="lb-guest-grid">' +
+                    cands.map(x =>
+                      '<button class="lb-guest-c' + (cur && cur.src === x.src && cur.key === x.key ? ' is-cur' : '') + '"' +
+                        ' type="button" data-src="' + x.src + '" data-key="' + esc(x.key) + '"' +
+                        ' data-name="' + esc(x.name) + '">' +
+                        '<span class="lb-guest-pic"' + (x.portrait ? ' style="background-image:url(' + x.portrait + ')"' : '') + '></span>' +
+                        '<span class="lb-guest-n">' + esc(x.name) + '</span>' +
+                      '</button>').join('') +
+                  '</div>' +
+                '</div>';
+
+            // 故事角色的頭像在 IDB 裡，逐張撈上來（撈一張畫一張，關掉就停）
+            (async () => {
+                for (const x of cands) {
+                    if (!alive) return;
+                    if (x.src !== 'cache') continue;
+                    let url = '';
+                    try { const v = await win.VN_Cache.getRaw('avatar_cache', x.key); url = win.VN_Cache.headOf ? win.VN_Cache.headOf(v) : ((v && v.url) || ''); } catch (e) {}
+                    if (!alive || !url) continue;
+                    const el = c.querySelector('.lb-guest-c[data-key="' + String(x.key).replace(/"/g, '\\"') + '"] .lb-guest-pic');
+                    if (el) el.style.backgroundImage = 'url(' + url + ')';
+                }
+            })();
+        };
+
+        c.addEventListener('click', onClick);
+
+        render();
+    }
+
+    // 「站得住」跟「面板開得起來」是兩個問題，本來混在同一個判斷裡。
+    // 🚨 對話模式的主畫面就是這個視圖，而它只需要一張背景＋一個看板娘 ——
+    //    那個地方的功能面板有沒有載好，跟你能不能站在那裡無關。
+    //    混在一起的後果：大廳的閘是 OS_WORLDGATE，而大廳的視圖在慢速載入時會早於
+    //    那支 script 被建出來（control_center 用 setTimeout(0) 掛手機殼，parser 卡在
+    //    下載後面的 script 時那顆計時器就插隊跑了），於是整個主畫面拒絕畫，變成一片黑。
+    //    這條分法跟 flatWhen 是同一個道理（下面那段註解寫的就是它），只是 ready 當時漏掉了。
+    function _standable(p) {
+        try {
+            // flatWhen＝「對話模式進不進得去」。我的家在舞台要先有房子才走得進去，
+            // 但對話模式只是一張背景＋看板娘，不該被房子擋住 → 兩邊的條件分開判。
+            const gate = p.flatWhen || p.when;
+            if (gate && !gate()) return false;
+            return true;
+        } catch (e) { return false; }
+    }
+
+    // 這個地點的功能面板現在開得起來嗎（模組還沒載進來就還不行）
+    function _usable(p) {
+        try {
+            if (!_standable(p)) return false;
+            if (p.ready && !p.ready()) return false;
+            return typeof p.open === 'function';
+        } catch (e) { return false; }
+    }
+
+    // 🚨 沒解鎖的地方照樣列出來、但鎖著：整顆消失＝玩家不知道以後有東西可以期待，
+    //    而且清單長度會隨進度跳來跳去，肌肉記憶每次都要重學。
+    //    廣場不列——它只有走路才有意義，立繪模式沒有「站在廣場上」這件事。
+    // 這個地點現在站著誰。一般地點是固定的管理員；我的家是動態的——看你請了誰進來。
+    function _npcMeta(p) {
+        if (p.guest) { const g = _guestGet(); return g ? { name: g.name } : null; }
+        return (win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null;
+    }
+    const _hasNpc = (p) => !!_npcMeta(p);
+    function _cards() {
+        return PLACES.filter(p => p.id !== 'city').map(p => ({
+            // on＝站得住（能不能走過去），不是「它的面板現在開得起來」——
+            // 模組晚一步載好不該讓地點看起來像沒解鎖，按進去那一刻自然會知道開不開得了。
+            p, on: _standable(p), npc: _npcMeta(p),
+            // 我的家沒人的時候要明講，不然那行空白看起來像沒載出來
+            emptyWho: p.guest ? '還沒有人' : (p.who ? (() => { try { return p.who() || ''; } catch (e) { return ''; } })() : ''),
+        }));
+    }
+
+    // 🏛 桌機對話模式的右邊（11-16 改版，照阿洛的版面稿；小樣在本機 參考資料/LOBBY_HOME_LAB.html）：
+    //   一句話 → 一顆大按鈕（這個地點最主要的那件事：大廳＝世界門、書咖＝書咖櫃檯…，字用 flatName、按下去＝go('app')）
+    //   → 三張常去的地點（清單順序裡前三個站得住的別處）→「查看全部」（開換場景那張卡片面板，全部地點都在）。
+    //   取代 09-11 那版「當前區域一張＋附近地點一整格」：那版八個地點加九顆功能鍵佔掉整個右半，人被擠到旁邊。
+    //   🚨 阿洛的圖上這顆寫「繼續故事」，那跟「章節」是同一件事（圖上那顆容易被當成世界門）。
+    //   11-17 起 404 也用這個（以前它留著 09-11 那版的兩張卡；那組畫法和樣式已經拿掉）。
+    function _homeHtml(curId) {
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const cards = _cards();
+        const cur = cards.filter(c => c.p.id === curId)[0];
+        const p = cur && cur.p;
+        const picks = cards.filter(c => c.p.id !== curId && c.on).slice(0, 3);
+        return ((p && p.slogan) ? '<p class="lb-rail-slogan">' + esc(p.slogan) + '</p>' : '') +
+            ((p && (p.openIn || p.open)) ? '<button class="lb-rail-cta" type="button">' +
+                '<i class="fa-solid ' + esc(p.icon || 'fa-door-open') + '"></i>' +
+                '<span>開啟' + esc(p.flatName || p.name) + '</span>' +
+                '<i class="fa-solid fa-arrow-right"></i></button>' : '') +
+            ((p && p.more && (!p.more.ready || p.more.ready())) ? '<button class="lb-rail-cta lb-rail-more" type="button" data-place="' + esc(p.id) + '">' +
+                '<i class="fa-solid ' + esc(p.more.icon || 'fa-door-open') + '"></i>' +
+                '<span>開啟' + esc(p.more.label) + '</span>' +
+                '<i class="fa-solid fa-arrow-right"></i></button>' : '') +
+            '<div class="lb-rail-picks">' + picks.map(c =>
+                '<button class="lb-rail-pick" type="button" data-id="' + esc(c.p.id) + '">' +
+                    '<span class="lb-rail-thumb" aria-hidden="true"><img alt="" data-bg="' + esc(c.p.bg || '') + '"></span>' +
+                    '<span class="lb-rail-pick-t"><i class="fa-solid ' + esc(c.p.icon) + '"></i><span>' + esc(c.p.name) + '</span></span>' +
+                '</button>').join('') + '</div>' +
+            '<button class="lb-rail-all" type="button">查看全部 <i class="fa-solid fa-chevron-right"></i></button>';
+    }
+
+    // ── 🎞 會動的立繪（11-16；她拿新立繪去生的綠幕影片）──────────────
+    //   影片檔是「上半彩色（已乘透明度）＋下半透明度灰階」疊起來的普通 mp4：到處都播得了（iPhone 不認帶透明的 webm），
+    //   這裡用 WebGL 把兩半合回一張透明的畫面，畫在 <canvas class="lb-pv-portrait lb-pv-live"> 上；它跟靜止那張 <img> 吃同一套版位。
+    //   誰有影片寫在 lobby_npcs.js 的 STAFF[x].live＝{ idle 站著循環, greet 進這個地點後第一次拉近時演一次, greetFrom 那支從第幾秒進場, greetDelay 點下去先等幾毫秒再演 }。
+    //   🚨 起不來就什麼都不做：沒有 WebGL、檔案抓不到、瀏覽器不給自動播（省電模式）、系統設了減少動態 → 畫面上留靜止立繪。
+    //      真的畫出第一格才掛 .lb-pv.is-live（CSS 這時才把 <img> 換成 <canvas>）。
+    //   🚨 影片先整支抓成 blob 再播：jsDelivr 不給素材庫的 mp4（見 fetchUrl），只能靠 GitHub raw，而 raw 給的類型不是影片，
+    //      直接當 <video src> 有的瀏覽器不播；blob 也順便免掉跨網域的圖不能進 WebGL 的問題。
+    //   🚨 收掉時影片要拆乾淨（pause＋拿掉 src＋load、blob 網址還回去、放掉 WebGL），不然每進出一次大廳就多佔一份記憶體。
+    function _livePortrait(box, canvas) {
+        let cur = null, vIdle = null, vGreet = null, active = null;
+        const blobs = new Map();   // 影片網址 → Promise<blob 網址>。走開又回來不重抓（一支兩三 MB）；整個畫面收掉時才還回去
+        let gl = null, tok = 0, gen = 0, lastT = -1, greeted = false, dead = false;
+        const reduce = () => { try { return win.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { return false; } };
+        const wantPlay = () => !!cur && !dead && canvas.isConnected && !document.hidden &&
+            box.classList.contains('is-talk') && !box.classList.contains('is-focus');
+
+        const fetchUrl = (url) => {
+            if (blobs.has(url)) return blobs.get(url);
+            const job = (async () => {
+                // 🚨 影片先走 GitHub raw、jsDelivr 當後備（跟圖片相反）：11-16 量過，jsDelivr 對素材庫的 mp4 一律回 503，
+                //    而且有時要拖 18 秒才回，等它失敗再換的話，人都拉近講完話了影片才到。raw 0.6 秒。
+                const alt = window.LobbyStage?._b?.sfMirror?.(url);
+                let r = await fetch(alt || url, { mode: 'cors' }).catch(() => null);
+                if ((!r || !r.ok) && alt) r = await fetch(url, { mode: 'cors' }).catch(() => null);
+                if (!r || !r.ok) throw new Error('HTTP ' + (r ? r.status : '連不上'));
+                return URL.createObjectURL(new Blob([await r.arrayBuffer()], { type: 'video/mp4' }));
+            })();
+            blobs.set(url, job);
+            job.catch(() => blobs.delete(url));   // 沒抓到的下次再試
+            return job;
+        };
+        const mkVideo = (src, loop) => {
+            const v = document.createElement('video');
+            v.muted = true; v.defaultMuted = true; v.playsInline = true; v.loop = !!loop; v.preload = 'auto';
+            v.setAttribute('muted', ''); v.setAttribute('playsinline', '');
+            v.src = src;
+            return v;
+        };
+        const initGl = () => {
+            if (gl) return true;
+            try {
+                const g = canvas.getContext('webgl', { alpha: true, premultipliedAlpha: true, antialias: false });
+                if (!g) return false;
+                const sh = (type, src) => { const s = g.createShader(type); g.shaderSource(s, src); g.compileShader(s); return s; };
+                const prog = g.createProgram();
+                g.attachShader(prog, sh(g.VERTEX_SHADER, 'attribute vec2 p; varying vec2 uv; void main(){ uv = p * 0.5 + 0.5; gl_Position = vec4(p, 0.0, 1.0); }'));
+                // 上半取顏色、下半取透明度；兩半交界各往內縮一點，不然放大時會互相滲色。顏色本來就乘過透明度，壓縮造成的誤差用 min 收掉
+                g.attachShader(prog, sh(g.FRAGMENT_SHADER,
+                    'precision mediump float; uniform sampler2D t; varying vec2 uv;' +
+                    'void main(){ float y = 1.0 - uv.y; float e = 0.0008;' +
+                    ' vec3 c = texture2D(t, vec2(uv.x, clamp(y * 0.5, e, 0.5 - e))).rgb;' +
+                    ' float a = texture2D(t, vec2(uv.x, clamp(0.5 + y * 0.5, 0.5 + e, 1.0 - e))).r;' +
+                    ' a = smoothstep(0.03, 0.97, a); gl_FragColor = vec4(min(c, vec3(a)), a); }'));
+                g.linkProgram(prog);
+                if (!g.getProgramParameter(prog, g.LINK_STATUS)) return false;
+                g.useProgram(prog);
+                g.bindBuffer(g.ARRAY_BUFFER, g.createBuffer());
+                g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g.STATIC_DRAW);
+                const loc = g.getAttribLocation(prog, 'p');
+                g.enableVertexAttribArray(loc); g.vertexAttribPointer(loc, 2, g.FLOAT, false, 0, 0);
+                g.bindTexture(g.TEXTURE_2D, g.createTexture());
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_S, g.CLAMP_TO_EDGE);
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_WRAP_T, g.CLAMP_TO_EDGE);
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MIN_FILTER, g.LINEAR);
+                g.texParameteri(g.TEXTURE_2D, g.TEXTURE_MAG_FILTER, g.LINEAR);
+                g.clearColor(0, 0, 0, 0);
+                gl = g;
+                canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); gl = null; stop(); });
+                return true;
+            } catch (e) { return false; }
+        };
+        const draw = (v) => {
+            if (!gl || !v || v.readyState < 2 || !v.videoWidth) return false;
+            const w = v.videoWidth, h = v.videoHeight >> 1;
+            if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; gl.viewport(0, 0, w, h); }
+            gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+            gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+            return true;
+        };
+        // 影片出新的一格才畫（影片 24 格、螢幕 60 格，每格都重傳貼圖是白做工）；換播哪一支就重排，舊的那一輪作廢
+        const schedule = () => {
+            const my = ++gen, v = active;
+            if (!v || dead) return;
+            const step = () => {
+                if (my !== gen || dead || !cur) return;
+                try {
+                    if (v.requestVideoFrameCallback || v.currentTime !== lastT) {
+                        lastT = v.currentTime;
+                        if (draw(v) && !box.classList.contains('is-live')) box.classList.add('is-live');
+                    }
+                } catch (e) { console.warn('[LobbyPlaces] 會動的立繪畫不出來，退回靜止的', e); stop(); return; }
+                next();
+            };
+            const next = () => { if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(step); else requestAnimationFrame(step); };
+            next();
+        };
+        // 該播就播、不該播（開著面板、切到別的分頁、不在對話那一態）就停
+        const sync = () => {
+            if (!active) return;
+            if (wantPlay()) { const p = active.play(); if (p && p.catch) p.catch(() => {}); }
+            else { try { active.pause(); } catch (e) {} }
+        };
+        const backToIdle = () => {
+            if (!vIdle) return;
+            active = vIdle;
+            try { vIdle.currentTime = 0; } catch (e) {}
+            schedule(); sync();
+        };
+        function stop() {
+            tok++; gen++;
+            box.classList.remove('is-live');
+            [vIdle, vGreet].forEach(v => { if (v) { try { v.pause(); v.removeAttribute('src'); v.load(); } catch (e) {} } });
+            vIdle = vGreet = active = null; cur = null; lastT = -1;
+        }
+        // 換成這位的影片（live＝STAFF 的 live；沒有就收掉）。同一位再叫一次不重載
+        const set = async (live) => {
+            const want = (live && live.idle && !reduce()) ? live : null;
+            if (want && cur && want.idle === cur.idle) { sync(); return; }
+            stop();
+            if (!want || dead) return;
+            cur = want; greeted = false;
+            const my = tok;
+            try {
+                if (!initGl()) throw new Error('沒有 WebGL');
+                // 兩支一起抓：歡迎那支要趕在她第一次拉近之前到
+                if (want.greet) {
+                    fetchUrl(want.greet).then(g => {
+                        if (my !== tok) return;
+                        vGreet = mkVideo(g, false);
+                        vGreet.addEventListener('ended', backToIdle);
+                    }).catch(() => {});
+                }
+                const u = await fetchUrl(want.idle);
+                if (my !== tok) return;
+                vIdle = mkVideo(u, true); active = vIdle;
+                schedule(); sync();
+            } catch (e) {
+                console.warn('[LobbyPlaces] 會動的立繪沒起來，留靜止的', e);
+                if (my === tok) stop();
+            }
+        };
+        // 進這個地點後第一次拉近：演一次歡迎的動作，演完接回站著的那支。那支還沒抓到、或影片根本沒在播就不演（下次拉近再試）。
+        // 不等它「準備好」才播：影片已經整支在記憶體裡，叫它播幾毫秒就有畫面；它出第一格之前，畫面停在站著那支的最後一格
+        const greet = () => {
+            if (!cur || greeted || !vGreet || !box.classList.contains('is-live')) return;
+            greeted = true;
+            const my = tok;
+            const start = () => {
+                if (my !== tok || !vGreet || !vIdle) return;   // 等的那一下人已經換走了
+                try { vIdle.pause(); } catch (e) {}
+                active = vGreet;
+                try { vGreet.currentTime = cur.greetFrom || 0; } catch (e) {}   // 從第幾秒進場各人自己訂（STAFF 的 live.greetFrom）
+                schedule();
+                const p = vGreet.play(); if (p && p.catch) p.catch(backToIdle);
+            };
+            // 影片一開頭就有動作的人，先讓鏡頭拉近一下再演（live.greetDelay，毫秒）；這段時間照舊播站著的那支
+            if (cur.greetDelay > 0) setTimeout(start, cur.greetDelay); else start();
+        };
+        const arrive = () => { greeted = false; };   // 換到一個地點（含走開又回來）：下次拉近再演一次
+        const onVis = () => sync();
+        document.addEventListener('visibilitychange', onVis);
+        const destroy = () => {
+            stop(); dead = true;
+            blobs.forEach(job => { job.then(u => { try { URL.revokeObjectURL(u); } catch (e) {} }).catch(() => {}); });
+            blobs.clear();
+            document.removeEventListener('visibilitychange', onVis);
+            try { gl && gl.getExtension('WEBGL_lose_context')?.loseContext(); } catch (e) {}
+            gl = null;
+        };
+        return { set, sync, greet, arrive, destroy };
+    }
+
+    function closeView() { if (_view) { try { _view(); } catch (e) {} _view = null; } }
+
+    // 對話模式的主頁：進來就站在預設地點，不必按任何東西
+    function openHome() { return openView(HOME_ID); }
+
+    function openView(id) {
+        // 已經開著就地換一個地方，不要拆掉重建（重建會讓背景閃一下、對話框也跟著重掛）
+        if (_view && _paint) { _paint(id); return null; }
+
+        const host = document.querySelector('.lobby-left');
+        if (!host) { const p0 = get(id); try { p0 && p0.open && p0.open(); } catch (e) {} return null; }   // 沒有大廳外殼就退回單開面板
+
+        const box = document.createElement('div');
+        box.className = 'lb-pv';
+        box.innerHTML =
+            '<div class="lb-pv-bg"></div>' +
+            '<div class="lb-pv-hd">' +
+              // 地名：桌機當標題；手機不顯示（11-25 換場景的膠囊拿掉了，跟「查看全部」重複，副標已經寫了在哪）
+              '<span class="lb-pv-place"><span class="lb-pv-title"></span></span>' +
+              '<span class="lb-pv-sub"></span>' +
+            '</div>' +
+            '<img class="lb-pv-portrait" alt="">' +
+            '<canvas class="lb-pv-portrait lb-pv-live" aria-hidden="true"></canvas>' +   // 會動的立繪畫在這張上（有影片的人才用，見 _livePortrait）
+            '<div class="lb-pv-veil"></div>' +   // 拉近對話時蓋在人下半身上的那層紗（11-16 那版才用，404 不顯示）
+            // 頭旁邊的「聊聊」：對話平常是收起來的，這顆告訴第一次來的人「點他可以講話」；沒有立繪的人也靠它開對話
+            '<button class="lb-pv-poke" type="button"><i class="fa-regular fa-comment-dots"></i><span>聊聊</span></button>' +
+            '<div class="lb-rail"></div>' +
+            '<div class="lb-pv-pane"><button class="lb-pv-x" type="button" aria-label="收起"><i class="fa-solid fa-xmark"></i></button><div class="lb-pv-body"></div></div>';
+
+        const bg      = box.querySelector('.lb-pv-bg');
+        const titleEl = box.querySelector('.lb-pv-title');
+        const subEl   = box.querySelector('.lb-pv-sub');
+        const pimg    = box.querySelector('img.lb-pv-portrait');
+        const lcv     = box.querySelector('.lb-pv-live');
+        const live    = _livePortrait(box, lcv);
+        const rail    = box.querySelector('.lb-rail');
+        const body    = box.querySelector('.lb-pv-body');
+
+        const restorePanel = () => {
+            try { if (body._pvRestore) { body._pvRestore(); body._pvRestore = null; } } catch (e) {}
+        };
+        const talkOff = () => { try { win.LobbyStage?.endTalk?.(); } catch (e) {} };
+
+        // 🔍 拉近對話（11-16）：平常人全身站著、對話整個收起來（反正要拉近才能聊，一開始不必顯示來占空間）；
+        //    點他（或頭旁邊的「聊聊」）＝拉近成半身，名牌、台詞、輸入框從底下滑上來。點旁邊空白或按 Esc 退回去、對話收掉。
+        //    只是畫面遠近（.is-zoom），對話對象、紀錄都不動；只在對話那一態有意義。
+        //    404 皮沒有這一版的樣式，class 掛上去也沒有任何變化（那邊對話框照舊一直在）。
+        const zoom = (on) => {
+            const was = box.classList.contains('is-zoom');
+            const now = !!on && box.classList.contains('is-talk');
+            box.classList.toggle('is-zoom', now);
+            // 電腦：拉近了就能直接打字。手機不自動點進輸入框（鍵盤一彈出來畫面剩一半，要打字自己點）。
+            // 🚨 focus 帶 preventScroll：對話框還在滑上來的半路，不帶的話瀏覽器會把外層整個捲過去
+            if (now && !was && desktopRail.matches) { try { host.querySelector('.void-input')?.focus({ preventScroll: true }); } catch (err) {} }
+            if (now && !was) live.greet();   // 有影片的人：進這個地點後第一次拉近，演一次歡迎的動作
+        };
+        const onHostFocus = (e) => { if (e.target && e.target.matches && e.target.matches('.void-input')) zoom(true); };
+        const onHostClick = (e) => { if (e.target && e.target.closest && e.target.closest('.void-dialogue-box')) zoom(true); };
+        const onKey = (e) => {
+            if (e.key !== 'Escape' || !box.classList.contains('is-zoom')) return;
+            if (_scn || _more) return;   // 開著的卡片面板先處理它自己的
+            if (window.AUI && window.AUI.escTarget && window.AUI.escTarget()) return;   // 上面還開著窗口：這次 Esc 先關窗口
+            e.preventDefault();   // 標記處理過：AUI 的 Esc 不再關別的
+            zoom(false);
+            try { host.querySelector('.void-input')?.blur(); } catch (err) {}
+        };
+        host.addEventListener('focusin', onHostFocus);
+        host.addEventListener('click', onHostClick);
+        document.addEventListener('keydown', onKey);
+        pimg.addEventListener('click', () => zoom(!box.classList.contains('is-zoom')));
+        lcv.addEventListener('click', () => zoom(!box.classList.contains('is-zoom')));
+        box.querySelector('.lb-pv-poke').addEventListener('click', () => zoom(true));
+        bg.addEventListener('click', () => zoom(false));
+
+        // 🧍 立繪大小依「圖片原生比例」自動決定，不必為了不同人準備不同資產：
+        //    細長(比例≥1.7)＝全身站高貼底，下緣讓對話框蓋掉＝自然的半身效果；
+        //    方(比例<1.7)＝本來就是半身(丹/雷伊 640x896)，放小一點、切口一樣藏進對話框。
+        //    🚨 所以全身圖不用砍半——對話框本身就是裁刀。
+        const sizePortrait = () => {
+            const r = pimg.naturalWidth ? (pimg.naturalHeight / pimg.naturalWidth) : 0;
+            if (r) pimg.classList.toggle('is-half', r < 1.7);
+        };
+        pimg.addEventListener('load', sizePortrait);
+
+        let curId = null;
+        let curNpc = null;      // 這個地點現在站著誰（我的家那位是非同步撈回來的）
+        let paintTok = 0;       // 連點換地點時，晚回來的那張不准蓋掉新的
+        const desktopRail = win.matchMedia('(min-width:761px)');
+        const loadRailThumbs = async () => {
+            // 這一欄沒顯示就不抓（404 皮在手機上是藏起來的）；之後轉成看得到的寬度時會再叫一次補載。
+            // 11-16 起手機的新版面也有這三張，所以看「有沒有顯示」，不是看寬度。
+            try { if (getComputedStyle(rail).display === 'none') return; } catch (e) { return; }
+            const tok = paintTok;
+            // 共用場景選擇器快取。一張一張來：手機上同時解好幾張原圖很吃記憶體（見下面 _thumb 的說明）
+            for (const img of rail.querySelectorAll('.lb-rail-thumb img[data-bg]:not([src])')) {
+                if (!img.dataset.bg) continue;
+                try {
+                    const url = await _thumb(img.dataset.bg);
+                    if (tok !== paintTok) return;   // 已經換地點重畫了，剩下的交給新的那一輪
+                    if (url && img.isConnected) {
+                        img.src = url;
+                        img.parentElement.classList.add('is-loaded');
+                    }
+                } catch (e) { /* 保留圖示與文字入口，不影響導航 */ }
+            }
+        };
+        desktopRail.addEventListener('change', loadRailThumbs);
+
+        // mode: 'talk' 對話 / 'app' 應用（兩者互斥，見檔頭）
+        const go = (mode) => {
+            restorePanel();
+            body.innerHTML = '';
+            box.classList.remove('is-talk', 'is-app', 'is-focus', 'is-zoom');
+            setTimeout(live.sync, 0);   // 這一態定下來之後：對話那一態影片照播，開著面板就停
+            const p = get(curId);
+            if (!p) return;
+            if (mode === 'talk' && _hasNpc(p)) {
+                box.classList.add('is-talk');
+                // 對話對象＝這裡站著的人（管理員，或我的家請進來的那位）；
+                // 沒有舞台也設得起來，void_terminal 讀的是 talkTarget
+                try { if (curNpc) win.LobbyStage?.setTalkTarget?.(curNpc); } catch (e) {}
+                try { win.LobbyStage?.showDialog?.(); } catch (e) {}
+                // 對話框只有一個、大家共用：換到誰這裡，名牌／提示字／框裡那句都要換成他的，
+                // 不然會一直掛著瀅瀅的（書咖開場旁白、她的名牌、「與瀅瀅對話」）。
+                if (curNpc) { try { win.VoidTerminal?.primeTalk?.(curNpc); } catch (e) {} }
+                return;
+            }
+            talkOff();
+            box.classList.add('is-app');
+            // 專注：右欄與常用功能收起來、面板撐滿（CSS 看 .is-focus）。
+            // 🚨 只給「有人可以回去對話」的地方：沒人的地方（我的家還沒請人）按 ✕ 會回到這個面板本身，
+            //    右欄一收就再也回不來、哪裡都去不了。
+            if (_hasNpc(p)) box.classList.add('is-focus');
+            // 站得住不等於面板開得起來：模組可能還在載（慢速開機時很常見）。
+            // 這裡講「還在載」而不是「打不開」——前者等一下就好，後者聽起來像壞了。
+            if (!_usable(p)) {
+                body.innerHTML = '<div class="lb-pv-note">這個地方還在載入，等一下再按一次</div>';
+                return;
+            }
+            try {
+                if (p.openIn) { p.openIn(body); return; }
+                // 還沒改成吃容器的地方：照舊自己開浮窗，容器說明一下免得看起來像壞了
+                body.innerHTML = '<div class="lb-pv-note">這個面板還是獨立視窗，已經幫你開了</div>';
+                p.open && p.open();
+            } catch (e) {
+                body.innerHTML = '<div class="lb-pv-fail">這個面板現在打不開</div>';
+                console.warn('[LobbyPlaces] 面板開啟失敗', curId, e);
+            }
+        };
+
+        // 換到某個地點：背景／立繪／標題／卡片高亮一起換，外殼不動
+        const paint = (nextId, mode) => {
+            const p = get(nextId);
+            // 🚨 這裡以前是靜靜 return：畫不出來時外殼留著、裡面全空＝整片黑，
+            //    而且沒有任何線索說是誰擋的。要壞就要說得出是哪一關沒過。
+            if (!p || !_standable(p)) {
+                const gate = p && (p.flatWhen || p.when);
+                const why = !p ? '沒有這個地點'
+                    : (gate && !gate()) ? '還沒解鎖' : '未知';
+                win.__LP_LASTFAIL__ = { id: nextId, why: why, at: Math.round(performance.now()) };
+                console.warn('[LobbyPlaces] 畫不出「' + nextId + '」：' + why);
+                return;
+            }
+            restorePanel(); talkOff();
+            curId = nextId; _curId = nextId;
+            live.arrive();
+            box.dataset.place = nextId;   // 介面的顏色跟著地點換（色票在 lobby.css「顏色跟著地點走」那段；沒寫到的地點用大廳的藍）
+            // 404 地點＝套上 404 皮：對話換成柴郡的軌道（人設、紀錄），離開就脫掉。
+            // 🚨 舞台模式由 lstage-scene 事件做這件事，對話模式以前沒人做 → 在 404 跟柴郡講話其實是跟瀅瀅講。
+            //    要在 go() 之前：primeTalk 看的是套好皮之後的狀態。
+            try { win.VoidTerminal?.sync404?.(nextId === 'room404'); } catch (e) {}
+            // 上一位的對話紀錄窗開著就收掉，不然換了地方還掛著別人的紀錄
+            try { win.LobbyDress?.closeHistory?.(); } catch (e) {}
+            const tok = ++paintTok;
+            // 🚨 沒有平視背景的地方不要清成純黑：這裡以前是「開了就關」的浮層所以無所謂，
+            //    現在它是常駐主畫面，切過去整片黑會讀成「壞掉了」。留著上一張，素材補上就自動換。
+            if (p.bg) bg.style.backgroundImage = 'url(' + CDN + p.bg + ')';
+            titleEl.textContent = p.name;
+            closeMoreSheet();
+            // 🚨 顯示/隱藏走 class 不走 inline style（專案鐵律）；背景圖是動態 URL，只能直接設 backgroundImage
+            const applyNpc = (npc) => {
+                curNpc = npc || null;
+                subEl.textContent = (npc && npc.subTitle) || '';
+                if (npc && npc.portrait) {
+                    box.classList.remove('no-portrait');
+                    if (pimg.getAttribute('src') !== npc.portrait) pimg.src = npc.portrait; else sizePortrait();
+                } else { box.classList.add('no-portrait'); pimg.removeAttribute('src'); }
+                live.set(npc && npc.portrait ? npc.live : null);
+            };
+            applyNpc((win.LobbyNpcs && p.npc) ? win.LobbyNpcs.staff(p.npc) : null);
+            // 我的家的看板娘：名字在 localStorage（同步，上面已經拿來決定要不要直接進對話），圖在 IDB（非同步）
+            if (p.guest) {
+                p.guest().then(g => {
+                    if (tok !== paintTok) return;   // 已經換去別的地方了，晚到的這張不算數
+                    applyNpc(g);
+                    if (g && box.classList.contains('is-talk')) {
+                        try { win.LobbyStage?.setTalkTarget?.(g); } catch (e) {}
+                        try { win.VoidTerminal?.primeTalk?.(g); } catch (e) {}
+                    }
+                }).catch(() => {});
+            }
+            // 11-17 起 404 也用同一套（大按鈕＋三張地點＋查看全部）；顏色在 lobby.css「404 的顏色」那段
+            rail.innerHTML = _homeHtml(curId);
+            loadRailThumbs();
+            go(mode || (_hasNpc(p) ? 'talk' : 'app'));
+        };
+        _paint = paint;
+        _speakerOf = () => (box.classList.contains('is-talk') && curNpc) ? curNpc.key : '';
+        _reprime = () => {
+            if (!box.classList.contains('is-talk') || !curNpc) return false;
+            try { win.VoidTerminal?.primeTalk?.(curNpc); } catch (e) {}
+            return true;
+        };
+
+        rail.addEventListener('click', (e) => {
+            // 11-16 新版面的三種鈕；點到這一欄的空白處＝點旁邊，拉近的對話退回去
+            if (e.target === rail) { zoom(false); return; }
+            if (e.target.closest('.lb-rail-all')) { openScenePicker(); return; }
+            const more = e.target.closest('.lb-rail-more');
+            if (more) { const mp = PLACES.find(x => x.id === more.dataset.place); try { mp && mp.more && mp.more.open(); } catch (err) { console.warn('[LobbyPlaces] 第二顆鈕開不了', err); } return; }
+            if (e.target.closest('.lb-rail-cta')) {
+                // full＝整個畫面換掉的地方（紫薇的記憶吧檯）：不進右邊窗格，直接開
+                const cp = get(curId);
+                if (cp && cp.full) { try { if (!cp.ready || cp.ready()) cp.open(); } catch (err) { console.warn('[LobbyPlaces] 開不了', err); } return; }
+                go('app'); return;
+            }
+            const pick = e.target.closest('.lb-rail-pick');
+            if (pick) paint(pick.dataset.id);
+        });
+
+        // ✕ 只收起右邊的窗格（回到單純看立繪講話），不是關掉整個主頁——主頁沒有「關掉」這件事
+        box.querySelector('.lb-pv-x').addEventListener('click', () => go('talk'));
+
+        // 窗格裡的面板按了它自己的 ✕（見 _mountFloating）：跟按窗格這顆 ✕ 是同一件事，回到對話。
+        // 這裡沒人可以講話的話不能叫 go('talk')——它會退回應用、把剛關掉的面板又開一次。
+        body.addEventListener('pv-panel-gone', () => {
+            const p = get(curId);
+            if (p && _hasNpc(p)) { go('talk'); return; }
+            body.innerHTML = '';
+            box.classList.remove('is-app', 'is-focus');
+        });
+
+        const close = () => {
+            restorePanel(); talkOff(); closeScenePicker(); closeMoreSheet();
+            try { win.LobbyDress?.closeHistory?.(); } catch (e) {}
+            // 離開對話模式時站在 404 的話把皮脫掉；接著掛舞台的話，舞台的 lstage-scene 會照它的場景再套一次
+            if (_curId === 'room404') { try { win.VoidTerminal?.sync404?.(false); } catch (e) {} }
+            desktopRail.removeEventListener('change', loadRailThumbs);
+            host.removeEventListener('focusin', onHostFocus);
+            host.removeEventListener('click', onHostClick);
+            document.removeEventListener('keydown', onKey);
+            live.destroy();
+            if (_paint === paint) { _paint = null; _curId = null; _speakerOf = null; _reprime = null; }
+            box.remove();
+            if (_view === close) _view = null;
+        };
+
+        host.appendChild(box);
+        _view = close;
+        paint(_standable(get(id)) ? id : HOME_ID);
+        return box;
+    }
+
+    // ── 🏞 換場景（窄畫面）───────────────────────────────────────
+    //   窄畫面放不下地點欄（以前收成一排沒有名字的深色方塊，看不出哪顆是哪裡），
+    //   改成點左上角的地名膠囊 → 這張卡片面板：每個地點一張縮圖＋名字，現在在的打勾，沒解鎖的灰掉加鎖。
+    //   清單跟桌機的地點欄同一份（_cards），點一張就走過去（_paint），跟點地點欄是同一件事。
+    //
+    // 🚨 縮圖不能直接塞背景原圖：一張 1440×810，七張同時解碼在 iPhone 上就是三十幾 MB
+    //    （章節面板就是這樣卡死過）。逐張抓下來縮成 320×180 小圖、原圖馬上放掉；
+    //    縮好的留在記憶體裡，這次開著的期間再打開就不用重縮。
+    const THUMB_W = 320, THUMB_H = 180;
+    const _thumbs = new Map();   // 背景檔名 → Promise<objectURL>
+    function _thumb(file) {
+        if (_thumbs.has(file)) return _thumbs.get(file);
+        const job = (async () => {
+            let r = await fetch(CDN + file, { mode: 'cors' }).catch(() => null);
+            if (!r || !r.ok) {   // 素材庫超過 jsDelivr 上限會隨機 403：同一張換 raw 再抓一次（見 lobby_stage.js 的 _sfMirror）
+                const alt = window.LobbyStage?._b?.sfMirror?.(CDN + file);
+                if (alt) r = await fetch(alt, { mode: 'cors' });
+            }
+            if (!r || !r.ok) throw new Error('HTTP ' + (r ? r.status : '連不上'));
+            const raw = URL.createObjectURL(await r.blob());
+            try {
+                const img = new Image();
+                img.src = raw;
+                await img.decode();
+                const cv = document.createElement('canvas');
+                cv.width = THUMB_W; cv.height = THUMB_H;
+                // 等比裁滿 16:9（背景本來就是這個比例，其他比例也不會變形）
+                const s = Math.max(THUMB_W / img.naturalWidth, THUMB_H / img.naturalHeight);
+                const w = img.naturalWidth * s, h = img.naturalHeight * s;
+                cv.getContext('2d').drawImage(img, (THUMB_W - w) / 2, (THUMB_H - h) / 2, w, h);
+                const out = await new Promise(res => cv.toBlob(res, 'image/jpeg', 0.82));
+                cv.width = cv.height = 0;
+                return out ? URL.createObjectURL(out) : '';
+            } finally { URL.revokeObjectURL(raw); }
+        })();
+        _thumbs.set(file, job);
+        job.catch(() => _thumbs.delete(file));   // 沒抓到的下次打開再試，不要永遠卡在失敗
+        return job;
+    }
+
+    let _scn = null;
+    function closeScenePicker() { if (_scn) { _scn.remove(); _scn = null; } }
+
+    function openScenePicker() {
+        if (!_paint) return;                       // 只在對話模式的主畫面有意義
+        const host = document.querySelector('.lobby-left');
+        if (!host) return;
+        closeScenePicker();
+        closeMoreSheet();
+
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const el = document.createElement('div');
+        el.className = 'lb-scn';
+        el.innerHTML =
+            '<div class="lb-scn-card" role="dialog" aria-label="換場景">' +
+              '<div class="lb-scn-hd"><span class="lb-scn-title">換場景</span>' +
+                '<button class="lb-scn-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
+              '<div class="lb-scn-grid">' +
+                _cards().map(c => {
+                    const p = c.p, cur = p.id === _curId;
+                    return '<button class="lb-scn-item' + (cur ? ' is-cur' : '') + (c.on ? '' : ' is-off') + '" type="button" data-id="' + esc(p.id) + '"' + (c.on ? '' : ' aria-disabled="true"') + '>' +
+                        '<span class="lb-scn-pic"><img alt="" data-bg="' + esc(p.bg || '') + '">' +
+                          (c.on ? '' : '<span class="lb-scn-lock"><i class="fa-solid fa-lock"></i></span>') + '</span>' +
+                        '<span class="lb-scn-name">' + esc(p.name) + '</span>' +
+                        '<span class="lb-scn-who">' + esc(c.on ? ((c.npc && c.npc.name) || c.emptyWho || '　') : '尚未開放') + '</span>' +
+                        (cur ? '<span class="lb-scn-check"><i class="fa-solid fa-check"></i></span>' : '') +
+                    '</button>';
+                }).join('') +
+              '</div>' +
+            '</div>';
+
+        el.addEventListener('click', (e) => {
+            // 點暗掉的外面或 ✕ ＝ 不換，關掉
+            if (e.target === el || e.target.closest('.lb-scn-x')) { closeScenePicker(); return; }
+            const b = e.target.closest('.lb-scn-item');
+            if (!b || b.classList.contains('is-off')) return;
+            const id = b.dataset.id;
+            closeScenePicker();
+            if (id !== _curId && _paint) _paint(id);
+        });
+
+        host.appendChild(el);
+        _scn = el;
+
+        // 縮圖一張一張來（同一時間只解碼一張原圖）；面板關了就停
+        (async () => {
+            for (const img of el.querySelectorAll('img[data-bg]')) {
+                const f = img.dataset.bg;
+                if (!f) continue;
+                let url = '';
+                try { url = await _thumb(f); } catch (e) { continue; }   // 沒抓到就留底色，不擋其他張
+                if (_scn !== el) return;
+                if (!url) continue;
+                img.onload = () => img.classList.add('is-in');
+                img.src = url;
+            }
+        })();
+    }
+
+    // ── ⋯ 更多（窄畫面）───────────────────────────────────────
+    //   手機的右側欄只留藏書／章節／應用／更多／出門：九顆排成一柱會把角色整個蓋住。
+    //   其餘標 data-more 的（日誌／成就／房產／宿舍／控制台）收進這張從底部升起的清單。
+    //   清單上的每一格＝按原本那顆 dock 鈕（它藏著但還在），動作、404 的換字、宿舍沒裝不出現全部照舊走原路。
+    //   清單滿寬、蓋住右側欄：開了就是要在這裡挑，不必縮窄去讓它。點遮罩、✕ 或清單裡任一格就收。
+    let _more = null;
+    function closeMoreSheet() {
+        if (!_more) return;
+        _more.remove();
+        _more = null;
+        document.getElementById('lb-dock-more')?.setAttribute('aria-expanded', 'false');
+    }
+    function openMoreSheet() {
+        if (!_paint) return;                       // 只在對話模式的主畫面有意義
+        const host = document.querySelector('.lobby-left');
+        const dock = document.getElementById('lb-dock');
+        if (!host || !dock) return;
+        closeScenePicker();
+        closeMoreSheet();
+
+        const is404 = !!host.closest('.void-tab.mode-404');
+        // 清單裡放的＝這一排現在沒顯示的那幾顆。手機藏的是標 data-more 的，桌機（11-16 改版）藏的是沒標 data-desk 的，
+        //   兩邊不一樣，所以看「現在有沒有顯示」而不是看哪個標記；這台沒裝的（lb-entry-off）哪邊都不放。
+        const src = [...dock.querySelectorAll('.lb-dock-btn')].filter(b => {
+            if (b.id === 'lb-dock-more' || b.classList.contains('lb-entry-off')) return false;
+            try { return getComputedStyle(b).display === 'none'; } catch (e) { return b.hasAttribute('data-more'); }
+        });
+        const el = document.createElement('div');
+        el.className = 'lb-more';
+        el.innerHTML =
+            '<div class="lb-more-veil"></div>' +
+            '<div class="lb-more-sheet" role="dialog" aria-label="更多">' +
+              '<div class="lb-more-hd"><span class="lb-more-title">更多</span>' +
+                '<button class="lb-more-x" type="button" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></div>' +
+              '<div class="lb-more-grid"></div>' +
+            '</div>';
+        const grid = el.querySelector('.lb-more-grid');
+        src.forEach((b, i) => {
+            const lab = b.querySelector('.lb-dock-label');
+            const name = (is404 && lab && lab.getAttribute('data-cn-404')) || (lab ? lab.textContent.trim() : b.title);
+            const dot = b.classList.contains('has-pending') || b.classList.contains('lb-ai-news') || b.classList.contains('lb-ai-news-prop') || b.classList.contains('lb-ai-news-msg');
+            const item = document.createElement('button');
+            item.type = 'button';
+            item.className = 'lb-more-item' + (dot ? ' has-dot' : '');
+            item.dataset.i = String(i);
+            item.innerHTML = '<span class="lb-more-ic"></span><span class="lb-more-name"></span>';
+            const ic = b.querySelector('.lb-dock-ic');
+            if (ic) item.querySelector('.lb-more-ic').appendChild(ic.cloneNode(true));
+            item.querySelector('.lb-more-name').textContent = name;
+            grid.appendChild(item);
+        });
+
+        el.addEventListener('click', (e) => {
+            if (e.target.closest('.lb-more-x') || e.target.classList.contains('lb-more-veil')) { closeMoreSheet(); return; }
+            const it = e.target.closest('.lb-more-item');
+            if (!it) return;
+            const b = src[Number(it.dataset.i)];
+            closeMoreSheet();
+            if (b) b.click();                      // 冒泡到 #lb-dock 的代理，照原本那顆的路走
+        });
+
+        host.appendChild(el);
+        _more = el;
+        document.getElementById('lb-dock-more')?.setAttribute('aria-expanded', 'true');
+    }
+
+    // 「更多」那顆沒有 data-proxy（void_terminal 的 dock 代理會略過它），在這裡接；
+    // 清單開著時按右側欄其他顆＝要去別的地方了，清單順手收掉
+    document.addEventListener('click', (e) => {
+        const t = e.target;
+        if (!t || !t.closest) return;
+        if (t.closest('#lb-dock-more')) { if (_more) closeMoreSheet(); else openMoreSheet(); return; }
+        if (_more && t.closest('#lb-dock .lb-dock-btn')) closeMoreSheet();
+    });
+
+    // ── 統一入口：同一顆鈕，兩種畫法 ────────────────────────────
+    //   舞台掛著 → 開快轉地圖（空間感，看得到廣場長怎樣）
+    //   舞台關著 → 開按鈕清單（沒有場景可以畫，就直接列能辦的事）
+    function open() {
+        const st = _stage();
+        if (st && st.isActive && st.isActive() && st.openCityMap) { st.openCityMap(); return; }
+        openHome();
+    }
+
+    // speaker()：對話模式的主畫面開著時，回傳現在對話框的主人 key（沒在對話＝''）；沒開視圖回 undefined。
+    //   void_terminal 靠它決定話要送給誰、放置台詞該不該由瀅瀅說。
+    // reprime()：把對話框換回眼前這位的（大廳開場流程比地點視圖晚一步時，會把書咖的開場旁白蓋上來）。
+    const speaker = () => (_speakerOf ? _speakerOf() : undefined);
+    const reprime = () => (_reprime ? _reprime() : false);
+    // 換場景卡上那行字會變的地點（SN 32 樓的「幾份等妳看」）：那邊一通知（lobby-place-who）就只改那行，不重畫整張
+    function refreshWho() {
+        PLACES.forEach(p => {
+            if (!p.who) return;
+            let t = '';
+            try { t = p.who() || ''; } catch (e) {}
+            document.querySelectorAll('.lb-scn-item[data-id="' + p.id + '"]:not(.is-off) .lb-scn-who').forEach(el => { el.textContent = t || '　'; });
+        });
+    }
+    try { win.addEventListener('lobby-place-who', refreshWho); } catch (e) {}
+    win.LobbyPlaces = { list, get, open, openHome, openView, closeView, openScenePicker, closeScenePicker, openMoreSheet, closeMoreSheet, speaker, reprime, refreshWho, HOME_ID, PLACES };
+    console.log('✅ LobbyPlaces（地點清單）模組就緒');
+})();

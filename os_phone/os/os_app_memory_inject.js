@@ -1,0 +1,955 @@
+// ----------------------------------------------------------------
+// [檔案] os_app_memory_inject.js (V2：wx + 電話 + 微薄)
+// 路徑：os_phone/os/os_app_memory_inject.js
+// 職責：把「角色在手機 app 上跟你的近期互動」反向注入酒館原生生成。
+//       涵蓋三個預設應用：微信/電話(OS_DB api_chats) + 微薄(OS_DB wb_posts)。
+//       ──「唯讀注入、不貼回 chat」（跟狀態面板 state_runtime / 向量記憶 os_vector_inject 同款）──
+//       所以不會造成「app 對話被複製進酒館正文 → app 又把酒館正文當記憶讀回 → 重複」的問題。
+//       做法照 os_vector_inject.js：
+//         GENERATION_STARTED → 掃最近幾樓酒館對話找「在場角色」→ 抓他們 api_chats 對話 + wb_posts 動態
+//         → injectPrompts({once:true}) 塞進這一輪主模型 system prompt（用完即清、不寫進 chat）
+//       只在「酒館（非獨立）」跑；scope 到當前劇情提到的角色 + 每人最近 N 條，避免脹 token。
+//       插件 app（創造室）：透過 st.remember 寫進統一桶 OS_DB.app_memory；每-app 開關
+//       (localStorage 'os_app_mem_plugin_<appId>'，預設關)開了才注入；展廳 UI 之後做。
+// 依賴：window.TavernHelper.injectPrompts/getChatMessages/getLastMessageId
+//       window.OS_DB.getAllApiChats / getAllWbPosts
+// 關閉：localStorage['os_app_mem_inject_enabled'] = '0'（預設開）
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    console.log('📱 [App Memory Injector] 載入');
+    const win = window.parent || window;
+
+    const INJECT_ID = 'aurelia_app_memory';
+    const FLAG_KEY = 'os_app_mem_inject_enabled';
+
+    // 🚪 世界門（11-15）：主角進視差世界不帶手機。
+    //   11-15：世界門另一邊多半沒有現代手機——人在世界裡時，手機記憶、手機上剛發生的事、應用資料、聊天室代號都不送，
+    //   不然奧瑞亞的聯絡人和對話每輪跟進世界。手機上這段時間收到的訊息不會丟：事件簿沒送就還留著，撤離回來那一輪才一起看到。
+    //   網頁版同一條規則在 os_api_engine 的 _buildStandaloneContext（問同一支 inWorld）。
+    async function inWorld() {
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.getCurrentWorld !== 'function') return false;
+        try { return !!(await G.getCurrentWorld()); } catch (e) { return false; }
+    }
+    const RECENT_SCAN = 8;      // 掃最近幾樓酒館對話，找「在場角色」
+    const PER_CHAT_CHARS = 700; // 每個聊天室從最新往回帶，累積到這麼多字為止（聊天一句很短，只數句數會截在話題中間）
+    const PER_CHAT_MSGS = 30;   // 同上，句數上限
+    const PER_CHAR_MSGS = 6;    // 插件記憶桶每個角色帶最近幾條
+    const PER_CHAR_POSTS = 3;   // 每個在場角色帶最近幾則 微薄 動態
+    const POST_COMMENTS = 3;    // 每則動態帶最近幾條留言
+    const MAX_CHARS = 6;        // 最多注入幾個角色（防爆 token）
+    const LINE_MAX = 80;        // 單行截斷字數
+    let _lastUninject = null;
+
+    // 📲 統一「app 資料回傳酒館」：開關開的 app → 程式自動把它存的資料注入酒館，不靠 app 自己呼叫 remember、不用教生成 AI。
+    //    純應用：讀它自己 saveData/dbSave 的桶。共用面板：讀 vnpanel:<tagId> 桶裡「應用那條」（使用者發的、生成的）；正文那條不落地、不回傳。
+    const APPDATA_INJECT_ID = 'aurelia_app_data';
+    const MAX_APPS = 6;          // 最多回傳幾個 app（防爆 token）
+    const PER_APP_MAX = 1500;    // 每個 app 回傳字數上限
+    let _lastAppDataUninject = null;
+
+    function _enabled() { try { return localStorage.getItem(FLAG_KEY) !== '0'; } catch (e) { return true; } }
+    function _clean(s) { return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+    function _cut(s) { s = _clean(s); return s.length > LINE_MAX ? s.slice(0, LINE_MAX) + '…' : s; }
+    function _userName() {
+        let n = '';
+        try { if (win.OS_API && win.OS_API.getGlobalUserName) n = win.OS_API.getGlobalUserName() || ''; } catch (e) {}
+        n = String(n).replace(/\*+/g, '').trim();   // 使用者角色名帶了 markdown 粗體記號就剝掉，別原樣送進 prompt
+        return n || '你';
+    }
+
+    // 抓最近幾樓酒館對話文字（找在場角色用）
+    async function _recentChatText() {
+        try {
+            const th = win.TavernHelper;
+            if (!th || !th.getChatMessages) return '';
+            let lastId = -1;
+            try { lastId = await th.getLastMessageId(); } catch (e) {}
+            let msgs;
+            if (lastId >= 0) {
+                const start = Math.max(0, lastId - (RECENT_SCAN - 1));
+                msgs = await th.getChatMessages(`${start}-${lastId}`);
+            } else {
+                msgs = await th.getChatMessages(-1);
+            }
+            if (!Array.isArray(msgs)) return '';
+            return msgs.map(m => m.message || m.mes || m.content || '').join('\n');
+        } catch (e) { return ''; }
+    }
+
+    // 這條是不是「在手機上真的發生、正文裡沒有」的訊息（跳過紅包/貼圖/系統，也跳過跑團同步進來的劇情訊息）
+    function _isAppMsg(m) { return !!(m && (!m.type || m.type === 'msg') && m._story == null && !m.recalled && _clean(m.content)); }   // 撤回的不回傳酒館
+    // 格式說明裡的佔位字（AI 常照字面寫 [Char] 當發話人，存下來就變成一個叫 Char 的人）
+    function _isPlaceholderName(n) { return /^\s*(?:\{\{\s*(?:char|user)\s*\}\}|char|user)\s*$/i.test(String(n == null ? '' : n)); }
+    // 一條 微信/電話 訊息 → 一行
+    function _chatLine(m, userName, charName, isGroup) {
+        if (!_isAppMsg(m)) return '';
+        let who;
+        if (m.isMe) who = userName;
+        else if (!isGroup) who = charName;   // 私聊對面只有聊天室那一位；存下來的發話人可能是 AI 照抄的「Char」，不可信
+        else {
+            who = m.senderName || m.sender || '';
+            if (!who || _isPlaceholderName(who)) who = '群裡有人';
+        }
+        let text = m.content;
+        // 📷 相簿照片在訊息裡只是圖庫編號 → 換成對方看過寫下的那句
+        try { const _pt = win.wxApp && win.wxApp.photoContextText; if (_pt) text = _pt(m, text); } catch (e) {}
+        // 分享卡片：聊天室裡畫成卡片，交給劇情的要講人話
+        text = String(text == null ? '' : text)
+            .replace(/\[\s*AppShare\s*[:：]\s*([^|\]]*)\|([^|\]]*)\|?([^\]]*)\]/gi, function (_, src, t, x) { return '（分享了「' + src.trim() + '」上的一則：' + t.trim() + (x.trim() ? '——' + x.trim() : '') + '）'; })
+            .replace(/\[\s*WbShare\s*[:：]\s*([^|\]]*)\|([^\]]*)\]/gi, function (_, au, x) { return '（分享了 @' + au.trim() + ' 的微博：' + x.trim() + '）'; });
+        return `・${who}：${_cut(text)}`;
+    }
+    // 🚨 先挑出「手機上發生的」再取最後幾條。以前反過來（先取最後 6 條再濾）：
+    //    跑團同步把正文裡的聊天室也塞進同一串，最後 6 條常常全是劇情訊息 → 濾完變空，你在微信打的話永遠回不去酒館。
+    //    從最新往回帶到 PER_CHAT_CHARS 字：以前固定 6 句，一問一答加兩個表情包就用完了，
+    //    「約吃飯」只剩後半段「下課來接」，主模型看不懂接什麼。
+    //    before：只取這個時間點以前的（之後的那些這一輪另外黏在她那句話前面，這裡不重複）
+    function _appLines(chat, userName, name, before) {
+        const ms = (chat && Array.isArray(chat.messages)) ? chat.messages.filter(function (m) {
+            return _isAppMsg(m) && !(before && m.timestamp && m.timestamp > before);
+        }) : [];
+        const isGroup = !!(chat && chat.isGroup);
+        const out = [];
+        let used = 0;
+        for (let i = ms.length - 1; i >= 0 && out.length < PER_CHAT_MSGS; i--) {
+            const l = _chatLine(ms[i], userName, name, isGroup);
+            if (!l) continue;
+            if (out.length && used + l.length > PER_CHAT_CHARS) break;
+            out.unshift(l);
+            used += l.length;
+        }
+        return out;
+    }
+    // 最近有沒有在手機上聊過：劇情房看「送出時正文到第幾樓」、還沒蓋樓號的＝上一輪之後才打的；
+    //   一般聯絡人沒有樓號，看送出時間（RECENT_HOURS 小時內）
+    const RECENT_HOURS = 6;
+    function _recentlyActive(chat, lastFloor) {
+        const ms = (chat && Array.isArray(chat.messages)) ? chat.messages : [];
+        const since = Date.now() - RECENT_HOURS * 3600 * 1000;
+        for (let i = ms.length - 1; i >= 0; i--) {
+            const m = ms[i];
+            if (!_isAppMsg(m)) continue;
+            if (chat.storyKey) {
+                if (m._afterFloor == null) return true;
+                if (lastFloor >= 0 && m._afterFloor >= lastFloor - RECENT_SCAN) return true;
+            } else if (m.timestamp && m.timestamp >= since) return true;
+        }
+        return false;
+    }
+
+    // 微薄：依作者(角色)分組（只收別人發的，isMe 是你自己發的不算角色記憶）
+    async function _wbByAuthor(curCid) {
+        try {
+            if (!win.OS_DB || !win.OS_DB.getAllWbPosts) return {};
+            const posts = (await win.OS_DB.getAllWbPosts()) || [];
+            const by = {};
+            for (let i = 0; i < posts.length; i++) {
+                const p = posts[i];
+                if (!p || p.isMe) continue;
+                if (p.tavernChatId != null && p.tavernChatId !== curCid) continue;   // 🔒 只收當前劇情的微薄（沒蓋章的舊資料保留）
+                const name = p.user;
+                if (!name) continue;
+                (by[name] = by[name] || []).push(p);
+            }
+            return by;
+        } catch (e) { return {}; }
+    }
+
+    // 她在微博上用的名字（留言的作者欄存的是這個）
+    function _wbMyName() {
+        try { const A = win.WB_ACCOUNT; if (A && A.getCurrentAccount) { const a = A.getCurrentAccount() || {}; return String(a.weiboNickname || a.realName || '').trim(); } } catch (e) {}
+        return '';
+    }
+    // 某角色的近期 微薄 動態 → 多行（發文 + 該文近期留言）
+    //   before：她在這之後留的言這一輪由事件簿送（排在她那句話前面），這裡不重複
+    function _wbLines(posts, before) {
+        const myWb = _wbMyName();
+        const out = [];
+        const recent = posts.slice(-PER_CHAR_POSTS);
+        for (let i = 0; i < recent.length; i++) {
+            const p = recent[i];
+            const c = _cut(p.content);
+            if (c) out.push(`・發了微薄：${c}`);
+            if (Array.isArray(p.comments) && p.comments.length) {
+                p.comments.filter(function (cm) {
+                    return !(before && myWb && cm && typeof cm === 'object' && cm.author === myWb && cm.time > before);
+                }).slice(-POST_COMMENTS).forEach(function (cm) {
+                    const who = (cm && typeof cm === 'object') ? (cm.author || '') : '';
+                    const txt = _cut((cm && typeof cm === 'object') ? cm.content : cm);
+                    if (txt) out.push(`　└ ${who}：${txt}`);
+                });
+            }
+        }
+        return out;
+    }
+
+    // 插件記憶桶(app_memory)：每-app 小開關(localStorage，預設關)，開了才注入
+    function _pluginEnabled(appId) { try { return localStorage.getItem('os_app_mem_plugin_' + appId) === '1'; } catch (e) { return false; } }
+    async function _pluginMemByChar() {
+        try {
+            if (!win.OS_DB || !win.OS_DB.getAllAppMemory) return {};
+            const recs = (await win.OS_DB.getAllAppMemory()) || [];
+            const by = {};
+            for (let i = 0; i < recs.length; i++) {
+                const r = recs[i];
+                if (!r || !r.charName || !Array.isArray(r.entries) || !r.entries.length) continue;
+                if (!_pluginEnabled(r.appId)) continue;       // 該 app 開關沒開 → 跳過
+                (by[r.charName] = by[r.charName] || []).push(r);
+            }
+            return by;
+        } catch (e) { return {}; }
+    }
+    function _pluginLines(recs, curCid) {
+        const out = [];
+        for (let i = 0; i < recs.length; i++) {
+            const es = recs[i].entries.filter(function (e) { return e && (e.tavernChatId == null || e.tavernChatId === curCid); }).slice(-PER_CHAR_MSGS);
+            for (let k = 0; k < es.length; k++) {
+                const t = _cut(es[k].text); if (!t) continue;
+                const who = es[k].speaker || '';
+                out.push(who ? `・${who}：${t}` : `・${t}`);
+            }
+        }
+        return out;
+    }
+
+    // 組「手機近況」文字（兩版共用的唯一真相）：recentText＝最近正文＋這次輸入，用來篩「在場角色」。
+    //   酒館端由 injectAppMemory 包成 injectPrompts；PWA 端由 _buildStandaloneContext 的
+    //   app_memory 那一格取這份塞進 messages（PWA 沒有 injectPrompts）。
+    async function buildAppMemoryBlock(recentText, lastFloor, before) {
+        try {
+            if (!_enabled()) return '';
+            if (!win.OS_DB) return '';
+            if (lastFloor == null) lastFloor = -1;
+
+            // 🔒 分艙隔離：只注入「當前劇情」的 app 資料（酒館＝chatId、PWA＝storyId，同一支 currentChatId）
+            const curCid = (win.OS_DB.currentChatId) ? win.OS_DB.currentChatId() : null;
+            if (curCid == null) { console.warn('📱 [App Memory Injector] 取不到當前劇情 id → 為免跨卡污染，本輪不注入'); return ''; }
+
+            // 候選：名字 → { chat, posts, plugins, active }（微信/電話來自 api_chats、微薄來自 wb_posts）
+            //   群聊用「群聊：群名」當鍵，跟私聊分開放
+            const cand = {};
+            const chats = (win.OS_DB.getAllApiChats ? (await win.OS_DB.getAllApiChats()) : {}) || {};
+            Object.keys(chats).forEach(function (id) {
+                const c = chats[id];
+                if (!c) return;
+                // 🔒 只收當前劇情建立的對話。沒蓋章的一律保留 —— 跟 OS_DB.getApiChatsForCurrentCard 同一把尺：
+                //    PWA 以前根本取不到分艙鑰匙、資料全是沒蓋章的，濾掉就等於這個注入源在 PWA 永遠是空的。
+                if (c.tavernChatId != null && c.tavernChatId !== curCid && !_isLobby(c)) return;
+                if (!_backToStory(c)) return;   // 聊天設置 → 隔離 →「帶回劇情」關掉的（大廳的人預設也不帶）
+                const name = c.name || c.realName || '';
+                if (!name || name.length < 2) return;
+                const key = c.isGroup ? ('群聊：' + name) : name;
+                const slot = (cand[key] = cand[key] || {});
+                slot.chat = c;
+                slot.match = name;
+                if (_recentlyActive(c, lastFloor)) slot.active = true;
+            });
+            const wbBy = await _wbByAuthor(curCid);
+            Object.keys(wbBy).forEach(function (name) {
+                if (!name || name.length < 2) return;
+                (cand[name] = cand[name] || {}).posts = wbBy[name];
+            });
+            const pluginBy = await _pluginMemByChar();
+            Object.keys(pluginBy).forEach(function (name) {
+                if (!name || name.length < 2) return;
+                (cand[name] = cand[name] || {}).plugins = pluginBy[name];
+            });
+            const names = Object.keys(cand);
+            if (!names.length) return '';
+
+            const recent = String(recentText || '');
+
+            // scope：劇情近期有提到名字的，加上最近剛在手機上聊過的（剛傳完微信就回劇情，對方當然記得）
+            //   剛聊過的排前面，總數封頂 MAX_CHARS
+            const present = [];
+            names.filter(function (k) { return cand[k].active; })
+                .concat(names.filter(function (k) { return !cand[k].active && recent && recent.includes(cand[k].match || k); }))
+                .forEach(function (k) { if (present.length < MAX_CHARS && present.indexOf(k) < 0) present.push(k); });
+            if (!present.length) return '';
+
+            const userName = _userName();
+            let block = `<手機記憶 規則="下列是更早以前角色在手機 app（微信/微薄/電話等）上跟${userName}的互動，都已經發生過、劇情也已經接過了。寫作時記得並延續，別當沒發生；但不是現在正在發生的事，不要再回應一次，也不要照抄這個格式。">`;
+            let any = false;
+            for (let i = 0; i < present.length; i++) {
+                const name = present[i];
+                const info = cand[name];
+                const lines = [];
+                if (info.chat) _appLines(info.chat, userName, info.match || name, before).forEach(function (l) { lines.push(l); });
+                if (info.posts) _wbLines(info.posts, before).forEach(function (l) { lines.push(l); });
+                if (info.plugins) _pluginLines(info.plugins, curCid).forEach(function (l) { lines.push(l); });
+                if (!lines.length) continue;
+                block += `\n〔${name}〕\n` + lines.join('\n');
+                any = true;
+            }
+            block += `\n</手機記憶>`;
+            if (!any) return '';
+
+            console.log(`📱 [App Memory Injector] ${present.length} 個在場角色的手機近況（微信/微薄/電話）`);
+            return block.trim();
+        } catch (e) {
+            console.warn('[App Memory Injector] 組文字失敗:', (e && e.message) || e);
+            return '';
+        }
+    }
+
+    // ── 手機上剛發生的事：上一段劇情之後、她這句話之前，在手機上聊的、發生的 ──
+    //    組法、送過沒、重新生成送哪一批，都在手機事件簿（os_phone_events.js），酒館與 PWA 共用。
+    //    這裡只做兩件事：把微信登記成事件簿的一個來源；酒館那條把它插在她那句話前面（深度 1）。
+    //    送過的就退進上面那塊回顧當背景，不會每輪都像剛發生一樣再送一次（不然 AI 會一直重複微信裡聊過的內容）。
+    const NOW_INJECT_ID = 'aurelia_phone_now';
+    const NOW_MAX_CHARS = 2400;    // 一間一輪最多帶這麼多字（從最新往回，太多就截掉最舊的）
+    let _nowUninject = null;
+    let _nowBatch = null;   // 這一輪事件簿送了什麼 { from, keys }：背景那兩塊要排掉，同一件事不出現兩次
+
+    // 聊天設置 → 隔離 →「帶回劇情」：沒動過的照「吃這本的劇情」走（關了劇情的那些人本來就跟這本故事無關）
+    function _isLobby(c) { return !!(c && win.OS_DB && c.tavernChatId === win.OS_DB.LOBBY_ID); }
+    function _backToStory(c) {
+        if (!c) return false;
+        if (c.noBack === true) return false;
+        if (c.noBack === false) return true;
+        if (_isLobby(c)) return false;          // 常駐角色：預設不帶，要的話在聊天設置打開
+        return c.noHistory !== true;
+    }
+    // 一則 → 一行（系統那種也要：外送付了、紅包收了…都是手機上發生的事）
+    function _nowLine(m, userName, charName, isGroup) {
+        if (!m || m._story != null) return '';                  // 劇情同步進來的，本來就在正文裡
+        if (m.sentWhileBlocked || m._blockedNotice) return '';  // 對方沒收到的
+        if (m.recalled) return '（' + (m.isMe ? userName : charName) + '撤回了一則訊息）';
+        if (m.type === 'system') { const t = _clean(m.content); return t ? '（' + t + '）' : ''; }
+        return _chatLine(m, userName, charName, isGroup);
+    }
+    // 事件簿的微信來源：from 之後每一間聊了什麼
+    async function _wxSince(cid, from) {
+        if (!win.OS_DB || !win.OS_DB.getAllApiChats) return [];
+        const chats = (await win.OS_DB.getAllApiChats()) || {};
+        const userName = _userName();
+        const rooms = [];
+        Object.keys(chats).forEach(function (id) {
+            const c = chats[id];
+            if (!c || !Array.isArray(c.messages)) return;
+            // 只送屬於這個故事的；常駐角色（大廳章）要她在聊天設置打開「帶回劇情」才送，送進當下這本。
+            //   在故事裡傳過訊息的聊天室，存檔時就會被記成這個故事的，所以這裡不會漏掉正在玩的那本。
+            if (c.tavernChatId !== cid && !_isLobby(c)) return;
+            if (!_backToStory(c)) return;
+            const name = c.name || c.realName || '';
+            if (!name) return;
+            const ms = c.messages.filter(function (m) { return m && m.timestamp && m.timestamp > from; });
+            if (!ms.length) return;
+            const lines = [];
+            let used = 0;
+            for (let i = ms.length - 1; i >= 0; i--) {
+                const l = _nowLine(ms[i], userName, name, !!c.isGroup);
+                if (!l) continue;
+                if (lines.length && used + l.length > NOW_MAX_CHARS) break;
+                lines.unshift(l);
+                used += l.length;
+            }
+            if (lines.length) rooms.push({ name: c.isGroup ? ('群聊：' + name) : name, last: ms[ms.length - 1].timestamp, lines: lines });
+        });
+        return rooms;
+    }
+    // 事件簿的微博來源：她發的、她留的言、別人在她貼文底下的留言（別人自己發的動態是刷出來的世界，不算她在手機上做的事）
+    function _wbMedia(m) {
+        if (!m) return '';
+        const PI = win.OS_PHONE_IMAGE;
+        const pic = function (v) { v = String(v || ''); return (!v || /^(data:|https?:)/.test(v)) ? '' : ((PI && PI.displayText) ? PI.displayText(v) : v); };
+        if (m.type === 'image') { const d = m.aiDesc || pic(m.desc); return '（附了一張照片' + (d ? '：' + _cut(d) : '') + '）'; }
+        if (m.type === 'images') return '（附了' + ((m.list || []).length || '幾') + '張照片）';
+        if (m.type === 'video') return '（附了影片' + (m.title ? '：' + _cut(m.title) : '') + '）';
+        if (m.type === 'vote') return '（發起投票' + (m.title ? '：' + _cut(m.title) : '') + '）';
+        if (m.type === 'location') return '（打卡' + (m.name ? '：' + _cut(m.name) : '') + '）';
+        return '';
+    }
+    async function _wbSince(cid, from) {
+        if (!win.OS_DB || !win.OS_DB.getAllWbPosts) return [];
+        const posts = (await win.OS_DB.getAllWbPosts()) || [];
+        const me = _userName();
+        const myWb = _wbMyName();
+        const evs = [];
+        posts.forEach(function (p) {
+            if (!p || (p.tavernChatId != null && p.tavernChatId !== cid && p.tavernChatId !== win.OS_DB.LOBBY_ID)) return;
+            if (p.isMe && p.timestamp > from) {
+                const t = _cut(p.content) + _wbMedia(p.media);
+                if (t) evs.push({ at: p.timestamp, line: '・' + me + '發了一則微博：' + t });
+            }
+            (Array.isArray(p.comments) ? p.comments : []).forEach(function (cm) {
+                if (!cm || typeof cm !== 'object' || !(cm.time > from)) return;
+                const txt = _cut(cm.content);
+                if (!txt) return;
+                const mine = !!myWb && cm.author === myWb;
+                if (mine) evs.push({ at: cm.time, line: '・' + me + '在' + (p.isMe ? '自己' : ((p.user || '別人') + '的')) + '微博底下留言：' + txt });
+                else if (p.isMe) evs.push({ at: cm.time, line: '・' + (cm.author || '有人') + '在' + me + '的微博底下留言：' + txt });
+            });
+        });
+        if (!evs.length) return [];
+        evs.sort(function (a, b) { return a.at - b.at; });
+        return [{ name: '微博', last: evs[evs.length - 1].at, lines: evs.map(function (e) { return e.line; }) }];
+    }
+
+    // 事件簿的創作室 app 來源：開了「記憶回傳酒館」的 app，有新東西才送一次
+    //   共用面板：她在 app 裡新增／改過的那幾筆（有時間可比）；純應用：它存的那份現況，跟上次送出的不一樣才送整份
+    function _hash(t) { let h = 0; t = String(t || ''); for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) | 0; return t.length + ':' + h; }
+    function _entryText(e) {
+        const f = Array.isArray(e.fields) ? e.fields.map(function (x) { return _clean(x); }).filter(Boolean) : [];
+        return (e.tag ? e.tag + '：' : '') + f.join('｜');
+    }
+    async function _appsSince(cid, from, snaps) {
+        const out = [];
+        const list = await _appDataList();
+        list.forEach(function (a) {
+            if (a.entries) {
+                const ents = a.entries.filter(function (e) { return (e.ts > from) || (e.edited > from); });
+                if (!ents.length) return;
+                out.push({
+                    name: a.name,
+                    last: Math.max.apply(null, ents.map(function (e) { return Math.max(e.ts || 0, e.edited || 0); })),
+                    lines: ents.map(function (e) { return '・' + ((e.ts > from) ? '' : '改了一筆：') + _entryText(e); })
+                });
+                return;
+            }
+            const key = 'app:' + a.id;
+            const h = _hash(a.body);
+            if (snaps && snaps[key] === h) return;
+            out.push({ name: a.name, last: Date.now(), lines: ['・app 裡記的東西現在是這樣：', a.body], snap: { key: key, val: h } });
+        });
+        return out;
+    }
+
+    (function registerSources(n) {
+        const B = win.OS_PHONE_EVENTS;
+        if (B && B.addSource) { B.addSource('wx', _wxSince); B.addSource('wb', _wbSince); B.addSource('apps', _appsSince); return; }
+        if (n > 0) setTimeout(function () { registerSources(n - 1); }, 500);
+    })(20);
+
+    // 酒館那條：插在她那句話前面。回傳 from（回顧那塊要排除這之後的，免得同一句出現兩次）
+    async function injectPhoneNow(type) {
+        try { _nowUninject && _nowUninject(); } catch (e) {}
+        _nowUninject = null;
+        _nowBatch = null;
+        const B = win.OS_PHONE_EVENTS;
+        if (!B) return null;
+        const r = await B.build((type === 'regenerate' || type === 'swipe') ? 'redo' : '');
+        _nowBatch = { from: r.from, keys: r.keys || [] };
+        if (r.text && win.TavernHelper && win.TavernHelper.injectPrompts) {
+            // 深度 1＝排在最後一則（她這句話）的前面
+            const x = win.TavernHelper.injectPrompts([{ id: NOW_INJECT_ID, content: r.text, position: 'in_chat', depth: 1, role: 'system' }], { once: true });
+            _nowUninject = (x && x.uninject) || null;
+        }
+        return r.from;
+    }
+
+    async function injectAppMemory(type) {
+        try {
+            try { _lastUninject && _lastUninject(); } catch (e) {}
+            _lastUninject = null;
+
+            if (win.__AURELIA_SUMMARIZING) return;            // 大總結生成不摻
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 這條路酒館 only（PWA 走 app_memory 那一格）
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            if (await inWorld()) { try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; _nowBatch = null; try { win.OS_PHONE_EVENTS && win.OS_PHONE_EVENTS.cancel(); } catch (e) {} return; }   // 🚪 世界裡沒有手機：手機那三塊都不送
+            if (type === 'quiet' || type === 'impersonate' || type === 'continue') { await injectAppData(null); return; }   // 不是使用者說了一句話的那種：事件簿不送，app 資料只帶送過的
+
+            const before = await injectPhoneNow(type);
+            await injectAppData(_nowBatch);
+
+            let lastFloor = -1;
+            try { lastFloor = await win.TavernHelper.getLastMessageId(); } catch (e) {}
+            const content = await buildAppMemoryBlock(await _recentChatText(), lastFloor, before);
+            if (!content) return;
+
+            const result = win.TavernHelper.injectPrompts([{
+                id: INJECT_ID,
+                content,
+                position: 'in_chat',
+                depth: 2,   // 手機/工坊 app 記憶＝背景事實，放深一點(2)不搶戲；VN組件說明是格式規則維持 0 高注意
+                role: 'system'
+            }], { once: true });
+            _lastUninject = (result && result.uninject) || null;
+        } catch (e) {
+            console.warn('[App Memory Injector] 失敗:', (e && e.message) || e);
+        }
+    }
+
+    // 😺 表情包清單注入：正文裡的手機要發表情，模型得知道手機裡有哪些。
+    //    用的是「這個故事」在劇情手機「···」→ 表情包 挑的那一包（WX_STICKER.storyLibId，一個故事一個），
+    //    不是微信 app 那個選擇。奇幻、古風那種沒手機的故事不會去挑＝完全不注入，不白佔字數。
+    var STICKER_INJECT_ID = 'aurelia_sticker_list';
+    var _lastStickerUninject = null;
+    async function injectStickers() {
+        try {
+            try { _lastStickerUninject && _lastStickerUninject(); } catch (e) {}
+            _lastStickerUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var block = '';
+            try {
+                var W = win.WX_STICKER;
+                block = (W && W.aiPromptBlock && W.storyLibId) ? W.aiPromptBlock(W.storyLibId()) : '';
+            } catch (e) {}
+            if (!block) return;
+            var result = win.TavernHelper.injectPrompts([{
+                id: STICKER_INJECT_ID, content: block, position: 'in_chat', depth: 2, role: 'system'
+            }], { once: true });
+            _lastStickerUninject = (result && result.uninject) || null;
+        } catch (e) {
+            console.warn('[Sticker Injector] 失敗:', (e && e.message) || e);
+        }
+    }
+
+    // 🎴 VN組件說明注入：把「啟用中的 VN組件」使用說明(os_vn_extra_tags_prompt，由 syncActiveTagsToLocal
+    //    在 啟用/停用 時即時組好)注入酒館原生生成 → 啟用/停用 = 馬上換注入層，取代手動貼世界書。
+    var VN_TAGS_INJECT_ID = 'aurelia_vn_tags';
+    var _lastVnTagsUninject = null;
+    async function injectVnTags() {
+        try {
+            try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {}
+            _lastVnTagsUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            // 常駐組件：每輪都注（syncActiveTagsToLocal 已只放常駐的進這份）
+            var constBlob = '';
+            try { constBlob = localStorage.getItem('os_vn_extra_tags_prompt') || ''; } catch (e) {}
+            // 關鍵字組件：抓最近約 3 輪正文＋這次使用者輸入，命中關鍵字才注入（省 token）
+            var kwBlock = '';
+            try {
+                var raw = localStorage.getItem('os_vn_tags_keyword') || '';
+                var kwList = raw ? JSON.parse(raw) : [];
+                if (Array.isArray(kwList) && kwList.length && win.TavernHelper.getChatMessages) {
+                    var lastId = 0;
+                    try { lastId = await win.TavernHelper.getLastMessageId(); } catch (e) {}
+                    var start = Math.max(0, (lastId || 0) - 5);   // 最近約 3 輪（user/AI 交錯，抓 6 則）
+                    var msgs = [];
+                    try { msgs = (await win.TavernHelper.getChatMessages(start + '-' + lastId)) || []; } catch (e) {}
+                    var recent = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n').toLowerCase();
+                    if (recent.trim()) {
+                        var hit = kwList.filter(function (k) {
+                            return k && Array.isArray(k.keywords) && k.keywords.some(function (w) {
+                                w = String(w || '').trim().toLowerCase();
+                                return w && recent.indexOf(w) !== -1;
+                            });
+                        });
+                        if (hit.length) {
+                            kwBlock = '# [📱模式｜VN組件·情境觸發] 下列面板因最近劇情提到相關內容而啟用，依格式在正文/區塊內使用：\n'
+                                + hit.map(function (k) { return k.snippet; }).join('\n');
+                        }
+                    }
+                }
+            } catch (e) {}
+            var spec = [String(constBlob).trim(), String(kwBlock).trim()].filter(Boolean).join('\n\n');
+            if (!spec) return;
+            var result = win.TavernHelper.injectPrompts([{
+                id: VN_TAGS_INJECT_ID,
+                content: spec,
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastVnTagsUninject = (result && result.uninject) || null;
+            console.log('🎴 [VN Tags Injector] 注入 VN組件說明（常駐' + (kwBlock ? ' + 觸發命中' : '') + '）');
+        } catch (e) { console.warn('[VN Tags Injector] 失敗:', (e && e.message) || e); }
+    }
+
+    // ⚡ 畫面特效清單注入：內建+創作室已存特效彙成白名單（#fx-id# 用法同 SFX），只在「最近劇情
+    //    是 VN 格式」的聊天注入（掃到 [Char| / <ChapterCard 才注），非 VN 卡不吃這份 token。os_fx_inject=0 可關。
+    var FX_LIST_INJECT_ID = 'aurelia_fx_list';
+    var _lastFxUninject = null;
+    async function injectFxList() {
+        try {
+            try { _lastFxUninject && _lastFxUninject(); } catch (e) {}
+            _lastFxUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            try { if (localStorage.getItem('os_fx_inject') === '0') return; } catch (e) {}
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var fx = win.OS_FX || window.OS_FX;
+            if (!fx || !fx.listForPrompt) return;
+            // 只在 VN 格式聊天注入：掃最近幾則正文有沒有 VN 標記
+            var isVn = false;
+            try {
+                var lastId = 0;
+                try { lastId = await win.TavernHelper.getLastMessageId(); } catch (e) {}
+                var start = Math.max(0, (lastId || 0) - 5);
+                var msgs = (await win.TavernHelper.getChatMessages(start + '-' + lastId)) || [];
+                var recent = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
+                isVn = recent.indexOf('[Char|') !== -1 || recent.indexOf('<ChapterCard') !== -1;
+            } catch (e) {}
+            if (!isVn) return;
+            var list = fx.listForPrompt();
+            if (!list) return;
+            var content = '# [📱模式｜畫面特效] 正文句尾可穿插 #fx-id#（用法同 #SFXID#，不可單獨一行）。'
+                + '只用下列 ID、不可自創；大多數輪次都不需要，一章最多 1-2 次。標（持續）者換 [Bg] 自動停止：\n' + list;
+            var result = win.TavernHelper.injectPrompts([{
+                id: FX_LIST_INJECT_ID,
+                content: content,
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastFxUninject = (result && result.uninject) || null;
+            console.log('⚡ [FX List Injector] 注入畫面特效清單');
+        } catch (e) { console.warn('[FX List Injector] 失敗:', (e && e.message) || e); }
+    }
+
+    // ── 💬 手機聊天室 ID 對照表：掃最近劇情的 [Chat: 名|ID]，每輪提醒 AI「沿用既有 ID、別因改群名而亂編」──
+    //    （配合 wx 跑團同步改成按 ID 分群：AI 改名沒關係，ID 不變就合回同一間）
+    var WX_CHATROOM_INJECT_ID = 'aurelia_wx_chatroom_ids';
+    var _lastWxRoomUninject = null;
+    async function injectWxChatrooms() {
+        try {
+            try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {}
+            _lastWxRoomUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;  // 酒館 only
+            if (await inWorld()) return;   // 🚪 世界裡沒有手機：聊天室代號不送
+            var th = win.TavernHelper;
+            if (!th || !th.injectPrompts || !th.getChatMessages) return;
+            var lastId = 0;
+            try { lastId = await th.getLastMessageId(); } catch (e) {}
+            // 掃全樓（去重靠 id）：跑團動輒上百樓、舊房間 id 也要記得；只掃最近 N 樓→久沒出現的房間 id 會掉、改群名就裂
+            var msgs = [];
+            try { msgs = (await th.getChatMessages('0-' + lastId)) || []; } catch (e) {}
+            var text = msgs.map(function (m) { return (m && (m.message || m.mes)) || ''; }).join('\n');
+            // AI 整理產出的「舊亂id→統一id」對應表（微信右上「＋」→「整理聊天室」存的，按 tavern chatId 隔離）；套上去同房只剩一筆
+            //   哪一格要問聊天 app 自己（wxApp.roomKey，寫表那邊用的同一把）：以前這裡用 _appChatId，拿不到聊天 id 時兩邊退到不同格，整理過的套不進來
+            var _roomKey = (win.wxApp && typeof win.wxApp.roomKey === 'function') ? win.wxApp.roomKey() : null;
+            var remap = {};
+            try { var _allRemap = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_id_remap')) || '{}'); remap = (_roomKey && _allRemap[_roomKey]) || {}; } catch (e) {}
+            // 整理過的正確聊天室名字（正文 AI 把代號寫進名字時）：給它看修好的，不然它看到「代號｜代號」會一直照抄
+            var fixNames = {};
+            try { var _allFix = JSON.parse((win.localStorage && win.localStorage.getItem('wx_room_fix')) || '{}'); fixNames = ((_roomKey && _allFix[_roomKey]) || {}).names || {}; } catch (e) {}
+            // 🚨🚨 每個代號的名字＝它第一次出現時的名字（之後只有 [Rename: …] 能改），跟聊天 app 取房名同一條規矩。
+            //    以前是「最後一次寫的名字」：AI 寫錯一次（09-27：新開一個群卻借了大群的 group_001），
+            //    這張表下一輪就告訴它「新群名｜group_001」，它照抄，之後大群、某人的私聊全塞進同一個代號——
+            //    寫錯的東西被當成正確答案送回去，越錯越深。代號本身（chat_003）、範本字（私聊角色账号名/群名）、空名不算名字。
+            //    代號＝英數加底線或數字（chat_003、grp01），或只有標點；純英文字（Zephyr）是人名，算數
+            var _okName = function (n) { n = String(n || '').trim(); return !!n && !(/^[A-Za-z0-9_\-.]+$/.test(n) && /[_\d]|^[.\-]+$/.test(n)) && n.indexOf('/') < 0; };
+            var map = {}, renamed = {}, order = [];
+            var _seen = function (id, nm) { if (!(id in map)) { order.push(id); map[id] = ''; } if (!map[id] && _okName(nm)) map[id] = nm.trim(); };
+            // ① <chat chatroom="名" id="穩定id"> 容器，照正文順序；代號與名字的取法跟聊天 app 同步那邊一樣
+            //   （id 屬性 > 容器裡的 [Chat: 名|ID]；名字先看 [Chat:] 那行再看 chatroom）。容器裡的 [Rename: 新名字] 才准改名
+            var re2 = /<chat\s+([^>]*?)>([\s\S]*?)<\/chat>/gi, m3;
+            while ((m3 = re2.exec(text)) !== null) {
+                var a = m3[1] || '', inner = m3[2] || '';
+                var hdr = inner.match(/^\s*\[\s*Chat\s*[:：]\s*([^|\]]*)\|?([^\]]*)\]/im);
+                var id3 = ((a.match(/(?:^|\s)id\s*=\s*["']?([^"'>]*)["']?/i) || [])[1] || '').trim() || (hdr ? hdr[2].trim() : '');
+                if (!id3) continue;
+                id3 = remap[id3] || id3;
+                var nm3 = (hdr && _okName(hdr[1])) ? hdr[1] : (a.match(/chatroom\s*=\s*["']?([^"'>]*)["']?/i) || [])[1];
+                _seen(id3, nm3);
+                var rn = inner.match(/^\s*\[\s*Rename\s*[:：]\s*(.*?)\s*\]\s*$/im);
+                if (rn && _okName(rn[1])) renamed[id3] = rn[1].replace(/^["'「『]+|["'」』]+$/g, '').trim();
+            }
+            // ② 容器外零散的 [Chat: 名|ID]：只補容器裡從沒出現過的代號
+            var re = /\[Chat[:：]\s*([^|\]]+)\|([^\]]+)\]/g, m2;
+            var outside = text.replace(/<chat\s+[^>]*?>[\s\S]*?<\/chat>/gi, '');
+            while ((m2 = re.exec(outside)) !== null) { var id = remap[(m2[2] || '').trim()] || (m2[2] || '').trim(); if (id && !(id in map)) _seen(id, m2[1]); }
+            var table = order.map(function (id) { var nm = fixNames[id] || renamed[id] || map[id]; return nm ? nm + '｜' + id : ''; }).filter(Boolean).join('、');
+            if (!table) return;
+            var result = th.injectPrompts([{
+                id: WX_CHATROOM_INJECT_ID,
+                content: '\n\n【現有手機聊天室 ID 對照】下列房間「沿用」對應 ID（寫 <chat> 容器時用對 ID：可放 chatroom 旁的 id="…" 屬性，或容器內的 [Chat: 名|ID] 那行）；ID「絕不可」改，只有全新房間才給新 ID。chatroom 照抄下表的名字，不要自己改寫——改 chatroom 不會改到畫面上的名字，劇情裡真的改名要在那間房的容器裡寫 [Rename: 新名字] 那一行。手機預設是主角的；只有換視角（這段是別人在用手機）才在 <chat> 加 owner="那個人的名字"，[With] 只是名單、順序無所謂：\n' + table + '\n\n',
+                position: 'in_chat',
+                depth: 0,
+                role: 'system'
+            }], { once: true });
+            _lastWxRoomUninject = (result && result.uninject) || null;
+            console.log('💬 [WX Chatroom ID Injector] 注入 ' + order.length + ' 間聊天室 ID 對照');
+        } catch (e) { console.warn('[WX Chatroom ID Injector] 失敗:', (e && e.message) || e); }
+    }
+
+    function _safeParse(s) { try { return JSON.parse(s); } catch (e) { return s; } }
+    function _flatten(v) { if (v == null) return ''; if (typeof v === 'string') return v.trim(); try { return JSON.stringify(v); } catch (e) { return String(v); } }
+    // ⚠️ chatId 要跟 app 端 window.getChatId()（core/void/app_runtime 注入的那支）一模一樣：酒館問聊天室、PWA 問當前故事，都沒有就是 _nochat。
+    //   以前這裡少了 ST.chatId 那步、最後退空字串：app 存在 _nochat 底下的資料這裡一筆都讀不到。劇情裡面板那份（vn_dynamic_parser）也是同一個順序
+    function _appChatId() {
+        try { var ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { var id = ST.getCurrentChatId(); if (id != null && id !== '') return String(id); } var c = ST && ST.getContext && ST.getContext(); if (c && c.chatId != null && c.chatId !== '') return String(c.chatId); if (ST && ST.chatId != null) return String(ST.chatId); } catch (e) {}
+        try { var AD = win.OS_AVS_ADAPTER; var sid = AD && AD.getStoryId && AD.getStoryId(); if (sid) return String(sid); } catch (e) {}
+        return '_nochat';
+    }
+
+    // 開了「記憶回傳酒館」的創作室 app 各自存了什麼：[{ id, name, entries }]（共用面板，她在 app 裡加的那幾筆）或 [{ id, name, body }]（純應用存的那份）
+    //   事件簿（有新東西送一次）與背景那塊（送過的當既成事實）共用這一份
+    async function _appDataList() {
+        const out = [];
+        if (!_enabled()) return out;
+        if (!win.OS_DB || !win.OS_DB.getAllPhoneApps) return out;
+        const curCid = _appChatId();
+        // 每一輪組提示詞都會跑這裡：先看哪幾個 app 開了「記憶回傳酒館」，只把那幾個讀出來。
+        //   以前整個手機 app 倉庫全讀（每筆帶整頁 html），app 一多每輪都白讀一大包；一個都沒開就整個不碰資料庫
+        const onIds = [];
+        try {
+            for (let k = 0; k < localStorage.length; k++) {
+                const key = localStorage.key(k);
+                if (key && key.indexOf('os_app_mem_plugin_') === 0 && localStorage.getItem(key) === '1') onIds.push(key.slice('os_app_mem_plugin_'.length));
+            }
+        } catch (e) {}
+        if (!onIds.length) return out;
+        let apps;
+        if (win.OS_DB.getPhoneApp) {
+            // 開關的鑰匙是字串；萬一哪個 app 的 id 是數字存進去的，用數字再找一次
+            const _get = function (id) { return win.OS_DB.getPhoneApp(id).then(function (r) { return r || (/^\d+$/.test(id) ? win.OS_DB.getPhoneApp(Number(id)) : null); }).catch(function () { return null; }); };
+            apps = (await Promise.all(onIds.map(_get))).filter(Boolean);
+            apps.sort(function (a, b) { return (b.createdAt || 0) - (a.createdAt || 0); });   // 跟 getAllPhoneApps 一樣新的在前（MAX_APPS 截的是同一批）
+        } else apps = (await win.OS_DB.getAllPhoneApps()) || [];
+        if (!apps.length) return out;
+
+        // 模板表查 isBlock：isBlock 的走共用面板那條（vnpanel 桶），其餘走 app 自己的桶
+        let tplById = {};
+        try {
+            const tpls = (win.OS_DB.getAllUITemplates ? (await win.OS_DB.getAllUITemplates()) : []) || [];
+            tpls.forEach(function (t) { if (t && t.id != null) tplById[t.id] = t; });
+        } catch (e) {}
+
+        for (let i = 0; i < apps.length && out.length < MAX_APPS; i++) {
+            const app = apps[i];
+            if (!app || app.id == null) continue;
+            if (!_pluginEnabled(app.id)) continue;                      // 該 app「記憶回傳酒館」開關沒開
+            const tpl = (app.srcTplId != null) ? tplById[app.srcTplId] : null;
+
+            // 共用面板（isBlock）：資料由 VN_PANEL_FEED 管，桶是 vnpanel:<tagId>。只回傳「應用那條」（使用者發的、生成鈕生的），
+            // 正文那條本來就在正文裡、不落地，所以不會迴圈。
+            if (tpl && tpl.isBlock) {
+                let ents = null;
+                try {
+                    const tagId = String(tpl.tagId || '').trim();
+                    // 桶的 chat 鍵要跟 VN_PANEL_FEED 存的同一支（OS_DB.currentChatId，已正規化），別用這裡的 curCid
+                    const feedCid = (win.OS_DB.currentChatId ? win.OS_DB.currentChatId() : null) || curCid;
+                    ents = (tagId && win.OS_DB.getAppData) ? (await win.OS_DB.getAppData('vnpanel:' + tagId, 'entries', feedCid)) : null;
+                } catch (e) {}
+                ents = (Array.isArray(ents) ? ents : []).filter(function (e) { return e && e.tag; });
+                if (ents.length) out.push({ id: app.id, name: app.name || tpl.tagId || 'App', entries: ents });
+                continue;
+            }
+            const parts = [];
+            // dbSave（OS_DB app_data：global + 當前 chat）
+            try {
+                if (win.OS_DB.getAppDataByApp) {
+                    const rows = (await win.OS_DB.getAppDataByApp(app.id, curCid)) || [];
+                    // app 那邊讀 scope:'chat' 時，這個聊天沒有的那把會退去讀 _nochat 那份當起點（dbLoad）：這裡也照樣補上，回傳的才是 app 畫面上那份
+                    if (curCid !== '_nochat') {
+                        const have = {};
+                        rows.forEach(function (r) { if (r.scope !== 'global') have[r.key] = 1; });
+                        const base = (await win.OS_DB.getAppDataByApp(app.id, '_nochat')) || [];
+                        base.forEach(function (r) { if (r.scope === 'chat:_nochat' && !have[r.key]) rows.push(r); });
+                    }
+                    rows.forEach(function (r) { const t = _flatten(r.value); if (t) parts.push(t); });
+                }
+            } catch (e) {}
+            // saveData（localStorage：aurelia_appdata_<appId>_*；只收 global + 當前 chat）
+            try {
+                const preG = 'aurelia_appdata_' + app.id + '_';
+                const preChatAny = preG + 'chat_';
+                const preChatCur = preG + 'chat_' + (curCid || '') + '_';
+                const preChatBase = preG + 'chat__nochat_';   // app 的 loadData 在這個聊天沒有那把時退去讀的起點（同上）
+                const keys = [];
+                for (let k = 0; k < localStorage.length; k++) keys.push(localStorage.key(k));
+                const haveCur = {};
+                keys.forEach(function (key) { if (key && key.indexOf(preChatCur) === 0) haveCur[key.slice(preChatCur.length)] = 1; });
+                keys.forEach(function (key) {
+                    if (!key || key.indexOf(preG) !== 0) return;
+                    if (key.indexOf(preChatAny) === 0 && key.indexOf(preChatCur) !== 0) {
+                        if (!(key.indexOf(preChatBase) === 0 && !haveCur[key.slice(preChatBase.length)])) return;   // 別的 chat 的→跳（_nochat 起點那份、這個聊天還沒有的除外）
+                    }
+                    const t = _flatten(_safeParse(localStorage.getItem(key)));
+                    if (t) parts.push(t);
+                });
+            } catch (e) {}
+            if (!parts.length) continue;
+            let body = parts.join('\n').trim();
+            if (body.length > PER_APP_MAX) body = body.slice(0, PER_APP_MAX) + '…';
+            out.push({ id: app.id, name: app.name || 'App', body: body });
+        }
+        return out;
+    }
+
+    // 📲 背景那塊：開了回傳的 app 裡「已經交給劇情過的」資料，當既成事實每輪帶著（跟手機記憶那塊同一種角色）。
+    //    新加的、改過還沒送的，由事件簿排在她那句話前面送一次，這裡排掉。
+    //    batch：這一輪事件簿送了什麼 { from, keys }；null＝這一輪不送事件簿（續寫、背景生成），只帶送過的
+    async function injectAppData(batch) {
+        try {
+            try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {}
+            _lastAppDataUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (win.OS_API && win.OS_API.isStandalone && win.OS_API.isStandalone()) return;   // 酒館 only
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+
+            const B = win.OS_PHONE_EVENTS;
+            const seen = B && B.peek ? await B.peek() : { from: 0, keys: [], snaps: {} };
+            const from = batch ? batch.from : seen.from;
+            const keys = (batch && batch.keys) || [];
+            const snaps = seen.snaps || {};
+
+            const list = await _appDataList();
+            const blocks = [];
+            list.forEach(function (a) {
+                if (a.entries) {
+                    const old = a.entries.filter(function (e) { return Math.max(e.ts || 0, e.edited || 0) <= from; });
+                    if (!old.length) return;
+                    let body = old.map(function (e) { return '・' + _entryText(e); }).join('\n');
+                    if (body.length > PER_APP_MAX) body = '…' + body.slice(-PER_APP_MAX);
+                    blocks.push('〔' + a.name + '〕\n' + body);
+                    return;
+                }
+                const key = 'app:' + a.id;
+                if (keys.indexOf(key) >= 0 || snaps[key] !== _hash(a.body)) return;   // 這一輪正在送、或改了還沒送
+                blocks.push('〔' + a.name + '〕\n' + a.body);
+            });
+            if (!blocks.length) return;
+
+            const block = '<手機app資料 規則="下列是使用者手機 app 裡的資料（行程／清單／設定等），劇情已經知道了。當作既成事實、劇情需與之一致，別矛盾或遺忘；但不是現在才發生的事，不要再回應一次。">\n'
+                + blocks.join('\n\n') + '\n</手機app資料>';
+            const result = win.TavernHelper.injectPrompts([{ id: APPDATA_INJECT_ID, content: block, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastAppDataUninject = (result && result.uninject) || null;
+            console.log('📲 [App Data Injector] 注入 ' + blocks.length + ' 個 app 的回傳資料');
+        } catch (e) { console.warn('[App Data Injector] 失敗:', (e && e.message) || e); }
+    }
+
+    // 🎭 地圖 NPC 番外記事注入：設施小劇場的摘要回饋給正文（番外不能憑空消失，後續劇本要能橋接）。
+    //    資料來源＝map_core 存的 localStorage 'aurelia_map_theater_log'（按 chatId 分卡），只注最近 3 條。
+    var MAP_THEATER_INJECT_ID = 'aurelia_map_theater';
+    var _lastMapTheaterUninject = null;
+    function injectMapTheater() {
+        try {
+            try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {}
+            _lastMapTheaterUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var cid = null;
+            try { var ST = win.SillyTavern; if (ST && ST.getCurrentChatId) { var c = ST.getCurrentChatId(); if (c != null && c !== '') cid = String(c); } } catch (e) {}
+            if (!cid) return;   // 🔒 chatId 隔離：取不到就不注，免跨卡污染
+            var all = {};
+            try { all = JSON.parse(localStorage.getItem('aurelia_map_theater_log') || '{}'); } catch (e) {}
+            var list = Array.isArray(all[cid]) ? all[cid] : [];
+            if (!list.length) return;
+            var lines = list.slice(0, 3).map(function (e) {
+                return '・〔' + (e.fac || '某處') + '〕' + (e.pair || '') + '：' + (e.brief || '');
+            });
+            var block = '<NPC番外記事 規則="以下是主線之外已發生的 NPC 互動番外（玩家旁觀所見）。當作既成事實：這些角色的認知、情緒與關係需與之一致，劇情合適時可自然呼應，但不要照抄或宣讀。">\n'
+                + lines.join('\n') + '\n</NPC番外記事>';
+            var result = win.TavernHelper.injectPrompts([{ id: MAP_THEATER_INJECT_ID, content: block, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastMapTheaterUninject = (result && result.uninject) || null;
+            console.log('🎭 [Map Theater Injector] 注入 ' + Math.min(3, list.length) + ' 條番外記事');
+        } catch (e) { console.warn('[Map Theater Injector] 失敗:', (e && e.message) || e); }
+    }
+
+    // 📌 進行中的委託：每一輪都帶單號和「辦成時寫收款那一行」的要求（內容由 map_core 的委託紀錄給）。
+    //    接委託那則訊息只發一次，大總結藏掉舊樓、預設把舊樓剝成摘要以後，AI 就看不到單號，收尾時不會寫收款那行、報酬進不了錢包。
+    //    這支只管酒館；網頁版同一份字由 os_api_engine 的 _buildStandaloneContext 插在同一個深度（10-20 補齊）。
+    var MAP_MISSION_INJECT_ID = 'aurelia_map_mission';
+    var _lastMapMissionUninject = null;
+    async function injectMapMission() {
+        try {
+            try { _lastMapMissionUninject && _lastMapMissionUninject(); } catch (e) {}
+            _lastMapMissionUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+            if (!M || !M.missionReminderText) return;
+            var text = await M.missionReminderText();
+            if (!text) return;
+            var result = win.TavernHelper.injectPrompts([{ id: MAP_MISSION_INJECT_ID, content: text, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastMapMissionUninject = (result && result.uninject) || null;
+            console.log('📌 [Map Mission Injector] 帶上進行中的委託');
+        } catch (e) { console.warn('[Map Mission Injector] 失敗:', (e && e.message) || e); }
+    }
+
+    // 🚪 世界門「通知主角」：主角手機收到新世界開門的通知、什麼時候能提、戴上頸環那刻寫 [Dive|…]（內容由 OS_WORLDGATE.inviteText 給）。
+    //    這支只管酒館；網頁版同一份字由 os_api_engine 的 _buildStandaloneContext 插在同一個深度。
+    var GATE_INVITE_INJECT_ID = 'aurelia_gate_invite';
+    var _lastGateInviteUninject = null;
+    async function injectGateInvite() {
+        try {
+            try { _lastGateInviteUninject && _lastGateInviteUninject(); } catch (e) {}
+            _lastGateInviteUninject = null;
+            if (win.__AURELIA_SUMMARIZING) return;
+            if (!win.TavernHelper || !win.TavernHelper.injectPrompts) return;
+            var G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+            if (!G || !G.inviteText) return;
+            var text = await G.inviteText();
+            if (!text) return;
+            var result = win.TavernHelper.injectPrompts([{ id: GATE_INVITE_INJECT_ID, content: text, position: 'in_chat', depth: 2, role: 'system' }], { once: true });
+            _lastGateInviteUninject = (result && result.uninject) || null;
+            console.log('🚪 [Gate Invite Injector] 帶上新世界的通知');
+        } catch (e) { console.warn('[Gate Invite Injector] 失敗:', (e && e.message) || e); }
+    }
+
+    // 📮 地圖「確認接取」的委託先收著：她下一句送出時接在同一則訊息裡，不另外多一樓
+    //    （多一樓的話最新一樓變成委託，資料中心只抓最新一樓，上一章的選項就拿不到了）。
+    //    酒館順序：GENERATION_STARTED → 讀輸入框 → 推進聊天 → MESSAGE_SENT（等監聽器做完）→ 畫出來 → 組 prompt，
+    //    所以在 MESSAGE_SENT 改那則的 mes，畫面、這一輪送出去的、存檔都是併好的版本。
+    async function mergeHeldMission(mesId) {
+        try {
+            var M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+            if (!M || !M.missionMergeHeld) return;
+            var ctx = (win.SillyTavern && win.SillyTavern.getContext) ? win.SillyTavern.getContext() : null;
+            var msg = ctx && ctx.chat && ctx.chat[Number(mesId)];
+            if (!msg || !msg.is_user) return;
+            var merged = await M.missionMergeHeld(msg.mes);
+            if (!merged) return;
+            msg.mes = merged;
+            try { if (ctx.saveChat) await ctx.saveChat(); } catch (e) {}
+            console.log('📮 [Map Mission] 收著的委託併進這一句送出');
+        } catch (e) { console.warn('[Map Mission] 併委託失敗:', (e && e.message) || e); }
+    }
+    //    沒打字直接按送出：酒館不會推一則她的訊息（MESSAGE_SENT 不來），委託就送不出去 →
+    //    在讀輸入框之前把收著的委託整段填進去，酒館就把它當這一句送出。只認她按的一般送出。
+    async function fillHeldMissionOnEmptySend(type, opts) {
+        try {
+            if (type && type !== 'normal') return;
+            opts = opts || {};
+            if (opts.automatic_trigger || opts.quiet_prompt || win.__AURELIA_SUMMARIZING) return;
+            var ta = win.document.getElementById('send_textarea');
+            if (!ta || String(ta.value || '').trim()) return;
+            var M = win.AUREALIS_MAP || window.AUREALIS_MAP;
+            if (!M || !M.missionHeldText) return;
+            var text = await M.missionHeldText();
+            if (!text || String(ta.value || '').trim()) return;
+            ta.value = text;
+            console.log('📮 [Map Mission] 空送出：收著的委託當這一句送出');
+        } catch (e) {}
+    }
+
+    // 🚨 酒館會 await 監聽器回傳的 Promise，組 prompt 前就等注入做完；以前監聽器沒 return，
+    //    注入是在背景跑，讀資料庫慢一點就趕不上這一輪 prompt（once 的注入還會在下一輪開頭被清掉＝整輪沒送到）。
+    //    現在把 Promise 交回去讓酒館等，但最多等 WAIT_MS，免得資料庫卡住害生成跟著卡。
+    const WAIT_MS = 2500;
+    function _waitFor(fn) { return Promise.race([Promise.resolve().then(fn).catch(function () {}), new Promise(function (r) { setTimeout(r, WAIT_MS); })]); }
+
+    function init() {
+        if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
+        if (win.tavern_events.GENERATION_STARTED) {
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(function () { return injectAppMemory(type); }); });   // dryRun 空跑不注入
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectVnTags); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectFxList); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectStickers); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectWxChatrooms); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; injectMapTheater(); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectMapMission); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectGateInvite); });
+            win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(function () { return fillHeldMissionOnEmptySend(type, opts); }); });
+        }
+        // 第二格 'extension'＝酒館助手 createChatMessages 塞的（聊天 app 的協議訊息那類），不是她送的話，不接委託
+        if (win.tavern_events.MESSAGE_SENT) win.eventOn(win.tavern_events.MESSAGE_SENT, function (mesId, src) { if (src === 'extension') return; return _waitFor(function () { return mergeHeldMission(mesId); }); });
+        // 劇情真的回來了才把這一批記成送過（生成失敗或按停，下一輪會再送一次）
+        if (win.tavern_events.MESSAGE_RECEIVED) win.eventOn(win.tavern_events.MESSAGE_RECEIVED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.commit(); });
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, function () { if (win.OS_PHONE_EVENTS) win.OS_PHONE_EVENTS.cancel(); try { _nowUninject && _nowUninject(); } catch (e) {} _nowUninject = null; try { _lastUninject && _lastUninject(); } catch (e) {} try { _lastVnTagsUninject && _lastVnTagsUninject(); } catch (e) {} try { _lastFxUninject && _lastFxUninject(); } catch (e) {} try { _lastWxRoomUninject && _lastWxRoomUninject(); } catch (e) {} try { _lastAppDataUninject && _lastAppDataUninject(); } catch (e) {} try { _lastMapTheaterUninject && _lastMapTheaterUninject(); } catch (e) {} try { _lastMapMissionUninject && _lastMapMissionUninject(); } catch (e) {} _lastUninject = null; _lastVnTagsUninject = null; _lastFxUninject = null; _lastWxRoomUninject = null; _lastAppDataUninject = null; _lastMapTheaterUninject = null; _lastMapMissionUninject = null; });
+        console.log('📱 [App Memory Injector] Ready（微信/微薄/電話 + VN組件 + app資料回傳 + 地圖番外記事）');
+    }
+
+    win.OS_APP_MEMORY_INJECT = {
+        injectAppMemory: injectAppMemory,
+        inWorld: inWorld,   // 🚪 人在視差世界裡（沒有手機）；網頁版組 context 也問這支
+        injectWxChatrooms: injectWxChatrooms,
+        buildAppMemoryBlock: buildAppMemoryBlock,   // PWA：_buildStandaloneContext 的 app_memory 那一格取這份
+        injectAppData: injectAppData,
+        isEnabled: _enabled,
+        setEnabled: function (v) { return win.AUI.lsSet(FLAG_KEY, v ? '1' : '0', '手機記憶回傳的開關'); },
+        // 插件每-app 開關（展廳 UI 之後接這兩個）
+        isPluginEnabled: _pluginEnabled,
+        setPluginEnabled: function (appId, v) { return win.AUI.lsSet('os_app_mem_plugin_' + appId, v ? '1' : '0', '「記憶回傳酒館」的開關'); }
+    };
+    init();
+})();

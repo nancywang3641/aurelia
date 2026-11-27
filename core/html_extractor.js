@@ -1,0 +1,629 @@
+/**
+ * 奧瑞亞檔案庫 (Aurelia Archives) - V11.5 (PhoneOS UI 終極純淨版 + 全通用插件支援 + 終端輸入遷移)
+ * Update:
+ * 1. [核心升級] 完全依賴 TH-render 自動攔截與 <title> 隱藏代碼解析命名。
+ * 2. [極簡化] 廢除所有手動設定規則的 UI 與儲存邏輯，實現「零設定」全自動分類。
+ * 3. [防漏機制] 未被 TH-render 捕捉的其餘有效 HTML 標籤，將自動歸入分類。
+ * 4. [全通用插件支援] 無差別解開被 <p> 標籤錯誤包裹的所有第三方 DOM 結構，自動歸類。
+ * 5. [DOM 劫持] 針對全螢幕模式新增 #form_sheld 動態遷移機制，確保輸入功能存活。
+ */
+
+(function() {
+    'use strict';
+
+    const STYLE_ID = 'ue-styles-v12-1';
+
+    // 外來的純文字（樓層裡的字、表格格子）塞回 HTML 前轉義：五個都轉
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    // 外來、但本來就帶格式的 HTML（模型煉出來的狀態面板＋模型寫的值）：過 AUI.safeHtml，會跑的拿掉、格式照留。
+    //   先包一層再消毒、消完拆掉那層：酒館有 DOMPurify，開頭就是 <style> 的那段會被它當成 head 的東西丟掉
+    function _safeHtml(html) {
+        const A = window.AUI || (window.parent && window.parent.AUI);
+        if (!A || !A.safeHtml) return _esc(html);
+        const t = document.createElement('template');
+        t.innerHTML = A.safeHtml('<div data-ue-safe="1">' + String(html == null ? '' : html) + '</div>');
+        const w = t.content.querySelector('div[data-ue-safe]');
+        if (w) w.replaceWith(...Array.from(w.childNodes));
+        return t.innerHTML;
+    }
+
+    // 只捲 el 自己所在的那一格（最近一層真的捲得動的祖先），block 同 scrollIntoView 的 start / center / end / nearest。
+    //   scrollIntoView 會連外層一起捲：酒館整頁、正在滑入的面板、overflow:hidden 的父層都會被程式拖動。
+    function _scrollInBox(el, block) {
+        const view = (el.ownerDocument && el.ownerDocument.defaultView) || window;
+        let box = el.parentElement;
+        while (box) {
+            const oy = view.getComputedStyle(box).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && box.scrollHeight > box.clientHeight) break;
+            box = box.parentElement;
+        }
+        if (!box) return;
+        const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+        let top;
+        if (block === 'end') top = box.scrollTop + (r.bottom - b.bottom);
+        else if (block === 'center') top = box.scrollTop + (r.top - b.top) - (b.height - r.height) / 2;
+        else if (block === 'nearest') {
+            if (r.top >= b.top && r.bottom <= b.bottom) return;
+            top = box.scrollTop + (r.top < b.top ? (r.top - b.top) : (r.bottom - b.bottom));
+        } else top = box.scrollTop + (r.top - b.top);
+        box.scrollTo({ top: top });
+    }
+
+    const UniversalExtractor = {
+        activeTab: '', isVisible: false,
+        originalFormParent: null, originalFormSibling: null, // 用於記錄輸入框原本的家
+
+        init() {
+            if (!window.getIframeName) window.getIframeName = () => 'aurelia-native-render';
+            if (!window.eventClearAll) window.eventClearAll = () => {};
+        },
+
+        _getVnBgImage() {
+            try {
+                const gameBg = document.getElementById('game-bg');
+                if (gameBg) {
+                    const bg = gameBg.style.backgroundImage;
+                    if (bg && bg !== 'none' && bg !== '') return bg; 
+                }
+            } catch (e) {}
+            return null;
+        },
+
+
+        // opt.tab='threads'＝直接開到線索那頁（VN 末尾、世界面板的「線索」鍵）
+        show(opt) {
+            console.log('[Extractor] 🔍 show() 被調用');
+            this._wantTab = (opt && opt.tab) || null;
+            const win = window.parent || window;
+            const doc = win.document || document;
+
+            const vnTabContainer = doc.getElementById('aurelia-extractor-container-vn');
+            let parentEl = vnTabContainer;
+            const isVnTab = !!vnTabContainer;
+
+            if (!parentEl) return AUI.alert('找不到顯示目標！請確認 VN 面板或手機系統已開啟。');
+
+            if (isVnTab) {
+                parentEl.style.display = 'flex';
+            }
+
+            let overlay = parentEl.querySelector('#aurelia-extractor-phone-overlay');
+            if (!overlay) {
+                overlay = doc.createElement('div');
+                overlay.id = 'aurelia-extractor-phone-overlay';
+                parentEl.appendChild(overlay);
+            }
+
+            const vnBg = this._getVnBgImage();
+            overlay.style.backgroundImage = vnBg || 'none';
+
+            // 重複呼叫 show()（面板開著又被叫一次）：輸入框還在舊的 #ue-input-area 裡，下面整個重建會把它一起拆掉 → 先搬回家
+            this._restoreFormSheld(doc);
+            overlay.innerHTML = `
+                <div id="ue-root-wrapper">
+                    <div id="ue-toolbar">
+                        <div style="display: flex; align-items: center; gap: 5px;">
+                            <button class="ue-icon-btn" title="返回" id="ue-btn-close" style="font-size: 28px; line-height: 1; margin-left: -8px;">‹</button>
+                            <div class="ue-title">Aurealis Core</div>
+                        </div>
+                        <div class="ue-controls">
+                            <button class="ue-icon-btn" title="重新讀取" id="ue-btn-refresh">↻</button>
+                        </div>
+                    </div>
+                    <div id="ue-tab-bar"></div>
+                    <div id="ue-content-area"></div>
+                    <div id="ue-input-area"></div>
+                </div>
+            `;
+
+            const rootWrapper = overlay.querySelector('#ue-root-wrapper');
+            rootWrapper.querySelector('#ue-btn-close').onclick = () => this.hide();
+            const tabBar = rootWrapper.querySelector('#ue-tab-bar');
+            tabBar.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                tabBar.scrollLeft += e.deltaY || e.deltaX;
+            }, { passive: false });
+            rootWrapper.querySelector('#ue-btn-refresh').onclick = () => {
+                const freshBg = this._getVnBgImage();
+                if (freshBg) overlay.style.backgroundImage = freshBg;
+                this.scanAndRender();
+            };
+
+            // 執行 DOM 劫持：把 form_sheld 搬過來（#chat 模式下跳過）
+            const _mountSelector = window.AureliaUIUtils?.getExtensionSettings?.()?.mount?.selector || '#sheld';   // 擴展設定唯一的讀法在 ui_utilities
+            const formSheld = doc.getElementById('form_sheld');
+            if (formSheld && _mountSelector !== '#chat') {
+                this.originalFormParent = formSheld.parentNode;
+                this.originalFormSibling = formSheld.nextSibling;
+                rootWrapper.querySelector('#ue-input-area').appendChild(formSheld);
+            }
+
+            void overlay.offsetWidth;
+            overlay.classList.add('show');
+            this.isVisible = true;
+
+            this.scanAndRender();
+        },
+
+        // 把劫持來的 #form_sheld 搬回原本的家（hide 與重複 show 共用；story_extractor 有一支一樣的）。
+        //   原本的鄰居已經不在原處就接在最後面，別讓 insertBefore 丟錯、輸入框卡在要被清掉的面板裡
+        _restoreFormSheld(doc) {
+            try {
+                const formSheld = doc.getElementById('form_sheld');
+                const home = this.originalFormParent, sib = this.originalFormSibling;
+                if (formSheld && home) home.insertBefore(formSheld, (sib && sib.parentNode === home) ? sib : null);
+            } catch (e) { console.warn('[Extractor] 還原 #form_sheld 失敗', e); }
+            this.originalFormParent = null;
+            this.originalFormSibling = null;
+        },
+
+        hide() {
+            const win = window.parent || window;
+            const doc = win.document || document;
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+
+            if (overlay) {
+                // 面板關閉時，把 form_sheld 丟回原本的 DOM 樹
+                this._restoreFormSheld(doc);
+
+                overlay.classList.remove('show');
+                this.isVisible = false;
+
+                const vnTabContainer = doc.getElementById('aurelia-extractor-container-vn');
+                if (vnTabContainer && vnTabContainer.contains(overlay)) {
+                    setTimeout(() => { vnTabContainer.style.display = 'none'; }, 360);
+                }
+
+                console.log('[Extractor] ✅ 面板已關閉');
+            }
+        },
+
+        // ── TauriTavern 懶渲染對策 ─────────────────────────────────────────
+        // TauriTavern 只渲染「捲進視口」的樓層：最後一樓沒捲到就沒 DOM、或 ```html
+        // 還沒被 TavernHelper 煮成 .TH-render → 資料中心抓空。含插件卡需要 live JS
+        // runtime、正則重建早試過只出空殼(6dcfb1a 已退回)，所以正解＝抓之前先把聊天
+        // 捲到底逼它渲染、等內容煮熟，克隆完再還原捲動位置。瀏覽器版本來就有 DOM → 首拍直接命中、零等待。
+        _ensureLastMesRendered: async function(doc) {
+            const chat = doc.getElementById('chat');
+            const getLast = () => doc.querySelector('#chat .mes.last_mes .mes_text');
+            const hasContent = el => !!(el && el.innerHTML && el.innerHTML.trim());
+            // ```html 代碼塊已出現、但 TavernHelper 還沒煮成 .TH-render → 還要再等
+            const rawStillCooking = el => !!(el && el.querySelector('pre code.language-html') && !el.querySelector('.TH-render'));
+            let el = getLast();
+            if (hasContent(el) && !rawStillCooking(el)) return el;   // 已渲染好（瀏覽器版走這）
+
+            if (!chat) return el;
+            this._prevChatScroll = chat.scrollTop;   // 記住使用者原本捲到哪，克隆完還原
+            const push = () => {
+                chat.scrollTop = chat.scrollHeight;
+                const mes = doc.querySelector('#chat .mes.last_mes');
+                if (mes) { try { _scrollInBox(mes, 'end'); } catch (e) {} }
+            };
+            push();
+            // 第一階段：等最後一樓的 DOM 長出來（懶渲染觸發）
+            const t0 = Date.now();
+            while (Date.now() - t0 < 5000) {
+                await new Promise(r => setTimeout(r, 150));
+                el = getLast();
+                if (hasContent(el) && !rawStillCooking(el)) break;
+                push();   // 有些實作要捲動事件才醒，再推一把
+            }
+            // 第二階段：等重內容穩定（iframe/插件卡陸續長高）——內容長度連續兩拍不變才收工
+            if (hasContent(el)) {
+                let prev = -1, stable = 0;
+                const t1 = Date.now();
+                while (Date.now() - t1 < 2500 && stable < 2) {
+                    await new Promise(r => setTimeout(r, 200));
+                    const len = (getLast() || {}).innerHTML ? getLast().innerHTML.length : 0;
+                    if (len === prev) stable++; else { stable = 0; prev = len; }
+                }
+                el = getLast();
+            }
+            if (!hasContent(el)) console.warn('[Extractor] 捲到底仍等不到最後一樓渲染（懶載）——#chat 可能被藏或樓層被收合');
+            return el;
+        },
+        _restoreChatScroll: function(doc) {
+            if (this._prevChatScroll == null) return;
+            const chat = doc.getElementById('chat');
+            if (chat) chat.scrollTop = this._prevChatScroll;
+            this._prevChatScroll = null;
+        },
+
+        async scanAndRender() {
+            const win = window.parent || window;
+            const doc = win.document || document;
+
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+            if(!overlay) return;
+
+            const contentArea = overlay.querySelector('#ue-content-area');
+            const tabBar = overlay.querySelector('#ue-tab-bar');
+
+            if (this._scanning) return;   // 防連點刷新疊兩條等待迴圈
+            this._scanning = true;
+            // 📜 章末簡報卡指名要的那頁（11-09）：'card'＝角色卡作者做的第一頁、'avs'＝狀態面板；有指名就不跳回上次停的線索
+            const wantTab = this._wantTab;
+            const wantThreads = wantTab === 'threads' || (!wantTab && this.activeTab === 'aurelia_threads');   // 指名要線索、或上次停在線索
+            this._wantTab = null;
+            contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-hourglass-half"></i></div>讀取劇情數據中...
+            </div>`;
+            tabBar.innerHTML = '';
+
+            const extractedData = {};
+            let tabOrder = [];
+
+            let lastMes = null;
+            try { lastMes = await this._ensureLastMesRendered(doc); } finally { this._scanning = false; }
+            contentArea.innerHTML = '';
+
+            if (!lastMes) {
+                this._restoreChatScroll(doc);
+                contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-inbox"></i></div>無對話數據。
+                </div>`;
+                this._injectThreadsTab(wantThreads);
+                return;
+            }
+
+            const tempMesDiv = doc.createElement('div');
+            tempMesDiv.innerHTML = lastMes.innerHTML;
+            this._restoreChatScroll(doc);   // 內容已克隆到手 → 把聊天捲回使用者原位（晚了會被懶載收回去）
+
+            const ALLOWED_TAGS = ['DIV', 'TABLE', 'IFRAME', 'SCRIPT', 'STYLE', 'CANVAS', 'SVG', 'SECTION', 'ASIDE', 'NAV', 'HEADER', 'FOOTER', 'UL', 'OL', 'DL', 'FORM', 'DETAILS'];
+
+            const pTags = Array.from(tempMesDiv.querySelectorAll('p'));
+            pTags.forEach(p => {
+                Array.from(p.children).forEach(child => {
+                    if (ALLOWED_TAGS.includes(child.tagName.toUpperCase())) {
+                        p.parentNode.insertBefore(child, p);
+                    }
+                });
+                if (p.textContent.trim() === '' && p.children.length === 0) {
+                    p.remove();
+                }
+            });
+
+            const thRenders = Array.from(tempMesDiv.querySelectorAll('.TH-render'));
+            thRenders.forEach((thNode, index) => {
+                let panelName = '自定義面板';
+                const codeBlock = thNode.querySelector('code.custom-language-html');
+                if (codeBlock) {
+                    const rawHtml = codeBlock.innerText || codeBlock.textContent;
+                    const titleMatch = rawHtml.match(/<title>(.*?)<\/title>/i);
+                    if (titleMatch && titleMatch[1]) {
+                        panelName = titleMatch[1].trim();
+                    }
+                }
+
+                const panelId = 'th_panel_' + index;
+
+                if (!extractedData[panelId]) {
+                    extractedData[panelId] = { name: panelName, html: [] };
+                    tabOrder.push(panelId);
+                }
+
+                extractedData[panelId].html.push(`<div class="native-render-wrapper">${thNode.outerHTML}</div>`);
+                thNode.remove();
+            });
+
+            const othersHtml = [];
+            Array.from(tempMesDiv.children).forEach(el => {
+                if (ALLOWED_TAGS.includes(el.tagName.toUpperCase())) {
+                    othersHtml.push(`<div class="native-render-wrapper">${el.outerHTML}</div>`);
+                }
+            });
+
+            if (othersHtml.length > 0) {
+                if (!extractedData['others']) { 
+                    extractedData['others'] = { name: '其他擴展與物件', html: [] }; 
+                    tabOrder.push('others'); 
+                }
+                extractedData['others'].html = othersHtml;
+            }
+
+            if (tabOrder.length === 0) {
+                contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-magnifying-glass"></i></div>
+                    未提取到符合規格的內容或面板。
+                </div>`;
+                this._injectThreadsTab(wantThreads);
+                return;
+            }
+
+            tabOrder.forEach(id => {
+                this.createTab(id, extractedData[id].name, extractedData[id].html.join(''));
+            });
+
+            if (wantTab === 'card' || !this.activeTab || !tabOrder.includes(this.activeTab)) {
+                this.activeTab = tabOrder[0];
+            }
+            this.switchTab(this.activeTab);
+
+            // 異步注入「狀態面板」固定 tab（從展廳啟用的 UI 模板渲染 + 當前變數值）
+            // chatId-aware：不同 chat 對應不同 pack 的 active 模板
+            this._injectStatePanelTab().then(() => {
+                const ov = doc.getElementById('aurelia-extractor-phone-overlay');
+                if (wantTab === 'avs' && ov && ov.querySelector('#tab-btn-aurelia_state_panel')) this.switchTab('aurelia_state_panel');
+            }).catch(e => console.warn('[Extractor] 狀態面板注入失敗:', e));
+            this._injectThreadsTab(wantThreads);
+        },
+
+        // 📜 章末簡報卡問：這一章角色卡作者做了哪幾頁（只要名字，給「角色卡畫面」那塊小牌子）。
+        //   不捲聊天、不等懶載：最後一樓現在就看得到的才算（TauriTavern 沒捲到就沒有，那就不出那塊小牌子，資料中心照樣點得到）
+        peekCardPanels() {
+            try {
+                const win = window.parent || window;
+                const doc = win.document || document;
+                const last = doc.querySelector('#chat .mes.last_mes .mes_text');
+                if (!last) return [];
+                return Array.from(last.querySelectorAll('.TH-render')).map(th => this._panelInfo(th));
+            } catch (e) { return []; }
+        },
+        // 一頁的名字＋原文（簡報卡拿原文認哪一頁是這一章的選項卡）
+        _panelInfo(th) {
+            const code = th.querySelector('code.custom-language-html');
+            const text = code ? String(code.innerText || code.textContent || '') : '';
+            const m = text.match(/<title>(.*?)<\/title>/i);
+            return { title: (m && m[1] && m[1].trim()) || '自定義面板', text: text };
+        },
+        // 📜 章末簡報卡的「繼續」（11-13）要把選項卡整張搬過去：跟資料中心同一套抓法（TauriTavern 懶載先捲到底等煮好），整塊 .TH-render 照搬
+        async cardPanelsFull() {
+            const win = window.parent || window;
+            const doc = win.document || document;
+            let last = null;
+            try { last = await this._ensureLastMesRendered(doc); } catch (e) {}
+            this._restoreChatScroll(doc);
+            if (!last) return [];
+            return Array.from(last.querySelectorAll('.TH-render')).map(th => Object.assign(this._panelInfo(th), { html: th.outerHTML }));
+        },
+
+        // 🧵 線索：跟狀態、選擇放同一個窗（10-13：拆成獨立窗口時，一邊看線索一邊要回資訊中心，很卡手）
+        //   點到這頁才畫（線索要讀資料庫、畫關係圖）；沒有面板只有一行提示時，點過來順便把那行收掉
+        _injectThreadsTab(want) {
+            const win = window.parent || window;
+            const T = win.OS_STORY_THREADS || window.OS_STORY_THREADS;
+            if (!T || typeof T.mountInto !== 'function') return;
+            const doc = win.document || document;
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+            if (!overlay) return;
+            overlay.querySelector('#tab-btn-aurelia_threads')?.remove();
+            overlay.querySelector('#tab-pane-aurelia_threads')?.remove();
+            this.createTab('aurelia_threads', '線索', '');
+            const btn = overlay.querySelector('#tab-btn-aurelia_threads');
+            const pane = overlay.querySelector('#tab-pane-aurelia_threads');
+            if (!btn || !pane) return;
+            let mounted = false;
+            const go = () => {
+                overlay.querySelectorAll('#ue-content-area > :not(.ue-tab-pane)').forEach(n => n.remove());
+                btn.querySelector('.ue-tab-dot')?.remove();   // 📜 點進來就算看過（線索頁那邊會記帳）
+                this.switchTab('aurelia_threads');
+                if (!mounted) { mounted = true; T.mountInto(pane); }
+            };
+            btn.onclick = go;
+            // 📜 還沒看過的新線：分頁名字旁掛紅色數字（跟章末簡報卡同一個數）
+            if (typeof T.unseenCount === 'function') {
+                T.unseenCount().then(n => {
+                    if (n > 0 && btn.isConnected && !btn.classList.contains('active') && !btn.querySelector('.ue-tab-dot')) btn.insertAdjacentHTML('beforeend', '<span class="ue-tab-dot">' + n + '</span>');
+                }).catch(() => {});
+            }
+            if (want) go();
+        },
+
+        async _injectStatePanelTab() {
+            const win = window.parent || window;
+            if (!win.OS_DB?.getAllUITemplates || !win.OS_AVS_ADAPTER) return;
+
+            const chatId = win.OS_AVS_ADAPTER.getCurrentChatId?.() || '';
+            if (!chatId) return;
+
+            // 找當前 chat 對應的 pack（!pack.chatId 視為通用 fallback）
+            const allPacks = await win.OS_DB.getAllVarPacks();
+            const myPacks = (allPacks || []).filter(p => !p.chatId || p.chatId === chatId);
+            if (!myPacks.length) return;
+            const myPackIds = myPacks.map(p => p.id);
+
+            // 找啟用中的 UI 模板（綁定我這些 pack 的）
+            const templates = await win.OS_DB.getAllUITemplates();
+            const activeTpl = (templates || []).find(t => t.isActive && myPackIds.includes(t.packId));
+            if (!activeTpl) return;   // 沒煉丹過 / 沒啟用任何模板 → 不注入
+
+            // 找此模板綁定的 pack（給第二層 fallback 用）
+            const tplPack = myPacks.find(p => p.id === activeTpl.packId);
+
+            // 用展廳/資訊中心那支「共用渲染引擎」(os_avs.renderTemplate) → 三處完全一致
+            // （剝掉自包裝範本=不會有鬼角色、攤平舊「形象」巢狀、逐實體補初值），不再各寫一份分岔
+            const state = win._AVS_ENGINE?.read?.() || {};
+            const fmt = win.OS_AVS_ADAPTER?.formatVarValue || (v => String(v ?? ''));
+            const _packVars = (tplPack && Array.isArray(tplPack.variables)) ? tplPack.variables : [];
+            let _avatarMap = {};
+            try { _avatarMap = (await win.OS_AVS?.buildAvatarMap?.(state, _packVars)) || {}; } catch (e) {}
+            let html = '';
+            try { html = (win.OS_AVS?.renderTemplate?.(activeTpl.htmlContent || '', state, _packVars, fmt, _avatarMap)) || (activeTpl.htmlContent || ''); }
+            catch (e) { html = activeTpl.htmlContent || ''; console.warn('[Extractor] renderTemplate 失敗:', e); }
+            // 🔧 修「狀態面板被壓扁/切出窗外」：vn_core.css 把 .ue-tab-pane.active 設成 flex:1 的 flex 直欄
+            //    → 面板(十幾個 NPC)被當 flex 子項擠壓分攤固定高、不長高也不捲。用 id 選擇器(權重高過 .ue-tab-pane.active)
+            //    把這一頁改回 block+自然高，#ue-content-area 本身就會捲；並擋掉面板根的固定高/max-height(讓內容完整長出來)。
+            const _panelFix = `#tab-pane-aurelia_state_panel.active{display:block;flex:0 0 auto;height:auto;min-height:100%;}`
+                + `#tab-pane-aurelia_state_panel>.custom-status-panel,#tab-pane-aurelia_state_panel .custom-status-panel{height:auto;max-height:none;}`;
+            // 🧼 模板是模型煉的、值是模型寫的（煉丹本來就規定純 CSS、不跑 JS）：照格式畫，onerror／script 這類會跑的拿掉。
+            //    CSS 不會跑程式，只擋「</style> 後面接一段 HTML」跳出去的寫法
+            html = _safeHtml(html);
+            const _css = String(activeTpl.cssContent || '').replace(/<\/style/gi, '<\\/style');
+            html = `<style>${_panelFix}\n${_css}</style>${html}`;
+            // 🔬 本輪更新了什麼：面板右上角一顆小鈕，點了跳小窗（10-13：以前摺在最底下不美觀）；鈕和小窗是 os_avs 那份，PWA 資料中心同一份
+            const _AV = win.OS_AVS;
+            if (_AV && _AV.updatesBtnHtml) html = _AV.updatesBtnHtml() + html;
+
+            // 建 tab（重複建立會留下舊的，先清掉）
+            const doc = win.document || document;
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+            if (!overlay) return;
+            const oldBtn  = overlay.querySelector('#tab-btn-aurelia_state_panel');
+            const oldPane = overlay.querySelector('#tab-pane-aurelia_state_panel');
+            if (oldBtn)  oldBtn.remove();
+            if (oldPane) oldPane.remove();
+
+            this.createTab('aurelia_state_panel', '狀態面板', html);
+            if (_AV && _AV.bindUpdatesBtn) _AV.bindUpdatesBtn(overlay.querySelector('#tab-pane-aurelia_state_panel'), overlay);
+
+            // 把這個 tab 推到第一個位置（不在預設 tabOrder 內，加完是最後一個）
+            const tabBar = overlay.querySelector('#ue-tab-bar');
+            const newBtn = overlay.querySelector('#tab-btn-aurelia_state_panel');
+            if (tabBar && newBtn && tabBar.firstChild !== newBtn) {
+                tabBar.insertBefore(newBtn, tabBar.firstChild);
+            }
+        },
+
+        createTab(id, name, contentHtml) {
+            const win = window.parent || window;
+            const doc = win.document || document;
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+            if(!overlay) return;
+
+            const tabBar = overlay.querySelector('#ue-tab-bar');
+            const contentArea = overlay.querySelector('#ue-content-area');
+
+            const btn = doc.createElement('div');
+            btn.className = 'ue-tab-item';
+            btn.id = `tab-btn-${id}`;
+            btn.textContent = name;
+            btn.onclick = () => this.switchTab(id);
+            tabBar.appendChild(btn);
+
+            const pane = doc.createElement('div');
+            pane.className = 'ue-tab-pane';
+            pane.id = `tab-pane-${id}`;
+            pane.innerHTML = contentHtml;
+
+            // 卡片面板裡的摺疊一律攤開（原本的設計）；ue-keep-closed 是我們自己加的（本輪更新了什麼），維持收著
+            pane.querySelectorAll('details:not([open]):not(.ue-keep-closed)').forEach(el => el.setAttribute('open', 'true'));
+            contentArea.appendChild(pane);
+        },
+
+        switchTab(id) {
+            const win = window.parent || window;
+            const doc = win.document || document;
+            const overlay = doc.getElementById('aurelia-extractor-phone-overlay');
+            if(!overlay) return;
+
+            this.activeTab = id;
+            overlay.querySelectorAll('.ue-tab-item').forEach(b => b.classList.remove('active'));
+            const btn = overlay.querySelector(`#tab-btn-${id}`);
+            if(btn) btn.classList.add('active');
+
+            overlay.querySelectorAll('.ue-tab-pane').forEach(p => p.classList.remove('active'));
+            const pane = overlay.querySelector(`#tab-pane-${id}`);
+            if(pane) {
+                pane.classList.add('active');
+                this.fixIframes(pane);
+                this._processMarkdownTables(pane);
+                this._processMermaid(pane);
+            }
+        },
+
+        fixIframes(container) {
+            container.querySelectorAll('iframe').forEach(iframe => {
+                const adjustHeight = () => {
+                    try {
+                        const doc = iframe.contentWindow?.document;
+                        if (doc && doc.body) {
+                            doc.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
+                            // 高度沒變就別寫——每寫一次就觸發下一輪 resize，ResizeObserver 自迴圈空轉的來源
+                            const want = (doc.body.scrollHeight + 100) + 'px';
+                            if (doc.body.scrollHeight > 0 && iframe.style.height !== want) iframe.style.height = want;
+                            if (doc.body.style.overflow !== 'hidden') doc.body.style.overflow = 'hidden';
+                        }
+                    } catch (e) { iframe.style.height = '600px'; }
+                };
+                // 跟 story_extractor 的 fixIframes 同一套：沒有 ResizeObserver 就定時量；已經載完的 iframe 不會再發 load，直接補跑一次
+                //   （以前這份沒補：插進來之前就載完的 iframe 一直沒被量，高度停在預設值）
+                iframe.onload = () => {
+                    adjustHeight();
+                    try {
+                        if (window.ResizeObserver) new ResizeObserver(() => adjustHeight()).observe(iframe.contentWindow.document.body);
+                        else setInterval(adjustHeight, 500);
+                    } catch(e){}
+                };
+                try { if (iframe.contentWindow && iframe.contentWindow.document.readyState === 'complete') iframe.onload(); } catch (e) {}
+            });
+        },
+
+        _processMarkdownTables(container) {
+            const candidates = container.querySelectorAll('p, div, pre, td, li');
+            candidates.forEach(el => {
+                if (el.children.length > 0) return;
+                const text = el.innerText || el.textContent || '';
+                if (!text.includes('|')) return;
+                const lines = text.split('\n').map(l => l.trim()).filter(l => l);
+                const sepIdx = lines.findIndex(l => /^\|?[\s\-:]+\|/.test(l));
+                if (sepIdx < 1) return;
+
+                const headers = lines[sepIdx - 1].split('|').map(s => s.trim()).filter(s => s);
+                const rows = lines.slice(sepIdx + 1)
+                    .filter(l => l.startsWith('|') || l.includes('|'))
+                    .map(l => l.split('|').map(s => s.trim()).filter(s => s));
+                if (!headers.length || !rows.length) return;
+
+                // 格子是從 innerText 拿的「字」（&lt;img…&gt; 在這裡已經被解回 <img…>）：塞回去要再轉義，不然會長成真的標籤
+                const thead = `<tr>${headers.map(h => `<th>${_esc(h)}</th>`).join('')}</tr>`;
+                const tbody = rows.map(r => `<tr>${r.map(c => `<td>${_esc(c)}</td>`).join('')}</tr>`).join('');
+                const tableHtml = `<table class="ue-md-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table>`;
+                el.outerHTML = tableHtml;
+            });
+        },
+
+        async _processMermaid(container) {
+            const MERMAID_KEYWORDS = /^\s*(graph\s+(TD|LR|RL|BT|TB)|flowchart\s+|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie\s+title|gitGraph)/i;
+            const blocks = [];
+
+            container.querySelectorAll('code.language-mermaid, pre.mermaid').forEach(el => blocks.push(el));
+
+            container.querySelectorAll('pre, div.mermaid').forEach(el => {
+                if (blocks.includes(el)) return;
+                const t = el.textContent || '';
+                if (MERMAID_KEYWORDS.test(t)) blocks.push(el);
+            });
+
+            container.querySelectorAll('p, div').forEach(el => {
+                if (blocks.includes(el) || el.querySelector('table,iframe,img,svg')) return;
+                const t = (el.innerText || el.textContent || '').trim();
+                if (MERMAID_KEYWORDS.test(t)) blocks.push(el);
+            });
+
+            if (!blocks.length) return;
+
+            if (!window.mermaid) {
+                await new Promise((resolve, reject) => {
+                    const s = document.createElement('script');
+                    s.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+                    s.onload = resolve; s.onerror = reject;
+                    document.head.appendChild(s);
+                }).catch(() => null);
+                if (!window.mermaid) return; 
+                window.mermaid.initialize({ startOnLoad: false, theme: 'dark',
+                    themeVariables: { primaryColor: '#1a1a1a', primaryTextColor: '#d4af37',
+                        primaryBorderColor: '#d4af37', lineColor: '#888', background: '#0a0a0a' } });
+            }
+
+            for (const el of blocks) {
+                try {
+                    const code = (el.innerText || el.textContent || '').trim();
+                    if (!MERMAID_KEYWORDS.test(code)) continue;
+                    const id = 'mermaid-' + Math.random().toString(36).slice(2);
+                    const wrapper = document.createElement('div');
+                    wrapper.style.cssText = 'background:rgba(0,0,0,0.4);border:1px solid rgba(212,175,55,0.2);border-radius:6px;padding:12px;margin:8px 0;overflow-x:auto;';
+                    const { svg } = await window.mermaid.render(id, code);
+                    wrapper.innerHTML = svg;
+                    el.replaceWith(wrapper);
+                } catch(e) { }
+            }
+        }
+    };
+
+    UniversalExtractor.init();
+    window.AureliaHtmlExtractor = UniversalExtractor;
+    console.log('✅ 奧瑞亞檔案庫 V11.5 (PhoneOS UI 終極純淨版 + 全通用插件支援 + 終端輸入遷移) 已啟動');
+})();

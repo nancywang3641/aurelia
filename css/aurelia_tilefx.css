@@ -1,0 +1,3 @@
+/* 🧱 全螢幕窗口切塊進出場時亮的淡藍格線（core/aurelia_tilefx.js）
+   疊在窗口正上方的畫布；位置、大小、層級是照窗口當下量的，由 JS 放進來 */
+.aurelia-tilefx { position: absolute; pointer-events: none; display: block; }

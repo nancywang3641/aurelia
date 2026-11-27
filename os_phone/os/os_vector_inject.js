@@ -1,0 +1,744 @@
+// ----------------------------------------------------------------
+// [檔案] os_vector_inject.js (V1)
+// 路徑：os_phone/os/os_vector_inject.js
+// 職責：酒館版「向量記憶召回」注入器。
+//       PWA 端的記憶召回寫在 os_api_engine._buildStandaloneContext（已有）；
+//       但酒館 VN 走 SillyTavern 原生生成，不經過那段 → 改用 injectPrompts 在每輪生成前塞。
+//       做法完全照 os_phone/rpg/blacklist_injector.js：
+//         GENERATION_STARTED → search 相關記憶 → injectPrompts({once:true})
+//       只在「酒館（非獨立）+ 記憶開啟」時跑；PWA 不碰（避免重複召回）。
+// 依賴：window.OS_VECTOR_ENGINE.search/isEnabled、window.TavernHelper.injectPrompts/getChatMessages
+//       window.VN_Core._currentStoryId / window.OS_AVS_ADAPTER.getStoryId
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    console.log('🧠 [Vector Memory Injector] 載入');
+    const win = window.parent || window;
+
+    const INJECT_ID = 'aurelia_vn_memory';
+    let _lastUninject = null;
+    let _lastRecall = null;   // 給 CTX 面板「記憶召回」行讀：{ text, count }
+    let _pendingRecallKeywords = [];   // 主模型 <recall> 寫的「非代號」關鍵詞（語氣角色名 / AI 不照碼亂寫時的末路備援）
+    let _pendingRecallEntries = [];    // 🎬 副模型(記憶導演)上一輪挑的記憶物件，待下一輪注入完整內文（主力）
+    let _pendingRecallMainEntries = []; // 主模型 <recall>A5</recall> 挑碼 → 解析出的記憶物件（備援，用碼比關鍵詞可靠）
+    let _lastCatalogMap = {};          // 上一輪注入主模型目錄的「碼→記憶物件」對照（給 _captureAndStripRecall 解析主模型挑的碼）
+    const _RECALL_RE = /<recall>([\s\S]*?)<\/recall>/gi;
+
+    // 抽出 AI 回覆裡的 <recall>關鍵詞</recall> → 存給下一輪 injectMemories 補完整內文；並把標籤從顯示訊息清掉。
+    // 回傳清過 <recall> 的內文(給後續 ingest，避免把標籤記成記憶)。
+    async function _captureAndStripRecall(content) {
+        try {
+            const toks = [];
+            let mt; _RECALL_RE.lastIndex = 0;
+            while ((mt = _RECALL_RE.exec(content)) !== null) {
+                String(mt[1] || '').split(/[,，、\s]+/).forEach((k) => { k = k.trim(); if (k) toks.push(k); });
+            }
+            if (!toks.length) return content;        // 沒有 <recall> → 原樣返回
+            // 代號(A+數字) → 對照上一輪注入目錄解析成記憶物件(可靠)；其餘 → 當關鍵詞末路備援(語氣角色名 / AI 不照碼)
+            const codeEntries = [], kws = [];
+            for (const t of Array.from(new Set(toks))) {
+                const hit = /^A\d+$/i.test(t) ? _lastCatalogMap[t.toUpperCase()] : null;
+                if (hit) codeEntries.push(hit); else kws.push(t);
+            }
+            _pendingRecallMainEntries = codeEntries.slice(0, 8);
+            _pendingRecallKeywords = kws.slice(0, 12);
+            console.log('🧠 [Recall] 主模型點名、下一輪載入細節:', `碼 ${codeEntries.length} 條` + (kws.length ? ` + 關鍵詞 ${kws.join('、')}` : ''));
+            // 從顯示訊息清掉 <recall>…</recall>（用陣列索引 chat.length-1 改，避開懶載入真樓號越界）
+            const cleaned = content.replace(/\s*<recall>[\s\S]*?<\/recall>\s*/gi, '\n').trim();
+            if (cleaned !== content) {
+                try {
+                    const ctx = win.SillyTavern?.getContext?.();
+                    const arrIdx = (ctx && Array.isArray(ctx.chat)) ? ctx.chat.length - 1 : -1;
+                    if (arrIdx >= 0 && win.TavernHelper?.setChatMessages) {
+                        await win.TavernHelper.setChatMessages([{ message_id: arrIdx, message: cleaned, mes: cleaned }], { refresh: 'affected' });
+                    }
+                } catch (e) {}
+            }
+            return cleaned;
+        } catch (e) { console.warn('[Recall] capture 失敗:', e?.message || e); return content; }
+    }
+
+    function _storyId() {
+        // 隔離鍵：OS_AVS_ADAPTER.getStoryId 在「酒館回 chatId、PWA 回 vn_current_story_id」——一律以它為準。
+        //   ❌ 別優先 VN_Core._currentStoryId：它是全域 storyTitle_timestamp、不隨換聊天室變 → 會害所有酒館聊天室
+        //      的記憶擠進同一桶(一直累積/跨聊天室混)。chatId 才跟大總結/頭像快取的隔離一致。
+        const sid = win.OS_AVS_ADAPTER?.getStoryId?.();
+        if (sid) return sid;
+        return (win.VN_Core && win.VN_Core._currentStoryId) || localStorage.getItem('vn_current_story_id') || '';
+    }
+
+    // 當前主角名：優先用最近一則 [Protagonist|名]（ingestLatest 順手解析快取、每章 header 都有），退 OS_PERSONA(大廳那個)，再退酒館 name1。
+    let _protagonistName = '';
+    function _getProtagonist() {
+        if (_protagonistName) return _protagonistName;
+        try { const n = win.OS_PERSONA?.getName?.(); if (n && n !== 'User') return String(n).trim(); } catch (e) {}
+        try { const n = win.SillyTavern?.getContext?.()?.name1; if (n) return String(n).trim(); } catch (e) {}
+        return '';
+    }
+
+    // 召回不開副模型「挑」(省一通)：把「全部記憶的一句話摘要(summary)目錄」注入主模型(學星河璀璨：目錄常駐、全文按需)。
+    // 目錄按時間遠近分早/中/近三段(免費時間召回，不花 LLM)；需要某條完整內容時主模型用 <recall>關鍵詞</recall> 點名，
+    // 下一輪補上(見 _captureAndStripRecall)。每行都是看得懂的摘要、不是噪音 tag，prompt 也大幅縮水。
+    const MEM_SUM_MAX = 28;      // 索引每條摘要最多幾字
+    const PICK_POOL_K = 40;      // 🔎 向量粗篩給導演的候選池大小（取代 2000 行全目錄常駐：只把語意相關的這幾條交給副模型挑）
+    const CROSS_MAX = 6;   // 🚪 世界門：這章提到、但不在這裡的人，記憶導演候選最多放幾條
+    // ⚖️ 候選池留給「份量重但跟當下劇情不相似」的格數。
+    //    粗篩只認相似度，所以二十輪前埋的線只要話題轉開就再也撈不出來——它不是被忘了，
+    //    是永遠不會被問到。留位置而不是去調相似度的打分：把「重要」折算成「相似」需要一個
+    //    換算率，那個換算率沒有正確答案，調它就是在調一個說不清的旋鈕。
+    //    按缺口補（粗篩自己撈進來幾條重的就少補幾條），且不超過候選池的一半。
+    const HEAVY_SLOTS  = 5;
+    const HEAVY_MIN    = 0.7;    // 多重才算「還懸著」。0.5 是副模型拿不準時的預設值，門檻要高於它
+
+    // ── 🗓 每條記憶標「第幾章·故事日期」──
+    //   🚨 09-24：約定拍完了，隔天 AI 又提約定，記憶沒標順序。送出那包的劇情記憶每條都沒有時間：
+    //   「核心角色｜最新狀態」裡有的其實是初遇那條；同一樣東西有兩條說法（一條說丟了、一條說還在），模型分不出哪條新。
+    //   記憶存的 chapterId 就是當時那一樓 → 回聊天檔讀那樓的 [Chapter|N] 跟狀態欄的日期，不用另外存、舊記憶也標得到。
+    //   讀不到完整聊天檔就不標（不猜）。快取按「樓號＋那樓記憶最新的寫入時間」，重生後那樓重抽就會重讀。
+    let _labelCache = { chat: '', map: {} };
+    function _labelOf(text) {
+        const t = String(text || '').replace(/<think(?:ing)?>[\s\S]*?<\/think(?:ing)?>/gi, '');
+        const cm = t.match(/\[Chapter\|\s*(\d+)/i);
+        let day = '';
+        const P = win.OS_MC_STATUS;
+        const os = t.match(/<os_status>[\s\S]*?<\/os_status>/i);
+        let dm = os && os[0].match(/(?:日期|date)\s*\|\s*([^\n<|]+)/i);
+        if (!dm) dm = t.match(/\[Date\|([^\]|]+)/i);
+        if (dm && P && P.parseDate) { const d = P.parseDate(dm[1]); if (d) day = P.fmtDate(d); }
+        const parts = [];
+        if (cm) parts.push('第' + cm[1] + '章');
+        if (day) parts.push(day);
+        return parts.length ? '（' + parts.join('·') + '）' : '';
+    }
+    async function _chapterLabels(mems) {
+        const cid = _storyId();
+        if (_labelCache.chat !== cid) _labelCache = { chat: cid, map: {} };
+        const floorTs = {};
+        for (const m of mems) {
+            const f = String(m && m.chapterId != null ? m.chapterId : '');
+            if (!/^\d+$/.test(f)) continue;
+            floorTs[f] = Math.max(floorTs[f] || 0, m.createdAt || 0);
+        }
+        const need = Object.keys(floorTs).filter(f => !(_labelCache.map[f] && _labelCache.map[f].ts === floorTs[f]));
+        if (need.length && win.VN_READER?.fetchFullChat) {
+            const cache = _labelCache;
+            const fill = (full) => {
+                if (!Array.isArray(full) || !full.length) return;
+                const msgs = full.filter(x => x && (x.mes != null || x.message != null));   // 聊天檔第一行是設定、不是訊息
+                const textAt = (i) => { const x = msgs[i]; return x ? String(x.mes != null ? x.mes : x.message) : ''; };
+                for (const f of need) {
+                    const i = Number(f);
+                    // 記憶來源一定是帶 <content> 的 AI 那則；對不上就看隔壁（兩種編號差一）
+                    let text = textAt(i);
+                    if (text.indexOf('<content>') < 0) { const a = textAt(i - 1), b = textAt(i + 1); text = a.indexOf('<content>') >= 0 ? a : (b.indexOf('<content>') >= 0 ? b : ''); }
+                    cache.map[f] = { ts: floorTs[f], label: text ? _labelOf(text) : '' };
+                }
+            };
+            // 注入整段最多等 2.5 秒（見 _waitFor）：讀檔最多等 0.8 秒，慢了這輪先不標，讀完照樣填進快取、下一輪就有
+            const p = Promise.resolve().then(() => win.VN_READER.fetchFullChat()).then(fill).catch(() => {});
+            await Promise.race([p, new Promise(r => setTimeout(r, 800))]);
+        }
+        return (m) => { const f = String(m && m.chapterId != null ? m.chapterId : ''); const c = _labelCache.map[f]; return c ? c.label : ''; };
+    }
+    function _floorOf(m) { const s = String(m && m.chapterId != null ? m.chapterId : ''); return /^\d+$/.test(s) ? Number(s) : -1; }
+    // 「哪條比較新」：先看發生在哪一樓（故事先後），同一樓或認不出樓號才看寫入時間。
+    //   只看寫入時間會錯：舊章重新整理／重抽過的記憶寫入時間是新的，會蓋掉真正最近的那條。
+    function _newer(a, b) {
+        const fa = _floorOf(a), fb = _floorOf(b);
+        if (fa >= 0 && fb >= 0 && fa !== fb) return fa > fb;
+        return (a.createdAt || 0) > (b.createdAt || 0);
+    }
+    function _keepNewest(map, key, name, m) { const prev = map.get(key); if (!prev || !_newer(prev[1], m)) map.set(key, [name, m]); }
+
+    // ── 👥 同一個人只算一個：正文寫简体（张伟），抽記憶的副模型寫繁體（張偉）→ 以前各算一個人、各留一條「最新」，
+    //   其中一條停在很早以前。比對一律過 OS_ZH.key。
+    //   關係／性事那兩類常把主角放第一個標籤，那條其實是在講對方 → 跳過主角，算在對方頭上。
+    function _nameKey(s) { const Z = win.OS_ZH || window.OS_ZH; return Z && Z.key ? Z.key(s) : String(s || '').trim(); }
+    function _whoOf(m, mcKey) {
+        const tags = (Array.isArray(m.tags) ? m.tags : []).map(t => String(t || '').trim()).filter(Boolean);
+        let name = tags[0] || String(m.summary || '').slice(0, 10).trim();
+        if ((m.type === 'relationship' || m.type === 'sex') && mcKey) {
+            const other = tags.find(t => _nameKey(t) !== mcKey);
+            if (other) name = other;
+        }
+        return name;
+    }
+
+    async function injectMemories() {
+        try {
+            // 撤上次（避免疊加 / 切 chat 殘留）
+            try { _lastUninject?.(); } catch (e) {}
+            _lastUninject = null;
+            _lastRecall = null;   // 每輪先歸零；成功召回才填回（給 CTX 面板顯示）
+
+            // 正在跑大總結（os_story_tools 的 generateRaw）→ 別把記憶召回摻進總結 prompt
+            if (win.__AURELIA_SUMMARIZING) return;
+
+            // 只在酒館跑；PWA 走 buildContext 已有召回
+            if (win.OS_API?.isStandalone?.()) return;
+            if (!win.TavernHelper?.injectPrompts) return;
+            if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return;
+
+            const storyId = _storyId();
+            if (!storyId) return;                 // 沒有當前 VN 故事就不注入
+            if (!win.OS_DB?.getAllVnMemories) return;
+
+            const allAny = ((await win.OS_DB.getAllVnMemories(storyId)) || []).filter(m => m && !m.merged);   // 過濾被壓縮隱藏的原始條目
+            // 🚪 世界門（11-15）：目錄、核心角色、性事、物品、語氣索引都只挑現在這個地方的記憶（見 OS_VECTOR_ENGINE.placeKeep）；
+            //   主模型自己寫 <recall>關鍵詞</recall> 點名的那條照舊整庫找（allAny）——要回顧就靠關鍵字回溯
+            let _here = null;
+            try { _here = (typeof win.OS_VECTOR_ENGINE?.placeKeep === 'function') ? await win.OS_VECTOR_ENGINE.placeKeep() : null; } catch (e) {}
+            const all = _here ? allAny.filter(_here) : allAny;
+            if (!all.length && !allAny.length) return;
+            all.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));   // 時序穩定(舊→新)
+
+            // 🔎 向量召回是否就緒：開了向量 + ≥90% 記憶已是「當前模型」的向量(回填到位) → 主模型不再背 2000 行全目錄，只給釘選＋導演挑的細節。
+            //    還沒回填 / 回填中 / 換了模型舊向量不認 → 未就緒，仍走全目錄(不在半路撤掉目錄、舊記憶卻搜不到＝不開天窗)。
+            const _vecActive = win.OS_VECTOR_ENGINE?.vectorReady?.(all) === true;
+
+            // 主角名沒快取(本 session 還沒 ingest 過) → 直接掃最近訊息抓 [Protagonist|名]，免得開頭幾輪性事標不到主角。
+            //   [Protagonist|名] 是劇情 ground truth，比 OS_PERSONA / 酒館 name1 可靠——有人主角放世界書、根本沒設酒館用戶名。
+            if (!_protagonistName && win.TavernHelper?.getChatMessages) {
+                try {
+                    const _lid = await win.TavernHelper.getLastMessageId?.();
+                    const _ms = (await win.TavernHelper.getChatMessages(Math.max(0, (_lid || 0) - 4) + '-' + _lid)) || [];
+                    for (let i = _ms.length - 1; i >= 0; i--) {
+                        const _pm = String((_ms[i] && (_ms[i].message || _ms[i].mes)) || '').match(/\[Protagonist\|([^\]]+)\]/i);
+                        if (_pm && _pm[1] && _pm[1].trim().toLowerCase() !== 'user') { _protagonistName = _pm[1].trim(); break; }
+                    }
+                } catch (e) {}
+            }
+
+            // 最近幾樓（含她剛打的那句）的字：核心角色只給「這一輪會寫到的人」完整關係
+            let _recentKey = '';
+            try {
+                if (win.TavernHelper?.getChatMessages) {
+                    const _lid2 = await win.TavernHelper.getLastMessageId?.();
+                    const _ms2 = (await win.TavernHelper.getChatMessages(Math.max(0, (_lid2 || 0) - 3) + '-' + _lid2)) || [];
+                    _recentKey = _nameKey(_ms2.map(x => String((x && (x.message || x.mes)) || '')).join('\n'));
+                }
+            } catch (e) {}
+
+            const _lab = await _chapterLabels(all);            // m → （第N章·6/21），讀不到就空字串
+            const _mcKey = _nameKey(_getProtagonist());
+            const _labNote = all.some(m => _lab(m)) ? '每條前面的（第幾章·日期）是那件事記下時的章節與故事日期；同一個人或同一樣東西有新舊不同說法時，以章數大的那條為準。\n' : '';
+
+            // 索引 = 每條的「一句話摘要」(summary，學星河璀璨的目錄)，不是 tags。
+            //   summary 由抽取副模型寫(≤20字、有識別性、少塞主角名)；舊記憶沒 summary 就退回 text。
+            //   再做「免費時間召回」：facts 已按 createdAt 舊→新排序，切三段標粗略時距(不花 LLM、不多通)，
+            //   讓主模型有「多久以前」的概念、時態不錯亂。
+            const facts = all.filter(m => !['dialogue', 'item', 'npc', 'relationship'].includes(m.type));   // 狀態型(物品/角色/關係)走收斂釘選只留最新、不進零散目錄(治物品矛盾+態度忽冷忽熱)；目錄只放事件/地點/規則等流水
+            const voice = all.filter(m => m.type === 'dialogue');
+
+            // 索引每行前綴穩定代號 A1…An（與 getCatalogForPicking 同序同碼），主模型要回想就 <recall>A5</recall>。
+            _lastCatalogMap = {};
+            const _seen = new Set();
+            let _code = 0;
+            const _sumLine = (m) => {                       // 索引文字：summary 優先，沒有退回 text，截短去重；前綴代號
+                let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
+                if (!s) return '';
+                if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
+                if (_seen.has(s)) return '';
+                _seen.add(s);
+                _code++;
+                const code = 'A' + _code;
+                _lastCatalogMap[code] = m;
+                return `${code}・${s}`;
+            };
+
+            // 主模型常駐目錄：預設全目錄(早期/中段/近期)；開「只近期」開關 → 只留近期段當 fallback，精準召回交副模型(getCatalogForPicking 不受影響、照拿全部)，省 token。
+            //   給沒跑副模型導演的朋友：保持預設(全目錄)才不會砍掉他們的召回來源。
+            const _mainRecentOnly = (function(){ try { return JSON.parse(localStorage.getItem('os_vector_config') || '{}').mainRecentOnly === true; } catch (e) { return false; } })();
+            let block = `<劇情記憶 規則="既成事實·寫作前必讀·不得矛盾">\n`;
+            if (_vecActive) {
+                // 向量召回就緒：主模型不背全目錄，只給下面的釘選＋導演挑的細節；要更多細節用關鍵詞 <recall> 兜底。
+                block += `下列是本劇過往「已經發生」的重要記憶與當前需要的細節。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾。\n` + _labNote;
+            } else {
+                block += `下列是本劇過往「已經發生」的記憶摘要${_mainRecentOnly ? '（近期段）' : '，按時間遠近分三段(早期/中段/近期)'}。你必須延續這些事實、保持前後連貫，嚴禁遺忘、改寫或與之矛盾；需要某條完整細節時，依末尾「記憶用法」用 <recall> 回想。\n` + _labNote;
+                if (facts.length) {
+                    const n = facts.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
+                    const _segs = _mainRecentOnly
+                        ? [['近期', facts.slice(c2)]]
+                        : [['早期', facts.slice(0, c1)], ['中段', facts.slice(c1, c2)], ['近期', facts.slice(c2)]];
+                    _segs.forEach((seg) => {
+                        const lines = seg[1].map(_sumLine).filter(Boolean);
+                        if (lines.length) block += `\n〔${seg[0]}〕\n` + lines.join('\n');
+                    });
+                }
+            }
+
+            // 語氣記憶的 tag 幾乎只有角色名 → 收斂成「有語氣樣本的角色」一行(要範例就 <recall> 角色名)
+            const voiceNames = Array.from(new Set(voice.flatMap(m => (m.tags || []).filter(Boolean))));
+            if (voiceNames.length) {
+                block += `\n\n【角色語氣索引｜下列角色有語氣/說話樣本，需要某角色的說話風格範例就 <recall> 其名】\n・${voiceNames.join('、')}`;
+            }
+
+            // ── 🧷 核心角色：每個人一格「跟主角到現在的關係」＋「最近的狀態」 ──
+            //   09-27：兩個角色關係早已很親密，AI 還寫兩人互相敵對、一下好一下重來。
+            //   以前這格是 npc/relationship 裡最新的一條＝最近一章發生的事，吵一架那格就是吵架 → 關係跟著最後一幕擺盪。
+            //   現在 relationship 那條由抽記憶那通「以上一次的關係為底寫到現在」（見 relationNow），這裡分開擺：
+            //   關係＝累積到現在的；最近＝那個人最新的狀態（比關係新才附）。
+            //   設計：只有這一輪會寫到的人（最近幾樓、使用者剛打的那句提到名字）給完整一格，其他人一行摘要——人再多也不擠。
+            const CORE_PIN_MAX = 10, CORE_TEXT_MAX = 120;
+            const _coreKeys = new Set();
+            {
+                const relBy = new Map(), npcBy = new Map();   // 角色鑰匙(簡繁折一起) → [顯示名, 最新一條]
+                for (const m of all) {
+                    if (m.type !== 'npc' && m.type !== 'relationship') continue;
+                    const name = _whoOf(m, _mcKey);
+                    if (!name || _nameKey(name) === _mcKey) continue;
+                    _keepNewest(m.type === 'relationship' ? relBy : npcBy, _nameKey(name), name, m);
+                }
+                const _txt = (m, max) => { let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim(); return t.length > max ? t.slice(0, max) + '…' : t; };
+                const _sum = m => { let t = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim(); return t.length > MEM_SUM_MAX ? t.slice(0, MEM_SUM_MAX) + '…' : t; };
+                const people = [];
+                new Set([...relBy.keys(), ...npcBy.keys()]).forEach(k => {
+                    const r = relBy.get(k), n = npcBy.get(k);
+                    const rel = r ? r[1] : null, st = n ? n[1] : null;
+                    const newest = rel && st ? (_newer(st, rel) ? st : rel) : (rel || st);
+                    people.push({ k, name: (r || n)[0], rel, st: (st && (!rel || _newer(st, rel))) ? st : null, newest });
+                });
+                people.sort((a, b) => (_newer(a.newest, b.newest) ? -1 : 1));
+                const _hit = p => !!_recentKey && p.k.length >= 2 && _recentKey.indexOf(p.k) >= 0;
+                const core = people.filter(_hit).slice(0, CORE_PIN_MAX);
+                const coreSet = new Set(core.map(p => p.k));
+                const coreRest = people.filter(p => !coreSet.has(p.k));
+                const _mark = m => _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
+                if (core.length) {
+                    block += `\n\n【核心角色｜這一輪劇情提到的人。「關係」是他跟主角累積到現在的關係，「最近」是他最近的狀態；務必延續、別寫成陌生人、別拿更早的舊態度】\n`;
+                    block += core.map(p => {
+                        const parts = [];
+                        if (p.rel) { _mark(p.rel); parts.push(`${_lab(p.rel)}關係：${_txt(p.rel, CORE_TEXT_MAX)}`); }
+                        if (p.st) { _mark(p.st); parts.push(`${_lab(p.st)}${p.rel ? '最近：' : ''}${_txt(p.st, CORE_TEXT_MAX)}`); }
+                        return `・【${p.name}】${parts.join('｜')}`;
+                    }).join('\n');
+                }
+                if (coreRest.length) {
+                    block += `\n【其他角色（這一輪沒提到；跟主角的關係或最新狀態摘要，要細節 <recall> 其名）】\n`;
+                    block += coreRest.map(p => { const m = p.rel || p.st; _mark(m); return `・【${p.name}】${_lab(m)}${_sum(m)}`; }).join('\n');
+                }
+            }
+
+            // ── 🔞 性事釘選：跟某 NPC 發生過性事(type:'sex')的記憶永遠在場，按對方角色去重留最新一條，
+            //    防 NPC 久未出場 / 久沒提就被主模型寫成初次見面、拔屌無情 OOC（同 type 本身即重要度）。
+            {
+                const sexByChar = new Map();
+                for (const m of all) {
+                    if (m.type !== 'sex') continue;
+                    const name = _whoOf(m, _mcKey);
+                    if (name) _keepNewest(sexByChar, _nameKey(name), name, m);
+                }
+                const sx = Array.from(sexByChar.values()).sort((a, b) => (_newer(a[1], b[1]) ? -1 : 1)).slice(0, 8);
+                if (sx.length) {
+                    const _mc = _getProtagonist();   // 主角名（性事是角色×角色，標頭綁兩個人名才清楚）
+                    // 🚨 09-23：關係前後期會變（例如前期泡友、後期感情加深）→ 舊的性事紀錄寫著「泡友」，又每回合喊「務必記得這層關係」，跟核心角色那段最新的關係打架。
+                    //    這段只提醒「發生過」，關係一律以核心角色那段（relationship 最新一條）為準；舊紀錄裡寫的關係是當時的，不代表現在。
+                    block += `\n\n【性事紀錄｜主角與下列角色發生過性事，別寫成初次見面或冷淡無情。兩人現在是什麼關係，以上面【核心角色】或【其他角色】裡那個人的關係為準；下面紀錄裡若提到關係，那是當時的，不代表現在】\n`;
+                    block += sx.map(([name, m]) => {
+                        let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
+                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
+                        return `・【${_mc ? _mc + '×' + name : name}】${_lab(m)}${t}`;
+                    }).join('\n');
+                }
+            }
+
+            // ── 📦 物品狀態釘選：item 記憶按物品名(tags[0])去重、只留最新一條 → 同一物品只認最新狀態(手帕現在在誰那)。
+            //    治「每筆物品流轉各記一條→借走/拿回/還我並存→主模型亂寫」：all 已 createdAt 舊→新，後寫覆蓋＝最新狀態(時間線)、每輪抽取刷新＝即時動態(比 20 輪大總結快太多)。
+            {
+                const ITEM_PIN_MAX = 15;
+                const itemByName = new Map();
+                for (const m of all) {
+                    if (m.type !== 'item') continue;
+                    let name = (Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || String(m.summary || '').slice(0, 10);
+                    name = String(name).trim();
+                    if (name) _keepNewest(itemByName, _nameKey(name), name, m);   // 留最新一條（簡繁同一樣東西算一個）
+                }
+                const items = Array.from(itemByName.values())
+                    .sort((a, b) => (_newer(a[1], b[1]) ? -1 : 1))
+                    .slice(0, ITEM_PIN_MAX);
+                if (items.length) {
+                    block += `\n\n【物品狀態｜下列物品的「目前狀態／持有者」以此為唯一最新依據，不得拿更早的舊狀態、也不得寫成自相矛盾】\n`;
+                    block += items.map(([name, m]) => {
+                        let t = String(m.text || m.summary || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > CORE_TEXT_MAX) t = t.slice(0, CORE_TEXT_MAX) + '…';
+                        _coreKeys.add((m.summary || '') + '|' + String(m.text || '').slice(0, 40));
+                        return `・【${name}】${_lab(m)}${t}`;
+                    }).join('\n');
+                }
+            }
+
+            // ── 細節注入：① 副模型(記憶導演)上一輪挑的記憶＝主力  ② 主模型 <recall> 點名＝備援 → 合併去重補完整內文 ──
+            //    去重種子帶入 _coreKeys：核心角色已釘在上面，動態細節區不重複佔格。
+            let _detailHit = [];
+            const _pendingSecCount = _pendingRecallEntries.length, _pendingKwCount = _pendingRecallKeywords.length;
+            try {
+                const _src = [];
+                if (_pendingSecCount) _src.push((_pendingRecallVia === 'auto' ? '自動搜 ' : '記憶導演 ') + _pendingSecCount);
+                if (_pendingRecallMainEntries.length) _src.push('AI 自己點名(代號) ' + _pendingRecallMainEntries.length);
+                if (_pendingKwCount) _src.push('AI 自己點名(關鍵詞) ' + _pendingRecallKeywords.join('、'));
+                console.log('🧠 [Recall] 這輪點名記憶的來源：' + (_src.length ? _src.join('｜') : '沒有'));
+            } catch (e) {}
+            {
+                let _cand = [];
+                if (_pendingRecallEntries.length) _cand = _cand.concat(_pendingRecallEntries);          // 副模型導演挑的(主力)
+                if (_pendingRecallMainEntries.length) _cand = _cand.concat(_pendingRecallMainEntries);  // 主模型挑碼解析的(備援，用碼可靠)
+                if (_pendingRecallKeywords.length) {                                                     // 主模型寫的非代號關鍵詞(末路備援)
+                    const kws = _pendingRecallKeywords.map(k => k.toLowerCase());
+                    _cand = _cand.concat(allAny.filter(m => {   // 🚪 點名＝要的回顧，跨世界照找
+                        const hay = ((m.tags || []).join(' ') + ' ' + (m.summary || '') + ' ' + (m.text || '')).toLowerCase();
+                        return kws.some(k => k && hay.includes(k));
+                    }));
+                }
+                // 🗣️ 語氣樣本(dialogue)會隨關係過時(陌生→親密語氣不同)、又易累積十幾條 → 同角色只留最近 N 條，
+                //    淘汰過時舊語氣(免拿陌生時期語氣套現在關係)、也省 token。事件/角色等非 dialogue 不受影響。
+                {
+                    const VOICE_KEEP_PER_CHAR = 3;
+                    const _vByChar = new Map(), _rest = [];
+                    for (const m of _cand) {
+                        const nm = (m && m.type === 'dialogue') ? (((Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || '').trim()) : '';
+                        if (nm) { if (!_vByChar.has(nm)) _vByChar.set(nm, []); _vByChar.get(nm).push(m); }
+                        else _rest.push(m);
+                    }
+                    const _vKept = [];
+                    for (const arr of _vByChar.values()) {
+                        arr.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));   // 新→舊
+                        _vKept.push(...arr.slice(0, VOICE_KEEP_PER_CHAR));
+                    }
+                    _cand = _rest.concat(_vKept);
+                }
+                const _ds = new Set(_coreKeys); const _hit = _detailHit;
+                for (const m of _cand) {
+                    const key = (m.summary || '') + '|' + String(m.text || '').slice(0, 40);
+                    if (!key.trim() || _ds.has(key)) continue;
+                    _ds.add(key); _hit.push(m);
+                    if (_hit.length >= 8) break;
+                }
+                if (_hit.length) {
+                    // 照發生先後排（導演挑回來的順序是相關度，不是時間）
+                    _hit.sort((a, b) => (_floorOf(a) - _floorOf(b)) || ((a.createdAt || 0) - (b.createdAt || 0)));
+                    block += `\n\n【點名記憶細節｜下列是這段劇情需要記得的完整記憶內容，務必據此保持連貫】\n`;
+                    block += _hit.map(m => {
+                        let t = String(m.text || '').replace(/\s+/g, ' ').trim();
+                        if (t.length > 300) t = t.slice(0, 300) + '…';
+                        const tag = ((Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || '').trim();   // 角色名/事件名當標頭
+                        return tag ? `・【${tag}】${_lab(m)}${t}` : `・${_lab(m)}${t}`;
+                    }).join('\n');
+                }
+                _pendingRecallEntries = [];       // 消費掉；副模型每輪會重新挑
+                _pendingRecallMainEntries = [];   // 消費掉；主模型每輪會重新挑碼
+                _pendingRecallKeywords = [];      // 消費掉；要持續帶就靠下一輪再點名
+            }
+
+            // ── 教主模型怎麼把「摘要」變「細節」（細節晚一輪到）──
+            if (_vecActive) {
+                // 向量模式：沒有目錄代號可抄 → 改用關鍵詞回想（系統會向量撈相關記憶補上）。
+                block += `\n\n[記憶用法｜若這段劇情需要回想某件過往的事、或某角色的說話風格，請在回覆最後、</content> 之外，加一行 <recall>關鍵詞</recall>（例如人名、地點、事件名，多個用逗號隔開）。系統會在下一輪把相關記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
+            } else {
+                block += `\n\n[記憶用法｜每條摘要行首都有一個代號（A 開頭的編號）。若這段劇情需要某條記憶的完整內容，請在回覆最後、</content> 之外，加一行 <recall>代號</recall>（直接抄行首那個編號，多條用逗號隔開）；若需要某角色的說話風格範例，改抄該角色名。系統會在下一輪把對應記憶的完整內容補給你。這行不會顯示給讀者，切勿寫進 <content> 內。]\n</劇情記憶>`;
+            }
+
+            // depth(in_chat)：越小越貼近生成點/注意力越高。向量召回從 0 挪到 2，
+            //   讓出底部給大總結(depth:1) → 兩條記憶錯開、不再都擠 depth:0。
+            const result = win.TavernHelper.injectPrompts([{
+                id: INJECT_ID,
+                content: block.trim(),
+                position: 'in_chat',
+                depth: 2,
+                role: 'system'
+            }], { once: true });
+            _lastUninject = result?.uninject || null;
+            _lastRecall = { text: block.trim(), count: all.length };   // 給 CTX 面板「記憶召回」行
+            console.log(`🧠 [Vector Memory Injector] 注入記憶摘要索引 ${all.length} 條（summary 目錄+時間分段，全文按需 <recall>）`);
+        } catch (e) {
+            console.warn('[Vector Memory Injector] 失敗:', e?.message || e);
+        }
+    }
+
+    // ── 🎬 記憶導演：給副模型(state_runtime extractOnce)挑「下一輪主模型該被提醒哪幾條」用 ──
+    //    回傳帶碼全記憶目錄(文字) + 碼→記憶物件對照(map)；副模型挑碼 → 解析成物件 → setPendingRecall。
+    //    用代號(A1…An)讓副模型挑，避免它逐字寫關鍵詞寫錯/對不上（同學生圖 [P1] 號碼制）。
+    async function getCatalogForPicking(queryText) {
+        try {
+            if (win.OS_API?.isStandalone?.()) return null;
+            if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return null;
+            const storyId = _storyId();
+            if (!storyId || !win.OS_DB?.getAllVnMemories) return null;
+            const allRaw = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            let all = allRaw;
+            // 🚪 世界門：記憶導演平常只從現在這個地方的記憶挑（向量粗篩 search 自己也會篩）
+            let _here = null;
+            try { _here = (typeof win.OS_VECTOR_ENGINE?.placeKeep === 'function') ? await win.OS_VECTOR_ENGINE.placeKeep() : null; if (_here) all = allRaw.filter(_here); } catch (e) {}
+            const facts = all.filter(m => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged);   // 狀態型(物品/角色/關係)走收斂釘選、不交副模型挑(免挑到舊狀態/舊態度)；過濾被壓縮隱藏的原始條目
+            // 🚪 但剛寫完的這章提到不在這裡的人（主角在世界門裡想起奧瑞亞的人）→ 那個人的記憶也放進候選，挑不挑交給導演看劇情判斷。
+            //   11-15：記憶召回交給副模型（回顧靠關鍵字回溯）。
+            //   只看記憶的標籤（多半是人名）有沒有出現在這章正文；主角本人不算（每章都有他）。每個人關係／近況各最新一條＋事件，最多 CROSS_MAX 條。
+            const _away = [];
+            if (_here) {
+                try {
+                    const qk = _nameKey(String(queryText || '').replace(/<[^>]+>/g, ' '));
+                    const mcK = _nameKey(_getProtagonist());
+                    const hitTag = m => (Array.isArray(m.tags) ? m.tags : []).some(t => { const k = _nameKey(String(t || '').trim()); return k.length >= 2 && k !== mcK && qk.indexOf(k) >= 0; });
+                    const cand = allRaw.filter(m => m && !m.merged && m.type !== 'dialogue' && !_here(m) && hitTag(m))
+                        .sort((a, b) => (_newer(a, b) ? -1 : 1));   // 新的在前
+                    const seenState = new Set();
+                    for (const m of cand) {
+                        if (m.type === 'npc' || m.type === 'relationship' || m.type === 'item') {   // 狀態型：同一個人／東西只留最新一條
+                            const who = m.type + '|' + _nameKey(((Array.isArray(m.tags) ? m.tags.find(Boolean) : '') || '').trim());
+                            if (seenState.has(who)) continue;
+                            seenState.add(who);
+                        }
+                        _away.push(m);
+                        if (_away.length >= CROSS_MAX) break;
+                    }
+                } catch (e) {}
+            }
+            if (!facts.length && !_away.length) return null;
+
+            // 🔎 向量粗篩：有「當下劇情」當 query + 向量回填到位 → 只把語意相關的 top-K 候選交給導演挑（取代 2000 行全目錄常駐）。
+            //    沒給 query / 還沒回填到位(vectorReady=false) / 搜尋空 → 退回全目錄(早/中/近)，回填空窗期照舊能召回、不開天窗、不會只丟給導演零星幾條。
+            let pool = null, segmented = true, heavy = [];
+            const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
+            if (q && typeof win.OS_VECTOR_ENGINE?.search === 'function' && win.OS_VECTOR_ENGINE?.vectorReady?.(all)) {
+                try {
+                    const _isFact = (m) => m && !['dialogue', 'item', 'npc', 'relationship'].includes(m.type) && !m.merged;
+                    const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, PICK_POOL_K, _isFact);   // 先篩再取前 K 名，候選池才真的有 K 條事件
+                    const picked = (hits || []).filter(_isFact);
+                    if (picked.length) {
+                        pool = picked; segmented = false;   // 候選池＝相關片段，不再分三段
+                        // ⚖️ 按缺口補重的：粗篩自己撈到幾條 weight 夠高的就少補幾條，
+                        //    上限同時受 HEAVY_SLOTS 與「不超過候選池一半」夾住——預留不能變成霸佔。
+                        const _w = (m) => { const n = Number(m && m.weight); return Number.isFinite(n) ? n : 0.5; };
+                        const already = picked.filter(m => _w(m) >= HEAVY_MIN).length;
+                        const room = Math.min(HEAVY_SLOTS - already, Math.floor(picked.length / 2));
+                        if (room > 0) {
+                            const inPool = new Set(picked.map(m => m && m.id));
+                            heavy = facts
+                                .filter(m => !inPool.has(m.id) && _w(m) >= HEAVY_MIN)
+                                .sort((a, b) => (_w(b) - _w(a)) || ((b.createdAt || 0) - (a.createdAt || 0)))
+                                .slice(0, room);
+                        }
+                    }
+                } catch (e) {}
+            }
+            if (!pool) pool = facts.slice();
+            pool.sort((a, b) => (_newer(a, b) ? 1 : -1));   // 照故事先後（見 _newer）
+            const _lab = await _chapterLabels(pool.concat(heavy, _away));   // 目錄每行也標（第N章·日期），導演才分得出新舊
+
+            const map = {};
+            const _seen = new Set();
+            let text = '', idx = 0;
+            const _emit = (m, lines) => {
+                let s = String(m.summary || m.text || '').replace(/\s+/g, ' ').trim();
+                if (!s) return;
+                if (s.length > MEM_SUM_MAX) s = s.slice(0, MEM_SUM_MAX) + '…';
+                if (_seen.has(s)) return;
+                _seen.add(s);
+                idx++;
+                const code = 'A' + idx;
+                map[code] = m;
+                lines.push(`${code}・${_lab(m)}${s}`);
+            };
+            if (segmented) {
+                const n = pool.length, c1 = Math.floor(n / 3), c2 = Math.floor(n * 2 / 3);
+                [['早期', pool.slice(0, c1)], ['中段', pool.slice(c1, c2)], ['近期', pool.slice(c2)]].forEach((seg) => {
+                    const lines = [];
+                    seg[1].forEach(m => _emit(m, lines));
+                    if (lines.length) text += `\n〔${seg[0]}〕\n` + lines.join('\n');
+                });
+            } else {
+                const lines = [];
+                pool.forEach(m => _emit(m, lines));
+                if (lines.length) text += `\n〔跟剛發生的劇情字面相近的記憶（相近不代表下一輪需要）〕\n` + lines.join('\n');   // 09-26：以前寫「相關」，導演照單全收
+                // 另立一區，不混進上面那組：這些是「跟現在的話題不相關」才需要特別撈出來的，
+                // 併在一起的話導演會把它們讀成當下相關而照樣挑不出重點。
+                if (heavy.length) {
+                    const hl = [];
+                    heavy.forEach(m => _emit(m, hl));
+                    if (hl.length) text += `\n〔還懸著、跟當前劇情無關但沒收尾的事〕\n` + hl.join('\n');
+                }
+            }
+            // 🚪 別處的人：另立一區，講明「不在這裡」，導演才不會當成現在身邊的事挑
+            if (_away.length) {
+                const al = [];
+                _away.slice().sort((a, b) => (_newer(a, b) ? 1 : -1)).forEach(m => _emit(m, al));
+                if (al.length) text += `\n〔這章提到、但不在現在這個地方的人：跟他們有關的舊記憶（主角想起他們、或劇情真的需要回想時才挑）〕\n` + al.join('\n');
+            }
+            if (!idx) return null;
+            return { text: text.trim(), map };
+        } catch (e) { return null; }
+    }
+    // 副模型挑完的記憶物件 → 存著，下一輪 injectMemories 注入完整內文（最多 8）
+    //   via：誰挑的（'director' 記憶導演／'auto' 沒導演時自動搜），注入那一刻印出來，查「這條是誰塞進來的」用
+    let _pendingRecallVia = '';
+    function setPendingRecall(entries, via) {
+        try { _pendingRecallEntries = (Array.isArray(entries) ? entries : []).filter(Boolean).slice(0, 8); }
+        catch (e) { _pendingRecallEntries = []; }
+        _pendingRecallVia = via || 'director';
+        if (_pendingRecallEntries.length) console.log('🎬 [Recall' + (_pendingRecallVia === 'auto' ? '自動搜' : '導演') + '] 挑了下一輪要回想的記憶 ' + _pendingRecallEntries.length + ' 條');
+    }
+    // 🎬 AVS 關著也要有記憶導演（09-27：AVS 和記憶開關互不影響，兩者都開就合併成一通）。
+    //   以前導演只搭 AVS 那一通；AVS 關著就只剩程式拿整章搜 8 條、沒有任何判斷。
+    //   現在記憶自己那一通（os_vector_engine.ingest）也附同一份候選清單與說明，多回一欄 recall_next——不多叫模型。
+    async function directorPlan(queryText) {
+        try {
+            const RT = win.OS_STATE_RUNTIME;
+            if (!RT || typeof RT.recallAddendum !== 'function') return null;
+            const cat = await getCatalogForPicking(queryText);
+            if (!cat || !cat.text) return null;
+            let closed = [];
+            try { closed = (await win.OS_STORY_TOOLS?.getCurrentClosedNames?.()) || []; } catch (e) {}
+            return { addendum: RT.recallAddendum(cat.text, closed), map: cat.map };
+        } catch (e) { return null; }
+    }
+    function applyDirectorPicks(codes, map) {
+        const picked = (Array.isArray(codes) ? codes : []).map(c => map && map[String(c).trim().toUpperCase()]).filter(Boolean);
+        setPendingRecall(picked, 'director');
+        return picked.length;
+    }
+
+    // ── 酒館原生生成結束 → 直接 ingest（酒館不走 saveVnChapter，VN_CHAPTER_SAVED 不會發，
+    //    所以這裡補上：拿剛生成的 AI 劇情丟給引擎提取記憶）──
+    let _lastIngestSig = null;
+    let _pendingMemory = null;   // 結合觸發：狀態系統開著時，待 state_runtime 那通副模型一起抽的記憶內容
+    async function ingestLatest() {
+        try {
+            if (win.__AURELIA_SUMMARIZING) return;                     // 大總結生成不是劇情，別記成記憶
+            if (win.OS_API?.isStandalone?.()) return;                 // 酒館 only（PWA 走 saveVnChapter→VN_CHAPTER_SAVED）
+            if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return;
+            if (typeof win.OS_VECTOR_ENGINE?.ingest !== 'function') return;
+            const storyId = _storyId();
+            if (!storyId) return;
+            if (!win.TavernHelper?.getChatMessages) return;
+
+            const last = await win.TavernHelper.getChatMessages(-1);
+            if (!last || !last[0]) return;
+            const m = last[0];
+            if (m.is_user) return;                                     // 只記 AI 回覆
+            const id = String(m.message_id ?? m.id ?? '');
+            let content = (m.message || m.mes || m.content || '').trim();
+            if (!content) return;
+            // 順手快取當前主角名（每章 header 的 [Protagonist|名]）→ 給性事標頭「主角×對方」用
+            try { const _pm = content.match(/\[Protagonist\|([^\]]+)\]/i); if (_pm && _pm[1] && _pm[1].trim().toLowerCase() !== 'user') _protagonistName = _pm[1].trim(); } catch (e) {}
+            // 主模型若用 <recall> 點名要回想的記憶 → 記下關鍵詞(下一輪補完整內文)，並把標籤從訊息清掉(不顯示給讀者)
+            content = await _captureAndStripRecall(content);
+            // 只記「VN 劇情」回覆 —— 認 <content> 標籤即可（它裡面就是全文）；
+            // 不依賴 [Chapter|/[Story| 等特定 tag（用戶 tag 很多又持續新增，照 tag 走會漏）。
+            if (!/<content>[\s\S]*?<\/content>/i.test(content)) return;
+
+            // 去重用「內容簽章」而非只看 id：同則同內容才跳過；重 roll/重生換了內容 → 重新記
+            // （ingest 端會先清掉同一則(id)的舊記憶再寫新的 → 自動替換、不殘留舊分支）
+            const sig = id + '#' + content.length + '#' + content.slice(0, 40);
+            if (sig === _lastIngestSig) return;
+            _lastIngestSig = sig;
+            const cid = id || ('msg_' + Date.now());
+            // 結合觸發：狀態系統開著 → 把該記的內容掛成 pending，交給 state_runtime 那一通副模型一起抽(每回合省一通)；
+            //           狀態系統沒開 → 照舊自己抽一通(降級不變)。
+            if (win.OS_STATE_RUNTIME?.isEnabled?.()) {
+                _pendingMemory = { content, storyId, chapterId: cid };
+            } else {
+                // 記憶那一通順便當導演（見 directorPlan）；導演沒回才退回「拿本則劇情向量撈 8 條」
+                Promise.resolve(win.OS_VECTOR_ENGINE.ingest(content, storyId, cid, { director: true }))
+                    .then(r => { if (!(r && r.directed)) _selfRecall(content, storyId); })
+                    .catch(() => _selfRecall(content, storyId));
+            }
+        } catch (e) { console.warn('[Vector Memory Injector] ingestLatest 失敗:', e?.message || e); }
+    }
+
+    // 導演沒跑(state_runtime 關)時的自助召回：拿本則劇情向量搜相關記憶 → 存 pending，下一輪 injectMemories 直接注入細節
+    //   （同副模型導演的交棒路徑：setPendingRecall → _pendingRecallEntries → 下一輪【點名記憶細節】）。向量沒就緒就靜默跳過。
+    async function _selfRecall(queryText, storyId) {
+        try {
+            if (win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) return;
+            if (typeof win.OS_VECTOR_ENGINE?.search !== 'function') return;
+            const q = String(queryText || '').replace(/<[^>]+>/g, ' ').trim();
+            if (!q) return;
+            const _ok = (m) => m && m.type !== 'dialogue' && !m.merged;
+            const hits = await win.OS_VECTOR_ENGINE.search(q, storyId, 8, _ok);   // 先篩再取前 8 名
+            const picked = (hits || []).filter(_ok);
+            if (picked.length) setPendingRecall(picked, 'auto');
+            else console.warn('[Recall自動搜] 沒搜到任何記憶（向量還沒建好、或這個故事沒有記憶）');
+        } catch (e) { console.warn('[Recall自動搜] 失敗：', e?.message || e); }   // 以前這裡靜默吞掉，09-27 查為什麼沒生效查不到
+    }
+
+    // 監聽器把 Promise 交回去 → 酒館 emit 會等注入完才組 prompt；最多等 2.5 秒，免得資料庫卡住連生成一起卡
+    const WAIT_MS = 2500;
+    function _waitFor(fn) { return Promise.race([Promise.resolve().then(fn).catch(function () {}), new Promise(function (r) { setTimeout(r, WAIT_MS); })]); }
+
+    function init() {
+        if (!win.eventOn || !win.tavern_events) { setTimeout(init, 1000); return; }
+        if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; return _waitFor(injectMemories); });   // dryRun 空跑不注入
+        if (win.tavern_events.GENERATION_ENDED) win.eventOn(win.tavern_events.GENERATION_ENDED, ingestLatest);
+        // 刪訊息 → 自動清掉那一則的記憶（記憶跟著現存劇情走，不用手動管）
+        if (win.tavern_events.MESSAGE_DELETED) win.eventOn(win.tavern_events.MESSAGE_DELETED, (mesId) => {
+            try {
+                if (win.OS_API?.isStandalone?.()) return;
+                const id = (mesId !== undefined && mesId !== null) ? String(mesId) : '';
+                if (id && win.OS_DB?.deleteVnMemoriesByChapter) win.OS_DB.deleteVnMemoriesByChapter(id, _storyId());
+            } catch (e) {}
+        });
+        // 🚨切聊天室必須清「跨聊天室記憶體暫存」：漏清 _pendingMemory / _pendingRecallMainEntries → 舊聊天結尾掛的待處理記憶(含舊角色)會被新聊天第一輪 consumePendingMemory 吃進去 → 新局莫名遺留舊 chatId 數據。
+        if (win.tavern_events.CHAT_CHANGED) win.eventOn(win.tavern_events.CHAT_CHANGED, () => { try { _lastUninject?.(); _lastUninject = null; } catch (e) {} _lastIngestSig = null; _lastRecall = null; _pendingRecallKeywords = []; _pendingRecallEntries = []; _pendingRecallMainEntries = []; _pendingMemory = null; });
+        console.log('🧠 [Vector Memory Injector] Ready（召回 + 酒館 ingest）');
+    }
+
+    // 🧹 對齊劇情：清掉「來源訊息已被刪掉」的孤兒記憶（刪訊息事件沒觸發 / 位置漂移時的補救）。
+    //   讀真實全檔(VN_READER.fetchFullChat 繞懶載)拿真樓數 → chapterId(位置) ≥ 樓數 = 那則已不在劇情 = 孤兒 → 刪。
+    //   保險：① 讀不到全檔(total<0)就不動，寧可不清也別誤刪 ② 只動「數字 chapterId 且超出範圍」(msg_xxx 後備 id / 範圍內的不碰)
+    //         ③ 若要清的超過一半記憶 → 視為「沒讀到完整劇情」的異常，中止（防 fetchFullChat 回殘缺數量把好記憶全誤殺）。
+    async function reconcileToStory() {
+        try {
+            const storyId = _storyId();
+            if (!storyId || !win.OS_DB?.getAllVnMemories) return { ok: false, msg: '沒有有效世界' };
+            let total = -1;
+            try {
+                const msgs = (win.VN_READER && win.VN_READER.fetchFullChat) ? (await win.VN_READER.fetchFullChat()) : null;
+                if (Array.isArray(msgs)) total = msgs.length;
+            } catch (e) {}
+            if (total < 0) return { ok: false, msg: '讀不到目前完整劇情（保險起見沒清，請重試）' };
+            const all = (await win.OS_DB.getAllVnMemories(storyId)) || [];
+            const orphans = all.filter(m => {
+                if (!m || m.chapterId == null) return false;
+                const s = String(m.chapterId);
+                if (!/^\d+$/.test(s)) return false;       // 非數字位置 id(msg_xxx) → 不碰
+                return Number(s) >= total;                 // 位置 ≥ 目前樓數 → 來源訊息已不在 → 孤兒
+            });
+            if (orphans.length > all.length * 0.5) {
+                return { ok: false, msg: '偵測到異常（要清掉超過一半記憶），可能沒讀到完整劇情，已中止；請確認劇情正常載入後再試' };
+            }
+            let removed = 0;
+            for (const m of orphans) {
+                try { if (win.OS_DB?.deleteVnMemory) { await win.OS_DB.deleteVnMemory(m.id); removed++; } } catch (e) {}
+            }
+            return { ok: true, removed, total, scanned: all.length };
+        } catch (e) { return { ok: false, msg: (e?.message || String(e)) }; }
+    }
+
+    // 🧭 給抽記憶那一通：這一章出場的人「上一次記下的跟主角的關係」。抽記憶的只看得到這一章，
+    //   以前 relationship 寫的是這章的互動 → 以這裡為底寫到現在（規則在 os_vector_engine EXTRACTION_PROMPT）。
+    async function relationNow(chapterText, storyId) {
+        try {
+            const sid = storyId || _storyId();
+            if (!sid || !win.OS_DB?.getAllVnMemories) return '';
+            const all = ((await win.OS_DB.getAllVnMemories(sid)) || []).filter(m => m && !m.merged && m.type === 'relationship');
+            if (!all.length) return '';
+            const mcKey = _nameKey(_getProtagonist());
+            const by = new Map();
+            all.forEach(m => { const n = _whoOf(m, mcKey); if (n && _nameKey(n) !== mcKey) _keepNewest(by, _nameKey(n), n, m); });
+            const tk = _nameKey(chapterText);
+            const lines = Array.from(by.entries()).filter(([k]) => k.length >= 2 && tk.indexOf(k) >= 0).slice(0, 10)
+                .map(([, [n, m]]) => `・【${n}】${String(m.text || m.summary || '').replace(/\s+/g, ' ').trim().slice(0, 160)}`);
+            return lines.length ? `【這一章出場的人，上一次記下的跟主角的關係】\n${lines.join('\n')}` : '';
+        } catch (e) { return ''; }
+    }
+
+    win.OS_VECTOR_INJECT = {
+        injectMemories, ingestLatest, reconcileToStory, relationNow,
+        get _lastRecall() { return _lastRecall; },
+        // 結合觸發：state_runtime 取走待處理記憶內容(取走即清，避免重複)
+        consumePendingMemory() { const p = _pendingMemory; _pendingMemory = null; if (p && p.storyId && p.storyId !== _storyId()) return null; return p; },   // 守衛：不同 chatId 的殘留待處理記憶不給吃(防跨聊天室洩漏)
+        getCatalogForPicking, setPendingRecall,    // 🎬 記憶導演：給 state_runtime 副模型挑用
+        directorPlan, applyDirectorPicks,          // 🎬 AVS 關著時，記憶那一通順便當導演（os_vector_engine.ingest）
+    };
+    init();
+})();

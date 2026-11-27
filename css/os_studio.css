@@ -1,0 +1,1908 @@
+        .studio-container { width: 100%; height: 100%; background: #EEF0F6; color: #1A1C28; display: flex; flex-direction: column; font-family: 'Noto Sans TC', sans-serif; position: relative; z-index: 9999; }
+        .studio-header { padding: calc(12px + var(--safe-top, env(safe-area-inset-top, 0px))) 20px 12px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; box-sizing: border-box; }
+        .studio-title { font-size: 16px; font-weight: bold; color: #1A1C28; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        .studio-mode-select { background: #EEF0F6 !important; appearance: none; -webkit-appearance: none; border: 1px solid rgba(26,28,40,0.25); color: #1A1C28 !important; padding: 6px 12px; border-radius: 6px; font-size: 13px; outline: none; cursor: pointer; color-scheme: light; }
+        .studio-mode-select option { background: #EEF0F6 !important; color: #1A1C28 !important; }
+        /* 頂層 mode tab 列：自己一整列、橫向分段控制（不再塞標題裡擠到換行）✨煉丹 / 🎨主題 */
+        .studio-mode-tabs { display: flex; gap: 5px; padding: 8px 10px 10px; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.10); flex-shrink: 0; box-sizing: border-box; }
+        .studio-mode-tab { flex: 1 1 0; min-width: 0; text-align: center; padding: 7px 6px; border: 1px solid rgba(26,28,40,0.25); border-radius: 8px; font-size: 12px; cursor: pointer; color: rgba(26,28,40,0.72); background: #EEF0F6; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .studio-mode-tab:hover { background: rgba(26,28,40,0.06); color: #1A1C28; }
+        .studio-mode-tab.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: bold; }
+        /* 🎨 主題＝頂層 mode：top-theme 時隱藏 chat+preview、顯示主題全區 */
+        .studio-theme-pane { display: none; flex: 1; min-height: 0; overflow-y: auto; padding: 20px; }
+        .studio-container.top-theme .studio-left { display: none; }
+        .studio-container.top-theme .studio-right { display: none; }
+        .studio-container.top-theme .studio-theme-pane { display: block; }
+        /* 🎨 劇情主題吃創作室的版型：兩欄要吃滿高度、各自捲動（單欄時交還給 overflow-y:auto 那條）*/
+        .studio-container:not(.studio-mobile).top-theme .studio-theme-pane { display: flex; overflow: hidden; padding: 14px; }
+        /* 🌍 世界書＝頂層 mode（仿 top-theme：隱藏 chat+preview、顯示世界書全區） */
+        .studio-worldbook-pane { display: none; flex: 1; min-height: 0; overflow: hidden; }
+        .studio-container.top-worldbook .studio-left { display: none; }
+        .studio-container.top-worldbook .studio-right { display: none; }
+        .studio-container.top-worldbook .studio-worldbook-pane { display: flex; flex-direction: column; }
+        /* 🧑 我的角色＝頂層 mode（仿 top-worldbook：隱藏 chat+preview、顯示人設全區） */
+        .studio-persona-pane { display: none; flex: 1; min-height: 0; overflow: hidden; }
+        .studio-container.top-persona .studio-left { display: none; }
+        .studio-container.top-persona .studio-right { display: none; }
+        .studio-container.top-persona .studio-persona-pane { display: flex; flex-direction: column; }
+        /* 🧑 我的角色 — 清單/卡片 */
+        .mc-charcard { gap: 8px; }
+        .mc-active-tag { display:inline-block; margin-left:8px; font-size:11px; font-weight:700; color:var(--jrpg-paper-light); background:var(--jrpg-wine); padding:1px 7px; border-radius:8px; vertical-align:middle; }
+        .mc-usebtn { flex-shrink:0; padding:6px 10px; font-size:12px; font-weight:650; border:1px solid var(--jrpg-line); border-radius:10px; background:transparent; color:var(--jrpg-muted); cursor:pointer; font-family:inherit; }
+        .mc-usebtn.on { background:var(--jrpg-wine); color:var(--jrpg-paper-light); border-color:var(--jrpg-wine); }
+        .mc-impavatar { width:40px; height:40px; border-radius:50%; object-fit:cover; flex-shrink:0; border:1px solid var(--jrpg-line); }
+        .mc-impavatar-broke { display:none; }
+        .mc-impavatar-ph { display:flex; align-items:center; justify-content:center; color:var(--jrpg-muted); background:var(--jrpg-paper-light); font-size:18px; }
+        .mc-optbtn { width:100%; min-height:48px; border:1px solid var(--jrpg-line); border-radius:13px; background:var(--jrpg-paper-light); color:var(--jrpg-ink); font-size:15px; font-weight:650; cursor:pointer; font-family:inherit; text-align:left; padding:12px 16px; }
+        .mc-optbtn.primary { background:var(--jrpg-wine); color:var(--jrpg-paper-light); border-color:var(--jrpg-wine); text-align:center; }
+        .mc-opt-or { font-size:13px; color:var(--jrpg-muted); text-align:center; padding:2px 0; }
+        .mc-optreq { resize:none; }
+        /* 🧑 我的角色 — 編輯頁聊天 */
+        .mc-chat { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:4px 2px; }
+        .mc-msg { max-width:88%; padding:9px 12px; border-radius:13px; font-size:14px; line-height:1.5; white-space:normal; }
+        .mc-msg.me { align-self:flex-end; background:var(--jrpg-wine); color:var(--jrpg-paper-light); }
+        .mc-msg.ai { align-self:flex-start; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); color:var(--jrpg-ink); }
+        .mc-pendbar:empty { display:none; }
+        .mc-pend { width:100%; padding:9px; border:1px solid var(--jrpg-gold); border-radius:11px; background:rgba(232,211,174,0.4); color:var(--jrpg-wine-dark); font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .mc-pend.ghost { border-style:dashed; background:transparent; color:var(--jrpg-muted); font-weight:650; }
+        .mc-inputrow { display:flex; gap:8px; align-items:flex-end; flex-shrink:0; }
+        .mc-input { flex:1; resize:none; }
+        /* 🧑 我的角色 — 預覽卡片編輯器 */
+        .mc-namefield { flex-shrink:0; }
+        .mc-blocks { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:10px; }
+        .mc-block { border:1px solid var(--jrpg-line); border-radius:12px; background:var(--jrpg-paper-light); padding:10px 12px; }
+        .mc-block.editing { border-color:var(--jrpg-gold); }
+        .mc-block-head { display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+        .mc-grip { color:var(--jrpg-muted); cursor:grab; font-size:15px; }
+        .mc-block-name { font-size:14px; font-weight:700; color:var(--jrpg-ink); }
+        .mc-ai-dot { color:var(--jrpg-gold); font-weight:900; margin-left:4px; }
+        .mc-block-spacer { flex:1; }
+        .mc-iconbtn { border:0; background:none; padding:4px; font-size:15px; color:var(--jrpg-muted); cursor:pointer; font-family:inherit; }
+        .mc-iconbtn.danger { color:var(--swb-danger,#B54848); }
+        .mc-block-body { font-size:13px; line-height:1.6; color:var(--jrpg-muted); white-space:normal; }
+        .mc-block-label { width:100%; box-sizing:border-box; margin-bottom:6px; padding:8px 10px; border:1px solid var(--jrpg-line); border-radius:9px; font-size:14px; font-weight:700; font-family:inherit; background:var(--jrpg-paper-light); color:var(--jrpg-ink); }
+        .mc-block-text { width:100%; box-sizing:border-box; resize:none; padding:8px 10px; border:1px solid var(--jrpg-line); border-radius:9px; font-size:13px; line-height:1.6; font-family:inherit; background:var(--jrpg-paper-light); color:var(--jrpg-ink); }
+        .mc-block-editrow { display:flex; justify-content:flex-end; margin-top:6px; }
+        .mc-block-move { display:flex; justify-content:flex-end; gap:6px; margin-top:6px; }
+        .mc-movebtn { border:1px solid var(--jrpg-line); background:transparent; color:var(--jrpg-muted); border-radius:8px; padding:3px 9px; font-size:12px; cursor:pointer; font-family:inherit; }
+        .mc-movebtn:disabled { opacity:0.35; cursor:default; }
+        .mc-addblock { flex-shrink:0; width:100%; padding:9px; border:1px dashed var(--jrpg-line); border-radius:11px; background:transparent; color:var(--jrpg-muted); font-size:13px; cursor:pointer; font-family:inherit; }
+        /* 創作室首頁三張任務卡 CSS 已移除：首頁整併進應用商城工坊、不再有落地首頁 */
+        /* ═══ 世界書 5 換頁（吃創作室 --jrpg-* 暖色羊皮紙變數；不寫死顏色） ═══ */
+        .studio-worldbook-pane.swb-host { position: relative; --swb-add:#78966F; --swb-amber:#B47A33; --swb-danger:#B54848; }
+        .swb-page { display:flex; flex-direction:column; min-height:0; flex:1; padding:16px; gap:14px; box-sizing:border-box; color:var(--jrpg-ink); }
+        /* 頂列：返回 + 標題 + 安全章 */
+        .swb-bar { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+        /* 獨立 VN組件區：頂列(返回+標題)固定不隨內容捲；滿版蓋住捲動內容(容器已無 top padding，不留縫) */
+        .vncomp-app .swb-bar { position:sticky; top:0; z-index:5; background:var(--jrpg-paper); margin:0 -14px; padding:14px 14px 8px; }
+        .swb-bar-title { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:18px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .swb-bar-sub { font-size:12px; font-weight:400; color:var(--jrpg-muted); margin-left:8px; }
+        .swb-iconbtn { width:38px; height:38px; flex-shrink:0; display:grid; place-items:center; border:1px solid var(--jrpg-line); border-radius:10px; background:rgba(255,250,239,0.6); color:var(--jrpg-wine-dark); font-size:20px; line-height:1; cursor:pointer; font-family:inherit; padding:0; }
+        .swb-iconbtn:hover { background:rgba(232,211,174,0.55); border-color:var(--jrpg-gold); }
+        /* 選書頁標題區 */
+        .swb-phead { flex-shrink:0; }
+        .swb-ptitle { font-size:23px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .swb-psub { font-size:13px; color:var(--jrpg-muted); margin-top:4px; line-height:1.5; }
+        /* 主/次按鈕 */
+        .swb-primary { min-height:46px; padding:0 18px; border:0; border-radius:13px; background:var(--jrpg-wine); color:var(--jrpg-paper-light); font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .swb-primary:hover { background:var(--jrpg-wine-dark); }
+        .swb-primary:disabled { opacity:0.55; cursor:default; }
+        .swb-primary.swb-sm { min-height:0; height:40px; padding:0 14px; font-size:14px; flex-shrink:0; }
+        .swb-secondary { min-height:46px; padding:0 16px; border:1px solid rgba(104,31,37,0.4); border-radius:13px; background:transparent; color:var(--jrpg-wine); font-size:14px; font-weight:650; cursor:pointer; font-family:inherit; white-space:nowrap; }
+        .swb-secondary:hover { background:rgba(104,31,37,0.06); }
+        .swb-block { width:100%; flex-shrink:0; }
+        .swb-textdanger { align-self:flex-start; margin-top:14px; background:none; border:0; color:var(--swb-danger); font-size:14px; font-weight:650; cursor:pointer; font-family:inherit; padding:8px 2px; }
+        /* 命名輸入列 */
+        .swb-newrow { display:flex; gap:8px; flex-shrink:0; }
+        .swb-newrow[hidden] { display:none; }
+        /* 通用欄位 */
+        .swb-field { width:100%; box-sizing:border-box; padding:11px 13px; border-radius:11px; border:1px solid var(--jrpg-line); background:var(--jrpg-paper-light); color:var(--jrpg-ink); font-size:15px; font-family:inherit; outline:none; }
+        .swb-field:focus { border-color:var(--jrpg-gold); }
+        .swb-newrow .swb-field { flex:1; min-width:0; }
+        /* 搜尋＋篩選 */
+        .swb-tools { display:flex; flex-direction:column; gap:8px; flex-shrink:0; }
+        .swb-seg { display:flex; border:1px solid var(--jrpg-line); border-radius:11px; overflow:hidden; }
+        .swb-seg-btn { flex:1; padding:8px 6px; font-size:13px; font-weight:650; border:0; background:transparent; color:var(--jrpg-muted); cursor:pointer; font-family:inherit; }
+        .swb-seg-btn.on { background:var(--jrpg-wine); color:var(--jrpg-paper-light); }
+        /* 列表（可捲） */
+        .swb-list { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:8px; }
+        /* 卡片（書/條目/op 共用底） */
+        .swb-card { display:flex; align-items:center; gap:10px; padding:13px 14px; border:1px solid var(--jrpg-line); border-radius:14px; background:var(--jrpg-paper-light); box-shadow:0 1px 3px rgba(83,49,20,0.06); text-align:left; cursor:pointer; }
+        .swb-card.swb-op { align-items:center; }
+        .swb-copycard { border-color:rgba(182,138,69,0.55); background:rgba(182,138,69,0.10); }
+        .swb-seclabel { display:flex; align-items:center; gap:6px; font-size:12px; font-weight:700; color:var(--jrpg-muted); padding:2px 2px 4px; }
+        .swb-seclabel-div { margin-top:8px; padding-top:10px; border-top:1px solid var(--jrpg-line); }
+        .swb-card-main { flex:1; min-width:0; }
+        .swb-card-title { font-size:15px; font-weight:700; color:var(--jrpg-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .swb-card-meta { font-size:12px; color:var(--jrpg-muted); margin-top:3px; }
+        .swb-card-sum { font-size:13px; color:var(--jrpg-muted); margin-top:4px; line-height:1.45; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+        .swb-chev { flex-shrink:0; color:var(--jrpg-gold); font-size:20px; }
+        .swb-more { font-size:18px; }
+        .swb-card-tog { flex-shrink:0; }
+        /* 關鍵字標籤 */
+        .swb-tags { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+        .swb-tag { font-size:11px; font-weight:600; padding:2px 9px; border-radius:9px; background:var(--jrpg-paper-deep); color:var(--jrpg-ink); }
+        .swb-tag.muted { background:transparent; border:1px dashed var(--jrpg-line); color:var(--jrpg-muted); }
+        /* 安全/警告章 */
+        .swb-chip { flex-shrink:0; font-size:11px; font-weight:650; padding:3px 10px; border-radius:11px; white-space:nowrap; }
+        .swb-chip.safe { color:#46663d; background:rgba(120,150,111,0.18); }
+        .swb-chip.warn { color:#8a4d12; background:rgba(180,122,51,0.18); }
+        /* 詳情表單 */
+        .swb-form { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:7px; }
+        .swb-flabel { font-size:13px; font-weight:700; color:var(--jrpg-wine-dark); margin-top:8px; }
+        .swb-fhint { font-size:12px; color:var(--jrpg-muted); }
+        .swb-ftext { min-height:180px; resize:vertical; line-height:1.55; white-space:pre-wrap; }
+        .swb-frow { display:flex; align-items:center; justify-content:space-between; margin-top:14px; font-size:15px; font-weight:650; color:var(--jrpg-ink); }
+        /* 底部固定動作列 */
+        .swb-footbar { display:flex; gap:10px; flex-shrink:0; padding-top:2px; }
+        .swb-footbar .swb-primary { flex:1; }
+        .swb-footbar .swb-secondary { flex:0 0 auto; }
+        /* AI 對話 */
+        .swb-chatlog { flex:1; min-height:0; overflow-y:auto; display:flex; flex-direction:column; gap:9px; padding:2px 0; }
+        .swb-bubble { max-width:88%; padding:9px 12px; border-radius:13px; font-size:14px; line-height:1.5; white-space:pre-wrap; word-break:break-word; }
+        .swb-user { align-self:flex-end; background:var(--jrpg-wine); color:var(--jrpg-paper-light); border-bottom-right-radius:3px; }
+        .swb-assistant { align-self:flex-start; background:var(--jrpg-paper-deep); color:var(--jrpg-ink); border-bottom-left-radius:3px; }
+        .swb-pendbar { flex-shrink:0; }
+        .swb-pendbar:empty { display:none; }
+        .swb-pendbtn { width:100%; padding:11px; border:1px solid var(--jrpg-gold); border-radius:12px; background:rgba(182,138,69,0.14); color:var(--jrpg-wine-dark); font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .swb-inputrow { display:flex; gap:8px; align-items:flex-end; flex-shrink:0; }
+        .swb-msg { flex:1; min-width:0; min-height:48px; max-height:120px; resize:vertical; }
+        .swb-send { flex-shrink:0; min-height:48px; }
+        /* op 卡顏色 */
+        .swb-op-chip { flex-shrink:0; font-size:11px; font-weight:700; padding:3px 9px; border-radius:9px; color:#fff; background:var(--jrpg-muted); }
+        .swb-op-chip.c-add { background:var(--swb-add); }
+        .swb-op-chip.c-upd { background:var(--swb-amber); }
+        .swb-op-chip.c-del { background:var(--swb-danger); }
+        .swb-op.add { border-left:4px solid var(--swb-add); }
+        .swb-op.upd { border-left:4px solid var(--swb-amber); }
+        .swb-op.del { border-left:4px solid var(--swb-danger); }
+        /* 確認頁第二層：點一項才進來、完整內容攤開過目（不夾行、不摺疊；長的靠表單區捲動） */
+        .swb-op-body { margin-top:6px; padding:11px 13px; border-radius:10px; background:var(--jrpg-paper); border:1px solid var(--jrpg-line); font-size:14px; line-height:1.6; color:var(--jrpg-ink); white-space:pre-wrap; word-break:break-word; }
+        /* 空狀態 */
+        .swb-empty { margin:auto; text-align:center; color:var(--jrpg-muted); font-size:14px; line-height:1.7; padding:24px; }
+        .swb-empty-art { font-size:40px; margin-bottom:8px; opacity:0.7; }
+        /* 底部動作面板（sheet）：取代「卡上堆按鈕」與摺疊 */
+        .swb-sheet-ov { position:absolute; inset:0; background:rgba(40,25,15,0.34); display:flex; align-items:flex-end; z-index:30; }
+        .swb-sheet { width:100%; background:var(--jrpg-paper); border-top-left-radius:18px; border-top-right-radius:18px; padding:10px 14px calc(16px + env(safe-area-inset-bottom,0px)); display:flex; flex-direction:column; gap:8px; box-shadow:0 -6px 24px rgba(60,30,10,0.25); }
+        .swb-sheet-title { font-size:14px; font-weight:700; color:var(--jrpg-wine-dark); padding:8px 4px 4px; }
+        .swb-sheet-btn { width:100%; min-height:48px; border:1px solid var(--jrpg-line); border-radius:13px; background:var(--jrpg-paper-light); color:var(--jrpg-ink); font-size:15px; font-weight:650; cursor:pointer; font-family:inherit; text-align:left; padding:0 16px; }
+        .swb-sheet-btn:hover { background:rgba(232,211,174,0.5); }
+        .swb-sheet-btn.safe { color:#46663d; border-color:rgba(120,150,111,0.5); }
+        .swb-sheet-btn.danger { color:var(--swb-danger); border-color:rgba(181,72,72,0.45); }
+        .swb-sheet-btn.cancel { background:transparent; color:var(--jrpg-muted); font-weight:600; text-align:center; }
+        .studio-icon-btn { background: rgba(26,28,40,0.06); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 12px; transition: 0.2s; display: flex; align-items: center; gap: 5px; }
+        .studio-icon-btn:hover { background: rgba(26,28,40,0.10); border-color: #1A1C28; }
+        .studio-icon-btn.danger { color: #fc8181; border-color: #fc8181; background: rgba(252,129,129,0.1); }
+        .studio-icon-btn.danger:hover { background: rgba(252,129,129,0.2); }
+        /* header 👁️ 預覽鈕：固定放 header，手機佈局才顯示，點了開預覽抽屜 */
+        .studio-preview-toggle { display: none; }
+        @media (max-width: 768px) { .studio-preview-toggle { display: flex; } }
+        .studio-mobile .studio-preview-toggle { display: flex; }
+        .studio-body { flex: 1; display: flex; overflow: hidden; }
+        .studio-left { flex: 1; display: flex; flex-direction: column; border-right: 1px solid rgba(26,28,40,0.15); background: rgba(228,232,245,0.25); min-width: 300px; position: relative; }
+        .studio-right { flex: 1.2; display: flex; flex-direction: column; background: #EEF0F6; min-width: 300px; position: relative; }
+        .studio-chat-history { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 15px; }
+        .studio-bubble { max-width: 85%; padding: 12px 16px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-wrap: break-word; white-space: pre-wrap; position: relative; }
+        .studio-bubble.user { align-self: flex-end; background: rgba(210,215,235,0.3); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-bottom-right-radius: 2px; }
+        .studio-bubble.ai { align-self: flex-start; background: rgba(228,232,245,0.65); border: 1px solid rgba(26,28,40,0.12); color: #1A1C28; border-bottom-left-radius: 2px; }
+        /* 自動檢查：模型做完、程式驗過再追加的那一輪。畫成檢查單，跟使用者說的話、模型的回話都分開 */
+        .studio-bubble.auto { align-self: stretch; max-width: 100%; background: rgba(46,139,87,0.07); border: 1px dashed rgba(46,139,87,0.45); color: rgba(26,28,40,0.82); font-size: 12px; }
+        .studio-bubble.auto::before { content: '自動檢查'; display: block; font-size: 11px; font-weight: bold; letter-spacing: 1px; color: rgba(46,139,87,0.95); margin-bottom: 4px; }
+        .studio-check-ok { align-self: flex-start; font-size: 11px; color: rgba(46,139,87,0.85); padding: 0 6px; margin-top: -8px; }
+        .studio-check-ok i { margin-right: 4px; }
+        .studio-input-wrap { padding: 10px 15px 0; background: rgba(228,232,245,0.96); border-top: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; display: flex; flex-direction: column; gap: 6px; }
+        .studio-pending-images { display: none; flex-wrap: wrap; gap: 6px; padding: 4px 0; }
+        .studio-pending-images.active { display: flex; }
+        .studio-pending-img { position: relative; width: 60px; height: 60px; border-radius: 6px; overflow: hidden; border: 1px solid rgba(26,28,40,0.20); background: rgba(228,232,245,0.8); }
+        .studio-pending-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .studio-pending-img .pi-del { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 50%; background: rgba(0,0,0,0.7); color: #fff; font-size: 11px; cursor: pointer; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.3); transition: 0.15s; }
+        .studio-pending-img .pi-del:hover { background: #e74c3c; }
+        .studio-pending-img .pi-size { position: absolute; bottom: 2px; left: 2px; right: 2px; background: rgba(0,0,0,0.6); color: rgba(255,255,255,0.85); font-size: 9px; text-align: center; border-radius: 3px; padding: 1px 2px; }
+
+        .studio-input-area { padding: 5px 0 15px; padding-bottom: calc(15px + env(safe-area-inset-bottom, 0px)); display: flex; gap: 8px; flex-shrink: 0; align-items: flex-end; }
+        /* 面板類型選擇器（純展示/純應用/共用）：開頭選好，AI 第一輪即懂 */
+        .studio-type-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .studio-type-label { font-size: 11px; color: rgba(26,28,40,0.55); margin-right: 2px; }
+        .studio-type { padding: 3px 12px; font-size: 11px; border-radius: 12px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; }
+        .studio-type.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: 700; }
+        .studio-attach-btn { background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; border-radius: 8px; padding: 0 12px; height: 50px; cursor: pointer; font-size: 18px; transition: 0.2s; flex-shrink: 0; }
+        .studio-attach-btn:hover { background: rgba(26,28,40,0.08); }
+        .studio-attach-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .studio-textarea { flex: 1; box-sizing: border-box; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 10px 14px; border-radius: 8px; font-size: 13px; outline: none; resize: none; min-height: 50px; max-height: 200px; height: 50px; font-family: inherit; line-height: 1.5; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(26,28,40,0.15) transparent; }
+        .studio-textarea:focus { border-color: #1A1C28; }
+
+        /* === 全局滾動條樣式：整個創作室內所有可捲區域 === */
+        .studio-container, .studio-container * { scrollbar-width: thin; scrollbar-color: rgba(26,28,40,0.28) transparent; }
+        .studio-container ::-webkit-scrollbar,
+        .studio-container::-webkit-scrollbar { width: 8px; height: 8px; }
+        .studio-container ::-webkit-scrollbar-track,
+        .studio-container::-webkit-scrollbar-track { background: transparent; }
+        .studio-container ::-webkit-scrollbar-thumb,
+        .studio-container::-webkit-scrollbar-thumb { background: rgba(26,28,40,0.28); border-radius: 4px; transition: background 0.2s; }
+        .studio-container ::-webkit-scrollbar-thumb:hover,
+        .studio-container::-webkit-scrollbar-thumb:hover { background: rgba(26,28,40,0.5); }
+        .studio-container ::-webkit-scrollbar-corner,
+        .studio-container::-webkit-scrollbar-corner { background: transparent; }
+        /* textarea 用更窄一點的（個別覆蓋全局） */
+        .studio-textarea::-webkit-scrollbar { width: 6px; }
+        .studio-textarea::-webkit-scrollbar-thumb { background: rgba(26,28,40,0.15); border-radius: 3px; }
+        .studio-textarea::-webkit-scrollbar-thumb:hover { background: rgba(26,28,40,0.5); }
+        .studio-send-btn { background: #1A1C28; color: #EEF0F6; border: none; padding: 0 20px; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 13px; transition: 0.2s; height: 50px; flex-shrink: 0; }
+        /* ⚡ 組件快捷 chip 列 + 管理 modal */
+        .studio-chips-row { display: flex; gap: 6px; flex-wrap: wrap; }
+        .studio-chip { flex-shrink: 0; padding: 3px 12px; font-size: 11px; border-radius: 12px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; font-family: inherit; white-space: nowrap; }
+        .studio-chip:hover { background: rgba(26,28,40,0.06); }
+        .studio-chip:active { transform: scale(0.96); }
+        .studio-chip-manage { border-style: dashed; color: rgba(26,28,40,0.55); }
+        /* chip 選起來＝實心高亮：功能 chip 跨輪記住、元素 chip 送出即清；兩種都不碰輸入框 */
+        .studio-chip.active { background: #1A1C28; border-color: #1A1C28; color: #EEF0F6; }
+        .studio-chip.active:hover { background: #1A1C28; }
+        .studio-chip-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 99999; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; }
+        .studio-chip-modal.show { display: flex; }
+        .studio-chip-box { width: 100%; max-width: 460px; max-height: 86vh; overflow-y: auto; background: #EEF0F6; border: 1px solid rgba(26,28,40,0.2); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; box-sizing: border-box; }
+        .studio-chip-mhead { display: flex; justify-content: space-between; align-items: center; font-size: 14px; font-weight: 700; color: #1A1C28; }
+        .studio-chip-x { background: none; border: none; color: rgba(26,28,40,0.55); font-size: 18px; cursor: pointer; padding: 2px 4px; }
+        .studio-chip-input, .studio-chip-ta { width: 100%; box-sizing: border-box; background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.2); color: #1A1C28; padding: 9px 12px; border-radius: 8px; font-size: 13px; outline: none; font-family: inherit; }
+        .studio-chip-ta { min-height: 70px; resize: none; line-height: 1.5; }
+        .studio-chip-input:focus, .studio-chip-ta:focus { border-color: #1A1C28; }
+        .studio-chip-savebtn { background: #1A1C28; color: #EEF0F6; border: none; padding: 10px; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+        .studio-chip-mlist { display: flex; flex-direction: column; gap: 6px; }
+        .studio-chip-litem { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.12); border-radius: 8px; }
+        .studio-chip-litem-label { font-size: 12px; font-weight: 700; color: #1A1C28; flex-shrink: 0; max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .studio-chip-litem-text { font-size: 11px; color: rgba(26,28,40,0.6); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .studio-chip-del { background: none; border: none; color: #c0392b; cursor: pointer; font-size: 13px; flex-shrink: 0; padding: 2px 4px; }
+        .studio-chip-empty { font-size: 12px; color: rgba(26,28,40,0.5); text-align: center; padding: 12px; line-height: 1.5; }
+        .studio-right-header { display: flex; background: rgba(228,232,245,0.96); border-bottom: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; align-items: center; }
+        .mobile-sidebar-btn { display: none; }
+        .mobile-sidebar-close { display: none; }
+        .studio-tab { flex: 1; text-align: center; padding: 15px 0; font-size: 13px; color: rgba(26,28,40,0.72); cursor: pointer; font-weight: bold; transition: 0.3s; position: relative; }
+        .studio-tab.active { color: #1A1C28; }
+        .studio-tab.active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 3px; background: #1A1C28; }
+        .studio-preview-content { flex: 1; overflow: hidden; display: flex; flex-direction: row; position: relative; }
+        .studio-preview-main { flex: 1; overflow-y: auto; padding: 20px; position: relative; }
+        /* 展示區三尺寸（手機/中間/全屏）：用真實外框寬渲染卡片再等比縮放 */
+        .studio-pv-tabs { display: flex; gap: 4px; margin-bottom: 8px; }
+        .studio-pv { padding: 4px 11px; font-size: 11px; border-radius: 6px; border: 1px solid rgba(26,28,40,0.25); background: transparent; color: rgba(26,28,40,0.72); cursor: pointer; }
+        .studio-pv.active { background: #1A1C28; color: #EEF0F6; border-color: #1A1C28; font-weight: 700; }
+        /* 截圖鈕跟尺寸分頁同一排、同一個樣子，靠右站開：它不是尺寸，是動作 */
+        .studio-pv-shot { margin-left: auto; }
+        .studio-pv-shot i { margin-right: 3px; }
+        .studio-pv-shot:disabled { opacity: 0.45; cursor: progress; }
+        .studio-pv-wrap { width: 100%; overflow: hidden; background: #000; border: 1px dashed rgba(26,28,40,0.25); border-radius: 6px; }
+        .studio-pv-box { position: relative; background: #000; transform-origin: top left; min-height: 60px; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        .tree-project { color: #1A1C28; font-weight: bold; font-size: 13px; margin-bottom: 5px; cursor: pointer; padding: 8px; border-radius: 6px; background: rgba(26,28,40,0.06); transition: 0.2s; }
+        .tree-project:hover { background: rgba(26,28,40,0.10); }
+        .tree-folder { color: rgba(26,28,40,0.72); font-size: 12px; margin-top: 8px; margin-left: 10px; padding-bottom: 2px; border-bottom: 1px solid rgba(210,215,235,0.3); }
+        .tree-item { color: rgba(26,28,40,0.72); font-size: 12px; padding: 6px 10px 6px 20px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; gap: 6px; }
+        .tree-item:hover { background: rgba(26,28,40,0.06); color: #1A1C28; }
+        .tree-item.active { background: rgba(26,28,40,0.08); color: #1A1C28; border-left: 2px solid rgba(26,28,40,0.25); }
+        .studio-source-content { flex: 1; overflow-y: auto; padding: 20px; background: #000; color: #00ffcc; font-family: monospace; font-size: 12px; white-space: pre-wrap; word-break: break-all; display: none; }
+        .studio-action-area { padding: 15px; background: rgba(228,232,245,0.96); border-top: 1px solid rgba(26,28,40,0.15); flex-shrink: 0; display: flex; justify-content: flex-end; }
+        .studio-export-btn { background: #1A1C28; color: #EEF0F6; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; font-size: 13px; transition: 0.2s; display: none; }
+        .studio-card { background: rgba(228,232,245,0.5); border: 1px solid rgba(26,28,40,0.15); border-radius: 8px; padding: 16px; margin-bottom: 15px; }
+        .studio-card-title { font-size: 15px; font-weight: bold; color: #1A1C28; margin-bottom: 10px; border-bottom: 1px solid rgba(26,28,40,0.10); padding-bottom: 8px; }
+        .studio-empty { text-align: center; color: rgba(26,28,40,0.20); padding: 50px 20px; font-size: 13px; letter-spacing: 1px; }
+        .studio-preview-fab { display: none; position: absolute; bottom: 80px; right: 16px; background: rgba(26,28,40,0.5); color: #EEF0F6; border: none; border-radius: 20px; padding: 8px 16px; font-size: 12px; font-weight: bold; cursor: pointer; z-index: 48; box-shadow: 0 4px 14px rgba(0,0,0,0.5); align-items: center; gap: 6px; white-space: nowrap; }
+        .studio-drawer-handle { display: none; }
+        @media (max-width: 768px) {
+            .studio-body { flex-direction: column; position: relative; overflow: hidden; }
+            .studio-left { order: 1; flex: 1; min-height: 0; border-right: none; }
+            .studio-right { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; min-width: 0; background: #EEF0F6; border-top: none; border-radius: 0; box-shadow: 0 -8px 30px rgba(0,0,0,0.55); transform: translateY(103%); transition: transform 0.34s cubic-bezier(0.4,0,0.2,1); z-index: 50; display: flex; flex-direction: column; overflow: hidden; will-change: transform; }
+            .studio-right.drawer-open { transform: translateY(0); }
+            .studio-drawer-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.58); z-index: 49; opacity: 0; pointer-events: none; transition: opacity 0.34s ease; }
+            .studio-drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+            .studio-drawer-handle { display: block; text-align: center; padding: 10px 0 4px; cursor: pointer; flex-shrink: 0; }
+            .studio-drawer-handle::after { content: ''; display: inline-block; width: 38px; height: 4px; background: rgba(26,28,40,0.18); border-radius: 2px; }
+            .studio-preview-fab { display: flex; }
+            .studio-icon-btn span { display: none; }
+        }
+        /* 容器級手機佈局：手機殼是「窄容器擺在寬視窗裡」，viewport media query 失效；launch() 量容器寬度後掛 .studio-mobile 觸發同一套單欄+預覽抽屜 */
+        .studio-mobile .studio-body { flex-direction: column; position: relative; overflow: hidden; }
+        .studio-mobile .studio-left { order: 1; flex: 1; min-height: 0; border-right: none; }
+        .studio-mobile .studio-right { position: absolute; left: 0; right: 0; bottom: 0; height: 100%; min-width: 0; background: #EEF0F6; border-top: none; border-radius: 0; box-shadow: 0 -8px 30px rgba(0,0,0,0.55); transform: translateY(103%); transition: transform 0.34s cubic-bezier(0.4,0,0.2,1); z-index: 50; display: flex; flex-direction: column; overflow: hidden; will-change: transform; }
+        .studio-mobile .studio-right.drawer-open { transform: translateY(0); }
+        .studio-mobile .studio-drawer-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.58); z-index: 49; opacity: 0; pointer-events: none; transition: opacity 0.34s ease; }
+        .studio-mobile .studio-drawer-backdrop.active { opacity: 1; pointer-events: auto; }
+        .studio-mobile .studio-drawer-handle { display: block; text-align: center; padding: 10px 0 4px; cursor: pointer; flex-shrink: 0; }
+        .studio-mobile .studio-drawer-handle::after { content: ''; display: inline-block; width: 38px; height: 4px; background: rgba(26,28,40,0.18); border-radius: 2px; }
+        .studio-mobile .studio-preview-fab { display: flex; }
+        .studio-mobile .studio-icon-btn span { display: none; }
+        .studio-bubble h1,.studio-bubble h2,.studio-bubble h3 { font-family: 'Noto Sans TC',sans-serif; font-weight: bold; margin: 10px 0 6px; line-height: 1.3; }
+        .studio-bubble h1 { font-size: 1.15rem; color: #1A1C28; border-bottom: 1px solid rgba(26,28,40,0.12); padding-bottom: 4px; }
+        .studio-bubble h2 { font-size: 1.05rem; color: #1A1C28; }
+        .studio-bubble h3 { font-size: 0.98rem; color: rgba(26,28,40,0.80); }
+        .studio-bubble blockquote { border-left: 3px solid rgba(26,28,40,0.20); margin: 6px 0; padding: 4px 12px; color: rgba(26,28,40,0.65); font-style: italic; background: rgba(26,28,40,0.04); border-radius: 0 4px 4px 0; }
+        .studio-bubble li { list-style: none; padding-left: 14px; margin: 2px 0; position: relative; }
+        .studio-bubble li::before { content: '•'; position: absolute; left: 0; color: #1A1C28; }
+        .studio-bubble hr { border: none; border-top: 1px solid rgba(26,28,40,0.10); margin: 10px 0; }
+        .studio-bubble code { background: rgba(26,28,40,0.08); color: #2d6a4f; padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 0.88em; }
+        .studio-bubble strong { color: #1A1C28; font-weight: bold; }
+        .studio-bubble em { color: rgba(26,28,40,0.72); font-style: italic; }
+
+        /* ── 旋轉動畫 ── */
+        @keyframes os-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .os-studio-spinner { width: 16px; height: 16px; border: 2px solid rgba(26,28,40,0.15); border-top-color: #1A1C28; border-radius: 50%; animation: os-spin 1s linear infinite; flex-shrink: 0; }
+        /* ── 打字指示器 ── */
+        @keyframes studio-dot-pulse { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
+        .studio-typing-wrap { display:flex; align-items:center; gap:5px; padding:4px 2px; }
+        .studio-typing-dot { width:7px; height:7px; border-radius:50%; background:#1A1C28; display:inline-block; animation:studio-dot-pulse 1.4s infinite ease-in-out; }
+        .studio-typing-dot:nth-child(2) { animation-delay:0.2s; }
+        .studio-typing-dot:nth-child(3) { animation-delay:0.4s; }
+        /* ── 多泡泡入場動畫 ── */
+        @keyframes studio-bubble-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+        .studio-bubble-enter { animation: studio-bubble-in 0.22s ease-out forwards; }
+        /* ── VN組件（原展廳：只放純展示面板）── */
+        .studio-gallery-list { display:flex; flex-direction:column; gap:10px; }
+        /* 應用/共用 舊模板的「搬到我的應用」提示 */
+        .vn-migrate-notice { font-size:12px; color:rgba(26,28,40,0.72); background:rgba(230,126,34,0.10); border:1px solid rgba(230,126,34,0.40); border-radius:8px; padding:10px 12px; line-height:1.5; }
+        .vn-migrate-btn { display:block; margin-top:8px; padding:7px 12px; border-radius:6px; border:1px solid #e67e22; background:rgba(230,126,34,0.14); color:#b5651d; font-size:12px; font-weight:bold; cursor:pointer; font-family:inherit; }
+        .sgc-format-box { padding:10px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.40); border-radius:4px; margin-bottom:10px; position:relative; }
+        .sgc-format-text { font-family:monospace; font-size:12px; color:#3A3F5C; white-space:pre-wrap; word-break:break-all; }
+        .sgc-format-input { display:block; width:100%; min-height:80px; background:rgba(228,232,245,0.8); color:#1A1C28; border:1px solid rgba(26,28,40,0.25); font-family:monospace; font-size:12px; padding:8px; border-radius:4px; box-sizing:border-box; resize:vertical; }
+        .sgc-preview { padding:0; background:rgba(228,232,245,0.3); border-radius:6px; min-height:200px; max-height:700px; margin-bottom:10px; overflow-y:auto; position:relative; }
+
+        /* 拉桿開關（啟用/停用、整組）：綠=開、橙=半開(indeterminate) */
+        .sgc-switch { position:relative; display:inline-block; width:38px; height:22px; flex-shrink:0; cursor:pointer; }
+        .sgc-switch .sgc-switch-input { position:absolute; opacity:0; width:0; height:0; }
+        .sgc-switch-slider { position:absolute; inset:0; background:rgba(26,28,40,0.25); border-radius:22px; transition:0.2s; }
+        .sgc-switch-slider::before { content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.3); }
+        .sgc-switch-input:checked + .sgc-switch-slider { background:#2ecc71; }
+        .sgc-switch-input:checked + .sgc-switch-slider::before { transform:translateX(16px); }
+        .sgc-switch-input:indeterminate + .sgc-switch-slider { background:#e6a23c; }
+        .sgc-switch-input:indeterminate + .sgc-switch-slider::before { transform:translateX(8px); }
+        .sgc-folder-empty { color:#999; font-size:12px; text-align:center; padding:8px; }
+        /* 第二層詳情卡：歸到群組多選列 */
+        .sgc-grouprow { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:10px; padding:8px 10px; background:rgba(228,232,245,0.5); border-left:3px solid rgba(26,28,40,0.35); border-radius:0 4px 4px 0; }
+        .sgc-grouprow-label { font-size:12px; font-weight:bold; color:#1A1C28; margin-right:4px; }
+        .sgc-grouprow-empty { font-size:12px; color:#999; }
+        .sgc-grouptag { display:inline-flex; align-items:center; gap:4px; font-size:12px; color:#1A1C28; background:rgba(26,28,40,0.06); border:1px solid rgba(26,28,40,0.18); border-radius:14px; padding:3px 10px; cursor:pointer; }
+        .sgc-grouptag input { margin:0; }
+        /* 群組管理 modal（append 到 body、全域選擇器） */
+        .sgc-modal { position:fixed; inset:0; z-index:100000; background:rgba(0,0,0,0.55); display:flex; align-items:center; justify-content:center; padding:20px; }
+        .sgc-modal-card { background:#eef1f8; border-radius:12px; padding:18px; width:100%; max-width:420px; max-height:80vh; overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.4); box-sizing:border-box; }
+        .sgc-modal-title { font-size:16px; font-weight:bold; color:#1A1C28; margin-bottom:12px; }
+        .sgc-modal-row { display:flex; gap:8px; margin-bottom:12px; }
+        .sgc-modal-name { flex:1; min-width:0; padding:8px 10px; border-radius:6px; border:1px solid rgba(26,28,40,0.25); background:#fff; color:#1A1C28; font-size:13px; font-family:inherit; box-sizing:border-box; }
+        .sgc-modal-sub { font-size:12px; color:rgba(26,28,40,0.7); margin-bottom:8px; }
+        .sgc-assign-list { display:flex; flex-direction:column; gap:2px; max-height:40vh; overflow-y:auto; border:1px solid rgba(26,28,40,0.12); border-radius:6px; padding:6px; margin-bottom:12px; }
+        .sgc-assign-row { display:flex; align-items:center; gap:8px; padding:6px 8px; border-radius:4px; cursor:pointer; color:#1A1C28; font-size:13px; }
+        .sgc-assign-row:hover { background:rgba(26,28,40,0.06); }
+        .sgc-modal-actions { display:flex; gap:8px; justify-content:space-between; }
+        .sgc-mini-btn { padding:8px 14px; border-radius:6px; border:1px solid rgba(26,28,40,0.3); background:rgba(26,28,40,0.06); color:#1A1C28; font-size:13px; font-weight:bold; cursor:pointer; font-family:inherit; }
+        .sgc-mini-btn.danger { border-color:#e74c3c; color:#e74c3c; background:rgba(231,76,60,0.1); }
+
+        /* 展廳頂部：匯出/匯入「包」鈕（把模板搬到別台裝置的酒館用） */
+        .studio-pack-btn { flex:1; min-width:150px; padding:10px; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit; border:1px solid; }
+        .studio-pack-btn.export { background:rgba(52,152,219,0.12); border-color:#3498db; color:#2475a8; }
+        .studio-pack-btn.import { background:rgba(230,126,34,0.12); border-color:#e67e22; color:#b5651d; }
+        /* ── render 泡泡 ── */
+        .studio-bubble.render-bubble { padding: 0; overflow: hidden; background: rgba(228,232,245,0.5); border-color: rgba(26,28,40,0.12); }
+        .studio-render-wrap { padding: 12px; }
+        /* ── 錯誤泡泡 + 重試按鈕 ── */
+        .studio-bubble.studio-error-bubble { background: rgba(252,129,129,0.08); border-color: rgba(252,129,129,0.5); padding: 12px 14px; }
+        .studio-error-msg { color: #fc8181; font-size: 13px; line-height: 1.5; margin-bottom: 10px; word-break: break-word; }
+        .studio-retry-btn { background: rgba(252,129,129,0.15); border: 1px solid rgba(252,129,129,0.6); color: #fcc; border-radius: 6px; padding: 6px 14px; font-size: 12px; cursor: pointer; font-family: inherit; transition: 0.18s; }
+        .studio-retry-btn:hover { background: rgba(252,129,129,0.3); border-color: #fc8181; color: #fff; }
+        /* ── 摘要泡泡（副模型壓縮舊對話為記憶）── */
+        .studio-bubble.studio-summary-bubble { max-width: 100%; align-self: stretch; background: linear-gradient(135deg, rgba(155,89,182,0.12), rgba(155,89,182,0.05)); border: 1px dashed rgba(155,89,182,0.5); padding: 12px 14px; }
+        .summary-header { font-size: 12px; color: #c39bf2; font-weight: bold; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed rgba(155,89,182,0.3); }
+        .summary-content { font-size: 12px; color: rgba(26,28,40,0.85); line-height: 1.65; white-space: pre-wrap; }
+        .summary-content strong { color: #d4af37; }
+        .summary-foot { font-size: 10px; color: rgba(155,89,182,0.55); margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(155,89,182,0.2); font-style: italic; }
+        /* ── choices 泡泡（AI 給選項按鈕） ── */
+        .studio-bubble.choices-bubble { background: rgba(228,232,245,0.6); border-color: rgba(26,28,40,0.20); padding: 12px 14px; }
+        .studio-choices-hint { font-size: 12px; color: rgba(26,28,40,0.72); margin-bottom: 8px; letter-spacing: 0.5px; }
+        .studio-choices-row { display: flex; flex-direction: column; gap: 6px; }
+        .studio-choice-btn { background: rgba(228,232,245,0.8); border: 1px solid rgba(26,28,40,0.20); color: #1A1C28; padding: 9px 12px; border-radius: 8px; cursor: pointer; font-size: 13px; text-align: left; line-height: 1.4; transition: 0.18s; font-family: inherit; }
+        .studio-choice-btn:hover { background: rgba(210,215,235,0.95); border-color: #1A1C28; color: #1A1C28; transform: translateX(2px); }
+        .studio-choice-btn.studio-choice-other { background: rgba(26,28,40,0.08); border-color: rgba(26,28,40,0.20); color: #1A1C28; margin-top: 2px; }
+        .studio-choice-btn.studio-choice-other:hover { background: rgba(26,28,40,0.09); border-color: #1A1C28; }
+        /* 選後的「已選展示」狀態 */
+        .studio-bubble.choices-bubble.selected { background: rgba(210,215,235,0.6); border-color: rgba(26,28,40,0.30); }
+        .studio-bubble.choices-bubble.selected .studio-choices-hint { color: #1A1C28; }
+        .studio-choice-selected { padding: 10px 12px; background: rgba(228,232,245,0.6); border: 1px solid rgba(26,28,40,0.20); border-radius: 8px; color: #1A1C28; font-size: 13px; line-height: 1.5; }
+        .studio-choice-selected strong { color: #1A1C28; }
+        /* ── genimg 泡泡 ── */
+        .studio-bubble.genimg-bubble img { max-width: 100%; border-radius: 6px; display: block; }
+        .studio-bubble.genimg-bubble { padding: 8px; }
+        /* === VN 煉丹工具列：歷史快照 + 整體重做按鈕 (只在 vn_ui 模式 + 有 currentParsedData 時顯示) === */
+        #vn-studio-redesign-btn { background:rgba(230,126,34,0.1); border:1px solid #e67e22; color:#e67e22; padding:5px 10px; border-radius:6px; font-size:11px; cursor:pointer; transition:0.2s; }
+        #vn-studio-redesign-btn:hover { background:rgba(230,126,34,0.2); }
+        #vn-studio-history-area { display:none; margin-top:6px; padding:10px; background:rgba(228,232,245,0.4); border:1px solid rgba(26,28,40,0.09); border-radius:6px; max-height:260px; overflow-y:auto; }
+        .vn-history-empty { color:rgba(26,28,40,0.55); font-size:11px; text-align:center; padding:14px 0; }
+        .vn-history-hint { font-size:10px; color:rgba(26,28,40,0.60); margin-bottom:6px; line-height:1.4; }
+        .vn-history-item { display:flex; align-items:center; gap:6px; padding:6px 8px; background:rgba(228,232,245,0.6); border:1px solid rgba(26,28,40,0.12); border-radius:5px; margin-bottom:5px; font-size:11px; transition:0.15s; }
+        .vn-history-item:hover { border-color:rgba(26,28,40,0.30); background:rgba(210,215,235,0.85); }
+        .vn-history-item.pinned { border-color:rgba(241,196,15,0.6); background:rgba(255,250,230,0.6); }
+        .vn-history-item .h-time { color:rgba(26,28,40,0.55); font-family:monospace; flex-shrink:0; font-size:10px; }
+        .vn-history-item .h-note { color:rgba(26,28,40,0.80); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .vn-history-item .h-btn { background:transparent; border:1px solid rgba(26,28,40,0.20); color:#1A1C28; font-size:10px; padding:2px 6px; border-radius:4px; cursor:pointer; flex-shrink:0; }
+        .vn-history-item .h-btn:hover { background:rgba(26,28,40,0.08); }
+        /* 釘住鈕：沒釘時淡一點，釘住時實心 */
+        .vn-history-item .h-btn.btn-pin:not(.is-on) i { opacity:0.35; }
+        .vn-history-item .h-btn.danger { border-color:rgba(231,76,60,0.5); color:#e74c3c; }
+        .vn-history-item .h-btn.danger:hover { background:rgba(231,76,60,0.15); }
+
+        /* === 左邊返回鈕（跟 ps/avs/set/mon 同調 ‹）=== */
+        .studio-back-btn { font-size: 22px; color: #1A1C28; cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: 0.2s; user-select: none; flex-shrink: 0; }
+        .studio-back-btn:hover { background: rgba(26,28,40,0.10); }
+
+        /* ════ VN 組件 v2：兩層換頁（瀏覽/詳情/設置/打包）· 吃 --jrpg 暖色，與世界書 swb-* 同源 ════ */
+        .vc-hide { display:none !important; }
+        /* 標籤 chip 列 */
+        .vc-tagbar { display:flex; gap:7px; flex-wrap:wrap; }
+        .vc-chip { font-size:12px; padding:5px 13px; border-radius:20px; border:1px solid var(--jrpg-line); background:var(--jrpg-paper-light); color:var(--jrpg-wine-dark); cursor:pointer; font-family:inherit; }
+        .vc-chip.on { background:var(--jrpg-wine); color:var(--jrpg-paper-light); border-color:var(--jrpg-wine); }
+        .vc-chip-add { border-style:dashed; color:var(--jrpg-muted); }
+        /* 搜尋框 */
+        .vc-search { display:flex; align-items:center; gap:7px; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:11px; padding:8px 12px; }
+        .vc-search-ico { font-size:14px; opacity:0.6; }
+        .vc-search-input { flex:1; min-width:0; border:0; background:transparent; outline:none; font-size:14px; color:var(--jrpg-ink); font-family:inherit; }
+        /* 批次開關條 */
+        .vc-batchbar { display:flex; align-items:center; gap:9px; background:rgba(182,138,69,0.12); border:1px solid rgba(182,138,69,0.4); border-radius:11px; padding:9px 12px; }
+        .vc-batchbar-name { flex:1; min-width:0; font-size:13px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .vc-batchbar-mng { display:inline-flex; align-items:center; gap:5px; border:1px solid rgba(182,138,69,0.5); background:rgba(182,138,69,0.14); color:var(--jrpg-wine-dark); font-size:12px; font-weight:600; cursor:pointer; padding:5px 10px; border-radius:8px; line-height:1; white-space:nowrap; }
+        /* 輕卡列表 */
+        .vc-list { display:flex; flex-direction:column; gap:9px; }
+        .vc-card { display:flex; align-items:center; gap:11px; width:100%; text-align:left; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:13px; padding:10px; cursor:pointer; box-shadow:0 1px 3px rgba(83,49,20,0.06); font-family:inherit; }
+        .vc-card:hover { border-color:var(--jrpg-gold); }
+        .vc-thumb { width:54px; height:54px; flex-shrink:0; border-radius:9px; overflow:hidden; background:var(--jrpg-paper-deep); display:grid; place-items:center; position:relative; }
+        .vc-thumb-ph { font-size:22px; }
+        .vc-thumb-render { position:absolute; top:0; left:0; width:320px; transform:scale(0.17); transform-origin:top left; pointer-events:none; }
+        .vc-thumb-render.is-story { height:320px; }   /* 故事裡跳出來那型照故事畫面排：遮罩要有高度才置中得起來 */
+        .vc-card-main { flex:1; min-width:0; }
+        .vc-card-title { font-size:14px; font-weight:700; color:var(--jrpg-ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .vc-card-tags { display:flex; gap:5px; margin-top:4px; flex-wrap:wrap; }
+        .vc-tag { font-size:11px; padding:2px 8px; border-radius:7px; background:var(--jrpg-paper-deep); color:var(--jrpg-wine-dark); }
+        .vc-tag.muted { background:transparent; border:1px dashed var(--jrpg-line); color:var(--jrpg-muted); }
+        .vc-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; background:#c9bda6; }
+        .vc-dot.on { background:#639922; }
+        .vc-chev { flex-shrink:0; color:var(--jrpg-gold); font-size:20px; }
+        .vc-empty { color:var(--jrpg-muted); text-align:center; padding:24px 12px; font-size:13px; line-height:1.7; }
+        /* 隱藏／孤兒組件清理區 */
+        .vc-orphan-box { margin-top:14px; border:1px solid rgba(110,34,48,0.4); border-radius:13px; background:rgba(110,34,48,0.05); padding:10px; display:flex; flex-direction:column; gap:7px; }
+        .vc-orphan-hd { font-size:13px; font-weight:700; color:var(--jrpg-wine); display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+        .vc-orphan-sub { flex-basis:100%; font-size:11px; font-weight:400; color:var(--jrpg-muted); line-height:1.5; }
+        .vc-orphan-row { display:flex; align-items:center; gap:10px; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:10px; padding:8px 10px; }
+        .vc-orphan-info { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+        .vc-orphan-tag { font-size:13px; font-weight:700; color:var(--jrpg-ink); font-family:monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .vc-orphan-meta { font-size:11px; color:var(--jrpg-muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+        .vc-orphan-del { flex-shrink:0; border:0; background:transparent; color:var(--jrpg-wine); font-size:16px; cursor:pointer; padding:4px 8px; line-height:1; }
+        .vc-orphan-del:hover { color:var(--jrpg-wine-dark); }
+        /* 瀏覽層底部「選擇並打包」 */
+        .vc-browse-foot { padding-top:4px; }
+        .vc-pack-cta { width:100%; min-height:46px; border:1px solid rgba(110,34,48,0.45); border-radius:12px; background:transparent; color:var(--jrpg-wine); font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .vc-pack-cta:disabled { opacity:0.45; cursor:default; }
+        /* 子頁內容容器 */
+        .vc-page { display:flex; flex-direction:column; gap:12px; padding:4px 2px 16px; }
+        .vc-pv-panel { width:100%; height:auto; display:flex; flex-direction:column; }
+        .vc-full { width:100%; }
+        .vc-row2 { display:flex; gap:8px; }
+        .vc-row2 .swb-secondary { flex:1; }
+        /* 第二層導覽列（使用與設置 / 編輯原碼 等換頁入口） */
+        .vc-navrow { display:flex; align-items:center; gap:9px; width:100%; text-align:left; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:11px; padding:12px; cursor:pointer; font-family:inherit; }
+        .vc-navrow:hover { border-color:var(--jrpg-gold); }
+        .vc-navrow-ico { font-size:17px; flex-shrink:0; }
+        .vc-navrow-label { flex:1; min-width:0; font-size:14px; color:var(--jrpg-ink); }
+        /* 底部獨立紅色刪除 */
+        .vc-delzone { border-top:1px dashed var(--jrpg-line); margin-top:4px; padding-top:12px; }
+        .vc-delbtn { width:100%; min-height:46px; border:0; border-radius:12px; background:#a32d2d; color:#fff; font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+        .vc-delbtn:hover { background:#8a2424; }
+        /* 設置頁 */
+        .vc-set-row { display:flex; align-items:center; gap:10px; background:var(--jrpg-paper-light); border:1px solid var(--jrpg-line); border-radius:11px; padding:12px; }
+        .vc-set-label { flex:1; min-width:0; font-size:14px; color:var(--jrpg-ink); }
+        .vc-enable-row { background:rgba(182,138,69,0.12); border-color:rgba(182,138,69,0.45); }
+        .vc-enable-row .vc-set-label { font-weight:700; color:var(--jrpg-wine-dark); }
+        .vc-set-block { display:flex; flex-direction:column; gap:8px; }
+        .vc-set-blabel { font-size:13px; font-weight:700; color:var(--jrpg-wine-dark); }
+        .vc-fmt-actions { display:flex; gap:6px; justify-content:flex-end; margin-top:6px; }
+        .vc-fmt-actions .swb-secondary { min-height:34px; padding:0 12px; font-size:13px; }
+        .vc-font-preview { margin-top:8px; padding:8px 10px; font-size:15px; line-height:1.6; color:#3A3F5C; background:rgba(228,232,245,0.8); border:1px solid rgba(26,28,40,0.25); border-radius:4px; }
+        /* 打包頁 */
+        .vc-pack-row { cursor:pointer; }
+        .vc-pack-row.on { border-color:var(--jrpg-wine); }
+        .vc-pack-check { font-size:19px; color:var(--jrpg-wine); flex-shrink:0; }
+        .vc-uncheck { color:rgba(110,80,40,0.32); }
+        /* 獨立 VN 組件區（工坊進來的覆蓋層，在創作室外、自帶 --jrpg 暖色變數讓 vc-*/swb-* 吃得到色） */
+        .vncomp-app {
+            --jrpg-paper:#f5ead3; --jrpg-paper-light:#fff9eb; --jrpg-paper-deep:#e7d1a9;
+            --jrpg-ink:#3c2922; --jrpg-muted:#7b6654; --jrpg-wine:#681f25; --jrpg-wine-dark:#461319;
+            --jrpg-gold:#b68a45; --jrpg-gold-light:#ddbd78; --jrpg-line:rgba(132,91,45,0.34);
+            position:absolute; top:0; left:0; width:100%; height:100%; z-index:9000; background:#f5ead3; color:var(--jrpg-ink); box-sizing:border-box;
+            display:flex; flex-direction:column; overflow:hidden;
+        }
+        .vncomp-scroll { flex:1; min-height:0; overflow-y:auto; padding:14px 14px 24px; box-sizing:border-box; }
+        .vncomp-list { display:flex; flex-direction:column; gap:10px; }
+        .vc-pack-foot { display:flex; align-items:center; gap:10px; padding:10px 2px 4px; border-top:1px solid var(--jrpg-line); }
+        .vc-pack-count { flex:1; min-width:0; font-size:13px; color:var(--jrpg-muted); }
+        .vc-pack-foot .swb-primary { flex:0 0 auto; }
+        .vc-pack-clear { flex:0 0 auto; padding:8px 12px; font-size:13px; font-family:inherit; cursor:pointer; color:#c0392b; background:rgba(192,57,43,0.06); border:1px solid rgba(192,57,43,0.40); border-radius:10px; white-space:nowrap; }
+        .vc-pack-clear:hover { background:rgba(192,57,43,0.14); }
+
+/* ═══════════════════════════════════════════════════════════════
+   404 模式：整套換綠終端機風
+   ═══════════════════════════════════════════════════════════════ */
+html:has(.mode-404) .studio-container { background: #050d05 !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-header { background: rgba(0,15,5,0.92) !important; border-bottom-color: rgba(0,255,65,0.25) !important; }
+html:has(.mode-404) .studio-title { color: #00ff41 !important; text-shadow: 0 0 6px rgba(0,255,65,0.4) !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-back-btn { color: #00ff41 !important; }
+html:has(.mode-404) .studio-back-btn:hover { background: rgba(0,255,65,0.15) !important; }
+html:has(.mode-404) .studio-mode-select { background: #001a00 !important; border-color: rgba(0,255,65,0.40) !important; color: #00ff41 !important; color-scheme: dark; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-mode-select option { background: #001a00 !important; color: #00ff41 !important; }
+
+html:has(.mode-404) .studio-icon-btn { background: rgba(0,15,5,0.80) !important; border-color: rgba(0,255,65,0.30) !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-icon-btn:hover { background: rgba(0,255,65,0.15) !important; border-color: #00ff41 !important; }
+html:has(.mode-404) .studio-icon-btn.danger { color: #ff8080 !important; border-color: rgba(255,128,128,0.40) !important; background: rgba(30,5,5,0.80) !important; }
+html:has(.mode-404) .studio-icon-btn.danger:hover { background: rgba(255,128,128,0.20) !important; border-color: #ff8080 !important; }
+
+html:has(.mode-404) .studio-body { background: transparent !important; color: #b8ffcb !important; }
+html:has(.mode-404) .studio-left, html:has(.mode-404) .studio-right { background: transparent !important; }
+html:has(.mode-404) .studio-right-header { background: rgba(0,15,5,0.80) !important; border-bottom-color: rgba(0,255,65,0.20) !important; color: #00ff41 !important; }
+
+/* 對話氣泡 */
+html:has(.mode-404) .studio-bubble { background: rgba(0,18,0,0.80) !important; border: 1px solid rgba(0,255,65,0.20) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-bubble.ai { background: rgba(0,15,5,0.82) !important; border-color: rgba(0,255,65,0.25) !important; }
+html:has(.mode-404) .studio-bubble.user { background: rgba(0,40,10,0.78) !important; border-color: rgba(0,255,65,0.30) !important; }
+html:has(.mode-404) .studio-bubble.auto { background: rgba(0,25,5,0.80) !important; border-color: rgba(0,255,65,0.35) !important; color: #b8ffcb !important; }
+html:has(.mode-404) .studio-bubble.auto::before, html:has(.mode-404) .studio-check-ok { color: #00ff41 !important; }
+html:has(.mode-404) .studio-summary-bubble { background: rgba(0,25,5,0.80) !important; border-color: rgba(0,255,65,0.30) !important; color: #b8ffcb !important; }
+html:has(.mode-404) .studio-error-bubble { background: rgba(40,5,5,0.85) !important; border-color: rgba(255,128,128,0.40) !important; color: #ff8080 !important; }
+html:has(.mode-404) .studio-error-msg { color: #ff8080 !important; }
+html:has(.mode-404) .studio-typing-dot, html:has(.mode-404) .studio-dot-pulse { color: #00ff41 !important; }
+
+/* 輸入區 */
+html:has(.mode-404) .studio-input-area { background: rgba(0,12,3,0.92) !important; border-top: 1px solid rgba(0,255,65,0.25) !important; }
+html:has(.mode-404) .studio-input-wrap { background: rgba(0,18,0,0.90) !important; border: 1px solid rgba(0,255,65,0.30) !important; }
+html:has(.mode-404) .studio-textarea { background: transparent !important; color: #b8ffcb !important; caret-color: #00ff41; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-textarea::placeholder { color: rgba(0,255,65,0.40) !important; }
+html:has(.mode-404) .studio-send-btn { background: #001a00 !important; border: 1px solid #00ff41 !important; color: #00ff41 !important; }
+html:has(.mode-404) .studio-send-btn:hover { background: #003300 !important; box-shadow: 0 0 12px rgba(0,255,65,0.3) !important; }
+html:has(.mode-404) .studio-attach-btn { color: rgba(0,255,65,0.60) !important; }
+html:has(.mode-404) .studio-attach-btn:hover { color: #00ff41 !important; }
+
+/* tab / 動作工具列 / 卡片 */
+html:has(.mode-404) .studio-action-area { background: rgba(0,12,3,0.80) !important; border-bottom: 1px solid rgba(0,255,65,0.20) !important; }
+html:has(.mode-404) .studio-tab { background: rgba(0,15,5,0.78) !important; border: 1px solid rgba(0,255,65,0.30) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-tab.active { background: rgba(0,255,65,0.20) !important; border-color: #00ff41 !important; color: #00ff41 !important; }
+html:has(.mode-404) .studio-tab:hover { background: rgba(0,255,65,0.10) !important; border-color: #00ff41 !important; }
+html:has(.mode-404) .studio-card { background: rgba(0,15,5,0.80) !important; border: 1px solid rgba(0,255,65,0.25) !important; color: #b8ffcb !important; }
+html:has(.mode-404) .studio-card-title { color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
+
+/* 預覽 / 內容 */
+html:has(.mode-404) .studio-preview-fab { background: #001a00 !important; border-color: #00ff41 !important; color: #00ff41 !important; box-shadow: 0 0 12px rgba(0,255,65,0.3) !important; }
+html:has(.mode-404) .studio-preview-main { background: rgba(0,12,3,0.92) !important; }
+html:has(.mode-404) .studio-preview-content { background: rgba(0,18,0,0.82) !important; border-color: rgba(0,255,65,0.30) !important; color: #b8ffcb !important; }
+html:has(.mode-404) .studio-source-content { background: rgba(0,15,5,0.85) !important; border-color: rgba(0,255,65,0.25) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-render-wrap { background: transparent !important; color: #b8ffcb !important; }
+
+/* 選擇按鈕 / 提示 */
+html:has(.mode-404) .studio-choice-btn { background: rgba(0,15,5,0.78) !important; border-color: rgba(0,255,65,0.30) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-choice-btn:hover, html:has(.mode-404) .studio-choice-selected { background: rgba(0,255,65,0.15) !important; border-color: #00ff41 !important; color: #00ff41 !important; }
+html:has(.mode-404) .studio-choices-hint { color: rgba(0,255,65,0.55) !important; }
+
+/* 抽屜 */
+html:has(.mode-404) .studio-drawer-backdrop { background: rgba(0,0,0,0.85) !important; }
+
+/* 工具列 / 空狀態 / 大動作鈕 */
+html:has(.mode-404) .studio-vn-toolbar { background: rgba(0,12,3,0.90) !important; border-color: rgba(0,255,65,0.25) !important; }
+html:has(.mode-404) .studio-empty { color: rgba(0,255,65,0.50) !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-redesign-btn, html:has(.mode-404) .studio-retry-btn, html:has(.mode-404) .studio-history-btn, html:has(.mode-404) .studio-export-btn { background: rgba(0,18,0,0.82) !important; border: 1px solid rgba(0,255,65,0.40) !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
+
+/* gallery / pending / vn-history 系列 */
+html:has(.mode-404) #studio-gallery-content { background: transparent !important; color: #b8ffcb !important; }
+
+html:has(.mode-404) .studio-gallery-list { background: transparent !important; }
+html:has(.mode-404) .studio-gallery-card { background: rgba(0,15,5,0.82) !important; border: 1px solid rgba(0,255,65,0.30) !important; color: #b8ffcb !important; }
+html:has(.mode-404) .studio-gallery-card .sgc-title, html:has(.mode-404) .studio-gallery-card .sgc-header { color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-gallery-card .sgc-status, html:has(.mode-404) .studio-gallery-card .sgc-usage { color: rgba(0,255,65,0.60) !important; }
+html:has(.mode-404) .studio-gallery-card .sgc-format-box, html:has(.mode-404) .studio-gallery-card .sgc-format-input, html:has(.mode-404) .studio-gallery-card .sgc-format-text { background: rgba(0,18,0,0.85) !important; border-color: rgba(0,255,65,0.30) !important; color: #b8ffcb !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-gallery-card .sgc-btn { background: rgba(0,15,5,0.80) !important; border-color: rgba(0,255,65,0.30) !important; color: #00ff41 !important; font-family: 'Courier New', monospace !important; }
+html:has(.mode-404) .studio-gallery-card .sgc-btn:hover { background: rgba(0,255,65,0.15) !important; border-color: #00ff41 !important; }
+html:has(.mode-404) .studio-gallery-card .sgc-preview { background: rgba(0,18,0,0.85) !important; border-color: rgba(0,255,65,0.25) !important; }
+
+html:has(.mode-404) .studio-pending-images { background: rgba(0,12,3,0.80) !important; }
+html:has(.mode-404) .studio-pending-img { border-color: rgba(0,255,65,0.30) !important; }
+html:has(.mode-404) .studio-pending-img .pi-del { background: rgba(0,40,0,0.85) !important; color: #ff8080 !important; }
+
+html:has(.mode-404) .vn-history-item { background: rgba(0,15,5,0.78) !important; border: 1px solid rgba(0,255,65,0.25) !important; color: #b8ffcb !important; }
+html:has(.mode-404) .vn-history-item .h-time { color: rgba(0,255,65,0.55) !important; }
+html:has(.mode-404) .vn-history-item .h-note { color: #b8ffcb !important; }
+html:has(.mode-404) .vn-history-item .h-btn { background: rgba(0,15,5,0.78) !important; border-color: rgba(0,255,65,0.30) !important; color: #00ff41 !important; }
+html:has(.mode-404) .vn-history-item .h-btn:hover { background: rgba(0,255,65,0.15) !important; }
+html:has(.mode-404) .vn-history-empty, html:has(.mode-404) .vn-history-hint { color: rgba(0,255,65,0.55) !important; font-family: 'Courier New', monospace !important; }
+
+/* ============================================================
+   STUDIO JRPG PARCHMENT SKIN
+   Visual overrides only. Layout and mobile drawer rules remain intact.
+   ============================================================ */
+.studio-container {
+    --jrpg-paper: #f5ead3;
+    --jrpg-paper-light: #fff9eb;
+    --jrpg-paper-deep: #e7d1a9;
+    --jrpg-ink: #3c2922;
+    --jrpg-muted: #7b6654;
+    --jrpg-wine: #681f25;
+    --jrpg-wine-dark: #461319;
+    --jrpg-gold: #b68a45;
+    --jrpg-gold-light: #ddbd78;
+    --jrpg-line: rgba(132, 91, 45, 0.34);
+    /* 絕對 CDN URL：os_studio.css 是 fetch 注入成 inline <style>(酒館回 text/plain)→相對 ../aseets 會相對酒館頁404，必須用絕對網址 */
+    --jrpg-paper-texture: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/parchment-texture.webp');
+    --jrpg-seal: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/wax-seal.png');
+    --jrpg-quill: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/quill-ink.png');
+    --jrpg-corner: url('https://raw.githubusercontent.com/nancywang3641/sound-files/main/aseets/studio_jrpg/corner-ornament.png');
+    color: var(--jrpg-ink);
+    background-color: var(--jrpg-paper);
+    background-image:
+        linear-gradient(rgba(255, 250, 238, 0.28), rgba(236, 217, 181, 0.12)),
+        var(--jrpg-paper-texture);
+    background-size: auto, 520px 520px;
+    font-family: 'Noto Serif TC', 'PMingLiU', 'Songti TC', serif;
+}
+
+.studio-container .studio-header,
+.studio-container .studio-mode-tabs,
+.studio-container .studio-input-wrap,
+.studio-container .studio-right-header,
+.studio-container .studio-action-area {
+    background-color: rgba(250, 240, 219, 0.96);
+    background-image:
+        linear-gradient(90deg, transparent, rgba(182, 138, 69, 0.08), transparent),
+        var(--jrpg-paper-texture);
+    background-size: auto, 520px 520px;
+    border-color: var(--jrpg-line);
+}
+
+.studio-container .studio-header {
+    box-shadow:
+        inset 0 -1px rgba(255, 255, 255, 0.72),
+        0 3px 14px rgba(83, 49, 20, 0.10);
+}
+
+.studio-container .studio-title {
+    color: var(--jrpg-wine-dark);
+    font-size: 0;
+    font-family: 'Noto Serif TC', 'PMingLiU', serif;
+    letter-spacing: 0.12em;
+    text-shadow: 0 1px rgba(255, 255, 255, 0.8);
+}
+
+.studio-container .studio-title::before {
+    content: none;
+}
+
+.studio-container .studio-title::after {
+    content: '創作室';
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.studio-container .studio-back-btn {
+    color: var(--jrpg-wine-dark);
+    font-size: 25px;
+    border: 1px solid var(--jrpg-line);
+    border-radius: 8px;
+    background: rgba(255, 250, 239, 0.62);
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 255, 255, 0.45),
+        0 2px 5px rgba(77, 43, 18, 0.08);
+}
+
+.studio-container .studio-back-btn:hover {
+    color: var(--jrpg-wine);
+    background: rgba(232, 211, 174, 0.62);
+    border-color: var(--jrpg-gold);
+}
+
+.studio-container .studio-icon-btn {
+    color: var(--jrpg-ink);
+    border-color: var(--jrpg-line);
+    border-radius: 8px;
+    background: rgba(255, 250, 239, 0.72);
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.34);
+    font-family: inherit;
+}
+
+.studio-container .studio-icon-btn:hover {
+    color: var(--jrpg-wine);
+    border-color: var(--jrpg-gold);
+    background: rgba(236, 218, 184, 0.78);
+}
+
+.studio-container .studio-icon-btn.danger {
+    color: #842c31;
+    border-color: rgba(132, 44, 49, 0.55);
+    background: rgba(132, 44, 49, 0.07);
+}
+
+.studio-container .studio-icon-btn.danger:hover {
+    color: #fff8e7;
+    border-color: var(--jrpg-wine-dark);
+    background: var(--jrpg-wine);
+}
+
+.studio-container .studio-mode-tabs {
+    gap: 5px;
+    box-shadow: inset 0 -1px rgba(182, 138, 69, 0.16);
+}
+
+.studio-container .studio-mode-tab {
+    color: #644f40;
+    background:
+        linear-gradient(180deg, rgba(255, 252, 243, 0.82), rgba(238, 220, 188, 0.76));
+    border-color: rgba(151, 108, 55, 0.38);
+    border-radius: 8px;
+    font-family: inherit;
+    letter-spacing: 0;
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 255, 255, 0.34),
+        0 2px 5px rgba(80, 43, 16, 0.08);
+}
+
+.studio-container .studio-mode-tab:hover {
+    color: var(--jrpg-wine);
+    background:
+        linear-gradient(180deg, #fffaf0, #ead4ac);
+    border-color: var(--jrpg-gold);
+}
+
+.studio-container .studio-mode-tab.active {
+    color: #fff9e9;
+    background:
+        linear-gradient(180deg, #7b2930, var(--jrpg-wine-dark));
+    border-color: var(--jrpg-gold-light);
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 225, 157, 0.17),
+        inset 0 -4px 10px rgba(38, 5, 9, 0.24),
+        0 3px 8px rgba(74, 19, 24, 0.22);
+    text-shadow: 0 1px 1px rgba(28, 4, 6, 0.7);
+}
+
+.studio-container .studio-body,
+.studio-container .studio-left,
+.studio-container .studio-right,
+.studio-container .studio-preview-main {
+    color: var(--jrpg-ink);
+    background-color: rgba(246, 235, 212, 0.62);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 520px 520px;
+}
+
+.studio-container .studio-left {
+    border-color: var(--jrpg-line);
+    box-shadow: inset -1px 0 rgba(255, 255, 255, 0.42);
+}
+
+.studio-container .studio-chat-history {
+    background:
+        linear-gradient(90deg, rgba(119, 76, 34, 0.035) 1px, transparent 1px) 38px 0 / 1px 100% no-repeat,
+        linear-gradient(rgba(255, 252, 243, 0.18), rgba(229, 207, 167, 0.10));
+}
+
+.studio-container .studio-bubble {
+    color: var(--jrpg-ink);
+    border-radius: 10px;
+    border-color: rgba(142, 101, 51, 0.30);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.48),
+        0 4px 12px rgba(88, 51, 21, 0.09);
+    font-family: inherit;
+}
+
+.studio-container .studio-bubble.user {
+    color: #4b3429;
+    background-color: rgba(230, 210, 175, 0.88);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.22), transparent),
+        var(--jrpg-paper-texture);
+    background-size: auto, 420px 420px;
+    border-color: rgba(128, 85, 38, 0.35);
+    border-bottom-right-radius: 10px;
+}
+
+.studio-container .studio-bubble.ai {
+    color: var(--jrpg-ink);
+    background-color: rgba(255, 249, 235, 0.92);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 460px 460px;
+    border-color: rgba(166, 124, 68, 0.28);
+    border-bottom-left-radius: 10px;
+}
+
+.studio-container .studio-bubble h1,
+.studio-container .studio-bubble h2,
+.studio-container .studio-bubble h3 {
+    color: var(--jrpg-wine-dark);
+    font-family: 'Noto Serif TC', 'PMingLiU', serif;
+}
+
+.studio-container .studio-bubble h1,
+.studio-container .studio-bubble hr {
+    border-color: rgba(156, 110, 52, 0.28);
+}
+
+.studio-container .studio-bubble blockquote {
+    color: #6f5947;
+    border-left-color: var(--jrpg-gold);
+    background: rgba(220, 196, 155, 0.20);
+}
+
+.studio-container .studio-bubble code {
+    color: #684725;
+    background: rgba(119, 79, 32, 0.10);
+}
+
+.studio-container .studio-bubble strong {
+    color: var(--jrpg-wine-dark);
+}
+
+.studio-container .studio-bubble.render-bubble {
+    background-color: rgba(255, 248, 232, 0.92);
+    border-color: rgba(166, 124, 68, 0.34);
+}
+
+.studio-container .studio-bubble.studio-summary-bubble {
+    background-color: rgba(255, 247, 226, 0.94);
+    background-image:
+        var(--jrpg-seal),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(213, 182, 129, 0.12)),
+        var(--jrpg-paper-texture);
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-position: right 10px bottom 8px, center, center;
+    background-size: 56px 56px, auto, 430px 430px;
+    border-color: rgba(132, 31, 37, 0.38);
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 255, 255, 0.42),
+        0 4px 14px rgba(80, 38, 18, 0.11);
+}
+
+/* 「已生成，點預覽」卡：蠟印圖 + 羊皮框（取代舊 emoji 純色框；對齊設計圖、免用 emoji 當圖標）*/
+.studio-hidden-ui { margin-top: 10px; padding: 12px 15px; display: flex; align-items: center; gap: 11px; background: rgba(255, 247, 226, 0.94); border: 1px solid rgba(132, 31, 37, 0.30); border-radius: 10px; color: #4a2a24; font-size: 13px; font-weight: 700; }
+.studio-hidden-ui img { width: 38px; height: 38px; flex-shrink: 0; object-fit: contain; }
+.studio-hidden-ui i { color: var(--jrpg-wine); }
+
+.studio-container .summary-header {
+    color: var(--jrpg-wine);
+    border-color: rgba(132, 31, 37, 0.25);
+    font-family: inherit;
+}
+
+.studio-container .summary-content {
+    color: var(--jrpg-ink);
+}
+
+.studio-container .summary-content strong {
+    color: #8c5f22;
+}
+
+.studio-container .summary-foot {
+    color: #8e7860;
+    border-color: rgba(132, 31, 37, 0.18);
+}
+
+.studio-container .studio-input-wrap {
+    border-top-color: rgba(139, 94, 44, 0.32);
+    box-shadow:
+        0 -5px 18px rgba(92, 56, 24, 0.08),
+        inset 0 1px rgba(255, 255, 255, 0.56);
+}
+
+.studio-container .studio-type-label {
+    color: #806b58;
+}
+
+.studio-container .studio-type {
+    color: #6f5846;
+    border-color: rgba(142, 101, 51, 0.34);
+    background: rgba(255, 250, 239, 0.52);
+    font-family: inherit;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.30);
+}
+
+.studio-container .studio-type:hover {
+    color: var(--jrpg-wine);
+    border-color: var(--jrpg-gold);
+    background: rgba(235, 216, 181, 0.72);
+}
+
+.studio-container .studio-type.active {
+    color: #fff8e7;
+    border-color: var(--jrpg-gold-light);
+    background: linear-gradient(180deg, #7a2930, var(--jrpg-wine-dark));
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 218, 139, 0.18),
+        0 2px 5px rgba(71, 18, 23, 0.18);
+}
+
+.studio-container .studio-attach-btn {
+    color: transparent;
+    border-color: rgba(151, 108, 55, 0.36);
+    border-radius: 9px;
+    background-color: rgba(255, 249, 235, 0.82);
+    background-image: var(--jrpg-quill), var(--jrpg-paper-texture);
+    background-repeat: no-repeat, repeat;
+    background-position: center, center;
+    background-size: auto 46px, 400px 400px; /* 毛筆保持原比例(圖是瘦高型)，別硬設寬高拉變形 */
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 255, 255, 0.36),
+        0 2px 7px rgba(77, 43, 18, 0.09);
+}
+
+.studio-container .studio-attach-btn:hover {
+    color: transparent;
+    border-color: var(--jrpg-gold);
+    background-color: #f0ddba;
+    filter: saturate(1.06);
+}
+
+.studio-container .studio-textarea {
+    color: var(--jrpg-ink);
+    caret-color: var(--jrpg-wine);
+    border-color: rgba(151, 108, 55, 0.34);
+    border-radius: 9px;
+    background-color: rgba(255, 250, 239, 0.86);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 430px 430px;
+    box-shadow:
+        inset 0 1px 5px rgba(100, 63, 28, 0.07),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.44);
+    font-family: inherit;
+}
+
+.studio-container .studio-textarea::placeholder {
+    color: rgba(111, 85, 62, 0.52);
+}
+
+.studio-container .studio-textarea:focus {
+    border-color: var(--jrpg-gold);
+    box-shadow:
+        inset 0 1px 5px rgba(100, 63, 28, 0.08),
+        0 0 0 2px rgba(182, 138, 69, 0.15);
+}
+
+.studio-container .studio-send-btn {
+    color: #fff8e6;
+    border: 1px solid var(--jrpg-gold-light);
+    border-radius: 9px;
+    background:
+        linear-gradient(180deg, #7c2a31 0%, #5d1920 58%, #431118 100%);
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 218, 138, 0.13),
+        inset 0 -4px 8px rgba(35, 4, 8, 0.24),
+        0 3px 8px rgba(72, 18, 23, 0.24);
+    font-family: inherit;
+    letter-spacing: 0.12em;
+    text-shadow: 0 1px 1px #260408;
+}
+
+.studio-container .studio-send-btn:hover {
+    color: #fffbea;
+    border-color: #e6c77f;
+    background:
+        linear-gradient(180deg, #913841 0%, #6a2027 58%, #4b141a 100%);
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 223, 151, 0.18),
+        0 4px 11px rgba(72, 18, 23, 0.30);
+}
+
+.studio-container .studio-tab {
+    color: #74604f;
+    font-family: inherit;
+    letter-spacing: 0.03em;
+}
+
+.studio-container .studio-tab:hover {
+    color: var(--jrpg-wine);
+    background: rgba(211, 181, 128, 0.12);
+}
+
+.studio-container .studio-tab.active {
+    color: var(--jrpg-wine-dark);
+}
+
+.studio-container .studio-tab.active::after {
+    background: linear-gradient(90deg, transparent, var(--jrpg-gold), var(--jrpg-wine), var(--jrpg-gold), transparent);
+    box-shadow: 0 -1px rgba(255, 255, 255, 0.58);
+}
+
+.studio-container .studio-empty {
+    color: rgba(101, 75, 53, 0.43);
+    font-family: inherit;
+}
+
+.studio-container .studio-preview-fab {
+    color: #fff7e4;
+    border: 1px solid var(--jrpg-gold-light);
+    background: linear-gradient(180deg, #79272e, #4f151b);
+    box-shadow:
+        inset 0 0 0 2px rgba(255, 220, 146, 0.13),
+        0 5px 15px rgba(66, 20, 17, 0.30);
+}
+
+.studio-container .studio-drawer-handle::after {
+    background: linear-gradient(90deg, var(--jrpg-gold), var(--jrpg-wine), var(--jrpg-gold));
+    box-shadow: 0 1px rgba(255, 255, 255, 0.52);
+}
+
+.studio-container .studio-source-content {
+    color: #f0d9aa;
+    background: #231713;
+    border-color: #8e6e3e;
+}
+
+.studio-container .studio-card,
+.studio-container .studio-gallery-card,
+.studio-container .vn-history-item,
+.studio-container #vn-studio-history-area {
+    color: var(--jrpg-ink);
+    border-color: rgba(151, 108, 55, 0.30);
+    border-radius: 9px;
+    background-color: rgba(255, 249, 235, 0.88);
+    background-image:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(208, 174, 116, 0.08)),
+        var(--jrpg-paper-texture);
+    background-size: auto, 430px 430px;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.44),
+        0 4px 12px rgba(78, 43, 18, 0.09);
+}
+
+.studio-container .studio-gallery-card {
+    background-image:
+        var(--jrpg-corner),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(208, 174, 116, 0.08)),
+        var(--jrpg-paper-texture);
+    background-repeat: no-repeat, no-repeat, repeat;
+    background-position: left top, center, center;
+    background-size: 52px 52px, auto, 430px 430px;
+}
+
+.studio-container .studio-gallery-card.active-tag {
+    border-color: var(--jrpg-wine);
+    box-shadow:
+        inset 0 0 0 2px rgba(182, 138, 69, 0.24),
+        0 5px 14px rgba(82, 25, 28, 0.14);
+}
+
+.studio-container .studio-card-title,
+.studio-container .sgc-title {
+    color: var(--jrpg-wine-dark);
+    border-color: rgba(151, 108, 55, 0.24);
+    font-family: inherit;
+}
+
+.studio-container .sgc-usage,
+.studio-container .sgc-format-box {
+    color: #654f3f;
+    border-color: var(--jrpg-gold);
+    background: rgba(224, 200, 159, 0.24);
+}
+
+.studio-container .sgc-format-text {
+    color: #4c392c;
+}
+
+.studio-container .sgc-format-input {
+    color: var(--jrpg-ink);
+    border-color: var(--jrpg-line);
+    background: rgba(255, 250, 239, 0.88);
+}
+
+.studio-container .sgc-btn,
+.studio-container .studio-pack-btn,
+.studio-container #studio-spec-copy-btn,
+.studio-container #studio-import-btn {
+    color: var(--jrpg-wine-dark) !important;
+    border-color: rgba(139, 91, 42, 0.48) !important;
+    border-radius: 7px !important;
+    background: linear-gradient(180deg, rgba(255, 250, 238, 0.92), rgba(226, 201, 159, 0.76)) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38);
+    font-family: inherit !important;
+}
+
+.studio-container .sgc-btn:hover,
+.studio-container .studio-pack-btn:hover,
+.studio-container #studio-spec-copy-btn:hover,
+.studio-container #studio-import-btn:hover {
+    color: #fff8e7 !important;
+    border-color: var(--jrpg-gold-light) !important;
+    background: linear-gradient(180deg, #7b2930, var(--jrpg-wine-dark)) !important;
+}
+
+.studio-container .vn-history-item:hover {
+    border-color: var(--jrpg-gold);
+    background-color: #f3e2c2;
+}
+
+.studio-container .vn-history-item.pinned {
+    border-color: #bd8d39;
+    background-color: #fff1c7;
+}
+
+.studio-container .vn-history-item .h-time,
+.studio-container .vn-history-empty,
+.studio-container .vn-history-hint {
+    color: #806b58;
+}
+
+.studio-container .vn-history-item .h-note {
+    color: var(--jrpg-ink);
+}
+
+.studio-container .vn-history-item .h-btn {
+    color: var(--jrpg-wine-dark);
+    border-color: var(--jrpg-line);
+    background: rgba(255, 250, 239, 0.60);
+}
+
+.studio-container .vn-history-item .h-btn:hover {
+    color: #fff8e7;
+    border-color: var(--jrpg-wine);
+    background: var(--jrpg-wine);
+}
+
+.studio-container .studio-choice-btn,
+.studio-container .studio-choice-selected {
+    color: var(--jrpg-ink);
+    border-color: rgba(151, 108, 55, 0.30);
+    border-radius: 8px;
+    background-color: rgba(255, 249, 235, 0.82);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 420px 420px;
+    font-family: inherit;
+}
+
+.studio-container .studio-choice-btn:hover {
+    color: var(--jrpg-wine-dark);
+    border-color: var(--jrpg-gold);
+    background-color: #eddbb8;
+}
+
+.studio-container .studio-error-bubble {
+    color: #77282d;
+    border-color: rgba(142, 45, 50, 0.48);
+    background: rgba(255, 234, 224, 0.78);
+}
+
+.studio-container .studio-error-msg {
+    color: #8e2d32;
+}
+
+.studio-container .studio-retry-btn {
+    color: #7b252b;
+    border-color: rgba(142, 45, 50, 0.54);
+    background: rgba(142, 45, 50, 0.08);
+    font-family: inherit;
+}
+
+.studio-container .studio-retry-btn:hover {
+    color: #fff8e7;
+    border-color: #7b252b;
+    background: #7b252b;
+}
+
+.studio-container .studio-pending-img {
+    border-color: var(--jrpg-line);
+    background: var(--jrpg-paper-light);
+    box-shadow: 0 3px 8px rgba(77, 43, 18, 0.12);
+}
+
+.studio-container .studio-typing-dot {
+    background: var(--jrpg-wine);
+}
+
+.studio-container .os-studio-spinner {
+    border-color: rgba(104, 31, 37, 0.20);
+    border-top-color: var(--jrpg-wine);
+}
+
+.studio-container,
+.studio-container * {
+    scrollbar-color: rgba(128, 91, 49, 0.42) transparent;
+}
+
+.studio-container ::-webkit-scrollbar-thumb,
+.studio-container::-webkit-scrollbar-thumb {
+    background: rgba(128, 91, 49, 0.38);
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+
+.studio-container ::-webkit-scrollbar-thumb:hover,
+.studio-container::-webkit-scrollbar-thumb:hover {
+    background: rgba(104, 31, 37, 0.56);
+    background-clip: padding-box;
+}
+
+/* Theme workshop (.vth-*) lives in vn_gallery.css and needs its own skin. */
+.studio-container .studio-theme-pane {
+    color: var(--jrpg-ink);
+    background-color: rgba(246, 235, 212, 0.62);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 520px 520px;
+}
+
+.studio-container .vth-css-world,
+.studio-container .vth-prev-label,
+.studio-container .vth-gal-label {
+    color: var(--jrpg-wine-dark);
+    font-family: inherit;
+    text-shadow: 0 1px rgba(255, 255, 255, 0.72);
+}
+
+.studio-container .vth-mini {
+    color: #654f3f;
+    border-color: rgba(142, 101, 51, 0.36);
+    background:
+        linear-gradient(180deg, rgba(255, 251, 241, 0.92), rgba(229, 209, 174, 0.76));
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.38);
+    font-family: inherit;
+}
+
+.studio-container .vth-mini:hover {
+    color: var(--jrpg-wine);
+    border-color: var(--jrpg-gold);
+    background:
+        linear-gradient(180deg, #fffaf0, #ead4ac);
+}
+
+.studio-container .vth-mini.primary,
+.studio-container .vth-vp.active,
+.studio-container .vth-mode.active {
+    color: #fff8e7;
+    border-color: var(--jrpg-gold-light);
+    background:
+        linear-gradient(180deg, #7c2a31 0%, var(--jrpg-wine) 58%, var(--jrpg-wine-dark) 100%);
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 221, 145, 0.18),
+        0 2px 5px rgba(72, 18, 23, 0.18);
+    text-shadow: 0 1px 1px rgba(38, 4, 8, 0.72);
+}
+
+.studio-container .vth-mini.primary:hover,
+.studio-container .vth-vp.active:hover,
+.studio-container .vth-mode.active:hover {
+    color: #fffbea;
+    border-color: #e6c77f;
+    background:
+        linear-gradient(180deg, #913841 0%, #6a2027 58%, #4b141a 100%);
+}
+
+.studio-container .vth-mini.danger {
+    color: #8e2d32;
+    border-color: rgba(142, 45, 50, 0.48);
+    background: rgba(142, 45, 50, 0.06);
+}
+
+.studio-container .vth-mini.danger:hover {
+    color: #fff8e7;
+    border-color: #7b252b;
+    background: #7b252b;
+}
+
+.studio-container .vth-vp,
+.studio-container .vth-mode {
+    color: #715c4a;
+    border-color: rgba(142, 101, 51, 0.32);
+    background: rgba(255, 250, 239, 0.58);
+    font-family: inherit;
+}
+
+.studio-container .vth-vp:hover,
+.studio-container .vth-mode:hover {
+    color: var(--jrpg-wine);
+    border-color: var(--jrpg-gold);
+    background: rgba(235, 216, 181, 0.76);
+}
+
+.studio-container .vth-ai-desc,
+.studio-container .vth-css-area,
+.studio-container .vth-gal-name,
+.studio-container .vth-vp-w {
+    color: var(--jrpg-ink);
+    caret-color: var(--jrpg-wine);
+    border-color: rgba(142, 101, 51, 0.34);
+    background-color: rgba(255, 250, 239, 0.88);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 430px 430px;
+    box-shadow:
+        inset 0 1px 5px rgba(100, 63, 28, 0.07),
+        inset 0 0 0 1px rgba(255, 255, 255, 0.40);
+    font-family: inherit;
+}
+
+.studio-container .vth-css-area {
+    color: #49372c;
+    font-family: 'Courier New', monospace;
+}
+
+.studio-container .vth-ai-desc::placeholder,
+.studio-container .vth-gal-name::placeholder,
+.studio-container .vth-css-area::placeholder {
+    color: rgba(111, 85, 62, 0.52);
+}
+
+.studio-container .vth-ai-desc:focus,
+.studio-container .vth-css-area:focus,
+.studio-container .vth-gal-name:focus,
+.studio-container .vth-vp-w:focus {
+    border-color: var(--jrpg-gold);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(182, 138, 69, 0.14);
+}
+
+.studio-container .vth-preview-box,
+.studio-container .vth-gal-thumb-wrap {
+    border-color: rgba(104, 31, 37, 0.34);
+    background: #2c211d;
+    box-shadow:
+        0 4px 12px rgba(72, 38, 17, 0.12),
+        inset 0 0 0 1px rgba(221, 189, 120, 0.12);
+}
+
+.studio-container .vth-gal {
+    border-color: rgba(142, 101, 51, 0.28);
+}
+
+.studio-container .vth-css-hint,
+.studio-container .vth-gal-empty {
+    color: #806b58;
+}
+
+.studio-container .vth-gal-card {
+    color: var(--jrpg-ink);
+    border-color: rgba(151, 108, 55, 0.30);
+    background-color: rgba(255, 249, 235, 0.88);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 430px 430px;
+    box-shadow:
+        inset 0 0 0 1px rgba(255, 255, 255, 0.42),
+        0 4px 12px rgba(78, 43, 18, 0.09);
+}
+
+.studio-container .vth-gal-cname {
+    color: var(--jrpg-wine-dark);
+    font-family: inherit;
+}
+
+/* ═══ ⚡ 特效工坊（fx 模式：特效庫清單 + 試播台） ═══ */
+.studio-container .fx-pv-desc {
+    font-size: 12px;
+    color: #806b58;
+    margin: 4px 0 10px;
+    line-height: 1.5;
+}
+/* 特效庫：匯出／匯入／清空 按鈕列 */
+.studio-container .fx-file-hidden { display: none; }
+.studio-container .fx-lib-actions {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin: 0 0 10px;
+}
+.studio-container .fx-lib-act {
+    flex: 1;
+    min-width: 90px;
+    padding: 7px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    color: #6b5a48;
+    background: rgba(151, 108, 55, 0.08);
+    border: 1px solid rgba(151, 108, 55, 0.30);
+    border-radius: 6px;
+    white-space: nowrap;
+}
+.studio-container .fx-lib-act:hover { background: rgba(151, 108, 55, 0.16); }
+.studio-container .fx-lib-act.danger {
+    color: #c0392b;
+    border-color: rgba(192, 57, 43, 0.40);
+    background: rgba(192, 57, 43, 0.06);
+}
+.studio-container .vn-fx-preview-stage {
+    margin-bottom: 10px;
+    border: 1px solid rgba(151, 108, 55, 0.30);
+}
+.studio-container .fx-lib-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.studio-container .fx-lib-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(151, 108, 55, 0.30);
+    background-color: rgba(255, 249, 235, 0.88);
+    background-image: var(--jrpg-paper-texture);
+    background-size: 430px 430px;
+}
+.studio-container .fx-lib-info {
+    flex: 1;
+    min-width: 0;
+}
+.studio-container .fx-lib-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--jrpg-ink);
+}
+.studio-container .fx-lib-desc {
+    font-size: 11px;
+    color: #806b58;
+    margin-top: 2px;
+    line-height: 1.4;
+}
+.studio-container .fx-lib-kind {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 1px 7px;
+    border-radius: 8px;
+    color: var(--jrpg-wine-dark);
+    border: 1px solid rgba(142, 101, 51, 0.35);
+    background: rgba(142, 101, 51, 0.10);
+    vertical-align: 1px;
+}
+.studio-container .fx-lib-builtin {
+    opacity: 0.75;
+}
+.studio-container .fx-lib-btn {
+    flex-shrink: 0;
+    border: 1px solid rgba(151, 108, 55, 0.35);
+    background: rgba(255, 252, 244, 0.9);
+    color: var(--jrpg-ink);
+    border-radius: 9px;
+    padding: 7px 11px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.studio-container .fx-lib-btn:active {
+    transform: scale(0.96);
+}
+.studio-container .fx-lib-btn.danger {
+    color: #9c2f2f;
+    border-color: rgba(156, 47, 47, 0.35);
+}
+.studio-container .fx-pv-play {
+    width: 100%;
+}
+.studio-container .fx-lib-row-stage {
+    height: 180px;
+    margin: 2px 0 6px;
+}
+
+/* 特效庫：群組chip + 開關 */
+.studio-container .fx-grp-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+.studio-container .fx-grp-chip {
+    border: 1px solid rgba(151, 108, 55, 0.35);
+    background: rgba(255, 252, 244, 0.9);
+    color: var(--jrpg-ink);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+    cursor: pointer;
+}
+.studio-container .fx-grp-chip.active {
+    background: var(--jrpg-wine-dark, #6d2233);
+    border-color: var(--jrpg-wine-dark, #6d2233);
+    color: #fff8ec;
+}
+.studio-container .fx-grp-batch {
+    border: 1px dashed rgba(151, 108, 55, 0.45);
+    background: transparent;
+    color: #806b58;
+    border-radius: 8px;
+    padding: 3px 9px;
+    font-size: 11px;
+    cursor: pointer;
+    margin-left: 2px;
+}
+.studio-container .fx-lib-grp {
+    display: inline-block;
+    border: 1px dashed rgba(151, 108, 55, 0.45);
+    background: transparent;
+    color: #806b58;
+    border-radius: 8px;
+    padding: 0 7px;
+    font-size: 10px;
+    line-height: 16px;
+    cursor: pointer;
+    vertical-align: 1px;
+}
+.studio-container .fx-lib-row.fx-off .fx-lib-info {
+    opacity: 0.45;
+}
+.studio-container .fx-switch {
+    position: relative;
+    flex-shrink: 0;
+    width: 38px;
+    height: 22px;
+    cursor: pointer;
+}
+.studio-container .fx-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    cursor: pointer;
+}
+.studio-container .fx-sw-knob {
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: rgba(151, 108, 55, 0.28);
+    transition: background 0.18s;
+    pointer-events: none;
+}
+.studio-container .fx-sw-knob::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #fffdf6;
+    box-shadow: 0 1px 3px rgba(78, 43, 18, 0.35);
+    transition: transform 0.18s;
+}
+.studio-container .fx-switch input:checked + .fx-sw-knob {
+    background: #4d9c62;
+}
+.studio-container .fx-switch input:checked + .fx-sw-knob::after {
+    transform: translateX(16px);
+}
+
+/* 🚨 兩段式確認的中間態（window.confirm 在 Tauri 會被攔掉，一律用這個代替）：
+   按第一下按鈕自己變成「再按一次」，4 秒沒動作會自己還原。 */
+.studio-icon-btn.is-arm,
+.vth-mini.is-arm {
+    background: #c0392b;
+    border-color: #c0392b;
+    color: #fff;
+}
+
+
+/* ============================================================
+   2026-09-11 重排：設定列／設定頁／已選要求／格式與說明／還原舊版彈窗／帽匠名牌
+   🚨 以前面板類型、誰來做、一整排要求 chip 全攤在輸入框上方，看不出怎麼調；
+      標籤／說明／格式疊在預覽上面把作品推到下面去；還原舊版在原地展開擠掉聊天。
+   配色全走 --jrpg-* 變數：手機殼的羊皮紙、工坊的深紫（lobby_stage.css 重新定義那組變數）都自動跟上。
+   ============================================================ */
+.studio-container .studio-set-bar { display:flex; align-items:center; gap:6px; flex-shrink:0;
+    padding:8px 12px; border-bottom:1px solid var(--jrpg-line, rgba(26,28,40,.15)); }
+.studio-container .studio-set-bar[hidden] { display:none; }
+.studio-container .studio-set-pill { font-size:12px; padding:3px 10px; border-radius:999px; white-space:nowrap;
+    border:1px solid var(--jrpg-line, rgba(26,28,40,.2)); background:var(--jrpg-paper-light, rgba(255,255,255,.6));
+    color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-set-pill[hidden] { display:none; }
+.studio-container .studio-set-open { margin-left:auto; display:inline-flex; align-items:center; gap:6px; cursor:pointer;
+    padding:4px 10px; border-radius:8px; font-size:12px; font-family:inherit; background:transparent;
+    border:1px solid var(--jrpg-line, rgba(26,28,40,.2)); color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-set-open:hover { border-color:var(--jrpg-wine, #1A1C28); }
+.studio-container .studio-set-open .fa-chevron-right { font-size:10px; opacity:.7; }
+
+/* 設定頁：蓋住左半邊（聊天那欄），右邊作品照樣在 */
+.studio-container .studio-set-page { position:absolute; inset:0; z-index:20; display:flex; flex-direction:column;
+    background:var(--jrpg-paper, #EEF0F6); color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-set-page[hidden] { display:none; }
+.studio-container .studio-set-hd { display:flex; align-items:center; gap:10px; padding:10px 14px; flex-shrink:0;
+    font-size:14px; font-weight:700; border-bottom:1px solid var(--jrpg-line, rgba(26,28,40,.15)); }
+.studio-container .studio-set-back { width:30px; height:30px; border-radius:8px; cursor:pointer; font-family:inherit;
+    display:flex; align-items:center; justify-content:center; background:transparent;
+    border:1px solid var(--jrpg-line, rgba(26,28,40,.2)); color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-set-body { flex:1; min-height:0; overflow-y:auto; padding:10px 14px 18px;
+    display:flex; flex-direction:column; gap:8px; }
+.studio-container .studio-set-sec { margin-top:8px; font-size:12px; font-weight:700; color:var(--jrpg-muted, rgba(26,28,40,.6)); }
+.studio-container .studio-set-sec small { margin-left:6px; font-size:11px; font-weight:400; }
+.studio-container .studio-set-note { font-size:11px; line-height:1.5; color:var(--jrpg-muted, rgba(26,28,40,.6)); }
+.studio-container .studio-set-page .studio-type-row { display:grid; gap:6px; }
+.studio-container .studio-set-page .studio-type { display:flex; flex-direction:column; align-items:flex-start; gap:2px;
+    padding:9px 12px; border-radius:10px; text-align:left; font-family:inherit; cursor:pointer;
+    border:1px solid var(--jrpg-line, rgba(26,28,40,.2)); background:var(--jrpg-paper-light, rgba(255,255,255,.6));
+    color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-set-page .studio-type b { font-size:13px; }
+.studio-container .studio-set-page .studio-type span { font-size:11px; font-weight:400; color:var(--jrpg-muted, rgba(26,28,40,.6)); }
+.studio-container .studio-set-page .studio-type.active { border-color:var(--jrpg-wine, #1A1C28); box-shadow:inset 0 0 0 1px var(--jrpg-wine, #1A1C28); }
+.studio-container .studio-set-page .studio-type.active span { color:inherit; opacity:.85; }
+.studio-container .studio-set-page .studio-chips-row { display:flex; flex-wrap:wrap; gap:6px; }
+.studio-container .studio-set-page .studio-chip { padding:5px 12px; font-size:12px; }
+.studio-container .studio-feat-list { display:grid; gap:6px; }
+.studio-container .studio-feat { display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:10px; cursor:pointer;
+    font-size:13px; font-family:inherit; text-align:left;
+    border:1px solid var(--jrpg-line, rgba(26,28,40,.2)); background:var(--jrpg-paper-light, rgba(255,255,255,.6));
+    color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-feat > span:first-of-type { flex:1; }
+.studio-container .studio-feat-sw { position:relative; flex-shrink:0; width:32px; height:18px; border-radius:999px;
+    background:var(--jrpg-line, rgba(26,28,40,.25)); transition:background .15s ease; }
+.studio-container .studio-feat-sw::after { content:''; position:absolute; top:2px; left:2px; width:14px; height:14px;
+    border-radius:50%; background:#fff; transition:left .15s ease; }
+.studio-container .studio-feat.on .studio-feat-sw { background:var(--jrpg-wine, #1A1C28); }
+.studio-container .studio-feat.on .studio-feat-sw::after { left:16px; }
+
+/* 輸入框上方：已選的要求與開著的功能，× 可以直接拿掉 */
+.studio-container .studio-picked { display:flex; flex-wrap:wrap; gap:6px; }
+.studio-container .studio-picked:empty, .studio-container .studio-picked[hidden] { display:none; }
+.studio-container .studio-picked-tag { display:inline-flex; align-items:center; gap:5px; font-size:12px;
+    padding:3px 4px 3px 10px; border-radius:999px;
+    border:1px solid var(--jrpg-line, rgba(26,28,40,.2)); background:var(--jrpg-paper-light, rgba(255,255,255,.6));
+    color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-picked-tag.is-feat i { color:var(--jrpg-wine, #1A1C28); font-size:11px; }
+.studio-container .studio-picked-tag button { background:none; border:none; cursor:pointer; padding:0 5px; font-size:11px;
+    color:var(--jrpg-muted, rgba(26,28,40,.6)); }
+
+/* 右邊「格式與說明」分頁 */
+.studio-container .studio-tab[hidden] { display:none; }
+.studio-container .studio-info-content { flex:1; min-height:0; overflow-y:auto; padding:18px 20px;
+    display:flex; flex-direction:column; gap:14px; }
+.studio-container .studio-info-content[hidden] { display:none; }
+.studio-container .studio-info-k { margin-bottom:6px; font-size:12px; font-weight:700; color:var(--jrpg-muted, rgba(26,28,40,.6)); }
+.studio-container .studio-info-v { margin:0; padding:10px 12px; border-radius:10px; font-size:13px; line-height:1.7;
+    white-space:pre-wrap; word-break:break-word;
+    border:1px solid var(--jrpg-line, rgba(26,28,40,.15)); background:var(--jrpg-paper-light, rgba(255,255,255,.6));
+    color:var(--jrpg-ink, #1A1C28); }
+.studio-container .studio-info-mono { font-family:ui-monospace, Consolas, 'Courier New', monospace; font-size:12px; }
+
+/* 還原舊版彈窗 */
+.studio-container .studio-hist-modal { position:absolute; inset:0; z-index:40; display:flex; align-items:center; justify-content:center;
+    padding:20px; background:rgba(10,8,16,.5); }
+.studio-container .studio-hist-modal[hidden] { display:none; }
+.studio-container .studio-hist-card { width:min(460px, 100%); max-height:80%; overflow-y:auto; padding:14px 16px;
+    border-radius:14px; border:1px solid var(--jrpg-line, rgba(26,28,40,.2));
+    background:var(--jrpg-paper, #EEF0F6); color:var(--jrpg-ink, #1A1C28); box-shadow:0 16px 40px rgba(0,0,0,.35); }
+.studio-container .studio-hist-hd { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;
+    font-size:14px; font-weight:700; }
+.studio-container .studio-hist-x { background:none; border:none; cursor:pointer; font-size:16px; padding:2px 6px;
+    color:var(--jrpg-muted, rgba(26,28,40,.6)); }
+.studio-container .studio-hist-card #vn-studio-history-area { display:block; margin:0; padding:0; background:none; border:none; }
+
+/* 帽匠名牌：在工坊裡打開時，AI 每一輪回話前面的「頭像＋名字」 */
+.studio-container .studio-ai-who { align-self:flex-start; display:flex; align-items:center; gap:7px; margin:4px 0 -8px;
+    font-size:12px; color:var(--jrpg-muted, rgba(26,28,40,.6)); }
+.studio-container .studio-ai-ava { flex-shrink:0; width:26px; height:26px; border-radius:50%;
+    background-color:var(--jrpg-paper-light, rgba(255,255,255,.6)); background-size:280% auto; background-position:50% 8.5%;
+    background-repeat:no-repeat; border:1px solid var(--jrpg-line, rgba(26,28,40,.2)); }
+
+/* 還原舊版那顆沒作品時藏著：.studio-icon-btn 自帶 display:flex，會蓋過 hidden */
+.studio-container .studio-icon-btn[hidden] { display:none; }
+
+/* ══ 🎩 組件類創作室＝帽匠皮 ═══════════════════════════
+   照阿洛的稿。本來這整段只在「從帽匠工坊進去」時才生效，
+   所以從手機的創作室進去看到的還是舊的米黃。
+   現在條件換成「這一間創作室是組件類」（容器帶 craft-skin），不管從哪個入口進去都一樣。
+
+   🚨 米黃只留給文書那兩間：世界書、我的角色。它們不帶 craft-skin，吃的是上面那套羊皮紙。
+   🚨 這一整段一定要放在檔案最後面：它跟創作室本身的規則權重一樣，靠「後出現」才蓋得過去。
+   🚨 面的底色在這裡是實色：手機殼裡底下是白的，半透明的深紫蓋上去會變成一片淡紫。
+      工坊裡要的是半透明（讓工坊的暗紫透上來），那幾條覆寫留在 lobby_stage.css。 */
+.craft-skin { --lwt-ink:#efe7f6; --lwt-dim:rgba(239,231,246,.62); --lwt-line:rgba(214,150,190,.26);
+  --lwt-pane:#261f38; --lwt-card:rgba(58,47,84,.55); --lwt-hot:#c9407a; }
+.studio-container.craft-skin { background:var(--lwt-pane); color:var(--lwt-ink); }
+.craft-skin .studio-body { background:transparent; }
+/* 標題列：跟面板的框同一種暗紫，底線走酒紅 */
+.craft-skin .studio-header { background:linear-gradient(180deg, rgba(58,47,84,.75), rgba(38,31,56,.6));
+  border-bottom:1px solid var(--lwt-line); }
+.craft-skin .studio-title { color:var(--lwt-ink); letter-spacing:2px; }
+.craft-skin .studio-title i { color:#e79ec4; }
+.craft-skin .studio-back-btn { color:var(--lwt-ink); background:rgba(255,255,255,.08); border:1px solid var(--lwt-line); }
+.craft-skin .studio-back-btn:hover { background:rgba(255,255,255,.16); }
+.craft-skin .studio-icon-btn { background:rgba(255,255,255,.07); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-icon-btn:hover { background:rgba(255,255,255,.15); }
+.craft-skin .studio-icon-btn.danger { color:#f0a8bd; border-color:rgba(226,110,150,.45); }
+/* 左右兩欄 */
+.craft-skin .studio-left { background:rgba(30,24,44,.55); border-right:1px solid var(--lwt-line); }
+.craft-skin .studio-right { background:var(--lwt-pane); }
+.craft-skin .studio-right-header { background:rgba(46,37,68,.9); border-bottom:1px solid var(--lwt-line); }
+.craft-skin .studio-tab { color:var(--lwt-dim); }
+.craft-skin .studio-tab.active { color:#ffd9ea; }
+.craft-skin .studio-tab.active::after { background:linear-gradient(90deg,#8f7ce0,var(--lwt-hot)); }
+/* 對話泡泡 */
+.craft-skin .studio-chat-history { background:transparent; }
+.craft-skin .studio-bubble.user { background:rgba(120,52,96,.42); border-color:rgba(226,140,180,.32); color:var(--lwt-ink); }
+.craft-skin .studio-bubble.ai { background:var(--lwt-card); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-bubble code, .craft-skin .studio-bubble pre {
+  background:rgba(16,12,24,.7); color:#ffd9ea; border-color:var(--lwt-line); }
+.craft-skin .studio-typing-dot { background:#e79ec4; }
+/* 輸入區與 chip */
+.craft-skin .studio-input-wrap { background:rgba(46,37,68,.92); border-top:1px solid var(--lwt-line); }
+.craft-skin .studio-type-label { color:var(--lwt-dim); }
+.craft-skin .studio-type, .craft-skin .studio-chip {
+  border-color:var(--lwt-line); color:var(--lwt-ink); background:rgba(255,255,255,.05); }
+.craft-skin .studio-type:hover, .craft-skin .studio-chip:hover { background:rgba(255,255,255,.12); }
+.craft-skin .studio-type.active, .craft-skin .studio-chip-feature.active {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .studio-chip-manage { color:var(--lwt-dim); }
+/* 🚨 元素 chip 的「選了」以前在工坊裡看不出來：上面那條 .craft-skin .studio-chip 權重比 .studio-chip.active 高，
+   選取的底色被蓋回透明，選了跟沒選長一樣 */
+.craft-skin .studio-chip.active { background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+/* 設定頁與還原舊版彈窗要實心底：--jrpg-paper 在這裡是 .92 透明，蓋在聊天上會把底下的輸入列透出來 */
+.craft-skin .studio-set-page, .craft-skin .studio-hist-card { background:#262038; }
+.craft-skin .studio-textarea, .craft-skin .studio-attach-btn {
+  background:rgba(22,17,34,.75); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-textarea::placeholder { color:rgba(239,231,246,.42); }
+.craft-skin .studio-send-btn { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff;
+  box-shadow:0 4px 14px rgba(180,50,110,.4); }
+.craft-skin .studio-history-btn { background:rgba(255,255,255,.07); border:1px solid var(--lwt-line); color:var(--lwt-ink); }
+/* 預覽區與雜項 */
+.craft-skin .studio-preview-main, .craft-skin .studio-preview-content { background:transparent; }
+.craft-skin .studio-empty { color:rgba(239,231,246,.4); }
+.craft-skin .studio-card { background:var(--lwt-card); border-color:var(--lwt-line); }
+.craft-skin .studio-card-title { color:var(--lwt-ink); border-bottom-color:var(--lwt-line); }
+.craft-skin .studio-pv { background:rgba(255,255,255,.06); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-pv.active { background:var(--lwt-hot); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .studio-pv-wrap { border-color:var(--lwt-line); }
+.craft-skin .studio-action-area { background:rgba(46,37,68,.92); border-top:1px solid var(--lwt-line); }
+.craft-skin .studio-export-btn { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff; border:none; }
+.craft-skin .studio-preview-fab { background:linear-gradient(135deg,#a12f66,var(--lwt-hot)); color:#fff; }
+/* 捲軸配合暗底 */
+.studio-container.craft-skin, .studio-container.craft-skin * { scrollbar-color:rgba(226,150,190,.45) transparent; }
+.studio-container.craft-skin ::-webkit-scrollbar-thumb { background:rgba(226,150,190,.4); }
+
+/* ── 工坊裡的工具：把創作室那套「羊皮紙」皮整組換掉 ──
+   創作室的暖色皮有兩種寫法，兩種都要處理：
+   ① 變數驅動（--jrpg-*）：這裡整組重新定義就一次翻完。
+      🚨 要 !important——VN 組件庫那層把變數寫在元素的 style 上（os_studio_vn_gallery.js），
+         不加的話 class 規則永遠輸給 inline。順手把羊皮紙紋 --jrpg-paper-texture 設成 none，
+         不然每塊底都還鋪著米色紙紋。
+   ② 硬寫死的米白底（rgba(255,249,235,.88) 那種）：只能點名蓋，下面那幾組就是全部名單。 */
+.studio-container.craft-skin, .vncomp-app.craft-skin {
+  --jrpg-paper:rgba(38,31,56,.92) !important;
+  --jrpg-paper-light:rgba(58,47,84,.62) !important;
+  --jrpg-paper-deep:rgba(30,24,44,.9) !important;
+  --jrpg-ink:#efe7f6 !important;
+  --jrpg-muted:rgba(239,231,246,.62) !important;
+  --jrpg-wine:#a12f66 !important;
+  --jrpg-wine-dark:#6d1f46 !important;
+  --jrpg-gold:#e0a86a !important;
+  --jrpg-gold-light:#f0cfa0 !important;
+  --jrpg-line:rgba(214,150,190,.3) !important;
+  --jrpg-paper-texture:none !important;
+}
+/* 面：所有本來鋪紙底的區塊 */
+.craft-skin .studio-header,
+.craft-skin .studio-input-wrap,
+.craft-skin .studio-right-header,
+.craft-skin .studio-action-area,
+.craft-skin .studio-mode-tabs,
+.craft-skin .studio-card,
+.craft-skin .studio-gallery-card,
+.craft-skin .studio-chip-box,
+.craft-skin .studio-chip-litem,
+.craft-skin .studio-pending-img,
+.craft-skin #vn-studio-history-area,
+.craft-skin .vn-history-item,
+.craft-skin .fx-lib-row,
+.craft-skin .fx-grp-row,
+.craft-skin .sgc-format-box,
+.craft-skin .sgc-grouprow,
+.craft-skin .sgc-preview,
+.craft-skin .vc-font-preview,
+.craft-skin .studio-bubble.render-bubble,
+.craft-skin .studio-bubble.choices-bubble,
+.craft-skin .studio-choice-btn,
+.craft-skin .swb-card,
+.craft-skin .swb-op-body {
+  background-color:rgba(58,47,84,.5); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); box-shadow:none; }
+/* 輸入類：底再深一階，才看得出是可以打字的地方 */
+.craft-skin .studio-chip-input, .craft-skin .studio-chip-ta,
+.craft-skin .sgc-format-input, .craft-skin .swb-field, .craft-skin .mc-block-text,
+.craft-skin .mc-block-label {
+  background-color:rgba(22,17,34,.75); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); }
+/* 下拉選單本身寫了 background:#EEF0F6 !important（原生 select 在某些瀏覽器會吃系統色，所以它加了 important）
+   → 這裡也只能用 important 對衝 */
+.craft-skin .studio-mode-select {
+  background-color:rgba(22,17,34,.9) !important; background-image:none !important;
+  border-color:var(--lwt-line); color:var(--lwt-ink) !important; }
+/* 酒紅底上的字：這幾處原本吃 --jrpg-paper-light 當字色，而那顆變數在這裡被我改成深色的面
+   （它在原皮裡一顆兩用：淺色的面＋酒紅底上的字）→ 這幾條要單獨指定亮字，不然酒紅底配深字看不見 */
+.craft-skin .swb-user, .craft-skin .mc-msg.me, .craft-skin .mc-active-tag { color:#fff; }
+/* 主色鈕（酒紅）：送出／確定創建／收藏／啟用中的分頁與 chip */
+.craft-skin .studio-chip-savebtn,
+.craft-skin .studio-mode-tab.active,
+.craft-skin .studio-pv.active,
+.craft-skin .swb-primary,
+.craft-skin .swb-seg-btn.on,
+.craft-skin .fx-lib-btn:not(.danger),
+.craft-skin .studio-choice-selected,
+.craft-skin .mc-optbtn.primary, .craft-skin .mc-usebtn.on {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); background-image:linear-gradient(135deg,#8f3a76,var(--lwt-hot));
+  border-color:var(--lwt-hot); color:#fff; }
+/* 次要鈕與標籤 */
+.craft-skin .studio-mode-tab, .craft-skin .swb-iconbtn, .craft-skin .studio-back-btn,
+.craft-skin .fx-lib-act, .craft-skin .vn-history-item .h-btn, .craft-skin .studio-history-btn,
+.craft-skin .fx-lib-kind, .craft-skin .fx-lib-grp, .craft-skin .swb-tag {
+  background-color:rgba(255,255,255,.07); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .studio-attach-btn:hover, .craft-skin .studio-back-btn:hover,
+.craft-skin .studio-mode-tab:hover, .craft-skin .fx-lib-act:hover,
+.craft-skin .studio-choice-btn:hover, .craft-skin .swb-card:hover {
+  background-color:rgba(255,255,255,.16); background-image:none; color:var(--lwt-ink); }
+/* 危險色統一 */
+.craft-skin .fx-lib-btn.danger, .craft-skin .fx-lib-act.danger, .craft-skin .studio-chip-del {
+  background-color:rgba(226,110,150,.14); border-color:rgba(226,110,150,.45); color:#f0a8bd; }
+/* 字：泡泡裡的標題／粗體／行內碼原本是深墨色，暗底上等於看不見 */
+.craft-skin .studio-bubble h1, .craft-skin .studio-bubble h2,
+.craft-skin .studio-bubble h3, .craft-skin .studio-bubble strong {
+  color:#ffd9ea; border-bottom-color:var(--lwt-line); }
+.craft-skin .studio-bubble code {
+  background:rgba(16,12,24,.72); color:#9ff0c8; }
+.craft-skin .studio-bubble a { color:#e79ec4; }
+.craft-skin .fx-lib-desc, .craft-skin .fx-pv-desc, .craft-skin .studio-chip-litem-text,
+.craft-skin .studio-chip-empty, .craft-skin .swb-muted, .craft-skin .studio-card-title {
+  color:var(--lwt-dim); }
+.craft-skin .fx-lib-name, .craft-skin .studio-chip-litem-label { color:var(--lwt-ink); }
+
+/* 🚨 酒紅那顆變數在原皮裡是「紙上的墨」：43 處拿它當文字色、只有 18 處當底色。
+   暗紫底上照抄就變成粉字配紫底、整片糊掉（2026-08-26 回報）→ 這裡把它翻成「暗底上的亮墨」，
+   再把那 18 處當底色的單獨補回酒紅（下面幾組 + 前面那批主色鈕）。 */
+.studio-container.craft-skin, .vncomp-app.craft-skin {
+  --jrpg-wine:#f4a8cd !important; --jrpg-wine-dark:#e888b3 !important; }
+.craft-skin .vc-chip.on, .craft-skin .swb-primary:hover,
+.craft-skin .vn-history-item .h-btn:hover,
+.craft-skin .studio-icon-btn.danger:hover {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .studio-tab.active::after, .craft-skin .studio-drawer-handle::after,
+.craft-skin .studio-typing-dot { background:var(--lwt-hot); }
+/* 分頁字：原本吃暗色墨，在暗底上跟底融在一起 */
+.craft-skin .studio-tab { color:rgba(239,231,246,.78); }
+.craft-skin .studio-tab.active { color:#fff0f8; }
+.craft-skin .studio-tab:hover { color:#ffd9ea; }
+/* 🚨 這四顆（複製創建說明書／匯入面板／匯入包／組件卡上的小鈕）在原皮裡連底帶字都是 !important，
+   class 規則蓋不過去 → 這裡也只能用 !important 對衝；字色本來吃 --jrpg-wine-dark，
+   我把那顆翻亮之後就變成亮字配米底＝整顆看不到字（2026-08-26 回報） */
+.craft-skin .sgc-btn, .craft-skin .studio-pack-btn,
+.craft-skin #studio-spec-copy-btn, .craft-skin #studio-import-btn {
+  background:rgba(255,255,255,.07) !important; background-image:none !important;
+  border-color:var(--lwt-line) !important; color:var(--lwt-ink) !important; box-shadow:none; }
+.craft-skin .sgc-btn:hover, .craft-skin .studio-pack-btn:hover,
+.craft-skin #studio-spec-copy-btn:hover, .craft-skin #studio-import-btn:hover {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)) !important;
+  border-color:var(--lwt-hot) !important; color:#fff !important; }
+
+/* 掃出來的兩塊漏網米色底：待處理提示條與「介面已隱藏」提示 */
+.craft-skin .mc-pend, .craft-skin .studio-hidden-ui {
+  background:rgba(58,47,84,.55); background-image:none; border-color:var(--lwt-line); color:var(--lwt-ink); }
+
+/* 匯入頁（借手機那份的 .ws-*）也換暗紫皮：整頁米色紙貼在工坊裡完全是另一個世界 */
+/* 劇情主題那一頁（.vth-*）也換工坊的皮：它原本吃創作室的米色紙底，
+   在工坊裡會跟暗紫框打架。權重跟創作室那份一樣，靠這整段放在檔案最後面、後出現才蓋得過去。 */
+.craft-skin .studio-theme-pane { background:transparent; background-image:none; color:var(--lwt-ink); }
+.craft-skin .vth-css-world, .craft-skin .vth-prev-label, .craft-skin .vth-gal-label { color:#e79ec4; }
+.craft-skin .vth-mini, .craft-skin .vth-vp, .craft-skin .vth-mode, .craft-skin .vth-ptab {
+  background:rgba(255,255,255,.06); border-color:var(--lwt-line); color:var(--lwt-ink); }
+.craft-skin .vth-mini:hover, .craft-skin .vth-vp:hover, .craft-skin .vth-mode:hover, .craft-skin .vth-ptab:hover {
+  background:rgba(255,255,255,.14); color:var(--lwt-ink); border-color:rgba(226,150,190,.5); }
+.craft-skin .vth-mini.primary, .craft-skin .vth-vp.active, .craft-skin .vth-mode.active, .craft-skin .vth-ptab.active {
+  background:linear-gradient(135deg,#8f3a76,var(--lwt-hot)); border-color:var(--lwt-hot); color:#fff; }
+.craft-skin .vth-mini.danger { color:#f0a8bd; border-color:rgba(226,110,150,.45); background:rgba(255,255,255,.05); }
+.craft-skin .vth-ai-desc, .craft-skin .vth-css-area, .craft-skin .vth-gal-name, .craft-skin .vth-vp-w {
+  background-color:rgba(22,17,34,.75); background-image:none; border-color:var(--lwt-line);
+  color:var(--lwt-ink); box-shadow:none; }
+.craft-skin .vth-css-area { color:#f3d9e8; }
+.craft-skin .vth-ai-desc::placeholder, .craft-skin .vth-css-area::placeholder,
+.craft-skin .vth-gal-name::placeholder { color:rgba(239,231,246,.4); }
+.craft-skin .vth-css-hint, .craft-skin .vth-gal-empty, .craft-skin .vth-chat-empty { color:var(--lwt-dim); }
+.craft-skin .vth-gal { border-color:var(--lwt-line); }
+.craft-skin .vth-gal-card { background-color:var(--lwt-card); background-image:none;
+  border-color:var(--lwt-line); color:var(--lwt-ink); box-shadow:none; }
+.craft-skin .vth-gal-cname { color:var(--lwt-ink); }
+.craft-skin .vth-preview-box, .craft-skin .vth-gal-thumb-wrap {
+  border-color:rgba(226,150,190,.34); background:#0d0a14; box-shadow:none; }
+
+/* VN 組件庫（獨立浮層；它的底色寫在 style 上→這幾條必須 !important） */
+.vncomp-app.craft-skin { background:var(--lwt-pane) !important; color:var(--lwt-ink) !important;
+  --jrpg-paper:rgba(46,37,68,.9); --jrpg-paper-light:rgba(58,47,84,.85); --jrpg-paper-deep:rgba(30,24,44,.9);
+  --jrpg-ink:#efe7f6; --jrpg-muted:rgba(239,231,246,.6); --jrpg-wine:#a12f66; --jrpg-wine-dark:#6d1f46;
+  --jrpg-gold:#e0a86a; --jrpg-gold-light:#f0cfa0; --jrpg-line:rgba(214,150,190,.3); }
+

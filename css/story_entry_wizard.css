@@ -1,0 +1,618 @@
+/* ═══════════════════════════════════════════════════════════════
+   藏書入場精靈(白金視差風)——CSS 為主的版本
+   框/鈕/線全 CSS;裝飾圖案全部 SVG(inline 在 JS 模板、翼線/分隔線在此用 data-URI)
+   只剩滿版背景大廳 bg.webp 仍是圖(寫實場景)。直橫共用一套 flex 流式,直式(.sew-portrait)只調參數。
+   縮放:--sew-u = 版面單位 px、--sew-h = 容器高(JS ResizeObserver 維護)
+   ═══════════════════════════════════════════════════════════════ */
+
+#se-root-wrapper { position: relative; }
+
+/* 剛從精靈「進入故事」出來的這一輪:閱讀畫面不重複顯示開場切換列/模式列 */
+#se-root-wrapper.sew-planned #se-swipe-bar,
+#se-root-wrapper.sew-planned #se-mode-bar { display: none !important; }
+
+/* 從精靈啟程送出後,「故事撰寫中」等待室要蓋在精靈(z 60)上面 */
+#se-root-wrapper #se-flow-overlay { z-index: 70 !important; }
+
+#sew-root {
+    --sew-navy: #2a4a80;
+    --sew-navy-deep: #1e3554;
+    --sew-ink: #1f3a68;
+    --sew-ink-soft: #46639b;
+    --sew-gold: #b9924f;
+    --sew-paper: #fdfdfc;
+
+    position: absolute;
+    inset: 0;
+    z-index: 60;
+    overflow: hidden;
+    background: #eef1f7;
+    font-family: 'Noto Serif TC', 'Source Han Serif TC', 'Songti TC', 'PMingLiU', serif;
+    color: var(--sew-ink);
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+#sew-root.sew-leaving { opacity: 0; pointer-events: none; }
+
+/* 滿版背景(白色圖書館大廳) */
+.sew-bg {
+    position: absolute; inset: 0;
+    background: url('https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/story_entry/bg.webp') center / cover no-repeat;
+}
+
+/* 舞台=置中容器;面板=白理石主體 */
+.sew-stage {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    overflow-y: auto;
+    padding: calc(var(--sew-u, 1px) * 16);
+    box-sizing: border-box;
+    scrollbar-width: thin;
+}
+.sew-panel {
+    position: relative;
+    width: calc(var(--sew-u, 1px) * 880);
+    max-width: 100%;
+    /* 高度吃滿舞台(扣掉 .sew-stage 上下各 16u 內距):三幕都鋪滿,內容垂直置中 */
+    height: calc(var(--sew-h, 1000px) - var(--sew-u, 1px) * 32);
+    margin: auto;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: calc(var(--sew-u, 1px) * 18);
+    padding: calc(var(--sew-u, 1px) * 30) calc(var(--sew-u, 1px) * 44) calc(var(--sew-u, 1px) * 34);
+    box-sizing: border-box;
+    background: linear-gradient(178deg, #ffffff 0%, #fbfcfe 55%, #f4f6fb 100%);
+    clip-path: polygon(
+        calc(var(--sew-u, 1px) * 22) 0, calc(100% - var(--sew-u, 1px) * 22) 0,
+        100% calc(var(--sew-u, 1px) * 22), 100% calc(100% - var(--sew-u, 1px) * 22),
+        calc(100% - var(--sew-u, 1px) * 22) 100%, calc(var(--sew-u, 1px) * 22) 100%,
+        0 calc(100% - var(--sew-u, 1px) * 22), 0 calc(var(--sew-u, 1px) * 22)
+    );
+    box-shadow: 0 calc(var(--sew-u, 1px) * 14) calc(var(--sew-u, 1px) * 40) rgba(31, 58, 104, 0.18);
+}
+/* 面板頂部中央金菱 + 內圈細線(細線用漸層邊框圖層,避開 clip-path 吃 border) */
+.sew-panel::before {
+    content: '';
+    position: absolute;
+    top: calc(var(--sew-u, 1px) * 8);
+    left: 50%;
+    width: calc(var(--sew-u, 1px) * 8);
+    height: calc(var(--sew-u, 1px) * 8);
+    background: var(--sew-gold);
+    transform: translateX(-50%) rotate(45deg);
+    opacity: 0.85;
+}
+
+.sew-screen { display: contents; }
+.sew-screen.sew-hidden > * { display: none !important; }
+
+/* ── 關閉 ── */
+.sew-close {
+    position: absolute;
+    top: calc(var(--sew-u, 1px) * 14);
+    right: calc(var(--sew-u, 1px) * 16);
+    border: none; background: none;
+    line-height: 1;
+    padding: calc(var(--sew-u, 1px) * 6);
+    cursor: pointer;
+    z-index: 5;
+    transition: transform 0.15s ease, filter 0.15s ease;
+}
+.sew-close img, .sew-close svg { width: calc(var(--sew-u, 1px) * 20); height: auto; display: block; }
+.sew-close:hover { transform: scale(1.15); filter: brightness(1.2); }
+
+/* ── 標題列:翼線 ─◆ 標題 ◆─ ── */
+.sew-title-row {
+    width: 100%;
+    display: flex; align-items: center;
+    gap: calc(var(--sew-u, 1px) * 16);
+    margin-top: calc(var(--sew-u, 1px) * 4);
+}
+/* 標題翼線=SVG 裝飾線(空心淺藍菱—小藍菱—金線—大藍菱),貼著標題側對齊 */
+.sew-wing {
+    flex: 1;
+    height: calc(var(--sew-u, 1px) * 16);
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 150'%3E%3Cg fill='none'%3E%3Cpath d='M75 18 L132 75 L75 132 L18 75 Z' stroke='%23a6c6f0' stroke-width='5'/%3E%3Cpath d='M75 34 L116 75 L75 116 L34 75 Z' stroke='%23d4e4fa' stroke-width='2.5'/%3E%3C/g%3E%3Cpath d='M238 60 L253 75 L238 90 L223 75 Z' fill='%231c3260' stroke='%23caa85f' stroke-width='3'/%3E%3Cpolygon points='256,74 642,71.5 642,78.5 256,76' fill='%23d0a95c'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='%231e3767' stroke='%23d8b76a' stroke-width='5'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='none' stroke='%23f0dfae' stroke-width='2' transform='translate(695 75) scale(0.78) translate(-695 -75)'/%3E%3C/svg%3E") right center / contain no-repeat;
+}
+.sew-wing:last-child {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 760 150'%3E%3Cg transform='translate(760 0) scale(-1 1)'%3E%3Cg fill='none'%3E%3Cpath d='M75 18 L132 75 L75 132 L18 75 Z' stroke='%23a6c6f0' stroke-width='5'/%3E%3Cpath d='M75 34 L116 75 L75 116 L34 75 Z' stroke='%23d4e4fa' stroke-width='2.5'/%3E%3C/g%3E%3Cpath d='M238 60 L253 75 L238 90 L223 75 Z' fill='%231c3260' stroke='%23caa85f' stroke-width='3'/%3E%3Cpolygon points='256,74 642,71.5 642,78.5 256,76' fill='%23d0a95c'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='%231e3767' stroke='%23d8b76a' stroke-width='5'/%3E%3Cpath d='M695 25 C682 51 668 63 645 75 C668 87 682 99 695 125 C708 99 722 87 745 75 C722 63 708 51 695 25 Z' fill='none' stroke='%23f0dfae' stroke-width='2' transform='translate(695 75) scale(0.78) translate(-695 -75)'/%3E%3C/g%3E%3C/svg%3E");
+    background-position: left center;
+}
+.sew-title {
+    margin: 0;
+    font-size: calc(var(--sew-u, 1px) * 30);
+    font-weight: 700;
+    letter-spacing: 0.35em;
+    text-indent: 0.35em;
+    white-space: nowrap;
+}
+
+/* ── 徽章(白膠囊+盾徽) ── */
+.sew-badge {
+    display: flex; align-items: center; justify-content: center;
+    gap: calc(var(--sew-u, 1px) * 10);
+    min-width: calc(var(--sew-u, 1px) * 290);
+    padding: calc(var(--sew-u, 1px) * 5) calc(var(--sew-u, 1px) * 26);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1) solid rgba(42, 74, 128, 0.35);
+    border-radius: calc(var(--sew-u, 1px) * 24);
+    box-sizing: border-box;
+}
+.sew-badge-icon { width: calc(var(--sew-u, 1px) * 30); height: auto; display: block; }
+.sew-badge-text {
+    font-size: calc(var(--sew-u, 1px) * 13.5);
+    letter-spacing: 0.12em;
+    white-space: nowrap;
+}
+.sew-badge-text b { font-weight: 700; margin-left: 0.4em; }
+.sew-chip2-text { font-weight: 700; letter-spacing: 0.3em; text-indent: 0.3em; }
+
+/* ── 雙選卡 ── */
+.sew-cards {
+    width: 100%;
+    /* 雙選卡吃掉面板剩餘高度,卡內容垂直置中(面板已固定滿高,免得中央空一大塊) */
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    gap: calc(var(--sew-u, 1px) * 26);
+}
+.sew-card {
+    flex: 1 1 0;
+    position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: calc(var(--sew-u, 1px) * 26) calc(var(--sew-u, 1px) * 16) calc(var(--sew-u, 1px) * 14);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1.5) solid rgba(42, 74, 128, 0.55);
+    border-radius: calc(var(--sew-u, 1px) * 6);
+    cursor: pointer;
+    transition: box-shadow 0.2s ease, border-color 0.2s ease, filter 0.2s ease;
+    -webkit-tap-highlight-color: transparent;
+    box-sizing: border-box;
+}
+/* 四角斜切角飾(TL/BR 實心小三角,呼應 mockup 的角落細節) */
+.sew-card::before, .sew-card::after {
+    content: '';
+    position: absolute;
+    width: calc(var(--sew-u, 1px) * 12);
+    height: calc(var(--sew-u, 1px) * 12);
+    pointer-events: none;
+}
+.sew-card::before {
+    top: calc(var(--sew-u, 1px) * 3); left: calc(var(--sew-u, 1px) * 3);
+    border-top: calc(var(--sew-u, 1px) * 3) solid var(--sew-navy);
+    border-left: calc(var(--sew-u, 1px) * 3) solid var(--sew-navy);
+}
+.sew-card::after {
+    bottom: calc(var(--sew-u, 1px) * 3); right: calc(var(--sew-u, 1px) * 3);
+    border-bottom: calc(var(--sew-u, 1px) * 3) solid var(--sew-navy);
+    border-right: calc(var(--sew-u, 1px) * 3) solid var(--sew-navy);
+}
+.sew-card.sew-sel {
+    border-color: var(--sew-navy);
+    box-shadow:
+        0 0 0 calc(var(--sew-u, 1px) * 1.5) var(--sew-navy),
+        0 0 calc(var(--sew-u, 1px) * 16) rgba(42, 74, 128, 0.35);
+}
+.sew-card:not(.sew-sel):hover { filter: brightness(0.985); }
+
+/* 菱形圖案框:─◆ ◇(圖) ◆─ */
+.sew-dia-row {
+    display: flex; align-items: center;
+    gap: calc(var(--sew-u, 1px) * 14);
+    margin-bottom: calc(var(--sew-u, 1px) * 6);
+}
+.sew-dia-deco {
+    position: relative;
+    width: calc(var(--sew-u, 1px) * 34);
+    height: calc(var(--sew-u, 1px) * 1.2);
+    background: linear-gradient(90deg, transparent, rgba(42, 74, 128, 0.5));
+}
+.sew-dia-deco::after {
+    content: '';
+    position: absolute;
+    top: 50%; right: 0;
+    width: calc(var(--sew-u, 1px) * 5);
+    height: calc(var(--sew-u, 1px) * 5);
+    background: var(--sew-navy);
+    transform: translateY(-50%) rotate(45deg);
+}
+.sew-dia-deco-r { background: linear-gradient(270deg, transparent, rgba(42, 74, 128, 0.5)); }
+.sew-dia-deco-r::after { right: auto; left: 0; }
+.sew-diamond {
+    width: calc(var(--sew-u, 1px) * 108);
+    height: calc(var(--sew-u, 1px) * 108);
+    background: #fff;
+    border: calc(var(--sew-u, 1px) * 1.2) solid rgba(42, 74, 128, 0.6);
+    transform: rotate(45deg);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 calc(var(--sew-u, 1px) * 10) rgba(42, 74, 128, 0.12);
+    margin: calc(var(--sew-u, 1px) * 12);
+}
+.sew-diamond img, .sew-diamond svg {
+    width: 62%;
+    height: auto;
+    transform: rotate(-45deg);
+    display: block;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+}
+.sew-diamond .sew-icon-crystal { width: 78%; }
+
+.sew-card-title {
+    font-size: calc(var(--sew-u, 1px) * 22);
+    font-weight: 700;
+    letter-spacing: 0.5em;
+    text-indent: 0.5em;
+    white-space: nowrap;
+}
+.sew-card-sub {
+    margin-top: calc(var(--sew-u, 1px) * 6);
+    font-size: calc(var(--sew-u, 1px) * 12);
+    letter-spacing: 0.08em;
+    color: var(--sew-ink-soft);
+    white-space: nowrap;
+}
+/* 卡底分隔=SVG 菱晶分隔線(藍細線+空心點+中央菱) */
+.sew-card-divider {
+    width: 56%;
+    height: calc(var(--sew-u, 1px) * 12);
+    margin-top: calc(var(--sew-u, 1px) * 10);
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 420 24'%3E%3Crect x='8' y='11.2' width='176' height='1.6' rx='0.8' fill='%238fb6e8'/%3E%3Ccircle cx='190' cy='12' r='2.6' fill='none' stroke='%238fb6e8' stroke-width='1.4'/%3E%3Crect x='236' y='11.2' width='176' height='1.6' rx='0.8' fill='%238fb6e8'/%3E%3Ccircle cx='230' cy='12' r='2.6' fill='none' stroke='%238fb6e8' stroke-width='1.4'/%3E%3Cg transform='translate(210 12) rotate(45)'%3E%3Crect x='-7' y='-7' width='14' height='14' fill='%23ffffff' stroke='%231c3260' stroke-width='2'/%3E%3Crect x='-3' y='-3' width='6' height='6' fill='%23d8a75a'/%3E%3C/g%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* ── 資訊條(白膠囊三欄) ── */
+.sew-info {
+    width: 92%;
+    display: flex; align-items: center; justify-content: space-evenly;
+    gap: calc(var(--sew-u, 1px) * 8);
+    padding: calc(var(--sew-u, 1px) * 10) calc(var(--sew-u, 1px) * 18);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1) solid rgba(42, 74, 128, 0.28);
+    border-radius: calc(var(--sew-u, 1px) * 30);
+    box-sizing: border-box;
+}
+.sew-info-col {
+    display: flex; align-items: center;
+    gap: calc(var(--sew-u, 1px) * 10);
+}
+/* 三欄圖標=FA 符號+統一金色圓環 */
+.sew-info-ring {
+    flex: 0 0 auto;
+    width: calc(var(--sew-u, 1px) * 26);
+    height: calc(var(--sew-u, 1px) * 26);
+    display: flex; align-items: center; justify-content: center;
+    border: calc(var(--sew-u, 1px) * 1.4) solid #cfa85e;
+    border-radius: 50%;
+    box-sizing: border-box;
+}
+.sew-info-ring i {
+    font-size: calc(var(--sew-u, 1px) * 11);
+    color: var(--sew-navy-deep);
+    line-height: 1;
+}
+.sew-info-txt {
+    display: flex; flex-direction: column;
+    font-size: calc(var(--sew-u, 1px) * 10.5);
+    letter-spacing: 0.15em;
+    line-height: 1.55;
+    white-space: nowrap;
+}
+.sew-info-txt small { font-size: inherit; color: var(--sew-ink-soft); }
+.sew-info-sep {
+    width: calc(var(--sew-u, 1px) * 1);
+    height: calc(var(--sew-u, 1px) * 26);
+    background: rgba(42, 74, 128, 0.3);
+}
+
+/* ── CTA 六角鈕(金邊+深藍底,雙層 clip-path) ── */
+.sew-cta {
+    position: relative;
+    min-width: calc(var(--sew-u, 1px) * 290);
+    height: calc(var(--sew-u, 1px) * 58);
+    display: flex; align-items: center; justify-content: center;
+    gap: calc(var(--sew-u, 1px) * 12);
+    border: none;
+    background: linear-gradient(180deg, #d8bc85, var(--sew-gold) 45%, #8f6f38);
+    clip-path: polygon(4.5% 0, 95.5% 0, 100% 50%, 95.5% 100%, 4.5% 100%, 0 50%);
+    color: #f4efe3;
+    font-family: inherit;
+    font-size: calc(var(--sew-u, 1px) * 17);
+    font-weight: 700;
+    letter-spacing: 0.45em;
+    text-indent: 0.45em;
+    cursor: pointer;
+    margin-top: calc(var(--sew-u, 1px) * 2);
+    transition: filter 0.15s ease;
+    box-sizing: border-box;
+}
+.sew-cta::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--sew-u, 1px) * 2);
+    background: linear-gradient(180deg, #2c4a7e, var(--sew-navy-deep) 60%, #16263e);
+    clip-path: polygon(4.5% 0, 95.5% 0, 100% 50%, 95.5% 100%, 4.5% 100%, 0 50%);
+    z-index: 0;
+}
+.sew-cta span, .sew-cta i, .sew-cta .sew-cta-ico { position: relative; z-index: 1; }
+.sew-cta i { font-size: calc(var(--sew-u, 1px) * 14); text-indent: 0; }
+.sew-cta .sew-cta-ico { height: calc(var(--sew-u, 1px) * 16); width: auto; display: block; }
+.sew-cta:hover { filter: brightness(1.12); }
+.sew-cta.sew-enter { min-width: calc(var(--sew-u, 1px) * 250); }
+
+/* ── 幕二:開場預覽 ── */
+.sew-preview-frame {
+    width: 100%;
+    /* 正文框吃掉面板剩下的高度(面板已固定滿高),不再綁死 330u */
+    flex: 1 1 auto;
+    min-height: calc(var(--sew-u, 1px) * 330);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1.5) solid var(--sew-navy);
+    box-shadow: inset 0 0 0 calc(var(--sew-u, 1px) * 4) rgba(42, 74, 128, 0.06);
+    display: flex; flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    box-sizing: border-box;
+}
+.sew-preview-frame::before, .sew-preview-frame::after {
+    content: '';
+    position: absolute;
+    width: calc(var(--sew-u, 1px) * 14);
+    height: calc(var(--sew-u, 1px) * 14);
+    border: calc(var(--sew-u, 1px) * 2.5) solid var(--sew-navy);
+    pointer-events: none;
+}
+.sew-preview-frame::before { top: calc(var(--sew-u, 1px) * -1.5); left: calc(var(--sew-u, 1px) * -1.5); border-right: none; border-bottom: none; }
+.sew-preview-frame::after { bottom: calc(var(--sew-u, 1px) * -1.5); right: calc(var(--sew-u, 1px) * -1.5); border-left: none; border-top: none; }
+
+.sew-preview-head {
+    flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    gap: calc(var(--sew-u, 1px) * 10);
+    padding: calc(var(--sew-u, 1px) * 10) 0 calc(var(--sew-u, 1px) * 6);
+    font-size: calc(var(--sew-u, 1px) * 14);
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-indent: 0.25em;
+}
+.sew-preview-head::before, .sew-preview-head::after { content: '◆'; font-size: 0.55em; color: var(--sew-gold); }
+
+.sew-swipe-btn {
+    pointer-events: auto;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: var(--sew-navy);
+    font-size: calc(var(--sew-u, 1px) * 13);
+    padding: 0 calc(var(--sew-u, 1px) * 6);
+    font-family: inherit;
+}
+.sew-swipe-btn:disabled { opacity: 0.25; cursor: default; }
+
+.sew-preview-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding: calc(var(--sew-u, 1px) * 8) calc(var(--sew-u, 1px) * 34) calc(var(--sew-u, 1px) * 16);
+    font-size: calc(var(--sew-u, 1px) * 13.5);
+    line-height: 2.1;
+    letter-spacing: 0.06em;
+    scrollbar-width: thin;
+    scrollbar-color: #b9c6dd transparent;
+}
+/* 退路的純文字段落:框變寬後行長會爆到 50 字以上,限一行約 42 字並置中 */
+.sew-preview-body > p {
+    margin: 0 auto calc(var(--sew-u, 1px) * 10);
+    max-width: calc(var(--sew-u, 1px) * 580);
+}
+#sew-root.sew-portrait .sew-preview-body > p { max-width: none; }
+
+/* ── 預覽框內＝藏書那套渲染(閱讀紙卡 + 作者美化面板) ──
+   紙卡本體沿用 story_extractor.css 的白理石樣式,只把固定 px 換成版面單位、
+   並壓掉黑金暗版對紙卡的染色(精靈永遠是白金舞台,深藍卡塞進來會撞色)。
+   .story-html-block(作者自帶樣式的美化面板)只調外框寬度,內部一律不碰。 */
+#se-root-wrapper #sew-root .native-render-wrapper {
+    max-width: calc(var(--sew-u, 1px) * 640);
+    margin: 0 auto calc(var(--sew-u, 1px) * 14);
+    padding: calc(var(--sew-u, 1px) * 20) calc(var(--sew-u, 1px) * 26);
+    border-radius: calc(var(--sew-u, 1px) * 6);
+    font-size: calc(var(--sew-u, 1px) * 13.5);
+    line-height: 2.1;
+    color: var(--sew-ink);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1) solid rgba(42, 74, 128, 0.28);
+    box-shadow: none;
+}
+/* 作者面板寬度沿用閱讀畫面的 760px:那是卡片設計時的參考寬,跟著版面放大會把等比卡撐爆 */
+#se-root-wrapper #sew-root .story-html-block {
+    margin: 0 auto calc(var(--sew-u, 1px) * 14);
+}
+#sew-root.sew-portrait .native-render-wrapper,
+#sew-root.sew-portrait .story-html-block { max-width: 100%; }
+
+/* ── 幕三:啟程(第一句輸入) ── */
+.sew-embark-frame {
+    width: 100%;
+    /* 同上:輸入框連同外框吃滿面板剩餘高度 */
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex; flex-direction: column;
+    gap: calc(var(--sew-u, 1px) * 10);
+    padding: calc(var(--sew-u, 1px) * 18) calc(var(--sew-u, 1px) * 22);
+    background: var(--sew-paper);
+    border: calc(var(--sew-u, 1px) * 1.5) solid var(--sew-navy);
+    box-shadow: inset 0 0 0 calc(var(--sew-u, 1px) * 4) rgba(42, 74, 128, 0.06);
+    box-sizing: border-box;
+}
+.sew-embark-hint {
+    text-align: center;
+    font-size: calc(var(--sew-u, 1px) * 13);
+    letter-spacing: 0.12em;
+    color: var(--sew-ink-soft);
+}
+.sew-embark-input {
+    width: 100%;
+    flex: 1 1 auto;
+    min-height: calc(var(--sew-u, 1px) * 180);
+    resize: none;
+    box-sizing: border-box;
+    padding: calc(var(--sew-u, 1px) * 12) calc(var(--sew-u, 1px) * 14);
+    background: #fff;
+    border: calc(var(--sew-u, 1px) * 1) solid rgba(42, 74, 128, 0.35);
+    color: var(--sew-ink);
+    font-family: inherit;
+    font-size: calc(var(--sew-u, 1px) * 14);
+    line-height: 1.9;
+    letter-spacing: 0.05em;
+    outline: none;
+    scrollbar-width: thin;
+}
+.sew-embark-input:focus { border-color: var(--sew-navy); box-shadow: 0 0 0 calc(var(--sew-u, 1px) * 2) rgba(42, 74, 128, 0.18); }
+.sew-embark-input::placeholder { color: #9fb0cc; }
+.sew-cta:disabled { filter: grayscale(0.4) brightness(0.9); cursor: default; }
+
+/* 幕二按鈕列 */
+.sew-btn-row {
+    width: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: calc(var(--sew-u, 1px) * 14);
+}
+.sew-btn-outline {
+    position: relative;
+    flex: 0 0 auto;
+    width: 26%;
+    height: calc(var(--sew-u, 1px) * 52);
+    display: flex; align-items: center; justify-content: center;
+    gap: 0.4em;
+    background: var(--sew-navy);   /* 外層=描邊色,::before 縮一圈當底 → clip-path 也有完整邊框 */
+    border: none;
+    color: var(--sew-ink);
+    font-family: inherit;
+    font-size: calc(var(--sew-u, 1px) * 14);
+    letter-spacing: 0.25em;
+    text-indent: 0.25em;
+    cursor: pointer;
+    clip-path: polygon(6% 0, 94% 0, 100% 50%, 94% 100%, 6% 100%, 0 50%);
+    transition: filter 0.15s ease;
+}
+.sew-btn-outline::before {
+    content: '';
+    position: absolute;
+    inset: calc(var(--sew-u, 1px) * 1.4);
+    background: var(--sew-paper);
+    clip-path: polygon(6% 0, 94% 0, 100% 50%, 94% 100%, 6% 100%, 0 50%);
+    z-index: 0;
+}
+.sew-btn-outline i, .sew-btn-outline span { position: relative; z-index: 1; }
+.sew-btn-outline:hover { filter: brightness(0.96); }
+
+/* ═══════════════════════════════════════════════════════════════
+   直式(.sew-portrait):同一套流式,卡片改直欄、字距收斂
+   --sew-u = 容器寬/430
+   ═══════════════════════════════════════════════════════════════ */
+#sew-root.sew-portrait .sew-stage {
+    align-items: flex-start;
+    padding: calc(var(--sew-u, 1px) * 14) calc(var(--sew-u, 1px) * 10);
+}
+#sew-root.sew-portrait .sew-panel {
+    width: 100%;
+    /* 直式維持內容高+由舞台捲動,不吃滿高 */
+    height: auto;
+    justify-content: flex-start;
+    padding: calc(var(--sew-u, 1px) * 22) calc(var(--sew-u, 1px) * 16) calc(var(--sew-u, 1px) * 24);
+    gap: calc(var(--sew-u, 1px) * 14);
+}
+#sew-root.sew-portrait .sew-title { font-size: calc(var(--sew-u, 1px) * 26); letter-spacing: 0.25em; text-indent: 0.25em; }
+#sew-root.sew-portrait .sew-cards { flex-direction: column; gap: calc(var(--sew-u, 1px) * 14); }
+#sew-root.sew-portrait .sew-card { padding-top: calc(var(--sew-u, 1px) * 18); }
+#sew-root.sew-portrait .sew-diamond {
+    width: calc(var(--sew-u, 1px) * 92);
+    height: calc(var(--sew-u, 1px) * 92);
+    margin: calc(var(--sew-u, 1px) * 10);
+}
+#sew-root.sew-portrait .sew-card-title { font-size: calc(var(--sew-u, 1px) * 24); }
+#sew-root.sew-portrait .sew-card-sub { font-size: calc(var(--sew-u, 1px) * 12.5); }
+#sew-root.sew-portrait .sew-info { width: 100%; padding: calc(var(--sew-u, 1px) * 8) calc(var(--sew-u, 1px) * 8); }
+#sew-root.sew-portrait .sew-info-txt { letter-spacing: 0.1em; font-size: calc(var(--sew-u, 1px) * 10); }
+#sew-root.sew-portrait .sew-cta { min-width: 62%; height: calc(var(--sew-u, 1px) * 52); font-size: calc(var(--sew-u, 1px) * 16); }
+#sew-root.sew-portrait .sew-preview-frame { flex: 0 0 auto; min-height: 0; height: calc(var(--sew-h, 1000px) * 0.5); }
+#sew-root.sew-portrait .sew-preview-body { padding: calc(var(--sew-u, 1px) * 8) calc(var(--sew-u, 1px) * 16) calc(var(--sew-u, 1px) * 14); }
+#sew-root.sew-portrait .sew-btn-row { gap: calc(var(--sew-u, 1px) * 8); }
+#sew-root.sew-portrait .sew-btn-outline {
+    width: 30%;
+    height: calc(var(--sew-u, 1px) * 40);
+    font-size: calc(var(--sew-u, 1px) * 13);
+    letter-spacing: 0.15em;
+    text-indent: 0.15em;
+}
+#sew-root.sew-portrait .sew-cta.sew-enter { min-width: 36%; height: calc(var(--sew-u, 1px) * 40); font-size: calc(var(--sew-u, 1px) * 14); letter-spacing: 0.3em; text-indent: 0.3em; }
+#sew-root.sew-portrait .sew-embark-frame { padding: calc(var(--sew-u, 1px) * 14) calc(var(--sew-u, 1px) * 14); }
+#sew-root.sew-portrait .sew-embark-frame { flex: 0 0 auto; }
+#sew-root.sew-portrait .sew-embark-input { flex: 0 0 auto; min-height: 0; height: calc(var(--sew-h, 1000px) * 0.3); }
+
+/* ═══════════════════════════════════════════════════════════════
+   幕二沉浸態(.sew-immersive):進了開場白就別再框著看
+   面板殼/標題/徽章/外框全退場,開場白鋪滿舞台;大廳背景壓成夜場,
+   只留最低限度的操作(切開場、上一步/重新規劃/進入故事)浮在上下。
+   ═══════════════════════════════════════════════════════════════ */
+#sew-root.sew-immersive .sew-stage { padding: 0; }
+#sew-root.sew-immersive .sew-panel {
+    width: 100%;
+    height: 100%;
+    background: none;
+    box-shadow: none;
+    clip-path: none;
+    gap: calc(var(--sew-u, 1px) * 10);
+    padding: calc(var(--sew-u, 1px) * 16) calc(var(--sew-u, 1px) * 20) calc(var(--sew-u, 1px) * 18);
+}
+#sew-root.sew-immersive .sew-panel::before,
+#sew-root.sew-immersive .sew-title-row,
+#sew-root.sew-immersive .sew-badge { display: none; }
+
+/* 燈暗:白理石大廳壓成夜場,卡片才不會像貼在亮底上的貼紙 */
+#sew-root.sew-immersive .sew-bg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at 50% 45%, rgba(8, 12, 22, 0.84), rgba(3, 5, 12, 0.95));
+}
+
+#sew-root.sew-immersive .sew-preview-frame {
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+#sew-root.sew-immersive .sew-preview-frame::before,
+#sew-root.sew-immersive .sew-preview-frame::after { display: none; }
+
+/* 切開場列:浮在內容上方的淡金小字 */
+#sew-root.sew-immersive .sew-preview-head {
+    color: rgba(232, 220, 181, 0.72);
+    padding: calc(var(--sew-u, 1px) * 4) 0 calc(var(--sew-u, 1px) * 8);
+}
+#sew-root.sew-immersive .sew-preview-head::before,
+#sew-root.sew-immersive .sew-preview-head::after { color: rgba(212, 175, 55, 0.75); }
+#sew-root.sew-immersive .sew-swipe-btn { color: rgba(232, 220, 181, 0.8); }
+/* 夜場字色:退路的純文字段落也要跟著翻淺(墨藍字在暗底等於看不見) */
+#sew-root.sew-immersive .sew-preview-body {
+    color: #e8dcb5;
+    scrollbar-color: rgba(212, 175, 55, 0.35) transparent;
+}
+
+/* 沒有美化面板的純文字開場:紙卡改暗色玻璃,跟夜場一致(有面板時偷學樣式會 inline 蓋掉這段) */
+#se-root-wrapper #sew-root.sew-immersive .native-render-wrapper {
+    background: rgba(12, 16, 28, 0.5);
+    border-color: rgba(212, 175, 55, 0.2);
+    color: #e8dcb5;
+}
+
+/* 關閉 X 與外框鈕在夜場改金線 */
+#sew-root.sew-immersive .sew-close svg g { stroke: rgba(232, 220, 181, 0.7); }
+#sew-root.sew-immersive .sew-btn-outline {
+    background: rgba(212, 175, 55, 0.5);
+    color: #f0e6cd;
+}
+#sew-root.sew-immersive .sew-btn-outline::before { background: rgba(10, 14, 26, 0.82); }
+#sew-root.sew-immersive .sew-btn-outline:hover { filter: brightness(1.25); }
+
+/* 直式的沉浸態:手機也一樣滿版(蓋掉直式那套內容高+捲動的參數) */
+#sew-root.sew-immersive.sew-portrait .sew-stage { padding: 0; align-items: stretch; }
+#sew-root.sew-immersive.sew-portrait .sew-panel { height: 100%; justify-content: center; }
+#sew-root.sew-immersive.sew-portrait .sew-preview-frame { flex: 1 1 auto; height: auto; min-height: 0; }

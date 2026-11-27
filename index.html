@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- ⚠️ 不要改回 black-translucent。實測(iPhone 932pt)：translucent 下頁面畫布佔滿整個
+         932，內容確實壓在狀態列底下，但版面視口只有 873(innerHeight/clientHeight/visualViewport
+         三個都是 873)，而且是從螢幕頂端 0 開始算 —— 於是螢幕最底下 59pt 落在所有
+         position:fixed inset:0 的盒子外面，只有 html/body 的畫布底色塗得到，就是底部那條。
+         那 59 跟 home indicator 的安全區(34)不是同一件事，用 env(safe-area-inset-bottom)
+         永遠補不到。改成不透明 black：視口與畫布對齊，fixed 盒子才真的到底。 -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <meta name="apple-mobile-web-app-title" content="奧瑞亞" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <link rel="apple-touch-icon" href="https://files.catbox.moe/l5hl69.png" />
+    <link rel="icon" type="image/png" href="https://files.catbox.moe/l5hl69.png" />
+    <!-- ⚠️ 有 manifest 時 iOS 會照 manifest 的 display 走，apple-mobile-web-app-status-bar-style
+         的 black-translucent 會被忽略 → webview 不再滿版，上下各被系統吃掉一條，頁面裡的
+         env(safe-area-inset-*) 也一起塌成 0。拿掉 manifest 才會回到 black-translucent 的滿版路徑。
+         pwa.json 檔案保留（推播那條線之後要用），只是不掛上來。
+    <link rel="manifest" href="pwa.json" /> -->
+    <title>奧瑞亞 | Aurelia</title>
+
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="aurelia_core.css" />
+    <link rel="stylesheet" href="core/void/lobby.css" />
+    <link rel="stylesheet" href="css/phone_shell.css" />
+    <link rel="stylesheet" href="css/app_store.css" />
+    <link rel="stylesheet" href="css/lobby_memory.css" />
+
+    <!-- core 模組 CSS -->
+    <link rel="stylesheet" href="core/void/lobby_stage.css" />
+    <link rel="stylesheet" href="css/story_extractor.css" />
+    <link rel="stylesheet" href="css/story_entry_wizard.css" />
+    <link rel="stylesheet" href="css/html_extractor.css" />
+
+    <!-- os_phone/os 模組 CSS -->
+    <link rel="stylesheet" href="css/os_settings.css" />
+    <link rel="stylesheet" href="css/os_settings_window.css" />
+    <link rel="stylesheet" href="css/os_keyrun.css" />
+    <link rel="stylesheet" href="css/os_phone_theme.css" />
+    <link rel="stylesheet" href="css/os_studio.css" />
+    <link rel="stylesheet" href="css/os_worldbook.css" />
+    <link rel="stylesheet" href="css/os_persona.css" />
+    <link rel="stylesheet" href="css/os_prompts.css" />
+    <link rel="stylesheet" href="css/os_avs.css" />
+    <link rel="stylesheet" href="css/os_journal.css" />
+    <link rel="stylesheet" href="css/os_story_tools.css" />
+    <link rel="stylesheet" href="css/os_exchange.css" />
+    <link rel="stylesheet" href="css/os_wg_pack.css" />
+
+    <!-- vn_story / qb / wx / map / rpg 模組 CSS -->
+    <link rel="stylesheet" href="css/vn_styles.css" />
+    <link rel="stylesheet" href="css/vn_end_show.css" />
+    <link rel="stylesheet" href="css/vn_core.css" />
+    <link rel="stylesheet" href="css/vn_fx.css" />
+    <link rel="stylesheet" href="css/vn_battle.css" />
+    <link rel="stylesheet" href="css/vn_gallery.css" />
+    <link rel="stylesheet" href="css/vn_tts_panel.css" />
+    <link rel="stylesheet" href="css/os_control_room.css" />
+    <link rel="stylesheet" href="css/os_dashboard.css" />
+    <link rel="stylesheet" href="css/os_keepalive.css" />
+    <link rel="stylesheet" href="css/wx_profile.css" />
+    <link rel="stylesheet" href="css/wx_notebook.css" />
+    <link rel="stylesheet" href="css/wx_takeout.css" />
+    <link rel="stylesheet" href="css/wx_theme_pack.css" />
+    <link rel="stylesheet" href="css/wx_moments.css" />
+    <link rel="stylesheet" href="css/os_sims.css" />
+    <link rel="stylesheet" href="css/qb_core.css" />
+    <link rel="stylesheet" href="css/qb_os_404_chaos.css" />
+    <link rel="stylesheet" href="css/wx_chat_settings.css" />
+    <link rel="stylesheet" href="css/map_core.css" />
+    <link rel="stylesheet" href="css/void_achievement.css" />
+    <link rel="stylesheet" href="css/os_sn_board.css" />
+
+    <!-- 系統性面板的統一外殼(標頭/分頁列)：必須排在所有面板 CSS 之後 -->
+    <link rel="stylesheet" href="css/aurelia_theme.css" />
+    <link rel="stylesheet" href="css/os_sys_chrome.css" />
+    <link rel="stylesheet" href="css/aurelia_dialog.css" />
+    <link rel="stylesheet" href="css/aurelia_tilefx.css" />
+    <link rel="stylesheet" href="css/os_photo_viewer.css" />
+    <link rel="stylesheet" href="css/os_char_gallery.css" />
+    <link rel="stylesheet" href="css/os_chat_tidy.css" />
+</head>
+<body>
+
+    
+
+    <div id="aurelia-boot">
+        <img id="aurelia-boot-logo" src="https://files.catbox.moe/l5hl69.png" alt="Aurelia" />
+        <div id="aurelia-boot-bar-wrap"><div id="aurelia-boot-bar"></div></div>
+        <div id="aurelia-boot-label">INITIALIZING</div>
+    </div>
+
+    <div id="aurelia-standalone-root"></div>
+
+    <!-- lobby-bgm-player 由 void_terminal.js createTab 動態建立（避免與此處重複造成 BGM 重疊） -->
+
+    <!-- 擴展根目錄：酒館由 index.js 設；手機版沒載 index.js，要自己設成這一頁所在的資料夾。
+         沒設的話書咖等模組會退回酒館的相對路徑，接在手機版網址後面變成兩段（書咖菜單那張圖 404，10-20 巡主控台抓到）。
+         必須排在所有模組前面：有的模組載入當下就算好路徑 -->
+    <script>window.AURELIA_EXT_BASE = window.AURELIA_EXT_BASE || '.';</script>
+
+    <script src="core/aurelia_dialog.js"></script>
+    <script src="core/aurelia_tilefx.js"></script>
+    <script src="core/ui_utilities.js"></script>
+    <script src="core/void/frames.js"></script>
+    <script src="core/void/panels.js"></script>
+    <script src="core/void/worldview.js"></script>
+    <script src="core/void/prompts.js"></script>
+    <script src="core/void/guide_map.js"></script>
+    <script src="core/void/worldgate.js"></script>
+    <script src="core/void/ambient.js"></script>
+    <script src="core/void/ui_sfx.js"></script>
+    <script src="core/void/canvas.js"></script>
+    <!-- 🏙 舞台模式（大廳俯視小人）：五支一組，順序照酒館版 —— stage 是底座，其餘掛在它上面 -->
+    <script src="core/void/lobby_stage.js"></script>
+    <script src="core/void/lobby_loom.js"></script>
+    <script src="core/void/lobby_theater.js"></script>
+    <script src="core/void/lobby_dress.js"></script>
+    <script src="core/void/lobby_doll_cut.js"></script>
+    <script src="core/void/lobby_editor.js"></script>
+    <script src="core/void/lobby_npcs.js"></script>
+    <script src="core/void/lobby_cafe_pests.js"></script>
+    <script src="core/void/lobby_cafe_regulars.js"></script>
+    <script src="core/void/lobby_ember.js"></script>
+    <script src="core/void/lobby_places.js"></script>
+    <script src="core/void/lobby_memory.js"></script>
+    <script src="core/void/lobby_decider.js"></script>
+    <script src="core/void/npc_decide.js"></script>
+    <script src="core/void/lobby_workshop.js"></script>
+    <script src="core/void/phone_shell.js"></script>
+    <script src="core/void/app_runtime.js"></script>
+    <script src="core/void_terminal.js"></script>
+    <script src="core/control_center.js"></script>
+    <script src="core/vn_free_mode.js"></script>
+
+    <script src="os_phone/os/os_settings.js"></script>
+    <script src="os_phone/os/os_phone_theme.js"></script>
+    <!-- 🖼️ 圖片設置的 ComfyUI 直連＋🎵 語音清單：2026-07-17 自 os_settings.js 拆出，
+         onclick 指名 window._cfdPreset.* → 少載這支＝圖片設置整頁按了就爆，存檔也丟包庫 -->
+    <script src="os_phone/os/os_settings_page.js"></script>
+    <script src="os_phone/os/os_settings_backup.js"></script>
+    <script src="os_phone/os/os_settings_comfyui.js"></script>
+    <script src="os_phone/os/os_settings_voice.js"></script>
+    <script src="os_phone/os/os_settings_window.js"></script>
+    <script src="os_phone/os/os_db.js"></script>
+    <script src="os_phone/os/os_zh_fold.js"></script>
+    <script src="os_phone/os/app_store.js"></script>
+    <script src="os_phone/os/os_widgets.js"></script>
+    <script src="os_phone/os/os_studio.js"></script>
+    <!-- 創作室四支拆檔：載入當下就抓 OS_STUDIO._b，必須緊跟在 os_studio.js 後面 -->
+    <script src="os_phone/os/os_studio_worldbook.js"></script>
+    <script src="os_phone/os/os_studio_persona.js"></script>
+    <script src="os_phone/os/os_studio_vn_gallery.js"></script>
+    <script src="os_phone/os/os_studio_diff_engine.js"></script>
+    <script src="os_phone/os/os_studio_selfcheck.js"></script>
+    <script src="os_phone/os/os_persona.js"></script>
+    <script src="os_phone/os/os_prompts.js"></script>
+    <script src="os_phone/os/os_vn_rules_data.js"></script>
+    <script src="os_phone/os/os_vn_foreign.js"></script>
+    <script src="os_phone/os/os_vn_rules.js"></script>
+    <script src="os_phone/os/os_dialer.js"></script>
+    <script src="os_phone/os/os_lorebook.js"></script>
+    <script src="os_phone/os/os_contacts.js"></script>
+    <script src="os_phone/os/os_tavern_bridge.js"></script>
+    <script src="os_phone/os/os_think.js"></script>
+    <script src="os_phone/os/os_avs_adapter.js"></script>
+    <script src="os_phone/os/os_avs_engine.js"></script>
+    <script src="os_phone/os/os_avs_rules.js"></script>
+    <script src="os_phone/os/os_vector_engine.js"></script>
+    <script src="os_phone/os/os_vector_inject.js"></script>
+    <script src="os_phone/os/os_jev_conn.js"></script>
+    <script src="os_phone/os/os_jev_usage.js"></script>
+    <script src="os_phone/os/os_jev_shadow.js"></script>
+    <script src="os_phone/os/os_jev_stage.js"></script>
+    <script src="os_phone/os/os_jev_sfx.js"></script>
+    <script src="os_phone/os/os_inject_blocks.js"></script>
+    <script src="os_phone/os/os_phone_events.js"></script>
+    <script src="os_phone/os/os_app_memory_inject.js"></script>
+    <script src="os_phone/os/os_summary_inject.js"></script>
+    <!-- 📊 用量記錄層：每次呼叫記一筆進自己的 IndexedDB（必須在 api_engine / image_manager 之前）-->
+    <script src="os_phone/os/os_usage.js"></script>
+    <script src="os_phone/os/os_api_engine.js"></script>
+    <script src="os_phone/os/phone_system.js"></script>
+
+    <script src="os_phone/os/os_minimax.js"></script>
+    <script src="os_phone/os/os_elevenlabs.js"></script>
+    <script src="os_phone/os/os_voice_cast.js"></script>
+    <script src="os_phone/os/translation_manager.js"></script>
+    <script src="os_phone/os/os_image_manager.js"></script>
+    <script src="os_phone/os/os_keyrun.js"></script>
+    <script src="os_phone/os/os_relay.js"></script>
+    <script src="os_phone/os/os_heartbeat.js"></script>
+    <script src="os_phone/os/os_app_tools.js"></script>
+    <script src="os_phone/os/os_keepalive.js"></script>
+    <script src="os_phone/os/os_phone_image.js"></script>
+    <script src="os_phone/os/os_voice_input.js"></script>
+    <script src="os_phone/os/os_photo_viewer.js"></script>
+    <script src="os_phone/os/os_expr_grid.js"></script>
+    <script src="os_phone/os/os_char_gallery.js"></script>
+    <script src="os_phone/os/os_chat_tidy.js"></script>
+    <script src="os_phone/os/os_control_room.js"></script>
+    <script src="os_phone/os/os_dashboard.js"></script>
+    <script src="os_phone/os/os_achievement.js"></script>
+    <script src="os_phone/os/os_404_store.js"></script>
+    <script src="os_phone/os/os_tarot.js"></script>
+    <script src="os_phone/os/os_backup.js"></script>
+    <script src="os_phone/os/os_worldbook.js"></script>
+    <script src="os_phone/os/os_builtin_lore.js"></script>
+    <script src="os_phone/os/os_avs_state.js"></script>
+    <script src="os_phone/os/os_avs_memory.js"></script>
+    <script src="os_phone/os/os_avs_skins.js"></script>
+    <script src="os_phone/os/os_ui_style_packs.js"></script>
+    <script src="os_phone/os/os_avs.js"></script>
+    <script src="os_phone/os/os_card_import.js"></script>
+    <script src="os_phone/os/os_card_regex.js"></script>
+    <script src="os_phone/os/nai_recipe.js"></script>
+
+    <!-- 📖 故事日誌與故事管理：大廳日誌鈕與 app_runtime 的總結注入都指名這兩支 -->
+    <script src="os_phone/os/os_journal.js"></script>
+    <script src="os_phone/os/os_story_tools.js"></script>
+
+    <!-- 🏦 經濟與房產：大廳白兔＝交易所、瀅瀅＝書咖櫃檯、dock＝房產手帳，全靠這批 -->
+    <script src="os_phone/os/os_pt.js"></script>
+    <script src="os_phone/os/os_cafe_regulars.js"></script>
+    <script src="os_phone/os/os_cafe.js"></script>
+    <script src="os_phone/os/os_cafe_kitchen.js"></script>
+    <script src="os_phone/os/os_cafe_staff.js"></script>
+    <script src="os_phone/os/os_npc_brain.js"></script>
+    <script src="os_phone/os/os_npc_life.js"></script>
+    <script src="os_phone/os/os_npc_life_lines.js"></script>
+    <script src="os_phone/os/os_cafe_hire.js"></script>
+    <script src="os_phone/os/os_sn_board.js"></script>
+    <script src="os_phone/os/os_sn_board_ui.js"></script>
+    <script src="os_phone/os/os_room_svg.js"></script>
+    <script src="os_phone/os/os_room_gen.js"></script>
+    <script src="os_phone/os/os_landlord.js"></script>
+    <script src="os_phone/os/os_blueprints.js"></script>
+    <script src="os_phone/os/os_landlord_room.js"></script>
+    <script src="os_phone/os/os_landlord_book.js"></script>
+    <!-- 🌱 後院（農場＋牧場）入口：os_phone/farm/ 那批與 farm.css 第一次打開才自己載 -->
+    <script src="os_phone/os/os_farm.js"></script>
+
+    <!-- 🚪 世界門（AI 生成世界觀）：依賴大廳與風格庫，所以排在它們後面 -->
+    <script src="os_phone/os/os_worldgate.js"></script>
+    <script src="os_phone/os/os_wg_pack.js"></script>
+    <script src="os_phone/vn_story/vn_styles.js"></script>
+    <script src="os_phone/vn_story/vn_settings.js"></script>
+    <script src="os_phone/vn_story/vn_tts.js"></script>
+    <script src="os_phone/vn_story/vn_tts_panel.js"></script>
+    <script src="os_phone/vn_story/vn_panel_feed.js"></script>
+    <script src="os_phone/vn_story/vn_dynamic_parser.js"></script>
+    <!-- vn_core 拆分後的底層工具（必須先於 vn_core.js 載入） -->
+    <script src="os_phone/vn_story/vn_cache.js"></script>
+    <script src="os_phone/vn_story/vn_config.js"></script>
+    <script src="os_phone/vn_story/vn_monitor.js"></script>
+    <script src="os_phone/vn_story/vn_summary.js"></script>
+    <script src="os_phone/vn_story/vn_sticker.js"></script>
+    <script src="os_phone/vn_story/vn_panels.js"></script>
+    <script src="os_phone/vn_story/vn_generator.js"></script>
+    <script src="os_phone/vn_story/vn_theme.js"></script>
+    <script src="os_phone/vn_story/vn_fx.js"></script>
+    <script src="os_phone/vn_story/vn_battle.js"></script>
+    <script src="os_phone/vn_story/vn_chapter_warp.js"></script>
+    <!-- 開場 Loading 的視差校準艙＋輪播提示（vn_core 掛載時就要用到，必須排它前面） -->
+    <script src="os_phone/vn_story/vn_loader_tips.js"></script>
+    <script src="os_phone/vn_story/vn_loader_chamber.js"></script>
+    <script src="os_phone/vn_story/vn_core.js"></script>
+    <script src="os_phone/vn_story/vn_core_images.js"></script>
+    <script src="os_phone/vn_story/vn_core_stage.js"></script>
+    <script src="os_phone/vn_story/vn_scene_insert.js"></script>
+    <script src="os_phone/vn_story/vn_avatar_earlybird.js"></script>
+    <script src="os_phone/vn_story/vn_end_panel.js"></script>
+    <script src="os_phone/vn_story/vn_end_show.js"></script>
+    <script src="os_phone/vn_story/vn_end_brief.js"></script>
+    <script src="os_phone/vn_story/vn_inspect.js"></script>
+    <script src="os_phone/vn_story/vn_reader.js"></script>
+    <script src="os_phone/vn_story/vn_phone.js"></script>
+    <script src="os_phone/vn_story/vn_browser.js"></script>
+    <script src="os_phone/vn_story/vn_nav.js"></script>
+    <script src="os_phone/vn_story/vn_moments.js"></script>
+
+    <script src="os_phone/rpg/state_schema.js"></script>
+    <script src="os_phone/rpg/npc_dossier.js"></script>
+    <script src="os_phone/rpg/mc_status.js"></script>
+    <script src="os_phone/rpg/story_threads.js"></script>
+    <script src="os_phone/rpg/state_runtime.js"></script>
+    <script src="os_phone/rpg/blacklist_injector.js"></script>
+    <!-- ⛔ 已刪(2026-06-19)：summary_core 舊「<summary>→[RPG_LOG]世界書」自動寫入，寫了沒人讀，已被 AVS+向量+大總結取代 -->
+    <!-- ⛔ 已停用：avatar_manager 與 VN 頭像系統並行重複生成、浪費資源（index.js 早已停用，這裡對齊）。檔案保留。 -->
+    <!-- 🔀 世界書條目開關同步器：兩支都補上獨立版分支（改翻 OS_DB 世界書條目的 enabled，
+         規則與邊界跟酒館同一份），所以 PWA 也要載。必須排在 os_worldbook / os_worldgate 之後。 -->
+    <script src="os_phone/rpg/avatar_rules_injector.js"></script>
+    <script src="os_phone/rpg/world_rules_injector.js"></script>
+
+    <!-- 🗺️ 地圖：css/map_core.css 早就掛著，但這六支一直沒補，所以地圖 app 開不起來 -->
+    <script src="os_phone/map/map_icons.js"></script>
+    <script src="os_phone/map/map_data.js"></script>
+    <script src="os_phone/map/world_runtime.js"></script>
+    <script src="os_phone/map/world_painter.js"></script>
+    <script src="os_phone/map/world_generator.js"></script>
+    <script src="os_phone/map/schedule_engine.js"></script>
+    <script src="os_phone/map/scene_painter.js"></script>
+    <script src="os_phone/map/scene_map_engine.js"></script>
+    <script src="os_phone/map/vn_map_link.js"></script>
+    <script src="os_phone/map/map_image.js"></script>
+    <script src="os_phone/map/map_core.js"></script>
+
+    <script src="os_phone/wx/wx_user_profile.js"></script>
+    <script src="os_phone/wx/wx_zh.js"></script>
+    <script src="os_phone/wx/wx_theme.js"></script>
+    <script src="os_phone/wx/wx_contacts.js"></script>
+    <script src="os_phone/wx/wx_chat_settings.js"></script>
+    <script src="os_phone/wx/wx_bubble_settings.js"></script>
+    <script src="os_phone/wx/wx_bubble_ai.js"></script>
+    <script src="os_phone/wx/wx_message_manager.js"></script>
+    <script src="os_phone/wx/wx_view.js"></script>
+    <script src="os_phone/wx/wx_summary.js"></script>
+    <script src="os_phone/wx/wx_wallet.js"></script>
+    <script src="os_phone/wx/wx_avatar_ai.js"></script>
+    <script src="os_phone/wx/wx_chat_media.js"></script>
+    <script src="os_phone/wx/wx_cards.js"></script>
+    <script src="os_phone/wx/wx_takeout.js"></script>
+    <script src="os_phone/wx/wx_theme_pack.js"></script>
+    <script src="os_phone/wx/wx_profile.js"></script>
+    <script src="os_phone/wx/wx_notebook.js"></script>
+    <script src="os_phone/os/os_aurelia_tools.js"></script>
+    <script src="os_phone/os/os_aurelia_edit.js"></script>
+    <script src="os_phone/os/os_aurelia_preset.js"></script>
+    <script src="os_phone/os/os_aurelia_vn.js"></script>
+    <script src="os_phone/os/os_aurelia_theme.js"></script>
+    <script src="os_phone/os/os_aurelia_fx.js"></script>
+    <script src="os_phone/os/os_aurelia_vnrule.js"></script>
+    <script src="os_phone/os/os_aurelia_bubble.js"></script>
+    <script src="os_phone/os/os_xiaoji_lessons.js"></script>
+    <script src="os_phone/os/os_xiaoji_make.js"></script>
+    <script src="os_phone/os/os_xiaoji_sandbox.js"></script>
+    <script src="os_phone/os/os_xiaoji_memory.js"></script>
+    <script src="os_phone/os/os_xiaoji.js"></script>
+    <script src="os_phone/wx/wx_tools.js"></script>
+    <script src="os_phone/wx/wx_moments.js"></script>
+    <script src="os_phone/wx/wx_core.js"></script>
+    <!-- 🎮 模擬市民模式：網址帶 ?sims=1 才動（遊戲外的 SimTalk 小程式開的小窗），平常什麼都不做 -->
+    <script src="os_phone/os/os_sims.js"></script>
+
+    <script src="os_phone/wb/wb_account.js"></script>
+    <script src="os_phone/wb/wb_theme.js"></script>
+    <script src="os_phone/wb/wb_view.js"></script>
+    <script src="os_phone/wb/wb_core.js"></script>
+    <script src="os_phone/os/os_calendar.js"></script>
+
+    <script src="os_phone/qb/qb_bookshelf.js"></script>
+    <script src="os_phone/qb/os_404_chaos.js"></script>
+
+    <!-- 🤖 AI 助手（Claude / Codex 房間）—— 獨立擴展 claude-codex-room，自己一個 git repo。
+         它的核心零酒館依賴（只吃 OS_SETTINGS / OS_DB / fetch），所以獨立版直接載得起來；
+         大廳 dock 那顆「宿舍」找的就是 window.ChatWindow，沒載到按了會顯示斷在哪一段。
+         🚨 走 CDN 鎖 commit，不要改回 "../claude-codex-room/index.js"。這份 index.html 有兩個家：
+            VPS 的酒館（隔壁真的有那個資料夾）跟 GitHub Pages（她手機上的 PWA 是這個）。
+            Pages 上「隔壁」是另一個 repo 的 Pages 站，沒開＝404，相對路徑只有一半的場合成立。
+            CDN 這條在兩邊都一樣，是唯一同時成立的寫法。
+         🚨 房間改版要同時把下面兩處的 commit 換掉（__CCR_BASE__ 與 script src 必須同一個），
+            換完先用瀏覽器打一次新網址預熱，不然手機第一次會等 jsDelivr 回源。
+            board.html（手機通知點進來那頁）會讀這份檔案裡的 __CCR_BASE__ 去載房間的留言板，別改那行的寫法。
+         ⚠️ 它自己會載自己的 core/css（帶 ?v=VER、順序自己管），這裡只拉 index.js 一支，
+            也不要把它的檔案抄進本 repo 的載入清單 —— 那邊改版跟這邊是兩條 git 線。
+         ⚠️ 位置必須在 os_settings.js / os_db.js 之後：房間會先看這兩個在不在，
+            在就沿用（設定與對話存檔跟奧瑞亞共用同一份），不在才自己裝一份 shim。 -->
+    <script>
+        /* 浮球不用在這裡關 —— void_terminal.js 一載入就會設 __CCR_NO_LAUNCHER__，
+           因為入口已經收攏成大廳 dock 的「宿舍」那一顆。 */
+        window.__CCR_BASE__ = "https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@6a04d60/";
+    </script>
+    <script src="https://testingcf.jsdelivr.net/gh/nancywang3641/claude-codex-room@6a04d60/index.js"></script>
+
+
+    <script>
+    (function () {
+        'use strict';
+
+        // ── ST 事件系統 stub ──
+        window.eventOn    = window.eventOn    || function () {};
+        window.eventOnce  = window.eventOnce  || function () {};
+        window.eventOff   = window.eventOff   || function () {};
+        window.eventEmit  = window.eventEmit  || function () {};
+        window.eventOnButton  = window.eventOnButton  || function () {};
+        window.TavernHelper   = null;
+
+        (function () {
+            try {
+                const wxCfg  = JSON.parse(localStorage.getItem('wx_phone_api_config') || '{}');
+                wxCfg.directMode    = true;
+                wxCfg.disableTyping = true;
+                // 以前第一次開機會把主模型的網址／金鑰／模型抄一份進來，之後不再更新；手機聊天拿設定時這份舊的又蓋在設置上面，
+                //   換了主模型手機聊天還在用舊的那組。跟酒館版一樣：這裡只留開關，接口一律照設置（哪件事走哪個模型）。舊抄本拿掉。
+                delete wxCfg.url; delete wxCfg.key; delete wxCfg.model; delete wxCfg.maxTokens;
+                localStorage.setItem('wx_phone_api_config', JSON.stringify(wxCfg));
+            } catch(e) {}
+        })();
+        window.tavern_events  = window.tavern_events  || {
+            MESSAGE_RECEIVED: 'message_received',
+            MESSAGE_SENT:     'message_sent',
+            CHAT_CHANGED:     'chat_changed',
+            CHARACTER_MESSAGE_RENDERED: 'character_message_rendered',
+        };
+
+        // ── 載入進度條 ──
+        const bootBar   = document.getElementById('aurelia-boot-bar');
+        const bootLabel = document.getElementById('aurelia-boot-label');
+        let _progress = 0;
+        function setProgress(pct, label) {
+            _progress = pct;
+            if (bootBar)   bootBar.style.width = pct + '%';
+            if (bootLabel && label) bootLabel.textContent = label;
+        }
+
+        function hideBoot() {
+            const boot = document.getElementById('aurelia-boot');
+            if (boot) {
+                boot.classList.add('hidden');
+                setTimeout(() => boot.remove(), 700);
+            }
+        }
+
+        // ── 全域快捷函式 ──
+        window.togglePhoneSystem = function() {
+            if (window.PhoneSystem) window.PhoneSystem.show();
+            else console.warn('[Aurelia] 手機系統尚未就緒');
+        };
+
+        // ── 手機 App 註冊 ──
+        function registerApps() {
+            const PS = window.PhoneSystem;
+            if (!PS) return;
+            // 賽博塔羅 11-26 拿掉：個人占卜搬進紫薇的記憶吧檯（lobby_memory.js）
+            if (window.OS_WORLDBOOK) PS.install('世界書',    '📗', '#1a3a5c', c => window.OS_WORLDBOOK.launch(c));
+            if (window.OS_AVS)       PS.install('變數工坊',  '🎲', '#e67e22', c => window.OS_AVS.launch(c));
+        }
+
+        // 🎮 模擬市民模式（os_sims.js）：疊在遊戲上的小窗，只要手機，不掛大廳（也就沒有大廳音樂）
+        const SIMS_MODE = !!(window.OS_SIMS && window.OS_SIMS.active);
+
+        // ── 主初始化流程 ──
+        function init() {
+            setProgress(20, 'MOUNTING LOBBY');
+
+            const root = document.getElementById('aurelia-standalone-root');
+            if (SIMS_MODE) {
+                // 不掛大廳：手機殼自己蓋在整個畫面上，開機完由 OS_SIMS.boot 打開
+            } else if (window.AureliaControlCenter && root) {
+                window.AureliaControlCenter.mountEmbedded(root, 'bottom');
+            } else {
+                console.error('[Aurelia] AureliaControlCenter 未載入，請檢查 core/ 路徑');
+            }
+
+            setProgress(60, 'REGISTERING APPS');
+
+            setTimeout(() => {
+                registerApps();
+                setProgress(90, 'STARTING');
+            }, 800);
+
+            setTimeout(() => {
+                window.eventEmit('APP_READY');
+                window.eventEmit('VN_PANEL_READY');
+                window.eventEmit('CHAT_CHANGED');
+                setProgress(100, 'READY');
+                setTimeout(hideBoot, 300);
+                if (SIMS_MODE) window.OS_SIMS.boot();
+            }, 1500);
+        }
+
+        // ── Service Worker 註冊（iOS PWA 背景恢復快取）──
+        //   模擬市民模式不裝：小窗開的是她電腦上的本機檔，離線快取只會讓她看到舊版。
+        //   小窗哪天被用一般模式開過一次就會裝上（同一個網址、一直接管），所以這裡順手拆掉
+        if ('serviceWorker' in navigator && SIMS_MODE) {
+            navigator.serviceWorker.getRegistrations()
+                .then(rs => rs.forEach(r => r.unregister().then(ok => { if (ok) console.log('[SW] 模擬市民模式：拆掉離線快取', r.scope); })))
+                .catch(() => {});
+        }
+        if ('serviceWorker' in navigator && !SIMS_MODE) {
+            // 當新 SW 取得控制權時，強制重新整理頁面以確保加載最新的 JS/CSS
+            // （舊 SW 可能已用 Cache-First 提供了舊檔案，換 SW 後必須 reload）
+            //   10-20 實測修兩件：
+            //   ① 第一次安裝（本來沒有 SW）也會發 controllerchange（clients.claim 接管），以前照樣重整，
+            //      剛打開兩秒整頁又重開一次。頁面本來就是從網路拿的最新版，第一次不用重整。
+            //   ② 用到一半才換版（例如推播讓瀏覽器順手檢查到新版）：不當場整頁重開打斷她，
+            //      等她切出去（畫面藏起來）再換，回來就是新版。剛打開那段照舊馬上換。
+            let _swHad = !!navigator.serviceWorker.controller, _swReloading = false, _swDeferred = false;
+            const _swReload = () => { if (_swReloading) return; _swReloading = true; window.location.reload(); };
+            // 第一次裝好時，這次載的程式和樣式是 SW 接管前抓的、沒進離線快取（以前那次多的重整剛好把它們補進去）。
+            //   照頁面上的 <script>／<link> 再抓一次（經過 SW 就會存進去），一次 6 支慢慢來；第一次打開後馬上斷網也進得來
+            const _swWarm = () => {
+                const urls = Array.from(document.querySelectorAll('script[src], link[rel="stylesheet"][href]'))
+                    .map(el => el.src || el.href).filter(u => u && u.indexOf(location.origin) === 0);
+                let i = 0;
+                const next = () => { const u = urls[i++]; if (!u) return; fetch(u).then(r => r.blob()).catch(() => {}).then(next); };
+                for (let k = 0; k < 6; k++) next();
+            };
+            navigator.serviceWorker.addEventListener('controllerchange', () => {
+                if (!_swHad) { _swHad = true; console.log('[SW] 第一次裝好離線快取，不用重整'); setTimeout(_swWarm, 3000); return; }
+                if (performance.now() < 20000 || document.visibilityState === 'hidden') {
+                    console.log('[SW] 偵測到新版本接管，自動重新整理…');
+                    _swReload();
+                    return;
+                }
+                if (_swDeferred) return;
+                _swDeferred = true;
+                console.log('[SW] 偵測到新版本，等切出去再換');
+                document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') _swReload(); });
+            });
+
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js', { scope: './' })
+                    .then(reg => {
+                        console.log('[SW] 已註冊', reg.scope);
+                        // 強制立刻檢查 sw.js 是否有新版本（不等 24 小時）
+                        // 這讓 iOS 在每次開啟 App 時都能偵測到新部署
+                        reg.update().catch(() => {});
+                    })
+                    .catch(e => console.warn('[SW] 註冊失敗', e));
+            });
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+
+    })();
+    </script>
+</body>
+</html>

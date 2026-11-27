@@ -1,0 +1,968 @@
+﻿/**
+ * Story Extractor (開場白提取器)
+ * 把開場白整段渲染在單一區域（純文字 + HTML 區塊依原本順序堆疊）
+ */
+
+(function() {
+    'use strict';
+
+    const STYLE_ID = 'se-styles-v1';
+
+    // 外來的純文字塞回 HTML 前轉義：五個都轉
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    const THEME_STORAGE_KEY = 'story_extractor_theme';
+    const THEMES = {
+        light: 'light',
+        darkgold: 'darkgold'
+    };
+
+    const StoryExtractor = {
+        currentTheme: THEMES.light,
+        isVisible: false,
+        originalFormParent: null,    // 記住 #form_sheld 原本的家（hide 時還原）
+        originalFormSibling: null,
+
+        init() {
+            this.loadTheme();
+            this.initStoryFlow();
+        },
+
+        // ── 發消息 → 自動轉等待室 → 故事就緒自動讓路（2026-06-11）────────────
+        // 藏書開在 VN 面板內：訊息完成時 vn_core 的自動偵測本來就會套劇本＋切到劇情頁，
+        // 但藏書蓋在上面、生成期間也沒有任何狀態 → 這裡補一塊等待室 overlay：
+        //   發消息（生成開始）→「故事撰寫中…」＋圖片進度（早鳥已在背景生）
+        //   → 回覆落地且含 <content> →「進入劇情」並收起藏書讓路（劫持的輸入框同步還原）
+        //   → 劇情頁的開場閘門接手：圖沒好會自己擋 loading
+        _flowInited: false,
+        _genWatch: null,
+        initStoryFlow() {
+            if (this._flowInited) return;
+            const w = window;
+            if (!w.eventOn || !w.tavern_events) { setTimeout(() => this.initStoryFlow(), 1000); return; }
+            this._flowInited = true;
+            const ev = w.tavern_events;
+
+            if (ev.GENERATION_STARTED) w.eventOn(ev.GENERATION_STARTED, (type, opts, dryRun) => {
+                if (dryRun) return;            // dryRun 試算空跑 → 別彈等待室
+                if (!this.isVisible) return;   // 只在藏書開著時接管
+                this._showFlowOverlay();
+            });
+
+            // 生成被手動停止 / 出錯沒有回覆 → 收起等待室別卡人
+            if (ev.GENERATION_STOPPED) w.eventOn(ev.GENERATION_STOPPED, () => this._hideFlowOverlay());
+            if (ev.GENERATION_ENDED) w.eventOn(ev.GENERATION_ENDED, () => {
+                setTimeout(() => { if (this._overlayShown() && !this._waitClose) this._hideFlowOverlay(); }, 4000);
+            });
+
+            const _readReply = (mid) => {
+                try {
+                    const ctx = w.SillyTavern?.getContext?.();
+                    const m = ctx?.chat?.[mid];
+                    return (m && !m.is_user) ? (m.mes || m.message || '') : '';
+                } catch (e) { return ''; }
+            };
+
+            if (ev.MESSAGE_RECEIVED) w.eventOn(ev.MESSAGE_RECEIVED, (mid) => {
+                if (!this._overlayShown()) return;
+                const txt = _readReply(mid);
+                if (!txt.includes('<content>')) { this._hideFlowOverlay(); return; }   // 不是劇情回覆 → 靜默收起
+                // 沒收尾＝AI 還在輸出（TauriTavern 事件來得早）→ 留在等待室輪詢等 </content>
+                if (!txt.includes('</content>')) {
+                    if (this._waitClose) return;
+                    const t0 = Date.now();
+                    this._waitClose = setInterval(() => {
+                        const t2 = _readReply(mid);
+                        if (t2.includes('</content>')) {
+                            clearInterval(this._waitClose); this._waitClose = null;
+                            this._enterStory();
+                        } else if ((Date.now() - t0) > 300000) {
+                            clearInterval(this._waitClose); this._waitClose = null;
+                            this._hideFlowOverlay();
+                        }
+                    }, 1500);
+                    return;
+                }
+                this._enterStory();
+            });
+
+            console.log('[StoryExtractor] ✅ 發消息→等待室→進劇情 流程已掛載');
+        },
+
+        _overlayShown() { return !!document.getElementById('se-flow-overlay'); },
+
+        // 等待室視覺=章節進入同一顆「視差校準艙」:把 #vn-start-loader 殼借進來(不存在就先建),
+        // 收場時歸還 #page-game 給開場閘門接手——同一個殼、同一套 loading,全程統一。
+        // 拿不到校準艙模組(非 VN 環境)才退回土製轉圈。
+        _showFlowOverlay() {
+            if (this._overlayShown()) return;
+            const host = document.getElementById('se-root-wrapper');
+            if (!host) return;
+            // 開始生成＝開場白預覽退場：預覽那份直接拆掉（只是被等待室蓋住，iframe 還活著會一直放）
+            //   拆完要把渲染簽章作廢：生成被中止/退回來時，scanAndRender 會因為「原稿沒變、容器還有東西」
+            //   而跳過重演 → 面板被拆掉就再也回不來。
+            this._stopPanelMedia(true);
+            this._lastRenderSig = null;
+            const o = document.createElement('div');
+            o.id = 'se-flow-overlay';
+
+            let usingChamber = false;
+            try {
+                if (window.VN_LoaderChamber) {
+                    // 殼的基礎樣式(track/bar/label):與 vn_core._ensureStartLoaderEl 同 id 同內容,
+                    // 誰先到誰注入、後到跳過,不會雙份
+                    if (!document.getElementById('vn-sl-style')) {
+                        const s = document.createElement('style');
+                        s.id = 'vn-sl-style';
+                        s.textContent = '#vn-start-loader{position:absolute;inset:0;z-index:900;background:#050402;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}' +
+                            '#vn-start-loader-track{width:60%;height:3px;background:rgba(255,255,255,0.08);border-radius:2px;overflow:hidden}' +
+                            '#vn-start-loader-bar{height:100%;width:0%;background:#d4af37;border-radius:2px;transition:width linear}' +
+                            '#vn-start-loader-label{font-size:10px;letter-spacing:3px;color:rgba(212,175,55,0.5);text-transform:uppercase}' +
+                            '#vn-start-loader-skip{display:none;margin-top:6px;font-size:11px;letter-spacing:2px;color:rgba(255,255,255,0.35);border:1px solid rgba(255,255,255,0.18);border-radius:4px;padding:6px 18px;cursor:pointer;background:transparent}' +
+                            '#vn-start-loader-skip:hover{color:rgba(255,255,255,0.7);border-color:rgba(255,255,255,0.4)}';
+                        document.head.appendChild(s);
+                    }
+                    let sl = document.getElementById('vn-start-loader');
+                    if (!sl) {
+                        sl = document.createElement('div');
+                        sl.id = 'vn-start-loader';
+                        sl.innerHTML = '<div id="vn-start-loader-track"><div id="vn-start-loader-bar"></div></div><div id="vn-start-loader-label">Loading</div><button id="vn-start-loader-skip" type="button">跳過等待</button>';
+                    }
+                    this._slPrevParent = sl.parentNode || null;   // 記原家(通常是 #page-game),收場歸還
+                    o.appendChild(sl);
+                    sl.style.display = 'flex';
+                    const skip = sl.querySelector('#vn-start-loader-skip');
+                    if (skip) skip.style.display = 'none';
+                    window.VN_LoaderChamber.mount(sl);
+                    window.VN_LoaderChamber.start();
+                    window.VN_LoaderChamber.phase('text');
+                    usingChamber = true;
+                }
+            } catch (e) { console.warn('[StoryExtractor] 校準艙借用失敗,退土製等待室', e); }
+
+            if (!usingChamber) {
+                o.innerHTML = '<div id="se-flow-spin"></div><div id="se-flow-label">故事撰寫中…</div><div id="se-flow-sub"></div>';
+            }
+            host.appendChild(o);
+
+            const t0 = Date.now();
+            this._genWatch = setInterval(() => {
+                const label = document.getElementById('vn-start-loader-label') || document.getElementById('se-flow-label');
+                if (!label) return;
+                const sec = Math.round((Date.now() - t0) / 1000);
+                if (!label.textContent.startsWith('✓')) label.textContent = `故事撰寫中… ${sec}s`;
+                try {
+                    const st = window.VN_Core?.imgPendingStatus?.();
+                    if (st && (st.pending > 0 || st.total > 0)) {
+                        const sub = document.getElementById('se-flow-sub');
+                        if (sub) sub.textContent = `圖片繪製中 ${st.done}/${st.total}`;
+                        if (usingChamber && !this._chamberImgPhase) { this._chamberImgPhase = true; try { window.VN_LoaderChamber.phase('img'); } catch (e) {} }
+                    }
+                } catch (e) {}
+            }, 1000);
+        },
+
+        _enterStory() {
+            const label = document.getElementById('vn-start-loader-label') || document.getElementById('se-flow-label');
+            if (label) label.textContent = '✓ 故事就緒，進入劇情…';
+            try { window.VN_LoaderChamber?.phase('done'); } catch (e) {}
+            // 自動偵測那邊正在套劇本＋切頁；稍等再收起藏書讓路
+            setTimeout(() => { this._hideFlowOverlay(); this.hide(); }, 800);
+        },
+
+        _hideFlowOverlay() {
+            if (this._genWatch) { clearInterval(this._genWatch); this._genWatch = null; }
+            if (this._waitClose) { clearInterval(this._waitClose); this._waitClose = null; }
+            this._chamberImgPhase = false;
+            const o = document.getElementById('se-flow-overlay');
+            if (!o) return;
+            // 歸還借來的校準艙殼:劇情頁已展開=開場閘門大概率正要/正在用它 → 原樣送回別打斷;
+            // 劇情頁還沒開(生成被停/失敗)→ 藏起來並停掉 rAF,別留背景空轉
+            try {
+                const sl = o.querySelector('#vn-start-loader');
+                if (sl) {
+                    const pg = document.getElementById('page-game');
+                    const home = this._slPrevParent || pg;
+                    if (home) home.appendChild(sl);
+                    const vnActive = pg && !pg.classList.contains('hidden');
+                    if (!vnActive) {
+                        sl.style.display = 'none';
+                        try { window.VN_LoaderChamber?.stop(); } catch (e) {}
+                    }
+                    if (!home) sl.remove();   // 無處可還(純手機殼環境)→ 直接收掉
+                }
+            } catch (e) {}
+            this._slPrevParent = null;
+            o.remove();
+        },
+
+        loadTheme() {
+            try {
+                const saved = localStorage.getItem(THEME_STORAGE_KEY);
+                if (saved && (saved === THEMES.light || saved === THEMES.darkgold)) {
+                    this.currentTheme = saved;
+                }
+            } catch (e) { console.error('主題讀取失敗', e); }
+        },
+
+        saveTheme() {
+            AUI.lsSet(THEME_STORAGE_KEY, this.currentTheme, '劇情面板的淺色／黑金設定');
+        },
+
+        toggleTheme() {
+            this.currentTheme = this.currentTheme === THEMES.light ? THEMES.darkgold : THEMES.light;
+            this.saveTheme();
+            this.applyTheme();
+            const themeBtn = document.getElementById('se-btn-theme');
+            if (themeBtn) {
+                themeBtn.innerHTML = this.currentTheme === THEMES.darkgold ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+                themeBtn.title = this.currentTheme === THEMES.darkgold ? '切換到淺色模式' : '切換到黑金模式';
+            }
+        },
+
+        applyTheme() {
+            const root = document.getElementById('se-root-wrapper');
+            if (root) {
+                root.className = this.currentTheme === THEMES.darkgold ? 'theme-darkgold' : '';
+            }
+        },
+
+
+        // 🔥 完全複製 html_extractor.js 的 show 方法
+        show(targetContainer = null) {
+            console.log('[StoryExtractor] 🔍 show() 被調用，當前狀態 isVisible:', this.isVisible);
+
+            const vnExtractorContainer = document.getElementById('story-extractor-container-vn');
+            let panelContainer = null;
+            let iframeContainer = null;
+            let isVnTabMode = false;
+
+            if (targetContainer) {
+                iframeContainer = targetContainer;
+                panelContainer = targetContainer.parentElement;
+            }
+            else if (vnExtractorContainer) {
+                iframeContainer = vnExtractorContainer;
+                panelContainer = vnExtractorContainer;
+                isVnTabMode = true;
+            }
+            else {
+                panelContainer = document.getElementById('story-panel-container');
+                iframeContainer = document.getElementById('story-iframe-container');
+            }
+
+            if (!panelContainer || !iframeContainer) {
+                console.warn('[StoryExtractor] 容器缺失，正在嘗試修復...');
+                const phoneScreen = document.getElementById('aurelia-phone-screen');
+
+                if (phoneScreen) {
+                    panelContainer = document.createElement('div');
+                    panelContainer.id = 'story-panel-container';
+                    panelContainer.style.cssText = `
+                        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+                        background: #EEF0F6; z-index: 50;
+                        transform: translateX(100%); transition: transform 0.3s ease;
+                        display: flex; flex-direction: column;
+                    `;
+
+                    const header = document.createElement('div');
+                    header.style.cssText = `height: 40px; background: rgba(0,0,0,0.5); display: flex; align-items: center; padding: 0 15px; justify-content: space-between; color: white;`;
+                    header.innerHTML = `
+                        <div style="font-size:14px"><i class="fa-solid fa-book-open"></i> 開場白提取</div>
+                        <div style="cursor:pointer; padding:5px;" onclick="
+                            window.StoryExtractor && window.StoryExtractor.hide();
+                            const home=document.getElementById('aurelia-home-tab');
+                            if(home) home.style.display='flex';
+                        ">✕</div>
+                    `;
+
+                    iframeContainer = document.createElement('div');
+                    iframeContainer.id = 'story-iframe-container';
+                    iframeContainer.style.cssText = `flex: 1; position: relative; background: #fcfcfc;`;
+
+                    panelContainer.appendChild(header);
+                    panelContainer.appendChild(iframeContainer);
+                    phoneScreen.appendChild(panelContainer);
+                    console.log('[StoryExtractor] 容器修復完成');
+                } else {
+                    return AUI.alert('無法定位手機介面 (aurelia-phone-screen)，請確認控制中心已開啟。');
+                }
+            }
+
+            // 重複呼叫 show()（面板開著又被叫一次）：輸入框還在舊面板裡，下一行清空會把它一起拆掉 → 先搬回家
+            this._restoreFormSheld();
+            iframeContainer.innerHTML = '';
+
+            const rootWrapper = document.createElement('div');
+            rootWrapper.id = 'se-root-wrapper';
+            if (isVnTabMode) {
+                rootWrapper.className = 'vn-tab-mode';
+            }
+            rootWrapper.innerHTML = `
+                <div id="se-toolbar">
+                    <button class="se-back-btn" title="返回" id="se-btn-close"><i class="fa-solid fa-chevron-left"></i></button>
+                    <div class="se-title">踏入故事</div>
+                    <div class="se-controls">
+                        <button class="se-icon-btn" title="切換主題" id="se-btn-theme"><i class="fa-solid fa-moon"></i></button>
+                        <button class="se-icon-btn" title="刷新" id="se-btn-refresh"><i class="fa-solid fa-rotate-right"></i></button>
+                    </div>
+                </div>
+                <div id="se-swipe-bar" class="se-hidden">
+                    <button class="se-swipe-btn" id="se-swipe-first" type="button" title="回第一個開場"><i class="fa-solid fa-angles-left"></i></button>
+                    <button class="se-swipe-btn" id="se-swipe-prev" type="button" title="上一個開場"><i class="fa-solid fa-chevron-left"></i></button>
+                    <div id="se-swipe-label">開場 1 / 1</div>
+                    <button class="se-swipe-btn" id="se-swipe-next" type="button" title="下一個開場"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+                <div id="se-mode-bar" class="se-hidden">
+                    <span id="se-mode-label">表情</span>
+                    <button class="se-mode-chip" data-mode="main" type="button">主模型寫</button>
+                    <button class="se-mode-chip" data-mode="side" type="button">副模型補</button>
+                    <button class="se-mode-chip" data-mode="off" type="button">不寫</button>
+                </div>
+                <div id="se-content-area"></div>
+                <div id="se-input-area"></div>
+            `;
+
+            iframeContainer.appendChild(rootWrapper);
+
+            if (isVnTabMode) {
+                if (panelContainer) {
+                    panelContainer.style.removeProperty('display');
+                    panelContainer.classList.remove('hide');
+                    panelContainer.classList.add('show');
+                    panelContainer.style.setProperty('display', 'flex', 'important');
+                }
+            } else {
+                panelContainer.style.pointerEvents = 'auto';
+                panelContainer.style.display = 'flex';
+                setTimeout(() => {
+                    panelContainer.style.transform = 'translateX(0)';
+                }, 10);
+
+                const phoneScreen = document.getElementById('aurelia-phone-screen');
+                if (phoneScreen) {
+                    const homeTab = phoneScreen.querySelector('#aurelia-home-tab');
+                    if (homeTab) homeTab.style.display = 'none';
+                }
+            }
+
+            const closeBtn = rootWrapper.querySelector('#se-btn-close');
+            if (closeBtn) {
+                closeBtn.onclick = () => {
+                    this.hide();
+                };
+            }
+
+            rootWrapper.querySelector('#se-btn-refresh').onclick = () => this.scanAndRender(true);   // 手動刷新＝強制重演（跳過原稿沒變的略過判定）
+
+            const themeBtn = rootWrapper.querySelector('#se-btn-theme');
+            themeBtn.onclick = () => this.toggleTheme();
+            themeBtn.innerHTML = this.currentTheme === THEMES.darkgold ? '<i class="fa-solid fa-sun"></i>' : '<i class="fa-solid fa-moon"></i>';
+            themeBtn.title = this.currentTheme === THEMES.darkgold ? '切換到淺色模式' : '切換到黑金模式';
+
+            this.applyTheme();
+            this.isVisible = true;
+
+            // DOM 劫持：把酒館主聊天的輸入框搬進來（mount 在 #chat 時不搬，跟 html_extractor 行為一致）
+            try {
+                const _mountSelector = window.AureliaUIUtils?.getExtensionSettings?.()?.mount?.selector || '#sheld';   // 擴展設定唯一的讀法在 ui_utilities
+                const formSheld = document.getElementById('form_sheld');
+                if (formSheld && _mountSelector !== '#chat') {
+                    this.originalFormParent = formSheld.parentNode;
+                    this.originalFormSibling = formSheld.nextSibling;
+                    rootWrapper.querySelector('#se-input-area').appendChild(formSheld);
+                    console.log('[StoryExtractor] 已劫持 #form_sheld');
+                }
+            } catch (e) { console.warn('[StoryExtractor] 劫持 #form_sheld 失敗', e); }
+
+            console.log('[StoryExtractor] ✅ 窗口已顯示');
+
+            this.scanAndRender();
+            this._startChatSync();   // 卡片自帶跳轉鈕改第 0 樓時，藏書自動跟上
+            this._refreshModeBar(rootWrapper);   // 🎲 本卡模式（圖庫/自由）chips
+            try { window.StoryEntryWizard?.maybeShow?.(rootWrapper); } catch (e) { }   // 🎫 第0樓開局 → 入場精靈
+        },
+
+        // ── 🎲 本卡模式切換（按 storyId=這張卡記，同卡開新聊天不用重選）：
+        //    圖庫＝現狀（表情立繪+生成fallback）；自由＝純生成、AI 不輸出表情格（VN_FREE_MODE 負責
+        //    總綱條目二選一+歷史表情格剝除正則的自動開關）。拿不到 VN_FREE_MODE（PWA）就整條藏起。──
+        _refreshModeBar(rootWrapper) {
+            try {
+                const bar = (rootWrapper || document).querySelector('#se-mode-bar');
+                if (!bar) return;
+                const FM = window.VN_FREE_MODE;
+                if (!FM || !FM.storyId()) { bar.classList.add('se-hidden'); return; }
+                // 人在視差世界裡＝世界門把模式壓成自由（旅人隨機生成、沒圖庫）→ 這裡要顯示「真的在跑的那個」，
+                // 而且鎖住不給改：使用者存的選擇沒被動到，撤離就會回來，此時給按只會看起來壞掉。
+                // 11-04 起三選一（VN_FREE_MODE.exprMode）：主模型寫＝原本的圖庫、不寫＝原本的自由、副模型補＝主模型不寫、副模型讀劇本時順便挑。
+                //   視差世界裡主模型固定不寫：亮的是 exprModeNow（真的在跑的那個，視差世界裡看世界那一把）。
+                const locked = !!FM.inParallax?.();
+                const now = FM.exprModeNow ? FM.exprModeNow() : (FM.isFree() ? 'off' : 'main');
+                const TIP = { main: '主模型寫劇情時每句台詞自己帶表情（多幾個字）', side: '主模型不寫；副模型本來就要讀一次劇本，順便替有表情圖的角色挑表情', off: '不要表情：立繪一直用同一張，主模型也省字' };
+                //   視差世界裡只鎖「主模型寫」（那裡的主模型固定不寫）；副模型／不寫照樣能切，只管視差世界，撤離回來照主世界選的
+                bar.querySelectorAll('.se-mode-chip').forEach(b => {
+                    const lockThis = locked && b.dataset.mode === 'main';
+                    b.classList.toggle('active', b.dataset.mode === now);
+                    b.classList.toggle('locked', lockThis);
+                    b.title = lockThis ? '現在人在視差世界裡：主模型固定不寫表情。撤離回主世界才能選這個。'
+                        : TIP[b.dataset.mode] + (locked ? '（只管視差世界，撤離回來照主世界選的）' : '');
+                    b.onclick = async () => {
+                        if (lockThis || !FM.setExprMode || FM.exprModeNow() === b.dataset.mode) return;
+                        await FM.setExprMode(b.dataset.mode);
+                        this._refreshModeBar(rootWrapper);
+                    };
+                });
+                bar.classList.remove('se-hidden');
+            } catch (e) { console.warn('[StoryExtractor] 模式列失敗:', e); }
+        },
+
+        // 多來源重渲染請求（切換鈕 / 第0樓觀察者 / 卡片跳轉）合併成一拍，只渲一次——治連發全套重演的卡頓
+        _renderTimer: null,
+        _lastRenderSig: null,
+        _scheduleRender(delay = 300) {
+            clearTimeout(this._renderTimer);
+            this._renderTimer = setTimeout(() => this.scanAndRender(), delay);
+        },
+
+        // 把開場白整段渲染進單一區域：純文字 + HTML 區塊依原本順序堆疊
+        // 卡頓優化：①原稿沒變就跳過（防重複請求白演）②區塊先組進 fragment、最後一次上牆（不逐塊 reflow）
+        scanAndRender(force = false) {
+            const contentArea = document.getElementById('se-content-area');
+            if (!contentArea) return;
+
+            this._refreshSwipeBar();   // 開場白切換列（多開局卡）——async 自理、不擋渲染
+
+            const firstMes = document.querySelector('#chat .mes[mesid="0"] .mes_text');
+
+            if (!firstMes) {
+                contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-inbox"></i></div>
+                    找不到開場白<br><small>請先開啟一個角色卡對話</small>
+                </div>`;
+                this._lastRenderSig = null;
+                return;
+            }
+
+            const sig = firstMes.innerHTML;
+            if (!force && sig === this._lastRenderSig && contentArea.children.length) return;   // 原稿沒變 → 不重演
+            this._lastRenderSig = sig;
+
+            this._stopPanelMedia();   // 重渲染前先停舊媒體(detached <audio> 不會自己停)，換卡不疊加 BGM
+            // 渲染後卡片自帶 BGM 會自動播 → 延遲幾拍靜掉(藏書是預覽、不該被卡片 BGM 洗版；含 iframe 晚載)
+            setTimeout(() => this._stopPanelMedia(), 300);
+            setTimeout(() => this._stopPanelMedia(), 1200);
+
+            if (!this.renderOpeningInto(contentArea, sig)) {
+                contentArea.innerHTML = `<div style="padding:20px; text-align:center; color:#999; margin-top:50px;">
+                    <div style="font-size:40px; margin-bottom:10px;"><i class="fa-solid fa-inbox"></i></div>
+                    開場白內容為空
+                </div>`;
+                return;
+            }
+            console.log(`[StoryExtractor] ✅ 開場白渲染完成，共 ${contentArea.children.length} 個區塊`);
+        },
+
+        // 把「已渲染好的第 0 樓開場白」鋪進任意容器：純文字段落 + HTML 美化區塊照原順序堆疊，回傳區塊數。
+        // 藏書內容區與入場精靈的開場預覽共用這一支——精靈以前自己把原文剝成純文字，作者的美化面板就整個不見了。
+        // srcHtml 省略時自己去刮第 0 樓；容器不存在或沒東西可鋪回傳 0，由呼叫端決定空狀態怎麼演。
+        renderOpeningInto(container, srcHtml) {
+            if (!container) return 0;
+            const html = (srcHtml != null)
+                ? srcHtml
+                : (document.querySelector('#chat .mes[mesid="0"] .mes_text')?.innerHTML || '');
+            if (!html) { container.innerHTML = ''; return 0; }
+
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = html;
+
+            const BLOCK_TAGS = ['DIV', 'TABLE', 'FORM', 'DETAILS', 'SECTION', 'ARTICLE', 'ASIDE', 'NAV', 'FIELDSET', 'FIGURE', 'IFRAME', 'CANVAS', 'SVG'];
+
+            const frag = document.createDocumentFragment();   // 先在記憶體組好、最後一次上牆
+            let textBuffer = [];
+            const flushText = () => {
+                if (textBuffer.length === 0) return;
+                const html = textBuffer.join('');
+                if (html.replace(/<[^>]*>/g, '').trim()) {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'native-render-wrapper';
+                    wrapper.innerHTML = html;
+                    frag.appendChild(wrapper);
+                }
+                textBuffer = [];
+            };
+
+            Array.from(tempDiv.childNodes).forEach(node => {
+                if (node.nodeType === Node.TEXT_NODE) {
+                    // 文字節點的 textContent 是「解開後的字」（畫面上的 &lt;img…&gt; 到這裡變回 <img…>），下面會整段當 HTML 塞回去 → 先轉義
+                    if (node.textContent.trim()) textBuffer.push(_esc(node.textContent));
+                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                    const tagName = node.tagName.toUpperCase();
+                    if (['SCRIPT', 'STYLE'].includes(tagName)) return;
+
+                    if (BLOCK_TAGS.includes(tagName)) {
+                        flushText();
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'story-html-block';
+                        wrapper.innerHTML = node.outerHTML;
+                        wrapper.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
+                        frag.appendChild(wrapper);
+                    } else {
+                        textBuffer.push(node.outerHTML);
+                    }
+                }
+            });
+            flushText();
+
+            container.innerHTML = '';
+            container.appendChild(frag);
+            if (container.children.length === 0) return 0;
+
+            this.fixIframes(container);
+            this.mimicAuthorStyle(container);
+            // iframe 載入慢（含內部 JS 觸發的 1.5s 過渡）→ 載完立刻補一次 + 1.6s 後再補一次最終態
+            container.querySelectorAll('iframe').forEach(iframe => {
+                iframe.addEventListener('load', () => {
+                    this.mimicAuthorStyle(container);
+                    setTimeout(() => this.mimicAuthorStyle(container), 1600);
+                }, { once: true });
+            });
+            return container.children.length;
+        },
+
+        // ── 開場白切換列（卡片多開局）：拿「資料」自建、不搬酒館 DOM ──
+        //    來源＝第 0 樓 swipes ∪ 卡片 first_mes/alternate_greetings（保留既有、只補缺、宏先替換）；
+        //    切換走官方 setChatMessages swipe_id（真改第 0 樓＋自動重渲染＋存檔），切完重刮 mesid=0 照舊渲染。
+        //    只在「第 0 樓就是最後一樓」(劇情還沒推進) 時開放；開打後藏起來、只看當前開場。
+        async _refreshSwipeBar() {
+            const bar = document.getElementById('se-swipe-bar');
+            if (!bar) return;
+            bar.classList.add('se-hidden');
+            try {
+                const TH = window.TavernHelper;
+                if (!TH?.getChatMessages || !TH?.setChatMessages || !TH?.getLastMessageId) return;
+                if (TH.getLastMessageId() !== 0) return;   // 劇情已推進 → 不給改開局
+                const m0 = (TH.getChatMessages(0, { include_swipes: true }) || [])[0];
+                if (!m0) return;
+                let swipes = (Array.isArray(m0.swipes) && m0.swipes.length) ? m0.swipes.slice() : [String(m0.message || '')];
+
+                // 卡片的備用開場白還沒進第 0 樓 → 併進 swipes（宏替換後比對，原文/替換後任一已存在就不重複補）
+                try {
+                    const cd = TH.getCharData ? TH.getCharData('current') : null;
+                    const alts = [cd?.first_mes].concat(cd?.data?.alternate_greetings || cd?.alternate_greetings || []);
+                    const sub = (t) => { try { const c = window.SillyTavern?.getContext?.(); return c?.substituteParams ? c.substituteParams(t) : t; } catch (e) { return t; } };
+                    const have = new Set(swipes.map(s => String(s).trim()));
+                    const missing = [];
+                    // 🚨 第 0 樓的開場數已經不少於卡上的開場白數 → 不補。開場白帶 {{random}}／{{time}}／{{roll}} 時
+                    //    每次代換出來都不一樣、永遠比對不到，以前每重畫一次就多補一份、還寫進存檔
+                    const altCount = alts.filter(g => g && String(g).trim()).length;
+                    if (swipes.length >= altCount) alts.length = 0;
+                    for (const g of alts) {
+                        if (!g || !String(g).trim()) continue;
+                        const s = sub(String(g));
+                        if (have.has(s.trim()) || have.has(String(g).trim())) continue;
+                        missing.push(s); have.add(s.trim());
+                    }
+                    if (missing.length) {
+                        swipes = swipes.concat(missing);
+                        await TH.setChatMessages([{ message_id: 0, swipes }], { refresh: 'none' });
+                        console.log(`[StoryExtractor] 已把卡片的 ${missing.length} 個備用開場白補進第 0 樓`);
+                    }
+                } catch (e) { console.warn('[StoryExtractor] 補開場白清單失敗:', e); }
+
+                if (swipes.length <= 1) return;   // 單開場卡不顯示切換列
+                const cur = m0.swipe_id || 0;
+                bar.querySelector('#se-swipe-label').textContent = `開場 ${cur + 1} / ${swipes.length}`;
+                const first = bar.querySelector('#se-swipe-first'), prev = bar.querySelector('#se-swipe-prev'), next = bar.querySelector('#se-swipe-next');
+                first.disabled = cur <= 0;
+                prev.disabled = cur <= 0;
+                next.disabled = cur >= swipes.length - 1;
+                first.onclick = () => this._switchGreeting(0);
+                prev.onclick = () => this._switchGreeting(cur - 1);
+                next.onclick = () => this._switchGreeting(cur + 1);
+                bar.classList.remove('se-hidden');
+            } catch (e) { console.warn('[StoryExtractor] 開場白切換列失敗:', e); }
+        },
+
+        async _switchGreeting(idx) {
+            try {
+                await window.TavernHelper.setChatMessages([{ message_id: 0, swipe_id: idx }]);   // 官方切換：改第 0 樓＋重渲染＋存檔
+                this._scheduleRender(300);   // 跟同步觀察者共用同一個排程 → 一次切換只重演一遍
+            } catch (e) { console.warn('[StoryExtractor] 切換開場失敗:', e); }
+        },
+
+        // ── 第 0 樓同步觀察者：卡片自帶的「跳轉開場」美化按鈕(QR/腳本)改的是酒館第 0 樓，
+        //    藏書是拓印不會自己跟上 → 盯 #chat 裡 mesid=0 的 DOM 變動，防抖後自動重渲染。──
+        _chatObserver: null,
+        _startChatSync() {
+            if (this._chatObserver) return;
+            const chat = document.getElementById('chat');
+            if (!chat) return;
+            this._chatObserver = new MutationObserver((muts) => {
+                if (!this.isVisible) return;
+                const hit = muts.some(m => {
+                    const el = m.target.nodeType === 1 ? m.target : m.target.parentElement;
+                    return el && el.closest && el.closest('.mes[mesid="0"]');
+                });
+                if (!hit) return;
+                console.log('[StoryExtractor] 偵測到第 0 樓變動 → 排程同步重渲染');
+                this._scheduleRender(400);
+                // 疊在藏書上的畫面(入場精靈的開場預覽)也是同一份拓印 → 廣播讓它一起跟上
+                try { document.dispatchEvent(new CustomEvent('SE_MES0_CHANGED')); } catch (e) { }
+            });
+            this._chatObserver.observe(chat, { childList: true, subtree: true, characterData: true });
+            console.log('[StoryExtractor] 第 0 樓同步觀察者已啟動');
+        },
+        _stopChatSync() {
+            try { this._chatObserver?.disconnect(); } catch (e) {}
+            this._chatObserver = null;
+            clearTimeout(this._renderTimer);
+        },
+
+        // 文字 wrapper 偷學作者 HTML 面板的視覺：背景、遮罩、文字色、邊框、圓角、陰影、字體
+        // bg 捐贈者：第一個有底色或 bg-image 的可見元素
+        // overlay 捐贈者：全屏絕對定位 + 半透明底色（疊在 bg 上的「夜色」遮罩）
+        // 文字色捐贈者：第一個有直接文字內容的可見元素
+        mimicAuthorStyle(contentArea) {
+            const blocks = contentArea.querySelectorAll('.story-html-block');
+            if (!blocks.length) return;
+
+            // 酒館主題的預設字色＝繼承來的、不是作者風格——找字色捐贈者時優先跳過它（白字的真兇：
+            // 偷到「沒被作者調過色」的元素，拿走的其實是酒館預設白字）
+            let tavernDefaultColor = null;
+            try { tavernDefaultColor = getComputedStyle(document.querySelector('#chat .mes_text') || document.body).color; } catch (e) {}
+
+            let bgDonor = null;
+            let overlayDonor = null;
+            let textDonor = null;
+            for (const block of blocks) {
+                if (!bgDonor) bgDonor = this.findStyledDonor(block);
+                if (!overlayDonor) overlayDonor = this.findOverlayDonor(block);
+                if (!textDonor) textDonor = this.findTextDonor(block, tavernDefaultColor);
+                if (bgDonor && overlayDonor && textDonor) break;
+            }
+
+            if (!bgDonor) {
+                console.log('[StoryExtractor] 找不到 bg 捐贈者，保留書咖預設');
+                return;
+            }
+
+            const bgCs = getComputedStyle(bgDonor);
+            const overlayColor = overlayDonor ? getComputedStyle(overlayDonor).backgroundColor : null;
+            const textColor = textDonor ? getComputedStyle(textDonor).color : bgCs.color;
+            const fontFamily = textDonor ? getComputedStyle(textDonor).fontFamily : bgCs.fontFamily;
+
+            console.log('[StoryExtractor] bg：', bgDonor.tagName, bgDonor.className || '(無)',
+                '| overlay：', overlayColor || '(無)',
+                '| 文字色：', textColor,
+                '| 字體：', fontFamily,
+                '| bgImage:', bgCs.backgroundImage.substring(0, 60));
+
+            // 多重背景合成：overlay（整面色塊）疊在 image 上
+            const composedBgImage = (overlayColor && bgCs.backgroundImage !== 'none')
+                ? `linear-gradient(${overlayColor}, ${overlayColor}), ${bgCs.backgroundImage}`
+                : bgCs.backgroundImage;
+
+            // ── 對比度守衛：bg 和字色來自「不同捐贈者」、沒人保證是一對（白底白字/深底深字的真兇）。
+            //    算「實際有效底色」（捐贈者底色透明就疊回藏書自身紙色、overlay 也疊進去）跟字色的對比，
+            //    不及格 → 按底色亮暗強制改成看得見的字色；底是圖片看不出亮暗 → 改給字加反差描邊保底。──
+            const _rgb = (s) => { const m = String(s || '').match(/rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\)/); return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null; };
+            const _luma = (c) => (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
+            const _blend = (top, base) => !top || top.a <= 0 ? base : { r: top.r * top.a + base.r * (1 - top.a), g: top.g * top.a + base.g * (1 - top.a), b: top.b * top.a + base.b * (1 - top.a), a: 1 };
+            const _paper = this.currentTheme === THEMES.darkgold ? { r: 17, g: 26, b: 56, a: 1 } : { r: 246, g: 243, b: 234, a: 1 };
+            let _effBg = _blend(_rgb(bgCs.backgroundColor), _paper);
+            _effBg = _blend(_rgb(overlayColor), _effBg);
+            let finalTextColor = textColor;
+            let guardShadow = '';
+            const _txt = _rgb(textColor);
+            if (_txt) {
+                const hasImg = bgCs.backgroundImage !== 'none';
+                const lb = _luma(_effBg), lt = _luma(_txt);
+                const ratio = (Math.max(lb, lt) + 0.05) / (Math.min(lb, lt) + 0.05);
+                if (hasImg && !overlayColor) {
+                    // 底是圖片、又沒遮罩壓底 → 亮暗未知，給字上反差描邊保底（不改作者的字色）
+                    guardShadow = lt > 0.5 ? '0 0 4px rgba(0,0,0,0.85), 0 1px 2px rgba(0,0,0,0.9)' : '0 0 4px rgba(255,255,255,0.85), 0 1px 2px rgba(255,255,255,0.9)';
+                } else if (ratio < 3) {
+                    finalTextColor = lb > 0.5 ? '#2c261d' : '#f2ead8';
+                    console.log(`[StoryExtractor] ⚠️ 偷到的字色跟底色對比不足(${ratio.toFixed(2)}) → 強制改 ${finalTextColor}`);
+                }
+            }
+
+            contentArea.querySelectorAll('.native-render-wrapper').forEach(w => {
+                w.style.backgroundColor = bgCs.backgroundColor;
+                w.style.backgroundImage = composedBgImage;
+                w.style.backgroundSize = bgCs.backgroundSize;
+                w.style.backgroundPosition = bgCs.backgroundPosition;
+                w.style.backgroundRepeat = bgCs.backgroundRepeat;
+                w.style.color = finalTextColor;
+                w.style.textShadow = guardShadow;
+                w.style.borderTop = `${bgCs.borderTopWidth} ${bgCs.borderTopStyle} ${bgCs.borderTopColor}`;
+                w.style.borderRight = `${bgCs.borderRightWidth} ${bgCs.borderRightStyle} ${bgCs.borderRightColor}`;
+                w.style.borderBottom = `${bgCs.borderBottomWidth} ${bgCs.borderBottomStyle} ${bgCs.borderBottomColor}`;
+                w.style.borderLeft = `${bgCs.borderLeftWidth} ${bgCs.borderLeftStyle} ${bgCs.borderLeftColor}`;
+                w.style.borderRadius = bgCs.borderRadius;
+                w.style.boxShadow = bgCs.boxShadow;
+                w.style.fontFamily = fontFamily;
+                w.style.padding = '15px';
+            });
+        },
+
+        // 作者的美化面板常照「整頁」設計（min-height:100vh / height:100vh 撐滿螢幕）。
+        // 閱讀畫面是整頁捲動、看不太出來；搬進入場精靈那種固定高的框，就變成內容排在上面、框底一大段空白。
+        // → 只把「跟視窗一樣高」的容器放掉高度，改吃內容高；圖片/影片與絕對定位的層不碰（那些高度是版面的一部分）。
+        deflateFullPageBlocks(container) {
+            if (!container) return 0;
+            const vh = window.innerHeight || 0;
+            if (!vh) return 0;
+            const SKIP = ['IMG', 'VIDEO', 'CANVAS', 'SVG', 'IFRAME'];
+            let hit = 0;
+            container.querySelectorAll('.story-html-block, .story-html-block *').forEach(el => {
+                try {
+                    if (SKIP.includes(el.tagName.toUpperCase())) return;
+                    const cs = getComputedStyle(el);
+                    if (cs.position === 'absolute' || cs.position === 'fixed') return;
+                    if ((parseFloat(cs.minHeight) || 0) >= vh * 0.9) { el.style.minHeight = '0'; hit++; }
+                    if ((parseFloat(cs.height) || 0) >= vh * 0.9) { el.style.height = 'auto'; hit++; }
+                } catch (e) { }
+            });
+            return hit;
+        },
+
+        // 共用：判斷元素是否隱藏（含 opacity:0，避免採到夜模式被淡出的 day-bg 之類）
+        _isHidden(el) {
+            try {
+                const cs = getComputedStyle(el);
+                return cs.display === 'none' ||
+                    cs.visibility === 'hidden' ||
+                    parseFloat(cs.opacity || '1') < 0.05;
+            } catch (e) { return false; }
+        },
+
+        // 共用：BFS wrapper 子樹，遇到 iframe 踩進 contentDocument，跳過隱藏元素
+        // matchFn(el) 返回 true 即返回該元素
+        _bfsFindFirst(wrapper, matchFn, maxDepth = 5) {
+            if (!wrapper) return null;
+            const queue = [];
+            for (const child of wrapper.children) {
+                queue.push({ el: child, depth: 0 });
+            }
+            while (queue.length) {
+                const { el, depth } = queue.shift();
+                if (!el || !el.tagName || this._isHidden(el)) continue;
+                if (matchFn(el)) return el;
+                if (depth >= maxDepth) continue;
+
+                if (el.tagName === 'IFRAME') {
+                    try {
+                        const iframeDoc = el.contentDocument;
+                        if (iframeDoc && iframeDoc.body) {
+                            for (const child of iframeDoc.body.children) {
+                                queue.push({ el: child, depth: depth + 1 });
+                            }
+                        }
+                    } catch (e) { /* cross-origin */ }
+                } else if (el.children) {
+                    for (const child of el.children) {
+                        queue.push({ el: child, depth: depth + 1 });
+                    }
+                }
+            }
+            return null;
+        },
+
+        // 找第一個有底色或 bg-image 的可見元素
+        findStyledDonor(wrapper) {
+            return this._bfsFindFirst(wrapper, (el) => {
+                try {
+                    const cs = getComputedStyle(el);
+                    const hasBgColor = cs.backgroundColor &&
+                        cs.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+                        cs.backgroundColor !== 'transparent';
+                    const hasBgImage = cs.backgroundImage && cs.backgroundImage !== 'none';
+                    return hasBgColor || hasBgImage;
+                } catch (e) { return false; }
+            });
+        },
+
+        // 找第一個有直接文字內容的可見元素（用它的 color 當文字色）
+        findTextDonor(wrapper, defaultColor) {
+            const hasText = (el) => {
+                for (const child of el.childNodes) {
+                    if (child.nodeType === Node.TEXT_NODE && child.textContent.trim()) return true;
+                }
+                return false;
+            };
+            // 兩段式：先找「作者真的調過字色」的元素（顏色≠酒館預設字色）；全都是預設色才退回第一個有字的
+            if (defaultColor) {
+                const styled = this._bfsFindFirst(wrapper, (el) => hasText(el) && getComputedStyle(el).color !== defaultColor, 7);
+                if (styled) return styled;
+            }
+            return this._bfsFindFirst(wrapper, hasText, 7);
+        },
+
+        // 找遮罩層：position:absolute/fixed + 全屏 (top/bottom/left/right 至少對角=0) + 有半透明底色
+        findOverlayDonor(wrapper) {
+            return this._bfsFindFirst(wrapper, (el) => {
+                try {
+                    const cs = getComputedStyle(el);
+                    if (cs.position !== 'absolute' && cs.position !== 'fixed') return false;
+                    const bg = cs.backgroundColor;
+                    if (!bg || bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') return false;
+                    // 全屏判定：對角邊都 0
+                    const fullV = cs.top === '0px' && cs.bottom === '0px';
+                    const fullH = cs.left === '0px' && cs.right === '0px';
+                    return fullV && fullH;
+                } catch (e) { return false; }
+            }, 6);
+        },
+
+        fixIframes(container) {
+            const iframes = container.querySelectorAll('iframe');
+            iframes.forEach(iframe => {
+                const adjustHeight = () => {
+                    try {
+                        const doc = iframe.contentWindow?.document;
+                        if (doc && doc.body) {
+                            doc.querySelectorAll('details:not([open])').forEach(el => el.setAttribute('open', 'true'));
+                            const realHeight = doc.body.scrollHeight;
+                            // 高度沒變就別寫——每寫一次就觸發下一輪 resize，ResizeObserver 自迴圈空轉的來源
+                            const want = (realHeight + 100) + 'px';
+                            if (realHeight > 0 && iframe.style.height !== want) iframe.style.height = want;
+                            if (doc.body.style.overflow !== 'hidden') doc.body.style.overflow = 'hidden';
+                        }
+                    } catch (e) { iframe.style.height = '600px'; }
+                };
+                iframe.onload = () => {
+                    adjustHeight();
+                    try {
+                        if (window.ResizeObserver) {
+                            new ResizeObserver(() => adjustHeight()).observe(iframe.contentWindow.document.body);
+                        } else { setInterval(adjustHeight, 500); }
+                    } catch(e){}
+                };
+                // 已經載完的 iframe 不會再發 load：直接補跑一次。跨網域的 iframe 讀 document 會丟錯，別讓它打斷後面幾個
+                try { if (iframe.contentWindow && iframe.contentWindow.document.readyState === 'complete') iframe.onload(); } catch (e) {}
+            });
+        },
+
+        // 停掉「卡片自帶的 BGM/音訊」——角色卡開場白常含 <audio autoplay>，渲染進去就自動播。
+        //   ★移除播放中的 <audio> 不一定會停(detached 仍續播)，必須先 pause()。同源 iframe 內的也順手停。
+        //   hard=true：連 iframe 一起拆掉（生成開始／面板收起時用）。腳本是「載完抓完網址」才 .play() 的，
+        //     只暫停一次擋不住晚一步才響的那種；把 iframe 的 document 整個銷毀才是真的斷乾淨。
+        //   🚨 酒館第 0 樓本體才是 BGM 的真正來源：藏書這份是拓印(outerHTML 複製出來的第二個 iframe)，
+        //     只停拓印＝原版在背後一路放到底（「開始劇情、loading 了 BGM 還在響」就是這個）。
+        //     那是酒館自己的 DOM，只暫停＋拔掉 autoplay，不靜音也不拆——使用者關掉藏書後還要能自己按播放。
+        _stopPanelMedia(hard) {
+            try {
+                const docs = [document];
+                try { const pd = window.parent && window.parent.document; if (pd && pd !== document) docs.push(pd); } catch (e) {}
+                const stop = (m, keepAudible) => {
+                    try {
+                        m.pause(); m.currentTime = 0; m.removeAttribute('autoplay');
+                        if (!keepAudible) m.muted = true;
+                    } catch (e) {}
+                };
+                const sweep = (root, opt) => {
+                    if (!root || !root.querySelectorAll) return;
+                    opt = opt || {};
+                    root.querySelectorAll('audio, video').forEach(m => stop(m, opt.keepAudible));
+                    root.querySelectorAll('iframe').forEach(f => {
+                        try {
+                            const idoc = f.contentWindow && f.contentWindow.document;
+                            if (idoc) idoc.querySelectorAll('audio, video').forEach(m => stop(m, opt.keepAudible));
+                        } catch (e) {}
+                        if (opt.hard) {
+                            try { f.removeAttribute('srcdoc'); f.removeAttribute('src'); } catch (e) {}
+                            try { f.remove(); } catch (e) {}
+                        }
+                    });
+                };
+                docs.forEach(d => {
+                    ['se-content-area', 'story-extractor-container-vn', 'story-panel-container', 'sew-root'].forEach(id => {
+                        sweep(d.getElementById && d.getElementById(id), { hard: hard });
+                    });
+                    try { sweep(d.querySelector && d.querySelector('#chat .mes[mesid="0"]'), { keepAudible: true }); } catch (e) {}
+                });
+            } catch (e) { console.warn('[StoryExtractor] 停止面板媒體失敗', e); }
+        },
+
+        // 把劫持來的 #form_sheld 搬回原本的家（hide 與重複 show 共用；html_extractor 有一支一樣的）。
+        //   原本的鄰居已經不在原處就接在最後面，別讓 insertBefore 丟錯、輸入框卡在要被清掉的面板裡
+        _restoreFormSheld() {
+            try {
+                const formSheld = document.getElementById('form_sheld');
+                const home = this.originalFormParent, sib = this.originalFormSibling;
+                if (formSheld && home) {
+                    home.insertBefore(formSheld, (sib && sib.parentNode === home) ? sib : null);
+                    console.log('[StoryExtractor] 已還原 #form_sheld');
+                }
+            } catch (e) { console.warn('[StoryExtractor] 還原 #form_sheld 失敗', e); }
+            this.originalFormParent = null;
+            this.originalFormSibling = null;
+        },
+
+        hide() {
+            // reentry guard：hideVnPanel 內呼叫 StoryExtractor.hide()，而 hide() 內又會
+            // 經 _maybeHideVnPanel → hideVnPanel 回呼 → 無限遞迴卡頓
+            if (this._hiding) return;
+            this._hiding = true;
+            this._stopChatSync();   // 面板收起就別再盯第 0 樓
+            try { this._doHide(); } finally { this._hiding = false; }
+        },
+
+        _doHide() {
+            console.log('[StoryExtractor] 🔍 hide() 被調用');
+
+            // 先停掉卡片自帶 BGM，再清空內容(移除 <audio>/iframe＝斷源停音)，避免關閉後 BGM 殘留/疊加
+            this._stopPanelMedia(true);
+            try {
+                [document, (window.parent && window.parent.document)].forEach(d => {
+                    try { const ca = d && d.getElementById && d.getElementById('se-content-area'); if (ca) ca.innerHTML = ''; } catch (e) {}
+                });
+            } catch (e) {}
+
+            // 還原 #form_sheld 回原本的家（最先做，避免後續 DOM 操作把它連帶清掉）
+            this._restoreFormSheld();
+
+            const _maybeHideVnPanel = () => {
+                const pageGame = document.getElementById('page-game');
+                if (pageGame && pageGame.classList.contains('hidden')) {
+                    if (window.AureliaControlCenter?.hideVnPanel) window.AureliaControlCenter.hideVnPanel();
+                }
+            };
+
+            const vnExtractorContainer = document.getElementById('story-extractor-container-vn');
+            if (vnExtractorContainer) {
+                vnExtractorContainer.classList.remove('show');
+                vnExtractorContainer.style.removeProperty('display');
+                this.isVisible = false;
+                _maybeHideVnPanel();
+                return;
+            }
+
+            try {
+                const parentDoc = window.parent && window.parent.document;
+                if (parentDoc) {
+                    const parentContainer = parentDoc.getElementById('story-extractor-container-vn');
+                    if (parentContainer) {
+                        parentContainer.classList.remove('show');
+                        parentContainer.style.removeProperty('display');
+                        this.isVisible = false;
+                        _maybeHideVnPanel();
+                        return;
+                    }
+                }
+            } catch (e) {}
+
+            const panelContainer = document.getElementById('story-panel-container');
+            if (panelContainer) {
+                panelContainer.style.transform = 'translateX(100%)';
+                this.isVisible = false;
+            }
+        }
+    };
+
+    StoryExtractor.init();
+    window.StoryExtractor = StoryExtractor;
+    console.log('✅ Story Extractor (開場白提取器) 已啟動');
+})();

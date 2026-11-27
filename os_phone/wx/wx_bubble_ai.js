@@ -1,0 +1,463 @@
+// ----------------------------------------------------------------
+// [檔案] wx_bubble_ai.js — 泡泡主題：跟 AI 說一句，他出一整套
+// 路徑：os_phone/wx/wx_bubble_ai.js
+// 職責：氣泡設置第三個分頁「AI 主題」的腦。出 prompt、叫主模型、
+//       把回覆裡的 CSS 挑出來、擋掉會把版位打壞的寫法。
+//       UI 在 wx_bubble_settings.js，儲存也在那邊（跟微調同一份 config）。
+//
+// 🚨 兩個 app 共用一套選擇器：微信的 .wx-msg-row.me 跟 VN 手機的 .chat-row.you
+//    講的是同一件事（我方），名字卻是反的。所以主題一律只認 .pbub-* 這組
+//    共用 class，兩邊的訊息列在渲染時都會帶上；AI 完全不必知道有兩個 app。
+//    共用 class 掛在：wx_view.js（微信）、vn_phone.js（VN 手機）。
+// 暴露：window.WX_BUBBLE_AI
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    console.log('[WeChat] 載入泡泡主題 AI (wx_bubble_ai.js)...');
+    const win = window.parent || window;
+
+    // ── 底稿：AI 的 CSS 會接在這後面 ──────────────────────────────
+    // 為什麼要有這一段：兩個 app 的尖角畫在不同的偽元素上（微信我方是
+    // ::before、VN 手機我方是 ::after），AI 沒辦法一份 CSS 顧到兩種。
+    // 底稿把原生尖角收掉，改成「一律由 .pbub-bubble::before 畫」，
+    // 並且讓它吃跟泡泡同一顆變數 → AI 只要設 --pbub-me-bg，尖角自己跟上。
+    // 🚨🚨特異性：兩個 app 的預設泡泡都是三個 class 寫成的
+    //   （.wx-msg-row.me .wx-bubble-content、.chat-row.you .chat-bubble ＝ 0,3,0）。
+    //   底稿寫成 .pbub-me .pbub-bubble 只有 0,2,0，會整條輸給預設——
+    //   實測就是「主題套了、字色變了、泡泡底色卻紋風不動」。
+    //   所以底稿一律寫成 .pbub-row.pbub-me .pbub-bubble（0,3,0，跟預設同分、注入在後面所以贏），
+    //   AI 那份再由 boost() 提到 0,4,0 以上蓋過底稿。
+    const BASE_CSS = `
+/* 泡泡主題底稿（程式產生，AI 的 CSS 接在後面覆蓋） */
+/* 🚨收掉 VN 手機那邊原生的 ::after 尖角。content:none 不夠——原生那條還寫了
+   border（微信綠的三角）跟 top/right 定位，AI 拿 ::after 做裝飾時通常只設
+   background 與自己要的邊，那些沒被覆蓋的宣告就留在裝飾層上：
+   實測是一條 6.4px 的綠邊掛在深海主題的泡泡上，還往右溢出 7px。所以一起歸零。
+   **不准加 !important**：
+   AI 很自然會拿 ::after 去做裝飾（第一次生的海洋主題兩側 SVG 就都畫在這裡），
+   加了 important 誰也蓋不過，裝飾整個不見、而且完全看不出原因。
+   靠特異性就夠了：這條 0,3,0 注入在原生之後 → 收得掉原生；
+   AI 那份提權後 0,4,0 → 蓋得回來。 */
+.pbub-row.pbub-row .pbub-bubble::after { content: none; border: 0; top: auto; right: auto; bottom: auto; left: auto; }
+.pbub-row.pbub-row .pbub-bubble { position: relative; isolation: isolate; }
+/* 🚨裝飾層一律墊在字的下面。::after 是絕對定位的，照瀏覽器的疊法它會畫在字的「上面」：
+   AI 拿它畫玻璃頂部那道白色高光，第一行字就被一層白霧蓋住、看起來糊糊的（實測過：就是遮罩放到字前面了）。
+   泡泡自己圍成一層（isolation），裝飾給 z-index:-1＝在泡泡的底色之上、字之下。
+   這一條帶 !important：沒有任何正當的設計需要把裝飾蓋在字上，而 AI 那份提權後比底稿強，不鎖就蓋得回來。
+   （上面收原生 ::after 那條不帶 important 的理由不受影響：那條管的是 content／border，這條只管疊的順序。） */
+.pbub-row.pbub-row .pbub-bubble::after { z-index: -1 !important; }
+.pbub-row.pbub-other .pbub-bubble { background: var(--pbub-other-bg, #ffffff); color: var(--pbub-other-fg, #000000); border-radius: var(--pbub-other-radius, 6px); }
+.pbub-row.pbub-me .pbub-bubble { background: var(--pbub-me-bg, #95ec69); color: var(--pbub-me-fg, #000000); border-radius: var(--pbub-me-radius, 6px); }
+.pbub-row.pbub-row .pbub-bubble::before { content: ''; position: absolute; top: var(--pbub-tail-top, 14px); width: 0; height: 0; border-top: var(--pbub-tail-size, 6px) solid transparent; border-bottom: var(--pbub-tail-size, 6px) solid transparent; pointer-events: none; }
+.pbub-row.pbub-other .pbub-bubble::before { left: calc(var(--pbub-tail-size, 6px) * -1); border-right: var(--pbub-tail-size, 6px) solid var(--pbub-other-bg, #ffffff); border-left: 0; }
+.pbub-row.pbub-me .pbub-bubble::before { right: calc(var(--pbub-tail-size, 6px) * -1); border-left: var(--pbub-tail-size, 6px) solid var(--pbub-me-bg, #95ec69); border-right: 0; }
+/* 群聊：泡泡上面多一行名字（約 17px）把泡泡往下推，尖角跟著往上提同樣的距離，最高貼到離頂 4px */
+.pbub-row.pbub-other .wx-group-name + .pbub-bubble::before { top: max(4px, calc(var(--pbub-tail-top, 14px) - 17px)); }
+`;
+
+    // ── 一次性生成的 prompt ────────────────────────────────────────
+    const PROMPT = `你是手機聊天介面的 UI 設計師。根據使用者描述的風格，生成一段純 CSS，重新設計聊天泡泡（只有泡泡，其他一律別碰）。
+
+【你在設計什麼 — 先看懂這個畫面】
+一支手機，直的，畫面寬約 390px。使用者正在跟某個人傳訊息。
+訊息一列一列由上往下排，新的在最下面：對方講的話靠左、自己講的話靠右。
+每一列最外側貼著一張 40px 的方形頭像，頭像旁邊就是泡泡，泡泡最寬佔畫面的七成。
+泡泡尖端有一個小三角形指著自己那側的頭像。
+群聊時，對方的泡泡上面會多一行小字寫他是誰。
+泡泡底下鋪的是使用者自己挑的聊天背景圖，什麼都可能——素色、風景、深色夜景、亮到發白的圖。
+使用者會在這個畫面裡一句一句讀完整段對話，讀幾百輪。
+你要做的是讓這些泡泡看起來像「那個世界裡的通訊軟體」，材質、年代、氣氛都看得出來，而不是在微信上換個顏色。
+
+【畫面的結構 — 縮排＝父子關係】
+  .pbub-row ................. 一整列訊息（頭像＋泡泡），橫向排列
+      身上一定帶 .pbub-me（自己講的，靠右）或 .pbub-other（對方講的，靠左）其中一個
+    .pbub-avatar ............ 那張 40px 方形頭像，貼在列的最外側
+    .pbub-bubble ............ 泡泡本體，話就寫在裡面
+      ::before .............. 尖角三角形（底稿已經畫好，見下面「尖角」）
+
+【你的 CSS 會被怎麼使用 — 現況與限制】
+- 你寫的 CSS 會「接在一份底稿後面」，不是取代它。底稿定義了尖角，還有這幾顆變數：
+    --pbub-me-bg / --pbub-me-fg / --pbub-me-radius ........ 自己那側的底色 / 字色 / 圓角
+    --pbub-other-bg / --pbub-other-fg / --pbub-other-radius  對方那側的底色 / 字色 / 圓角
+    --pbub-tail-size ...... 尖角大小（預設 6px；設 0 等於不要尖角）
+    --pbub-tail-top ....... 尖角離泡泡頂端多遠（預設 14px）
+  在 :root 設這幾顆，泡泡跟尖角會一起跟著變，這是最省事的做法。
+- 尖角：底稿用 .pbub-bubble::before 畫了一個三角形，顏色吃 --pbub-me-bg / --pbub-other-bg。
+  你設變數它自己跟上；想做別的形狀（方尾、圓尾、鋸齒、沒有尾巴）就直接覆蓋 .pbub-me .pbub-bubble::before
+  跟 .pbub-other .pbub-bubble::before 這兩條，或把 --pbub-tail-size 設成 0 讓它消失。
+  ⚠️泡泡底色如果用漸層或圖片，尖角吃不到——那就別留尖角（--pbub-tail-size:0），或者自己把
+  ::before 改成用 background 畫的小方塊旋轉 45 度。底色是漸層、尖角是純色，接縫會很明顯。
+- 裝飾用 ::after：泡泡的 ::before 已經被尖角佔走了，要加花紋、浪線、紋理、角飾就寫在
+  .pbub-me .pbub-bubble::after 跟 .pbub-other .pbub-bubble::after 上（記得 content:'' 跟 position:absolute，
+  泡泡本身已經是 position:relative）。頭像框的 ::before / ::after 兩個都空著，也可以借。
+- 同一份 CSS 兩個地方都會用到（手機 app 裡的聊天、故事劇情裡演出來的手機畫面），所以只准寫 .pbub-* 這組選擇器。
+
+【你手上有的做法 — 不只換顏色】
+沒有外部圖片網址可用，圖形都自己畫，下面這些都能用、也能混著用：
+- 外形：clip-path 把泡泡或頭像框剪成不是長方形的輪廓；四個角各自的圓角；::before 尖角換成別的形狀。
+- 圖形：內聯 SVG 的 data URI 可以當 background-image、mask-image 或 border-image，畫任何輪廓、花紋、邊飾，
+  放在泡泡的 ::after、頭像框的 ::before／::after 上，大小、位置、角度、重複都由你定。
+- 質感：好幾層漸層疊起來做紙紋、布紋、金屬、雜點；多層 box-shadow；inset 陰影做壓紋或凹陷。
+- 字：@import 從 Google Fonts 載字體，字重、字距、行距配合那個世界。
+- 動：很輕的 @keyframes，只放在裝飾上，不放在字上。
+
+【這是拿來讀字的 — 先懂用途，再談造型】
+泡泡存在的唯一理由，是讓人把裡面那句話讀完。它疊在一張使用者自選、明暗未知的背景圖上。
+- 字的正下方要夠安靜，兩條路挑一條：
+  ① 實底：泡泡的底是實心色，或 alpha ≥ 0.85。
+  ② 玻璃：使用者要的是玻璃、液態、水滴、果凍、透明感這一類，底就可以是半透明的（alpha 0.45～0.7），
+     但同一條規則裡一定要有 backdrop-filter: blur(12px 以上)（連同 -webkit-backdrop-filter 一起寫），
+     把後面那張背景圖糊掉，字才讀得到。只寫半透明、不寫模糊，字會直接壓在背景圖的細節上。
+- 字色要強對比：實底就深底亮字、亮底深字。不要半透明的字，不要相近色。
+- 玻璃底的字色跟著「玻璃自己的色調」走，不是跟著你想像中的背景走——後面那張圖可能全白也可能全黑，
+  模糊只會把它糊開，不會改變它的明暗，所以對比只能靠玻璃這一層自己撐：
+    淺色調的玻璃（白、奶白、淺粉、淺藍這種偏亮的色）→ 字用近黑（#111 到 #333）。
+    深色調或飽和的玻璃（深藍、墨綠、酒紅、黑）→ 字用純白。
+  淺色玻璃配白字、深色玻璃配黑字，在一半的背景上會完全看不見。兩側的玻璃色調不同，字色就各自照自己那側定，
+  不必兩側同一個字色。alpha 低於 0.45 的玻璃撐不住對比，別用。字可以加一圈很淡的 text-shadow，
+  方向相反：黑字配白的光暈，白字配黑的陰影。
+- 玻璃的質感來自疊層，不是來自顏色：邊緣一圈亮邊（1px 半透明白的 border，或 inset 的 box-shadow）、
+  頂部一道高光（::after 畫一條由白到透明的漸層，貼著上緣）、底下一層柔的外陰影，三樣至少做兩樣。
+  只有一塊半透明的色塊，看起來是褪色，不是玻璃。
+- 玻璃泡泡不留尖角（--pbub-tail-size:0）：尖角是一塊純色三角形，接在半透明的泡泡上一定穿幫。
+- 裝飾不准壓在字上：花紋、線條、光暈、圖案一律走泡泡的邊緣、角落，或泡泡外面。中間留給字。
+  泡泡的 ::after 程式會自動墊在字的下面（你不用、也不要自己寫 z-index），所以高光、紋理畫在那裡不會蓋住字；
+  但它還是會讓字後面那一塊變亮或變花，頂部高光的高度別超過泡泡的三分之一，顏色淡一點。
+- 所有裝飾一律 pointer-events:none（泡泡可以長按叫出選單，裝飾蓋住會擋掉）。
+
+【可設計的元素 — 只有這三個】
+- .pbub-bubble：泡泡本體，你的主力。底色、字色、字體、字級、行距、內距、圓角、邊框、陰影、
+  ::before 尖角、材質紋理、動畫都放手做。自己那側（.pbub-me .pbub-bubble）跟對方那側
+  （.pbub-other .pbub-bubble）「兩側都要設計」，而且要看得出是同一套東西的兩個角色。
+- .pbub-avatar：頭像框。外框造型、圓角、邊框、陰影、濾鏡可以改，配合泡泡的風格。
+  ⚠️尺寸維持 40px 上下，變太大會把泡泡擠掉。頭像圖本身是使用者設的，你只做框。
+- .pbub-row：整列。只准改 margin（上下間距）跟 gap（頭像與泡泡的距離）。見下面的版位契約。
+
+【版位是契約 — 這幾個屬性一個字都不准寫】
+.pbub-row 身上「絕對不可以出現」：display / flex-direction / justify-content / position / float。
+.pbub-me 與 .pbub-other 是掛在同一個列元素上的，所以「單獨寫 .pbub-me { } 或 .pbub-other { }」
+等於在寫列，同一份禁令照算。要改泡泡就寫 .pbub-me .pbub-bubble（中間有空格），別漏掉後面那半。
+左右分邊是靠 flex-direction 做的（自己那側是 row-reverse），你寫了就會把兩邊的訊息全部推到同一側。
+.pbub-bubble 上不准寫 position:absolute / fixed、不准寫 float，也不准用 margin-left/right 的負值
+把泡泡拖出畫面。
+泡泡的寬度上限在 .pbub-wrap 這一層（預設 70%），不在泡泡身上。想讓泡泡更寬或更窄，改 .pbub-wrap
+的 max-width；不要寫在 .pbub-bubble 上——那裡的百分比是相對 .pbub-wrap 再算一次，兩邊都寫會疊兩次，
+結果比你以為的窄很多。上限不要超過 78%，泡泡貼到邊會很難讀。
+
+【骨架 — 這一區是關係，每一條都要能在你寫的 CSS 裡驗出來】
+- 兩側的差別不可以只有顏色：圓角的形狀、邊框的有無或厚度、陰影的方向，至少有一項明顯不同。
+- 每套設計要有一個主題簽名：使用者說的那個東西，要在畫面上認得出它的「形狀」，不能只靠顏色、字體或改一個角——
+  用上面的外形或圖形做法，把它的輪廓、邊緣或花紋畫在泡泡或頭像框上。遮住字只看泡泡，也猜得出主題是什麼。
+  大小要一眼看得到：要嘛泡泡本身的外形就是它，要嘛那個圖形至少有泡泡高度的一半，貼著泡泡或頭像框的邊，
+  可以伸出泡泡外面。縮在角落、要放大才看得到的小點綴不算。
+  圖形跟字不重疊：要嘛整個放在泡泡外面（貼著邊往外長），要嘛把那一側的 padding 加大、讓出一塊空位再放進去。
+  字的第一個字跟最後一個字旁邊最容易被蓋到，放之前先想那一行字會落在哪。
+  頭像那一角不放：自己那側泡泡的右上角、對方那側泡泡的左上角，旁邊就貼著頭像（尖角也在那裡），
+  圖形往那邊長會蓋住頭像。要伸出去，就從另外三個角或上下兩邊伸。
+  使用者要的是玻璃、液態、水滴、膠囊這一類（東西本身就是質感），簽名改由疊層來擔：
+  亮邊、高光、陰影怎麼疊，兩側各自的色調偏哪裡；四個角可以一樣圓（整顆膠囊也行）。
+- 泡泡跟頭像框之間要有一處呼應：同一種圓角語言、同一組邊框厚度、或同一個切角。
+- 這一區不給例外。長相隨你，形狀關係照這裡走。
+
+【完成度】
+兩側泡泡、頭像框用同一套設計語言做成完整一組。不可以自己那側做得很講究、對方那側還停在預設白。
+
+【輸出格式】
+1. 先輸出一段 <版面骨架>…</版面骨架>，60~100 字：這次的泡泡是那個世界裡的什麼東西（紙條、終端訊窗、
+   刻痕、符紙、票根…），兩側各是什麼角色，尖角留不留、為什麼，頭像框是什麼材質的框。
+   講不出「它是什麼」，畫出來就會是兩個圓角矩形換顏色。寫下來才會照著做。
+2. 接著才是 CSS，用 \`\`\`css 包起來。骨架那段之外不要別的解釋文字。
+3. 輸出前自檢一次：兩側都設計了嗎？遮住字只看泡泡，認得出主題嗎（玻璃那一類就看疊層做了沒）？字底下是實底，還是半透明加了模糊？
+   .pbub-row 上有沒有不小心寫到 display / flex-direction / justify-content？
+   底色改成漸層了但尖角還是純色嗎（會有接縫，要嘛去掉尖角、要嘛自己重畫）？有問題就修好再輸出。
+
+使用者想要的風格：`;
+
+    // 💬 對話式：規則沿用上面那份，只換掉「一次性生成」這個前提
+    const CHAT_PROMPT = PROMPT.replace('使用者想要的風格：', '') + `
+【這是一段對話，不是一次性生成】
+- 每次回覆都要輸出「完整的最新 CSS」（不是片段、不是 diff），用 \`\`\`css 包起來；使用者會直接拿去套用。
+- 只改使用者這次講的地方，沒被提到的部分原封不動保留，不要順手重做。
+- CSS 之外可以用一兩句話說你改了什麼，不要長篇解釋。
+- 使用者問的是問題、或你需要先確認才知道怎麼改，就只回話、不要輸出 CSS。
+- 微調時不必再寫 <版面骨架>——除非要改的就是版面結構本身（兩側的分法、尖角的去留、主題簽名），那就重寫一次再改。
+`;
+
+    // ── 從 AI 回覆裡挑出 CSS ───────────────────────────────────────
+    // 🚨照創作室主題那支的教訓做：只認「成對的 ```」會漏掉兩種常見情況——
+    //   ① 回覆被輸出上限截斷，只有開頭那個 ``` ② 模型直接吐純 CSS，一個 ``` 都沒有。
+    //   漏掉的下場是整包 CSS 被當成說明文字原封不動貼進對話泡泡。
+    function pickCss(raw) {
+        const s0 = String(raw || '');
+        const looksCss = (t) => /\{[\s\S]*?\}/.test(t) && (t.match(/\}/g) || []).length >= 2;
+        const clean = (t) => String(t || '').replace(/<\/?版面骨架>/g, '').trim();
+        let m = s0.match(/```(?:css)?\s*([\s\S]*?)```/i);
+        if (m) return { css: m[1].trim(), note: clean(s0.replace(/```[\s\S]*?```/g, '')), cut: false };
+        m = s0.match(/```(?:css)?\s*([\s\S]*)$/i);
+        if (m && looksCss(m[1])) return { css: m[1].trim(), note: clean(s0.slice(0, m.index)), cut: true };
+        // 沒有圍欄時：骨架宣告那段要先撕下來當說明，它在 CSS 裡是無效選擇器，
+        // 混進去會把緊接著的第一條規則一起吃掉
+        const bm = s0.match(/<版面骨架>([\s\S]*?)<\/版面骨架>/);
+        const body = bm ? s0.replace(bm[0], '').trim() : s0;
+        if (looksCss(body)) return { css: body, note: bm ? clean(bm[1]) : '', cut: false };
+        return { css: '', note: clean(s0), cut: false };
+    }
+
+    // ── 提權：讓 AI 那份蓋得過兩個 app 的預設 ──────────────────────
+    // 🚨🚨兩個 app 的預設泡泡都是三個 class 寫成的（0,3,0）。AI 照 prompt 寫的
+    //   .pbub-me .pbub-bubble 只有 0,2,0，整條會輸給預設——實測就是「字色變了、底色沒變」。
+    //   這裡把每條選擇器的第一個 .pbub-* 重複三次，特異性 +2。重複同一個 class
+    //   不改變它匹配誰，只加分；比整份灌 !important 溫和得多——AI 自己那份裡的
+    //   先後與強弱關係原封不動，使用者之後想在 CSS 分頁手動蓋掉某一條也還蓋得動。
+    //   存起來的一律是 AI 的原文，提權只在注入前做一次。
+    function boost(css) {
+        return String(css || '').replace(/(^|[{};])\s*([^{}@;]+)\{/g, (whole, pre, sel) => {
+            if (!/\.pbub-/.test(sel)) return whole;
+            const out = sel.split(',').map(part => {
+                const m = part.match(/\.pbub-[\w-]+/);
+                return m ? part.replace(m[0], m[0] + m[0] + m[0]) : part;
+            }).join(',');
+            return pre + out + '{';
+        });
+    }
+
+    // ── 版位契約：碰到就地剝掉 ─────────────────────────────────────
+    // 左右分邊是 flex-direction 做的。主題只要在 .pbub-row 上寫了 display 或
+    // flex-direction，兩邊的訊息就會全部擠到同一側——留著畫面一定壞，講不聽就剝。
+    const LOCK_PROPS = /(^|;)\s*(display|flex-direction|justify-content|position|float)\s*:[^;}]*/gi;
+    function stripLayout(css) {
+        let hit = 0;
+        const out = String(css || '').replace(/([^{}]+)\{([^}]*)\}/g, (whole, sel, body) => {
+            const sl = sel.trim();
+            if (/:hover|:active|:focus/.test(sl)) return whole;
+            // 只鎖「列」本身；泡泡與頭像身上的 position/display 是正當用法。
+            // 🚨.pbub-me / .pbub-other 跟 .pbub-row 掛在同一個元素上（列身上一定帶其中一個），
+            //   所以 .pbub-me{display:block} 一樣會把左右分邊弄壞——三個都要鎖，只鎖 .pbub-row 有漏。
+            if (!/\.pbub-(?:row|me|other)/.test(sl) || /\.pbub-bubble|\.pbub-avatar|\.pbub-wrap|::/.test(sl)) return whole;
+            const nb = body.replace(LOCK_PROPS, (m, p1) => { hit++; return p1 || ''; });
+            return sel + '{' + nb + '}';
+        });
+        return { css: hit ? out : String(css || ''), hit };
+    }
+
+    // ── 量顏色用的小工具（只給 risky 用）──────────────────────────
+    function _parseColor(v) {
+        const x = String(v || '').trim();
+        let m = x.match(/#([0-9a-f]{3,8})\b/i);
+        if (m) {
+            let h = m[1];
+            if (h.length === 3 || h.length === 4) h = h.split('').map(function (ch) { return ch + ch; }).join('');
+            if (h.length !== 6 && h.length !== 8) return null;
+            return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16), h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1];
+        }
+        m = x.match(/rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)(?:[\s,\/]+([\d.]+%?))?\s*\)/i);
+        if (m) {
+            let a = m[4] == null ? 1 : (/%$/.test(m[4]) ? parseFloat(m[4]) / 100 : parseFloat(m[4]));
+            return [parseFloat(m[1]), parseFloat(m[2]), parseFloat(m[3]), isNaN(a) ? 1 : a];
+        }
+        if (/^white$/i.test(x)) return [255, 255, 255, 1];
+        if (/^black$/i.test(x)) return [0, 0, 0, 1];
+        return null;
+    }
+    function _over(c, back) { const a = c[3] == null ? 1 : c[3]; return [0, 1, 2].map(function (i) { return c[i] * a + back[i] * (1 - a); }); }
+    function _lum(c) {
+        const f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+    }
+    function _contrast(a, b) { const x = _lum(a), y = _lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); }
+    // 某一側的底色與字色：先看 .pbub-me .pbub-bubble{…} 那條，沒寫就退回 --pbub-me-bg / --pbub-me-fg
+    function _sideColors(t, side) {
+        let bgRaw = '', fgRaw = '';
+        const re = new RegExp('\\.pbub-' + side + '\\s+\\.pbub-bubble\\s*(?:,[^{]*)?\\{([^}]*)\\}', 'gi');
+        let m;
+        while ((m = re.exec(t))) {
+            const body = m[1];
+            const b = body.match(/(?:^|;)\s*background(?:-color)?\s*:\s*([^;]+)/i);
+            const c = body.match(/(?:^|;)\s*color\s*:\s*([^;]+)/i);
+            if (b) bgRaw = b[1];
+            if (c) fgRaw = c[1];
+        }
+        if (!bgRaw) { const v = t.match(new RegExp('--pbub-' + side + '-bg\\s*:\\s*([^;}]+)', 'i')); if (v) bgRaw = v[1]; }
+        if (!fgRaw) { const v = t.match(new RegExp('--pbub-' + side + '-fg\\s*:\\s*([^;}]+)', 'i')); if (v) fgRaw = v[1]; }
+        if (!bgRaw || !fgRaw || /gradient|url\(|var\(/i.test(bgRaw) || /var\(/i.test(fgRaw)) return null;
+        const bg = _parseColor(bgRaw), fg = _parseColor(fgRaw);
+        if (!bg || !fg) return null;
+        return { bg: bg, fg: fg };
+    }
+
+    // ── 掃出「看起來會壞」的寫法，套用時直接講給使用者聽 ──────────────
+    function risky(css) {
+        const t = String(css || '');
+        const out = [];
+        // 泡泡沒有底：字直接壓在使用者的聊天背景圖上
+        const clearBg = /\.pbub-(?:me|other)\s+\.pbub-bubble[^{}]*\{[^}]*background\s*:\s*(?:none|transparent|rgba\([^)]*,\s*0(?:\.0*)?\s*\))/i.test(t);
+        // 玻璃泡泡：半透明的底配上模糊是正當做法，後面的背景圖被糊掉了，字讀得到
+        const glass = /backdrop-filter\s*:\s*[^;}]*blur\(/i.test(t);
+        if (clearBg && !glass) out.push('泡泡的底被設成透明，字會直接壓在聊天背景圖上');
+        // 底是漸層／圖片，尖角卻還留著純色 → 接縫
+        const gradBg = /\.pbub-(?:me|other)\s+\.pbub-bubble[^{}]*\{[^}]*background(?:-image)?\s*:[^;}]*(?:gradient|url\()/i.test(t);
+        const tailOff = /--pbub-tail-size\s*:\s*0/i.test(t) || /\.pbub-bubble\s*::?before[^{}]*\{[^}]*content\s*:\s*none/i.test(t);
+        const tailRedrawn = /\.pbub-(?:me|other)\s+\.pbub-bubble\s*::?before/i.test(t);
+        if (gradBg && !tailOff && !tailRedrawn) out.push('泡泡底色是漸層但尖角還是純色，接縫會露出來');
+        // ::before 是尖角（底稿用邊框畫三角）：在它身上放字或圖，邊框還在，三角會跟著飄走（10-04 實測翅膀旁邊多一個白三角）
+        const hasContent = (body) => /content\s*:\s*(?:(['"])(?:(?!\1)[^;}])+\1|url\()/i.test(body);
+        if (!tailOff && /\.pbub-bubble\s*::?before[^{}]*\{([^}]*)\}/i.test(t)) {
+            const reB = /\.pbub-bubble\s*::?before[^{}]*\{([^}]*)\}/gi; let mb;
+            while ((mb = reB.exec(t))) { if (hasContent(mb[1])) { out.push('泡泡的 ::before 是畫尖角的，拿去放圖或字，尖角的三角會跟著飄走；裝飾放 ::after，或先把尖角關掉（--pbub-tail-size:0）'); break; } }
+        }
+        // 裝飾往頭像那一角伸出去：自己那側往右、對方那側往左（用戶的右上、角色的左上有頭像，裝飾會被遮住）
+        //   ::before 沒放東西的是尖角本身（本來就貼著頭像），不算
+        const reS = /\.pbub-(me|other)\s+\.pbub-bubble\s*::?(after|before)[^{}]*\{([^}]*)\}/gi; let ms, toAv = false;
+        while ((ms = reS.exec(t))) {
+            const side = ms[1].toLowerCase(), body = ms[3];
+            if (ms[2].toLowerCase() === 'before' && !hasContent(body)) continue;
+            if ((side === 'me' && /(?:^|;)\s*right\s*:\s*-/i.test(body)) || (side === 'other' && /(?:^|;)\s*left\s*:\s*-/i.test(body))) toAv = true;
+        }
+        if (toAv) out.push('有裝飾往頭像那一邊伸出泡泡（自己那側往右、對方那側往左），會蓋到頭像');
+        // 整份沒有任何塑形 ＝ 又退回「兩個圓角矩形換顏色」
+        // 🚨圓角走 --pbub-*-radius 變數也算塑形——prompt 推薦的就是這個寫法，
+        //   只認 border-radius 會把照著做的那些主題全部誤報成「沒有塑形」。
+        const shaped = /clip-path\s*:\s*(?!none)/i.test(t)
+            || /border-image\s*:/i.test(t)
+            || /(?:border|--pbub-(?:me|other))-radius\s*:\s*[^;}]*(?:\d+(?:px|%)[^;}]*){2,}/i.test(t)
+            || /-webkit-mask|(?:^|[^-])mask(?:-image)?\s*:/i.test(t)
+            || /data:image\/svg/i.test(t)   // 自己畫的圖形（翅膀、紙邊、紋樣）
+            // 材質簽名：玻璃那一類四個角本來就一樣圓，塑形靠疊層（模糊、或帶 inset 的多層陰影）
+            || glass
+            || /box-shadow\s*:[^;}]*inset[^;}]*,|box-shadow\s*:[^;}]*,[^;}]*inset/i.test(t);
+        if (!shaped) out.push('整份只換了顏色：泡泡還是四角一樣圓的長方形，看不出主題的形狀');
+        // 字壓在底上看不看得清楚：半透明的底要在「後面全白」跟「後面全黑」兩個極端都過得去，
+        //   模糊只是把背景糊開、不改明暗，所以對比只能靠泡泡這一層自己撐。
+        //   門檻 3 倍：內建那顆綠底黑字十幾倍、白底黑字二十一倍，離得很遠；
+        //   實測那顆「白玻璃配白字」在白背景上是 1 倍出頭。解析不出顏色（漸層、變數套變數）就不量，不誤報。
+        [['me', '自己'], ['other', '對方']].forEach(function (pair) {
+            const c = _sideColors(t, pair[0]);
+            if (!c) return;
+            const worst = Math.min(_contrast(_over(c.bg, [255, 255, 255]), c.fg), _contrast(_over(c.bg, [0, 0, 0]), c.fg));
+            if (worst < 3) out.push(pair[1] + '那側的字跟泡泡的底太接近，換到' + (_lum(c.fg) > 0.5 ? '亮' : '暗') + '的聊天背景上會看不見');
+        });
+        // 只做了一側
+        const hasMe = /\.pbub-me\s+\.pbub-bubble/i.test(t);
+        const hasOther = /\.pbub-other\s+\.pbub-bubble/i.test(t);
+        const hasVars = /--pbub-(?:me|other)-/i.test(t);
+        if (!hasVars && hasMe !== hasOther) out.push('只設計了其中一側，另一側還是預設的樣子');
+        return [...new Set(out)];
+    }
+
+    // ── 主題庫：全域，跟聊天室無關 ─────────────────────────────────
+    // 全域才有意義：收藏一次，之後任何一個人的聊天室都能一鍵套上去。
+    // 存的是主題 CSS 原文（跟 aiCSS 同一種東西），套用時照樣走底稿＋提權。
+    function galLoad() { try { return JSON.parse(localStorage.getItem('wx_bubble_gallery') || '[]'); } catch (e) { return []; } }
+    function galSave(arr) { try { localStorage.setItem('wx_bubble_gallery', JSON.stringify(arr || [])); return true; } catch (e) { return false; } }
+    function galAdd(name, css) {
+        const arr = galLoad();
+        arr.unshift({
+            id: 'bt_' + Date.now().toString(36) + Math.floor(Math.random() * 1e4).toString(36),
+            name: String(name || '沒有名字'), css: String(css || ''), ts: Date.now()
+        });
+        return galSave(arr) ? arr : null;
+    }
+    function galRemove(id) { const arr = galLoad().filter(x => x.id !== id); galSave(arr); return arr; }
+
+    // 微調那頁的參數 → 主題 CSS。
+    // 有這條，三個分頁調出來的東西才都收得進同一個庫（不然微調的配色存不了，
+    // 而使用者本來就是先在微調那邊試顏色的）。
+    function fromGeneral(c) {
+        c = c || {};
+        const rad = (p) => `${c[p + '_radiusTL'] || 0}px ${c[p + '_radiusTR'] || 0}px ${c[p + '_radiusBR'] || 0}px ${c[p + '_radiusBL'] || 0}px`;
+        const border = (p) => c[p + '_borderEnabled']
+            ? `border: ${c[p + '_borderWidth'] || 1}px solid ${c[p + '_borderColor'] || '#000'};` : '';
+        return `:root{
+  --pbub-me-bg: ${c.me_bgColor || '#95ec69'}; --pbub-me-fg: ${c.me_textColor || '#000000'}; --pbub-me-radius: ${rad('me')};
+  --pbub-other-bg: ${c.other_bgColor || '#ffffff'}; --pbub-other-fg: ${c.other_textColor || '#000000'}; --pbub-other-radius: ${rad('other')};
+}
+.pbub-me .pbub-bubble{ ${border('me')} }
+.pbub-other .pbub-bubble{ ${border('other')} }`;
+    }
+
+    // 縮圖：複刻兩則訊息的預設外觀，主題疊上去 → 卡片上看到的就是套用後的樣子。
+    // 這份骨架的特異性刻意壓低（0,1,0 / 0,2,0），底稿(0,3,0)與提權後的主題(0,4,0)都蓋得過。
+    const PREVIEW_BASE = `
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font-family:system-ui,'Noto Sans TC',sans-serif;padding:9px 4px;overflow:hidden;
+  background:#eaeaea;
+  background-image:linear-gradient(45deg,rgba(0,0,0,.05) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.05) 75%),
+                   linear-gradient(45deg,rgba(0,0,0,.05) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.05) 75%);
+  background-size:14px 14px;background-position:0 0,7px 7px}
+.pbub-row{display:flex;align-items:flex-start;gap:6px;margin:0 6px 8px}
+.pbub-row.pbub-me{flex-direction:row-reverse}
+.pbub-avatar{width:24px;height:24px;border-radius:5px;flex-shrink:0;background:#c4c4c4}
+.pbub-me .pbub-avatar{background:#a5e6aa}
+.pbub-wrap{max-width:70%;min-width:0}
+.pbub-bubble{max-width:100%;padding:6px 9px;border-radius:6px;position:relative;
+  font-size:10.5px;line-height:1.45;color:#000;background:#fff;word-break:break-word}
+.pbub-me .pbub-bubble{background:#95ec69}
+`;
+    function buildThumb(css) {
+        return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+            + PREVIEW_BASE + '\n' + BASE_CSS + '\n' + boost(css || '')
+            + '</style></head><body>'
+            + '<div class="pbub-row pbub-other"><div class="pbub-avatar"></div><div class="pbub-wrap"><div class="pbub-bubble">今晚要不要出來？</div></div></div>'
+            + '<div class="pbub-row pbub-me"><div class="pbub-avatar"></div><div class="pbub-wrap"><div class="pbub-bubble">好啊，老地方。</div></div></div>'
+            + '</body></html>';
+    }
+
+    // ── 對話紀錄與還原堆疊：跟設定一樣按聊天室分開 ─────────────────
+    const _chatKey = (id) => 'wx_bubble_chat::' + (id || 'default');
+    const _undoKey = (id) => 'wx_bubble_undo::' + (id || 'default');
+    function chatLoad(id) { try { return JSON.parse(localStorage.getItem(_chatKey(id)) || '[]'); } catch (e) { return []; } }
+    function chatSave(id, arr) { return win.AUI.lsSet(_chatKey(id), JSON.stringify((arr || []).slice(-30)), '調泡泡的對話紀錄'); }
+    function chatClear(id) { try { localStorage.removeItem(_chatKey(id)); } catch (e) {} }
+    function undoLoad(id) { try { return JSON.parse(localStorage.getItem(_undoKey(id)) || '[]'); } catch (e) { return []; } }
+    function undoSave(id, arr) { return win.AUI.lsSet(_undoKey(id), JSON.stringify((arr || []).slice(-8)), '泡泡的上一步'); }
+
+    // ── 叫 AI ──────────────────────────────────────────────────────
+    // 🚨走「主模型」：這是設計工作，不是照規格填欄位。副模型做這個做出來就是
+    //   「兩個矩形換顏色」——跟創作室的 VN 主題同一個道理。
+    // o.via：別人指定這一通走哪條接口（小機做大件走它自己的，os_xiaoji.js 的 viaFor）；沒給照舊走「聊天泡泡」那一列
+    function ask(opts) {
+        const o = opts || {};
+        const api = win.OS_API || window.OS_API;
+        const chat = (api && typeof api.chatMain === 'function') ? api.chatMain.bind(api)
+            : (api && typeof api.chatSecondary === 'function') ? api.chatSecondary.bind(api) : null;
+        if (!chat && typeof o.via !== 'function') { o.onError && o.onError(new Error('AI 不可用，請先到設置把主模型設好')); return; }
+
+        const msgs = [{ role: 'user', content: CHAT_PROMPT }];
+        (o.log || []).slice(-7, -1).forEach(m => msgs.push(m.role === 'user'
+            ? { role: 'user', content: m.text }
+            : { role: 'assistant', content: '（已更新泡泡 CSS）' }));
+        msgs.push({
+            role: 'user',
+            content: '【目前的 CSS】\n```css\n' + (o.currentCss || '(還沒有，這是第一版)') + '\n```\n\n【這次要改】' + (o.text || '')
+        });
+
+        // 🚨🚨簽章是 (messages, onChunk, onFinish, onError, options)——**沒有 config**，
+        //   chatMain / chatSecondary 自己去拿 OS_SETTINGS。多塞一個 config 進去，
+        //   後面每一個都往後錯一格：onFinish 變成 null、我的完成處理被當成 onError。
+        //   症狀是 AI 明明回來了（DEBUG 有完整回覆），畫面永遠停在「設計中…」。
+        //   跟 OS_API.chat 不一樣，那支才吃 config，別照著它寫。
+        const done = (full) => {
+            const got = pickCss(String(full || ''));
+            const lk = stripLayout(got.css);
+            o.onDone && o.onDone({
+                css: lk.css,
+                note: got.note,
+                cut: got.cut,
+                stripped: lk.hit,
+                warns: lk.css ? risky(lk.css) : []
+            });
+        };
+        const fail = (err) => { o.onError && o.onError(err); };
+        if (typeof o.via === 'function') { Promise.resolve(o.via(msgs, { label: '泡泡主題（小機）' })).then(done, fail); return; }
+        chat(msgs, null, done, fail, { task: 'wx_bubble', label: '泡泡主題:' + (o.chatId || '') });
+    }
+
+    win.WX_BUBBLE_AI = {
+        BASE_CSS, PROMPT, CHAT_PROMPT,
+        pickCss, stripLayout, risky, boost, ask, PREVIEW_BASE, buildThumb,
+        galLoad, galSave, galAdd, galRemove, fromGeneral,
+        chatLoad, chatSave, chatClear, undoLoad, undoSave
+    };
+    window.WX_BUBBLE_AI = win.WX_BUBBLE_AI;
+})();

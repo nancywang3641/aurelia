@@ -1,0 +1,200 @@
+/* ============================================================
+ * void_achievement.css — 成就收藏冊（V2 量子票券收藏冊）
+ *
+ * 單本白冊共用兩皮膚：分類靠冊內 tab（全部/故事/日常/異常），
+ * 異常成就渲染成柴郡 404 黑卡、其餘是白票券——不再依大廳模式換整套皮。
+ * 素材：sound-files aseets/achievement_ui/（阿洛拆件；標題/數字/按鈕全由 DOM 排）——票券、徽章、貼紙還是圖。
+ * 10-06 外框不再是圖：core/void/frames.js 照窗的大小畫一層 svg（.aurelia-vframe）墊在最底下（以前那張外框圖寬 90%／高 75% 硬撐，
+ *   長寬比跟裝置走會被拉）；上下兩顆寶石圖（藍鑽擋標題）換成框頂邊、底邊畫的同一顆小菱形。內距跟著改固定距離。
+ * 兌換分流：白票券「領取」→ 交易所白兔換 PT；黑卡「領取」→ 404 柴郡換碎片。
+ * 殼（定位/尺寸/進場動畫）在 aurelia_core*.css 的 #achievement-panel-overlay。
+ * ============================================================ */
+
+#achievement-panel-overlay {
+    filter: drop-shadow(0 18px 44px rgba(30, 40, 80, 0.38));
+    padding: 16px 22px 16px;
+    overflow: visible;
+}
+#achievement-panel-overlay > .aurelia-vframe {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    overflow: visible; pointer-events: none; z-index: -1;
+}
+
+.achv2-close {
+    position: absolute; top: 12px; right: 16px; z-index: 2;
+    border: none; background: transparent; color: #8a93ad; cursor: pointer;
+    font-size: 17px; padding: 3px 7px;
+}
+.achv2-close:hover { color: #23315e; }
+
+.achv2-title {
+    text-align: center; color: #23315e; font-size: 24px; font-weight: 800;
+    letter-spacing: 6px; text-indent: 6px; margin-top: 2px;
+    font-family: Georgia, 'Noto Serif TC', 'PMingLiU', serif;
+}
+.achv2-title-en {
+    text-align: center; color: #c8a96e; font-size: 9px; letter-spacing: 4px; text-indent: 4px;
+    margin: 3px 0 10px;
+}
+.achv2-title-en::before { content: '✦'; margin-right: 8px; color: #4f74c8; }
+.achv2-title-en::after  { content: '✦'; margin-left: 8px;  color: #4f74c8; }
+
+/* 統計列：收藏數/待兌換 + 一鍵全兌/清空 */
+.achv2-stats {
+    display: flex; align-items: center; gap: 16px; flex-shrink: 0;
+    padding: 8px 12px; margin-bottom: 8px;
+    border: 1px solid rgba(35, 49, 94, 0.14); border-radius: 12px;
+    background: rgba(240, 244, 252, 0.65);
+}
+.achv2-stat { color: #5a6784; font-size: 11.5px; letter-spacing: 1px; white-space: nowrap; }
+.achv2-stat b { color: #23315e; font-size: 15px; margin: 0 2px; font-variant-numeric: tabular-nums; }
+.achv2-stat i { color: #4f74c8; margin-right: 4px; font-size: 11px; }
+.achv2-stat-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+#ach-redeem-btn {
+    border: none; border-radius: 999px; padding: 5px 12px; font-size: 11px; font-weight: 700;
+    letter-spacing: 1px; cursor: pointer; white-space: nowrap;
+    background: linear-gradient(135deg, #6a9be0, #4a78d8); color: #fff;
+    box-shadow: 0 3px 8px rgba(74, 120, 216, 0.35);
+}
+#ach-redeem-btn:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+#ach-clear-btn {
+    border: 1px solid rgba(200, 80, 70, 0.35); border-radius: 999px; padding: 5px 9px;
+    background: rgba(255, 255, 255, 0.8); color: #b05555; font-size: 11px; cursor: pointer;
+}
+#ach-clear-btn:hover { border-color: #b05555; }
+
+/* 分類 tab */
+.achv2-tabs {
+    display: flex; gap: 4px; flex-shrink: 0; margin-bottom: 6px;
+    background: rgba(35, 49, 94, 0.06); border: 1px solid rgba(35, 49, 94, 0.12);
+    border-radius: 999px; padding: 3px;
+}
+.achv2-tab {
+    flex: 1; border: none; background: transparent; border-radius: 999px;
+    padding: 6px 4px; font-size: 12px; color: #5a6784; cursor: pointer; letter-spacing: 1px;
+    font-family: inherit; white-space: nowrap;
+}
+.achv2-tab i { font-size: 10px; margin-right: 3px; opacity: 0.8; }
+.achv2-tab.on { background: #23315e; color: #fff; font-weight: 700; }
+
+/* 兌換結果訊息列 */
+.achv2-msg { min-height: 16px; flex-shrink: 0; font-size: 11px; color: #b05555; text-align: center; margin-bottom: 2px; }
+.achv2-msg.ok { color: #2e7d4f; }
+
+/* 票券列表 */
+.achv2-list {
+    flex: 1; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column; gap: 11px; padding: 3px 3px 8px;
+}
+.achv2-list::-webkit-scrollbar { width: 4px; }
+.achv2-list::-webkit-scrollbar-thumb { background: rgba(35, 49, 94, 0.2); border-radius: 2px; }
+
+.achv2-empty { text-align: center; color: #8a93ad; font-size: 12px; padding: 42px 12px; line-height: 1.9; }
+.achv2-empty-hint { color: #aab2c6; font-size: 11px; }
+
+/* ── 票券卡 ──
+   白票券：左深藍票根(直排狀態字)＋主內容區；異常＝柴郡 404 黑卡（貓臉在右，內容避開） */
+.achv2-tk {
+    position: relative; width: 100%; flex: 0 0 auto;
+    aspect-ratio: 1685 / 592;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/achievement_ui/achievement-ticket-standard-empty.png) center / 100% 100% no-repeat;
+}
+.achv2-tk.anomaly {
+    aspect-ratio: 1783 / 775;
+    background-image: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/achievement_ui/achievement-ticket-cheshire-404-empty.png);
+}
+.achv2-tk.redeemed { filter: saturate(0.85); }
+.achv2-tk.redeemed .achv2-tk-name { opacity: 0.75; }
+
+.achv2-tk-stub {
+    position: absolute; left: 1.5%; top: 12%; bottom: 12%; width: 11.5%;
+    display: flex; align-items: center; justify-content: center; pointer-events: none;
+    writing-mode: vertical-rl; text-orientation: mixed;
+    color: #dfe5f2; font-size: 8px; font-weight: 700; letter-spacing: 2.5px; opacity: 0.9;
+}
+.achv2-tk.anomaly .achv2-tk-stub { left: 2.5%; width: 12%; color: #57e389; font-family: monospace; opacity: 0.95; }
+
+.achv2-tk-main {
+    position: absolute; left: 16.5%; right: 7%; top: 11%; bottom: 12%;
+    display: flex; flex-direction: column; gap: 2px; min-width: 0;
+}
+.achv2-tk.anomaly .achv2-tk-main { left: 19%; right: 35%; top: 13%; bottom: 16%; }
+
+.achv2-tk-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.achv2-tk-badge {
+    width: 32px; height: 32px; flex: 0 0 auto;
+    display: flex; align-items: center; justify-content: center;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/achievement_ui/achievement-badge-ring-empty.png) center / contain no-repeat;
+    color: #3a5db0; font-size: 12px;
+}
+.achv2-tk.anomaly .achv2-tk-badge {
+    background: none; border: 1.5px dashed rgba(87, 227, 137, 0.55); border-radius: 50%;
+    width: 28px; height: 28px; color: #57e389;
+}
+.achv2-tk-name {
+    flex: 1; min-width: 0; color: #23315e; font-size: 14px; font-weight: 800; letter-spacing: 1px;
+    font-family: Georgia, 'Noto Serif TC', 'PMingLiU', serif;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.achv2-tk.anomaly .achv2-tk-name { color: #57e389; text-shadow: 0 0 8px rgba(87, 227, 137, 0.35); }
+
+.achv2-tk-desc {
+    color: #5a6784; font-size: 10.5px; line-height: 1.5;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.achv2-tk.anomaly .achv2-tk-desc { color: #9fd8ae; }
+
+/* 估值點評：兌換後才有，一行帶章戳圖示的斜體簽註 */
+.achv2-tk-note {
+    display: flex; align-items: baseline; gap: 5px; min-width: 0;
+    color: #7b6a4a; font-size: 10px; font-style: italic; line-height: 1.45;
+}
+.achv2-tk-note i { flex: 0 0 auto; font-size: 9px; color: #b39247; font-style: normal; }
+.achv2-tk-note span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.achv2-tk.anomaly .achv2-tk-note { color: #7fc596; }
+.achv2-tk.anomaly .achv2-tk-note i { color: #57e389; }
+
+.achv2-tk-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.achv2-tk-status { color: #5a6784; font-size: 10.5px; white-space: nowrap; }
+.achv2-tk-status i { margin-right: 3px; color: #4f74c8; }
+.achv2-tk.anomaly .achv2-tk-status { color: #9fd8ae; }
+.achv2-tk.anomaly .achv2-tk-status i { color: #57e389; }
+.achv2-tk-date { margin-left: auto; color: #8a93ad; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.achv2-tk.anomaly .achv2-tk-date { color: #7fae8d; }
+.achv2-tk-claim {
+    flex: 0 0 auto; border: none; border-radius: 999px; padding: 4px 14px;
+    font-size: 11px; font-weight: 700; letter-spacing: 2px; cursor: pointer; font-family: inherit;
+    background: linear-gradient(135deg, #6a9be0, #4a78d8); color: #fff;
+    box-shadow: 0 3px 8px rgba(74, 120, 216, 0.35);
+    transition: filter 0.15s;
+}
+.achv2-tk-claim:hover { filter: brightness(1.08); }
+.achv2-tk-claim:disabled { opacity: 0.6; cursor: default; box-shadow: none; }
+.achv2-tk.anomaly .achv2-tk-claim {
+    background: linear-gradient(135deg, #39c56b, #1f9a4c);
+    box-shadow: 0 3px 8px rgba(40, 180, 90, 0.35);
+}
+
+/* 高額紀念星星貼紙（兌換值 ≥100） */
+.achv2-tk-star {
+    position: absolute; top: -9px; right: 5%; width: 34px; height: 34px; pointer-events: none;
+    background: url(https://cdn.jsdelivr.net/gh/nancywang3641/aurelia-ui-assets@v1/aseets/achievement_ui/achievement-sticker-rare-star.png) center / contain no-repeat;
+    transform: rotate(12deg);
+}
+
+.achv2-foot {
+    flex-shrink: 0; text-align: center; color: #7d869f; font-size: 13px;
+    letter-spacing: 0.5px; padding: 7px 10px 2px; line-height: 1.5;
+}
+
+/* 手機：字級縮小 */
+@media (max-width: 560px) {
+    .achv2-title { font-size: 20px; letter-spacing: 4px; }
+    .achv2-stats { gap: 10px; padding: 7px 9px; }
+    .achv2-stat { font-size: 10.5px; letter-spacing: 0.5px; }
+    .achv2-tk-name { font-size: 12.5px; }
+    .achv2-tk-desc { font-size: 9.5px; }
+    .achv2-tk-badge { width: 26px; height: 26px; font-size: 10px; }
+    .achv2-tk-claim { padding: 3px 10px; font-size: 10px; }
+    .achv2-tk-stub { font-size: 7px; letter-spacing: 1.5px; }
+}

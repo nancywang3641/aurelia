@@ -1,0 +1,59 @@
+/* ===== 控制室（SoVITS + ComfyUI 監控遙控）=====
+   骨架與配色一律沿用系統設置那套：外框 .set-container / .set-header / .set-content、
+   卡片 .set-group、按鈕 .set-btn / .btn-save / .btn-danger、說明字 .set-desc。
+   這支只留控制室自己才有的東西（狀態燈、引擎二選一、VRAM 條、說明書排版），
+   而且色值一律取 os_settings.css 的那組（var(--os-ink) 墨、var(--os-ink-soft) 次要字、rgba(26,28,40,*) 網），
+   不再自帶一套黑金——顏色只有一個出處，系統設置改了這裡才不會落單。
+   .cr-btn 留著純粹是 JS 的事件掛勾（.cr-btn[data-act]），視覺全交給 .set-btn。 */
+
+.cr-root { position: relative; }   /* 說明書那頁 absolute 疊在上面，要有定位錨點 */
+
+.cr-tower-down { border: 1px solid rgba(252,129,129,0.5); background: rgba(252,129,129,0.12); color: #b03030; border-radius: 8px; padding: 16px; text-align: center; font-size: 14px; line-height: 2; margin-bottom: 20px; }
+.cr-tower-hint { font-size: 11px; color: rgba(var(--os-ink-rgb), 0.65); }
+
+.cr-dim { opacity: 0.4; pointer-events: none; }
+
+/* 卡片標題那排的狀態燈與右側標記 */
+.cr-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 4px; vertical-align: middle; background: #d64545; box-shadow: 0 0 0 2px rgba(214,69,69,.18); }
+.cr-dot[data-st="up"] { background: #2fbf6a; box-shadow: 0 0 0 2px rgba(47,191,106,.2); }
+.cr-dot[data-st="starting"] { background: #e0a82e; box-shadow: 0 0 0 2px rgba(224,168,46,.2); }
+.cr-card-tag { font-size: 10px; font-weight: 400; color: var(--os-ink-soft); letter-spacing: 1px; }
+.cr-card-body { min-height: 16px; margin: 0; }
+
+/* 語音引擎二選一（顯存只夠開一套） */
+.cr-seg { display: flex; gap: 4px; padding: 3px; border-radius: 7px; background: rgba(var(--os-ink-rgb), 0.06); border: 1px solid rgba(var(--os-ink-rgb), 0.12); }
+.cr-seg-btn { flex: 1; padding: 7px 8px; font: inherit; font-size: 11px; letter-spacing: 1px; cursor: pointer; border-radius: 5px; border: 1px solid transparent; background: transparent; color: var(--os-ink-soft); transition: all 0.2s; }
+.cr-seg-btn:hover { color: var(--os-ink); }
+.cr-seg-btn.on { border-color: var(--os-ink-soft); background: var(--os-page-bg); color: var(--os-ink); font-weight: 800; }
+
+.cr-vram-label { font-size: 10px; color: rgba(var(--os-ink-rgb), 0.6); margin-bottom: 5px; letter-spacing: 1px; }
+.cr-vram-track { height: 5px; background: rgba(var(--os-ink-rgb), 0.10); border-radius: 3px; overflow: hidden; }
+.cr-vram-bar { height: 100%; width: 0%; background: var(--os-ink); border-radius: 3px; transition: width 0.6s ease; }
+.cr-vram-bar.cr-vram-hot { background: #fc8181; }
+
+/* 按鈕：視覺來自 .set-btn / .btn-save / .btn-danger，這裡只排版 */
+.cr-card-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+/* min-width 抓寬一點是刻意的：生圖那張有五顆，擠成一排時「釋顯存」會斷成兩行，
+   寧可讓它換行成兩排也不要字被折。 */
+.cr-card-btns .set-btn { flex: 1 1 auto; min-width: 78px; padding: 9px 8px; font-size: 13px; white-space: nowrap; }
+/* 這幾條都跟 .set-btn / .btn-save 同特異性，靠 CSS 載入順序決勝負太脆——
+   誰先誰後改一次就翻臉，所以一律寫成兩層選擇器把自己墊高。 */
+.set-btn.cr-btn-danger { color: #b03030; border-color: rgba(252,129,129,0.55); background: rgba(252,129,129,0.10); }
+.set-btn.cr-btn-danger:hover { background: rgba(252,129,129,0.20); border-color: #b03030; }
+.cr-all-btns { display: flex; gap: 8px; margin-top: 4px; }
+.cr-all-btns > .btn-save, .cr-all-btns > .btn-test { flex: 1; margin-top: 0; }
+
+/* ===== 設定說明書（蓋在控制室上的一頁）===== */
+.cr-help { position: absolute; inset: 0; z-index: 5; display: flex; flex-direction: column; background: var(--os-page-bg); }
+.cr-help-body { font-size: 13px; line-height: 1.9; color: var(--os-ink); }
+.cr-help-lead { margin: 0 0 18px; }
+.cr-help-lead b { font-weight: 800; }
+.cr-help-note { font-size: 11.5px; color: var(--os-ink-soft); }
+.cr-help-sect { margin-top: 20px; }
+.cr-help-sect p { margin: 8px 0 0; }
+.cr-help-h { font-size: 13.5px; font-weight: 800; letter-spacing: 1px; color: var(--os-ink); padding-left: 9px; border-left: 3px solid var(--os-ink); }
+.cr-help-sect b { font-weight: 800; }
+.cr-step { display: flex; gap: 10px; margin-top: 12px; }
+.cr-step-no { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--os-ink); color: var(--os-page-bg); font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center; margin-top: 3px; }
+.cr-step-txt { flex: 1; }
+.cr-help-code { margin: 8px 0; padding: 10px 12px; background: rgba(var(--os-ink-rgb), 0.05); border: 1px solid rgba(var(--os-ink-rgb), 0.18); border-radius: 6px; font-family: 'Consolas', monospace; font-size: 12px; color: var(--os-ink-soft); line-height: 1.8; }

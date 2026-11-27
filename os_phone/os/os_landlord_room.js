@@ -1,0 +1,1169 @@
+// ----------------------------------------------------------------
+// [檔案] os_landlord_room.js
+// 路徑：os_phone/os/os_landlord_room.js
+// 職責：房間＝舞台上的一個場景，不是面板裡的一張圖。
+//   進房間 → 小人真的走進去(房間圖當底圖、房間地板當可走區)；
+//   布置 → 站在房裡把包裹丟到想要的位置 → 按配送 → 整間房當場變樣。
+//   生成邏輯全在 os_room_gen.js，這裡只管「走進去」與「站在裡面擺」。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    const d = win.document;
+
+    const MAX_ITEMS = 10;      // 一間房最多幾件（再多會擠成一團，生圖也顧不來）
+    const DRAG_SLOP = 6;       // 位移小於這個算「點一下」不算拖曳
+    // 🧍 小人多高不在這裡調：房間圖已經照「一個人＝固定像素高」縮放好了（os_room_gen 的 PERSON_PX），
+    //   這裡照著用就好，小人才會在每一間房都是同一個大小。
+
+    function _LL() { return win.OS_LANDLORD || window.OS_LANDLORD || null; }
+    function _GEN() { return win.OS_ROOM_GEN || window.OS_ROOM_GEN || null; }
+    function _SVG() { return win.OS_ROOM_SVG || window.OS_ROOM_SVG || null; }
+    function _STAGE() { return win.LobbyStage || window.LobbyStage || null; }
+
+    // 目前站在哪間房：進門時填，走出去就作廢
+    let _ctx = null;   // { unitId, unitName, room, viewBox, floor, fit, items, deco }
+
+    function _injectStyle() {
+        if (d.getElementById('llr-style')) return;
+        const s = d.createElement('style'); s.id = 'llr-style';
+        s.textContent = [
+            // 房間右下角的浮鈕組：跟舞台既有的聊天浮鈕同一種語言，位置錯開，由下往上疊
+            '.llr-fabs{position:absolute;right:18px;bottom:96px;z-index:60;display:flex;flex-direction:column;gap:8px;align-items:flex-end}',
+            '.llr-fab{display:flex;align-items:center;gap:7px;',
+            '  padding:10px 14px;border-radius:22px;border:1px solid rgba(217,176,106,.55);background:rgba(14,16,21,.86);',
+            '  color:#f0e2c6;font-size:13px;font-family:inherit;cursor:pointer}',
+            '.llr-fab:hover{border-color:#d98fb0}',
+            '.llr-fab:disabled{opacity:.5;cursor:default}',
+            // 布置模式的工具列：螢幕座標，不跟著舞台縮放。手機放不下一排就換行（字不准被擠成直的一個字一行）
+            '.llr-bar{position:absolute;left:0;right:0;bottom:0;z-index:62;display:flex;flex-wrap:wrap;gap:8px;justify-content:center;',
+            '  padding:12px 14px;background:linear-gradient(180deg,rgba(14,16,21,0) 0%,rgba(14,16,21,.9) 45%)}',
+            '.llr-bar .llr-btn{white-space:nowrap}',
+            '.llr-btn{display:flex;align-items:center;gap:6px;padding:9px 14px;border-radius:10px;',
+            '  border:1px solid #2c3140;background:#20242e;color:#e7eaf1;font-size:13px;font-family:inherit;cursor:pointer}',
+            '.llr-btn:hover{border-color:#d98fb0}',
+            '.llr-btn:disabled{opacity:.5;cursor:default}',
+            '.llr-btn.is-go{border-color:rgba(217,176,106,.6);color:#f0e2c6}',
+            '.llr-tip{position:absolute;left:0;right:0;top:0;z-index:62;padding:12px 16px;text-align:center;',
+            '  color:#e7eaf1;font-size:13px;line-height:1.6;background:linear-gradient(180deg,rgba(14,16,21,.9) 0%,rgba(14,16,21,0) 100%);pointer-events:none}',
+            // 包裹層：鋪滿舞台世界層，讓包裹的座標跟舞台同一套
+            '.llr-layer{position:absolute;left:0;top:0;width:1536px;height:1024px}',
+            // 包裹：掛在舞台世界層，吃同一個縮放，所以字級用世界座標放大
+            '.llr-pkg{position:absolute;z-index:5000;transform:translate(-50%,-50%);display:flex;flex-direction:column;',
+            '  align-items:center;gap:4px;padding:10px 14px;border-radius:14px;border:2px solid #d9b06a;',
+            '  background:rgba(20,23,30,.88);color:#f0e2c6;font-size:26px;font-family:inherit;cursor:grab;',
+            '  touch-action:none;white-space:nowrap}',
+            '.llr-pkg.is-drag{cursor:grabbing;border-color:#d98fb0}',
+            '.llr-pkg-unnamed{color:#9aa1b0}',
+            // 包裹小窗與忙碌遮罩：蓋整個舞台
+            '.llr-sheet{position:absolute;left:0;top:0;right:0;bottom:0;z-index:70;background:rgba(8,10,14,.72);',
+            '  display:flex;align-items:center;justify-content:center;padding:18px}',
+            '.llr-card{width:100%;max-width:320px;border:1px solid #2c3140;border-radius:12px;background:#171a21;padding:14px}',
+            '.llr-card-title{font-size:13px;font-weight:700;color:#e7eaf1;margin-bottom:10px}',
+            '.llr-field{display:block;font-size:11px;color:#9aa1b0;margin:8px 0 4px}',
+            '.llr-input,.llr-area{width:100%;box-sizing:border-box;border:1px solid #2c3140;border-radius:8px;',
+            '  background:#0e1015;color:#e7eaf1;font-family:inherit;font-size:12px;padding:8px}',
+            '.llr-area{min-height:64px;resize:vertical}',
+            '.llr-card-bar{display:flex;gap:8px;margin-top:12px}',
+            '.llr-card-bar .llr-btn{flex:1;justify-content:center}',
+            '.llr-fill{display:flex;align-items:center;gap:2px}',
+            '.llr-fill .aui-help{background:none;border:0;color:#cdbf9f;padding:4px;font-size:15px;cursor:pointer}',
+            '.llr-danger{border-color:#5a3038;color:#e0a0a8}',
+            // 樓層清單：一層一顆，會換行
+            '.llr-floors{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}',
+            '.llr-floors .llr-btn{flex:0 0 auto}',
+            '.llr-btn.is-now{border-color:rgba(217,176,106,.6);color:#f0e2c6}',
+            '.llr-rent{margin:6px 0 8px;font-size:20px;font-weight:700;color:#f0e2c6}',
+            '.llr-msg{margin-top:10px;font-size:12px;line-height:1.7;color:#9aa1b0}',
+            '.llr-msg.is-bad{color:#e0a0a8}',
+            // 擋路範圍：畫在舞台世界層的那張（跟著縮放）＋蓋滿舞台接點擊的透明層（不讓舞台把點擊當成走路）
+            '.llr-pencv{position:absolute;left:0;top:0;width:1536px;height:1024px;z-index:4990;pointer-events:none}',
+            '.llr-cap{position:absolute;left:0;top:0;right:0;bottom:0;z-index:61;cursor:crosshair;touch-action:none}',
+            '.llr-bar-wrap{flex-wrap:wrap}',
+            '.llr-btn.is-on{border-color:rgba(217,176,106,.8);color:#f0e2c6;background:#2d2a24}',
+            // 紀念品小窗：一件一列，多了在小窗裡捲
+            '.llr-souv-list{display:flex;flex-direction:column;gap:6px;max-height:min(52vh,360px);overflow-y:auto;overscroll-behavior:contain}',
+            '.llr-souv{display:flex;align-items:center;gap:10px;width:100%;padding:6px 8px;border:1px solid #2c3140;border-radius:10px;',
+            '  background:#20242e;color:#e7eaf1;font-family:inherit;text-align:left;cursor:pointer}',
+            '.llr-souv:hover{border-color:#d98fb0}',
+            '.llr-souv.is-placed{opacity:.6}',
+            '.llr-souv-pic{flex:none;width:40px;height:40px;border-radius:8px;background:#0e1015;display:flex;align-items:center;justify-content:center;color:#cdbf9f;overflow:hidden}',
+            '.llr-souv-pic img{width:100%;height:100%;object-fit:contain}',
+            '.llr-souv-tx{min-width:0;display:flex;flex-direction:column;gap:2px}',
+            '.llr-souv-tx b{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+            '.llr-souv-tx small{font-size:11px;color:#9aa1b0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}',
+            '.llr-busy{position:absolute;left:0;top:0;right:0;bottom:0;z-index:75;background:rgba(8,10,14,.8);',
+            '  display:flex;align-items:center;justify-content:center;padding:18px;text-align:center;',
+            '  color:#e7eaf1;font-size:14px;line-height:1.8}',
+        ].join('\n');
+        (d.head || d.documentElement).appendChild(s);
+    }
+
+    function _btn(iconClass, text, extraClass) {
+        const b = d.createElement('button');
+        b.type = 'button';
+        b.className = 'llr-btn' + (extraClass ? ' ' + extraClass : '');
+        b.innerHTML = '<i class="' + iconClass + '"></i> ' + text;
+        return b;
+    }
+    function _esc(s) {
+        return String(s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    const HOME_ID = 'home';          // 你自己那間（城市裡自己那棟房子走進去的）
+    const HOME_TYPE = 'standard';    // 自家預設房型；之後升級公寓再讓它可換
+    const HOME_FLOOR = 1;            // 🚨 自己住一樓,而且只有一樓——加蓋是往上長,自宅不會跟著複製上去
+
+    function _specOfKey(key) {
+        const RT = (_SVG() && _SVG().ROOM_TYPES) || {};
+        const t = RT[key] || RT.standard || { w: 4.2, d: 4.0, wallH: 1.0, floor: 'oak' };
+        return { w: t.w, d: t.d, wallH: t.wallH, floor: t.floor, window: true, label: t.label || '', typeKey: key };
+    }
+    // 那一戶的房間：寬深照房產手帳拉桿調過的（OS_ROOM_SVG.specFor），沒調過＝房型的
+    function _specOf(unit) {
+        const S = _SVG();
+        return (S && S.specFor) ? S.specFor(unit && unit.roomTypeKey, unit) : _specOfKey(unit && unit.roomTypeKey);
+    }
+
+    // ── 走進一間房（房客的房 / 你自己家共用這條）──
+    // 有成品圖就用成品圖，還沒布置過就用空房母圖——兩種都走得進去。
+    async function _enter(container, info) {
+        _injectStyle();
+        const stage = _STAGE();
+        if (!stage || typeof stage.enterRoom !== 'function') { _sorry(container, '這個版本的大廳還進不了房間。'); return; }
+        if (typeof stage.isOn === 'function' && !stage.isOn()) { _sorry(container, '舞台目前是關的，先按大廳右上的手把圖示把它打開就能走進房間。'); return; }
+
+        const LL = _LL(), GEN = _GEN();
+        if (!LL || !GEN) { _sorry(container, '房間功能還沒載入完，稍等一下再試。'); return; }
+
+        let room;
+        try {
+            room = await LL.getRoom(info.id);
+            if (!room || !room.image) {
+                // 還沒布置過：空房母圖當底，地板一樣走得
+                // 🚨 personH 一定要帶上：少了它 stageLayers 會退回「拉滿舞台」，空房就跟布置過的房不同尺度
+                const base = await GEN.buildBase(info.spec);
+                room = { image: base.baseData, floor: base.room.floor, inner4: base.room.inner4, viewBox: base.room.viewBox, personH: base.room.personH, order: [] };
+            // 缺幾何要重算。最後那條是相容用的：玄關上線後、inner4 上線前存的房間會是
+            // 「8 點 floor 但沒有 inner4」，那種要重算才拿得到房內四角（玄關之前存的 4 點 floor 本身就等於房內四角，不用動）。
+            } else if (!room.floor || !room.viewBox || !room.personH || (room.floor.length > 4 && !room.inner4)) {
+                // 舊存檔缺幾何 → 用同一份房規格重算一次（同 spec 出的幾何完全一樣，對得上那張圖）
+                const base = await GEN.buildBase(info.spec);
+                room = Object.assign({}, room, { floor: base.room.floor, inner4: base.room.inner4, viewBox: base.room.viewBox, personH: base.room.personH });
+            }
+        } catch (e) {
+            console.warn('[LandlordRoom] 開房失敗', e);
+            _sorry(container, (e && e.message) || '房間暫時打不開。');
+            return;
+        }
+
+        let layers;
+        try {
+            layers = await GEN.stageLayers(room, 1536, 1024);
+        } catch (e) {
+            console.warn('[LandlordRoom] 房間圖層失敗', e);
+            _sorry(container, '房間的圖讀不進來，再試一次。');
+            return;
+        }
+
+        _ctx = {
+            unitId: info.id,
+            unitName: info.name,
+            spec: info.spec,
+            room: room,
+            viewBox: layers.viewBox,
+            fit: layers.fit,
+            floor: room.floor,
+            exit: info.exit,
+            items: null,
+            deco: null,
+        };
+
+        // 🕹 自己家裡也立一根控制柱：還沒加蓋公寓的人是走進自宅的，
+        //    柱子只放走廊的話，他就永遠找不到加蓋的地方（雞生蛋）。
+        let base = layers.base, extraDoors = null;
+        if (info.lift) {
+            const bea = await _placeBeacon(layers.base, layers.innerStage || layers.floorStage, layers.figurePx, info.liftFloor || 1);
+            base = bea.base;
+            if (bea.door) extraDoors = [bea.door];
+        }
+
+        stage.enterRoom({
+            base: base,
+            mask: layers.mask,
+            floorStage: layers.floorStage,
+            header: {
+                name: info.name,
+                badge: info.badge || (info.name + '的房間'),
+                ph: info.lift ? '在房裡走走、按右下角布置，走到那根柱子可以加蓋樓層…' : '在房裡走走，或按右下角布置這間房…',
+            },
+            exit: info.exit,
+            doors: extraDoors,
+            actorPx: layers.figurePx,
+            spawn: layers.spawn || null,
+        });
+
+        // 面板讓開，讓舞台變成主角
+        try { if (win.PhoneSystem && typeof win.PhoneSystem.goHome === 'function') win.PhoneSystem.goHome(); } catch (e) {}
+    }
+
+    // 從房產面板點某一戶「進房間」
+    async function open(container, unitId) {
+        const LL = _LL();
+        if (!LL) { _sorry(container, '房產還沒載入完，稍等一下再試。'); return; }
+        let unit;
+        try {
+            const state = await LL.getState();
+            unit = state.units.find(function (u) { return u.id === unitId; });
+            if (!unit) throw new Error('找不到這一戶。');
+        } catch (e) {
+            console.warn('[LandlordRoom] 讀這一戶失敗', e);
+            _sorry(container, (e && e.message) || '房間暫時打不開。');
+            return;
+        }
+        // 空房也進得去（空房就是拿來布置的），標題別假裝有房客
+        // 走出這一戶＝回到那層走廊（公寓戶一定是從走廊進來的）
+        const at = unit.floor ? (_bldg(unit.floor) + '樓 · ') : '';
+        return _enter(container, {
+            id: unitId,
+            name: unit.tenantName || '空房',
+            badge: at + (unit.tenantName ? (unit.tenantName + '的房間') : '還沒有房客'),
+            spec: _specOf(unit),
+            exit: unit.floor ? { panel: 'apartment-back', floor: unit.floor, unitId: unitId } : { to: 'city', spawn: CITY_SPAWN },
+        });
+    }
+
+    // 🏠 從城市走進自己那棟房子
+    async function openHome() {
+        const LL = _LL();
+        let saved = null, floors = 0;
+        try { if (LL) saved = await LL.getRoom(HOME_ID); } catch (e) {}
+        try { if (LL) floors = ((await LL.getState()).floors) || 0; } catch (e) {}
+        return _enter(null, {
+            id: HOME_ID,
+            name: '你的家',
+            badge: floors > 0 ? (_bldg(HOME_FLOOR) + '樓 · 你的家') : '你的家',   // 蓋了公寓才有樓層可言
+            spec: _specOfKey((saved && saved.roomTypeKey) || HOME_TYPE),
+            // 蓋了公寓＝自己那戶開在走廊上,走出來要回走廊;還沒蓋才是直接走回城市
+            exit: floors > 0 ? { panel: 'apartment-back', floor: HOME_FLOOR, unitId: HOME_ID } : { to: 'city', spawn: CITY_SPAWN },
+            lift: true, liftFloor: Math.max(1, floors),   // 自己家裡看得到那根柱子
+        });
+    }
+    // 走進城市裡自己那棟房子的門（lobby_stage 的 panel 型門發的事件；大廳地點「我的家」也發這個）
+    // 🏢 蓋了公寓就先進一樓大廳（11-23：一樓是大廳，搭電梯到二樓以上才是房間），搭電梯上樓才是走廊；還沒蓋＝那棟就是自己家,直接進。
+    win.addEventListener('lstage-open-myhome', function () {
+        (async function () {
+            let floors = 0;
+            try { const LL = _LL(); if (LL) floors = ((await LL.getState()).floors) || 0; }
+            catch (e) { console.warn('[LandlordRoom] 讀樓層失敗,當作還沒蓋公寓', e); }
+            if (floors > 0) openLobby();
+            else await openHome();
+        })().catch(function (e) { console.warn('[LandlordRoom] 進自己那棟失敗', e); });
+    });
+
+    // ── 🏢 公寓大樓：一樓大廳＋樓上一層一條走廊（11-23 換成 Vproject 畫的 SVG，場景在 lobby_stage.js 的 aptlobby／aptcorr）──
+    //   房東這邊的「第 1 層」＝這棟的 2 樓（一樓是大廳）：畫面上寫樓層一律走 _bldg。
+    //   走廊每層同一張圖、三扇門：最左木門＝你家（只在 2 樓，其他樓那扇鎖著）、兩扇藍門＝那層的 A、B 兩戶。
+    const CITY_SPAWN = { x: 364, y: 892 };   // 從樓裡出來站的位置＝自家門口外
+    // 🕹 走廊裡那根控制錨點：加蓋樓層／換樓層都走它（先借城市的信標素材頂著）
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
+    const BEACON = { file: 'city/obj/beacon_short_01_day.png', w: 130, h: 204 };
+
+    function _loadImg(src) {
+        return new Promise(function (resolve, reject) {
+            const im = new win.Image();
+            if (!String(src).startsWith('data:')) im.crossOrigin = 'anonymous';
+            im.onload = function () { resolve(im); };
+            im.onerror = function () { reject(new Error('圖讀不到：' + src)); };
+            im.src = src;
+        });
+    }
+    // 把控制錨點立在地板前緣靠邊（那一帶通常是空的，不會壓到家具，也不擋走廊盡頭的門）。
+    // 🚨 圖畫不上去也要留下觸發區——不然沒公寓的人就永遠找不到加蓋的地方。
+    // 🚨 floorStage 這裡要傳 innerStage（房內四角）：floor 含玄關，[0]/[1] 會變成門口那塊的角
+    async function _placeBeacon(baseUrl, floorStage, figurePx, floor) {
+        const fFL = (floorStage || [])[0], fFR = (floorStage || [])[1];
+        if (!fFL || !fFR) return { base: baseUrl, door: null };
+        const bh = Math.max(60, (figurePx || 120) * 0.92), bw = bh * BEACON.w / BEACON.h;
+        const bx = fFL[0] + (fFR[0] - fFL[0]) * 0.12, by = fFL[1] + (fFR[1] - fFL[1]) * 0.12;
+        // 🚨 觸發區要往地板「內側」鋪，不能跨到地板外緣：
+        //    柱子立在地板前緣，往外那半塊根本走不到，可走的只剩十幾像素＝走過去常常踩不到。
+        const door = { x: bx - bw / 2, y: by - 62, w: Math.max(80, bw), h: 62, panel: 'apartment-lift', floor: floor || 1 };
+        let base = baseUrl;
+        try {
+            const imgs = await Promise.all([_loadImg(CDN + BEACON.file), _loadImg(baseUrl)]);
+            const cv = d.createElement('canvas'); cv.width = 1536; cv.height = 1024;
+            const cx = cv.getContext('2d');
+            cx.drawImage(imgs[1], 0, 0);
+            cx.drawImage(imgs[0], bx - bw / 2, by - bh, bw, bh);   // 底部中心對齊地板上那一點
+            base = cv.toDataURL('image/png');
+        } catch (e) { console.warn('[LandlordRoom] 控制錨點的圖畫不上去，觸發區還在', e); }
+        return { base: base, door: door };
+    }
+
+    function _bldg(floor) { return (floor || 0) + 1; }   // 房東的第幾層 → 這棟的幾樓
+    function _stageReady() {
+        const stage = _STAGE();
+        if (!stage || typeof stage.enterApt !== 'function') { _sorry(null, '這個版本的大廳還進不了公寓。'); return null; }
+        if (typeof stage.isOn === 'function' && !stage.isOn()) { _sorry(null, '舞台目前是關的，先按大廳右上的手把圖示把它打開就能走進公寓。'); return null; }
+        return stage;
+    }
+    // 一樓大廳（fromLift＝搭電梯下來，站電梯門口；不然是從前面樓梯走進來）
+    function openLobby(fromLift) {
+        const stage = _stageReady();
+        if (!stage) return;
+        _ctx = null;
+        stage.enterApt('aptlobby', { fromLift: !!fromLift });
+        try { if (win.PhoneSystem && typeof win.PhoneSystem.goHome === 'function') win.PhoneSystem.goHome(); } catch (e) {}
+    }
+    // 樓上走廊（floor＝房東的第幾層；fromUnit＝從哪一戶走出來，就站那扇門前）
+    async function openCorridor(floor, fromUnit) {
+        const LL = _LL();
+        if (!LL) { _sorry(null, '房間功能還沒載入完，稍等一下再試。'); return; }
+        const stage = _stageReady();
+        if (!stage) return;
+        let units = [];
+        try {
+            const state = await LL.getState();
+            units = (state.units || []).filter(function (u) { return (u.floor || 1) === floor; });
+        } catch (e) { console.warn('[LandlordRoom] 讀樓層失敗', e); _sorry(null, '這一層暫時上不去。'); return; }
+        const F = _bldg(floor);
+        // 門牌＝樓層＋戶別（2 樓的 a 戶 → 2A）；名字太長會擠爆，截短
+        const slotOf = function (u) {
+            return u ? { panel: 'apartment', unitId: u.id, plate: F + String.fromCharCode(65 + (u.slot || 0)), sub: u.tenantName ? String(u.tenantName).slice(0, 6) : '空房' }
+                : { panel: 'apartment-locked', plate: '', sub: '' };
+        };
+        const bySlot = function (k) { return units.find(function (u) { return (u.slot || 0) === k; }) || null; };
+        // 三扇門（電梯旁那扇、中間、右邊）：自住那層＝自家（木門）＋A、B；其他樓三扇都是藍門＝A、B、C（11-23：只有主角自家是紅門，其他預設藍門）
+        const mine = floor === HOME_FLOOR;
+        const doorSlot = mine ? { a: 0, b: 1 } : { home: 0, a: 1, b: 2 };   // 那扇門＝第幾戶
+        const slots = {
+            home: mine ? { panel: 'apartment', unitId: HOME_ID, plate: '我家', sub: '' } : slotOf(bySlot(0)),
+            a: slotOf(bySlot(doorSlot.a)),
+            b: slotOf(bySlot(doorSlot.b)),
+        };
+        let spawnSlot = null;
+        if (fromUnit === HOME_ID) spawnSlot = 'home';
+        else if (fromUnit) {
+            const u = units.find(function (x) { return x.id === fromUnit; });
+            if (u) spawnSlot = Object.keys(doorSlot).find(function (k) { return doorSlot[k] === (u.slot || 0); }) || null;
+        }
+        _ctx = null;   // 走廊不是「站在某一間房裡」，布置那套不能作用
+        stage.enterApt('aptcorr', {
+            floor: floor, slots: slots, spawnSlot: spawnSlot, homeDoor: mine,   // homeDoor：第一扇是不是自家的木門（不是就換藍門）
+            // 🚨 樓層要寫在 badge（左上角那條）：name 是對話框的名字標籤，走廊沒有對話對象＝看不到
+            header: { name: F + '樓', badge: '公寓 ' + F + '樓', ph: '走到門口進各戶，點電梯換樓層、加蓋或回 1 樓…' },
+        });
+        try { if (win.PhoneSystem && typeof win.PhoneSystem.goHome === 'function') win.PhoneSystem.goHome(); } catch (e) {}
+    }
+
+    // 🕹 搭電梯（一樓大廳、樓上走廊都有）／自己家裡那根控制柱：加蓋一層、換到其他樓層
+    async function _openLift(floor) {
+        // 🚨 樣式一定要在這裡補注入：走「城市→走廊→柱子」一路過來的人從沒進過任何房間，
+        //   _injectStyle 只掛在進房那條路上＝.llr-sheet 沒有樣式，面板掛了也是透明的一片
+        //   ——這才是「第一次踩柱子沒反應、進出一次房間就好」的真兇（DB 冷熱只是剛好同路）。
+        _injectStyle();
+        const LL = _LL(), stage = _STAGE();
+        // 🚨 S.root 可能還指著上一個場景那顆已經被 remove 的節點：掛上去＝面板開了但看不見
+        //   （症狀就是「第一次走過去沒反應，進出一趟房間就好了」）。掛之前先確認它還在畫面上。
+        let root = stage && stage._S && stage._S.root;
+        if (root && !root.isConnected) root = null;
+        if (!root) root = d.querySelector('.lobby-left') || d.body;
+        if (!LL || !root) return;
+        if (root.querySelector('.llr-sheet')) return;   // 已經開著就不疊第二層
+
+        // 🚨 先把面板掛上去、再去讀資料：反過來的話，DB 冷啟動那幾百毫秒裡玩家已經走開了，
+        //   等資料回來面板才「突然跳出」，接著換場把整個舞台容器移除，面板又跟著消失
+        //   ——症狀就是「走到柱子沒反應，碰到房間門才閃一下」。
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '這棟樓';
+        card.appendChild(title);
+        const list = d.createElement('div'); list.className = 'llr-floors';
+        card.appendChild(list);
+        const msg = d.createElement('div'); msg.className = 'llr-msg';
+        msg.textContent = '正在看這棟樓…';
+        card.appendChild(msg);
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const closeBtn = _btn('fa-solid fa-xmark', '關上');
+        bar.appendChild(closeBtn);
+        card.appendChild(bar);
+        sheet.appendChild(card); root.appendChild(sheet);
+
+        function close() { try { sheet.remove(); } catch (e) {} }
+        closeBtn.onclick = close;
+
+        let state;
+        try { state = await LL.getState(); }
+        catch (e) {
+            console.warn('[LandlordRoom] 讀樓層失敗', e);
+            msg.className = 'llr-msg is-bad'; msg.textContent = '這棟樓的資料暫時讀不到，關上再走過來一次。';
+            return;
+        }
+        if (!sheet.isConnected) return;   // 讀的時候玩家已經換場了，別再往一個被丟掉的面板填東西
+
+        const cfg = LL._cfg || {};
+        const maxFloors = cfg.maxFloors || 4, perFloor = (cfg.unitsPerFloor || 2) + 1, price = cfg.floorPrice || 600;   // 加蓋的都不是自住那層：一層 3 間
+        const floors = state.floors || 0;
+
+        // 一樓大廳（floor 0＝人就在大廳）
+        const lob = _btn('fa-solid fa-door-open', '1樓 大廳', floor === 0 ? 'is-now' : '');
+        if (floor === 0) lob.disabled = true;
+        else lob.onclick = function () { close(); openLobby(true); };
+        list.appendChild(lob);
+        for (let i = 1; i <= floors; i++) {
+            const b = _btn('fa-solid fa-building', _bldg(i) + '樓' + (i === HOME_FLOOR ? '（你家）' : ''), i === floor ? 'is-now' : '');
+            if (i === floor) b.disabled = true;
+            else b.onclick = function () { close(); openCorridor(i).catch(function (err) { console.warn('[LandlordRoom] 換樓層失敗', err); }); };
+            list.appendChild(b);
+        }
+        msg.textContent = floors >= maxFloors
+            ? ('已經蓋到 ' + _bldg(floors) + ' 樓，不能再往上了。')
+            : ('再加一層，就多 ' + perFloor + ' 間可以出租。');
+
+        const add = floors < maxFloors ? _btn('fa-solid fa-layer-group', '加蓋一層（' + price + '）', 'is-go') : null;
+        if (add) bar.appendChild(add);
+        if (add) add.onclick = async function () {
+            add.disabled = true;
+            let r;
+            try { r = await LL.addFloor(); }
+            catch (e) { console.warn('[LandlordRoom] 加蓋失敗', e); r = { ok: false, reason: 'save' }; }
+            if (r && r.ok) { close(); await openCorridor(r.floors); return; }   // 蓋好就直接上去看
+            msg.className = 'llr-msg is-bad';
+            msg.textContent = r && r.reason === 'poor' ? ('還差 ' + r.short + ' 才蓋得起這一層。')
+                : r && r.reason === 'nohouse' ? '要先在城市裡有自己的房子。'
+                : r && r.reason === 'max' ? '已經蓋到頂了。'
+                : '這次沒蓋成，錢沒有扣掉，再試一次就好。';
+            add.disabled = false;
+        };
+    }
+    win.addEventListener('lstage-open-apartment-lift', function (e) {
+        const door = (e && e.detail && e.detail.door) || null;
+        // 🚨 0＝人在一樓大廳（電梯）——別寫成 floor || 1，會把大廳當成 2 樓
+        const f = door && door.floor != null ? Number(door.floor) : 1;
+        _openLift(isFinite(f) ? f : 1).catch(function (err) { console.warn('[LandlordRoom] 開控制錨點失敗', err); });
+    });
+
+    // 從某一戶走出來＝回到那層走廊、站在那扇門前（不是一路彈回城市）
+    win.addEventListener('lstage-open-apartment-back', function (e) {
+        const door = (e && e.detail && e.detail.door) || null;
+        openCorridor((door && door.floor) || 1, door && door.unitId).catch(function (err) { console.warn('[LandlordRoom] 回走廊失敗', err); });
+    });
+    // 3 樓以上最左那扇木門：你家只在 2 樓
+    win.addEventListener('lstage-open-apartment-locked', function () {
+        _sorry(null, '這扇門鎖著。你家在 ' + _bldg(HOME_FLOOR) + ' 樓。');
+    });
+
+    // 走廊上的門：自己那戶走自宅那條，其他走出租戶那條
+    win.addEventListener('lstage-open-apartment', function (e) {
+        const door = (e && e.detail && e.detail.door) || null;
+        if (!door || !door.unitId) return;
+        const id = door.unitId;
+        (id === HOME_ID ? openHome() : open(null, id))
+            .catch(function (err) { console.warn('[LandlordRoom] 進這一戶失敗', err); });
+    });
+
+    // 進不了房間就講一聲（現在所有入口都是舞台/手帳來的,一律 toast,不再畫回手機面板）
+    function _sorry(container, msg) {
+        try { AUI.toastr && AUI.toastr.info(msg); } catch (e) {}
+    }
+
+    // ── 房間掛好了 → 在場景右下角放「布置這間房」 ──
+    win.addEventListener('lstage-mounted', function (e) {
+        try {
+            if (!_ctx || !e.detail || e.detail.scene !== 'room') return;
+            const stage = _STAGE();
+            const root = stage && stage._S && stage._S.root;
+            if (!root) return;
+            _injectStyle();
+            _mountFabs(root);
+        } catch (err) { console.warn('[LandlordRoom] 房間工具掛載失敗', err); }
+    });
+
+    // 房間裡的浮鈕組：一定有「布置」；布置過的房才多一顆「重新生成」
+    function _mountFabs(root) {
+        const old = root.querySelector('.llr-fabs');
+        if (old) old.remove();
+        const box = d.createElement('div'); box.className = 'llr-fabs';
+        const deco = d.createElement('button');
+        deco.type = 'button'; deco.className = 'llr-fab';
+        deco.innerHTML = '<i class="fa-solid fa-box-open"></i> 布置這間房';
+        deco.onclick = function () { _startDeco(root); };
+        box.appendChild(deco);
+        const block = d.createElement('button');
+        block.type = 'button'; block.className = 'llr-fab';
+        block.innerHTML = '<i class="fa-solid fa-draw-polygon"></i> 擋路範圍';
+        block.onclick = function () { _startBlock(root); };
+        box.appendChild(block);
+        if (_ctx && _ctx.room && Array.isArray(_ctx.room.order) && _ctx.room.order.length) {
+            const again = d.createElement('button');
+            again.type = 'button'; again.className = 'llr-fab';
+            again.innerHTML = '<i class="fa-solid fa-rotate"></i> 重新生成';
+            again.onclick = function () { _regen(root, [deco, again]); };
+            box.appendChild(again);
+        }
+        // 💰 出租設定：只有出租戶有（自己家不用標租金）
+        if (_ctx && _ctx.unitId && _ctx.unitId !== HOME_ID) {
+            const price = d.createElement('button');
+            price.type = 'button'; price.className = 'llr-fab';
+            price.innerHTML = '<i class="fa-solid fa-tag"></i> 出租設定';
+            price.onclick = function () { _openPricing(root); };
+            box.appendChild(price);
+        }
+        root.appendChild(box);
+    }
+
+    // ── 💰 出租設定：站在這間房裡標租金、掛招租 ──
+    //   定價放在房裡而不是手機，是因為你要看著自己布置的成果決定收多少；
+    //   手機那頁只負責顯示帳。
+    function _openPricing(root) {
+        _injectStyle();   // 冪等；沒樣式的話這個窗會是一塊看不見的裸 div
+        const LL = _LL();
+        if (!root || !LL || !_ctx || !_ctx.unitId) return;
+        if (root.querySelector('.llr-sheet')) return;
+
+        // 🚨 先掛窗再讀 DB：反過來的話冷啟動那幾百毫秒會像是按了沒反應
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '出租設定';
+        const rentLine = d.createElement('div'); rentLine.className = 'llr-rent';
+        const row = d.createElement('div'); row.className = 'llr-floors';
+        const msg = d.createElement('div'); msg.className = 'llr-msg'; msg.textContent = '正在看這間房…';
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const closeBtn = _btn('fa-solid fa-xmark', '關上');
+        bar.appendChild(closeBtn);
+        card.appendChild(title); card.appendChild(rentLine); card.appendChild(row);
+        card.appendChild(msg); card.appendChild(bar);
+        sheet.appendChild(card); root.appendChild(sheet);
+        const close = function () { try { sheet.remove(); } catch (e) {} };
+        closeBtn.onclick = close;
+
+        LL.getPricing(_ctx.unitId).then(function (p) {
+            if (!sheet.isConnected) return;
+            if (p.unit.tenantKey) {
+                rentLine.textContent = '每日租金 ' + (p.unit.rent || 0);
+                msg.textContent = (p.unit.tenantName || '房客') + ' 正住在這裡，租約期間不能改價。';
+                return;
+            }
+
+            let rent = p.rent;
+            function paint() {
+                rentLine.textContent = '每日租金 ' + rent;
+                const bonus = Math.round(Math.min(14, p.orderCount * 1.6));
+                msg.className = 'llr-msg';
+                msg.textContent = '建議收 ' + p.suggest
+                    + (p.orderCount ? '（房裡的 ' + p.orderCount + ' 件家具幫它加了 ' + bonus + '）' : '（空房，擺點家具能開更高）')
+                    + '。可以標 ' + p.min + ' 到 ' + p.max + '。'
+                    + (rent > p.suggest ? '　開得比建議高，會比較難租出去。' : (rent < p.suggest ? '　開得比建議低，很快會有人要。' : ''));
+            }
+            function step(v) { rent = Math.max(p.min, Math.min(p.max, rent + v)); paint(); }
+            // 圖標已經是加減號了，文字只寫數字，不然會變成「－ －5」
+            const minus = _btn('fa-solid fa-minus', '5'); minus.onclick = function () { step(-5); };
+            const minus1 = _btn('fa-solid fa-minus', '1'); minus1.onclick = function () { step(-1); };
+            const plus1 = _btn('fa-solid fa-plus', '1'); plus1.onclick = function () { step(1); };
+            const plus = _btn('fa-solid fa-plus', '5'); plus.onclick = function () { step(5); };
+            const fair = _btn('fa-solid fa-scale-balanced', '照建議'); fair.onclick = function () { rent = p.suggest; paint(); };
+            [minus, minus1, plus1, plus, fair].forEach(function (b) { row.appendChild(b); });
+
+            const go = _btn('fa-solid fa-sign-hanging', p.listed ? '改成這個價' : '掛上招租', 'is-go');
+            const off = p.listed ? _btn('fa-solid fa-ban', '撤下招租', 'llr-danger') : null;
+            go.onclick = async function () {
+                go.disabled = true; if (off) off.disabled = true;
+                const r = await LL.setListing(_ctx.unitId, rent, true).catch(function (e) {
+                    console.warn('[LandlordRoom] 掛招租失敗', e); return { ok: false, reason: 'save' };
+                });
+                if (r && r.ok) { close(); try { AUI.toastr && AUI.toastr.info('已經掛上招租，每日 ' + r.rent + '。'); } catch (e) {} return; }
+                msg.className = 'llr-msg is-bad';
+                msg.textContent = r && r.reason === 'occupied' ? '這間已經有房客了。' : '這次沒存起來，再按一次就好。';
+                go.disabled = false; if (off) off.disabled = false;
+            };
+            if (off) off.onclick = async function () {
+                go.disabled = true; off.disabled = true;
+                const r = await LL.setListing(_ctx.unitId, rent, false).catch(function () { return { ok: false }; });
+                if (r && r.ok) { close(); try { AUI.toastr && AUI.toastr.info('招租撤下來了。'); } catch (e) {} return; }
+                msg.className = 'llr-msg is-bad'; msg.textContent = '這次沒存起來，再按一次就好。';
+                go.disabled = false; off.disabled = false;
+            };
+            bar.insertBefore(go, closeBtn);
+            if (off) bar.appendChild(off);
+            paint();
+        }).catch(function (e) {
+            console.warn('[LandlordRoom] 讀定價失敗', e);
+            if (sheet.isConnected) { msg.className = 'llr-msg is-bad'; msg.textContent = '這間房的資料暫時讀不到，關上再試一次。'; }
+        });
+    }
+
+    // 重新生成：東西與位置都不動，直接沿用上次翻好的那份清單再畫一張。
+    //   不重翻訂單＝少燒一次副模型，也讓「只有種子/參數在變」成立。
+    async function _regen(root, btns) {
+        if (!_ctx || !_ctx.room || !Array.isArray(_ctx.room.order) || !_ctx.room.order.length) return;
+        btns.forEach(function (b) { b.disabled = true; });
+        try {
+            await _runDeliver(_ctx.room.order, root, { layout: _ctx.room.layout });
+        } catch (e) {
+            btns.forEach(function (b) { b.disabled = false; });
+            try { AUI.toastr && AUI.toastr.info((e && e.message) || '這次沒生成，再按一次就好。'); } catch (_) {}
+        }
+    }
+
+    // ── 座標換算：包裹存房間座標(0~100)，畫在舞台上要換成舞台座標 ──
+    function _toStage(x, y) {
+        const f = _ctx.fit, vb = _ctx.viewBox;
+        return [(x / 100 * vb[0]) * f.s + f.ox, (y / 100 * vb[1]) * f.s + f.oy];
+    }
+    function _toRoom(sx, sy) {
+        const f = _ctx.fit, vb = _ctx.viewBox;
+        return [((sx - f.ox) / f.s) / vb[0] * 100, ((sy - f.oy) / f.s) / vb[1] * 100];
+    }
+    function _onFloor(x, y) {
+        const S = _SVG();
+        if (!S || !_ctx.floor) return true;
+        return S.pointInPolygon([x / 100 * _ctx.viewBox[0], y / 100 * _ctx.viewBox[1]], _ctx.floor);
+    }
+    // 新包裹落點：房間中央往外找一個在地板上、又沒被占住的位置
+    function _freeSpot() {
+        const cands = [[50, 52], [35, 46], [65, 46], [50, 68], [35, 68], [65, 68], [50, 36], [30, 57], [70, 57], [42, 60], [58, 60]];
+        for (let i = 0; i < cands.length; i++) {
+            const x = cands[i][0], y = cands[i][1];
+            if (!_onFloor(x, y)) continue;
+            if (_ctx.items.some(function (it) { return Math.abs(it.x - x) < 9 && Math.abs(it.y - y) < 9; })) continue;
+            return { x: x, y: y };
+        }
+        return { x: 50, y: 55 };
+    }
+
+    // ── 布置模式：站在房裡擺包裹 ──
+    function _startDeco(root) {
+        if (!_ctx || _ctx.deco || _ctx.block) return;
+        const stage = _STAGE();
+        const world = stage && stage._S && stage._S.world;
+        if (!world) return;
+
+        _ctx.items = ((_ctx.room && _ctx.room.order) || []).slice(0, MAX_ITEMS).map(function (it, i) {
+            return { id: 'p' + i + '_' + Math.random().toString(36).slice(2, 6), name: String(it.name || ''), content: String(it.content || ''), x: Number(it.x) || 50, y: Number(it.y) || 50, tags: (it.tags || []).slice() };
+        });
+
+        const fabs = root.querySelector('.llr-fabs');
+        if (fabs) fabs.remove();
+
+        const layer = d.createElement('div');
+        layer.className = 'llr-layer';
+        world.appendChild(layer);
+
+        const tip = d.createElement('div');
+        tip.className = 'llr-tip';
+        root.appendChild(tip);
+
+        const bar = d.createElement('div'); bar.className = 'llr-bar';
+        const cancel = _btn('fa-solid fa-xmark', '取消');
+        const add = _btn('fa-solid fa-plus', '添加包裹');
+        const ship = _btn('fa-solid fa-truck-fast', '配送', 'is-go');
+        // ✨ 幫我補齊：使用者只放在意的幾件，其他過日子要的東西交給 AI 補（09-22 加）；記在這間房，下次打開還是同一個樣子
+        _ctx.fill = !!(_ctx.room && _ctx.room.fill);
+        const fill = _btn('fa-solid fa-wand-magic-sparkles', '幫我補齊');
+        fill.classList.toggle('is-on', _ctx.fill);
+        fill.setAttribute('aria-pressed', _ctx.fill ? 'true' : 'false');
+        fill.onclick = function () {
+            _ctx.fill = !_ctx.fill;
+            fill.classList.toggle('is-on', _ctx.fill);
+            fill.setAttribute('aria-pressed', _ctx.fill ? 'true' : 'false');
+        };
+        const fillWrap = d.createElement('span'); fillWrap.className = 'llr-fill';
+        fillWrap.appendChild(fill);
+        try {
+            if (win.AUI && win.AUI.registerHelp) {
+                win.AUI.registerHelp({ llr_fill: { title: '幫我補齊', body: '打開以後，房間裡除了你放的包裹，還會多出過日子用得到的東西。\n\n你放的包裹一件都不會少，位置也照你擺的。AI 會看你放了什麼，猜這是什麼樣的房間，把缺的家具和用品補在空著的地方，中間會留路給你走。\n\n關著的時候只畫你放的包裹。\n\n按「配送」才會照這個開關畫；「重新生成」會用上一次的清單，不會重新補。' } });
+                fillWrap.insertAdjacentHTML('beforeend', win.AUI.helpBtn('llr_fill'));
+            }
+        } catch (e) {}
+        bar.appendChild(cancel); bar.appendChild(add); bar.appendChild(fillWrap);
+        // 已經布置過才給「清空」：把房間退回空屋(不燒生圖)。沒布置過的房本來就是空的,不用這顆。
+        const wipe = (_ctx.room && _ctx.room.order && _ctx.room.order.length) ? _btn('fa-solid fa-broom', '清空', 'llr-danger') : null;
+        if (wipe) bar.appendChild(wipe);
+        bar.appendChild(ship);
+        root.appendChild(bar);
+
+        _ctx.deco = { root: root, world: world, layer: layer, tip: tip, bar: bar, btns: [cancel, add, fill, ship].concat(wipe ? [wipe] : []) };
+
+        function say(msg) {
+            tip.textContent = msg || (_ctx.items.length
+                ? ('房裡有 ' + _ctx.items.length + ' 個包裹。點包裹可以改名稱或拿走。')
+                : '按「添加包裹」把想放的東西丟進來，拖到你要的位置。');
+        }
+        function redraw() {
+            layer.innerHTML = '';
+            _ctx.items.forEach(function (it) { layer.appendChild(_makePkg(it, redraw, say)); });
+            say();
+        }
+
+        // 🧳 自己家才有：視差撤離時選了「留紀念」的東西（os_wg_pack.js），點一件就變成一個包裹，名稱和樣子先填好。
+        //   一件都沒有就不出這顆（清單是非同步撈的，撈到了才插在「添加包裹」旁邊）
+        const PK = win.OS_WG_PACK || window.OS_WG_PACK;
+        if (_ctx.unitId === HOME_ID && PK && PK.souvenirs) {
+            PK.souvenirs().then(function (list) {
+                if (!list.length || !_ctx || !_ctx.deco || _ctx.deco.bar !== bar) return;
+                const souv = _btn('fa-solid fa-gem', '放紀念品');
+                souv.onclick = function () { _openSouvenirs(list, redraw, say); };
+                bar.insertBefore(souv, add.nextSibling);
+                _ctx.deco.btns.push(souv);
+            }).catch(function () {});
+        }
+
+        cancel.onclick = function () { _endDeco(); };
+        add.onclick = function () {
+            if (_ctx.items.length >= MAX_ITEMS) { say('一間房最多放 ' + MAX_ITEMS + ' 個包裹，先拿走一個再放。'); return; }
+            const spot = _freeSpot();
+            const it = { id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: '', content: '', x: spot.x, y: spot.y };
+            _ctx.items.push(it);
+            redraw();
+            _openEditor(it, redraw, say);
+        };
+        ship.onclick = function () { _deliver(say); };
+        // 清空＝退回空屋。要按兩次（Tauri 會擋 confirm，所以用「再按一次」代替跳窗）
+        if (wipe) {
+            let armed = false, armT = null;
+            wipe.onclick = async function () {
+                if (!armed) {
+                    armed = true;
+                    wipe.innerHTML = '<i class="fa-solid fa-broom"></i> 再按一次清空';
+                    say('清空會把這間房退回空屋，裡面的東西全部沒有。要的話再按一次。');
+                    armT = win.setTimeout(function () {
+                        armed = false;
+                        wipe.innerHTML = '<i class="fa-solid fa-broom"></i> 清空';
+                        say();
+                    }, 4000);
+                    return;
+                }
+                win.clearTimeout(armT);
+                const id = _ctx.unitId, isHome = (id === HOME_ID);
+                try {
+                    await _LL().saveRoom(id, null);
+                    _endDeco();
+                    if (isHome) await openHome(); else await open(null, id);
+                } catch (e) {
+                    console.warn('[LandlordRoom] 清空失敗', e);
+                    armed = false;
+                    wipe.innerHTML = '<i class="fa-solid fa-broom"></i> 清空';
+                    say('這次沒清成，再試一次。');
+                }
+            };
+        }
+
+        redraw();
+    }
+
+    function _endDeco() {
+        if (!_ctx || !_ctx.deco) return;
+        const dc = _ctx.deco;
+        [dc.layer, dc.tip, dc.bar].forEach(function (el) { try { el.remove(); } catch (e) {} });
+        _ctx.deco = null;
+        try { _mountFabs(dc.root); } catch (e) {}   // 浮鈕組放回去
+    }
+
+
+    // ── ✏️ 擋路範圍：站在房裡用鋼筆圈出走不過去的地方（2026-09-22 加：像 PS 那種鋼筆直線錨點）──
+    //   改的是房間那張家具圖（黑＝擋路、白＝能走，跟自訂接口量出來的是同一張），任何房間都能用：
+    //   ComfyUI 畫的、自訂接口一次畫的本來沒有這張 → 從全白開始；兩次畫的 → 從它量的開始修。
+    //   牆和地板外面本來就走不過去（程式的地板管），這裡只圈家具。
+    //   手機上一下一下點比手指拖著畫準，所以只做錨點，不做筆刷。
+    function _startBlock(root) {
+        if (!_ctx || _ctx.deco || _ctx.block) return;
+        const stage = _STAGE();
+        const S = stage && stage._S;
+        const world = S && S.world;
+        const room = _ctx.room;
+        if (!world || !room || !room.image) return;
+        _injectStyle();
+
+        const fabs = root.querySelector('.llr-fabs');
+        if (fabs) fabs.remove();
+
+        const MAPW = 1536, MAPH = 1024;
+        const f = _ctx.fit, vb = _ctx.viewBox;
+        const floor = (_ctx.floor || []).map(function (p) { return [p[0] * f.s + f.ox, p[1] * f.s + f.oy]; });
+
+        const over = d.createElement('canvas');
+        over.className = 'llr-pencv'; over.width = MAPW; over.height = MAPH;
+        world.appendChild(over);
+        const cap = d.createElement('div'); cap.className = 'llr-cap';
+        root.appendChild(cap);
+        const tip = d.createElement('div'); tip.className = 'llr-tip';
+        root.appendChild(tip);
+        const bar = d.createElement('div'); bar.className = 'llr-bar llr-bar-wrap';
+        const bAdd = _btn('fa-solid fa-ban', '加擋路');
+        const bErase = _btn('fa-solid fa-eraser', '擦掉');
+        const bUndo = _btn('fa-solid fa-rotate-left', '退一步');
+        const bClose = _btn('fa-solid fa-draw-polygon', '封起來');
+        const bReset = _btn('fa-solid fa-arrows-rotate', '重來');
+        const bCancel = _btn('fa-solid fa-xmark', '取消');
+        const bSave = _btn('fa-solid fa-check', '存好了', 'is-go');
+        [bAdd, bErase, bUndo, bClose, bReset, bCancel, bSave].forEach(function (b) { bar.appendChild(b); });
+        root.appendChild(bar);
+
+        const st = { mode: 'add', pts: [], undo: [], img: null, iw: 0, ih: 0, edit: null, orig: null, dirty: false, busy: false };
+        const blk = { root: root, over: over, cap: cap, tip: tip, bar: bar };
+        _ctx.block = blk;
+
+        // 圖片像素 ↔ 舞台座標：房間圖在舞台上鋪在 (ox, oy, vb寬*s, vb高*s) 那一塊
+        function toImg(p) { return [(p[0] - f.ox) / (vb[0] * f.s) * st.iw, (p[1] - f.oy) / (vb[1] * f.s) * st.ih]; }
+
+        function say() {
+            if (st.pts.length) {
+                tip.textContent = '放了 ' + st.pts.length + ' 個點。點回第一個點、或按「封起來」，這一塊就' + (st.mode === 'add' ? '擋住' : '變回能走') + '。';
+                return;
+            }
+            tip.textContent = st.mode === 'add'
+                ? '在家具四周一下一下點，圈起來的地方走不過去。紅色＝現在走不過去的地方。'
+                : '在要放行的地方一下一下點，圈起來的地方變回能走。';
+        }
+        function paintButtons() {
+            bAdd.classList.toggle('is-on', st.mode === 'add');
+            bErase.classList.toggle('is-on', st.mode === 'erase');
+            bClose.disabled = st.pts.length < 3;
+            bUndo.disabled = !st.pts.length && !st.undo.length;
+            bReset.disabled = !st.dirty;
+        }
+        function paint() {
+            const g = over.getContext('2d');
+            g.clearRect(0, 0, MAPW, MAPH);
+            // 地板外面壓暗：那裡本來就走不過去，不用圈
+            g.fillStyle = 'rgba(8,10,14,.45)'; g.fillRect(0, 0, MAPW, MAPH);
+            if (st.floorA) {
+                // GPT 自己標的地板（跟空房算的不一定一樣大）
+                g.save(); g.globalCompositeOperation = 'destination-out';
+                g.drawImage(st.floorA, f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+                g.restore();
+            } else if (floor.length >= 3) {
+                g.save(); g.globalCompositeOperation = 'destination-out';
+                g.beginPath(); floor.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.fill();
+                g.restore();
+            }
+            // 家具圖黑的地方塗紅（只畫在地板裡）
+            if (st.edit) {
+                const t = d.createElement('canvas'); t.width = st.iw; t.height = st.ih;
+                const tg = t.getContext('2d'); tg.drawImage(st.edit, 0, 0);
+                const id = tg.getImageData(0, 0, st.iw, st.ih); const px = id.data;
+                for (let i = 0; i < px.length; i += 4) {
+                    const blocked = px[i] < 128;
+                    px[i] = 230; px[i + 1] = 60; px[i + 2] = 60; px[i + 3] = blocked ? 120 : 0;
+                }
+                tg.putImageData(id, 0, 0);
+                if (st.floorA) { tg.globalCompositeOperation = 'destination-in'; tg.drawImage(st.floorA, 0, 0, st.iw, st.ih); }
+                g.save();
+                if (!st.floorA && floor.length >= 3) { g.beginPath(); floor.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.closePath(); g.clip(); }
+                g.drawImage(t, f.ox, f.oy, vb[0] * f.s, vb[1] * f.s);
+                g.restore();
+            }
+            // 正在畫的這一筆：線＋錨點（錨點照螢幕大小畫，不跟著舞台縮小）
+            if (st.pts.length) {
+                const k = 1 / ((S && S.scale) || 1);
+                g.strokeStyle = st.mode === 'add' ? '#ffd27a' : '#8fe3ff'; g.lineWidth = 3 * k;
+                g.beginPath(); st.pts.forEach(function (p, i) { if (i) g.lineTo(p[0], p[1]); else g.moveTo(p[0], p[1]); }); g.stroke();
+                st.pts.forEach(function (p, i) {
+                    g.beginPath(); g.arc(p[0], p[1], (i === 0 ? 9 : 6) * k, 0, Math.PI * 2);
+                    g.fillStyle = i === 0 ? '#ffffff' : g.strokeStyle; g.fill();
+                    g.lineWidth = 2 * k; g.strokeStyle = '#14161c'; g.stroke();
+                    g.strokeStyle = st.mode === 'add' ? '#ffd27a' : '#8fe3ff';
+                });
+            }
+            paintButtons();
+            say();
+        }
+        function snapshot() {
+            const c = d.createElement('canvas'); c.width = st.iw; c.height = st.ih;
+            c.getContext('2d').drawImage(st.edit, 0, 0); return c;
+        }
+        function closeShape() {
+            if (st.pts.length < 3) return;
+            st.undo.push(snapshot());
+            const g = st.edit.getContext('2d');
+            g.fillStyle = st.mode === 'add' ? '#000' : '#fff';
+            g.beginPath(); st.pts.forEach(function (p, i) { const q = toImg(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); g.fill();
+            st.pts = []; st.dirty = true;
+            paint();
+        }
+        function undo() {
+            if (st.pts.length) { st.pts.pop(); paint(); return; }
+            const prev = st.undo.pop(); if (!prev) return;
+            st.edit.getContext('2d').drawImage(prev, 0, 0);
+            st.dirty = true; paint();
+        }
+        function end() {
+            win.removeEventListener('keydown', onKey, true);
+            [over, cap, tip, bar].forEach(function (el) { try { el.remove(); } catch (e) {} });
+            _ctx.block = null;
+            try { _mountFabs(root); } catch (e) {}
+        }
+        function onKey(ev) {
+            // 沒按「存好了／取消」就離開（換房、回走廊、關掉 app）的話 end() 不會跑：
+            //   圈擋路的畫面已經不在了就自己拆掉，不再吃掉別處的 Enter 和退格
+            if (!cap.isConnected || !_ctx || _ctx.block !== blk) { win.removeEventListener('keydown', onKey, true); return; }
+            const t = ev.target && ev.target.tagName;
+            if (t === 'INPUT' || t === 'TEXTAREA' || (ev.target && ev.target.isContentEditable)) return;
+            if (ev.key === 'Enter') { ev.preventDefault(); closeShape(); }
+            else if (ev.key === 'Escape') { ev.preventDefault(); if (st.pts.length) { st.pts = []; paint(); } }
+            else if (ev.key === 'Backspace') { ev.preventDefault(); undo(); }
+        }
+        win.addEventListener('keydown', onKey, true);
+
+        cap.addEventListener('pointerdown', function (ev) {
+            ev.preventDefault(); ev.stopPropagation();   // 別讓舞台把這一下當成「走過去」
+            if (!st.edit || !S || !S.scale) return;
+            const r = world.getBoundingClientRect();
+            const p = [(ev.clientX - r.left) / S.scale, (ev.clientY - r.top) / S.scale];
+            // 點回第一個點（螢幕上 22 像素內）＝封起來
+            if (st.pts.length >= 3) {
+                const a = st.pts[0];
+                if (Math.hypot((p[0] - a[0]) * S.scale, (p[1] - a[1]) * S.scale) < 22) { closeShape(); return; }
+            }
+            st.pts.push(p); paint();
+        });
+        bAdd.onclick = function () { st.mode = 'add'; paint(); };
+        bErase.onclick = function () { st.mode = 'erase'; paint(); };
+        bUndo.onclick = undo;
+        bClose.onclick = closeShape;
+        bReset.onclick = function () {
+            st.edit.getContext('2d').drawImage(st.orig, 0, 0);
+            st.pts = []; st.undo = []; st.dirty = false; paint();
+        };
+        bCancel.onclick = end;
+        bSave.onclick = async function () {
+            if (st.busy) return;
+            if (st.pts.length >= 3) closeShape();
+            st.busy = true; bSave.disabled = true; tip.textContent = '正在存…';
+            try {
+                // 整張都是白的＝沒有東西擋路 → 不存那張圖（省空間，也跟沒量過家具的房間一樣）
+                const px = st.edit.getContext('2d').getImageData(0, 0, st.iw, st.ih).data;
+                let any = false; for (let i = 0; i < px.length; i += 4) { if (px[i] < 128) { any = true; break; } }
+                const next = Object.assign({}, room, { furnMask: any ? st.edit.toDataURL('image/png') : null });
+                const id = _ctx.unitId, isHome = (id === HOME_ID);
+                await _LL().saveRoom(id, next);
+                end();
+                // 就地重進這間房＝新的擋路範圍立刻生效
+                if (isHome) await openHome(); else await open(null, id);
+            } catch (e) {
+                console.warn('[LandlordRoom] 擋路範圍沒存成', e);
+                st.busy = false; bSave.disabled = false; tip.textContent = '這次沒存起來，再按一次「存好了」。';
+            }
+        };
+
+        // 讀房間圖的大小，家具圖照同一個大小（沒有就從全白開始）
+        tip.textContent = '正在準備…';
+        paintButtons();
+        _loadImgEl(room.image).then(async function (im) {
+            st.iw = im.naturalWidth || im.width; st.ih = im.naturalHeight || im.height;
+            st.edit = d.createElement('canvas'); st.edit.width = st.iw; st.edit.height = st.ih;
+            const g = st.edit.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, st.iw, st.ih);
+            if (room.furnMask) { try { g.drawImage(await _loadImgEl(room.furnMask), 0, 0, st.iw, st.ih); } catch (e) {} }
+            // GPT 標的地板：黑白圖轉成「白＝不透明」，拿來挖壓暗那層、裁紅色那層
+            if (room.floorMask) {
+                try {
+                    const fm = await _loadImgEl(room.floorMask);
+                    const a = d.createElement('canvas'); a.width = st.iw; a.height = st.ih;
+                    const ag = a.getContext('2d'); ag.drawImage(fm, 0, 0, st.iw, st.ih);
+                    const ad = ag.getImageData(0, 0, st.iw, st.ih);
+                    for (let i = 0; i < ad.data.length; i += 4) { ad.data[i + 3] = ad.data[i] >= 128 ? 255 : 0; }
+                    ag.putImageData(ad, 0, 0);
+                    st.floorA = a;
+                } catch (e) {}
+            }
+            st.orig = snapshot();
+            paint();
+        }).catch(function () { tip.textContent = '房間的圖讀不進來，按取消再試一次。'; });
+    }
+    function _loadImgEl(src) {
+        return new Promise(function (res, rej) { const im = new win.Image(); im.onload = function () { res(im); }; im.onerror = rej; im.src = src; });
+    }
+
+    function _makePkg(it, redraw, say) {
+        const el = d.createElement('button');
+        el.type = 'button';
+        el.className = 'llr-pkg';
+        el.innerHTML = '<i class="fa-solid fa-box"></i><span class="llr-pkg-name' + (it.name ? '' : ' llr-pkg-unnamed') + '">'
+            + (it.name ? _esc(it.name) : '未命名') + '</span>';
+        const p = _toStage(it.x, it.y);
+        el.style.left = p[0] + 'px';
+        el.style.top = p[1] + 'px';
+
+        let moved = 0, startX = 0, startY = 0, lastX = it.x, lastY = it.y;
+        const stage = _STAGE();
+
+        // 🚨 拖曳的 move/up 一律掛在 window：滑鼠一定會跑出這顆小方塊，
+        //    掛在元素上(就算有 setPointerCapture)只要捕獲沒成立就整個拖不動。
+        function onMove(ev) {
+            moved = Math.max(moved, Math.hypot(ev.clientX - startX, ev.clientY - startY));
+            // 🚨 世界層的孩子全是絕對定位 → 它自己的框是 0×0，r.width/r.height 不能用(拿來當分母就整個拖不動)。
+            //    只有 r.left/r.top(＝縮放後的原點)跟 S.scale 是可信的——舞台自己的點擊移動也是這樣換算。
+            const st = stage && stage._S;
+            if (!st || !st.world || !st.scale) return;
+            const r = st.world.getBoundingClientRect();
+            const rm = _toRoom((ev.clientX - r.left) / st.scale, (ev.clientY - r.top) / st.scale);
+            it.x = Math.max(1, Math.min(99, rm[0]));
+            it.y = Math.max(1, Math.min(99, rm[1]));
+            const q = _toStage(it.x, it.y);
+            el.style.left = q[0] + 'px';
+            el.style.top = q[1] + 'px';
+            ev.preventDefault();
+        }
+        function onUp() {
+            win.removeEventListener('pointermove', onMove, true);
+            win.removeEventListener('pointerup', onUp, true);
+            win.removeEventListener('pointercancel', onUp, true);
+            el.classList.remove('is-drag');
+            if (moved < DRAG_SLOP) { _snap(el, it, lastX, lastY); _openEditor(it, redraw, say); return; }
+            // 掉到房間外面 → 退回原位，包裹只能放在房裡的地板上
+            if (!_onFloor(it.x, it.y)) { _snap(el, it, lastX, lastY); say('那裡不在房間裡，包裹放回原本的位置了。'); }
+            else say();
+        }
+        el.addEventListener('pointerdown', function (ev) {
+            moved = 0;
+            startX = ev.clientX; startY = ev.clientY;
+            lastX = it.x; lastY = it.y;
+            el.classList.add('is-drag');
+            ev.preventDefault();
+            ev.stopPropagation();   // 別讓舞台把這下當成「點地板走過去」
+            win.addEventListener('pointermove', onMove, true);
+            win.addEventListener('pointerup', onUp, true);
+            win.addEventListener('pointercancel', onUp, true);
+        });
+        return el;
+    }
+    function _snap(el, it, x, y) {
+        it.x = x; it.y = y;
+        const p = _toStage(x, y);
+        el.style.left = p[0] + 'px';
+        el.style.top = p[1] + 'px';
+    }
+
+    // 包裹小窗：名稱＋內容，或直接拿走
+    function _openEditor(it, redraw, say) {
+        const root = _ctx.deco && _ctx.deco.root;
+        if (!root) return;
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '這個包裹裡是什麼？';
+        const l1 = d.createElement('label'); l1.className = 'llr-field'; l1.textContent = '名稱';
+        const name = d.createElement('input'); name.className = 'llr-input'; name.type = 'text'; name.value = it.name || ''; name.maxLength = 20;
+        const l2 = d.createElement('label'); l2.className = 'llr-field'; l2.textContent = '想要什麼樣子（可以留白）';
+        const content = d.createElement('textarea'); content.className = 'llr-area'; content.value = it.content || ''; content.maxLength = 120;
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const drop = _btn('fa-solid fa-trash', '拿走', 'llr-danger');
+        const ok = _btn('fa-solid fa-check', '好了');
+        bar.appendChild(drop); bar.appendChild(ok);
+        card.appendChild(title); card.appendChild(l1); card.appendChild(name);
+        card.appendChild(l2); card.appendChild(content); card.appendChild(bar);
+        sheet.appendChild(card);
+        root.appendChild(sheet);
+        try { name.focus({ preventScroll: true }); } catch (e) {}   // 小窗一開就 focus：別把後面的舞台一起捲歪
+
+        const close = function () { try { sheet.remove(); } catch (e) {} };
+        drop.onclick = function () {
+            _ctx.items = _ctx.items.filter(function (x) { return x.id !== it.id; });
+            close(); redraw();
+        };
+        ok.onclick = function () {
+            it.name = String(name.value || '').trim();
+            it.content = String(content.value || '').trim();
+            close(); redraw();
+        };
+    }
+
+    // 紀念品小窗：一件一列（縮圖＋名字＋哪個世界帶回來的），點了就放一個包裹；房裡已經有同名包裹的那件標「已擺」
+    function _openSouvenirs(list, redraw, say) {
+        const root = _ctx.deco && _ctx.deco.root;
+        if (!root) return;
+        const sheet = d.createElement('div'); sheet.className = 'llr-sheet';
+        const card = d.createElement('div'); card.className = 'llr-card';
+        const title = d.createElement('div'); title.className = 'llr-card-title'; title.textContent = '放哪一件紀念品？';
+        const box = d.createElement('div'); box.className = 'llr-souv-list';
+        const close = function () { box.querySelectorAll('img').forEach(function (im) { im.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='; }); try { sheet.remove(); } catch (e) {} };
+        list.slice().reverse().forEach(function (s) {   // 最近帶回來的排上面
+            const name = String(s.name || '').slice(0, 20);
+            const placed = _ctx.items.some(function (it) { return it.name === name; });
+            const b = d.createElement('button'); b.type = 'button'; b.className = 'llr-souv' + (placed ? ' is-placed' : '');
+            b.innerHTML = '<span class="llr-souv-pic">' + (s.thumb ? '<img alt="" src="' + _esc(s.thumb) + '">' : '<i class="fa-solid fa-gem"></i>') + '</span>' +
+                '<span class="llr-souv-tx"><b>' + _esc(name) + '</b><small>' + _esc(s.world || '') + (placed ? '・已擺' : '') + '</small></span>';
+            b.onclick = function () {
+                if (_ctx.items.length >= MAX_ITEMS) { close(); say('一間房最多放 ' + MAX_ITEMS + ' 個包裹，先拿走一個再放。'); return; }
+                const spot = _freeSpot();
+                _ctx.items.push({ id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name,
+                    content: String(s.look || s.desc || '').slice(0, 120), x: spot.x, y: spot.y });
+                close(); redraw();
+                say('「' + name + '」放進來了，拖到你要的位置，再按配送。');
+            };
+            box.appendChild(b);
+        });
+        const bar = d.createElement('div'); bar.className = 'llr-card-bar';
+        const cancel = _btn('fa-solid fa-xmark', '取消');
+        cancel.onclick = close;
+        bar.appendChild(cancel);
+        card.appendChild(title); card.appendChild(box); card.appendChild(bar);
+        sheet.appendChild(card);
+        root.appendChild(sheet);
+    }
+
+    // ── 生圖那一段：訂單 → 整房一次生圖 → 存起來 → 就地換成新的房間 ──
+    //   「配送」與「重新生成」共用這條；差別只在 opts.layout 給不給(給了就不重翻訂單)。
+    async function _runDeliver(order, root, opts) {
+        const busy = d.createElement('div'); busy.className = 'llr-busy';
+        busy.textContent = '正在準備…';
+        root.appendChild(busy);
+        const unitId = _ctx.unitId, spec = _ctx.spec, isHome = (unitId === HOME_ID);
+        try {
+            const LL = _LL();
+            const result = await _GEN().deliver(spec, order, function (msg) { busy.textContent = msg; }, opts);
+            busy.textContent = '正在收好房間…';
+            await LL.saveRoom(unitId, {
+                image: result.image, layout: result.layout, order: order,
+                roomTypeKey: spec.typeKey,   // 房型跟著房間走,下次進來要用同一間
+                // 🚨 幾何三件套一定要一起存：地板＝可走區(沒有就整片不能動)、personH＝尺度(沒有就退回拉滿舞台)
+                floor: result.floor, inner4: result.inner4, viewBox: result.viewBox, personH: result.personH,
+                // 🛋 家具擋路那張：只有自訂接口畫的房間有；ComfyUI 畫的一定要寫 null，不然留著上一版的家具位置
+                furnMask: result.furnMask || null,
+                floorMask: result.floorMask || null,   // GPT 標的地板；沒有就用空房算的，舊的一定要清掉
+                // 「幫我補齊」開著沒：重新生成沿用上次清單不帶這個，就照這間房原本記的
+                fill: (opts && opts.fill != null) ? !!opts.fill : !!(_ctx.room && _ctx.room.fill),
+                styleName: result.styleName, at: result.at,
+            });
+            _endDeco();
+            try { busy.remove(); } catch (e) {}
+            // 就地重進這間房＝看到剛剛生出來的樣子
+            if (isHome) await openHome(); else await open(null, unitId);
+        } catch (e) {
+            console.warn('[LandlordRoom] 生成失敗', e);
+            try { busy.remove(); } catch (_) {}
+            throw e;
+        }
+    }
+
+    // 配送：把布置模式現在擺的這批包裹送出去（要重翻訂單）
+    async function _deliver(say) {
+        const dc = _ctx.deco;
+        if (!dc) return;
+        const items = _ctx.items;
+        if (!items.length) { say('房間還是空的，先添加一個包裹。'); return; }
+        if (items.some(function (it) { return !String(it.name || '').trim(); })) { say('有包裹還沒寫名稱，點開它填一下再配送。'); return; }
+
+        dc.btns.forEach(function (b) { b.disabled = true; });
+        const order = items.map(function (it) { return { name: it.name, content: it.content, x: it.x, y: it.y, tags: (it.tags || []).slice() }; });
+        try {
+            await _runDeliver(order, dc.root, { fill: !!_ctx.fill });
+        } catch (e) {
+            dc.btns.forEach(function (b) { b.disabled = false; });
+            say((e && e.message) || '這次沒送成，再按一次配送就好。');
+        }
+    }
+
+    // 重進「現在這一間」：調完數值要立刻看效果時用（測試面板按鈕接這個）
+    async function reenter() {
+        if (!_ctx) return false;
+        const id = _ctx.unitId;
+        if (id === HOME_ID) await openHome(); else await open(null, id);
+        return true;
+    }
+
+    win.OS_LANDLORD_ROOM = { open, openHome, openCorridor, reenter };
+    if (win !== window) { try { window.OS_LANDLORD_ROOM = win.OS_LANDLORD_ROOM; } catch (e) {} }
+    console.log('[LandlordRoom] 房間（舞台版）已載入');
+})();

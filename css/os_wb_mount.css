@@ -1,0 +1,31 @@
+/* os_wb_mount.js：「關於我」下拉窗的「世界書」分頁。跟關於我同一套淺灰底、深藍字。 */
+.wbm { display:flex; flex-direction:column; gap:14px; }
+.wbm-state { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:8px; font-size:13px; }
+.wbm-state b { font-weight:800; flex:1; min-width:0; }
+.wbm-state.is-ok { background:rgba(46,125,82,0.10); color:#1f5c3c; border:1px solid rgba(46,125,82,0.28); }
+.wbm-state.is-bad { flex-direction:column; align-items:stretch; background:rgba(196,52,52,0.08); color:#8a2323; border:1px solid rgba(196,52,52,0.35); }
+.wbm-state-hd { display:flex; align-items:center; gap:8px; }
+.wbm-probs { margin:0; padding-left:20px; font-size:12px; line-height:1.6; }
+.wbm-fix { align-self:flex-start; border:0; border-radius:6px; background:#8a2323; color:#fff; font:inherit; font-size:12px; font-weight:800; padding:7px 14px; cursor:pointer; }
+.wbm-fix:hover { filter:brightness(1.12); }
+
+.wbm-sec { display:flex; flex-direction:column; gap:6px; }
+.wbm-sec-t { font-size:11px; font-weight:800; letter-spacing:.5px; color:rgba(26,28,40,0.62); }
+.wbm-row { display:flex; align-items:center; gap:8px; min-height:38px; padding:6px 8px 6px 10px; border-radius:8px; background:rgba(228,232,245,0.95); border:1px solid rgba(26,28,40,0.10); }
+.wbm-ico { color:rgba(26,28,40,0.45); font-size:12px; flex-shrink:0; }
+.wbm-name { flex:1; min-width:0; font-size:13px; font-weight:700; color:#1A1C28; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wbm-auto { flex-shrink:0; font-size:11px; color:rgba(26,28,40,0.55); padding:2px 8px; border-radius:999px; background:rgba(26,28,40,0.06); }
+.wbm-x { flex-shrink:0; width:28px; height:28px; border:0; border-radius:6px; background:none; color:rgba(26,28,40,0.5); cursor:pointer; }
+.wbm-x:hover { background:rgba(196,52,52,0.10); color:#8a2323; }
+.wbm-add { flex-shrink:0; border:1px solid rgba(26,28,40,0.2); border-radius:6px; background:#fff; color:#1A1C28; font:inherit; font-size:11px; font-weight:800; padding:5px 9px; cursor:pointer; }
+.wbm-add:hover { border-color:#1A1C28; }
+.wbm-empty { font-size:12px; color:rgba(26,28,40,0.55); padding:4px 2px; }
+.wbm-search { width:100%; box-sizing:border-box; background:rgba(228,232,245,0.90); border:1px solid rgba(26,28,40,0.20); border-radius:6px; color:#1A1C28; font:inherit; font-size:13px; padding:9px 10px; outline:none; }
+.wbm-search:focus { border-color:#1A1C28; }
+.wbm-list { display:flex; flex-direction:column; gap:6px; }
+
+/* 404 房：跟關於我一起換綠終端機風 */
+html:has(.mode-404) .wbm-row { background:rgba(0,15,5,0.82) !important; border-color:rgba(0,255,65,0.25) !important; }
+html:has(.mode-404) .wbm-name, html:has(.mode-404) .wbm-sec-t { color:#00ff41 !important; font-family:'Courier New',monospace !important; }
+html:has(.mode-404) .wbm-ico, html:has(.mode-404) .wbm-empty, html:has(.mode-404) .wbm-auto, html:has(.mode-404) .wbm-x { color:rgba(0,255,65,0.6) !important; }
+html:has(.mode-404) .wbm-add, html:has(.mode-404) .wbm-search { background:#001a00 !important; border-color:rgba(0,255,65,0.4) !important; color:#00ff41 !important; }

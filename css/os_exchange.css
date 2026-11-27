@@ -1,0 +1,144 @@
+/* ================================================================
+   交易所面板 — 純 CSS 版（2026-09-11）
+   之前是圖片切件版（sound-files/aseets/exchange_ui/*.png：外框、內襯板、光環、三張卡殼、狀態列），
+   位置全靠量出來的百分比對齊。現在整張用 CSS 畫，版位靠排版流：
+   加商品、改名、換尺寸都不用重出圖，也不會因為框的比例跟容器對不上而歪掉。
+   配色跟對話模式的霧白右欄同一套（白底、靛藍字、天藍與金色點綴）。
+
+   三種掛法都要成立：
+   ① 舞台桌機：貼右側、垂直置中、高度照內容（太高就自己捲）
+   ② 舞台手機：大家共用的停靠版位（lobby.css 的 .lobby-left.void-dock-open .os-pt-dock，上下左右都釘死）
+   ③ 對話模式：被搬進地點視圖的窗格，外層以 !important 撐滿（lobby.css 的 .lb-pv-body > #os-pt-shop-dock）
+   → 外框一律吃滿自己的 dock、內容自己捲；內容本身限寬置中，窗格很寬時不會拉成一條。
+   ================================================================ */
+.osx-dock {
+    position: absolute; z-index: 80;
+    right: 3%; top: 50%;
+    width: min(46%, 540px); max-height: calc(100% - 40px);
+    display: flex; flex-direction: column;
+    opacity: 0; transform: translate(24px, -50%);
+    transition: opacity .28s ease, transform .28s ease;
+}
+.osx-dock.on { opacity: 1; transform: translate(0, -50%); }
+
+.osx-frame, .osx-frame * { box-sizing: border-box; }
+
+.osx-frame {
+    flex: 1 1 auto; min-height: 0; overflow-y: auto;
+    display: flex; flex-direction: column;   /* 內容比框矮時上下置中（margin:auto），比框高時照常捲 */
+    container-type: inline-size;
+    border-radius: 22px;
+    background:
+        radial-gradient(120% 60% at 50% 0%, rgba(214, 228, 255, .55), rgba(214, 228, 255, 0) 70%),
+        linear-gradient(180deg, #fbfcff, #f1f4fb);
+    border: 1px solid rgba(255, 255, 255, .95);
+    box-shadow: 0 18px 44px rgba(40, 60, 110, .24), inset 0 0 0 5px rgba(255, 255, 255, .45);
+    color: #2b3663; font-family: inherit;
+}
+.osx-inner { width: 100%; max-width: 760px; margin: auto; padding: 22px 22px 24px;
+    display: flex; flex-direction: column; gap: 18px; }
+
+/* ── 標題列：菱形徽記＋名字＋關閉 ── */
+.osx-hd { display: flex; align-items: center; gap: 14px; }
+.osx-emblem { position: relative; flex-shrink: 0; width: 34px; height: 34px; margin: 0 4px;
+    transform: rotate(45deg); border-radius: 7px;
+    background: linear-gradient(135deg, #7fb3ff, #3f64cf);
+    box-shadow: 0 4px 12px rgba(63, 100, 207, .35), inset 0 0 0 2px rgba(255, 255, 255, .55); }
+.osx-emblem::after { content: ''; position: absolute; inset: 9px; border-radius: 3px;
+    background: linear-gradient(135deg, #fff, #ffe9b8); box-shadow: 0 0 8px rgba(255, 230, 170, .9); }
+.osx-title { min-width: 0; display: flex; flex-direction: column; gap: 4px; line-height: 1.15; }
+.osx-title .zh { font-size: 20px; font-weight: 800; letter-spacing: .22em; color: #2b3663; white-space: nowrap; }
+.osx-title .en { font-size: 10px; letter-spacing: .2em; color: #8b98bd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.osx-close { margin-left: auto; flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+    border: none; cursor: pointer; font-family: inherit; font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    background: #eef1f8; color: #5d6b91; transition: background .18s, color .18s; }
+.osx-close:hover { background: #e1e6f3; color: #2b3663; }
+
+/* ── 餘額：一顆 CSS 畫的 PT 幣＋數字，底下一行交易所狀態 ── */
+.osx-bal { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 6px 16px;
+    padding: 16px 18px; border-radius: 18px;
+    background: linear-gradient(135deg, rgba(234, 241, 255, .95), rgba(255, 249, 235, .9));
+    border: 1px solid rgba(110, 140, 210, .18); }
+.osx-coin { grid-row: span 2; position: relative; width: 62px; height: 62px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 35% 30%, #fff3c4 0%, #f2c55c 38%, #c98f22 78%, #a8731a 100%);
+    box-shadow: 0 6px 16px rgba(180, 130, 30, .35), inset 0 -3px 6px rgba(120, 80, 10, .35), inset 0 3px 5px rgba(255, 255, 255, .6); }
+.osx-coin::before { content: ''; position: absolute; inset: 6px; border-radius: 50%;
+    border: 2px solid rgba(255, 244, 205, .75); box-shadow: inset 0 0 0 2px rgba(150, 100, 20, .25); }
+.osx-coin span { position: relative; font-family: Georgia, 'Times New Roman', serif; font-weight: 900; font-size: 19px;
+    color: #8a5a10; letter-spacing: .02em; text-shadow: 0 1px 0 rgba(255, 240, 190, .9); }
+.osx-bal-main { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.osx-bal-k { font-size: 12px; color: #7c88ac; letter-spacing: .1em; white-space: nowrap; }
+.osx-bal-n { font-size: 34px; font-weight: 800; line-height: 1; color: #2b3663; font-variant-numeric: tabular-nums; }
+.osx-msg { display: flex; align-items: center; gap: 8px; min-width: 0; font-size: 13px; color: #6d7ba2; }
+.osx-msg i { color: #6c8fd6; font-size: 12px; flex-shrink: 0; }
+.osx-msg .m { min-width: 0; }
+.osx-msg .m.ok { color: #2f8a58; }
+.osx-msg .m.bad { color: #c2506a; }
+
+/* ── 四張商品卡：同高、同寬，兩張一排（寬的時候一排四張，見下面）── */
+.osx-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.osx-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center;
+    padding: 18px 12px 14px; border-radius: 18px;
+    background: #fff; border: 1px solid rgba(110, 140, 210, .2);
+    box-shadow: 0 6px 18px rgba(60, 80, 140, .08); transition: transform .18s ease, box-shadow .18s ease; }
+.osx-card:not(.locked):hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(60, 80, 140, .14); }
+.osx-card-ic { width: 58px; height: 58px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 24px; color: #fff;
+    background: linear-gradient(135deg, #8cbcff, #4a6fd1); box-shadow: 0 6px 14px rgba(74, 111, 209, .3); }
+.osx-card.ach .osx-card-ic { background: linear-gradient(135deg, #ffd978, #d49a26); box-shadow: 0 6px 14px rgba(212, 154, 38, .32); }
+.osx-card.loot .osx-card-ic { background: linear-gradient(135deg, #9fb4e8, #2c4a7e); box-shadow: 0 6px 14px rgba(44, 74, 126, .32); }
+.osx-card.cafe .osx-card-ic { background: linear-gradient(135deg, #f2c79a, #b46f3c); box-shadow: 0 6px 14px rgba(180, 111, 60, .3); }
+.osx-card.locked .osx-card-ic { background: linear-gradient(135deg, #d9dde8, #aab2c6); box-shadow: none; }
+.osx-card-tx { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
+.osx-card-name { font-size: 15px; font-weight: 800; letter-spacing: .08em; color: #2b3663; }
+.osx-card-desc { font-size: 12px; line-height: 1.55; color: #7c88ac; }
+.osx-card.locked .osx-card-name { color: #8f97ad; }
+
+.osx-card-btn { width: 100%; padding: 9px 10px; border-radius: 999px; cursor: pointer; font-family: inherit;
+    font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    border: 1px solid transparent; background: #4a6fd1; color: #fff; transition: background .18s, filter .18s; }
+.osx-card-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.osx-card-btn:disabled { cursor: default; background: #eef1f7; color: #97a0b5; }
+.osx-card-btn.gold { background: linear-gradient(135deg, #e3b243, #c8952c); color: #fff; }
+.osx-card-btn.owned { background: rgba(47, 138, 88, .1); color: #2f8a58; border-color: rgba(47, 138, 88, .25); }
+.osx-card-btn.locked { background: #eef1f7; color: #97a0b5; }
+
+/* ── 寬的時候（對話模式整個窗格都給它）：整體放大，不要一小塊浮在大框中間 ── */
+@container (min-width: 900px) {
+    .osx-inner { max-width: 880px; gap: 24px; padding: 30px 30px 32px; }
+    .osx-title .zh { font-size: 24px; }
+    .osx-emblem { width: 40px; height: 40px; }
+    .osx-emblem::after { inset: 11px; }
+    .osx-bal { padding: 22px 26px; gap: 8px 20px; }
+    .osx-coin { width: 78px; height: 78px; }
+    .osx-coin span { font-size: 24px; }
+    .osx-bal-n { font-size: 42px; }
+    .osx-msg { font-size: 14px; }
+    .osx-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .osx-card { padding: 28px 16px 18px; gap: 12px; }
+    .osx-card-ic { width: 74px; height: 74px; font-size: 30px; }
+    .osx-card-name { font-size: 17px; }
+    .osx-card-desc { font-size: 13px; }
+    .osx-card-btn { padding: 11px 12px; font-size: 14px; }
+}
+
+/* ── 窄的時候（手機、舞台右側窄窗）：卡片改成一列一張，圖示在左、按鈕在右 ── */
+@container (max-width: 470px) {
+    .osx-inner { padding: 18px 16px 20px; gap: 14px; }
+    .osx-title .zh { font-size: 18px; }
+    .osx-coin { width: 52px; height: 52px; }
+    .osx-coin span { font-size: 16px; }
+    .osx-bal-n { font-size: 28px; }
+    .osx-cards { grid-template-columns: 1fr; gap: 10px; }
+    .osx-card { flex-direction: row; text-align: left; gap: 12px; padding: 12px 12px 12px 14px; }
+    .osx-card-ic { width: 44px; height: 44px; font-size: 18px; }
+    .osx-card-btn { width: auto; min-width: 88px; flex-shrink: 0; padding: 8px 14px; }
+}
+
+/* ── 手機（舞台模式）：沒有停靠版位可用時的退路 ── */
+@media (max-width: 680px) {
+    .osx-dock { right: 8px; left: 8px; top: 50%; width: auto; }
+    .void-dock-open #iris-avatar { opacity: .25; filter: brightness(.55) blur(1px); transition: opacity .25s; }
+}

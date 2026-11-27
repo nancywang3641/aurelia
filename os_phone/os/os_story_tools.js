@@ -1,0 +1,2043 @@
+/**
+ * os_story_tools.js — 故事管理工具（統一收進「瀅瀅的故事日誌」）
+ * 內容：大總結（生成/更新 + 編輯模板 + 合併）— 原 rpg/status_panel.js
+ *       隱藏對話（/hide /unhide）— 原 vn_story/vn_reader.js
+ * 作用對象：目前開啟的酒館對話。
+ * 對外：window.OS_STORY_TOOLS.openPanel(container) / closePanel()
+ *
+ * 註：函式幾乎逐字搬移、保留原本的 element id，行為與原檔一致；只把 onclick 的
+ *     window.RPG_PANEL / window.VN_READER 改成 window.OS_STORY_TOOLS。
+ */
+(function () {
+    'use strict';
+    console.log('[OS] 載入故事管理工具 (os_story_tools.js)...');
+    const win = window.parent || window;
+    // 世界書條目（模型寫的總結）、錯誤字放進畫面前轉成純文字
+    const _esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // ❔ 功能說明放在問號裡，不掛在面板上
+    //   說明要在「畫面組出來那一刻」才登記：這支檔案載入時提示視窗那支不一定已經在了
+    let _helpReg = false;
+    function _help(key) {
+        try {
+            if (!_helpReg && win.AUI && win.AUI.registerHelp) { win.AUI.registerHelp(_HELP); _helpReg = true; }
+            return (win.AUI && win.AUI.helpBtn) ? win.AUI.helpBtn(key) : '';
+        } catch (e) { return ''; }
+    }
+    const _HELP = {
+            ost_merge_phone: { title: '把手機聊天室寫進大總結', body:
+                '你在聊天 app 裡自己跟角色聊的，不在劇情的樓層裡，寫正文的 AI 平常看不到。'
+                + '\n這顆鈕會把每個聊天室「還沒寫進故事」的記錄收起來，合進現在這份大總結。一樣先給你看，按儲存才算數；不會動到劇情的樓層，也不會隱藏舊樓。'
+                + '\n\n平常不按也會寫進去：每次大總結自己會順便帶上。這顆鈕是讓你不用等到下一次。'
+                + '\n\n不會寫進去的：'
+                + '\n・劇情正文裡演過的聊天——正文本來就有，不重複寫。'
+                + '\n・聊天設置裡開了「隔離」的聊天室。'
+                + '\n\n聊天室的舊訊息：每間只把最近 40 則原文帶給角色，更早的每 30 則整理成一節，在聊天設置的「早前記錄」看得到、改得了。'
+                + '這顆鈕收的就是那些節，所以一間還不到 40 則的聊天室，按了也沒東西可收。' }
+    };
+    const API = {};
+
+    // === 取目前劇情線的識別碼 ===
+    //   酒館＝chatId（聊天檔名）。這段的正規化方式一個字都不能改：它是 tavern_summary 既有存檔的 key，
+    //   改了舊總結全部認不得（所以不共用 OS_AVS_ADAPTER.getCurrentChatId，那邊空白正規化不同）。
+    //   PWA＝storyId。以前這裡沒有 PWA 分支，會掉到最下面那行「Unsaved_Chat_今天日期」——
+    //   一把用日期組的假鑰匙、每天換一次，而且不管在跑哪一本書都是同一把 → 全部劇情線擠同一格。
+    function getChatIdentifier() {
+        if (window.parent.SillyTavern && window.parent.SillyTavern.getContext) {
+            const ctx = window.parent.SillyTavern.getContext();
+            if (ctx && ctx.chatId) {
+                return ctx.chatId.split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim().replace(/\s+/g, '_');
+            }
+        }
+        // PWA：跟章節 / 記憶 / AVS 用同一把鑰匙（adapter 在獨立版回 vn_current_story_id）
+        try { const sid = win.OS_AVS_ADAPTER?.getStoryId?.(); if (sid) return sid; } catch (e) {}
+        return "Unsaved_Chat_" + new Date().toISOString().slice(0, 10);
+    }
+    function _isStandalone() { try { return (win.OS_API?.isStandalone?.()) ?? false; } catch (e) { return false; } }
+
+    // === 酒館原生 API：背景讀聊天檔（不靠記憶體 chat 陣列、不展開、不靠酒館助手）===
+    function _stCtx() { try { return win.SillyTavern?.getContext?.() || null; } catch (e) { return null; } }
+    async function _stPost(path, body) {
+        const ctx = _stCtx();
+        if (!ctx || typeof ctx.getRequestHeaders !== 'function') return null;
+        const f = (win.fetch || fetch);
+        const resp = await f(path, { method: 'POST', headers: ctx.getRequestHeaders(), body: JSON.stringify(body) });
+        if (!resp.ok) return null;
+        return await resp.json();
+    }
+    function _curAvatar() { const ctx = _stCtx(); return (ctx && !ctx.groupId) ? (ctx.characters?.[ctx.characterId]?.avatar || null) : null; }
+    function _curChatFile() { const ctx = _stCtx(); return ctx?.chatId || null; }   // 聊天檔名(無副檔名)
+
+    // 真實對話數 = /api/chats/search 的 message_count(=檔案訊息數)；最後樓號 = -1。就是聊天列表那個「💬 數字」。
+    async function _apiLastId() {
+        try {
+            const avatar = _curAvatar(), chatFile = _curChatFile();
+            if (!avatar || !chatFile) return null;
+            const data = await _stPost('/api/chats/search', { query: '', avatar_url: avatar, group_id: null });
+            if (!Array.isArray(data)) return null;
+            const norm = s => String(s || '').replace(/\.jsonl?$/i, '').trim();
+            const target = norm(chatFile);
+            const hit = data.find(c => norm(c.file_name) === target);
+            if (hit && typeof hit.message_count === 'number' && hit.message_count > 0) return hit.message_count - 1;
+        } catch (e) { console.warn('[OS_STORY_TOOLS] /api/chats/search 失敗:', e); }
+        return null;
+    }
+
+    // 背景讀「整個聊天檔」的訊息陣列(已去掉開頭 metadata 行)；讀不到回 null
+    async function _apiFullChat() {
+        try {
+            const avatar = _curAvatar(), chatFile = _curChatFile();
+            if (!avatar || !chatFile) return null;
+            const arr = await _stPost('/api/chats/get', { avatar_url: avatar, file_name: chatFile });
+            if (Array.isArray(arr) && arr.length) return arr.slice(1);   // [0] 是 chat_metadata
+        } catch (e) { console.warn('[OS_STORY_TOOLS] /api/chats/get 失敗:', e); }
+        return null;
+    }
+
+    // === 取真實最後樓號：優先酒館原生 API(背景讀檔)，後備讀記憶體陣列 ===
+    async function _trueLastId() {
+        const api = await _apiLastId();
+        if (api != null) return api;
+        let best = -1;
+        try { const c = win.SillyTavern?.getContext?.()?.chat; if (Array.isArray(c) && c.length) best = Math.max(best, c.length - 1); } catch (e) {}
+        try { const TH = win.TavernHelper; if (TH?.getLastMessageId) { const lid = await TH.getLastMessageId(); if (typeof lid === 'number' && !isNaN(lid)) best = Math.max(best, lid); } } catch (e) {}
+        return best >= 0 ? best : null;
+    }
+    // 記憶體 chat 陣列的最後 index —— 給「對陣列操作」用(注入 KEY / /hide)；陣列被截短時即截短後的最後一格。
+    function _arrayLastId() { try { const c = win.SillyTavern?.getContext?.()?.chat; if (Array.isArray(c) && c.length) return c.length - 1; } catch (e) {} return null; }
+
+    // ====================================================================
+    // A. 大總結
+    // ====================================================================
+    const SUMMARY_DEFAULT_TPL = `要求：
+- 注明这是第{{count}}次大总结。
+- 直接陈述事实、含具体时间、省略冗余；不回避敏感内容、不评价、不修饰、不加粗。
+
+【精简原则·重要】
+- 各格只写"硬信息"，不写长段散文(细节由向量召回补)。
+- 信息分三层：永久层(人设铁律/世界规则/不可逆关系与权力变化/未回收伏笔)→保留绝不删；当前层(位置/进行中任务/最近状态)→覆盖更新；可丢弃层(过程描写/消耗品/过客NPC/已完成琐事/情境台词)→删除。
+- 事件表＝一條可讀的「時間線」，不是零散事實堆：所有事件按時序排列、時間欄務必填(沒有世界內日期就用相對時序，讓人一眼看出先後)；相鄰事件要有因果或承接、整張表讀起來是連貫的劇情線，別寫成互不相干的片段(片段會害 AI 抓不到主線、亂猜＝失憶)。以"不可逆结果"為主、不展開過程，但保留最精簡的來龍去脈。久远的多个事件压成一行"阶段节点"(一行涵蓋一段劇情的起因→轉折→結果)，最近5~8个事件保留逐笔。
+- 台词仅留"未来会被回调"的原则性发言，其余删。
+
+格式如下（区块标题与"结语/故事标题"务必原样保留）：
+【大总结(第{{count}}次)】
+
+【故事標題】(只有「第一次」總結才填——給這個聊天室下一個總標題，30字以內純文字一行、不要引號或裝飾；第二次起系統會自動移除此區塊、不用再填)
+
+【事件表】（一條時間線：按時序排、相鄰有因果承接連成劇情線；久远的合并成阶段节点、最近逐笔；以不可逆结果为主、不写过程）
+| 時間 | 关键事件 | 不可逆结果/影响 | 关键角色 | 关键台词(选填) |
+| :--- | :--- | :--- | :--- | :--- |
+
+【角色表】
+- 所有对剧情有影响的角色均需出现(包括没有实体的角色)
+- 姓名用角色的慣用稱呼即可（有正式全名就用全名）；同一角色前後務必用同一個名字，別這次全名、下次暱稱，以免同一人重複入表
+| 姓名 | 身份 | 性格核心(50字内) | 当前状态/位置 | 与MC关系+强度(1-10) | 髮色 | 髮型 | 眼色 | 伏笔/备注 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+
+
+【關係圖譜】
+| 角色A | 角色B | 關係 | 強度(1-10) | 當前描述 |
+| :--- | :--- | :--- | :--- | :--- |
+
+
+【結案表】（已經了結的事：衝突平息、麻煩解決、約定做完、人走了不再往來，或主角已經抽身——只是聽別人談起、自己沒再參與，也算抽身。以主角這邊為準，外面的人還在不在意不影響。更早開始、在這段劇情裡看得出已經結束的也算。一件事一列，同一件事別拆成好幾列；「結案事項」寫出牽涉的人、東西、地方，讓人一看就知道是哪件，別只寫籠統的名字；同一場風波裡不同人各自收尾的事分開列。沒有就只留表頭）
+| 結案事項 | 怎麼結束的 | 結束時間 |
+| :--- | :--- | :--- |
+
+【注意規範】（跑團中新確立的「世界/區域規則」：村莊規則、城市律法、組織禁忌、特殊機制等，常是 AI 自己補的設定；永久層、绝不删）
+| 規範(人事物/地點) | 規範描述 |
+| :--- | :--- |
+
+【性事紀】(以免出現AI角色後續忘記有過性事，導致角色OOC變成拔屌無情的渣男渣女)
+| 性事事件 | 事件描述 | 參與角色 |
+| :--- | :--- | :--- |
+
+【結語】(必填，100字以內純文字，只寫「這一段」的核心走向與結束時關鍵狀態；合併時會逐段累積成大廳快覽，所以別重述舊段、別把整個故事重寫一遍；不要加任何標題、序號、表格或裝飾符號)`;
+
+    function getSummaryTemplate() {
+        const t = localStorage.getItem('sp_summary_tpl') || SUMMARY_DEFAULT_TPL;
+        if (/【結案表】|【结案表】/.test(t)) return t;
+        // 自訂範本是結案表出現以前抄的 → 補上那一段（排在結語前），其餘照使用者的
+        const sec = (SUMMARY_DEFAULT_TPL.match(/【結案表】[\s\S]*?\n(?=\n)/) || [''])[0].trim();
+        if (!sec) return t;
+        const i = t.search(/【結語】|【结语】/);
+        return i >= 0 ? t.slice(0, i) + sec + '\n\n' + t.slice(i) : t.trimEnd() + '\n\n' + sec;
+    }
+
+    // ===== 結構化合併：把「這次增量」疊到「上一份累積總結」，不重濾舊內容 =====
+    // 事件類(事件表/代辦/結算/性事紀)→ 新列接在後面；角色/物品類 → 同名(第一欄)更新、新名加後面；
+    // 結語/場景索引 → 取新；故事標題 → 保留最早。表頭沒有前導「|」也吃得到（用「含 |」判斷）。
+    // 合法區塊名白名單：固定繁簡/舊區塊 + 從當前模板動態抽（支援自訂模板）。
+    //   ★ 內容裡的物品/技能名也常寫成 【坐骑缰绳】【熔炉之韧】，若把每個 【】 都當區塊標題 → 表格被從中間切碎、合併後亂飛。
+    //   只認白名單內的才算區塊標題，其餘 【...】 一律當內容留在 body。
+    function _knownSectionHeaders() {
+        const s = new Set([
+            '事件表','角色表','關係圖譜','关系图谱','結算清單','结算清单','結案表','结案表','配角近況','物品表',
+            '注意規範','注意规范','注意規範/記憶事項表','注意规范/记忆事项表','關鍵狀態/記憶','关键状态/记忆','關鍵狀態','关键状态',
+            '性事紀','性事记','結語','结语','故事標題','故事标题',
+            '代辦清單','代办清单','場景索引','场景索引'
+        ]);
+        try {
+            const tpl = getSummaryTemplate();   // 自訂模板的區塊名也抽進來
+            const re = /【([^】]+)】/g; let mm;
+            while ((mm = re.exec(tpl)) !== null) { const n = mm[1].trim(); if (n && !/大总结|大總結/.test(n)) s.add(n); }
+        } catch (e) {}
+        return s;
+    }
+    // 第二道保險：把「內容裡」的物品/技能名 【X】 正規化成「X」(只用在已切好的 body、標題不動)，
+    //   存進去就乾淨、跟區塊分隔符 【】 徹底不撞、顯示也更清爽。
+    function _normContentBrackets(body) {
+        return String(body == null ? '' : body).replace(/【([^】]+)】/g, '「$1」');
+    }
+    function _splitSummarySections(text) {
+        const known = _knownSectionHeaders();
+        const res = []; const re = /【([^】]+)】/g; let m, idx = 0, header = null;
+        while ((m = re.exec(text)) !== null) {
+            const name = m[1].trim();
+            const isSection = /^大总结|^大總結/.test(name) || known.has(name);   // 標題行(保險) 或 白名單區塊
+            if (!isSection) continue;                                              // 內容的物品/技能名 → 不切、留在當前 body
+            if (header !== null) res.push({ header: header.trim(), body: text.slice(idx, m.index).trim() });
+            header = name; idx = re.lastIndex;
+        }
+        if (header !== null) res.push({ header: header.trim(), body: text.slice(idx).trim() });
+        return res;
+    }
+    function _parseMdTable(body) {
+        const out = { header: null, sep: null, rows: [], extra: [] };
+        for (const raw of String(body).split('\n')) {
+            const l = raw.trim();
+            if (!l) continue;
+            if (/-{2,}/.test(l) && /^[|\s:\-]+$/.test(l)) { if (out.sep === null) out.sep = l; continue; }  // :--- 分隔列
+            if (l.includes('|')) { if (out.header === null) out.header = l; else out.rows.push(l); }
+            else if (!/^「[^」]*」$/.test(l) && l !== '与' && l !== '與') out.extra.push(l);   // 丟掉舊版亂掉折進來的單名碎片(「魔力共振网络」/与…)
+        }
+        return out;
+    }
+    function _buildMdTable(t) {
+        const lines = [];
+        if (t.extra && t.extra.length) lines.push(t.extra.join('\n'));
+        if (t.header) lines.push(t.header);
+        if (t.sep) lines.push(t.sep);
+        lines.push(...t.rows);
+        return lines.join('\n');
+    }
+    function _firstCell(row) {
+        return (String(row).replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|')[0] || '').trim();
+    }
+    // 表格列拆/合與欄數對齊：治「舊4欄 + 新5欄黏一起」害事件表整張錯位。
+    function _rowCells(line) { return String(line == null ? '' : line).replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim()); }
+    function _rowJoin(cells) { return '| ' + cells.join(' | ') + ' |'; }
+    function _colCount(line) { return line ? _rowCells(line).length : 0; }
+    function _alignTable(t) {   // 把表頭/分隔列/每一列都對齊到「表頭欄數」(欄數由上游挑較豐富的表頭決定)
+        if (!t || !t.header) return t;
+        const n = _colCount(t.header);
+        if (n <= 0) return t;
+        const fix = line => { const c = _rowCells(line); while (c.length < n) c.push(''); if (c.length > n) c.splice(n); return _rowJoin(c); };
+        t.header = fix(t.header);
+        if (t.sep) t.sep = _rowJoin(Array.from({ length: n }, () => ':---'));
+        t.rows = (t.rows || []).map(fix);
+        return t;
+    }
+    // 去重正規化：物品表常因「數量括號(2颗)/叫法不同/簡繁」生分身(毒腺/极品毒腺/毒腺(2颗)各一列)→ 膨脹。
+    //   合併比對前把這些雜訊抹平，讓同一物品落同一格、只留最新一列。角色表不正規化(怕把不同角色併掉)。
+    function _normMergeKey(header, raw) {
+        let k = String(raw == null ? '' : raw).trim();
+        if (header === '物品表') {
+            k = k.replace(/[（(][^（()]*[)）]/g, '')       // 去括號內容(數量/說明)
+                 .replace(/[x×]\s*\d+\s*$/i, '')          // 去尾綴 x2
+                 .replace(/[「」『』“”"'·,，。、\s]/g, '')   // 去標點/空白
+                 .replace(/[極极]品|[頂顶]級|[稀]有/g, ''); // 去品階形容(极品毒腺 = 毒腺)
+        } else if (header === '角色表') {
+            k = k.replace(/[（(][^（()]*[)）]/g, '')        // 去括號(種族/別名)：红石(深毒蛛人)→红石
+                 .replace(/^(成年|幼年|年幼|年輕|年轻|青年|中年|老年|未成年)/, '')   // 去年齡/狀態前綴：成年深毒蛛人→深毒蛛人
+                 .replace(/[「」『』“”"'·・,，。、\s]/g, '');
+        }
+        return k || String(raw == null ? '' : raw).trim();
+    }
+    const REL_HEADERS = new Set(['關係圖譜', '关系图谱']);
+    // 簡繁同形只拿來比對（張偉＝张伟），永遠不改寫表裡的字
+    function _fold(s) { try { const Z = win.WX_ZH || window.WX_ZH; return Z && Z.fold ? Z.fold(s) : s; } catch (e) { return s; } }
+    function _mergeSection(header, prevBody, incBody) {
+        const APPEND = ['事件表', '結算清單', '结算清单', '性事紀', '性事记'];
+        const MERGEKEY = ['角色表', '物品表', '關係圖譜', '关系图谱', '注意規範', '注意规范', '注意規範/記憶事項表', '注意规范/记忆事项表', '結案表', '结案表'];   // 簡體「注意规范」以前漏了 → 掉到「取新」，舊規範每合併一次就被蓋掉
+        if (APPEND.includes(header)) {
+            const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
+            const head = (_colCount(ti.header) > _colCount(tp.header)) ? ti.header : (tp.header || ti.header);   // 挑欄數較多的表頭，避免新增欄(如關鍵台詞)被截
+            return _buildMdTable(_alignTable({ header: head, sep: tp.sep || ti.sep, rows: [...tp.rows, ...ti.rows], extra: tp.extra.length ? tp.extra : ti.extra }));
+        }
+        if (MERGEKEY.includes(header)) {
+            const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
+            const order = [], map = {};
+            // 🚨 關係圖譜一列是「兩個人」：以前只拿第一欄當鑰匙，「主角｜角色甲」跟「主角｜角色乙」算同一列、後寫的蓋掉前面的，
+            //    主角永遠只剩一條關係（09-27 實測：主角跟某角色那條情感線整條不見，AI 只好照人設重來）。現在兩個名字一起當鑰匙、不分先後。
+            const _relKey = r => { const c = _rowCells(r); const f = n => _fold(String(n || '').replace(/[\s*＊]/g, '')); return [f(c[0]), f(c[1])].sort().join('↔'); };
+            const add = r => { const k = REL_HEADERS.has(header) ? _relKey(r) : _normMergeKey(header, _firstCell(r)); if (!(k in map)) order.push(k); map[k] = r; };   // 同(正規化)名更新、新名加後面
+            tp.rows.forEach(add); ti.rows.forEach(add);
+            // 物品表偏好「新版表頭」(2 欄、無備註)，讓舊 3 欄資料隨新生成收斂；其餘區塊挑欄數較多的表頭(免截掉新增欄)
+            const head = (header === '物品表') ? (ti.header || tp.header)
+                       : ((_colCount(ti.header) > _colCount(tp.header)) ? ti.header : (tp.header || ti.header));
+            const sep  = (header === '物品表') ? (ti.sep || tp.sep) : (tp.sep || ti.sep);
+            return _buildMdTable(_alignTable({ header: head, sep, rows: order.map(k => map[k]), extra: tp.extra.length ? tp.extra : ti.extra }));
+        }
+        // 純文字區塊：濾掉混進來的「表格列 / 單名碎片」(舊版亂掉的殘留會折進這些尾端文字區 → 你看到的「下面多餘東西」)
+        const _textOnly = s => String(s || '').split('\n').map(x => x.trim()).filter(Boolean)
+            .filter(x => !x.startsWith('|') && !/^「[^」]*」$/.test(x) && x !== '与' && x !== '與');
+        if (['結語', '结语'].includes(header)) return [prevBody, incBody].flatMap(_textOnly).join('\n');   // 結語：逐段累積疊加(舊段在上、這次接後面，成時間線給大廳快覽)、濾掉碎片
+        if (['故事標題', '故事标题'].includes(header)) return (_textOnly(prevBody)[0] || _textOnly(incBody)[0] || '');   // 故事標題：只取標題那行、丟尾端殘留
+        return incBody || prevBody;   // 其他純文字 → 取新
+    }
+    // 從 AVS 狀態(current) 抓「中文外觀」餵總結補角色表外觀（結構無關：走外觀關鍵字、掃 1~2 層；NAI 不吃中文但總結是中文沒問題）
+    function _avsLooksText(cur) {
+        if (!cur || typeof cur !== 'object') return '';
+        const APP = /(髮色|发色|髮型|发型|頭髮|头发|髮|发|眼色|瞳色|瞳孔|眼睛|眼|膚色|肤色|膚|肤|外觀|外观|外貌|長相|长相|形象|容貌|相貌|身高|體型|体型|身材|衣著|衣着|服裝|服装|裝扮|装扮|穿著|穿着|特徵|特征)/;
+        const lines = [];
+        const grab = (name, obj) => {
+            const parts = [];
+            for (const k of Object.keys(obj || {})) {
+                const v = obj[k];
+                if (v && typeof v === 'object' && !Array.isArray(v)) {
+                    if (APP.test(k)) for (const kk of Object.keys(v)) { const vv = v[kk]; if (vv != null && typeof vv !== 'object' && String(vv).trim() && String(vv) !== '—') parts.push(`${kk}=${vv}`); }
+                } else if (APP.test(k) && v != null && String(v).trim() && String(v) !== '—') {
+                    parts.push(`${k}=${v}`);
+                }
+            }
+            if (parts.length) lines.push(`${String(name).trim()}：${parts.join('、')}`);
+        };
+        try {
+            for (const name of Object.keys(cur)) {
+                const v = cur[name];
+                if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+                grab(name, v);
+                for (const sub of Object.keys(v)) {   // 巢狀實體(如 NPC 容器下每個角色)
+                    const sv = v[sub];
+                    if (sv && typeof sv === 'object' && !Array.isArray(sv)) grab(sub, sv);
+                }
+            }
+        } catch (e) {}
+        return lines.slice(0, 40).join('\n');   // 上限 40 行免爆 token
+    }
+    // 角色表合併：AI 已拿到完整累積角色表+去重指示 → 它的輸出是「完整去重版」，直接取代(不疊加免重複)。
+    //   安全網：角色列掉太兇(疑似 AI 沒照「完整重出」或誤刪角色)→ 退回程式 MERGEKEY 疊加(含正規化去重)、保住不漏角色。
+    function _mergeCharTable(prevBody, incBody) {
+        const tp = _parseMdTable(prevBody), ti = _parseMdTable(incBody);
+        const prevN = tp.rows.length, incN = ti.rows.length;
+        if (incN >= 1 && (prevN < 4 || incN >= Math.ceil(prevN * 0.5))) {
+            return _buildMdTable(_alignTable({ header: ti.header || tp.header, sep: ti.sep || tp.sep, rows: ti.rows, extra: ti.extra.length ? ti.extra : tp.extra }));
+        }
+        return _mergeSection('角色表', prevBody, incBody);
+    }
+    function _structuredMerge(incFull, prevFull, summaryCount, lastTxt) {
+        try {
+            if (!prevFull) return incFull;
+            // 清掉「所有」夾帶的大總結標題(不只開頭)：一旦舊總結被黏進內文，下一輪會被當成假區塊一直滾下去(就是尾巴那塊【大总结(第27次)】的來源)
+            const stripHead = t => String(t).replace(/【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/gi, '');
+            const prevSecs = _splitSummarySections(stripHead(prevFull));
+            const incSecs = _splitSummarySections(stripHead(incFull));
+            const incMap = {}; incSecs.forEach(s => { incMap[s.header] = s; });
+            const used = new Set(); const out = [];
+            const KEEPOLD = ['故事標題', '故事标题'];
+            const DROP = ['場景索引', '场景索引', '代辦清單', '代办清单', '物品表'];   // 已棄用區塊：合併時直接丟掉、不再輸出（物品表改走向量收斂釘選、不再進大總結，舊卡殘留的也在這裡停止往後搬）
+            for (const p of prevSecs) {
+                if (DROP.includes(p.header)) { used.add(p.header); continue; }
+                const i = incMap[p.header];
+                if (!i) { out.push(p); continue; }
+                used.add(p.header);
+                if (KEEPOLD.includes(p.header)) { out.push(p); continue; }
+                // 角色表＝AI 拿到累積表+去重指示後輸出的「完整去重版」→ 取代(不疊加)；其餘區塊照舊結構化疊加
+                const _mb = (p.header === '角色表') ? _mergeCharTable(p.body, i.body) : _mergeSection(p.header, p.body, i.body);
+                out.push({ header: p.header, body: _mb });
+            }
+            for (const i of incSecs) { if (!used.has(i.header) && !DROP.includes(i.header)) out.push(i); }   // 增量有、舊的沒有 → 加後面
+            // 依模板正規化區塊順序：治「結算清單漂到結語後面」這種錯序(增量才有的區塊原本一律被丟到最後)
+            const RANK = { '故事標題': -1, '故事标题': -1, '事件表': 0, '角色表': 1, '關係圖譜': 2, '关系图谱': 2, '結算清單': 3, '结算清单': 3, '結案表': 3, '结案表': 3, '配角近況': 5.5, '注意規範': 4, '注意规范': 4, '注意規範/記憶事項表': 4, '注意规范/记忆事项表': 4, '關鍵狀態/記憶': 4, '关键状态/记忆': 4, '性事紀': 5, '性事记': 5, '結語': 6, '结语': 6 };
+            out.sort((a, b) => ((a.header in RANK ? RANK[a.header] : 90) - (b.header in RANK ? RANK[b.header] : 90)));   // Array.sort 穩定排序：同序保留原順序
+            const body = out.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');   // 內容【】→「」，存進去乾淨不再撞
+            return `【大总结(第${summaryCount}次)】${lastTxt}\n\n${body}`;
+        } catch (e) {
+            console.warn('[大總結] 結構化合併失敗，改用增量本身:', e);
+            return incFull;
+        }
+    }
+
+    // 自動總結存檔前的「品質閘門」：只擋「根本不是總結」的壞生成(空/截斷/API錯誤頁)→不存、保留舊的，
+    //   根治「自動時報錯卻還是被套用、覆蓋掉好資料」。手動模式有預覽窗把關，這裡只補背景模式的缺口。
+    function _validateSummary(content) {
+        const txt = String(content == null ? '' : content).trim();
+        if (txt.length < 80) return { ok: false, reason: '內容過短或空（疑似生成失敗 / 被截斷）' };
+        if (/^\s*(<!doctype|<html|<head|\{?\s*"error"|error code|rate.?limit|too many requests|quota exceeded|bad gateway|gateway time-?out|service unavailable|cloudflare)/i.test(txt))
+            return { ok: false, reason: '回傳像錯誤頁 / 錯誤訊息，不是總結內容' };
+        // 🚫 不要再加「檔頭出現幾次」「有沒有某某區塊」這類格式檢查（2026-08-02 拔掉，定案）：
+        //    開頭那行【大总结(第N次)】Last:NN 是程式自己蓋的【檔頭／版本戳】，記第幾次總結、收到第幾樓，
+        //    不是故事標題（故事標題在【故事標題】區塊的下一行）。存檔前那段本來就會「有就取代第一個、沒有就補上」，
+        //    AI 多吐幾個檔頭頂多內文多一行雜訊——為這種事丟掉整份總結＝白燒一次 API 再重生成一次，
+        //    而且連「第 1 次總結」都會被誤判成「夾帶舊總結」（根本還沒有舊總結可以夾帶）。
+        //    這裡只擋「根本不是總結」的東西（空的／被截斷／API 錯誤頁），那些存進去會真的毀掉舊總結。
+        return { ok: true };
+    }
+
+    // ===== 重壓目前大總結：把「累積很長的單卡」重新濃縮(久遠壓階段節點、最近逐筆)，存回 OS_DB =====
+    //   大總結是一張卡、每次把新數據結構化疊到後面(合併模式)→事件表會越疊越長(注入字數爆)。
+    //   這個按鈕不新增劇情、只把現有那張卡重壓：角色表/關係圖譜程式原樣保留(一個不漏)、事件表丟 AI 濃縮、物品/結算/代辦等廢區塊移除。
+    API.recompressSummary = async function () {
+        const chatId = getChatIdentifier();
+        // 網頁版（10-20 補齊）：大總結在 vn_grand_summaries（一段故事好幾版，最新那版＝次數最大的），壓完蓋回同一版
+        const pwa = _isStandalone();
+        let rec = null, pwaLatest = null;
+        if (pwa) {
+            try { const list = (await win.OS_DB?.getGrandSummaries?.(chatId)) || []; pwaLatest = list.length ? list.reduce((a, b) => ((a.count || 0) >= (b.count || 0) ? a : b)) : null; } catch (e) {}
+            if (pwaLatest) rec = { content: pwaLatest.content, summaryCount: pwaLatest.count };
+        } else rec = await _loadTavernSummary(chatId);
+        if (!rec || !rec.content) { AUI.alert('目前這個對話還沒有大總結，沒得壓縮。'); return; }
+        const osApi = win.OS_API, osSet = win.OS_SETTINGS, osDb = win.OS_DB;
+        if (!osApi?.chat || !osSet?.getConfig || !(pwa ? osDb?.saveGrandSummary : osDb?.saveTavernSummary)) { AUI.alert('找不到 OS_API / OS_SETTINGS / OS_DB'); return; }
+        const beforeFull = rec.content.length;
+        const beforeInject = (API.buildInjectionPayload ? API.buildInjectionPayload(rec.content) : rec.content).length;
+        if (!await AUI.confirm(`重壓目前大總結？\n\n存檔全文 ${beforeFull} 字、每輪實際注入約 ${beforeInject} 字。\n會把久遠事件壓成階段節點、最近逐筆保留；角色 / 關係全保留、物品表移除。劇情不會新增。`)) return;
+
+        const btn = document.getElementById('btn-recompress-summary');
+        const origText = btn ? btn.innerText : '';
+        if (btn) { btn.innerText = '壓縮中 (請勿關閉)...'; btn.classList.add('spinning'); }
+        win.__AURELIA_SUMMARIZING = true;   // 擋住「重壓期間自己把舊總結注入進這次 prompt」+ 別讓 AVS/場景抽取器誤觸(同生成路徑契約)
+        try {
+            const stripHead = t => String(t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, '');
+            const secs = _splitSummarySections(stripHead(rec.content));
+            // 角色表/關係圖譜 → 程式原樣保留，等下強制蓋回 AI 輸出，保證一個角色都不漏
+            const PRESERVE = ['角色表', '關係圖譜', '关系图谱', '結案表', '结案表', '配角近況'];
+            const preserved = {};
+            for (const s of secs) { if (PRESERVE.includes(s.header) && String(s.body || '').trim()) preserved[s.header] = s.body; }
+            const preservedBlock = Object.keys(preserved).map(h => `【${h}】\n${preserved[h]}`).join('\n\n');
+
+            const target = (function () { const v = parseInt(localStorage.getItem('sp_summary_recompress_target')); return (!isNaN(v) && v > 500) ? v : 2000; })();
+            const prompt = `下面是一份已經累積很長的大總結，請把它「重新壓縮」成精簡完整的一份。只濃縮、不要新增劇情、不要評論。\n` +
+                `【規則】\n` +
+                `- 事件表 → 維持成一條「時間線」：按時序排、相鄰事件有因果承接連成連貫劇情線(別變零散片段)；久遠多筆壓成「階段節點」(一行涵蓋一段劇情的起因→轉折→結果)，最近 8 筆逐筆保留；以不可逆結果為主、不記過程。\n` +
+                `- 結語 → 壓成一條涵蓋全程的「時間線」(舊段在上、新段在下，給大廳快覽用)：相鄰的同場景 / 同時段多段合併成一個時間節點，用「【日期·場景】這段的起因→轉折→結果」一行帶過；最近數段可保留較細。必須保留每一個劇情轉折、秘密揭露、關係與權力變化；剔除重複的試探 / 遊戲過程 / 過場閒聊。整條時間線不可整段消失、不可只取最新、不可改寫成與原意不符。\n` +
+                `- 注意規範 → 去重、保留所有仍有後續影響的項目。\n` +
+                `- 性事紀 → 整併成一行：跟誰、大概在什麼情況下發生過（不寫兩人是什麼關係、關係怎麼變——關係以關係圖譜為準），但每個發生過性事的角色至少保留一條、絕不刪光。\n` +
+                `- 物品表、結算清單、代辦清單、場景索引 → 整個刪除、不要輸出這些區塊。\n` +
+                `- 故事標題 → 原樣保留、不要改寫。\n` +
+                `- 角色表、關係圖譜、結案表 → 直接用我下面附的「完整版」原樣放進去，一個角色、一件結案的事都不准刪或漏。\n` +
+                `- 目標：整份壓到 ${target} 字以內(角色表 / 關係圖譜 / 結案表不計)；用原本的【區塊】格式輸出一份，只輸出總結本身、不要解釋。\n` +
+                `\n【附：完整角色表 / 關係圖譜 / 結案表（照抄、不准刪）】\n${preservedBlock || '（無）'}\n\n` +
+                `【要壓縮的大總結】\n${stripHead(rec.content)}`;
+
+            const aiOut = await new Promise((res, rej) => {
+                let g = '';
+                osApi.chat([{ role: 'system', content: '剧情总结整理助手，只输出要求的内容' }, { role: 'user', content: prompt }],
+                    osSet.getConfig(), (c) => { g = c; }, (f) => { g = f; res(String(g || '')); }, (err) => rej(err),
+                    { task: 'summary', disableTyping: true, stream: true });   // 🌊 重壓輸出很長：非串流等整篇會撞閘道逾時 504（同大總結）
+            });
+            if (!String(aiOut || '').trim()) throw new Error('AI 沒有回傳內容');
+
+            // 重建：砍掉廢區塊 + 角色表/關係圖譜強制換回程式保留版(救 AI 漏角色)
+            const DROP = new Set(['物品表', '結算清單', '结算清单', '代辦清單', '代办清单', '場景索引', '场景索引']);
+            let rebuilt = _splitSummarySections(stripHead(aiOut)).filter(s => !DROP.has(s.header));
+            rebuilt = rebuilt.map(s => preserved[s.header] ? { header: s.header, body: preserved[s.header] } : s);
+            for (const h of Object.keys(preserved)) { if (!rebuilt.find(s => s.header === h)) rebuilt.push({ header: h, body: preserved[h] }); }
+            const headLine = `【大总结(第${rec.summaryCount || 1}次)】` + (rec.lastId != null ? `\nLast: ${rec.lastId}` : '');
+            const bodyOut = rebuilt.map(s => `【${s.header}】\n${_normContentBrackets(s.body)}`).join('\n\n');
+            // 網頁版的大總結本來就沒有那行檔頭（VN_Summary 直接存模型寫的），原本沒有就不加
+            const finalContent = (pwa && !/^\s*【大总结/.test(rec.content)) ? bodyOut : headLine + '\n\n' + bodyOut;
+
+            if (pwa) await osDb.saveGrandSummary(Object.assign({}, pwaLatest, { content: finalContent }));
+            else await osDb.saveTavernSummary(chatId, Object.assign({}, rec, { content: finalContent }));
+            try { win.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}
+            const afterFull = finalContent.length;
+            const afterInject = (API.buildInjectionPayload ? API.buildInjectionPayload(finalContent) : finalContent).length;
+            console.log(`[大總結] ✅ 重壓完成 全文 ${beforeFull}→${afterFull}、注入 ${beforeInject}→${afterInject}`);
+            AUI.alert(`重壓完成！\n存檔全文：${beforeFull} → ${afterFull} 字\n每輪實際注入：${beforeInject} → ${afterInject} 字\n角色 / 關係全保留、物品表已移除。`);
+            try { const sb = document.querySelector('#ost-panel .ost-hide-btn[title="重新整理"]'); if (sb) API._refreshStatus(sb); } catch (e) {}
+            // 網頁版的故事管理有一格「內容」顯示整份大總結：重開一次換成壓好的那份
+            if (pwa) { try { const host = document.getElementById('ost-panel')?.parentElement; if (host) API.openPanel(host); } catch (e) {} }
+        } catch (e) {
+            console.error('[大總結] 重壓失敗:', e);
+            AUI.alert('重壓失敗：' + (e?.message || e));
+        } finally {
+            if (btn) { btn.innerText = origText; btn.classList.remove('spinning'); }
+            setTimeout(function () { win.__AURELIA_SUMMARIZING = false; }, 3000);
+        }
+    };
+
+    // ── 注入壓縮：把「全文存檔」壓成「每輪實際送主模型」的精簡版（存檔保留全部、注入只送活著的狀態）──
+    //   事件表→預設全送(久遠已壓階段節點＝完整劇情線、防失憶；可設 sp_summary_events_keep 上限)；物品表→整塊 DROP 不注入(定案：20輪一次對物品太慢沒意義；物品改走向量收斂釘選 os_vector_inject)；結算清單→丟(跟事件/結語重複)；結案表→帶說明一起送（酒館正文帶 withoutClosed、另放下筆前）；
+    //   性事紀→只留最近數筆；結語(總記憶)/角色表/關係圖譜/注意規範→全送。供 os_summary_inject 每輪呼叫。
+    function _stripSummaryHead(t) { return String(t == null ? '' : t).replace(/^\s*【大总结[^】]*】[^\n]*\n*(Last:[^\n]*\n*)?/i, ''); }
+    // 🔚 結案表：6/22 起結算清單不送了，就沒有任何一處告訴 AI「哪件事已經結束」→ 背景線被當成還在進行、每章交代一次進度（實測某個長篇第 46～70 章）。
+    //   09-25 拿真實請求對照：一般性的「別重提」壓不住，點名「那件事已經過去了，別再提」才壓得住。
+    //   🚨 酒館正文那塊只送「結案事項」組成的一句話，不送整張表：表的「怎麼結束的」那欄等於把整件事再講一遍，
+    //      實測整張表放進去 4 次裡還是 1 次重演、3 次帶過；同位置只點名一句 3 次都沒重演。
+    const CLOSED = new Set(['結案表', '结案表']);
+    const CLOSED_NOTE = '（下列事情已經結束了。除非主角自己回頭去碰，不要再寫它們的後續，也別讓任何人再提起、當成新消息聊起。）';
+    API.buildClosedNames = function (fullContent) {
+        try {
+            const s = _splitSummarySections(_stripSummaryHead(fullContent)).find(x => CLOSED.has(x.header));
+            if (!s) return [];
+            return _parseMdTable(s.body).rows.map(r => String(_firstCell(r) || '').trim()).filter(n => n && n !== '-');
+        } catch (e) { return []; }
+    };
+    API.buildClosedBlock = function (fullContent) {
+        try {
+            const names = API.buildClosedNames(fullContent);
+            if (!names.length) return '';
+            return `<已結案>\n（${names.join('、')}，這些事已經過去了，這章不要再提，也別讓誰再聊起。）\n</已結案>`;
+        } catch (e) { return ''; }
+    };
+    // ── 🚪 世界門：別的世界的人和事，送的時候先收起來（11-13：玩過兩個世界門後大總結變得很臃腫，改成送的時候藏起來）──
+    //   存檔一個字都不動，只在送出去的那一刻藏：主角人在奧瑞亞（或 A 世界）時，B 世界留在那裡的人、他們的關係、
+    //   在 B 世界發生的事、他們的近況都不送，換成【去過的視差世界】一行（去過哪、什麼時候、在那裡認識誰）；回到 B 世界那份整段照送。
+    //   重壓是故意不刪角色表和關係圖譜的（一個不漏），所以兩趟世界門回來，壓完還是一萬字上下（實測一份 12,158 字，兩個世界佔 5,790）。
+    //   誰是哪個世界的：角色表「身份」或「狀態／位置」欄寫著那個世界的名字、又沒寫撤離／下線的（跟著主角進出的旅伴會寫撤離，照送）。
+    //     關係＝兩邊都是那些人、或一邊是主角；事件＝關鍵角色欄裡有那些人（名字切開一個一個比，「阿明」不會比中「阿明哲」）。
+    //   世界名單問世界門（OS_WORLDGATE.worldNames、getCurrentWorld），簡繁一律過 OS_ZH.key；認不出就照送，寧可多送也別藏錯。
+    const _zk = s => { const Z = win.OS_ZH || window.OS_ZH; return (Z && Z.key) ? Z.key(s) : String(s == null ? '' : s).replace(/\s/g, ''); };
+    const WG_ROLE = ['角色表'], WG_REL = ['關係圖譜', '关系图谱'], WG_EVT = ['事件表'];
+    const _WG_LEFT = /撤離|撤离|下線|下线/;
+    function _hdrCol(cells, re) { for (let i = 0; i < cells.length; i++) if (re.test(cells[i])) return i; return -1; }
+    function _nameList(cell) { return String(cell || '').split(/[、,，;；\/／|]|\s+|與|与|及/).map(s => s.trim()).filter(Boolean); }
+    // 🧭 11-15 起再多看「劇情裡真的在哪出場過」（OS_WORLDGATE.castInfo，從 [Char|名] 認）：
+    //   11-15 盤點後先修大總結——人在世界門的世界裡時，奧瑞亞那邊的人（角色表沒寫任何世界名）認不出來，整份照送，又長又會被 AI 帶進世界。
+    //   現在：在「現在這個地方」出場過的照送（旅伴、這個世界的人）；只在別的地方出場過的先收起來——
+    //   人在世界裡＝奧瑞亞的人和別的世界的人；人在奧瑞亞＝別的世界的人（角色表沒寫世界名的也認得出來）。
+    //   沒在劇情裡出場過（只被提到）的照送；11-15 定：其他角色靠向量抽屜，只保留一個區塊做全域記憶（主角去過哪類型的世界門、旅人有誰，角色性格不多寫）
+    //   → 收起來的人只留【去過的視差世界】那一小塊（去過哪、什麼類型、這一趟的旅伴），細節靠記憶召回照名字找回來。
+    const WG_HOME = '\u0000home';   // byWorld 裡「主角原本生活的地方」那一格的名字（不會撞到世界名）
+    const _firstSeg = s => String(s || '').split(/[·・•\s]/)[0];
+    // castInfo.places → Map(名字鑰匙 → Set(地方鑰匙))；全名和「·」前那段都登記（「黎昂·維斯頓」和「黎昂」對得上）
+    function _castIndex(cast) {
+        if (!cast || !cast.places || typeof cast.places !== 'object') return null;
+        const idx = new Map();
+        Object.keys(cast.places).forEach(n => {
+            const ps = (cast.places[n] || []).map(p => p ? _zk(p) : '');
+            [_zk(n), _zk(_firstSeg(n))].forEach(k => {
+                if (!k) return;
+                const set = idx.get(k) || new Set();
+                ps.forEach(p => set.add(p));
+                idx.set(k, set);
+            });
+        });
+        return idx.size ? idx : null;
+    }
+    // 回 { natives: Map(名字鑰匙→世界名或 WG_HOME), byWorld: {世界名:[名字]}, mc: 主角鑰匙, cast }；沒有要收的人回 null
+    function _worldNatives(secs, worlds) {
+        if (!worlds || !Array.isArray(worlds.names) || !worlds.names.length) return null;
+        const hereK = worlds.here ? _zk(worlds.here) : '';
+        const others = worlds.names.filter(n => n && _zk(n).length >= 2 && _zk(n) !== hereK);
+        const cast = _castIndex(worlds.cast);
+        if (!others.length && !cast) return null;
+        const worldOf = k => worlds.names.find(n => _zk(n) === k) || '';   // 地方鑰匙 → 世界名（''＝原本的地方）
+        const role = secs.find(x => WG_ROLE.indexOf(x.header) >= 0);
+        if (!role) return null;
+        const t = _parseMdTable(role.body);
+        if (!t.header) return null;
+        const hc = _rowCells(t.header);
+        const iId = _hdrCol(hc, /身份|身分/), iSt = _hdrCol(hc, /狀態|状态|位置/);
+        const natives = new Map(), byWorld = {};
+        let mc = '';
+        const put = (name, w) => { natives.set(_zk(name), w); (byWorld[w] = byWorld[w] || []).push(name); };
+        t.rows.forEach(r => {
+            const c = _rowCells(r), name = c[0];
+            if (!name || name === '-') return;
+            if (c.some(x => /^本人/.test(x))) { mc = _zk(name); return; }   // 主角永遠照送
+            const seen = cast ? (cast.get(_zk(name)) || cast.get(_zk(_firstSeg(name))) || null) : null;
+            if (seen && seen.has(hereK)) return;   // 在現在這個地方出場過：旅伴、這個世界的人
+            const st = iSt >= 0 ? (c[iSt] || '') : '';
+            if (_WG_LEFT.test(st)) return;         // 寫著撤離／下線的旅伴：跟著主角進出，照送
+            const hay = _zk((iId >= 0 ? (c[iId] || '') : '') + ' ' + st);
+            const w = others.find(n => hay.indexOf(_zk(n)) >= 0);
+            if (w) { put(name, w); return; }
+            if (seen && seen.size) {               // 只在別的地方出場過
+                const p = Array.from(seen).find(x => x !== hereK);
+                if (p === undefined) return;
+                put(name, p === '' ? WG_HOME : (worldOf(p) || WG_HOME));
+            }
+        });
+        return natives.size ? { natives: natives, byWorld: byWorld, mc: mc, cast: worlds.cast || null } : null;
+    }
+    // 這一列屬於哪個（別的）世界：'' ＝照送
+    function _wgRoleOf(tk, row) { return tk.natives.get(_zk(_rowCells(row)[0])) || ''; }
+    function _wgRelOf(tk, row) {
+        const c = _rowCells(row), a = _zk(c[0]), b = _zk(c[1]);
+        const wa = tk.natives.get(a) || '', wb = tk.natives.get(b) || '';
+        if (wa && (wb || (tk.mc && b === tk.mc))) return wa;
+        if (wb && tk.mc && a === tk.mc) return wb;
+        return '';
+    }
+    function _wgEvtOf(tk, row, iWho) {
+        if (iWho < 0) return '';
+        for (const n of _nameList(_rowCells(row)[iWho])) { const w = tk.natives.get(_zk(n)); if (w) return w; }
+        return '';
+    }
+    function _wgNote(tk, times) {
+        const cast = tk.cast || {};
+        const genreOf = n => { const v = (cast.visited || []).find(x => x && _zk(x.name) === _zk(n)); return v && v.genre ? '（' + v.genre + '）' : ''; };
+        const lines = [];
+        // 全域那一小塊：去過哪些世界、什麼類型、這一趟的旅伴（11-15 定：保留一個區塊做全域記憶，旅人有誰，角色性格不多寫）
+        if (Array.isArray(cast.visited) && cast.visited.length) lines.push('- 主角去過：' + cast.visited.map(v => v.name + genreOf(v.name)).join('、'));
+        if (Array.isArray(cast.team) && cast.team.length) lines.push('- 這一趟同行的旅人：' + cast.team.join('、'));
+        Object.keys(tk.byWorld).forEach(w => {
+            if (w === WG_HOME) { lines.push('- 主角原本生活那邊的人（' + tk.byWorld[w].length + ' 位）、在那裡發生的事：這一輪先不帶，主角回去時會整段帶上；他們不在這裡。'); return; }
+            const t = times[w] || [];
+            const when = t.length ? '（' + t[0] + (t.length > 1 ? ' ～ ' + t[t.length - 1] : '') + '）' : '';
+            lines.push('- ' + w + when + '：在那裡認識 ' + tk.byWorld[w].join('、'));
+        });
+        return '【去過的視差世界】\n（主角去過這些世界。不在這裡的人、在別處發生的事這一輪先不帶，主角回到那裡時會整段帶上；這些人留在自己的地方。）\n' + lines.join('\n');
+    }
+    // 給大總結送出時用：世界門有哪些世界、主角現在人在哪一個（不是視差世界＝''）；問不到回 null（＝照送）
+    async function _summaryWorlds() {
+        const G = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        if (!G || typeof G.worldNames !== 'function') return null;
+        try {
+            const names = (await G.worldNames()) || [];
+            if (!names.length) return null;
+            const cur = (typeof G.getCurrentWorld === 'function') ? await G.getCurrentWorld() : null;
+            let cast = null;   // 誰在哪出場過、去過哪、這一趟的旅伴（11-15；問不到＝只靠角色表的文字認）
+            try { cast = (typeof G.castInfo === 'function') ? await G.castInfo() : null; } catch (e) {}
+            return { here: (cur && cur.name) || '', names: names, cast: cast };
+        } catch (e) { return null; }
+    }
+    API.buildInjectionPayload = function (fullContent, opts) {
+        const o = opts || {};
+        // 事件表預設「全開」——大總結生成時久遠事件已壓成「階段節點」，這份本來就是壓縮過的完整劇情線，
+        //   砍最近10會害主模型失去大局意識(失憶/循環)。要設上限可填 localStorage.sp_summary_events_keep(>0)。
+        const eventsKeep = (o.eventsKeep != null) ? o.eventsKeep
+            : (function () { const v = parseInt(localStorage.getItem('sp_summary_events_keep')); return (!isNaN(v) && v > 0) ? v : Infinity; })();
+        const sexKeep = (o.sexKeep != null) ? o.sexKeep : 5;
+        try {
+            const secs = _splitSummarySections(_stripSummaryHead(fullContent));
+            const DROP = new Set(['結算清單', '结算清单', '場景索引', '场景索引', '代辦清單', '代办清单', '故事標題', '故事标题', '物品表']);   // 物品表整塊不注入(定案)，物品狀態走向量收斂釘選
+            const out = [];
+            const tk = o.worlds ? _worldNatives(secs, o.worlds) : null;   // 🚪 別的世界的人和事先收起來（見 _worldNatives）
+            const wgTimes = {};
+            let wgHid = 0;
+            const wgKeep = (t, of) => { const before = t.rows.length; t.rows = t.rows.filter(r => !of(r)); wgHid += before - t.rows.length; };
+            for (const s of secs) {
+                const h = s.header;
+                if (DROP.has(h)) continue;
+                let body = s.body;
+                if (tk && (WG_ROLE.indexOf(h) >= 0 || WG_REL.indexOf(h) >= 0)) {
+                    const t = _parseMdTable(body);
+                    wgKeep(t, r => WG_ROLE.indexOf(h) >= 0 ? _wgRoleOf(tk, r) : _wgRelOf(tk, r));
+                    body = _buildMdTable(t);
+                }
+                if (LIFE.has(h)) {
+                    if (o.withoutClosed) continue;   // 酒館正文另外放到下筆前（buildLifeBlock）
+                    const t = _parseMdTable(body);
+                    const mcK = _mcLifeKey();
+                    if (mcK) t.rows = t.rows.filter(r => _lifeKey(_rowCells(r)[0]) !== mcK);   // 主角不是配角（見 _mcLifeKey）
+                    if (tk) wgKeep(t, r => _wgRoleOf(tk, r));
+                    if (!t.rows.length) continue;
+                    body = LIFE_NOTE + '\n' + _buildMdTable(t);
+                } else if (CLOSED.has(h)) {
+                    if (o.withoutClosed) continue;   // 酒館正文另外放到下筆前（buildClosedBlock），這裡不重複
+                    const t = _parseMdTable(body);
+                    if (!t.rows.length) continue;
+                    body = CLOSED_NOTE + '\n' + _buildMdTable(t);
+                } else if (h === '事件表') {
+                    const t = _parseMdTable(body);
+                    if (tk && t.header) {
+                        const iWho = _hdrCol(_rowCells(t.header), /角色|人物/);
+                        wgKeep(t, r => { const w = _wgEvtOf(tk, r, iWho); if (w) (wgTimes[w] = wgTimes[w] || []).push(_rowCells(r)[0]); return w; });
+                    }
+                    if (t.rows.length > eventsKeep) t.rows = t.rows.slice(-eventsKeep);   // 只留最近 N 筆事件(舊的靠結語涵蓋)
+                    body = _buildMdTable(t);
+                } else if (h === '性事紀' || h === '性事记') {
+                    const t = _parseMdTable(body);
+                    if (t.rows.length > sexKeep) t.rows = t.rows.slice(-sexKeep);
+                    // 🚨 09-23：舊紀錄裡常寫著「泡友」之類當時的關係，關係後來變了還每輪送 → 標明關係以關係圖譜為準
+                    body = '（發生過就好，別寫成初次見面；兩人現在的關係以劇情記憶裡那個人的「關係」為準，這裡提到的關係是當時的）\n' + _buildMdTable(t);
+                }
+                if (String(body || '').trim()) out.push(`【${h}】\n${String(body).trim()}`);
+            }
+            if (tk && wgHid) out.push(_wgNote(tk, wgTimes));
+            const packed = out.join('\n\n').trim();
+            // 🚨 切不出任何區塊就退回全文，絕不回空字串：舊格式 / 自訂模板沒用【區塊名】包表頭時
+            //   _splitSummarySections 會回空陣列 → 這裡本來會回 ''，注入端拿到空字串＝整份長期記憶靜靜消失。
+            return packed || _stripSummaryHead(fullContent).trim();
+        } catch (e) {
+            console.warn('[大總結] buildInjectionPayload 失敗，退回全文:', e);
+            return _stripSummaryHead(fullContent).trim();
+        }
+    };
+
+    // ── 讀「目前 chatId 的大總結」：OS_DB 為主；OS_DB 沒有但世界書有舊版 → 一次性遷移進 OS_DB(舊聊天無痛接軌) ──
+    async function _migrateSummaryFromLorebook(chatId) {
+        try {
+            const helper = window.parent.TavernHelper;
+            const bookName = helper?.getCurrentCharPrimaryLorebook?.();
+            if (!bookName || !helper?.getLorebookEntries) return null;
+            const entries = await helper.getLorebookEntries(bookName);
+            const olds = (entries || []).filter(e => e.comment && e.comment.includes(`[大总结] - ${chatId}`));
+            if (!olds.length) return null;
+            const _seq = e => { const m = (e.comment || '').match(/第\s*(\d+)\s*次/); return m ? parseInt(m[1]) : 0; };
+            olds.sort((a, b) => _seq(b) - _seq(a));
+            const latest = olds[0];
+            const content = latest.content || '';
+            if (!content) return null;
+            const lm = content.match(/Last:\s*(\d+)/i);
+            // 搬出世界書：把舊大總結條目停用（資料已遷進 OS_DB，避免和新的程式注入雙重觸發）。
+            //   fire-and-forget：不 await，免得在 GENERATION_STARTED 當下卡住生成；只是停用 dormant 條目、晚一拍也無妨。
+            try {
+                if (helper.setLorebookEntries) {
+                    const ups = olds.filter(e => e.uid != null && e.enabled !== false).map(e => ({ uid: e.uid, enabled: false }));
+                    if (ups.length) helper.setLorebookEntries(bookName, ups)
+                        .then(() => console.log('[大總結] 已停用世界書舊條目 ' + ups.length + ' 筆'))
+                        .catch(e => console.warn('[大總結] 停用舊世界書條目失敗（不影響遷移）:', e));
+                }
+            } catch (e) { console.warn('[大總結] 停用舊世界書條目失敗（不影響遷移）:', e); }
+            return { content, summaryCount: _seq(latest) || olds.length, lastId: lm ? parseInt(lm[1]) : null, title: '', bgCacheId: '' };
+        } catch (e) { return null; }
+    }
+    async function _loadTavernSummary(chatId) {
+        // PWA：大總結存在 vn_grand_summaries（by storyId、一版一筆），不是酒館那個 tavern_summary。
+        //   取 count 最大的那版包成同一個形狀回傳，下游(getCurrentInjectionPayload → wx/電話/微博 app)不用分版本。
+        if (_isStandalone()) {
+            try {
+                const list = (await (win.OS_DB?.getGrandSummaries?.(chatId))) || [];
+                if (!list.length) return null;
+                const latest = list.reduce((a, b) => ((a.count || 0) >= (b.count || 0) ? a : b));
+                if (!latest || !latest.content) return null;
+                return { content: latest.content, summaryCount: latest.count || list.length, lastId: null, title: '', bgCacheId: '' };
+            } catch (e) { return null; }
+        }
+        try {
+            const osDb = window.parent.OS_DB;
+            if (osDb?.getTavernSummary) {
+                const rec = await osDb.getTavernSummary(chatId);
+                if (rec && rec.content) return rec;
+            }
+            const migrated = await _migrateSummaryFromLorebook(chatId);
+            if (migrated && osDb?.saveTavernSummary) { try { await osDb.saveTavernSummary(chatId, migrated); console.log('[大總結] 已把世界書舊版遷移進 OS_DB'); } catch (e) {} }
+            return migrated;
+        } catch (e) { return null; }
+    }
+    API._loadTavernSummary = _loadTavernSummary;
+    API.summaryWorlds = _summaryWorlds;   // 網頁版組劇情 context 時自己叫 buildInjectionPayload，要先問這個
+    API.getChatId = getChatIdentifier;   // 注入器/外部要用「跟存檔 key 同款」的 chatId，從這拿(別用 OS_DB.currentChatId，空白正規化不同)
+    // 給 PWA 的 vn_summary 共用：同一份模板(含使用者自訂的)與同一道品質閘門。
+    //   兩版差在「資料從哪來」與「怎麼注入」，這兩支是純文字處理、跟來源無關 → 沒有理由各寫一份。
+    API.getSummaryTemplate = getSummaryTemplate;
+    API.validateSummary = _validateSummary;
+
+    // 給 os_summary_inject 每輪呼叫：讀目前 chatId 的大總結 → 回壓縮後注入字串(沒有就回 '')
+    API.getCurrentInjectionPayload = async function (opts) {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return '';
+            const rec = await _loadTavernSummary(chatId);
+            if (!rec || !rec.content) return '';
+            const o = Object.assign({}, opts);
+            if (o.worlds === undefined) o.worlds = await _summaryWorlds();   // 🚪 別的世界的人和事送的時候先收起來；要整份帶 worlds:null
+            return API.buildInjectionPayload(rec.content, o);
+        } catch (e) { console.warn('[大總結] getCurrentInjectionPayload 失敗:', e); return ''; }
+    };
+    // 結案事項名單（記憶導演挑記憶時用：已結案的別挑）
+    API.getCurrentClosedNames = async function () {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return [];
+            const rec = await _loadTavernSummary(chatId);
+            return (rec && rec.content) ? API.buildClosedNames(rec.content) : [];
+        } catch (e) { return []; }
+    };
+    // ── 👥 配角近況：每個配角這幾天自己生活裡在發生的事，大總結存檔後另外叫副模型寫一次，存成大總結裡的【配角近況】 ──
+    //   09-26：群裡的人只會反覆演同一句設定。原因是 AI 手上每個配角就只有角色表那一格
+    //   （「貧窮日常求飯」「話少冷酷」「炸雞店員工」），人物檔案記的也只是他跟主角發生過什麼，他自己的生活一個字都沒有。
+    //   實測（某個長篇，那一輪改成翻群聊）：近況放進角色表一欄 → 3 次都沒用上；放在下筆前 → 門鎖壞了、寫負評、
+    //   撿到貓（另一位接話說帶回去）這些真的出現在群裡。
+    //   🚨 寫近況那通不給劇情：一起總結時順便寫，一半寫成職業、一半被主線拖回去（又寫成主線的衝突）。
+    const LIFE = new Set(['配角近況']);
+    const LIFE_NOTE = '（配角這幾天各自生活裡在發生的事。他們出場或在群裡說話時，可以從這裡找話題。）';
+    function _lifeRows(fullContent) {
+        const s = _splitSummarySections(_stripSummaryHead(fullContent)).find(x => LIFE.has(x.header));
+        if (!s) return [];
+        return _parseMdTable(s.body).rows.map(r => _rowCells(r)).filter(c => c[0] && c[1] && c[1] !== '-').map(c => ({ name: c[0], life: c[1] }));
+    }
+    // 主角不是配角：10-07 實測一份〈配角近況〉第一行是主角自己。
+    //   以前只靠角色表「與MC關係」欄開頭寫 MC/主角 來認，那格沒這樣寫就漏進來；再拿主角名字比一次（簡繁、** 都折掉）。
+    function _lifeKey(n) {
+        const s = String(n == null ? '' : n).replace(/[*_`]/g, '').trim();
+        try { if (s && win.OS_ZH?.key) return win.OS_ZH.key(s); } catch (e) {}
+        return s.toLowerCase();
+    }
+    function _mcLifeKey() {
+        let n = '';
+        try { n = String(win.SillyTavern?.getContext?.()?.name1 || '').trim(); } catch (e) {}
+        if (!n || n === 'User') { try { n = String(win.OS_API?.getGlobalUserName?.() || '').trim(); } catch (e) {} }
+        const k = _lifeKey(n);
+        return k === 'user' ? '' : k;
+    }
+    API.buildLifeBlock = function (fullContent, worlds) {
+        try {
+            const mcK = _mcLifeKey();
+            // 🚪 別的世界留在那裡的人，近況也先不送（同 buildInjectionPayload）
+            const tk = worlds ? _worldNatives(_splitSummarySections(_stripSummaryHead(fullContent)), worlds) : null;
+            const rows = _lifeRows(fullContent).filter(r => (!mcK || _lifeKey(r.name) !== mcK) && !(tk && tk.natives.has(_zk(r.name))));
+            if (!rows.length) return '';
+            return `<配角近況>\n${LIFE_NOTE}\n${rows.map(r => '・' + r.name + '：' + r.life).join('\n')}\n</配角近況>`;
+        } catch (e) { return ''; }
+    };
+    API.getCurrentLifeBlock = async function () {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return '';
+            const rec = await _loadTavernSummary(chatId);
+            return (rec && rec.content) ? API.buildLifeBlock(rec.content, await _summaryWorlds()) : '';
+        } catch (e) { return ''; }
+    };
+    const _lifeBusy = {};
+    // 寫一次近況、存回大總結。opts.onlyIfMissing：已經有就不寫（給「換版後第一輪自動補」用）
+    API.refreshNpcLife = async function (opts) {
+        const o = opts || {};
+        const chatId = getChatIdentifier();
+        if (!chatId || _lifeBusy[chatId]) return false;
+        _lifeBusy[chatId] = true;
+        try {
+            const rec = await _loadTavernSummary(chatId);
+            if (!rec || !rec.content) return false;
+            const prevLife = {}; _lifeRows(rec.content).forEach(r => { prevLife[r.name] = r.life; });
+            if (o.onlyIfMissing && Object.keys(prevLife).length) return false;
+            const secs = _splitSummarySections(_stripSummaryHead(rec.content));
+            const ct = secs.find(s => s.header === '角色表');
+            const t = ct ? _parseMdTable(ct.body) : null;
+            if (!t || !t.header) return false;
+            // 欄位照表頭找（範本可能被使用者改過，別寫死欄序）
+            const H = _rowCells(t.header);
+            const col = (re) => H.findIndex(h => re.test(h));
+            const cName = col(/姓名|名字/), cId = col(/身[份分]/), cChar = col(/性格/), cNow = col(/当前|當前|状态|狀態/), cRel = col(/关系|關係/);
+            if (cName < 0) return false;
+            const people = [], seen = new Set();
+            let mc = '';
+            const mcK = _mcLifeKey();
+            t.rows.map(_rowCells).forEach(c => {
+                const name = c[cName];
+                if (!name || seen.has(name)) return;
+                seen.add(name);
+                if (cRel >= 0 && /^\s*(MC|主角)/i.test(String(c[cRel] || ''))) { mc = name; return; }   // 主角那一列（與MC關係欄寫 MC/10）
+                if (mcK && _lifeKey(name) === mcK) { mc = name; return; }   // 那格沒寫 MC，就拿主角名字認
+                people.push([name, cId >= 0 ? c[cId] : '', cChar >= 0 ? c[cChar] : '', cNow >= 0 ? c[cNow] : ''].map(x => String(x || '-').trim()).join('｜'));
+            });
+            // 群聊裡講過話、角色表沒有的人（卡片自帶的群友常常這樣）：只有名字＋最近說過的一句
+            let date = '';
+            try {
+                const msgs = (await _apiFullChat()) || [];
+                const recent = msgs.slice(-40);
+                const said = {};
+                recent.forEach(m => {
+                    const text = String((m && m.mes) || '');
+                    (text.match(/<chat[\s\S]*?<\/chat>/g) || []).forEach(b => b.split('\n').forEach(l => {
+                        const mm = l.trim().match(/^\[([^\]|]{1,20})\]\s*(.+)$/);
+                        if (!mm || /^(You|Sys|Time|With|Img|Pic|Photo|Voice|Sticker|系统|系統|表情包|图片|圖片|语音|語音|转账|轉賬|撤回)$/i.test(mm[1])) return;
+                        said[mm[1].trim()] = mm[2].trim().slice(0, 40);
+                    }));
+                    if (!m.is_user) { const d = text.match(/日期\|([^\n|<]+)/); if (d) date = d[1].trim(); }
+                });
+                Object.keys(said).forEach(n => { if (seen.has(n) || (mc && n === mc) || (mcK && _lifeKey(n) === mcK)) return; seen.add(n); people.push(`${n}｜群聊裡的人｜-｜最近在群裡說過：${said[n]}`); });
+            } catch (e) {}
+            if (!people.length) return false;
+            const withPrev = people.map(p => { const n = p.split('｜')[0]; return prevLife[n] ? p + '｜上次近況：' + prevLife[n] : p; });
+            const prompt = `下面是一個故事裡的配角名單（名字｜身分｜性格｜目前狀態${Object.keys(prevLife).length ? '｜上次近況' : ''}）。${date ? '故事裡現在是 ' + date + '。' : ''}
+替每個人寫「近況」：這幾天他自己生活裡正在發生、之後會有下文的一件事。
+- 不能是他的工作、職業、招牌習慣或口頭禪，也不能發生在他上班的地方。
+- 只屬於他自己的事：不牽涉名單裡的其他人，也不牽涉主角。
+- 要跟他的身分、性格、家境、目前狀態合得起來。
+- 日常大小的事就好，不要寫成大事件。
+- 有上次近況的：往前推——那件事有了結果、走到下一步，或換成新的一件；不照抄。
+- 每人一句，二十字以內。
+
+${withPrev.join('\n')}
+
+只輸出 JSON：{"名字":"近況", …}`;
+            const raw = await new Promise((res, rej) => {
+                let g = '';
+                win.OS_API.chatSecondary([{ role: 'user', content: prompt }], (c) => { g = c; }, (f) => { res(String(f || g || '')); }, (err) => rej(err), { task: 'npc_life', disableTyping: true });
+            });
+            let j = null;
+            try { j = JSON.parse((String(raw).match(/\{[\s\S]*\}/) || ['{}'])[0]); } catch (e) {}
+            if (!j || typeof j !== 'object') return false;
+            const rows = Object.keys(j).map(n => [String(n).trim(), String(j[n] || '').replace(/[|\n]/g, ' ').trim()]).filter(r => r[0] && r[1]);
+            if (!rows.length) return false;
+            const body = '| 名字 | 近況 |\n| :--- | :--- |\n' + rows.map(r => `| ${r[0]} | ${r[1]} |`).join('\n');
+            // 存回：重讀最新一份再換掉那一段（寫近況那通要幾秒，這中間使用者可能編輯過大總結）
+            const cur = await _loadTavernSummary(chatId);
+            if (!cur || !cur.content) return false;
+            const lines = String(cur.content);
+            const re = /【配角近況】[\s\S]*?(?=\n【|$)/;
+            const next = re.test(lines) ? lines.replace(re, '【配角近況】\n' + body + '\n') : lines.trimEnd() + '\n\n【配角近況】\n' + body;
+            await win.OS_DB.saveTavernSummary(chatId, Object.assign({}, cur, { content: next }));
+            try { win.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}
+            console.log('👥 [大總結] 配角近況寫好了（' + rows.length + ' 人）');
+            return true;
+        } catch (e) { console.warn('[大總結] 配角近況沒寫成（不影響其他）:', e); return false; }
+        finally { delete _lifeBusy[chatId]; }
+    };
+    // 只要結案表那一塊（酒館正文把它另外放到下筆前的位置，見 os_summary_inject）
+    API.getCurrentClosedBlock = async function () {
+        try {
+            const chatId = getChatIdentifier();
+            if (!chatId) return '';
+            const rec = await _loadTavernSummary(chatId);
+            if (!rec || !rec.content) return '';
+            return API.buildClosedBlock(rec.content);
+        } catch (e) { console.warn('[大總結] getCurrentClosedBlock 失敗:', e); return ''; }
+    };
+
+    API.openSummaryTemplateModal = function () {
+        document.getElementById('rpg-summary-tpl-modal').classList.add('active');
+        document.getElementById('sp-summary-tpl-area').value = getSummaryTemplate();
+    };
+
+    API.saveSummaryTemplate = function () {
+        // 沒存下來就留著窗，改好的模板還在框裡
+        if (!win.AUI.lsSet('sp_summary_tpl', document.getElementById('sp-summary-tpl-area').value, '大總結模板')) return;
+        document.getElementById('rpg-summary-tpl-modal').classList.remove('active');
+    };
+
+    API.resetSummaryTemplate = async function () {
+        if (!await AUI.confirm('確定還原為預設模板？')) return;
+        localStorage.removeItem('sp_summary_tpl');
+        document.getElementById('sp-summary-tpl-area').value = SUMMARY_DEFAULT_TPL;
+    };
+
+    // CTX 面板用：算「還有多少樓沒總結」= 目前最後樓 − 上次大總結記的 Last
+    API.getUnsummarizedInfo = async function () {
+        try {
+            const helper = window.parent.TavernHelper;
+            if (!helper) return null;
+            // 真實最後樓號（對抗懶載入：取各來源最大值）。CTX 是高頻背景讀取，故不強制展開全部，best-effort。
+            let currentLast = await _trueLastId();
+            if (currentLast == null || isNaN(currentLast)) return null;
+            const chatId = getChatIdentifier();
+            let lastSummarized = 0;
+            let summaryCount = 0;
+            // 大總結已搬 OS_DB（key=chatId）；讀那筆的 summaryCount + lastId。舊聊天會在 _loadTavernSummary 自動遷移。
+            try {
+                const rec = await _loadTavernSummary(chatId);
+                if (rec) {
+                    summaryCount = rec.summaryCount || 0;
+                    if (rec.lastId != null && !isNaN(parseInt(rec.lastId))) lastSummarized = parseInt(rec.lastId);
+                }
+            } catch (e) {}
+            const uncounted = Math.max(0, currentLast - lastSummarized);
+            return { lastSummarized, currentLast, uncounted, start: lastSummarized + 1, end: currentLast, summaryCount };
+        } catch (e) { return null; }
+    };
+
+    API.showRangeModal = async function () {
+        _ensureSubModals();   // 確保子 modal 已注入（從 CTX 快捷入口直接呼叫時，可能還沒開過故事管理面板）
+        document.getElementById('rpg-range-modal').classList.add('active');
+        try {
+            const helper = window.parent.TavernHelper;
+            if (!helper) return;
+            const _endShow = await _trueLastId();      // 背景讀真實樓號(不展開；chat 陣列完整時即正確)
+            if (_endShow != null && _endShow !== '') document.getElementById('range-end-id').placeholder = `最後一條 ID: ${_endShow}`;
+
+            // 還原「自動隱藏 / 預留樓層」設定
+            try {
+                const _kr = document.getElementById('range-keep-recent');
+                if (_kr) { const v = parseInt(localStorage.getItem('sp_summary_keep_recent')); _kr.value = isNaN(v) ? 5 : v; }
+                const _ah = document.getElementById('sum_autohide');
+                if (_ah) _ah.checked = localStorage.getItem('sp_summary_autohide') !== '0';
+            } catch (e) {}
+
+            // 起始 ID 自動帶「上次總結到的下一樓」——從 OS_DB 那筆讀 lastId（舊聊天自動遷移進 OS_DB）
+            try {
+                const chatId = getChatIdentifier();
+                const rec = await _loadTavernSummary(chatId);
+                if (rec && rec.lastId != null && !isNaN(parseInt(rec.lastId))) {
+                    document.getElementById('range-start-id').value = parseInt(rec.lastId) + 1;
+                }
+            } catch (e) {}
+        } catch (e) { console.error('[大總結] 初始化失敗:', e); }
+    };
+
+    // 📱 不等下次大總結，現在就把手機聊天室還沒寫進故事的節寫進去。
+    //    先讓各聊天室把新的對話整理成節，再收；生成完照樣先跳預覽、按儲存才算數。
+    API.mergePhoneChats = async function () {
+        const _ws = window.parent.WX_SUMMARY || window.WX_SUMMARY;
+        if (!_ws?.collectForStory) { AUI.alert('微信模組還沒載入，等一下再試。'); return; }
+        const btn = document.getElementById('btn-merge-phone');
+        const t0 = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.textContent = '整理聊天室中…'; }
+        let c = null;
+        try {
+            try { await _ws.summarizeAll({ reason: 'merge_phone' }); } catch (e) {}
+            c = await _ws.collectForStory();
+        } finally { if (btn) { btn.disabled = false; btn.innerHTML = t0; } }
+        if (!c || !c.nodes) { AUI.alert('手機聊天室裡沒有還沒寫進故事的記錄。'); return; }
+        if (!await AUI.confirm(`把 ${c.chats} 個聊天室、${c.nodes} 節記錄寫進大總結？\n會用主模型生成一次，生成完一樣先給你看，按儲存才算數。`)) return;
+        if (_isStandalone()) {
+            const S = win.VN_Summary || window.VN_Summary;
+            if (!S?.generate) { AUI.alert('大總結模組尚未載入'); return; }
+            API.closePanel();
+            S.generate({ phoneOnly: true });
+            return;
+        }
+        API._generateSummary(null, null, 'content', true, false, { phoneOnly: true });
+    };
+
+    API.confirmRangeAndGenerate = function () {
+        const start = parseInt(document.getElementById('range-start-id').value) || 1;
+        const endVal = document.getElementById('range-end-id').value;
+        const end = endVal ? parseInt(endVal) : null;
+        const sourceType = 'content';   // 一律用全文當源（大總結本來就在濃縮，再拿摘要當源＝本末倒置）；摘要選項已移除
+        const mergePrev = document.getElementById('sum_merge').checked;
+        // 存「自動隱藏 / 預留樓層」設定(給 _doSave 讀)
+        try {
+            const _ah = document.getElementById('sum_autohide');
+            win.AUI.lsSet('sp_summary_autohide', (_ah && _ah.checked) ? '1' : '0', '「自動隱藏」設定');
+            const _kr = parseInt(document.getElementById('range-keep-recent')?.value);
+            win.AUI.lsSet('sp_summary_keep_recent', isNaN(_kr) ? '5' : String(Math.max(0, _kr)), '預留樓層設定');
+        } catch (e) {}
+        document.getElementById('rpg-range-modal').classList.remove('active');
+        API._generateSummary(start, end, sourceType, mergePrev);
+    };
+
+    // opts.phoneOnly：沒有新樓層、只把手機聊天室還沒寫進故事的節寫進大總結（故事管理「把手機聊天室寫進大總結」）
+    API._generateSummary = async function (startId, endId, sourceType, mergePrev, auto, opts) {
+        const _phoneOnly = !!(opts && opts.phoneOnly);
+        if (_phoneOnly) mergePrev = true;   // 只補手機的事，一定要疊在上一版上
+        const btn = document.getElementById('btn-grand-summary');   // 從 CTX 快捷入口開時不存在 → null-safe
+        if (btn) { btn.innerText = "生成中 (請勿關閉)..."; btn.classList.add('spinning'); }
+        try {
+            const TH = window.parent.TavernHelper;
+            if (!TH || typeof TH.generateRaw !== 'function') throw new Error("找不到 generateRaw（需要酒館助手在線）");
+            const helper = TH;
+            const chatId = getChatIdentifier();
+            let bookName = ''; try { bookName = helper.getCurrentCharPrimaryLorebook?.() || ''; } catch (e) {}   // 只給 lobby 索引/卡名用，可空
+
+            // 大總結改存 OS_DB（key=chatId、一卡一筆全文），不再寫世界書。讀「上一版」：OS_DB 為主；
+            // 舊聊天只有世界書版 → _loadTavernSummary 一次性遷移進 OS_DB、無痛接軌。合併走結構化疊加(AI 只輸出增量)。
+            const prevRec = await _loadTavernSummary(chatId);
+            const prevFull = (prevRec && prevRec.content) ? prevRec.content : '';
+            let summaryCount = ((prevRec && prevRec.summaryCount) ? prevRec.summaryCount : 0) + 1;
+            const prevSection = prevFull
+                ? `**除了【角色表】要按下方「角色表規則」完整重出(去重+補外觀)，其餘區塊只总结「这次新增」即可、旧内容不用重写（系统会自动叠加：事件接在后面、同名更新、新项加后面）**\n`
+                : `**首次总结**\n`;
+            // 結語＝逐段疊加(時間線)：本輪只寫「這一段」的短結語，舊段由 _mergeSection 自動接在後面(不送舊結語當底稿、不要 AI 重寫全程)。
+
+            // 角色表去重 + 補外觀：把「累積角色表」+「AVS 中文外觀」一起餵主模型，要它輸出「完整去重、外觀補齊」的角色表。
+            //   去重靠 AI 看得懂語意(红石=红石(深毒蛛人)=成年深毒蛛人=深毒蛛人 同一隻)；補外觀靠 AVS 外觀(總結是中文、能吃中文外觀)。
+            let prevCharTable = '';
+            if (prevFull) { try { const cm = prevFull.match(/【角色表】[^\n]*\n([\s\S]*?)(?:\n【|$)/); if (cm) prevCharTable = cm[1].trim(); } catch (e) {} }
+            let avsLooks = '';
+            if (prevCharTable) {
+                try {
+                    const osdb = window.parent.OS_DB;
+                    const _ctx = String(win.SillyTavern?.getContext?.()?.chatId || '');
+                    const _norm = _ctx.split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim();   // state_data 用的 normalizeChatId 形式(可能與 chatId 空白正規化不同)
+                    for (const _id of [chatId, _norm, (osdb && osdb.currentChatId ? osdb.currentChatId() : '')]) {
+                        if (!_id) continue;
+                        const _sd = await (osdb && osdb.getStateData ? osdb.getStateData(_id) : null);
+                        if (_sd && _sd.current) { avsLooks = _avsLooksText(_sd.current); if (avsLooks) break; }
+                    }
+                } catch (e) {}
+            }
+            const charHint = prevCharTable
+                ? (`\n【目前累積的角色表——只有「角色表」這個區塊要完整重出(去重+補外觀)，其餘區塊照舊只寫這次新增】\n${prevCharTable}\n`
+                    + (avsLooks ? `\n【AVS 角色外觀資料（補髮色/髮型/眼色用；正文沒寫就照這裡）】\n${avsLooks}\n` : '')
+                    + `\n【角色表規則】\n`
+                    + `- 把這次新出場/有變化的角色併進上面累積角色表，輸出「完整的角色表」(不是只列新增)。\n`
+                    + `- 合併重複：同一角色用過不同稱呼(本名/別名/帶種族或狀態，如「红石」「红石(深毒蛛人)」「成年深毒蛛人」「深毒蛛人」其實是同一隻)→ 併成「一列」、用最完整稱呼當名字。\n`
+                    + `- **絕不刪掉任何「不同」的角色**(只併重複、不減少真實角色數)。\n`
+                    + `- 每個角色的髮色/髮型/眼色盡量填齊：正文有寫照寫；沒寫就用上面 AVS 外觀；再沒有就依角色設定合理補(別留空)，方便之後生頭像。\n`)
+                : '';
+            let tplBody = getSummaryTemplate().replace(/\{\{count\}\}/g, summaryCount);
+            if (summaryCount > 1) tplBody = tplBody.replace(/\n*【故事標題】[\s\S]*?(?=\n【|$)/g, '').trim();   // 故事標題只第一次生成、第二次起移除(日誌只要一個總篇名)
+
+            // 📱 手機聊天室裡「還沒寫進故事」的節（wx_summary.js collectForStory）：一起給主模型，存檔後蓋章不再重複。
+            //    關了「吃這本劇情」的聊天室（隔離）與正文同步來的劇情聊天室不收。
+            const _WS = window.parent.WX_SUMMARY || window.WX_SUMMARY;
+            let _phone = { text: '', prompt: '', refs: [], chats: 0, nodes: 0 };
+            try { if (_WS?.collectForStory) _phone = await _WS.collectForStory(); } catch (e) { console.warn('[大總結] 收手機聊天室記錄失敗（不影響總結）:', e); }
+            const _phoneBlock = _phone.prompt ? `\n\n----\n${_phone.prompt}\n` : '';
+            if (_phoneOnly && !_phone.prompt) { if (!auto) AUI.alert('手機聊天室裡沒有還沒寫進故事的記錄。'); return; }
+            if (_phone.nodes) console.log(`[大總結] 帶上手機聊天室 ${_phone.chats} 間、${_phone.nodes} 節`);
+
+            let finalContent = '';
+            let _summarizedEnd = null;   // 這次總結到的最後樓號（給存檔 Last: + 自動隱藏範圍）
+            async function _genOnce() {
+                const _W = window.parent || window;
+                _W.__AURELIA_SUMMARIZING = true;
+                console.log('[大總結] 🚩 SUMMARIZING=true（generateRaw 開始）');   // 診斷：旗標窗起點
+                let generated = '';
+                // 🌊 串流開關（預設開）：generateRaw 預設非串流=要等整篇生完才回首位元組，Opus 長總結
+                //    會撞代理/閘道逾時(Pioneer 等平台 ~100s)直接 504；開串流連線一直有 chunk 在流就不會斷。
+                //    回傳值不變（promise 等收完才 resolve 完整文字）。出問題 localStorage sp_summary_stream='0' 關回。
+                const _stream = localStorage.getItem('sp_summary_stream') !== '0';
+                const _sys = '你是剧情总结助手。只输出大总结内容（按用户给的模板），绝不续写剧情。';
+                // 破甲(自訂前置指令)：generateRaw 本身不帶 preset/破甲 → Claude 會自我消音省略 NSFW。
+                //   依酒館「當前激活的連接預設」取對應破甲(customCotMap，跟設定面板同一套 key)，沒設過退回主模型單格 customCot。在哪條線就帶哪條的破甲。
+                let _cotPrefix = [];
+                try {
+                    const _cfg = (win.OS_SETTINGS && win.OS_SETTINGS.getConfigFor) ? win.OS_SETTINGS.getConfigFor('summary') : (win.OS_SETTINGS && win.OS_SETTINGS.getConfig) ? win.OS_SETTINGS.getConfig() : {};
+                    const _map = _cfg.customCotMap || {};
+                    const _cm = win.SillyTavern?.getContext?.()?.extensionSettings?.connectionManager;
+                    const _key = (_cm && _cm.selectedProfile) ? String(_cm.selectedProfile) : '__none__';
+                    const _cot = (_key in _map) ? (_map[_key] || '') : (_cfg.customCot || '');
+                    if (_cot && String(_cot).trim()) _cotPrefix = [{ role: 'system', content: String(_cot) }];
+                } catch (e) {}
+                try {
+                    // 背景讀整個聊天檔(原生 /api/chats/get；不靠記憶體陣列、不展開、不卡)
+                    const fileMsgs = _phoneOnly ? null : await _apiFullChat();
+                    if (_phoneOnly) {
+                        // 只補手機上的事：不讀樓層、樓號維持上一版
+                        _summarizedEnd = (prevRec && prevRec.lastId != null) ? prevRec.lastId : null;
+                        const userMsg = `這次沒有新的劇情樓層，只把手機上發生的事寫進大總結。${_phoneBlock}\n----\n${prevSection}${charHint}\n${tplBody}`;
+                        generated = await TH.generateRaw({
+                            user_input: userMsg,
+                            ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'user_input'],
+                            max_chat_history: 0,
+                            should_stream: _stream,
+                        });
+                    } else if (fileMsgs && fileMsgs.length) {
+                        // 只取「上次總結之後的新樓」(startId 由彈窗帶入=舊總結 Last+1) → 不重讀舊樓、省 token
+                        const _lastIdx = fileMsgs.length - 1;
+                        const sId = (startId != null && !isNaN(startId)) ? Math.max(0, startId) : 0;
+                        const eId = (endId != null && !isNaN(endId)) ? Math.min(endId, _lastIdx) : _lastIdx;
+                        _summarizedEnd = eId;
+                        const transcript = fileMsgs.slice(sId, eId + 1).map((m, i) => {
+                            const who = m.is_user ? '用户' : (m.name || '角色');
+                            return `[#${sId + i}] ${who}：${String(m.mes || '').trim()}`;
+                        }).join('\n\n');
+                        const userMsg = `以下是需要总结的剧情原文（楼层 ${sId}~${eId}）：\n\n${transcript}${_phoneBlock}\n\n----\n${prevSection}${charHint}\n${tplBody}`;
+                        generated = await TH.generateRaw({
+                            user_input: userMsg,
+                            ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'user_input'],   // 破甲(若有)→總結系統提示→正文；不讀 chat_history → 純送我給的全文
+                            max_chat_history: 0,
+                            should_stream: _stream,
+                        });
+                    } else {
+                        // 後備：讀不到檔 → generateRaw 讀記憶體 chat_history(all)
+                        _summarizedEnd = await _trueLastId();
+                        const instruction = `停止剧情输出，执行**新增大总结**。請依完整劇情產出大總結，只輸出總結內容、不要續寫劇情。${_phoneBlock}\n\n${prevSection}${charHint}\n${tplBody}`;
+                        generated = await TH.generateRaw({
+                            user_input: instruction,
+                            ordered_prompts: [..._cotPrefix, { role: 'system', content: _sys }, 'chat_history', 'user_input'],
+                            max_chat_history: 'all',
+                            should_stream: _stream,
+                        });
+                    }
+                } finally {
+                    // ⏱️ 真凶：TH.generateRaw 的 GENERATION_ENDED 在 await resolve「之後」才發；若此刻就清旗標，
+                    //    state_runtime 等抽取器在事件裡看到的是 false → 誤抽（重複 AVS/記憶/場景生圖）。
+                    //    → 延遲清除，讓旗標撐過 GENERATION_ENDED（事件就在同秒發）。下一輪真實劇情遠在 3s 後、不受影響。
+                    console.log('[大總結] 🏁 generateRaw 結束，旗標延遲 3s 清除（蓋過隨後才發的 GENERATION_ENDED）');
+                    setTimeout(function () { _W.__AURELIA_SUMMARIZING = false; console.log('[大總結] ✅ 旗標已清除'); }, 3000);
+                }
+                finalContent = String(generated || '');
+                const _lastTxt = (_summarizedEnd != null) ? `\nLast: ${_summarizedEnd}` : '';
+                if (/【大总结\(第\d+次\)】/.test(finalContent)) finalContent = finalContent.replace(/【大总结\(第\d+次\)】/, `【大总结(第${summaryCount}次)】${_lastTxt}`);
+                else finalContent = `【大总结(第${summaryCount}次)】${_lastTxt}\n\n${finalContent}`;
+                // 合併模式：把這次增量「結構化疊加」到上一份累積總結（事件接後面、角色同名更新+新名加後面），不重濾舊內容
+                if (mergePrev && prevFull) finalContent = _structuredMerge(finalContent, prevFull, summaryCount, _lastTxt);
+            }
+
+            async function _doSave() {
+            // 大總結搬出世界書：全文存 OS_DB(key=chatId、一卡一筆覆蓋更新)。注入改走程式壓縮(os_summary_inject)，
+            // 不再寫 lorebook、不再塞觸發 KEY；故事管理直接編這筆 OS_DB 記錄。
+            try {
+                const osDb = window.parent.OS_DB;
+                if (!osDb?.saveTavernSummary) throw new Error('OS_DB.saveTavernSummary 不存在');
+                const _tm = finalContent.match(/【故事標題】[^\n]*\n+([^\n【]+)/);
+                const _title = (_tm ? _tm[1] : (prevRec?.title || '')).replace(/[「」"']/g, '').trim().slice(0, 50);
+                const _bm = finalContent.match(/\[Bg\|[^|]*\|([^|]+)\|/);
+                const _bg = _bm ? _bm[1].trim() : (prevRec?.bgCacheId || '');
+                // 一起存 rawChatId(VN圖片world)+storyId(向量記憶/PWA總結)，讓日誌清空任一段(非當前聊天也行)能完整清到
+                let _rawCid = ''; try { _rawCid = String(win.SillyTavern?.getContext?.()?.chatId || ''); } catch (e) {}
+                let _sid = ''; try { _sid = (win.VN_Core && win.VN_Core._currentStoryId) || win.OS_AVS_ADAPTER?.getStoryId?.() || localStorage.getItem('vn_current_story_id') || ''; } catch (e) {}
+                await osDb.saveTavernSummary(chatId, {
+                    content: finalContent,
+                    summaryCount,
+                    lastId: (_summarizedEnd != null ? _summarizedEnd : (prevRec?.lastId ?? null)),
+                    title: _title,
+                    bgCacheId: _bg,
+                    storyId: _sid || (prevRec?.storyId || ''),
+                    rawChatId: _rawCid || (prevRec?.rawChatId || ''),
+                });
+                console.log('[大總結] ✅ 已存 OS_DB tavern_summary（chatId=' + chatId + '、第' + summaryCount + '次）');
+                try { window.parent.OS_SUMMARY_INJECT?.invalidate?.(chatId); } catch (e) {}   // 讓注入器丟掉快取、下輪重抓壓縮版
+                // 👥 配角近況：大總結存好就往前推一次（背景、副模型，失敗不影響存檔）
+                try { if (!_phoneOnly) API.refreshNpcLife(); } catch (e) {}
+                // 🏦 PT 結算（fire-and-forget，不擋存檔）：副模型估值→加 PT→浮結算卡。去重同一份只算一次。
+                try { const _pt = window.parent.OS_PT || window.OS_PT; if (_pt?.settleSummary) _pt.settleSummary(finalContent, { chatId, summaryCount }); } catch (e) {}
+
+                // 📱 這次帶進去的手機聊天室節蓋章：已寫進第幾次大總結，下次不再帶
+                try { if (_phone.refs.length && _WS?.markMerged) await _WS.markMerged(_phone.refs, summaryCount); } catch (e) { console.warn('[大總結] 手機聊天室蓋章失敗:', e); }
+                // 📒 大總結順便把各聊天室新的對話整理成節（下一次大總結再帶進來）。
+                //    fire-and-forget：整理是背景工作，副模型慢或失敗都不該擋住大總結存檔。
+                try { if (_WS?.summarizeAll) _WS.summarizeAll({ reason: 'grand_summary' }); } catch (e) {}
+            } catch (e) { console.error('[大總結] 存 OS_DB 失敗:', e); throw e; }
+
+            // 🔒 自動隱藏已總結樓層，但預留最新 N 樓可見(近期上下文 + 末樓帶觸發 KEY)。
+            //    開關與 N 由彈窗設定(sp_summary_autohide / sp_summary_keep_recent)。
+            try {
+                const _autohide = localStorage.getItem('sp_summary_autohide') !== '0' && !_phoneOnly;   // 只補手機的事時沒有新樓層，不動隱藏
+                let _keep = parseInt(localStorage.getItem('sp_summary_keep_recent'));
+                if (isNaN(_keep) || _keep < 0) _keep = 5;
+                let _end = _arrayLastId();   // 陣列索引(/hide 對記憶體陣列操作、不能用真樓號會超出截短陣列)；懶載入時偶爾回 null/只到窗口末
+                // 🩹 懶載入下 _arrayLastId 偶爾讀不到 → autohide 原本靜默跳過、舊樓沒藏→token 不知不覺爆。讀不到先等一拍重試。
+                if (_end == null) { await new Promise(r => setTimeout(r, 400)); _end = _arrayLastId(); }
+                const _hideTo = (_end != null) ? (_end - _keep) : null;   // 藏到這樓為止，之後 _keep 樓保留可見
+                if (_autohide && _hideTo != null && _hideTo >= 0) {
+                    await API._callSlashCommand(`/hide 0-${_hideTo}`);
+                    console.log(`[大總結] 🔒 自動隱藏 /hide 0-${_hideTo}（陣列末 index=${_end}、預留最新 ${_keep} 樓）`);
+                } else if (_autohide) {
+                    // 不再靜默：明確提醒+log，免得舊樓沒藏、token 默默飆高(4萬→8萬那種)
+                    console.warn(`[大總結] ⚠️ 自動隱藏沒執行：陣列末=${_end}（懶載入截短/讀不到）→ 舊樓沒藏、下輪 token 可能偏高`);
+                    try { AUI.toastr?.warning('舊樓自動隱藏這次沒跑成功，token 可能偏高——可到故事日誌手動隱藏舊樓'); } catch (e) {}
+                }
+            } catch (e) { console.warn('[大總結] 自動隱藏失敗:', e); }
+
+            // 🌟 parse【結語】+ 角色名單 → 寫 lobby_summary_index（給瀅瀅/柴郡注 sysPrompt）
+            try {
+                const osDb = window.parent.OS_DB;
+                if (osDb && osDb.saveLobbySummaryIndex) {
+                    const briefMatch = finalContent.match(/【結語】[^\n]*\n+([\s\S]*?)(?:\n【|$)/);
+                    const briefRaw = briefMatch ? briefMatch[1] : '';
+                    // 結語＝逐段疊加的時間線(舊段在上)；大廳快覽要「當前狀態」→ 取最新一段(最後一行非空)
+                    const _briefSegs = briefRaw.split('\n').map(s => s.replace(/\|/g, '').replace(/^[-*\s]+|[-*\s]+$/g, '').trim()).filter(Boolean);
+                    const brief = (_briefSegs[_briefSegs.length - 1] || '').replace(/\s+/g, ' ').slice(0, 200);
+
+                    const characters = [];
+                    const charNameSet = new Set();
+                    let charHeader = '';   // 角色表表頭那行 → 存著給日誌動態對位欄位(別硬寫欄序，模板可變)
+                    const charSectionMatch = finalContent.match(/【角色表】[\s\S]*?(?=\n【|$)/);
+                    if (charSectionMatch) {
+                        const lines = charSectionMatch[0].split('\n');
+                        for (const line of lines) {
+                            const trimmed = line.trim();
+                            if (!trimmed.includes('|')) continue;
+                            if (/^[|\s:\-]+$/.test(trimmed)) continue;
+                            const cols = trimmed.split('|').map(s => s.trim()).filter(Boolean);
+                            if (!cols.length) continue;
+                            const name = cols[0];
+                            if (!name) continue;
+                            if (/^姓名|^name$/i.test(name)) { if (!charHeader) charHeader = trimmed; continue; }   // 表頭行：抓起來、不入角色
+                            if (/^[-:\s]+$/.test(name)) continue;
+                            if (name.length > 40) continue;
+                            if (charNameSet.has(name)) continue;
+                            charNameSet.add(name);
+                            characters.push({ name, row: trimmed });
+                        }
+                    }
+                    console.log('[lobby_summary_index] parsed:', { brief: brief?.slice(0, 60), charsCount: characters.length, firstChar: characters[0] });
+
+                    const cardName = (helper.getCharData?.()?.name) || helper.getCurrentCharPrimaryLorebook?.() || '';
+
+                    const titleMatch = finalContent.match(/【故事標題】[^\n]*\n+([^\n【]+)/);
+                    let storyTitle = (titleMatch ? titleMatch[1] : '').replace(/[「」"']/g, '').trim().slice(0, 50);
+
+                    const bgMatch = finalContent.match(/\[Bg\|[^|]*\|([^|]+)\|/);
+                    const bgCacheId = bgMatch ? bgMatch[1].trim() : '';
+
+                    // 只沿用第一次的故事標題（不再做角色去重累積——改存「完整去重角色表」）
+                    //   + 沿用第一次紀錄的「玩這輪的 persona」與主角（大廳 guest NPC 用它認得訪客，不靠當前 USER）
+                    let personaId = '', personaName = '', personaDesc = '', protagonist = '', worldview = '';
+                    try {
+                        const existing = await osDb.getAllLobbySummaryIndex();
+                        for (const r of existing) {
+                            if ((r.cardName || '') !== cardName) continue;
+                            if ((r.chatId || '') !== chatId) continue;
+                            if (r.storyTitle) storyTitle = r.storyTitle;   // 沿用第一次的標題
+                            if (r.personaId && !personaId) { personaId = r.personaId; personaName = r.personaName || ''; personaDesc = r.personaDesc || ''; }
+                            if (r.protagonist && !protagonist) protagonist = r.protagonist;
+                            if (r.worldview && !worldview) worldview = r.worldview;
+                        }
+                    } catch (_) {}
+                    // 第一次大總結：快照當前 persona（之後沿用第一次的、不覆蓋）
+                    if (!personaId) {
+                        try {
+                            const _op = (window.parent && window.parent.OS_PERSONA) || window.OS_PERSONA;
+                            const _p = _op && _op.getCurrent && _op.getCurrent();
+                            if (_p) { personaId = _p.id || ''; personaName = _p.name || ''; personaDesc = _p.desc || ''; }
+                        } catch (_) {}
+                    }
+                    if (!protagonist) {
+                        const _pm = finalContent.match(/\[Protagonist\|([^\]|]+)/i);
+                        if (_pm) protagonist = _pm[1].trim();
+                    }
+                    // 世界觀：取世界書「常駐條目」(作者寫的常在設定＝世界觀本身，免 AI)。世界觀是靜態的→只要還沒存就補(不限第一次)
+                    if (!worldview) {
+                        try {
+                            if (bookName && helper?.getLorebookEntries) {
+                                const _entries = await helper.getLorebookEntries(bookName);
+                                let _wv = (_entries || []).filter(e => e && e.enabled !== false && e.type === 'constant' && e.content)
+                                    .map(e => String(e.content).trim()).filter(Boolean).join('\n\n').trim();
+                                if (!_wv) _wv = (_entries || []).filter(e => e && e.enabled !== false && e.content)   // 沒常駐→退前幾條
+                                    .slice(0, 4).map(e => String(e.content).trim()).filter(Boolean).join('\n\n').trim();
+                                worldview = _wv.slice(0, 1200);
+                            }
+                        } catch (_) {}
+                    }
+
+                    if (brief || characters.length) {
+                        await osDb.saveLobbySummaryIndex({
+                            cardName, chatId, storyTitle, bgCacheId, summaryCount, brief,
+                            characters,   // 存「這次大總結的完整去重角色表」(不再只存新增)→ 日誌用最新一筆即反映去重結果、不再賴舊重複卡
+                            charHeader,
+                            personaId, personaName, personaDesc, protagonist, worldview,   // 那輪的 USER persona 快照 + 主角 + 世界觀
+                            lorebookBook: bookName,
+                            lorebookKey: `tavern_summary::${chatId}`,   // 已搬 OS_DB，非世界書 key（保留欄位相容）
+                        });
+                    }
+                    console.log('[lobby_summary_index]', { storyTitle, bgCacheId, chars: characters.length });
+                }
+            } catch (e) { console.warn('[os_story_tools] 寫 lobby_summary_index 失敗（不影響大總結）:', e); }
+
+            // 大總結存檔後 → 自動補齊缺的頭像(中文角色表→副模型轉英文tag→生圖、每次最多N張)。fire-and-forget、不擋存檔；sp_autoavatar_on='0' 可關。
+            try { if (localStorage.getItem('sp_autoavatar_on') !== '0') API.fillMissingAvatars(finalContent); } catch (e) {}
+            } // end _doSave
+
+            // 生成完先跳「預覽窗」給用戶檢查（可直接編輯）；滿意按儲存才寫世界書，不滿意可重新生成
+            function _showSummaryPreview() {
+                const oldM = document.getElementById('rpg-summary-preview-modal'); if (oldM) oldM.remove();
+                const modal = document.createElement('div');
+                modal.id = 'rpg-summary-preview-modal';
+                modal.className = 'ost-modal active';
+                modal.innerHTML = `
+                    <div class="ost-modal-card ost-modal-wide">
+                        <div class="ost-modal-title"><i class="fa-solid fa-pen-to-square"></i> 大總結預覽（第 ${summaryCount} 次）</div>
+                        <div class="ost-opt-desc">檢查內容、可直接編輯。滿意按「儲存」才會存進故事日誌（本機、綁這個聊天室）；不滿意可「重新生成」。</div>
+                        <textarea id="rpg-sum-preview-area" class="ost-textarea ost-sum-preview-area" spellcheck="false"></textarea>
+                        <div class="ost-sum-preview-status" id="rpg-sum-preview-status"></div>
+                        <div class="ost-modal-btns">
+                            <button class="ost-btn" id="rpg-sum-cancel">取消</button>
+                            <button class="ost-btn" id="rpg-sum-regen"><i class="fa-solid fa-rotate"></i> 重新生成</button>
+                            <button class="ost-btn ost-btn-primary" id="rpg-sum-save"><i class="fa-solid fa-floppy-disk"></i> 儲存</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+                const area = modal.querySelector('#rpg-sum-preview-area');
+                const status = modal.querySelector('#rpg-sum-preview-status');
+                area.value = finalContent;
+                modal.querySelector('#rpg-sum-cancel').onclick = () => modal.remove();
+                modal.querySelector('#rpg-sum-regen').onclick = async () => {
+                    const rb = modal.querySelector('#rpg-sum-regen'), sb = modal.querySelector('#rpg-sum-save');
+                    rb.disabled = true; sb.disabled = true; status.textContent = '重新生成中…';
+                    try { await _genOnce(); area.value = finalContent; status.textContent = '已重新生成 ✓'; }
+                    catch (e) { status.textContent = '重新生成失敗：' + (e.message || e); }
+                    rb.disabled = false; sb.disabled = false;
+                };
+                modal.querySelector('#rpg-sum-save').onclick = async () => {
+                    const sb = modal.querySelector('#rpg-sum-save');
+                    sb.disabled = true; status.textContent = '儲存中…';
+                    try { finalContent = area.value; await _doSave(); modal.remove(); }
+                    catch (e) { status.textContent = '儲存失敗：' + (e.message || e); sb.disabled = false; }
+                };
+            }
+
+            await _genOnce();
+            if (auto) {   // 背景模式：先過品質閘門，壞生成不准覆蓋好總結(根治「報錯還是被套用」)；通過才存、不跳預覽
+                const _v = _validateSummary(finalContent);
+                if (!_v.ok) {
+                    console.warn('[自動總結] ⚠️ 生成結果未通過驗證，放棄存檔、保留舊總結：' + _v.reason);
+                    try { AUI.toastr?.error('這次自動總結格式異常（' + _v.reason + '），已保留舊總結、沒有覆蓋。請到故事管理手動「生成 / 更新大總結」檢查。', '自動總結已攔截', { timeOut: 9000 }); } catch (e) {}
+                    return;
+                }
+                await _doSave(); console.log('[自動總結] ✅ 背景總結完成並存檔');
+            }
+            else _showSummaryPreview();
+        } catch (e) { if (auto) console.warn('[自動總結] 失敗:', e); else AUI.alert("生成失敗: " + e.message); } finally {
+            if (btn) { btn.innerText = "生成 / 更新大總結 (Grand Summary)"; btn.classList.remove('spinning'); }
+        }
+    };
+
+    // ====================================================================
+    // B. 隱藏對話（/hide /unhide）
+    // ====================================================================
+    API._callSlashCommand = async function (cmd) {
+        const trigger = win.TavernHelper?.triggerSlash || win.triggerSlash;
+        if (typeof trigger === 'function') {
+            try {
+                await trigger(cmd);
+                return;
+            } catch (e) {
+                console.error('[OS_STORY_TOOLS] triggerSlash 失敗:', e);
+            }
+        }
+        const ta = document.querySelector('#send_textarea');
+        const btn = document.querySelector('#send_but');
+        if (!ta || !btn) {
+            console.error('[OS_STORY_TOOLS] 既無 TavernHelper 也找不到酒館輸入框');
+            return;
+        }
+        ta.value = cmd;
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+        btn.click();
+    };
+    API._readHideRange = function () {
+        const s = parseInt(document.getElementById('vrs-hide-start')?.value);
+        const e = parseInt(document.getElementById('vrs-hide-end')?.value);
+        if (isNaN(s) || isNaN(e) || s < 0 || e < 0) {
+            AUI.alert('請輸入有效樓層號（>= 0）');
+            return null;
+        }
+        return s > e ? `${e}-${s}` : `${s}-${e}`;
+    };
+    API._withBtnFeedback = async function (btn, action, successText = '✓') {
+        if (!btn) return action();
+        const orig = btn.innerHTML;   // 用 HTML 存：按鈕上可能有圖示
+        const wasDisabled = btn.disabled;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+        btn.classList.add('busy');
+        try {
+            const r = await action();
+            btn.textContent = successText;
+            btn.classList.remove('busy');
+            btn.classList.add('ok');
+            setTimeout(() => {
+                btn.innerHTML = orig;
+                btn.disabled = wasDisabled;
+                btn.classList.remove('ok');
+            }, 1200);
+            return r;
+        } catch (e) {
+            btn.textContent = '✗';
+            btn.classList.remove('busy');
+            btn.classList.add('err');
+            console.error('[OS_STORY_TOOLS] 操作失敗:', e);
+            setTimeout(() => {
+                btn.innerHTML = orig;
+                btn.disabled = wasDisabled;
+                btn.classList.remove('err');
+            }, 1500);
+        }
+    };
+    API._slashHide = async function (btn) {
+        const range = API._readHideRange();
+        if (!range) return;
+        await API._withBtnFeedback(btn, async () => {
+            await API._callSlashCommand(`/hide ${range}`);
+            API._updateHideStatus();
+        });
+    };
+    API._slashUnhide = async function (btn) {
+        const range = API._readHideRange();
+        if (!range) return;
+        await API._withBtnFeedback(btn, async () => {
+            await API._callSlashCommand(`/unhide ${range}`);
+            API._updateHideStatus();
+        });
+    };
+    API._slashShowAll = async function (btn) {
+        await API._withBtnFeedback(btn, async () => {
+            const _tlu = await _trueLastId();
+            await API._callSlashCommand('/unhide 0-' + (_tlu != null ? _tlu : '{{lastMessageId}}'));
+            API._updateHideStatus();
+        });
+    };
+    API._refreshStatus = function (btn) {
+        API._updateHideStatus();
+        if (btn) {
+            btn.classList.add('ok');
+            setTimeout(() => btn.classList.remove('ok'), 600);
+        }
+    };
+    API._formatRanges = function (ids) {
+        if (!ids || !ids.length) return '無';
+        const sorted = [...ids].sort((a, b) => a - b);
+        const out = [];
+        let start = sorted[0], prev = sorted[0];
+        for (let i = 1; i < sorted.length; i++) {
+            if (sorted[i] === prev + 1) {
+                prev = sorted[i];
+            } else {
+                out.push(start === prev ? `${start}` : `${start}-${prev}`);
+                start = prev = sorted[i];
+            }
+        }
+        out.push(start === prev ? `${start}` : `${start}-${prev}`);
+        return out.join(', ');
+    };
+    API._updateHideStatus = async function () {
+        const lastEl = document.getElementById('vrs-last-id');
+        const hiddenEl = document.getElementById('vrs-hidden-list');
+        if (!lastEl || !hiddenEl) return;
+        try {
+            const lastId = await _trueLastId();   // 真實最後樓號(/api/chats/search 的 message_count-1)
+            lastEl.textContent = (lastId != null && lastId >= 0) ? `#${lastId}` : '—';
+
+            // 隱藏狀態優先「讀檔」拿真實全量(/api/chats/get 的 is_system)——跟最後樓號同一把真實尺規，
+            // 不會因記憶體陣列截短/重編號而亂跳；讀不到檔才退回讀記憶體陣列(截短，可能偏少)。
+            let hiddenIds = null;
+            try {
+                const fileMsgs = await _apiFullChat();
+                if (Array.isArray(fileMsgs)) {
+                    hiddenIds = [];
+                    fileMsgs.forEach((m, i) => { if (m && m.is_system === true) hiddenIds.push(i); });
+                }
+            } catch (e) {}
+            if (hiddenIds == null) {
+                const helper = win.TavernHelper;
+                const hiddenSet = new Set();
+                try { const chat = win.SillyTavern?.getContext?.()?.chat || []; chat.forEach((m, idx) => { if (m && m.is_system === true) hiddenSet.add(idx); }); } catch (e) {}
+                try { if (helper?.getChatMessages) { const hidden = await helper.getChatMessages('0-999999', { hide_state: 'hidden' }); if (Array.isArray(hidden)) hidden.forEach(m => { if (typeof m.message_id === 'number') hiddenSet.add(m.message_id); }); } } catch (e) {}
+                hiddenIds = [...hiddenSet];
+            }
+            hiddenEl.textContent = API._formatRanges(hiddenIds);
+        } catch (e) {
+            console.error('[OS_STORY_TOOLS] _updateHideStatus 失敗:', e);
+        }
+    };
+
+    // ====================================================================
+    // C. 面板（掛在故事日誌容器內）+ 大總結三個子 modal（固定全螢幕，掛 body）
+    // ====================================================================
+    let _subModalsInjected = false;
+    function _ensureSubModals() {
+        if (_subModalsInjected && document.getElementById('rpg-range-modal')) return;
+        _subModalsInjected = true;
+        const wrap = document.createElement('div');
+        wrap.innerHTML = `
+            <div id="rpg-range-modal" class="ost-modal">
+                <div class="ost-modal-card">
+                    <div class="ost-modal-title">生成大總結設置</div>
+                    <div class="ost-modal-sec">
+                        <label class="ost-opt"><input type="checkbox" id="sum_merge" checked><span>合併之前的總結</span></label>
+                        <span class="ost-opt-desc">將舊的 [大總結] 一併發送給 AI 重整</span>
+                    </div>
+                    <div class="ost-modal-sec">
+                        <label class="ost-modal-lab">起始 ID (Start)</label>
+                        <input type="number" id="range-start-id" class="ost-input" value="1" min="1">
+                        <label class="ost-modal-lab">結束 ID (End)</label>
+                        <input type="number" id="range-end-id" class="ost-input" placeholder="留空代表最後一條">
+                    </div>
+                    <div class="ost-modal-sec">
+                        <label class="ost-opt"><input type="checkbox" id="sum_autohide" checked><span>總結後自動隱藏舊樓層</span></label>
+                        <span class="ost-opt-desc">已總結的對話藏起來、AI 不再重複讀（只是隱藏，資料不會刪）</span>
+                        <label class="ost-modal-lab">預留最新樓層（不隱藏）</label>
+                        <input type="number" id="range-keep-recent" class="ost-input" value="5" min="0">
+                        <span class="ost-opt-desc">保留最近幾樓給 AI 看，維持劇情連貫</span>
+                    </div>
+                    <div class="ost-modal-btns">
+                        <button class="ost-btn" onclick="document.getElementById('rpg-range-modal').classList.remove('active')">取消</button>
+                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.confirmRangeAndGenerate()">開始生成</button>
+                    </div>
+                </div>
+            </div>
+            <div id="rpg-summary-tpl-modal" class="ost-modal">
+                <div class="ost-modal-card ost-modal-wide">
+                    <div class="ost-modal-title"><i class="fa-solid fa-pen"></i> 大總結 生成模板</div>
+                    <div class="ost-opt-desc" style="margin-bottom:8px;">編輯後點保存，下次生成大總結時使用此模板。可用佔位符：{{count}}（第幾次）</div>
+                    <textarea id="sp-summary-tpl-area" class="ost-textarea" style="height:360px; font-family:monospace;"></textarea>
+                    <div class="ost-modal-btns">
+                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.resetSummaryTemplate()">↺ 還原預設</button>
+                        <button class="ost-btn" onclick="document.getElementById('rpg-summary-tpl-modal').classList.remove('active')">關閉</button>
+                        <button class="ost-btn ost-btn-primary" onclick="window.OS_STORY_TOOLS.saveSummaryTemplate()"><i class="fa-solid fa-floppy-disk"></i> 保存</button>
+                    </div>
+                </div>
+            </div>`;
+        while (wrap.firstElementChild) document.body.appendChild(wrap.firstElementChild);
+    }
+
+    // ====================================================================
+    // 黑名單（原 RPG 面板「操作」頁，2026-09-15 RPG 面板刪掉時搬來）：這段故事裡不准出現的角色名
+    //   酒館：角色卡主世界書一條 comment＝`[當前永不出現名單-黑名單角色] - <聊天 id>`，
+    //         rpg/blacklist_injector.js 每輪讀它直送（世界書靠關鍵字觸發，黑名單的名字本來就不會出現在對話裡）。
+    //         所以條目本身不給關鍵字、不走觸發，免得跟注入器各送一次。
+    //   PWA ：手機世界書一條同標題的常駐條目（keys 空＝每輪直送），不需要注入器。
+    //   以前酒館那條還會把 [BLACKLIST_聊天id] 偷偷接在最後一樓正文後面好讓條目觸發——注入器接手後早就不需要，已拿掉。
+    // ====================================================================
+    const BL_TAG = '[當前永不出現名單-黑名單角色]';
+    function _blTitle() { return BL_TAG + ' - ' + getChatIdentifier(); }
+    function _blContent(names) { return BL_TAG + '\n黑名單規則：劇情封禁\n\n' + names.join('\n'); }
+    function _blNamesOf(content) {
+        return String(content || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('[') && !l.includes('規則'));
+    }
+    function _blBook() {
+        const TH = win.TavernHelper;
+        try { return (TH && ((TH.getCurrentCharPrimaryLorebook && TH.getCurrentCharPrimaryLorebook()) || (TH.getCharWorldbookNames && (TH.getCharWorldbookNames('current') || {}).primary))) || ''; } catch (e) { return ''; }
+    }
+    async function _blRead() {
+        const title = _blTitle();
+        if (_isStandalone()) {
+            const all = (await win.OS_DB.getAllWorldbookEntries()) || [];
+            const entry = all.find(x => x && x.title === title) || null;
+            return { names: entry ? _blNamesOf(entry.content) : [], entry };
+        }
+        const TH = win.TavernHelper, book = _blBook();
+        if (!TH || !book) throw new Error('這張角色卡沒有綁角色世界書，黑名單存不進去');
+        const entries = (await TH.getLorebookEntries(book)) || [];
+        const entry = entries.find(x => x && x.comment === title) || null;
+        return { names: entry ? _blNamesOf(entry.content) : [], entry, book };
+    }
+    async function _blWrite(names) {
+        const cur = await _blRead();
+        if (_isStandalone()) {
+            if (!names.length) { if (cur.entry) await win.OS_DB.deleteWorldbookEntry(cur.entry.id); return; }
+            await win.OS_DB.saveWorldbookEntry(Object.assign({}, cur.entry || {
+                id: 'wb_blacklist_' + getChatIdentifier(),
+                book: (win.OS_WORLDBOOK && win.OS_WORLDBOOK.getTargetBook) ? win.OS_WORLDBOOK.getTargetBook() : '預設書包',
+                category: '規則設定', title: _blTitle(), keys: '', order: 9999, createdAt: Date.now()
+            }, { content: _blContent(names), enabled: true, updatedAt: Date.now() }));
+            return;
+        }
+        const TH = win.TavernHelper;
+        if (!names.length) { if (cur.entry) await TH.deleteLorebookEntries(cur.book, [cur.entry.uid]); return; }
+        if (cur.entry) await TH.setLorebookEntries(cur.book, [{ uid: cur.entry.uid, content: _blContent(names), keys: [], type: 'selective', enabled: true }]);
+        else await TH.createLorebookEntries(cur.book, [{ comment: _blTitle(), content: _blContent(names), keys: [], type: 'selective', enabled: true, position: 'at_depth_as_system', depth: 0, order: 9999 }]);
+    }
+    function _blSectionHtml() {
+        return `
+                    <div class="ost-section" id="ost-bl">
+                        <div class="ost-section-title"><i class="fa-solid fa-ban"></i> 黑名單</div>
+                        <div class="ost-bl-add">
+                            <input type="text" class="ost-input ost-bl-input" placeholder="不准出現的角色名">
+                            <button class="ost-btn ost-bl-add-btn" type="button"><i class="fa-solid fa-plus"></i> 加入</button>
+                        </div>
+                        <div class="ost-bl-list"><div class="ost-bl-empty">讀取中…</div></div>
+                        <div class="ost-hint">名單上的角色在這段故事裡不會出現、不會被提到</div>
+                    </div>`;
+    }
+    function _blMount(ov) {
+        const sec = ov.querySelector('#ost-bl');
+        if (!sec) return;
+        const listEl = sec.querySelector('.ost-bl-list');
+        const input = sec.querySelector('.ost-bl-input');
+        const note = (text) => { listEl.innerHTML = ''; const d = document.createElement('div'); d.className = 'ost-bl-empty'; d.textContent = text; listEl.appendChild(d); };
+        const paint = async () => {
+            try {
+                const { names } = await _blRead();
+                if (!sec.isConnected) return;
+                if (!names.length) { note('名單是空的'); return; }
+                listEl.innerHTML = '';
+                names.forEach(n => {
+                    const row = document.createElement('div');
+                    row.className = 'ost-bl-item';
+                    row.innerHTML = '<span class="ost-bl-name"></span><button class="ost-bl-del" type="button" title="移出黑名單"><i class="fa-solid fa-xmark"></i></button>';
+                    row.querySelector('.ost-bl-name').textContent = n;
+                    row.querySelector('.ost-bl-del').onclick = async () => {
+                        if (!(await AUI.confirm('把「' + n + '」移出黑名單？'))) return;
+                        try { const cur = await _blRead(); await _blWrite(cur.names.filter(x => x !== n)); }
+                        catch (e) { AUI.alert('移出失敗：' + (e.message || e)); }
+                        paint();
+                    };
+                    listEl.appendChild(row);
+                });
+            } catch (e) { note('讀不到：' + (e.message || e)); }
+        };
+        const add = async () => {
+            const name = input.value.trim();
+            if (!name) return;
+            try {
+                const cur = await _blRead();
+                if (cur.names.indexOf(name) >= 0) { AUI.toast('「' + name + '」已經在黑名單裡'); return; }
+                await _blWrite(cur.names.concat([name]));
+                input.value = '';
+            } catch (e) { AUI.alert('加入失敗：' + (e.message || e)); }
+            paint();
+        };
+        sec.querySelector('.ost-bl-add-btn').onclick = add;
+        input.addEventListener('keydown', (ev) => { if (ev.key === 'Enter') { ev.preventDefault(); add(); } });
+        paint();
+    }
+
+    // ── PWA 版故事管理：跟酒館同一個入口(故事日誌的書籤 / CTX 快捷)，內容換成獨立版自己的 ──
+    //   酒館那套的生成靠 TavernHelper 讀樓層、隱藏對話靠斜線指令，PWA 兩樣都沒有 → 開起來是空轉。
+    //   PWA 的大總結在 vn_grand_summaries(by storyId)，生成走 VN_Summary.generate 的滾動合併。
+    async function _openPanelStandalone(container) {
+        const ov = document.createElement('div');
+        ov.className = 'ost-overlay';
+        ov.id = 'ost-panel';
+        const sid = getChatIdentifier();
+        let list = [];
+        try { list = (await win.OS_DB?.getGrandSummaries?.(sid)) || []; } catch (e) {}
+        const latest = list.length ? list.reduce((a, b) => ((a.count || 0) >= (b.count || 0) ? a : b)) : null;
+        const ts = latest && latest.timestamp ? new Date(latest.timestamp).toLocaleString('zh-TW') : '';
+        const esc = (s) => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        ov.innerHTML = `
+            <div class="ost-card">
+                <div class="ost-head">
+                    <span class="ost-title"><i class="fa-solid fa-screwdriver-wrench"></i> 故事管理</span>
+                    <button class="ost-close" title="關閉">✕</button>
+                </div>
+                <div class="ost-body">
+                    <div class="ost-section">
+                        <div class="ost-section-title"><i class="fa-solid fa-pen-to-square"></i> 大總結</div>
+                        <div class="ost-note">${latest
+                            ? `目前是第 ${latest.count} 次，涵蓋 ${(latest.coveredChapterIds || []).length} 章${ts ? '　·　' + esc(ts) : ''}`
+                            : '還沒有大總結。玩幾章之後按下面那顆，系統會把劇情壓成一份長期記憶。'}</div>
+                        <button class="ost-btn ost-btn-primary" id="ost-sa-gen"><i class="fa-solid fa-pen-to-square"></i> 生成 / 更新大總結</button>
+                        <div class="ost-hint">拿上一版當底稿，只把「上次之後的新章節」合併進去</div>
+                        ${latest ? `<button class="ost-btn" id="btn-recompress-summary"><i class="fa-solid fa-shuffle"></i> 重壓目前大總結</button>
+                        <div class="ost-hint">把目前累積的總結再濃縮一次（不新增劇情）</div>` : ''}
+                        <div class="ost-btn-row"><button class="ost-btn" id="btn-merge-phone"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>${_help('ost_merge_phone')}</div>
+                        <button class="ost-btn" id="ost-sa-tpl"><i class="fa-solid fa-pen"></i> 編輯大總結生成模板</button>
+                    </div>
+                    ${latest ? `
+                    <div class="ost-section">
+                        <div class="ost-section-title"><i class="fa-solid fa-pen"></i> 內容</div>
+                        <textarea id="ost-sa-text" class="ost-sa-text" spellcheck="false">${esc(latest.content)}</textarea>
+                        <button class="ost-btn" id="ost-sa-save"><i class="fa-solid fa-floppy-disk"></i> 儲存修改</button>
+                        <div class="ost-hint">改完存回去，下一輪劇情就照新的走</div>
+                    </div>` : ''}
+                    ${_blSectionHtml()}
+                </div>
+            </div>`;
+        container.appendChild(ov);
+        ov.querySelector('.ost-close').onclick = () => API.closePanel();
+        ov.addEventListener('click', (e) => { if (e.target === ov) API.closePanel(); });
+        _blMount(ov);
+        const gen = ov.querySelector('#ost-sa-gen');
+        if (gen) gen.onclick = () => {
+            const S = win.VN_Summary || window.VN_Summary;
+            if (!S?.generate) { AUI.alert('大總結模組尚未載入'); return; }
+            API.closePanel();
+            S.generate();
+        };
+        const mp = ov.querySelector('#btn-merge-phone');
+        if (mp) mp.onclick = () => API.mergePhoneChats();
+        const rc = ov.querySelector('#btn-recompress-summary');
+        if (rc) rc.onclick = () => API.recompressSummary();
+        const tp = ov.querySelector('#ost-sa-tpl');
+        if (tp) tp.onclick = () => API.openSummaryTemplateModal();   // 模板兩邊共用同一份（VN_Summary 讀 getSummaryTemplate）
+        const sv = ov.querySelector('#ost-sa-save');
+        if (sv) sv.onclick = async () => {
+            const ta = ov.querySelector('#ost-sa-text');
+            if (!ta || !latest) return;
+            try {
+                await win.OS_DB?.saveGrandSummary({ ...latest, content: ta.value });
+                const o = sv.textContent; sv.textContent = '✓ 已儲存';
+                setTimeout(() => { sv.textContent = o; }, 1400);
+            } catch (e) { AUI.alert('儲存失敗：' + (e.message || e)); }
+        };
+    }
+
+    API.openPanel = function (container) {
+        if (!container) return;
+        _ensureSubModals();
+        API.closePanel();
+        if (_isStandalone()) { _openPanelStandalone(container); return; }
+        const ov = document.createElement('div');
+        ov.className = 'ost-overlay';
+        ov.id = 'ost-panel';
+        ov.innerHTML = `
+            <div class="ost-card">
+                <div class="ost-head">
+                    <span class="ost-title"><i class="fa-solid fa-screwdriver-wrench"></i> 故事管理</span>
+                    <button class="ost-close" title="關閉">✕</button>
+                </div>
+                <div class="ost-body">
+                    <div class="ost-note">以下工具作用於「<b>目前開啟的對話</b>」。點故事卡片只是看該故事的總結；要生成大總結 / 隱藏，請先確定酒館開的是這個對話。</div>
+                    <div class="ost-section">
+                        <div class="ost-section-title"><i class="fa-solid fa-pen-to-square"></i> 大總結</div>
+                        <button class="ost-btn ost-btn-primary" id="btn-grand-summary" onclick="window.OS_STORY_TOOLS.showRangeModal()"><i class="fa-solid fa-pen-to-square"></i> 生成 / 更新大總結 (Grand Summary)</button>
+                        <div class="ost-hint">將最近的劇情壓縮成永久記憶</div>
+                        <button class="ost-btn" id="btn-recompress-summary" onclick="window.OS_STORY_TOOLS.recompressSummary()"><i class="fa-solid fa-shuffle"></i> 重壓目前大總結</button>
+                        <div class="ost-hint">把目前累積的總結再濃縮一次（不新增劇情）</div>
+                        <div class="ost-btn-row"><button class="ost-btn" id="btn-merge-phone" onclick="window.OS_STORY_TOOLS.mergePhoneChats()"><i class="fa-solid fa-mobile-screen"></i> 把手機聊天室寫進大總結</button>${_help('ost_merge_phone')}</div>
+                        <button class="ost-btn" onclick="window.OS_STORY_TOOLS.openSummaryTemplateModal()"><i class="fa-solid fa-pen"></i> 編輯大總結生成模板</button>
+                        <div class="ost-hint">查看 / 編輯 / 清空各段劇情 → 大廳「瀅瀅的故事日誌」</div>
+                    </div>
+                    <div class="ost-section">
+                        <div class="ost-section-title"><i class="fa-solid fa-eye-slash"></i> 隱藏對話</div>
+                        <div class="ost-hide">
+                            <div class="ost-hide-row">
+                                <span class="ost-hide-label">樓層</span>
+                                <input type="number" class="ost-hide-input" id="vrs-hide-start" placeholder="起始" min="0">
+                                <span class="ost-hide-sep">~</span>
+                                <input type="number" class="ost-hide-input" id="vrs-hide-end" placeholder="結束" min="0">
+                                <button class="ost-hide-btn" onclick="window.OS_STORY_TOOLS._slashHide(this)">隱藏</button>
+                                <button class="ost-hide-btn primary" onclick="window.OS_STORY_TOOLS._slashUnhide(this)">取消</button>
+                                <button class="ost-hide-btn danger" onclick="window.OS_STORY_TOOLS._slashShowAll(this)">全顯示</button>
+                                <button class="ost-hide-btn" onclick="window.OS_STORY_TOOLS._refreshStatus(this)" title="重新整理"><i class="fa-solid fa-rotate"></i></button>
+                            </div>
+                            <div class="ost-hide-status">
+                                <span class="ost-hide-stat-lab">最後樓層</span><span class="ost-hide-stat-val" id="vrs-last-id">—</span>
+                                <span class="ost-hide-stat-sep">｜</span>
+                                <span class="ost-hide-stat-lab">已隱藏</span><span class="ost-hide-stat-val" id="vrs-hidden-list">—</span>
+                            </div>
+                        </div>
+                    </div>
+                    ${_blSectionHtml()}
+                </div>
+            </div>`;
+        container.appendChild(ov);
+        ov.querySelector('.ost-close').onclick = () => API.closePanel();
+        ov.addEventListener('click', (e) => { if (e.target === ov) API.closePanel(); });
+        try { API._updateHideStatus(); } catch (_) { }
+        _blMount(ov);
+    };
+
+    API.closePanel = function () {
+        const ov = document.getElementById('ost-panel');
+        if (ov) ov.remove();
+    };
+
+    // ====================================================================
+    // D. 自動總結（背景）：每輪生成後檢查未總結樓層，達門檻就背景總結一次、不用手動按
+    // ====================================================================
+    let _autoSumming = false;
+    let _genInProgress = false;   // 使用者/任何生成進行中 → 別插隊背景總結，免跟使用者的回合撞主模型
+    let _autoSumTimer = null;     // GENERATION_ENDED 後排的延遲檢查 timer；截斷(GENERATION_STOPPED)要取消掉
+    API.autoSummarizeCheck = async function () {
+        try {
+            if (_autoSumming) return;                                  // 正在背景總結
+            if (_genInProgress) return;                                // 有生成在跑(使用者回合)→ 等它結束再說
+            if (win.__AURELIA_SUMMARIZING) return;                     // 正在跑總結(含手動)
+            if (localStorage.getItem('sp_autosum_on') !== '1') return; // 開關關
+            let every = parseInt(localStorage.getItem('sp_autosum_every'));
+            if (isNaN(every) || every < 2) every = 20;
+            // 網頁版（10-20 補齊）：總結走 VN_Summary 那套滾動合併；數的是還沒總結進去的章數。
+            //   一章＝玩家那句＋AI 那段，算兩樓，所以「每 N 樓」跟酒館同一個意思
+            if (_isStandalone()) {
+                const S = win.VN_Summary || window.VN_Summary;
+                if (!S?.pendingChapters || !S.generate) return;
+                const n = await S.pendingChapters();
+                if (n * 2 < every) return;
+                _autoSumming = true;
+                try {
+                    console.log(`[自動總結] 網頁版還沒總結 ${n} 章（${n * 2} 樓）≥ ${every} 樓 → 背景總結`);
+                    await S.generate({ auto: true });
+                } finally { _autoSumming = false; }
+                return;
+            }
+            const info = await API.getUnsummarizedInfo();
+            if (!info || info.uncounted < every || info.start > info.end) return;
+            _autoSumming = true;
+            try {
+                console.log(`[自動總結] 未總結 ${info.uncounted} ≥ ${every} → 背景總結 #${info.start}~${info.end}`);
+                await API._generateSummary(info.start, info.end, 'content', true, true);   // auto=true → 直接存、不跳預覽
+                try { const t = AUI.toastr; if (t) t.success(`已自動總結（到 #${info.end}）`, '自動總結', { timeOut: 2500 }); } catch (e) {}
+            } finally { _autoSumming = false; }
+        } catch (e) { _autoSumming = false; console.warn('[自動總結] check 失敗:', e); }
+    };
+    // 🗜 自動整理記憶（09-27 起：像 CTX 面板那樣一個開關，每幾輪重新整理一下記憶庫，可關、可設輪次）
+    //   開關 sp_memtidy_on、輪次 sp_memtidy_every（CTX 面板那一行，vn_monitor）；每個故事自己數（sp_memtidy_count）。
+    //   每次都花錢，所以：預設關；一次最多 2 批（2 通）；舊記憶不到一整批不叫；成功失敗都歸零，失敗不會每輪重試。
+    //   到輪了但正在生成／總結 → 計數留著，下一輪再試。
+    const MEMTIDY_CNT = 'sp_memtidy_count';
+    let _memTidying = false, _memTidyTimer = null;
+    function _mtSid() { try { return String(win.OS_AVS_ADAPTER?.getStoryId?.() || ''); } catch (e) { return ''; } }
+    function _mtCounts() { try { return JSON.parse(localStorage.getItem(MEMTIDY_CNT) || '{}') || {}; } catch (e) { return {}; } }
+    function _mtSet(sid, n) { const c = _mtCounts(); if (n) c[sid] = n; else delete c[sid]; win.AUI.lsSet(MEMTIDY_CNT, JSON.stringify(c), '整理舊記憶的計數'); }
+    API.memTidyEvery = function () { let n = parseInt(localStorage.getItem('sp_memtidy_every')); if (isNaN(n) || n < 5) n = 30; return Math.min(n, 500); };
+    API.memTidyCount = function () { const s = _mtSid(); return s ? (_mtCounts()[s] || 0) : 0; };
+    API.autoMemTidyTick = async function () {
+        try {
+            if (localStorage.getItem('sp_memtidy_on') !== '1') return;
+            if (win.__AURELIA_SUMMARIZING) return;                     // 大總結自己那一通的結束不算一輪
+            //   網頁版（10-20 補齊）一樣跑：每章寫完數一輪（VN_CHAPTER_SAVED，見下面 _initAutoSumPwa）
+            const sid = _mtSid(); if (!sid) return;
+            const n = (_mtCounts()[sid] || 0) + 1;
+            _mtSet(sid, n);
+            if (n < API.memTidyEvery()) return;
+            if (_memTidying || _genInProgress || _autoSumming) return; // 到輪了但在忙：計數留著，下一輪再試
+            const RT = win.OS_STATE_RUNTIME;
+            if (!RT?.compressOldMemories || win.OS_VECTOR_ENGINE?.isEnabled?.() !== true) { _mtSet(sid, 0); return; }   // 劇情記憶沒開
+            _memTidying = true;
+            try {
+                const r = await RT.compressOldMemories({ storyId: sid, auto: true, maxBatches: 2 });
+                try { AUI.toastr?.success(`把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條`, '自動整理記憶', { timeOut: 3000 }); } catch (e) {}
+            } catch (e) {
+                const msg = String(e?.message || e);
+                if (!/還不夠多/.test(msg)) { console.warn('[自動整理記憶] 沒整理成:', msg); try { AUI.toastr?.warning('這次沒整理成（' + msg + '），下次到輪再試', '自動整理記憶', { timeOut: 5000 }); } catch (e2) {} }
+            } finally { _memTidying = false; _mtSet(sid, 0); }
+        } catch (e) { _memTidying = false; }
+    };
+    // 每輪生成結束 → 延遲檢查(讓 __AURELIA_SUMMARIZING 旗標窗過完、避免總結自己的 GENERATION_ENDED 觸發再總結)
+    (function _initAutoSum(tries) {
+        try {
+            if (win.eventOn && win.tavern_events && win.tavern_events.GENERATION_ENDED) {
+                // 🔑 dryRun(酒館試算prompt/數token的空跑)只發 STARTED、不發 ENDED → 若也設 _genInProgress=true 就永遠復位不了、自動總結永遠被擋。故空跑直接略過。
+                if (win.tavern_events.GENERATION_STARTED) win.eventOn(win.tavern_events.GENERATION_STARTED, function (type, opts, dryRun) { if (dryRun) return; _genInProgress = true; });
+                win.eventOn(win.tavern_events.GENERATION_ENDED, function () {
+                    _genInProgress = false;
+                    try { clearTimeout(_autoSumTimer); _autoSumTimer = setTimeout(function () { API.autoSummarizeCheck(); }, 4000); } catch (e) {}
+                    // 自動整理記憶排晚一點：等這一輪的記憶抽完、自動總結跑完
+                    try { clearTimeout(_memTidyTimer); _memTidyTimer = setTimeout(function () { API.autoMemTidyTick(); }, 25000); } catch (e) {}
+                });
+                // 截斷/手動停：stopGeneration 會先發 ENDED(剛排了檢查)再發 STOPPED → 這裡把那輪剛排的檢查取消掉。
+                // 截斷代表這輪要重開、不是完整內容，不能拿去總結；重開那輪正常 ENDED 才會重新排檢查。
+                if (win.tavern_events.GENERATION_STOPPED) win.eventOn(win.tavern_events.GENERATION_STOPPED, function () {
+                    _genInProgress = false;
+                    try { clearTimeout(_autoSumTimer); _autoSumTimer = null; } catch (e) {}
+                    try { clearTimeout(_memTidyTimer); _memTidyTimer = null; } catch (e) {}   // 停掉的那輪不算
+                });
+                return;
+            }
+        } catch (e) {}
+        if (tries > 0) setTimeout(function () { _initAutoSum(tries - 1); }, 1500);
+    })(8);
+    // 網頁版的「一章寫完」＝ OS_DB.saveVnChapter 發的 VN_CHAPTER_SAVED（酒館沒有這個事件，上面那段在網頁版也接不到東西）。
+    //   只認現在這段故事的章（小劇場那類換過編號的不算）；時間差照酒館那邊排
+    (function _initAutoSumPwa() {
+        win.addEventListener('VN_CHAPTER_SAVED', function (e) {
+            try {
+                if (!_isStandalone()) return;
+                const d = (e && e.detail) || {};
+                const cur = localStorage.getItem('vn_current_story_id') || '';
+                if (d.storyId && cur && d.storyId !== cur) return;
+                clearTimeout(_autoSumTimer); _autoSumTimer = setTimeout(function () { API.autoSummarizeCheck(); }, 4000);
+                clearTimeout(_memTidyTimer); _memTidyTimer = setTimeout(function () { API.autoMemTidyTick(); }, 25000);
+            } catch (err) {}
+        });
+    })();
+
+    // ====================================================================
+    // E. 大總結 → 補齊缺的頭像（中文角色表 → 副模型轉英文 Danbooru tag → 生圖）
+    //    大總結存檔後自動觸發；只補「有正式人名、avatar_cache 還沒」的；每次最多 N 張(預設5、成本控管)。
+    //    語言橋：角色表是中文、生圖只吃英文 booru tag → 中間用副模型轉成 [Avatar|名|英文tags] 再餵現有生圖管線。
+    // ====================================================================
+    // 世界書裡「這個人自己那條」。人物卡標題常用暱稱（例如「【分類-暱稱·姓】」，關鍵字只有暱稱），
+    //   但人物卡開頭都有 <character name="全名 …">：照那個認最準；其次標題拿掉「分類-」前綴後剛好是他的名字，
+    //   再來標題裡有他的全名（名字那段帶「團隊、群組」這種字的往後排——「角色團隊-某某」講的是一群人）、關鍵字剛好是他。
+    //   同分時挑內容裡有寫長相的。回條目原文（截 1200 字）或 ''
+    function _personEntry(list, name, T, max) {   // max：回多少字（預設 1200；記憶迴廊要整條人設，傳大一點）
+        // 簡繁折成同一把：OS_ZH.key（約四千字的對照表，總結寫簡體「丹尼尔·卡莱尔」、人設寫繁體也對得上）；聊天 app 那支表小，沒收「尔、莱」
+        const fold = s => {
+            s = String(s == null ? '' : s).toLowerCase();
+            try { const Z = win.OS_ZH || window.OS_ZH; if (Z && Z.key) return Z.key(s); } catch (e) {}
+            try { return (T && T.fold) ? T.fold(s) : s; } catch (e) { return s; }
+        };
+        const strip = s => fold(s).replace(/[\s【】\[\]「」（）()]/g, '');
+        const full = strip(name);
+        if (!full || !Array.isArray(list) || !list.length) return '';
+        const parts = String(name).split(/[·・．.\s]/).map(strip).filter(p => p.length >= 2 && p !== full);
+        const LOOK = /髮|发|眼|瞳|膚|肤|戴|穿|身高|cm|體型|体型|外貌|外觀|外观|長相|长相/;
+        const GROUP = /團隊|团队|群|組|组|家族|名單|名单|成員|成员|關係|关系|一覽|一览|×|x/;   // 名字那段講的是一群人、一對人
+        let best = null, bestScore = 0;
+        for (const e of list) {
+            if (!e || !e.content) continue;
+            const t = strip(e.title), keys = String(e.keys || '').split(',').map(strip).filter(Boolean);
+            const core = t.replace(/^[^-－]*[-－]/, '');   // 拿掉「分類-」前綴
+            const card = (String(e.content).slice(0, 300).match(/<character\s+name\s*=\s*["“]([^"”(（]+)/i) || [])[1];
+            let s = 0;
+            if (card && strip(card) === full) s = 6;
+            else if (core === full) s = 5;
+            else if (core.indexOf(full) !== -1 && core.length <= full.length + 8 && !GROUP.test(core)) s = 4;
+            else if (t.indexOf(full) !== -1 || keys.indexOf(full) !== -1) s = 3;
+            else if (parts.some(p => core === p || keys.indexOf(p) !== -1)) s = 2;
+            else continue;
+            if (LOOK.test(e.content)) s += 0.5;
+            if (s > bestScore) { best = e; bestScore = s; }
+        }
+        return best ? String(best.content).slice(0, max || 1200) : '';
+    }
+    API.personEntry = _personEntry;   // 外借：照名字挑這個人的人設條目（紫薇記憶迴廊 lobby_memory.js 寫外傳用）
+    let _fillingAvatars = false;
+    API.fillMissingAvatars = async function (summaryContent) {
+        try {
+            if (_fillingAvatars) return;
+            //   網頁版（10-20 補齊）：VN_Summary 存好大總結後也叫這支（帶著剛生好的內容）
+            const VC = win.VN_Cache || window.VN_Cache, VCore = win.VN_Core || window.VN_Core;
+            if (!VC?.get || !VCore?._genAvatarToCache) return;        // 沒生圖管線就算了
+            const osApi = window.parent.OS_API;
+            if (!osApi?.chatSecondary) return;
+
+            let content = summaryContent;
+            if (!content) { try { const rec = await _loadTavernSummary(getChatIdentifier()); content = rec?.content || ''; } catch (e) {} }
+            if (!content) return;
+
+            // 解析【角色表】→ [{name,row}]（跟 _doSave 寫大廳索引同邏輯）
+            const rows = []; const seen = new Set(); let header = '';
+            const sec = content.match(/【角色表】[\s\S]*?(?=\n【|$)/);
+            if (sec) {
+                for (const line of sec[0].split('\n')) {
+                    const t = line.trim();
+                    if (!t.includes('|') || /^[|\s:\-]+$/.test(t)) continue;
+                    const cols = t.split('|').map(s => s.trim()).filter(Boolean);
+                    if (!cols.length) continue;
+                    const name = cols[0];
+                    if (!name || name.length > 40) continue;
+                    if (/^姓名|^name$/i.test(name)) { if (!header) header = t; continue; }
+                    if (/^[-:\s]+$/.test(name) || seen.has(name)) continue;
+                    seen.add(name); rows.push({ name, row: t });
+                }
+            }
+            if (!rows.length) return;
+
+            // 篩出還沒頭像的
+            const missing = [];
+            for (const r of rows) {
+                let has = false; try { has = !!(await VC.get('avatar_cache', r.name)); } catch (e) {}
+                if (!has) missing.push(r);
+            }
+            if (!missing.length) return;
+
+            // 🔎 人設：照名字找這個人在故事掛的世界書裡的條目，外觀以它為準。
+            //   11-06：角色設定戴眼鏡，大總結補的頭像卻是淺棕亂髮、連帽衛衣——補頭像這通看不到人設，規則又叫它「表裡沒寫就依身份合理補」，
+            //   編出來的長相存進頭像快取就再也不換，之後每張插圖都照它畫（插圖的外觀登記表讀頭像快取那段描述）。
+            //   所以：表格和人設都沒寫長相的人不補（留給劇情 AI 第一次寫他的 [Avatar] 時再生），不准猜。
+            const T = win.OS_AURELIA_TOOLS || window.OS_AURELIA_TOOLS;
+            let wb = [];
+            try { wb = (T && T.entries) ? (((await T.entries(false)) || {}).list || []) : []; } catch (e) {}
+            for (const r of missing) r.wb = _personEntry(wb, r.name, T);
+            const LOOK_RE = /髮|发|眼|瞳|膚|肤|戴|穿|身高|cm|體型|体型|鬍|胡|疤|耳釘|耳钉|眼鏡|眼镜/;
+            const known = missing.filter(r => r.wb || LOOK_RE.test(r.row.split('|').slice(1).join('|')));
+            if (!known.length) { console.log(`[補頭像] 缺 ${missing.length} 張，但表格和人設都沒寫長相，先不補（等劇情 AI 寫）：${missing.map(r => r.name).join('、')}`); return; }
+
+            // 成本控管：每次最多 N 張
+            let maxN = parseInt(localStorage.getItem('sp_autoavatar_max'));
+            if (isNaN(maxN) || maxN < 1) maxN = 5;
+            const batch = known.slice(0, maxN);
+
+            _fillingAvatars = true;
+            console.log(`[補頭像] 缺 ${missing.length} 張，這次補 ${batch.length} 張：${batch.map(r => r.name + (r.wb ? '（有人設）' : '')).join('、')}`);
+
+            // 副模型：中文角色表＋人設 → 英文 [Avatar|名|tags]（翻譯+轉 booru 一步到位）
+            const tableText = (header ? header + '\n' : '') + batch.map(r => r.row).join('\n');
+            const wbText = batch.filter(r => r.wb).map(r => '【' + r.name + '】\n' + r.wb).join('\n\n');
+            const sys = '你是頭像提示詞轉換助手。只輸出要求的 [Avatar|...] 行，不要任何解釋、前言或多餘文字。';
+            const usr = '下面是一份中文角色表' + (wbText ? '，和其中幾個人在世界書裡的人設' : '') + '，請為其中「有正式人名」的角色，各輸出一行頭像生成提示詞，格式嚴格為：\n'
+                + '[Avatar|角色名|英文Danbooru標籤]\n\n'
+                + '規則：\n'
+                + '- 角色名用我下面給的「完全相同」的名字、不要改寫或翻譯。\n'
+                + '- 標籤用英文、小寫、逗號分隔、單行；描述「單人肖像」：髮色、髮型/長度、瞳色、年齡層(如 mature male / young woman)、體型、明顯特徵(疤/角/種族特徵等)、眼鏡耳環這類戴在身上的東西、代表性服裝。不要寫背景、不要寫動作。\n'
+                + '- 外觀只照表格和人設裡寫的轉成標籤；兩邊寫的不一樣時照人設。人設寫了的髮色、瞳色、眼鏡、服裝都要寫進去，一樣都不能漏。\n'
+                + '- 表格和人設都沒寫這個人長相的，不要輸出那一行，不要依身份猜。\n'
+                + '- 純代號／未具名／路人角色(沒有正式人名的)請「不要」輸出那一行。\n'
+                + '- 除了 [Avatar|...] 行以外，什麼都別輸出。\n\n'
+                + '角色表：\n' + tableText
+                + (wbText ? '\n\n人設（世界書原文，外觀以這個為準）：\n' + wbText : '');
+
+            let out = '';
+            try {
+                out = await new Promise((res, rej) => {
+                    let g = '';
+                    osApi.chatSecondary([{ role: 'system', content: sys }, { role: 'user', content: usr }],
+                        (c) => { g = c; }, (f) => { g = f; res(g); }, (err) => rej(err), { task: 'illust', label: '補頭像 tag', disableTyping: true });
+                });
+            } catch (e) { console.warn('[補頭像] 副模型轉 tag 失敗:', e?.message || e); _fillingAvatars = false; return; }
+
+            // 解析 [Avatar|名|tags]、只生這次 batch 內的
+            const re = /\[Avatar\|([^|\]]+)\|([^\]]+)\]/g;
+            const jobs = []; let m;
+            while ((m = re.exec(out))) {
+                const nm = (m[1] || '').trim(), tags = (m[2] || '').trim();
+                if (!nm || !tags || !batch.some(r => r.name === nm)) continue;
+                jobs.push({ nm, tags });
+            }
+            if (!jobs.length) { console.log('[補頭像] 副模型沒回可用的 tag（可能批內全是代號角色）'); _fillingAvatars = false; return; }
+
+            let done = 0;
+            for (const j of jobs) {
+                try {
+                    let has = false; try { has = !!(await VC.get('avatar_cache', j.nm)); } catch (e) {}
+                    if (has) continue;                                  // 生之前再確認一次
+                    if (!VCore.avatars) VCore.avatars = {};
+                    if (!VCore.avatars[j.nm]) VCore.avatars[j.nm] = j.tags;   // 沒現成宣告才用我們轉的英文 tag
+                    const r = await VCore._genAvatarToCache(j.nm);      // 走現有管線：底詞自動加、存 avatar_cache、有去重+GPU佇列
+                    if (r) {
+                        done++;                                         // 成功才計(失敗回 '')
+                        // 記號：這張是大總結補的。之後劇情 AI 正式寫了這個人的 [Avatar]，播放器會把存著的那段描述換成劇情寫的（vn_core._refreshGuessedLook）
+                        try { const rec = await VC.get('avatar_cache', j.nm); if (rec) await VC.set('avatar_cache', j.nm, Object.assign({}, rec, { src: 'summary' })); } catch (e) {}
+                    }
+                } catch (e) { console.warn('[補頭像] 生成失敗:', j.nm, e?.message || e); }
+            }
+            console.log(`[補頭像] ✅ 完成 ${done} 張`);
+            try {
+                const t = AUI.toastr;
+                if (t && done) t.success(`已自動補 ${done} 張頭像` + (missing.length > done ? `（還缺 ${missing.length - done} 個、下次大總結再補）` : ''), '補頭像', { timeOut: 3000 });
+            } catch (e) {}
+        } catch (e) {
+            console.warn('[補頭像] 失敗:', e?.message || e);
+        } finally {
+            _fillingAvatars = false;
+        }
+    };
+
+    window.OS_STORY_TOOLS = API;
+    console.log('✅ 故事管理工具 (OS_STORY_TOOLS) 模組就緒');
+})();

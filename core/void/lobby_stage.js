@@ -1,0 +1,3588 @@
+// ----------------------------------------------------------------
+// [檔案] core/void/lobby_stage.js (V1.1 - 書咖俯視像素舞台+擺設模式)
+// 職責：把 lobby-left 換成星露谷式俯視舞台（分層地圖/小人/NPC/互動）。
+//       對話仍走 void_terminal 的 sendIrisMessage（本模組只提供 talkTarget 與各 NPC 歷史）。
+// 分層：底圖(z0) → 物件與角色同一套「底邊y=z-index」深度排序（人走到桌後被遮）。
+// 擺設模式：舞台右下 🖊 鈕 → 拖物件/站位、調佔地 → 本機即時生效(localStorage) + 一鍵複製數據（實作拆在 lobby_editor.js）。
+// 開關：localStorage lobby_stage_on（'0' 關 → 完整還原原立繪大廳）
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+
+    const CDN = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@main/';
+    // 🖼 素材庫 sound-files 早就超過 jsDelivr 的 50MB 上限：沒被快取（或快取過期）的檔會隨機回 403「Package size exceeded」，
+    //   @main 跟鎖 commit 都會（10-19 台灣節點量大廳 107 張：@main 掉 4～10 張、鎖 commit 掉 21 張；占卜屋紫薇老師整個不見、書咖椅子時有時無）。
+    //   抓不到＝同一個版本的同一張改從 GitHub raw 再拿一次（raw 沒有包大小限制、有 CORS）。
+    //   畫面上的 <img> 由下面 document 那個監聽統一接；不進畫面的 new Image()（走路圖探針、碰撞遮罩）各自掛 _sfRetry。
+    const SF_RE = /^https:\/\/(?:cdn|fastly|testingcf|gcore)\.jsdelivr\.net\/gh\/nancywang3641\/sound-files@([^/]+)\/(.+)$/;
+    function _sfMirror(url) {
+        const m = String(url || '').match(SF_RE);
+        return m ? 'https://raw.githubusercontent.com/nancywang3641/sound-files/' + m[1] + '/' + m[2] : null;
+    }
+    // 🖋 SVG 不能直接改抓 raw：GitHub raw 給 SVG 的類型是 text/plain，<img> 顯示不出來（11-20 帽匠工坊、404 房換成 SVG 時 Vproject 的丹提醒的）
+    //   → 讀成文字、包成 image/svg+xml 的 blob 網址再塞回去。同一張只讀一次
+    const _svgBlobs = new Map();
+    function _sfAltSrc(url, alt) {
+        if (!/\.svg(\?|$)/i.test(String(url))) return Promise.resolve(alt);
+        if (!_svgBlobs.has(alt)) _svgBlobs.set(alt, fetch(alt).then(r => r.ok ? r.text() : Promise.reject(r.status))
+            .then(t => URL.createObjectURL(new Blob([t], { type: 'image/svg+xml' }))).catch(() => { _svgBlobs.delete(alt); return null; }));
+        return _svgBlobs.get(alt);
+    }
+    function _sfSwap(img, onFail) {
+        const alt = !img._sfAlt && _sfMirror(img.src);
+        if (!alt) { if (onFail) onFail(); return; }
+        img._sfAlt = true;
+        _sfAltSrc(img.src, alt).then(s => { if (s) img.src = s; else if (onFail) onFail(); });
+    }
+    function _sfRetry(img, onFail) {
+        img.onerror = () => _sfSwap(img, onFail);
+    }
+    if (!window.__AURELIA_SF_MIRROR__) {
+        window.__AURELIA_SF_MIRROR__ = true;
+        document.addEventListener('error', (e) => {   // error 不冒泡，掛捕獲階段才接得到每一張 <img>
+            const el = e.target;
+            if (!el || el.tagName !== 'IMG' || el._sfAlt) return;
+            _sfSwap(el);
+        }, true);
+    }
+    const ASSET = {
+        // 底圖per場景（SCENES[].base）；素材改版一律換新檔名(瀏覽器對舊檔快取7天,原地覆蓋沒用)
+        ying:  CDN + 'lobby_ying_v3.webp',   // 瀅瀅立繪(v3=11-16 阿洛重畫的六位管理員之一,708x1882;改版必換檔名防快取)
+        alice: CDN + 'lobby_alice_v4.webp',  // 愛麗絲立繪(v4=11-16 阿洛重畫;照 v3 的畫布 972x1882、人的高度和腳的位置對齊)
+        // 🎞 愛麗絲會動的立繪（對話模式用，lobby_places.js 的 _livePortrait 播）：綠幕影片去背後存成「上半彩色（已乘透明度）＋下半透明度」疊起來的 mp4，
+        //    744x2880、24 格；人的大小位置對齊上面那張靜止立繪。idle＝站著循環、greet＝第一次拉近時演一次的歡迎手勢。
+        //    🚨 接縫不做淡入淡出（頭尾直接接）：第一版疊過，一眼就看得出那幾格糊糊的；不疊反而看不出來。
+        aliceIdle:  CDN + 'lobby_alice_idle_v2.mp4',
+        yingIdle:   CDN + 'lobby_ying_idle_v2.mp4',     // 瀅瀅的兩支（11-17）：畫布比她的靜止立繪寬（744，靜止的是 708 那個比例），揮手才不會被切掉；人一樣站在畫布正中
+        yingGreet:  CDN + 'lobby_ying_greet_v2.mp4',
+        rabbitIdle:  CDN + 'lobby_rabbit_idle_v1.mp4',   // 白兔先生的兩支（11-17）：懷錶留在影片裡（歡迎那支會飄到手邊被點一下再降回去）
+        rabbitGreet: CDN + 'lobby_rabbit_greet_v1.mp4',
+        hatterIdle:  CDN + 'lobby_hatter_idle_v1.mp4',   // 帽匠的兩支（11-17）：手上那疊色卡留在影片裡（歡迎那支會收成一疊、攤成扇形、說完再收回手上）
+        hatterGreet: CDN + 'lobby_hatter_greet_v1.mp4',
+        zhiweiIdle:  CDN + 'lobby_zhiwei_idle_v1.mp4',   // 紫薇的兩支（11-17）：歡迎那支是把酒杯朝人抬一下、開口說話，再放回去
+        zhiweiGreet: CDN + 'lobby_zhiwei_greet_v1.mp4',
+        cheshireIdle:  CDN + 'lobby_cheshire_idle_v1.mp4',   // 柴郡的兩支（11-17）：他身上是螢光綠，生的時候用洋紅幕；尾巴會甩出去，畫布比別人寬（816）
+        cheshireGreet: CDN + 'lobby_cheshire_greet_v1.mp4',
+        aliceGreet: CDN + 'lobby_alice_greet_v3.mp4',   // 重生的、有開口說話的那支（生的時候給了一句台詞，嘴才會一直動；最早那支沒台詞，嘴只開合一下）
+        cheshire: CDN + 'lobby_cheshire_v3.webp',  // 柴郡立繪(v3=11-16 阿洛重畫;畫布、人的大小照 v2)
+        mcF:   CDN + 'lobby_mc_f_silhouette.png',   // 通用小人預設=剪影版(2026-07-15 定案)；換裝在裝扮室
+        mcM:   CDN + 'lobby_mc_m_silhouette.png',
+        walkBase: CDN + 'lobby_walk_base_v1.png',   // 3×4走路圖素體(列=下/左/右/上,欄=左步/立/右步)
+        yingWalk: CDN + 'lobby_ying_walk_v2.png',       // 瀅瀅豆豆走路圖(v2=修過圖)
+        aliceWalk: CDN + 'lobby_alice_walk_v2.png',     // 愛麗絲走路圖(v2)
+        cheshireWalk: CDN + 'lobby_cheshire_walk_v2.png', // 柴郡走路圖(v2=調過大小；改版必換檔名防快取)
+        rayWalk:  CDN + 'lobby_ray_walk_v1.png',   // 雷伊走路圖(SN自發登場)
+        danWalk:  CDN + 'lobby_dan_walk_v2.png',   // 丹走路圖(v2=修過圖)
+        ray:      CDN + 'lobby_ray.png',           // 雷伊對話立繪
+        dan:      CDN + 'lobby_dan.png',           // 丹對話立繪
+        rabbitWalk: CDN + 'lobby_rabbit_walk_v1.png',   // 白兔先生走路圖(3×4；交易所店員)
+        rabbit: CDN + 'lobby_rabbit_portrait_v3.webp',  // 白兔先生對話立繪(v3=11-16 阿洛重畫;畫布、人的大小照 v2)
+        zhiweiWalk: CDN + 'lobby_zhiwei_walk_v1.png',       // 紫薇老師走路圖(3×4；占卜小屋店主)
+        zhiwei: CDN + 'lobby_zhiwei_portrait_v2.webp',      // 紫薇老師對話立繪(v2=11-16 阿洛重畫;972x1882)
+        hatterWalk: CDN + 'lobby_hatter_walk_v1.png',       // 帽匠走路圖(3×4；奇想工坊店主)
+        hatter: CDN + 'lobby_hatter_portrait_v2.webp',      // 帽匠對話立繪(v2=11-16 阿洛重畫;972x1882)
+    };
+    // 底圖尺寸：大部分房間 1536×1024；11-23 起每間可以自己設 mapW（SCENES[場景].mapW）——比畫面寬的房間鏡頭照舊跟著人左右移（地圖是地圖、鏡頭是鏡頭）。
+    //   換房間時 tryMount 照那間設；其他模組讀 _b.MAP_W 走 getter，拿到的是現在這間的。
+    const MAP_W0 = 1536;
+    let MAP_W = MAP_W0, MAP_H = 1024;
+
+    // ── 🗺️ 場景註冊表（雙子設定：瀅瀅書咖 ⇄ 愛麗絲純白大廳）──
+    // layout: footH=腳印高(物件底部佔地)、s=個別縮放；points: 各場景擺設模式各存各的
+    // doors: 走進觸發區→白光過場→切場景（spawn=抵達點）
+    // 🔒 廣場（視差城市／街區）封起來：主軸是 VN 跑團，移動實際上都靠快轉在走，
+    //    走進廣場那條路先關掉。關掉的是「進得去」，素材、擺設、快轉地圖的底圖都原封不動，
+    //    要開回來只要把 lobby_city_locked 設成 '0'（或把這裡的預設改掉），舊行為整組回來。
+    //    影響到的三條路，各自在下面處理：①書咖/大廳的底部大門 ②快轉的廣場鈕與點空地傳送
+    //    ③房間走出來的出口（預設是回廣場，鎖上時改成回進門前待的場景，不然會走不出來）。
+    function _cityLocked() {
+        try { return localStorage.getItem('lobby_city_locked') !== '0'; } catch (e) { return true; }
+    }
+
+    const SCENES = {
+        cafe: {
+            // 🆕 2026-09-20 整間換素材（舊的 lobby_base_v2 + lobby_obj_01~07 + 手繪遮罩全部不再用）。
+            //    新底圖是「空房」，所有家具都是獨立物件＝擺設模式裡可以整間重排。
+            // 🚨 沒有 mask：新底圖的地板形狀跟舊的對不上，碰撞改走 boundary 鋼索（同占卜小屋／帽匠工坊）。
+            // 🖋 v5（10-26）＝底圖、前緣和家具換成 SVG，畫布跟 v3/v4 的 PNG 一樣大 → 座標一格都沒動；菜單立牌沒畫 SVG，照用 PNG。
+            //   使用者存過的擺設記的是舊檔名，載入時照 LOBBY_SVG 換新（_loadCfg）
+            base: 'lobby_cafe_base_v5.svg',
+            upper: 'lobby_cafe_upper_v6.svg',   // 前緣那排花圃＋台階：壓在最上層，小人走到下緣會被它擋住腳（v6＝11-23 門口台階從一條細線補成三階，不再像通往黑洞）
+            // 客人出沒區（npcZone）的底線：花圃頂邊約 y805～865，腳再往下整個人就被花圃蓋住（10-19：雷伊漫步到 y914，只剩頭頂）。
+            //   擺設模式存過的出沒區也一樣收到這條線（_loadCfg）；主角自己走過去照舊只擋腳
+            npcMaxY: 835,
+            cfgKey: 'lobby_stage_layout_cafe_v4',   // v4＝沙發組拆成三件（存檔是整份覆蓋，不升版會蓋掉新佈局）
+            layout: [   // ⬇ 擺設模式輸出（複製數據）；改版請直接換這份
+                { file: "lobby_cafe_obj_mat_v5.svg", x: 780, y: 387, w: 637, h: 383, footH: 0, s: 0.234, layer: "floor", noCollide: true },   // 長毯(中央走道，平貼地板)
+                { file: "lobby_cafe_obj_bar_v5.svg", x: 342, y: 91, w: 1259, h: 903, footH: 200, s: 0.309 },   // 咖啡吧台(左後牆，含咖啡機與水槽)
+                { file: "lobby_cafe_obj_counter_v5.svg", x: 323, y: 387, w: 1956, h: 593, footH: 180, s: 0.224 },   // 點心櫃檯(瀅瀅站這裡)
+                { file: "lobby_cafe_obj_plant_back_v5.svg", x: 154, y: 254, w: 876, h: 1056, footH: 130, s: 0.104 },   // 大盆栽(左後角)
+                { file: "lobby_cafe_obj_shelf_v5.svg", x: 1294, y: 135, w: 760, h: 1113, footH: 150, s: 0.217 },   // 書櫃(右後牆)
+                { file: "lobby_cafe_obj_cabinet_v5.svg", x: 732, y: 170, w: 680, h: 1099, footH: 150, s: 0.182 },   // 玻璃展示櫃(後牆中央)
+                { file: "lobby_cafe_obj_console_v5.svg", x: 70, y: 559, w: 643, h: 904, footH: 200, s: 0.277, zb: -446 },   // 畫架＋盆栽(左牆；zb 把它壓回牆邊)
+                { file: "lobby_cafe_obj_table_v5.svg", x: 451, y: 587, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 400, y: 610, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 549, y: 608, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_rug_v5.svg", x: 1163, y: 365, w: 1186, h: 869, footH: 0, s: 0.184, layer: "floor", noCollide: true },   // 圓毯(沙發組底下，平貼地板)
+                { file: "lobby_cafe_obj_sofa_v5.svg", x: 1199, y: 312, w: 877, h: 859, footH: 560, footW: 703, s: 0.134 },   // 🎯 單人沙發(互動點＝我的角色)
+                { file: "lobby_cafe_obj_teatable_v5.svg", x: 1243, y: 383, w: 835, h: 785, footH: 230, footW: 385, s: 0.142 },   // 🎯 圓几＋茶具(互動點＝世界書)
+                { file: "lobby_cafe_obj_cart_v5.svg", x: 852, y: 223, w: 698, h: 1129, footH: 150, s: 0.127 },   // 邊桌推車
+                { file: "lobby_cafe_obj_plant_right_v5.svg", x: 1213, y: 247, w: 735, h: 1074, footH: 130, s: 0.099 },   // 龜背芋
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 996, y: 781, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v5.svg", x: 898, y: 761, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 847, y: 784, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 1054, y: 513, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v5.svg", x: 956, y: 492, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 905, y: 515, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                { file: "lobby_cafe_obj_chair_r_v5.svg", x: 1364, y: 681, w: 658, h: 1238, footH: 320, footW: 592, s: 0.089 },
+                { file: "lobby_cafe_obj_table_v5.svg", x: 1266, y: 659, w: 861, h: 1133, footH: 300, footW: 408, s: 0.116 },   // 四組座位之一
+                { file: "lobby_cafe_obj_chair_l_v5.svg", x: 1215, y: 683, w: 648, h: 1240, footH: 320, footW: 578, s: 0.087 },
+                // 🎯 菜單立牌(互動點＝書咖櫃檯)：站在點心櫃檯桌面上、點心櫃左邊。zb 把它擠到櫃檯前面一層（不然底邊比櫃檯高、會被櫃檯蓋住）
+                { file: "lobby_cafe_obj_menu_v1.png", x: 408, y: 392, w: 289, h: 300, footH: 0, s: 0.16, zb: 81, noCollide: true },
+            ],
+            points: {
+                yingZone: { x: 342, y: 447, w: 380, h: 30 },      // 瀅瀅在點心櫃檯前那一條
+                npcZone:  { x: 160, y: 527, w: 1346, h: 392 },    // 客人出沒區（輪班NPC隨機刷在框內）
+                player: { x: 720, y: 790 },
+                arrive: { x: 720, y: 870 },   // 走門進來的落點（從街區進書咖：底部大門前）
+                // 外框鋼索：可走範圍多邊形，照新底圖的地板梯形（牆往前是外八）；牆角錨點可在擺設模式拖
+                boundary: [
+                    { x: 170, y: 335 }, { x: 1380, y: 335 },
+                    { x: 1460, y: 950 }, { x: 90, y: 950 },
+                ],
+                actorScale: 0.7,
+            },
+            walls: [],   // 新底圖沒有烤死的家具，全部是獨立物件；外框走 boundary
+            // 書咖⇄大廳不再直通（2026-07-17 定案）：出入口只剩底部大門→城市街區；doorsV 擋舊存檔的門座標
+            // 🚨 觸發區要整個落在 boundary 裡面，不然走不到門＝被關在店裡（同占卜小屋那條）
+            doors: [ { x: 640, y: 895, w: 200, h: 44, to: 'city', spawn: { x: 384, y: 400 } } ],  // 底部大門→街區（落在書咖建築門口）
+            doorsV: 3,
+            // 🎯 單人沙發那組＝兩顆互動點（2026-09-20 從手機的應用工坊搬過來的）。
+            //    坐的那張沙發＝我的角色，旁邊的圓几＝世界書；兩件事分開，各自直接開，不再多一層選單。
+            //    一顆管一件家具（沙發一張圖、圓几一張圖）→ 不用再切比例框，滑過去亮的就是那一件本身。
+            //    照樣跟著家具走：在擺設模式挪沙發或圓几，熱點自己跟上。
+            hotspots: [
+                { obj: 'obj_sofa_v5', label: '我的角色', icon: 'fa-user-pen',
+                  open: 'persona', cls: 'hs-cafe', lit: true },
+                { obj: 'obj_teatable_v5', label: '世界書', icon: 'fa-book-open',
+                  open: 'worldbook', cls: 'hs-cafe', lit: true },
+                // 10-14 新加：菜單放書咖櫃台上面，像核心那樣直接打開面板
+                //   菜單在櫃檯桌面上，人只能站到櫃檯前面（腳離它約 80px）→ reach 多給 50，站在櫃檯前就亮
+                { obj: 'obj_menu_v1', label: '菜單', icon: 'fa-receipt', open: 'cafeCounter', cls: 'hs-cafe', lit: true, reach: 50 },
+            ],
+        },
+        hall: {
+            // 🖋 v7（10-26）＝底圖和 13 件家具換成 SVG，畫布跟原 PNG 一樣大（含透明邊）→ 下面的 x/y/w/h/s、佔地一格都沒動。
+            //   使用者存過的擺設記的是舊檔名，載入時照 LOBBY_SVG 換新（_loadCfg）；碰撞遮罩照用 v5 那張 PNG
+            base: 'lobby_hall_base_v7.svg',
+            mask: 'lobby_hall_mask_v5.png',   // v5 手繪碰撞遮罩(白=可走)
+            cfgKey: 'lobby_stage_layout_hall_v9',   // v9：定版擺設數據（兩組座位左+右）
+            layout: [   // ⬇ 擺設模式輸出（複製數據）；改版請直接換這份
+                { file: "lobby_hall_obj_counter_v7.svg", x: 994, y: 229, w: 1548, h: 556, footH: 160, footW: 1548, s: 0.27 },
+                { file: "lobby_hall_obj_pedestal_v7.svg", x: 630, y: 462, w: 989, h: 682, footH: 120, footW: 360, s: 0.275, layer: "floor", noCollide: true },
+                { file: "lobby_hall_obj_core_v7.svg", x: 657, y: 252, w: 245, h: 321, footH: 40, footW: 86, s: 0.902, float: true },
+                { file: "lobby_hall_obj_sofa_v7.svg", x: 108, y: 231, w: 1012, h: 844, footH: 570, footW: 798, s: 0.248 },
+                { file: "lobby_hall_obj_coffee_v7.svg", x: 260, y: 309, w: 754, h: 593, footH: 360, footW: 754, s: 0.173 },
+                { file: "lobby_hall_obj_lounge_v7.svg", x: 382, y: 234, w: 544, h: 752, footH: 295, footW: 485, s: 0.132 },
+                { file: "lobby_hall_obj_holotable_v7.svg", x: 298, y: 679, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
+                { file: "lobby_hall_obj_chair_nw_v7.svg", x: 215, y: 631, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
+                { file: "lobby_hall_obj_chair_ne_v7.svg", x: 390, y: 631, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
+                { file: "lobby_hall_obj_chair_s_v7.svg", x: 307, y: 736, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
+                { file: "lobby_hall_obj_deco_05_v7.svg", x: 540, y: 116, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
+                { file: "lobby_hall_obj_deco_01_v7.svg", x: 985, y: 795, w: 67, h: 124, footH: 40, footW: 59, s: 0.799 },
+                { file: "lobby_hall_obj_deco_02_v7.svg", x: 1420, y: 300, w: 63, h: 99, footH: 20, s: 0.6 },
+                { file: "lobby_hall_obj_chair_nw_v7.svg", x: 1192, y: 537, w: 619, h: 837, footH: 310, footW: 557, s: 0.125 },
+                { file: "lobby_hall_obj_holotable_v7.svg", x: 1275, y: 585, w: 625, h: 569, footH: 200, footW: 369, s: 0.138 },
+                { file: "lobby_hall_obj_chair_s_v7.svg", x: 1284, y: 642, w: 414, h: 429, footH: 190, footW: 373, s: 0.178 },
+                { file: "lobby_hall_obj_chair_ne_v7.svg", x: 1367, y: 537, w: 668, h: 880, footH: 310, footW: 601, s: 0.125 },
+                { file: "lobby_hall_obj_deco_05_v7.svg", x: 842, y: 114, w: 132, h: 139, footH: 60, footW: 118, s: 1.169 },
+            ],
+            points: {
+                npcZone:  { x: 191, y: 249, w: 1273, h: 626 },
+                player: { x: 760, y: 640 },
+                arrive: { x: 730, y: 820 },   // 從街區底部大門進來的落點
+                alicePos: { x: 1072, y: 331 },   // 愛麗絲站位（可在擺設模式拖）
+                boundary: [
+                    { x: 190, y: 235 }, { x: 1400, y: 235 }, { x: 1465, y: 880 }, { x: 85, y: 880 },
+                ],
+                actorScale: 0.7,
+            },
+            walls: [],   // 碰撞全走手繪遮罩
+            doors: [
+                { x: 577, y: 888, w: 385, h: 110, to: 'city', spawn: { x: 1205, y: 655 } },   // 底部大門→街區
+                { x: 65, y: 490, w: 58, h: 203, to: 'exchange', spawn: { x: 1330, y: 620 } },   // 左拱門→交易所（落在交易所右側）
+            ],
+            doorsV: 3,
+            alice: { x: 1072, y: 331 },   // 愛麗絲：不漫步、正面站
+            // 🌌 中央的核心＝世界門（10-14，做法類似帽匠那樣）。
+            //    愛麗絲身上那顆「世界門」照留（新入口加在旁邊）；兩邊開的是同一個面板。
+            //    光用淡藍細邊＋藍光（lit-cyan），跟底座那幾圈藍光同一個調（小樣 tmp/hall_core_glow_lab.html：青銅邊在銀色核心上是一圈橘框、深藍邊像描框）
+            hotspots: [
+                { obj: 'obj_core_v7', label: '世界門', icon: 'fa-globe', open: 'worldgate', cls: 'hs-core',
+                  lit: true, litCls: 'lstage-obj-lit-cyan', orbit: true },   // orbit＝滑過／走近時一圈世界螢幕繞著轉（_orbOpen）
+            ],
+        },
+        room404: {   // 🐈‍⬛ 柴郡的地下駭客車庫（ERR_404 進、SYS_RESTORE 或走底部出口回）
+            // 🖋 v2（11-20）＝整間照阿洛的示意圖重畫成 SVG（Vproject 畫的）：房間形狀、家具、門、站位、可走遮罩全換。
+            //   cfgKey 升 v2：家具整組換掉，舊存檔排的是舊房間，套到新底圖上沒有意義（大廳、工坊那種只換圖的才不升）。
+            //   footH、actorScale 0.58 是 Vproject 估的，進擺設模式走一次再調。
+            base: 'lobby_404_base_v2.svg',
+            mask: 'lobby_404_mask_v2.png',   // 白＝可走，只畫地板；家具碰撞交給 footH
+            lower: 'lobby_404_fx_v2.svg',    // 窗外雨夜城市（雨、飛車、窗燈、閃電；SVG 自己的 CSS 動畫）：底圖正上方、家具下面
+            upper: 'lobby_404_front_v2.svg', // 前景矮牆＋門口：蓋在家具和人物上面
+            cfgKey: 'lobby_stage_layout_404_v2',
+            layout: [
+                { file: 'lobby_404_obj_banner_v2.svg',   x: 284,  y: 217, w: 773,  h: 1315, s: 0.0961, footH: 0,   layer: 'back', noCollide: true },   // 牆上的笑貓旗
+                { file: 'lobby_404_obj_mat_v2.svg',      x: 498,  y: 676, w: 942,  h: 1214, s: 0.0916, footH: 0,   layer: 'floor', noCollide: true },  // 地墊
+                { file: 'lobby_404_obj_desk_v2.svg',     x: 788,  y: 300, w: 1496, h: 885,  s: 0.2888, footH: 398,
+                  fx: 'lobby_404_obj_desk_fx_v2.svg' },   // 弧形駭客工作台；fx＝五面螢幕捲程式碼那層，跟著桌子走（_spawnObjEl）
+                { file: 'lobby_404_obj_chair_v2.svg',    x: 894,  y: 408, w: 786,  h: 991,  s: 0.172,  footH: 297 },   // 電競椅
+                { file: 'lobby_404_obj_servers_v2.svg',  x: 1131, y: 523, w: 715,  h: 977,  s: 0.2768, footH: 352 },   // 伺服器堆
+                { file: 'lobby_404_obj_bedside_v2.svg',  x: 285,  y: 540, w: 973,  h: 960,  s: 0.1791, footH: 403 },   // 床頭櫃
+                { file: 'lobby_404_obj_bed_v2.svg',      x: 223,  y: 546, w: 1061, h: 993,  s: 0.2722, footH: 655 },   // 床
+                { file: 'lobby_404_obj_floorbox_v2.svg', x: 180,  y: 732, w: 922,  h: 945,  s: 0.1002, footH: 454 },   // 地上的箱子
+                { file: 'lobby_404_obj_spool_v2.svg',    x: 527,  y: 553, w: 953,  h: 932,  s: 0.1353, footH: 401 },   // 線軸圓桌（黑市攤位）
+                { file: 'lobby_404_obj_sign_v2.svg',     x: 528,  y: 460, w: 1140, h: 784,  s: 0.0692, footH: 157 },   // 招牌螢幕
+                { file: 'lobby_404_obj_handheld_v2.svg', x: 694,  y: 451, w: 713,  h: 876,  s: 0.0487, footH: 219 },   // 手持終端
+                // 404 大箱：示意圖裡它蓋過前景矮牆 → zb 把它推到前景層（4000）上面；它在房間最前緣，沒有人能站到它前面
+                { file: 'lobby_404_obj_crate_v2.svg',    x: 1214, y: 728, w: 1097, h: 996,  s: 0.1505, footH: 498, zb: 3300 },
+            ],
+            points: {
+                player: { x: 706, y: 780 },
+                arrive: { x: 706, y: 800 },
+                cheshirePos: { x: 840, y: 600 },   // 柴郡站位（可在擺設模式拖）
+                boundary: [ { x: 300, y: 540 }, { x: 1240, y: 454 }, { x: 1350, y: 850 }, { x: 206, y: 852 } ],  // 遮罩沒載時的粗略退路
+                actorScale: 0.58,
+            },
+            walls: [],
+            doors: [ { x: 620, y: 836, w: 170, h: 46, to: 'cafe', restore: true } ],  // 底部出口=走出404(觸發系統還原流程)
+            cheshire: { x: 840, y: 600 },
+            // 🏪 線軸圓桌＝黑市攤位（點了開黑市面板）。obj 讓熱點跟著桌子走：擺設模式挪桌子，熱點自己跟上。
+            //    混沌片場 11-20 起改點右上的大電腦（工作台），走近柴郡只剩對話。
+            hotspots: [
+                { obj: 'lobby_404_obj_spool_v2', label: '黑市', icon: 'fa-store', open: 'store', cls: 'hs-404' },
+                // 🎬 混沌片場＝右上的弧形工作台（大電腦）：柴郡是那台導演機的主人（11-20 從他身上搬來）。滑過亮的是工作台本身（綠光）
+                { obj: 'lobby_404_obj_desk_v2', label: '混沌片場', icon: 'fa-clapperboard', open: 'chaos', cls: 'hs-404 hs-404-lit', lit: true, litCls: 'lstage-obj-lit-green' },
+            ],
+        },
+        exchange: {   // 🏦 交易所：純白大廳左門進的一間房；白兔先生站櫃台，點他開買房面板（家具粗擺，擺設模式可拖）
+            // 🖋 v3（10-27）＝底圖和 11 種家具換成 SVG（Vproject EXCHANGE_SVG_LAB），畫布跟 v2 那批 PNG 一樣大 → 座標一格都沒動；碰撞遮罩照用 v1 那張 PNG。
+            //   使用者存過的擺設記的是舊檔名，載入時照 LOBBY_SVG 換新（_loadCfg）
+            base: 'lobby_exchange_base_v3.svg',
+            mask: 'lobby_exchange_mask_v1.png',
+            cfgKey: 'lobby_stage_layout_exchange_v2',   // v2：定版擺設數據（兩組洽談區）
+            layout: [   // ⬇ 擺設模式輸出（複製數據）；改版請直接換這份
+                { file: "lobby_exchange_obj_rate_screen_v3.svg", x: 524, y: 37, w: 1682, h: 507, footH: 0, s: 0.3, layer: "back" },
+                { file: "lobby_exchange_obj_counter_v3.svg", x: 366, y: 232, w: 1949, h: 448, footH: 90, footW: 1929, s: 0.411 },
+                { file: "lobby_exchange_obj_rug_v3.svg", x: 258, y: 593, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 299, y: 524, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_table_v3.svg", x: 388, y: 632, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
+                { file: "lobby_exchange_obj_chair_left_v3.svg", x: 315, y: 597, w: 603, h: 766, footH: 370, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_right_v3.svg", x: 472, y: 599, w: 606, h: 801, footH: 410, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_front_v3.svg", x: 394, y: 715, w: 491, h: 471, footH: 240, s: 0.156 },
+                { file: "lobby_exchange_obj_bench_v3.svg", x: 192, y: 355, w: 978, h: 613, footH: 60, s: 0.132 },
+                { file: "lobby_exchange_obj_plant_v3.svg", x: 148, y: 348, w: 485, h: 1227, footH: 40, s: 0.07 },
+                { file: "lobby_exchange_obj_planter_v3.svg", x: 269, y: 710, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 544, y: 525, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_planter_v3.svg", x: 1268, y: 722, w: 352, h: 822, footH: 200, footW: 317, s: 0.122 },
+                { file: "lobby_exchange_obj_rug_v3.svg", x: 967, y: 600, w: 1150, h: 777, footH: 0, s: 0.3, layer: "floor", noCollide: true },
+                { file: "lobby_exchange_obj_chair_left_v3.svg", x: 1024, y: 604, w: 603, h: 766, footH: 370, s: 0.129 },
+                { file: "lobby_exchange_obj_chair_right_v3.svg", x: 1181, y: 606, w: 606, h: 801, footH: 410, s: 0.129 },
+                { file: "lobby_exchange_obj_table_v3.svg", x: 1097, y: 639, w: 651, h: 769, footH: 320, footW: 422, s: 0.136 },
+                { file: "lobby_exchange_obj_chair_front_v3.svg", x: 1103, y: 722, w: 491, h: 471, footH: 230, s: 0.156 },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 1008, y: 531, w: 212, h: 678, footH: 170, s: 0.132 },
+                { file: "lobby_exchange_obj_lamp_left_v3.svg", x: 1253, y: 532, w: 212, h: 678, footH: 170, s: 0.132 },
+            ],
+            points: {
+                npcZone:  { x: 118, y: 418, w: 1260, h: 459 },
+                player:  { x: 760, y: 720 },
+                arrive:  { x: 1330, y: 620 },   // 從大廳左門進來→落在交易所右側(右拱門旁)
+                rabbitPos: { x: 773, y: 365 },  // 白兔站櫃台前(擺設模式可拖)
+                boundary: [ { x: 120, y: 250 }, { x: 1440, y: 250 }, { x: 1470, y: 900 }, { x: 90, y: 900 } ],
+                actorScale: 0.7,
+            },
+            walls: [],
+            doors: [
+                { x: 1423, y: 513, w: 55, h: 158, to: 'hall', spawn: { x: 175, y: 600 } },   // 右拱門→回純白大廳(落在大廳左門內側)
+            ],
+            doorsV: 1,
+            rabbit: { x: 773, y: 365 },   // 觸發 lobby_npcs 的 if(SC.rabbit)：白兔先生站櫃台
+            // 🏦 交易所櫃檯＝可點的互動點（11-20：白兔走近只剩對話，交易所改點他面前的櫃檯；同書咖的菜單立牌、大廳的核心）。光用大廳那組淡藍
+            hotspots: [
+                { obj: 'lobby_exchange_obj_counter', label: '交易所', icon: 'fa-house', open: 'exchange', cls: 'hs-core', lit: true, litCls: 'lstage-obj-lit-cyan' },
+            ],
+        },
+        tarot: {   // 🔮 紫薇的店（微醺星軌）：廣場左側那間小屋的室內。紫薇老師站在吧檯後面，點吧檯「入座」開記憶吧檯（占卜和記憶迴廊都在裡面）。
+            // 🍸 11-20 換成「記憶吧檯」（取代占卜小屋）：Vproject 畫的 SVG，整間換掉（原本的占卜桌、高背椅、燭台不用了）。
+            //   cfgKey 升 v3：家具整組換了，舊的擺設套到新房間沒有意義。
+            //   碰撞不走手繪遮罩（沒有 mask）＝吃 boundary 鋼索：地板約 y322～893，牆腳線 x＝112－0.175×(y－360)，以 x765 左右對稱（交接說明給的）。
+            //   擺位照 Vproject 的 layout.json（width／height 就是畫面上的大小，所以 w／h 照抄、s＝1）；
+            //   那份說「照陣列順序疊、別用底邊 y 排」：會打架的兩件（邊桌要蓋在沙發上、沙發旁的盆栽也蓋在沙發上）用 zb 推到前面。
+            //   footH 是估的（交接沒附），進擺設模式走一次再調。
+            base: 'lobby_memory_bar_base_svg_v2.svg',   // v2＝11-23 門兩旁那兩條沒畫到的縫補地板色（遊戲裡是黑的）
+            lower: 'lobby_memory_bar_fx_window_svg_v1.svg',   // 窗外港口（雲、窗燈、紅燈、渡輪、飛機；SVG 自己的 CSS 動畫）：底圖之上、家具之下
+            upper: 'lobby_memory_bar_front_svg_v1.svg',       // 前景矮牆＋門：蓋在家具和人物上面
+            cfgKey: 'lobby_stage_layout_tarot_v3',
+            layout: [
+                { file: 'lobby_memory_bar_obj_wall_picture_svg_v1.svg', x: 70,  y: 204, w: 44,  h: 188, s: 1, footH: 0, layer: 'back', noCollide: true },   // 左牆的畫
+                { file: 'lobby_memory_bar_obj_plant_tall_svg_v1.svg',   x: 133, y: 173, w: 135, h: 205, s: 1, footH: 35 },    // 高盆栽（左後）
+                // 🎯 吧檯（點了入座；紫薇站在它後面）。fx＝燈條那層，跟著吧檯走
+                { file: 'lobby_memory_bar_obj_bar_svg_v1.svg',          x: 309, y: 172, w: 914, h: 320, s: 1, footH: 110, fx: 'lobby_memory_bar_obj_bar_fx_svg_v1.svg' },
+                { file: 'lobby_memory_bar_obj_stool_svg_v1.svg',        x: 579, y: 400, w: 129, h: 127, s: 1, footH: 30 },    // 吧檯凳
+                { file: 'lobby_memory_bar_obj_stool_svg_v1.svg',        x: 825, y: 400, w: 129, h: 127, s: 1, footH: 30 },
+                { file: 'lobby_memory_bar_obj_curio_cabinet_svg_v1.svg', x: 1230, y: 271, w: 228, h: 311, s: 1, footH: 60 },  // 古董櫃（右）
+                { file: 'lobby_memory_bar_obj_rug_svg_v1.svg',          x: 100, y: 540, w: 505, h: 208, s: 1, footH: 0, layer: 'floor', noCollide: true },   // 地毯
+                { file: 'lobby_memory_bar_obj_chair_left_svg_v2.svg',   x: 139, y: 486, w: 175, h: 183, s: 1, footH: 55 },    // 扶手椅（左）
+                { file: 'lobby_memory_bar_obj_chair_right_svg_v1.svg',  x: 405, y: 501, w: 165, h: 174, s: 1, footH: 55 },    // 扶手椅（右）
+                { file: 'lobby_memory_bar_obj_cocktail_table_svg_v1.svg', x: 270, y: 516, w: 181, h: 166, s: 1, footH: 45 },  // 雞尾酒小圓桌
+                { file: 'lobby_memory_bar_obj_sofa_svg_v1.svg',         x: 1120, y: 600, w: 386, h: 253, s: 1, footH: 120 },  // 弧形沙發（右下）
+                { file: 'lobby_memory_bar_obj_side_table_svg_v1.svg',   x: 1197, y: 679, w: 105, h: 129, s: 1, footH: 35, zb: 55 },   // 邊桌：蓋在沙發上
+                { file: 'lobby_memory_bar_obj_plant_sofa_svg_v1.svg',   x: 989, y: 516, w: 196, h: 263, s: 1, footH: 40, zb: 80 },    // 沙發旁的盆栽：也蓋在沙發上
+                { file: 'lobby_memory_bar_obj_lamp_planter_svg_v1.svg', x: 49,  y: 666, w: 148, h: 201, s: 1, footH: 40 },    // 燈籠花盆（左下）
+            ],
+            points: {
+                player: { x: 768, y: 800 },
+                arrive: { x: 768, y: 820 },   // 從門口進來的落點(門在前牆正中)
+                zhiweiPos: { x: 766, y: 350 },   // 紫薇站在吧檯後面（腳在吧檯底邊前面就會被擋住下半身，像調酒師；擺設模式可拖）
+                // 可走範圍：地板那塊梯形（牆往前是外八）。角點在擺設模式可拖。
+                boundary: [
+                    { x: 119, y: 322 }, { x: 1411, y: 322 },
+                    { x: 1505, y: 885 }, { x: 25, y: 885 },
+                ],
+                actorScale: 0.7,
+            },
+            walls: [],
+            doors: [
+                // 前牆的門→廣場。🔒 廣場鎖上時改回「進門前待的場景」，見過門判定。
+                // 🚨 觸發區必須整個落在 boundary 裡面，不然玩家走不到門＝被關在店裡
+                { x: 700, y: 836, w: 136, h: 44, to: 'city', spawn: { x: 329, y: 600 } },
+            ],
+            doorsV: 1,
+            zhiwei: { x: 766, y: 350 },   // 觸發 lobby_npcs 的 if(SC.zhiwei)：紫薇老師在店裡
+            // 🔮 吧檯＝可點的互動點（點了入座＝紫薇的記憶吧檯 lobby_memory.js；走近紫薇則是純聊天，兩件事分開）。
+            //    11-26 個人占卜和記憶占卜併一起 → 一個入口：紫薇問「想問問自己的事，還是想聽一段別人的往事？」，兩顆鈕分開走。
+            //    右邊回憶展示櫃那顆（原本開記憶迴廊）併進來拿掉；舊的賽博塔羅浮窗整個拆了。
+            //    obj 讓熱點跟著吧檯走；lit＝滑過時吧檯自己鑲一圈暖光（預設那組琥珀色，跟吧檯燈條同一個調）
+            hotspots: [
+                { obj: 'memory_bar_obj_bar_svg', label: '入座', icon: 'fa-wand-sparkles', open: 'memory', cls: 'hs-tarot', lit: true },
+            ],
+        },
+        workshop: {   // 🎩 帽匠的奇想工坊：廣場右側那間店的室內。帽匠站在造物儀旁邊，點造物儀開造物工坊面板。
+            //   同占卜小屋：沒有手繪遮罩素材＝碰撞吃 boundary 鋼索，四個牆角在擺設模式可以直接拖。
+            base: 'lobby_workshop_base_svg_v1.svg',   // 🖋 11-20 整間換 SVG（Vproject 畫的，畫布跟 PNG 一樣大→座標一格沒動；排過的存檔照 LOBBY_SVG 換檔名）
+            cfgKey: 'lobby_stage_layout_workshop_v1',
+            // 🚨 家具素材已經緊裁到物件本身（佔地寬＝w*s，圖邊留白會讓碰撞框比看到的東西寬一大截）。
+            layout: [   // ⚠️ 照阿洛的擺設稿目測擺位；進擺設模式拖完複製數據回來換掉這份
+                { file: 'lobby_workshop_obj_workbench_svg_v1.svg', x: 118, y: 115, w: 900, h: 578, footH: 300, s: 0.42 },   // 靠後牆的大工作桌
+                { file: 'lobby_workshop_obj_chair_svg_v1.svg',     x: 245, y: 227, w: 574, h: 900, footH: 260, s: 0.226 },  // 工作椅(桌子前面)
+                { file: 'lobby_workshop_obj_rack_svg_v1.svg',      x: 490, y: 286, w: 776, h: 900, footH: 400, s: 0.110 },  // 稿件架(桌子右邊)
+                { file: 'lobby_workshop_obj_cabinet_svg_v1.svg',   x: 30,  y: 394, w: 471, h: 900, footH: 300, s: 0.340 },  // 零件抽屜櫃(左牆)
+                { file: 'lobby_workshop_obj_beanbag_svg_v1.svg',   x: 120, y: 652, w: 900, h: 846, footH: 620, s: 0.211 },  // 懶骨頭(左下)
+                { file: 'lobby_workshop_obj_crate_svg_v1.svg',     x: 320, y: 701, w: 767, h: 900, footH: 520, s: 0.143 },  // 糖果箱(懶骨頭旁)
+                { file: 'lobby_workshop_obj_loom_svg_v1.svg',      x: 600, y: 279, w: 801, h: 900, footH: 280, s: 0.412 },  // 🎯 造物儀(正中央,互動點)
+                { file: 'lobby_workshop_obj_console_svg_v1.svg',   x: 1035, y: 164, w: 415, h: 900, footH: 320, s: 0.140 }, // 全息控制台(投影台左邊)
+                { file: 'lobby_workshop_obj_rig_svg_v1.svg',       x: 1105, y: 100, w: 482, h: 900, footH: 260, s: 0.300 }, // 全息試裝台(後牆右)
+                { file: 'lobby_workshop_obj_shelf_svg_v1.svg',     x: 1280, y: 117, w: 445, h: 900, footH: 180, s: 0.315 }, // 展示層架(右牆)
+                { file: 'lobby_workshop_obj_cart_svg_v1.svg',      x: 1240, y: 448, w: 710, h: 900, footH: 340, s: 0.280 }, // 工具推車(右側)
+                { file: 'lobby_workshop_obj_kiosk_svg_v1.svg',     x: 1080, y: 675, w: 524, h: 900, footH: 420, s: 0.172 }, // 安裝終端(右下)
+                { file: 'lobby_workshop_obj_coil_svg_v1.svg',      x: 1215, y: 709, w: 510, h: 344, footH: 200, s: 0.147 }, // 線材捲(地上)
+                { file: 'lobby_workshop_obj_case_svg_v1.svg',      x: 1290, y: 743, w: 801, h: 638, footH: 400, s: 0.137 }, // 樣品箱(右下角)
+            ],
+            points: {
+                player: { x: 768, y: 790 },
+                arrive: { x: 768, y: 800 },   // 從門口進來的落點(門在下緣中央)
+                hatterPos: { x: 545, y: 650 },   // 帽匠站在造物儀左前方(擺設模式可拖)
+                // 可走範圍：地板那塊梯形(牆往前是外八)。角點在擺設模式可拖。
+                boundary: [
+                    { x: 150, y: 330 }, { x: 1390, y: 330 },
+                    { x: 1450, y: 860 }, { x: 95, y: 860 },
+                ],
+                actorScale: 0.7,
+            },
+            walls: [],
+            doors: [
+                // 工坊大門→廣場。🔒 廣場鎖上時改回「進門前待的場景」，見過門判定。
+                // 🚨 觸發區必須整個落在 boundary 裡面，不然玩家走不到門＝被關在工坊（tmp/workshop_shop_test.cjs 有守）
+                { x: 700, y: 810, w: 136, h: 44, to: 'city', spawn: { x: 1312, y: 895 } },
+            ],
+            doorsV: 1,
+            hatter: { x: 545, y: 650 },   // 觸發 lobby_npcs 的 if(SC.hatter)：帽匠在店裡
+            // 🎯 造物儀＝可點的互動點（點了開造物工坊面板；走近帽匠是純聊天，兩件事分開，同占卜小屋那條規則）。
+            //    obj 讓熱點跟著家具走：擺設模式挪造物儀，熱點自己跟上，不用回來改座標。
+            hotspots: [
+                // 10-13 手繪描邊圖那圈橘框太突兀，書咖世界書那種跟背景一體的光比較好 → 改成造物儀自己鑲一圈光（lit），
+                //   顏色換成工坊的淡紫細邊＋紫光（litCls；三個小樣裡青銅邊太橘、只有柔光又看不出被點亮）
+                { obj: 'obj_loom', label: '開始造物', icon: 'fa-wand-magic-sparkles', open: 'workshop', cls: 'hs-workshop',
+                  lit: true, litCls: 'lstage-obj-lit-violet' },
+            ],
+        },
+        // 🏢 公寓大樓（11-23 Vproject 畫的 SVG，交接單「物業大樓_SVG_20261123」；一樓是大廳，搭電梯到二樓以上才是房間）
+        //   兩間都是固定的圖；誰住哪、門通到哪、門牌寫什麼全交給 os_landlord_room.js（蓋了公寓才有這棟，走進自己那棟＝一樓大廳）。
+        //   座標從拆件包的 1586×992 等比縮到 1536×1024（上下各留約 32px，跟 <img> 裡 SVG 自己置中同一個算法），產生器在本機 tmp/farm_svg/apt_scene.py。
+        //   碰撞吃 boundary（地板＋前面樓梯口那塊）；沒有 cfgKey、擺設鈕藏起來：樓上走廊的門每層不一樣，存擺設會把門釘死。
+        //   房東那邊的「第 1 層」＝這棟的 2 樓（一樓是大廳），畫面上的樓層一律 +1。
+        aptlobby: {
+            apt: true,
+            base: 'property_lobby_base_svg_v1.svg',
+            upper: 'property_lobby_front_svg_v1.svg',   // 前景矮牆、樓梯側擋板：蓋在家具和人物上面
+            layout: [
+                { file: 'property_lobby_obj_noticeboard_svg_v1.svg', x: 281, y: 203, w: 236, h: 115, s: 1, footH: 0, layer: 'back', noCollide: true },
+                { file: 'property_lobby_obj_mailboxes_svg_v1.svg', x: 253, y: 317, w: 291, h: 168, s: 1, footH: 0, layer: 'back', noCollide: true },
+                { file: 'property_lobby_obj_elevator_svg_v1.svg', x: 632, y: 182, w: 358, h: 353, s: 1, footH: 0, layer: 'back', noCollide: true },
+                { file: 'property_lobby_obj_entrance_mat_svg_v1.svg', x: 679, y: 688, w: 181, h: 46, s: 1, footH: 0, layer: 'floor', noCollide: true },
+                { file: 'property_lobby_obj_bench_svg_v1.svg', x: 1171, y: 445, w: 190, h: 171, s: 1, footH: 58 },
+                { file: 'property_lobby_obj_planter_svg_v1.svg', x: 1073, y: 332, w: 133, h: 207, s: 1, footH: 48 },
+                // 11-23 管理機台（手帳柱）拿掉了，改用信箱上的木板當入口：房產手帳改點信箱上面那塊公告板（hotspots 那顆）
+            ],
+            points: {
+                player: { x: 767, y: 743 },
+                arrive: { x: 767, y: 743 },   // 從前面樓梯走上來
+                boundary: [
+                    { x: 254, y: 529 }, { x: 1259, y: 529 }, { x: 1402, y: 682 }, { x: 876, y: 682 },
+                    { x: 876, y: 808 }, { x: 659, y: 808 }, { x: 659, y: 682 }, { x: 136, y: 682 },
+                ],
+                // 故事角色刷位、閒晃換位置只在這塊（地板、前牆線以內）：前面樓梯和地墊可以走，但不會有人站在那擋路
+                //   （11-23：禁區直接在這個位置生成，主角可以走，但別讓 NPC 站在那擋路）
+                npcZone: { x: 210, y: 545, w: 1110, h: 120 },
+                actorScale: 1.2,
+            },
+            liftSpot: { x: 806, y: 598 },   // 搭電梯下來站的地方（電梯門口）
+            walls: [],
+            doors: [
+                // 前面樓梯走下去＝出這棟（回自己那塊地門口）；🔒 廣場鎖上時回進這棟之前待的場景（過門判定那段）
+                { x: 678, y: 775, w: 179, h: 33, to: 'city', spawn: { x: 364, y: 892 } },
+                // 電梯門口：「這棟樓」面板（換樓層、加蓋；os_landlord_room.js 的 _openLift，floor 0＝人在一樓）
+                { x: 712, y: 531, w: 199, h: 33, panel: 'apartment-lift', floor: 0 },
+            ],
+            hotspots: [
+                { obj: 'lobby_obj_elevator', label: '搭電梯', icon: 'fa-elevator', open: 'aptLift', lit: true },
+                // 公告板掛在牆上、離地板遠（板子下緣 y 318，地板最裡面 529）：reach 放寬到站在信箱前面就搆得到
+                { obj: 'lobby_obj_noticeboard', label: '房產手帳', icon: 'fa-book', open: 'landlordBook', lit: true, reach: 175 },
+            ],
+        },
+        aptcorr: {
+            // 🛗 11-23 v2（走廊在紅門旁邊再拉長一個區塊、把電梯搬過來，只有一樓有前方樓梯，柱子退休；
+            //   拉長後視角跟書咖一樣：地圖是地圖、鏡頭是鏡頭）：
+            //   走廊往左多一格放電梯（用一樓大廳那座），樓上沒有前面的樓梯（前牆接成一整片），管理機台拿掉，換樓層、加蓋、下樓都點電梯。
+            //   圖比畫面寬（1963×992，mapW 1902），鏡頭照舊跟著人左右移。產生器：本機 tmp/farm_svg/corr_wide/room_wide.py（從 Vproject 的 room.py 抄來改，那邊不動）。
+            //   座標：原本那三扇門以右整排往右挪 366（多的那一格 378 × 縮放 0.969）。
+            apt: true,
+            mapW: 1902,
+            base: 'property_corridor_base_svg_v2.svg',
+            upper: 'property_corridor_front_svg_v2.svg',
+            layout: [
+                { file: 'property_lobby_obj_elevator_svg_v1.svg', x: 245, y: 215, w: 358, h: 353, s: 0.86, footH: 0, layer: 'back', noCollide: true },
+                { file: 'property_corridor_obj_door_home_svg_v2.svg', x: 627, y: 186, w: 264, h: 334, s: 1, footH: 0, layer: 'back', noCollide: true, homeDoor: true },   // 第一扇：自住那層是木門，其他樓換藍門（enterApt 照 opts.homeDoor 換；v2＝左框扶正）
+                { file: 'property_corridor_obj_door_1a_svg_v1.svg', x: 1003, y: 185, w: 263, h: 335, s: 1, footH: 0, layer: 'back', noCollide: true },
+                { file: 'property_corridor_obj_door_1b_svg_v1.svg', x: 1377, y: 185, w: 243, h: 335, s: 1, footH: 0, layer: 'back', noCollide: true },
+                { file: 'property_corridor_obj_planter_svg_v1.svg', x: 1527, y: 359, w: 115, h: 175, s: 1, footH: 48 },
+                { file: 'property_corridor_obj_bench_svg_v1.svg', x: 1600, y: 455, w: 154, h: 160, s: 1, footH: 58 },
+            ],
+            points: {
+                player: { x: 399, y: 590 },
+                arrive: { x: 399, y: 590 },   // 搭電梯上來：站在電梯門口
+                boundary: [ { x: 254, y: 529 }, { x: 1626, y: 529 }, { x: 1769, y: 683 }, { x: 136, y: 683 } ],
+                npcZone: { x: 210, y: 545, w: 1470, h: 120 },   // 故事角色站的範圍（同一樓大廳：地板上、前牆線以內）
+                actorScale: 1.2,
+            },
+            liftSpot: { x: 399, y: 590 },
+            // 三扇門的位置（觸發區貼門下緣、門牌框中心、從那戶走出來站哪）；通到哪由 enterApt 照那層填
+            slots: {
+                home: { x: 657, y: 529, w: 205, h: 33, plate: { x: 767, y: 259, w: 97 }, out: { x: 759, y: 589 } },
+                a:    { x: 1032, y: 529, w: 206, h: 33, plate: { x: 1135, y: 258, w: 97 }, out: { x: 1135, y: 589 } },
+                b:    { x: 1403, y: 529, w: 192, h: 33, plate: { x: 1493, y: 258, w: 97 }, out: { x: 1499, y: 589 } },
+            },
+            // 電梯門口：「這棟樓」面板（換樓層、加蓋、回 1 樓）；floor 由 enterApt 照那層填
+            liftDoor: { x: 300, y: 529, w: 198, h: 33, panel: 'apartment-lift' },
+            walls: [],
+            doors: [],
+            hotspots: [
+                { obj: 'lobby_obj_elevator', label: '搭電梯', icon: 'fa-elevator', open: 'aptLift', lit: true },
+            ],
+        },
+        room: {   // 🏠 房間：底圖與碰撞遮罩不是素材，是「進門當下」餵進來的（見 enterRoom）
+            //   房間圖＝生成的那張、可走區＝房間地板多邊形轉的白遮罩，所以每一間都不一樣、也不吃 CDN 素材。
+            //   points/doors 由 enterRoom 依當間房的地板算好再寫進來；沒有 cfgKey＝不存擺設（每間房各自不同）。
+            dynamic: true,
+            base: '', mask: '',
+            layout: [], walls: [], doors: [],
+            points: { player: { x: 768, y: 700 }, arrive: { x: 768, y: 700 }, actorScale: 0.7 },
+        },
+        city: {   // 🏙 視差城市廣場＝分層可走（新版：手繪遮罩碰撞，同大廳；前景建築物件各自深度排序）
+            base: 'city/city_floor_v2.png',        // 廣場地板 v2（MC家地塊框已拆出→改獨立sprite）；建築/噴泉/樹走前景物件
+            mask: 'city/city_floor_mask_v1.png',   // 手繪碰撞遮罩(白=可走)；改吃遮罩、不再用格子
+            lower: 'city/obj/city_floor_frame_upper_part.png',   // 背景層：北牆(後牆)在底圖上、被所有物件遮住
+            upper: 'city/obj/city_floor_frame_lower_part.png',   // 前景層：南牆(前牆)疊最上、壓住走到下緣的小人
+            alphaFoot: true,   // 🏢 建築照真實輪廓(alpha)擋，但✂️只算底部「佔地高」那一帶→上半可走過去(小人繞屋後)；佔地高可調
+            nightBase: 'city/city_floor_night.png',   // 🌙 夜版地板；物件/牆框夜版走 CITY_NIGHT 對照表（2026-07-20 夜版素材上齊,解鎖日夜）
+            cfgKey: 'lobby_stage_layout_city_v10',   // v10=npc02 那塊地換成帽匠的奇想工坊（v9舊存檔作廢；v9 的內容就是這份定版，不掉東西）
+            outdoor: true,     // 戶外：小人跟鏡頭脫鉤=固定螢幕尺寸俯視小棋子
+            // 前景物件＝獨立元素（書咖/大廳/房子/噴泉/樹/燈柱/長椅）；noCollide=不進碰撞(碰撞全走遮罩)；
+            //   靠 z=2+(y+h) 深度排序＝腳y比它低走前面、比它高走後面。
+            // 🏘 plot='npc01..04'＝NPC房；plotFrame=同編號的空地框。一塊地「空地↔蓋房」二選一顯示（setPlot 切換）。
+            layout: [   // ⬇ 2026-07-20 擺設模式定版（地塊框對位版）
+                { file: "city/obj/book_cafe_day.png", x: 173, y: 90, w: 424, h: 346, footH: 194, s: 0.77, layer: "floor" },   // 書咖建築
+                { file: "city/obj/lobby_day.png", x: 976, y: 308, w: 468, h: 350, footH: 155, s: 0.827 },   // 大廳建築（回大廳門接這棟）
+                { file: "city/obj/player_house_lv1.png", x: 97, y: 565, w: 1284, h: 750, footH: 350, footW: 1272, s: 0.402, plot: "player" },   // MC家（跟白兔買了才蓋起來；狀態=OS_PT）
+                // 🌱 LUNA 苗圃＝小機的家，門口走進去就是後院（原 npc01 那塊地；同占卜小屋、工坊，永遠都在、不吃 plot 開關）。
+                //    圖是阿洛 10-11 照廣場這幾棟畫的；舊存檔裡的鄰居房＋空地框由 _fixCityLayout 換成這棟。
+                { file: "city/obj/luna_nursery_day.png", x: 860, y: 664, w: 1070, h: 683, footH: 330, s: 0.29 },
+                { file: "city/obj/npc_house_03.png", x: 990, y: 128, w: 1030, h: 814, footH: 288, s: 0.281, plot: "npc03" },
+                // 🔮 占卜小屋（原 npc04 那塊地；鄰居系統不做了→這棟永遠都在，不吃 plot 開關）
+                { file: "city/obj/tarot_hut_day.png", x: 164, y: 327, w: 1428, h: 1024, footH: 360, s: 0.231 },
+                // 🎩 帽匠的奇想工坊（原 npc02 那塊地；同上，永遠都在、不吃 plot 開關）。廣場左邊占卜小屋、右邊工坊，一邊一間店。
+                { file: "city/obj/hatter_shop_day.png", x: 1177, y: 619, w: 1010, h: 898, footH: 300, s: 0.267 },
+                { file: "city/obj/plot_frame_day_player.png", x: 156, y: 619, w: 1342, h: 836, footH: 0, s: 0.308, layer: "floor", noCollide: true, plotFrame: "player" },   // MC家空地框(沒買房時顯示)
+                { file: "city/obj/plot_frame_day_npc03.png", x: 992, y: 152, w: 398, h: 300, footH: 0, s: 0.657, layer: "floor", noCollide: true, plotFrame: "npc03" },
+                { file: "city/obj/fountain_node_day.png", x: 706, y: 325, w: 180, h: 222, footH: 67, s: 0.799 },
+                { file: "city/obj/crystal_monument_day.png", x: 1086, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
+                { file: "city/obj/crystal_monument_day.png", x: 1224, y: 485, w: 151, h: 352, footH: 113, s: 0.322 },
+                { file: "city/obj/city_sign_01_day.png", x: 463, y: 234, w: 173, h: 371, footH: 87, s: 0.201 },
+                { file: "city/obj/terminal_02_day.png", x: 819, y: 73, w: 131, h: 235, footH: 62, s: 0.391 },
+                { file: "city/obj/street_lamp_02_day.png", x: 559, y: 325, w: 105, h: 379, footH: 68, s: 0.242 },
+                { file: "city/obj/street_lamp_02_day.png", x: 944, y: 325, w: 105, h: 379, footH: 68, s: 0.242, flipX: true },
+                { file: "city/obj/civic_light_cylinder_day.png", x: 1322, y: 112, w: 126, h: 196, footH: 85, s: 0.308, layer: "back" },
+                { file: "city/obj/conifer_tall_01_day.png", x: 904, y: 175, w: 157, h: 332, footH: 220, s: 0.271 },
+                { file: "city/obj/conifer_tall_02_day.png", x: 583, y: 175, w: 163, h: 328, footH: 219, s: 0.28 },
+                { file: "city/obj/tree_square_01_day.png", x: 590, y: 275, w: 159, h: 217, footH: 110, s: 0.31 },
+                { file: "city/obj/tree_square_01_day.png", x: 886, y: 275, w: 159, h: 217, footH: 110, s: 0.31, flipX: true },
+                { file: "city/obj/tree_square_01_day.png", x: 590, y: 550, w: 159, h: 217, footH: 110, s: 0.31, flipX: true },
+                { file: "city/obj/tree_square_01_day.png", x: 896, y: 550, w: 159, h: 217, footH: 110, s: 0.31, flipX: true },
+                { file: "city/obj/city_bench_06_day.png", x: 1257, y: 95, w: 328, h: 280, footH: 280, s: 0.234, layer: "floor" },
+                { file: "city/obj/city_bench_horizontal_02_day.png", x: 543, y: 109, w: 510, h: 228, footH: 148, s: 0.21 },
+                { file: "city/obj/city_bench_horizontal_02_day.png", x: 866, y: 108, w: 510, h: 228, footH: 158, s: 0.21 },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 856, y: 530, w: 361, h: 164, footH: 109, s: 0.193 },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 621, y: 530, w: 361, h: 164, footH: 109, s: 0.193, flipX: true },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 621, y: 340, w: 361, h: 164, footH: 109, s: 0.193, flipX: true },
+                { file: "city/obj/city_bench_horizontal_03_day.png", x: 856, y: 340, w: 361, h: 164, footH: 109, s: 0.193 },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 192, y: 920, w: 447, h: 191, footH: 107, s: 0.204, flipX: true },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 392, y: 919, w: 447, h: 191, footH: 107, s: 0.204 },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 1033, y: 919, w: 447, h: 191, footH: 107, s: 0.204, flipX: true },
+                { file: "city/obj/city_bench_horizontal_05_day.png", x: 1233, y: 918, w: 447, h: 191, footH: 107, s: 0.204 },
+                { file: "city/obj/planter_long_01_day.png", x: 299, y: 920, w: 403, h: 191, footH: 101, s: 0.202 },
+                { file: "city/obj/planter_long_01_day.png", x: 1140, y: 919, w: 403, h: 191, footH: 111, s: 0.202 },
+                { file: "city/obj/planter_long_02_day.png", x: 445, y: 114, w: 360, h: 149, footH: 85, s: 0.289 },
+                { file: "city/obj/planter_long_02_day.png", x: 978, y: 113, w: 360, h: 149, footH: 85, s: 0.284 },
+                { file: "city/obj/planter_long_03_day.png", x: 879, y: 914, w: 442, h: 146, footH: 84, s: 0.318 },
+                { file: "city/obj/planter_medium_01_day.png", x: 503, y: 916, w: 310, h: 188, footH: 86, s: 0.23 },
+            ],
+            points: {
+                // 客人出沒區＝廣場中央（遮罩全可走）。10-19 換掉 7 月舊大地圖時定的 {668,968,1430,869}：
+                //   地板換成 1536×1024 之後那塊幾乎全在地圖外，丹、雷伊在廣場都生在地圖外、永遠看不到
+                npcZone: { x: 480, y: 150, w: 560, h: 760 },
+                player: { x: 768, y: 620 },
+                arrive: { x: 768, y: 580 },   // 從書咖/大廳出來的落點（廣場中央）
+                actorScale: 0.32,             // 🗺️ 地圖俯視小棋子（脫鉤鏡頭後≈螢幕高比例）
+            },
+            walls: [],   // 碰撞全走手繪遮罩
+            doors: [
+                { x: 335, y: 316, w: 100, h: 42, to: 'cafe', spawn: { x: 780, y: 868 } },   // 書咖門口→瀅瀅書咖（走到門口下方觸發）
+                { x: 1136, y: 570, w: 86, h: 24, to: 'hall', spawn: { x: 772, y: 830 } },   // 大廳建築門口→愛麗絲純白大廳
+                // 🏠 你自己那棟：買了才有門(plot 沒蓋房就走不進去)。走進去＝進自己的房間,不切固定場景→用 panel 型門交給房產那邊處理。
+                //    門的位置可以在擺設模式直接拖(新增在陣列最後,不影響上面兩扇已調好的門)。
+                //    觸發區要落在房子「下緣外側」那一條——房子本體會擋路,站不進去就永遠踩不到門(同書咖那扇的做法)。
+                { x: 330, y: 850, w: 100, h: 42, panel: 'myhome', plot: 'player' },
+                // 🔮 占卜小屋門口（觸發區壓在小屋下緣外側那一條，同書咖那扇的作法）
+                { x: 279, y: 566, w: 100, h: 42, to: 'tarot', spawn: { x: 768, y: 800 } },
+                // 🎩 帽匠工坊門口（同上，壓在工坊下緣外側）
+                { x: 1262, y: 861, w: 100, h: 42, to: 'workshop', spawn: { x: 768, y: 800 } },
+                // 🌱 LUNA 苗圃門口→後院（panel 型：不切場景，lobby_places 收 lstage-open-garden 開後院；同上壓在苗圃下緣外側）
+                { x: 940, y: 864, w: 100, h: 42, panel: 'garden' },
+            ],
+        },
+    };
+    // 🌙 城市夜版素材對照：日檔→夜檔。放 runtime 對照而非寫進 layout——使用者的擺設存檔(layoutFull)
+    //    不帶 nightFile 欄位也能換夜；o.nightFile 手動欄位優先於這張表。特例：大廳門面樓夜版檔名叫 exchange_night。
+    const CITY_NIGHT = {
+        'city/city_floor_v1.png': 'city/city_floor_night.png',
+        'city/obj/city_floor_frame_upper_part.png': 'city/obj/city_floor_night_frame_upper_part.png',
+        'city/obj/city_floor_frame_lower_part.png': 'city/obj/city_floor_night_frame_lower_part.png',
+        'city/obj/book_cafe_day.png': 'city/obj/book_cafe_night.png',
+        'city/obj/lobby_day.png': 'city/obj/exchange_night.png',
+        'city/obj/player_house_lv1.png': 'city/obj/player_house_lv1_night.png',
+        'city/obj/npc_house_01.png': 'city/obj/npc_house_01_night.png',
+        'city/obj/npc_house_02.png': 'city/obj/npc_house_02_night.png',
+        'city/obj/npc_house_03.png': 'city/obj/npc_house_03_night.png',
+        'city/obj/npc_house_04.png': 'city/obj/npc_house_04_night.png',
+        'city/obj/tarot_hut_day.png': 'city/obj/tarot_hut_night.png',
+        'city/obj/hatter_shop_day.png': 'city/obj/hatter_shop_night_v2.png',   // v2（10-19）：拿掉夜版外圍那圈白邊（去背沒去乾淨的貼紙邊，夜裡整棟像描了白框；sound-files c1dd527）
+        'city/obj/luna_nursery_day.png': 'city/obj/luna_nursery_night.png',
+        'city/obj/city_bench_01_day.png': 'city/obj/city_bench_01_night.png',
+        'city/obj/city_bench_06_day.png': 'city/obj/city_bench_06_night.png',   // 10-19 補：原本沒畫夜版，夜裡一張白椅子；照同批長椅的白天→夜版顏色換出來（sound-files 05f8fd1）
+        'city/obj/city_bench_horizontal_02_day.png': 'city/obj/city_bench_horizontal_02_night.png',
+        'city/obj/city_bench_horizontal_03_day.png': 'city/obj/city_bench_horizontal_03_night.png',
+        'city/obj/city_bench_horizontal_05_day.png': 'city/obj/city_bench_horizontal_05_night.png',
+        'city/obj/city_sign_01_day.png': 'city/obj/city_sign_01_night.png',
+        'city/obj/civic_light_cylinder_day.png': 'city/obj/civic_light_cylinder_night.png',
+        'city/obj/conifer_tall_01_day.png': 'city/obj/conifer_tall_01_night.png',
+        'city/obj/conifer_tall_02_day.png': 'city/obj/conifer_tall_02_night.png',
+        'city/obj/crystal_monument_day.png': 'city/obj/crystal_monument_night.png',
+        'city/obj/fountain_node_day.png': 'city/obj/fountain_node_night.png',
+        'city/obj/planter_long_01_day.png': 'city/obj/planter_long_01_night.png',
+        'city/obj/planter_long_02_day.png': 'city/obj/planter_long_02_night.png',
+        'city/obj/planter_long_03_day.png': 'city/obj/planter_long_03_night.png',
+        'city/obj/planter_medium_01_day.png': 'city/obj/planter_medium_01_night.png',
+        'city/obj/street_lamp_02_day.png': 'city/obj/street_lamp_02_night.png',
+        'city/obj/terminal_02_day.png': 'city/obj/terminal_02_night.png',
+        'city/obj/tree_square_01_day.png': 'city/obj/tree_square_01_night.png',
+        'city/obj/plot_frame_day_npc01.png': 'city/obj/plot_frame_night_npc01.png',
+        'city/obj/plot_frame_day_npc02.png': 'city/obj/plot_frame_night_npc02.png',
+        'city/obj/plot_frame_day_npc03.png': 'city/obj/plot_frame_night_npc03.png',
+        'city/obj/plot_frame_day_npc04.png': 'city/obj/plot_frame_night_npc04.png',
+        'city/obj/plot_frame_day_player.png': 'city/obj/plot_frame_night_player.png',
+    };
+    // 🩹 地塊框改版導向（2026-07-20 重編號）：舊存檔裡的舊框檔名→新檔+新原始尺寸。
+    //    _loadCfg 載入時就地換掉→存檔不用手動改；下次按「完成」存檔即自動寫成新檔名。
+    const PLOT_FRAME_FIX = {
+        'city/obj/plot_frame_small_02_day.png': { file: 'city/obj/plot_frame_day_npc01.png', w: 357, h: 342 },
+        'city/obj/plot_frame_small_03_day.png': { file: 'city/obj/plot_frame_day_npc02.png', w: 342, h: 340 },
+        'city/obj/plot_frame_small_04_day.png': { file: 'city/obj/plot_frame_day_npc03.png', w: 398, h: 300 },
+        'city/obj/plot_frame_small_05_day.png': { file: 'city/obj/plot_frame_day_npc04.png', w: 411, h: 305 },
+    };
+    // 🖋 10-26 大廳、書咖，10-27 交易所換 SVG（見 SCENES.hall／cafe／exchange）：存過的擺設（layoutFull／舊版 layout）記的是舊檔名 → _loadCfg 載入時就地換新，調過的位置照留；
+    //   新畫布跟舊圖一樣大，w/h 不用改。下次在擺設模式按「完成」就存成新檔名。不升 cfgKey：升了使用者排好的大廳、書咖、交易所就作廢了
+    const LOBBY_SVG = {
+        // 🍸 記憶吧檯（11-20）：左邊扶手椅的枕頭原本畫在最上層、蓋過扶手（枕頭層級錯誤，跑到把手前面）→ v2 照右邊那張的順序排
+        'lobby_memory_bar_obj_chair_left_svg_v1.svg': 'lobby_memory_bar_obj_chair_left_svg_v2.svg',
+        // 🎩 帽匠工坊（11-20）
+        'lobby_workshop_obj_workbench_v1.png': 'lobby_workshop_obj_workbench_svg_v1.svg',
+        'lobby_workshop_obj_chair_v1.png': 'lobby_workshop_obj_chair_svg_v1.svg',
+        'lobby_workshop_obj_rack_v1.png': 'lobby_workshop_obj_rack_svg_v1.svg',
+        'lobby_workshop_obj_cabinet_v1.png': 'lobby_workshop_obj_cabinet_svg_v1.svg',
+        'lobby_workshop_obj_beanbag_v1.png': 'lobby_workshop_obj_beanbag_svg_v1.svg',
+        'lobby_workshop_obj_crate_v1.png': 'lobby_workshop_obj_crate_svg_v1.svg',
+        'lobby_workshop_obj_loom_v1.png': 'lobby_workshop_obj_loom_svg_v1.svg',
+        'lobby_workshop_obj_console_v1.png': 'lobby_workshop_obj_console_svg_v1.svg',
+        'lobby_workshop_obj_rig_v1.png': 'lobby_workshop_obj_rig_svg_v1.svg',
+        'lobby_workshop_obj_shelf_v1.png': 'lobby_workshop_obj_shelf_svg_v1.svg',
+        'lobby_workshop_obj_cart_v1.png': 'lobby_workshop_obj_cart_svg_v1.svg',
+        'lobby_workshop_obj_kiosk_v1.png': 'lobby_workshop_obj_kiosk_svg_v1.svg',
+        'lobby_workshop_obj_coil_v1.png': 'lobby_workshop_obj_coil_svg_v1.svg',
+        'lobby_workshop_obj_case_v1.png': 'lobby_workshop_obj_case_svg_v1.svg',
+        'lobby_cafe_obj_mat_v3.png': 'lobby_cafe_obj_mat_v5.svg',
+        'lobby_cafe_obj_bar_v3.png': 'lobby_cafe_obj_bar_v5.svg',
+        'lobby_cafe_obj_counter_v3.png': 'lobby_cafe_obj_counter_v5.svg',
+        'lobby_cafe_obj_plant_back_v3.png': 'lobby_cafe_obj_plant_back_v5.svg',
+        'lobby_cafe_obj_shelf_v3.png': 'lobby_cafe_obj_shelf_v5.svg',
+        'lobby_cafe_obj_cabinet_v3.png': 'lobby_cafe_obj_cabinet_v5.svg',
+        'lobby_cafe_obj_console_v3.png': 'lobby_cafe_obj_console_v5.svg',
+        'lobby_cafe_obj_table_v3.png': 'lobby_cafe_obj_table_v5.svg',
+        'lobby_cafe_obj_chair_l_v3.png': 'lobby_cafe_obj_chair_l_v5.svg',
+        'lobby_cafe_obj_chair_r_v3.png': 'lobby_cafe_obj_chair_r_v5.svg',
+        'lobby_cafe_obj_rug_v4.png': 'lobby_cafe_obj_rug_v5.svg',
+        'lobby_cafe_obj_sofa_v4.png': 'lobby_cafe_obj_sofa_v5.svg',
+        'lobby_cafe_obj_teatable_v4.png': 'lobby_cafe_obj_teatable_v5.svg',
+        'lobby_cafe_obj_cart_v3.png': 'lobby_cafe_obj_cart_v5.svg',
+        'lobby_cafe_obj_plant_right_v3.png': 'lobby_cafe_obj_plant_right_v5.svg',
+        'lobby_exchange_obj_rate_screen.png': 'lobby_exchange_obj_rate_screen_v3.svg',
+        'lobby_exchange_obj_counter.png': 'lobby_exchange_obj_counter_v3.svg',
+        'lobby_exchange_obj_rug.png': 'lobby_exchange_obj_rug_v3.svg',
+        'lobby_exchange_obj_lamp_left.png': 'lobby_exchange_obj_lamp_left_v3.svg',
+        'lobby_exchange_obj_table.png': 'lobby_exchange_obj_table_v3.svg',
+        'lobby_exchange_obj_chair_left.png': 'lobby_exchange_obj_chair_left_v3.svg',
+        'lobby_exchange_obj_chair_right.png': 'lobby_exchange_obj_chair_right_v3.svg',
+        'lobby_exchange_obj_bench.png': 'lobby_exchange_obj_bench_v3.svg',
+        'lobby_exchange_obj_plant.png': 'lobby_exchange_obj_plant_v3.svg',
+        'lobby_exchange_obj_planter.png': 'lobby_exchange_obj_planter_v3.svg',
+        'lobby_exchange_obj_chair_front_v2.png': 'lobby_exchange_obj_chair_front_v3.svg',
+        'lobby_hall_obj_counter_v5.png': 'lobby_hall_obj_counter_v7.svg',
+        'lobby_hall_obj_pedestal_v5.png': 'lobby_hall_obj_pedestal_v7.svg',
+        'lobby_hall_obj_core_v5.png': 'lobby_hall_obj_core_v7.svg',
+        'lobby_hall_obj_sofa_v6.png': 'lobby_hall_obj_sofa_v7.svg',
+        'lobby_hall_obj_coffee_v6.png': 'lobby_hall_obj_coffee_v7.svg',
+        'lobby_hall_obj_lounge_v6.png': 'lobby_hall_obj_lounge_v7.svg',
+        'lobby_hall_obj_holotable_v5.png': 'lobby_hall_obj_holotable_v7.svg',
+        'lobby_hall_obj_chair_nw_v5.png': 'lobby_hall_obj_chair_nw_v7.svg',
+        'lobby_hall_obj_chair_ne_v5.png': 'lobby_hall_obj_chair_ne_v7.svg',
+        'lobby_hall_obj_chair_s_v5.png': 'lobby_hall_obj_chair_s_v7.svg',
+        'lobby_hall_obj_deco_05_v5.png': 'lobby_hall_obj_deco_05_v7.svg',
+        'lobby_hall_obj_deco_01_v5.png': 'lobby_hall_obj_deco_01_v7.svg',
+        'lobby_hall_obj_deco_02_v5.png': 'lobby_hall_obj_deco_02_v7.svg',
+    };
+    // 🌱 10-11 npc01 那塊地蓋成 LUNA 苗圃：舊存檔（layoutFull）裡還是那間鄰居房＋空地框 → 換成苗圃，調過的其他東西照留。
+    //    走進廣場（_loadCfg）跟快轉縮圖（_openCityMap）各自讀存檔，兩邊都要過這支。
+    const NURSERY_FILE = 'city/obj/luna_nursery_day.png';
+    const NPC01_OLD = ['city/obj/npc_house_01.png', 'city/obj/plot_frame_day_npc01.png', 'city/obj/plot_frame_small_02_day.png'];
+    function _fixCityLayout(layout) {
+        if (layout.some(o => o.file === NURSERY_FILE)) return layout;
+        const def = (SCENES.city.layout || []).find(o => o.file === NURSERY_FILE);
+        const out = layout.filter(o => NPC01_OLD.indexOf(o.file) < 0);
+        if (def) out.push(Object.assign({}, def));
+        return out;
+    }
+    // 🌗 城市日夜：跟大廳 BG 同時段律（ambient.js：6-18=day）；場景有 nightBase 才生效
+    function _isNightNow() {
+        const h = new Date().getHours();
+        return !(h >= 6 && h < 18);
+    }
+    // 場景實際是否夜間：帶 forceDay 的場景永遠白天（不跟時間走）
+    function _sceneIsNight(SC) {
+        return !!(SC && !SC.forceDay && _isNightNow());
+    }
+    function _sceneBase(SC) {
+        return (SC.nightBase && _sceneIsNight(SC)) ? SC.nightBase : SC.base;
+    }
+    // 物件有效尺寸（s=個別縮放，預設1；佔地跟著縮）
+    // footW=佔地寬(未縮放，預設=全寬)；佔地框水平置中（treats 上寬下窄的懸浮物）
+    function effDims(o) {
+        const s = o.s || 1;
+        return {
+            ew: Math.round(o.w * s), eh: Math.round(o.h * s),
+            ef: Math.round((o.footH || 0) * s),
+            efw: Math.round((o.footW != null ? o.footW : o.w) * s),
+        };
+    }
+    // 佔地框＝物件底部那條「地面帶」：全寬(或 footW)、高 footH、底部對齊、水平置中。
+    //   一般家具＝這塊矩形直接當碰撞；alphaFoot 場景(大地圖)＝這塊只當「切線高度」，實際擋路形狀交給圖片 alpha。
+    function footRect(o) {
+        const d = effDims(o);
+        return { x: o.x + Math.round((d.ew - d.efw) / 2), y: o.y + d.eh - d.ef, w: d.efw, h: d.ef };
+    }
+
+    // ── 🧱 建構模式資產庫（上傳的圖存 IndexedDB，localStorage 只存引用）──
+    function idbOpen() {
+        return new Promise((res, rej) => {
+            const rq = indexedDB.open('lobby_stage_assets', 1);
+            rq.onupgradeneeded = () => rq.result.createObjectStore('imgs');
+            rq.onsuccess = () => res(rq.result);
+            rq.onerror = () => rej(rq.error);
+        });
+    }
+    async function idbPut(key, val) {
+        const db = await idbOpen();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('imgs', 'readwrite');
+            tx.objectStore('imgs').put(val, key);
+            tx.oncomplete = () => res();
+            tx.onerror = () => rej(tx.error);
+        });
+    }
+    async function idbGet(key) {
+        const db = await idbOpen();
+        return new Promise((res, rej) => {
+            const rq = db.transaction('imgs').objectStore('imgs').get(key);
+            rq.onsuccess = () => res(rq.result || null);
+            rq.onerror = () => rej(rq.error);
+        });
+    }
+    // 刪掉存在本機的那張圖。皮膚索引在 localStorage、圖片本體在這裡，
+    // 只清索引的話圖會變成沒人引用的孤兒，一直佔著空間（世界門刪世界時要連旅人小人的皮膚一起清）。
+    async function idbDel(key) {
+        const db = await idbOpen();
+        return new Promise((res, rej) => {
+            const tx = db.transaction('imgs', 'readwrite');
+            tx.objectStore('imgs').delete(key);
+            tx.oncomplete = () => res();
+            tx.onerror = () => rej(tx.error);
+        });
+    }
+    // 圖片引用解析：{file}=CDN內建、{url}=外部網址、{idb}=本機上傳
+    async function resolveRef(ref) {
+        if (!ref) return null;
+        if (ref.url) return ref.url;
+        if (ref.idb) { try { return await idbGet(ref.idb); } catch (e) { return null; } }
+        if (ref.file) return CDN + ref.file;
+        return null;
+    }
+
+    // 🩹 書咖菜單立牌（10-14 新加的）：存檔是整份家具清單，排過書咖的話裡面沒有這件 → 照櫃檯現在的位置補上（有了就不重複）。
+    //   不升 cfgKey：升了使用者排好的整間書咖就作廢了
+    function _addCafeMenu(layout, defs) {
+        const MENU = 'lobby_cafe_obj_menu_v1.png', COUNTER = 'lobby_cafe_obj_counter_v5.svg';   // 櫃檯是 _loadCfg 換過新檔名之後的（10-26 換 SVG）
+        if (layout.some(o => o.file === MENU)) return;
+        const def = defs.find(o => o.file === MENU), dc = defs.find(o => o.file === COUNTER);
+        if (!def) return;
+        const m = Object.assign({}, def);
+        const c = layout.find(o => o.file === COUNTER);
+        if (c && dc) {
+            const k = (c.s || 1) / (dc.s || 1);   // 櫃檯縮放過：菜單跟著同比例
+            m.s = def.s * k;
+            m.x = c.x + (def.x - dc.x) * k;
+            m.y = c.y + (def.y - dc.y) * k;
+            m.zb = Math.ceil((c.y + c.h * (c.s || 1) + (c.zb || 0)) - (m.y + m.h * m.s)) + 1;   // 疊在櫃檯前面一層
+        }
+        layout.push(m);
+    }
+
+    // 讀取佈局：本機調過的蓋過預設（每場景各存各的）
+    // 新版存 layoutFull=完整家具清單（可增刪）；舊版 layout=按 file 名對位覆蓋（相容）
+    function _loadCfg() {
+        const SC = SCENES[S.scene];
+        let layout = (SC.layout || []).map(o => Object.assign({}, o));
+        const points = JSON.parse(JSON.stringify(SC.points || {}));
+        // 靜態地圖沒 doors→給空陣列，別讓 undefined.map 炸掉整個掛載
+        // 🔒 廣場鎖上：通往廣場的門整扇不存在（書咖／大廳的底部大門）。房間的出口不走這裡——
+        //    它在 enterRoom 就改好目的地了，濾掉的話會變成一間沒有門的房間。
+        //    占卜小屋、帽匠工坊也不濾：它們唯一的門就是通往廣場那扇，鎖上時由過門判定改送回進門前的場景。
+        //    🚨 先套完存檔座標再濾：存檔的門照「整份門清單」的序號存。以前濾完才套，大廳鎖著時存的
+        //       [交易所門] 在解鎖後會套到第 0 扇（通往廣場那扇）上，兩扇門座標錯位。
+        const allDoors = (SC.doors || []).map((d, i) => Object.assign({}, d, { _i: i }));
+        const _doorGated = d => d.to === 'city' && S.scene !== 'room' && S.scene !== 'tarot' && S.scene !== 'workshop' && S.scene !== 'aptlobby';   // 廣場上鎖時會被濾掉的那種
+        const _doorOff = d => _doorGated(d) && _cityLocked();
+        let baseOverride = null, maskOverride = null;
+        try {
+            const saved = SC.cfgKey ? JSON.parse(localStorage.getItem(SC.cfgKey) || 'null') : null;   // 動態場景沒 cfgKey＝不存擺設
+            if (saved) {
+                if (Array.isArray(saved.layoutFull) && saved.layoutFull.length) {
+                    layout = saved.layoutFull.map(o => Object.assign({}, o));
+                    layout.forEach(o => {   // 🩹 地塊框改版導向：舊框檔名就地換新檔+新原始尺寸（保留調過的 x/y/s）
+                        const fix = PLOT_FRAME_FIX[o.file];
+                        if (fix) { o.file = fix.file; o.w = fix.w; o.h = fix.h; }
+                        if (LOBBY_SVG[o.file]) o.file = LOBBY_SVG[o.file];   // 🖋 大廳、書咖舊 PNG 檔名→SVG（要在下面 _addCafeMenu 之前：它照新檔名找櫃檯）
+                    });
+                    // 🩹 底板v2把MC家地塊框拆出來了：舊存檔沒有這件→補進去（有了就不重複）
+                    if (S.scene === 'city' && !layout.some(o => o.file === 'city/obj/plot_frame_day_player.png')) {
+                        const def = (SC.layout || []).find(o => o.file === 'city/obj/plot_frame_day_player.png');
+                        if (def) layout.push(Object.assign({}, def));
+                    }
+                    layout.forEach(o => {   // 🩹 舊存檔的MC房/框補地塊編號（MC房=買了才蓋,狀態接OS_PT）
+                        if (o.file === 'city/obj/player_house_lv1.png' && !o.plot) o.plot = 'player';
+                        if (o.file === 'city/obj/plot_frame_day_player.png' && !o.plotFrame) o.plotFrame = 'player';
+                    });
+                    if (S.scene === 'city') layout = _fixCityLayout(layout);
+                    if (S.scene === 'cafe') _addCafeMenu(layout, SC.layout || []);
+                } else (saved.layout || []).forEach(s => {
+                    const t = layout.find(o => o.file === (LOBBY_SVG[s.file] || s.file));
+                    if (t) { t.x = s.x; t.y = s.y; if (s.footH != null) t.footH = s.footH; if (s.footW != null) t.footW = s.footW; if (s.s != null) t.s = s.s; if (s.layer != null) t.layer = s.layer; if (s.flipX != null) t.flipX = s.flipX; if (s.noCollide != null) t.noCollide = s.noCollide; }
+                });
+                if (saved.baseOverride) baseOverride = saved.baseOverride;
+                if (saved.maskOverride) maskOverride = saved.maskOverride;
+                // doorsV 版本閘：場景門的「去向/配置」改版後，舊存檔的門座標整組作廢（防蓋到新門上）
+                // 存檔長度＝整份 → 照序號套；舊版在廣場上鎖時存的只有沒被濾掉的那幾扇 → 依序對回那幾扇
+                if (Array.isArray(saved.doors) && (saved.doorsV || 1) === (SC.doorsV || 1)) {
+                    const lockedList = allDoors.filter(d => !_doorGated(d));
+                    const target = saved.doors.length === allDoors.length ? allDoors
+                        : saved.doors.length === lockedList.length ? lockedList : [];
+                    saved.doors.forEach((sd, i) => {
+                        const D = target[i];
+                        if (D && sd) { D.x = sd.x; D.y = sd.y; D.w = sd.w; D.h = sd.h; }
+                    });
+                }
+                if (saved.points) {
+                    if (saved.points.yingZone) points.yingZone = saved.points.yingZone;
+                    if (saved.points.npcZone) points.npcZone = saved.points.npcZone;
+                    if (saved.points.player) points.player = saved.points.player;
+                    if (saved.points.arrive) points.arrive = saved.points.arrive;
+                    if (saved.points.alicePos) points.alicePos = saved.points.alicePos;
+                    if (saved.points.cheshirePos) points.cheshirePos = saved.points.cheshirePos;
+                    if (saved.points.rabbitPos) points.rabbitPos = saved.points.rabbitPos;
+                    if (saved.points.zhiweiPos) points.zhiweiPos = saved.points.zhiweiPos;
+                    if (saved.points.hatterPos) points.hatterPos = saved.points.hatterPos;
+                    if (Array.isArray(saved.points.boundary) && saved.points.boundary.length >= 3) points.boundary = saved.points.boundary;
+                    if (saved.points.actorScale != null) points.actorScale = saved.points.actorScale;
+                }
+            }
+        } catch (e) {}
+        // 出沒區要在地圖裡：存檔或預設留著舊地圖的大區域（見 SCENES.city 的 npcZone），切到地圖範圍；切完太小就用這個場景的預設
+        const _zoneInMap = z => {
+            if (!z) return null;
+            const x0 = Math.max(0, z.x), y0 = Math.max(0, z.y), x1 = Math.min(MAP_W, z.x + z.w), y1 = Math.min(MAP_H, z.y + z.h);
+            return (x1 - x0 >= 200 && y1 - y0 >= 150) ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+        };
+        if (points.npcZone) points.npcZone = _zoneInMap(points.npcZone) || _zoneInMap(SC.points && SC.points.npcZone) || points.npcZone;
+        // 前緣有壓頂層的場景：出沒區別伸進被蓋住的那一帶（見 SCENES.cafe.npcMaxY）
+        if (SC.npcMaxY && points.npcZone && points.npcZone.y + points.npcZone.h > SC.npcMaxY) {
+            points.npcZone = Object.assign({}, points.npcZone, { h: Math.max(40, SC.npcMaxY - points.npcZone.y) });
+        }
+        const doors = allDoors.filter(d => !_doorOff(d));
+        const doorsOff = allDoors.filter(_doorOff);   // 這次被濾掉的門：擺設存檔時照原座標一起寫回，序號才對得上
+        return { layout, points, doors, doorsOff, baseOverride, maskOverride };
+    }
+
+    const S = {
+        root: null, world: null, scale: 1,
+        raf: 0, last: 0, active: false,
+        scene: 'cafe',              // 目前場景（每次開大廳從書咖開始）
+        spawnOverride: null,        // 過門後的抵達點
+        roomFrom: '',               // 進房間之前待的場景（廣場鎖上時，走出房間就回這裡）
+        tarotFrom: '',              // 進占卜小屋之前待的場景（同上：小屋的門對外是廣場，鎖上時得回得去）
+        workshopFrom: '',           // 進帽匠工坊之前待的場景（同上）
+        aptFrom: '',                // 進公寓大樓之前待的場景（同上；enterApt 記）
+        aptHeader: null,            // 樓上走廊的抬頭（幾樓，enterApt 給）
+        aptFloor: 0,                // 人在這棟的第幾層（房東那邊的算法：0＝一樓大廳）
+        aptPlates: null,            // 樓上走廊的門牌（enterApt 給）
+        doorCd: 0,                  // 過門冷卻（防止落地瞬間又觸發）
+        doorArm: false,             // 門武裝狀態：落地後走出門區一次才重新啟動
+        transitioning: false,
+        player: null, npcs: [], talkTarget: null, followers: [],
+        keys: {}, onKey: null,
+        objEls: [],                 // 物件 img（跟 CFG.layout 同序）
+        edit: null,                 // 擺設模式狀態
+    };
+    let CFG = null;   // tryMount 時按場景載入
+    let _lpSuppressClick = false;   // 長按開選單後，抑制隨之而來的那次 click（免點擊移動誤觸）
+
+    function isOn() { try { return localStorage.getItem('lobby_stage_on') !== '0'; } catch (e) { return true; } }
+
+    // ── 碰撞（優先序：手繪遮罩 > 鋼索/牆矩形；家具腳印/alpha 形狀永遠有效）──
+    let BLOCKS = [];          // 矩形腳印（一般家具）
+    let ALPHA_BLOCKS = [];    // alpha 形狀擋路（大地圖建築：照圖形狀，只擋 footRect 底帶）
+    function rebuildBlocks() {
+        const maskOk = !!(S.mask && S.mask.ok);
+        const alpha = !!SCENES[S.scene].alphaFoot;
+        const feet = alpha ? [] : CFG.layout.filter(o => !o.noCollide && !o._plotOff).map(footRect);   // alphaFoot 不用腳印；noCollide 物件(城市前景)不擋路→碰撞全走遮罩
+        BLOCKS = (maskOk ? [] : (SCENES[S.scene].walls || [])).concat(feet);   // 靜態地圖沒 walls→空陣列，別 undefined.concat 炸掉掛載
+        ALPHA_BLOCKS = alpha ? CFG.layout.filter(o => o._alpha && !o.noCollide && !o._plotOff) : [];   // 只納入已載好 alpha 且沒設「不擋路」的物件（noCollide/隱藏地塊 在 alphaFoot 也生效）
+        _unstickWanderers();
+    }
+    // 隨機刷的路人（會避擋路的那種，像廣場的丹、雷伊）：擋路的形狀是陸續到的（遮罩載完、建築照圖形狀算完都比出生晚），
+    //   出生時看起來空的地方之後可能變成長椅、建築底座 → 每次擋路一變就把卡在裡面的彈到最近的地板（10-19：丹站在長椅、建築底座上）
+    //   站在櫃檯後面那種定點 NPC 沒有 avoidBlocks，不動；擺設模式不動
+    function _unstickWanderers() {
+        if (S.edit || !S.npcs) return;
+        S.npcs.forEach(n => {
+            if (!n.avoidBlocks || !blocked(n.x, n.y)) return;
+            const sp = findFreeSpot(n.x, n.y);
+            if (sp.x === n.x && sp.y === n.y) return;
+            n.x = sp.x; n.y = sp.y; n.dest = null;
+            placeActor(n);
+            if (n.tag) placeNpcExtras(n);
+        });
+    }
+    // ── 🏘 地塊入住狀態（NPC房：空地框↔蓋房二選一顯示；經濟③入住流程接 setPlot）──
+    //    小資料走 localStorage（🚨別動 OS_DB schema——升版加 store 會 deadlock）
+    const PLOTS_KEY = 'lobby_city_plots_v1';
+    function _plots() { try { return JSON.parse(localStorage.getItem(PLOTS_KEY) || '{}'); } catch (e) { return {}; } }
+    function _plotOccupied(id) { const v = _plots()[id]; return v == null ? false : !!v; }   // 預設一律空地（2026-07-20 定案）：MC地=買了才蓋(真狀態OS_PT)；NPC地=入住流程蓋(待做)
+    function _applyPlotVis(o, img) {
+        const off = (o.plot && !_plotOccupied(o.plot)) || (o.plotFrame && _plotOccupied(o.plotFrame));
+        o._plotOff = !!off;
+        if (img) img.classList.toggle('lstage-plot-off', !!off);
+    }
+    function setPlot(id, occupied) {
+        const all = _plots(); all[id] = !!occupied;
+        AUI.lsSet(PLOTS_KEY, JSON.stringify(all), '空地蓋房的狀態');
+        (CFG?.layout || []).forEach((o, i) => {
+            if (o.plot === id || o.plotFrame === id) _applyPlotVis(o, S.objEls?.[i]);
+        });
+        rebuildBlocks();
+    }
+    // 💰 買房即時反映：交易所(os_pt)買下→白兔那邊發事件→這裡把空地換成房子
+    window.addEventListener('os-pt-plot-changed', (e) => {
+        try { if (e.detail) setPlot(String(e.detail.plotId || 'player'), !!e.detail.built); } catch (err) {}
+    });
+    // alpha 形狀擋路：x那一直柱、y0..y1那段裡只要有「不透明像素(alpha≥128)」=牆。
+    //   ✂️ 只算「底部 footH 那一帶」的形狀→照建築真實輪廓擋底部，上半可走過去(小人繞到建築後面)；footH 高度可調。
+    //   掃整段而非點採樣：佔地高調薄(帶高<步長)時，點採樣會從縫隙間跳過去（穿樓）。
+    function _alphaSpan(o, x, y0, y1) {
+        const a = o._alpha, s = o.s || 1;
+        let lx = (x - o.x) / s;
+        if (lx < 0 || lx >= o.w) return false;
+        if (o.flipX) lx = o.w - 1 - lx;   // 物件水平翻轉→碰撞座標也鏡像（不然圖在右、碰撞在左）
+        const fh = (o.footH != null ? o.footH : o.h);   // 佔地高(未縮放px)；沒設=整棟
+        const top = Math.max((y0 - o.y) / s, o.h - fh); // 上半(超過佔地高的部分)不擋→可走屋後
+        const bot = Math.min((y1 - o.y) / s, o.h);
+        if (top > bot || bot < 0 || top >= o.h) return false;
+        const ax = Math.min(a.w - 1, Math.floor(lx / o.w * a.w));
+        const r0 = Math.max(0, Math.floor(top / o.h * a.h));
+        const r1 = Math.min(a.h - 1, Math.floor(bot / o.h * a.h));
+        for (let r = r0; r <= r1; r++) if (a.data[r * a.w + ax] >= 128) return true;
+        return false;
+    }
+    // 🚦 alpha 抽取排隊:快取熱時 40+ 張建築圖的 load 事件同瞬間湧到,全擠主執行緒=進場卡一大下
+    //    → 一次處理一件、間隔30ms攤開;場景收掉就清隊
+    let _alphaQ = [], _alphaPump = false;
+    function _queueAlpha(o, imgEl) {
+        _alphaQ.push([o, imgEl]);
+        if (_alphaPump) return;
+        _alphaPump = true;
+        const pump = () => {
+            if (!S.active) { _alphaQ.length = 0; _alphaPump = false; return; }
+            const item = _alphaQ.shift();
+            if (!item) { _alphaPump = false; return; }
+            try { _extractObjAlpha(item[0], item[1]); } catch (e) {}
+            setTimeout(pump, 30);
+        };
+        setTimeout(pump, 0);
+    }
+    // 從已載好的物件 <img> 抽 alpha 通道存降採樣點陣（o._alpha={w,h,data}）；載好後重建碰撞。
+    //   只留 alpha 一個 byte、200px 上限省記憶體；編輯中順便刷新剪影。
+    function _extractObjAlpha(o, imgEl) {
+        try {
+            const nw = imgEl.naturalWidth || o.w, nh = imgEl.naturalHeight || o.h;
+            const k = Math.min(1, 200 / Math.max(nw, nh));
+            const aw = Math.max(1, Math.round(nw * k)), ah = Math.max(1, Math.round(nh * k));
+            const cv = document.createElement('canvas');
+            cv.width = aw; cv.height = ah;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(imgEl, 0, 0, aw, ah);
+            const px = ctx.getImageData(0, 0, aw, ah).data;
+            const data = new Uint8Array(aw * ah);
+            let opaque = 0;
+            for (let i = 0; i < aw * ah; i++) { data[i] = px[i * 4 + 3]; if (data[i] >= 128) opaque++; }
+            o._alpha = { w: aw, h: ah, data };
+            rebuildBlocks();
+            if (S.edit) { try { window.LobbyEditor?.syncFeet?.(); } catch (e) {} }   // 編輯中→刷新剪影
+            console.log('[LobbyStage] 物件 alpha OK', o.file || o.url, aw + 'x' + ah, '不透明像素', opaque);
+        } catch (e) { console.warn('[LobbyStage] 物件 alpha 讀取失敗(CORS?)', o.file || o.url, e); }
+    }
+    // 手繪碰撞遮罩：白=可走、黑=不可走（<128 判黑）；jsdelivr 有 CORS 頭、canvas 可讀
+    async function loadMask() {
+        S.mask = null;
+        S.maskFailed = false;   // 重置：載入前先當「載入中」→blocked 空窗期全擋（防穿牆）
+        const ovSrc = await resolveRef(CFG.maskOverride);   // 建構模式「換遮罩」優先
+        const SCm = SCENES[S.scene];
+        const file = SCm.mask;
+        // 動態場景(房間)：遮罩是進門時算好的 dataURL，不是 CDN 素材
+        const src = ovSrc || (SCm.dynamic ? (S.dyn && S.dyn.mask) || null : (file ? CDN + file : null));
+        if (!src) { S.maskFailed = true; return; }   // 場景本來就沒遮罩→解除空窗期全擋
+        const img = new Image();
+        if (!String(src).startsWith('data:')) img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            try {
+                const cv = document.createElement('canvas');
+                cv.width = MAP_W; cv.height = MAP_H;
+                const ctx = cv.getContext('2d', { willReadFrequently: true });
+                ctx.drawImage(img, 0, 0, MAP_W, MAP_H);
+                S.mask = { ok: true, data: ctx.getImageData(0, 0, MAP_W, MAP_H).data };
+                rebuildBlocks();   // 遮罩生效→退役鋼索/牆矩形
+                // 遮罩比出生時晚到：發現人站在黑色區→彈到最近地板
+                if (S.player && blocked(S.player.x, S.player.y)) {
+                    const sp = findFreeSpot(S.player.x, S.player.y);
+                    S.player.x = sp.x; S.player.y = sp.y;
+                    placeActor(S.player);
+                }
+                console.log('[LobbyStage] 碰撞遮罩已載入', file);
+            } catch (e) { S.maskFailed = true; console.warn('[LobbyStage] 遮罩讀取失敗(退回鋼索/放行移動)', e); }
+        };
+        _sfRetry(img, () => { S.maskFailed = true; console.warn('[LobbyStage] 遮罩下載失敗(放行移動)', src); });
+        img.src = src;
+    }
+    const FOOT_W = 46, FOOT_H = 18;
+    // 射線法：點是否在多邊形內（外框鋼索用，用腳點中心判定）
+    function insidePoly(pts, x, y) {
+        let inside = false;
+        for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+            const xi = pts[i].x, yi = pts[i].y, xj = pts[j].x, yj = pts[j].y;
+            if ((yi > y) !== (yj > y) && x < (xj - xi) * (y - yi) / (yj - yi) + xi) inside = !inside;
+        }
+        return inside;
+    }
+    // 找最近可走點（落點在牆裡/黑色遮罩上時自動彈出，螺旋環搜尋）
+    function findFreeSpot(x, y) {
+        if (!blocked(x, y)) return { x, y };
+        for (let r = 12; r <= 320; r += 12) {
+            for (let a = 0; a < 16; a++) {
+                const rad = a * Math.PI / 8;
+                const nx = x + Math.cos(rad) * r, ny = y + Math.sin(rad) * r;
+                if (nx > 0 && nx < MAP_W && ny > 0 && ny < MAP_H && !blocked(nx, ny)) return { x: nx, y: ny };
+            }
+        }
+        return { x, y };
+    }
+    // 🧭 站位開闊度：以 (x,y) 為中心、半徑 r 的採樣圈裡「白像素(可走)比例」。
+    //   點子：拿手繪遮罩找「最多%白」的地方當站位——遮罩本來就已載進記憶體(S.mask.data)，
+    //   純資料採樣、零安裝、手機一樣跑；遮罩還沒載到就退回單點 blocked 判定(=現狀)。
+    function _whiteRatio(x, y, r) {
+        if (!(S.mask && S.mask.ok)) return blocked(x, y) ? 0 : 1;
+        const D = S.mask.data;
+        let ok = 0, n = 0;
+        const step = Math.max(6, Math.round(r / 6));
+        for (let dy = -r; dy <= r; dy += step) {
+            for (let dx = -r; dx <= r; dx += step) {
+                if (dx * dx + dy * dy > r * r) continue;
+                n++;
+                const px = Math.round(x + dx), py = Math.round(y + dy);
+                if (px < 0 || py < 0 || px >= MAP_W || py >= MAP_H) continue;   // 圈超出地圖=不算白
+                if (D[((py * MAP_W) + px) * 4] >= 128) ok++;
+            }
+        }
+        return n ? ok / n : 0;
+    }
+    // 🟦 格子碰撞：格子表寫死在場景(base64 bit-packed)，腳點落在「1」格=牆。首次用時解碼快取到 g._bits。
+    function _gridBlocked(g, x, y) {
+        if (!g._bits) {
+            const bin = atob(g.bits); const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            g._bits = arr;
+        }
+        const col = Math.floor(x / g.cell), row = Math.floor(y / g.cell);
+        if (col < 0 || row < 0 || col >= g.cols || row >= g.rows) return true;
+        const bi = row * g.cols + col;
+        return ((g._bits[bi >> 3] >> (7 - (bi & 7))) & 1) === 1;
+    }
+    // 單點是不是牆（格子/遮罩/鋼索）——不含腳印寬度
+    function _wallAt(x, y) {
+        const SC = SCENES[S.scene];
+        if (SC && SC.grid) return _gridBlocked(SC.grid, x, y);        // 🟦 格子碰撞（寫死、永不載入失敗）
+        if (SC && SC.mask && !(S.mask && S.mask.ok)) return !S.maskFailed;   // 遮罩載入中→空窗期全擋防穿牆
+        if (S.mask && S.mask.ok) {
+            const mi = ((Math.round(y) * MAP_W) + Math.round(x)) * 4;
+            return S.mask.data[mi] < 128;   // 手繪遮罩：<128=不可走
+        }
+        const P = CFG?.points?.boundary;
+        return !!(P && P.length >= 3 && !insidePoly(P, x, y));   // 鋼索圈外=牆
+    }
+    function blocked(x, y, hw) {
+        const fw = (hw && hw > 4) ? hw * 2 : FOOT_W;   // 有量到角色實際半寬就用它，否則退回 FOOT_W
+        const l = x - fw / 2, t = y - FOOT_H, r = x + fw / 2, b = y;
+        if (l < 0 || r > MAP_W || t < 0 || b > MAP_H) return true;
+        // 🚨 採樣腳印矩形(中心+左右邊+四角)而非單點→小人身體有寬度，側面靠牆時邊緣就擋住，不會整個身體穿進去
+        if (_wallAt(x, y) || _wallAt(l, b) || _wallAt(r, b) || _wallAt(l, t) || _wallAt(r, t) || _wallAt(x, t)) return true;
+        if (BLOCKS.some(B => l < B.x + B.w && r > B.x && t < B.y + B.h && b > B.y)) return true;
+        // alpha 建築：腳印左/中/右三條直柱各掃 [t..b] 整段——只驗腳中心單點的話，斜著靠近/凹角處身體會鑽進紅區
+        for (let i = 0; i < ALPHA_BLOCKS.length; i++) {
+            const A = ALPHA_BLOCKS[i];
+            if (_alphaSpan(A, l, t, b) || _alphaSpan(A, x, t, b) || _alphaSpan(A, r, t, b)) return true;
+        }
+        return false;
+    }
+    // 🧈 絲滑移動（玩家用）：直走→被擋就把方向轉 ±25/50/75° 用同樣步長試走（牆滑+轉角助推）。
+    //   市面2D的手感來源：撞到不急停，貼牆滑、擦角讓位；轉角最多75°=前進分量恆為正，朝目的地必收斂不繞圈。
+    function _slideMove(p, ux, uy, L) {
+        let nx = p.x + ux * L, ny = p.y + uy * L;
+        if (!blockedPath(p.x, p.y, nx, ny, p.hw)) { p.x = nx; p.y = ny; return true; }
+        for (const deg of [25, -25, 50, -50, 75, -75]) {
+            const rad = deg * Math.PI / 180, c = Math.cos(rad), s = Math.sin(rad);
+            const rx = ux * c - uy * s, ry = ux * s + uy * c;
+            nx = p.x + rx * L; ny = p.y + ry * L;
+            if (!blockedPath(p.x, p.y, nx, ny, p.hw)) { p.x = nx; p.y = ny; return true; }
+        }
+        return false;   // 真的正面頂死平牆才原地不動
+    }
+    // 一整步拆小段沿路採樣：單幀最多走16.5px、只驗終點的話，薄的alpha邊緣會被一步跨過去（穿進建築）
+    function blockedPath(x0, y0, x1, y1, hw) {
+        const d = Math.hypot(x1 - x0, y1 - y0);
+        const n = Math.max(1, Math.ceil(d / 8));
+        for (let i = 1; i <= n; i++) {
+            if (blocked(x0 + (x1 - x0) * i / n, y0 + (y1 - y0) * i / n, hw)) return true;
+        }
+        return false;
+    }
+
+    // ── 角色（玩家/NPC 共用）────────────────────────────
+    // src=字串→單張立姿圖；src={sheet:url}→3×4走路圖(真走路動畫,四方向)
+    // 🗺️ 地圖場景(outdoor)的小人跟鏡頭 cover 縮放脫鉤：不管鏡頭把底圖放大幾倍，人都固定螢幕尺寸
+    //    (俯視棋子；桌機/手機/橫豎屏一致)。室內房間維持原樣=跟著 cover 放大一起填滿畫面。
+    function _actorScale() {
+        let s = CFG.points.actorScale || 1;
+        if (SCENES[S.scene] && SCENES[S.scene].outdoor && S.scale > 0 && isFinite(S.scale)) s = s / S.scale;
+        return s;
+    }
+    // 🧍 量角色圖的「實際不透明範圍」→ 算下方padding(腳離圖底)+可見半寬比例，存 a.bpad/a.wfrac。
+    //   圖多半是角色置中、四周留透明padding；不修的話錨點會錨在圖底(腳下方)、碰撞寬對不上→貼牆會穿/離。
+    function _measureActorBounds(a) {
+        if (a.sheet || !a.el || !a.el.naturalWidth) return;
+        try {
+            const iw = a.el.naturalWidth, ih = a.el.naturalHeight;
+            const sw = 80, sh = Math.max(1, Math.round(ih * 80 / iw));
+            const cv = document.createElement('canvas'); cv.width = sw; cv.height = sh;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(a.el, 0, 0, sw, sh);
+            const d = ctx.getImageData(0, 0, sw, sh).data;
+            let minX = sw, maxX = -1, maxY = -1;
+            for (let yy = 0; yy < sh; yy++) for (let xx = 0; xx < sw; xx++) {
+                if (d[(yy * sw + xx) * 4 + 3] >= 40) { if (xx < minX) minX = xx; if (xx > maxX) maxX = xx; if (yy > maxY) maxY = yy; }
+            }
+            if (maxY < 0) return;   // 全透明
+            a.bpad = (sh - 1 - maxY) / sh;                // 下方padding比例(腳到圖底)
+            a.wfrac = ((maxX - minX + 1) / 2) / sw;        // 可見半寬佔圖寬比例→碰撞半寬
+            if (a.views) a._hwRatio = iw / ih;             // 三面小人：腳印照正面那張算，換面不跟著變寬變窄
+            placeActor(a);                                 // 用新錨點/寬度重放
+        } catch (e) { /* CORS污染等→維持預設(FOOT_W/圖底錨) */ }
+    }
+    // 🧍 走路圖(3×4)版量測：取中間立定幀量可見寬度→a.wfrac（碰撞半寬比例）。
+    //   sheet 小人原本量不到實寬→blocked 退回寫死 FOOT_W=46：窄縫看起來能過、腳印卻塞不下=卡住。
+    function _measureSheetBounds(a, probe) {
+        try {
+            const fw = Math.max(1, Math.floor(probe.naturalWidth / 3)), fh = Math.max(1, Math.floor(probe.naturalHeight / 4));
+            const sw = 80, sh = Math.max(1, Math.round(fh * 80 / fw));
+            const cv = document.createElement('canvas'); cv.width = sw; cv.height = sh;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.drawImage(probe, fw, 0, fw, fh, 0, 0, sw, sh);   // 第2欄第1列=朝下立定幀
+            const d = ctx.getImageData(0, 0, sw, sh).data;
+            let minX = sw, maxX = -1;
+            for (let yy = 0; yy < sh; yy++) for (let xx = 0; xx < sw; xx++) {
+                if (d[(yy * sw + xx) * 4 + 3] >= 40) { if (xx < minX) minX = xx; if (xx > maxX) maxX = xx; }
+            }
+            if (maxX < 0) return;
+            a.wfrac = ((maxX - minX + 1) / 2) / sw;
+            placeActor(a);
+        } catch (e) { /* CORS污染等→維持FOOT_W */ }
+    }
+    function spawnActor(src, x, y, h) {
+        const isSheet = (typeof src === 'object' && src && src.sheet);
+        const el = document.createElement(isSheet ? 'div' : 'img');
+        // lstage-loading=先藏著，圖真的載好才顯示（防轉場時預設單圖閃一下才換成走路圖）
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ' lstage-loading';
+        const a = { x, y, baseH: h, h: Math.round(h * _actorScale()), el, walking: false, flip: false };
+        if (isSheet) {
+            a.sheet = true; a.dir = 0; a.frame = 1; a.animT = 0;
+            const probe = new Image();
+            if (!String(src.sheet).startsWith('data:')) probe.crossOrigin = 'anonymous';   // 要讀alpha量實寬
+            probe.onload = () => {
+                a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4;
+                el.style.backgroundImage = 'url("' + probe.src + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha（probe.src＝真的拿到的那個網址，換過 raw 也對）
+                _measureSheetBounds(a, probe);
+                placeActor(a); a.el.classList.remove('lstage-loading');
+            };
+            _sfRetry(probe);
+            probe.src = src.sheet;
+        } else {
+            if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';   // 要讀alpha量範圍→掛CORS(jsdelivr有頭)
+            el.src = src;
+            el.style.height = a.h + 'px';
+            // 有皮膚(3x4)待換的話先別顯示這張預設單圖，等 _swapActorSrc 換好才顯示
+            el.addEventListener('load', () => { placeActor(a); _measureActorBounds(a); if (!a._skinPending) a.el.classList.remove('lstage-loading'); }, { once: true });
+        }
+        S.world.appendChild(el);
+        placeActor(a);
+        return a;
+    }
+    // 人物整體縮放即時套用（擺設模式「人物−/＋」用）
+    function applyActorScale() {
+        const s = _actorScale();
+        const all = S.player ? [S.player].concat(S.npcs) : S.npcs;
+        all.forEach(a => {
+            a.h = Math.round(a.baseH * s * (a._hk || 1));   // _hk＝內建不倒翁的高度倍率（帽匠的高帽），一起乘才不會按一下就變回小的
+            a.el.style.height = a.h + 'px';
+            placeActor(a);
+            if (a.tag) placeNpcExtras(a);
+        });
+    }
+    // 景深「往前」容差：大地圖(outdoor)角色站在物件底線稍高處仍算前面→貼著高樹/建築走不會頭被遮；室內不動
+    function _actorZBias(a) {
+        return (SCENES[S.scene] && SCENES[S.scene].outdoor) ? Math.round(a.h * 0.2) : 0;
+    }
+    // 👻 屋子透視（選2號進化版，棄圓形洞）：小人走到「屋子」後面→那棟整體變半透明，
+    //    但底座（佔地帶那段）保持不透明+往上羽化過渡＝底部 3D 感（模擬市民風）；走開就恢復。
+    //    只對屋子生效（看板/樹/燈等小物件不做）；只在 alphaFoot 場景（大地圖）啟用。
+    //    遮罩是縱向漸層→flipX 水平鏡像不影響，不用修座標。
+    function _isXray(o) {
+        if (o.xray) return true;    // 手動旗標（新屋子可在數據裡加 "xray":true）
+        if (o.plot) return true;    // NPC 房
+        return /book_cafe|lobby_day|player_house/.test(String(o.file || ''));   // 書咖/大廳/MC家
+    }
+    let _seeThruEls = new Set();
+    function _updateSeeThrough() {
+        const p = S.player;
+        const on = p && CFG && SCENES[S.scene].alphaFoot;
+        const next = new Set();
+        if (on) {
+            const pw = p.h * ((p.frameW && p.frameH) ? p.frameW / p.frameH : 0.6);
+            const pl = p.x - pw / 2, pt = p.y - p.h;
+            const pz = 2 + Math.round(p.y) + _actorZBias(p);   // 同 placeActor 的 z
+            CFG.layout.forEach((o, i) => {
+                const el = S.objEls?.[i];
+                if (!el || o.layer || o._plotOff || !_isXray(o)) return;
+                const s = o.s || 1, ew = Math.round(o.w * s), eh = Math.round(o.h * s);
+                if (2 + Math.round(o.y + eh + (o.zb || 0)) <= pz) return;              // 沒畫在小人前面
+                if (!(pl < o.x + ew && pl + pw > o.x && pt < o.y + eh && p.y > o.y)) return;   // 畫面沒疊到
+                const fh = Math.round((o.footH != null ? o.footH : 0) * s);   // 底座=佔地帶，保持不透明
+                const m = 'linear-gradient(to top, #000 0px, #000 ' + fh + 'px, rgba(0,0,0,.38) ' + (fh + 60) + 'px)';
+                if (el._mask !== m) { el.style.webkitMaskImage = m; el.style.maskImage = m; el._mask = m; }
+                next.add(el);
+            });
+        }
+        _seeThruEls.forEach(el => { if (!next.has(el)) { el.style.webkitMaskImage = ''; el.style.maskImage = ''; el._mask = null; } });
+        _seeThruEls = next;
+    }
+    // 單張立姿／三面小人的面向（走路圖的各處自己設 dir）：三面的照四個方向（0下/1左/2右/3上，同走路圖），單張的只左右鏡像
+    function _face(a, vx, vy) {
+        if (a.views) { if (vx || vy) a.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); }
+        else if (vx) a.flip = vx > 0;   // 原圖朝左：往右才鏡像
+    }
+    function placeActor(a) {
+        if (a.sheet) return placeSheetActor(a);
+        // 🧸 三面小人（三合一生成的 Q版畫成正面／側面／背面）：照面向換那一張。側面那張原圖朝右 → 往左才鏡像（跟單張「原圖朝左」相反）
+        if (a.views) {
+            const k = a.dir === 3 ? 'back' : (a.dir === 1 || a.dir === 2) ? 'side' : 'front';
+            if (a._viewK !== k) { a.el.src = a.views[k]; a._viewK = k; }
+            a.flip = a.dir === 1;
+        }
+        const ratio = (a.el.naturalWidth && a.el.naturalHeight) ? a.el.naturalWidth / a.el.naturalHeight : 0.6;
+        const w = a.h * ratio;
+        // 碰撞半寬=可見角色半寬(量到才設；沒量到 blocked 用 FOOT_W)。
+        // 🚨 用「邏輯尺寸」算(人物縮放,不含 outdoor 鏡頭脫鉤放大)：視覺放大是棋子表現,腳印跟著放大會變巨人塞不過縫
+        if (a.wfrac != null) a.hw = Math.max(6, Math.round(a.baseH * (CFG.points.actorScale || 1) * (a._hwRatio || ratio) * a.wfrac));
+        // 下方padding修正：把圖往下推 bpad*h，讓「可見的腳」正好落在 a.y(=碰撞判定點)，而不是錨在圖片底部(腳下方)
+        const footPad = Math.round(a.h * (a.bpad || 0));
+        // 只在變化時寫入；座標保留小數（整數化會讓移動跳格卡卡）
+        const left = a.x - w / 2, top = a.y - a.h + footPad, z = 2 + Math.round(a.y) + _actorZBias(a);
+        //   位置寫 translate 屬性、不寫 left/top：left/top 逐幀寫會弄髒版面樹（酒館聊天 DOM 肥時每幀整頁重排）。
+        //   彈跳／翻面的 keyframes 吃的是 transform，translate 屬性跟它疊加、互不蓋掉；left/top 第一次歸零就不再碰
+        if (!a._trBase) { a.el.style.left = '0px'; a.el.style.top = '0px'; a._trBase = true; }
+        if (a._left !== left || a._top !== top) { a.el.style.translate = left + 'px ' + top + 'px'; a._left = left; a._top = top; }
+        if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
+        if (a._walking !== !!a.walking) { a.el.classList.toggle('walking', !!a.walking); a._walking = !!a.walking; }
+        if (a._flipC !== !!a.flip) { a.el.classList.toggle('flip', !!a.flip); a._flipC = !!a.flip; }
+    }
+
+    // 走路圖角色：尺寸/幀切換全走 background-position（幀序 0,1,2,1 循環、立定=中幀）
+    //   定位走 transform 不走 left/top——left/top 逐幀寫入會反覆弄髒版面樹，桌機聊天 DOM 肥時走路掉幀。
+    //   走路圖角色沒有 CSS transform 動畫（.lstage-sheet 的 walking/flip 都關掉了），inline transform 不會打架；
+    //   單張立姿角色(placeActor)的彈跳/翻面 keyframes 吃 transform，所以維持 left/top 別搬。
+    function placeSheetActor(a) {
+        const ratio = (a.frameW && a.frameH) ? a.frameW / a.frameH : 0.8;
+        const w = a.h * ratio;
+        if (a.wfrac != null) a.hw = Math.max(6, Math.round(a.baseH * (CFG.points.actorScale || 1) * ratio * a.wfrac));   // 同 placeActor:邏輯尺寸算腳印半寬
+        const left = a.x - w / 2, top = a.y - a.h, z = 2 + Math.round(a.y) + _actorZBias(a);
+        const tf = 'translate3d(' + left + 'px,' + top + 'px,0)';
+        if (a._tf !== tf) { a.el.style.transform = tf; a._tf = tf; }
+        if (a._z !== z) { a.el.style.zIndex = String(z); a._z = z; }
+        if (a._sizedH !== a.h || a._sizedW !== w) {
+            a.el.style.width = w + 'px';
+            a.el.style.height = a.h + 'px';
+            a.el.style.backgroundSize = (w * 3) + 'px ' + (a.h * 4) + 'px';
+            a._sizedH = a.h; a._sizedW = w;
+        }
+        const bg = (-(a.frame || 0) * w) + 'px ' + (-(a.dir || 0) * a.h) + 'px';
+        if (a._bg !== bg) { a.el.style.backgroundPosition = bg; a._bg = bg; }
+    }
+
+    // ── 👗 裝扮室（每角色外觀：單圖或3×4走路圖，右鍵角色進入）──
+    const SKIN_KEY = 'lobby_stage_skins_v1';
+    function _skins() {
+        try { return JSON.parse(localStorage.getItem(SKIN_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    // 🧸 六位管理員的內建不倒翁（11-19 阿洛畫三視圖＋閉眼貼片）。使用者在裝扮頁自己換過的照使用者的（_skins 優先）。
+    //   素材在 sound-files 的 doll_mgr_v1（去背、切三面、閉眼兩面、接好手腳的走路圖、自動切好的頭身：本機 tmp/manager_dolls/prep.py＋本機的 mgr_bake.cjs）。
+    //   shut＝閉眼的兩面（阿洛的貼片照座標貼回原圖、跟睜眼同一個去背和裁切，逐像素對齊）：眨眼直接換這張，不用猜眼睛在哪（lobby_doll_cut.js）。
+    //   hk＝站在大廳的高度倍率：大小原本照整格高度算，帽匠的高帽、白兔的耳朵會把身體擠小（11-19：帽匠因為高帽顯得小）→ 照正面身體寬換算，六位身體一樣大
+    const MGR_DOLL = 'https://cdn.jsdelivr.net/gh/nancywang3641/sound-files@86d20c2366195e664f495994a37145b244f0f9e8/doll_mgr_v1/';
+    function _mgrDoll(k, hk) {
+        const u = (f) => ({ url: MGR_DOLL + k + '/' + f });
+        return { kind: 'sheet', doll: 2, builtin: true, hk, ref: u('sheet.webp'),
+            raw: { front: u('front.webp'), side: u('side.webp'), back: u('back.webp') },
+            shut: { front: u('front_shut.webp'), side: u('side_shut.webp') }, cut: u('cut.json') };
+    }
+    const BUILTIN_SKINS = {   // hk＝160／正面身體在走路圖那格裡的寬（mgr_measure.cjs 量的）
+        alice: _mgrDoll('alice', 0.877), ying: _mgrDoll('ying', 0.979), rabbit: _mgrDoll('rabbit', 1.07),
+        cheshire: _mgrDoll('cheshire', 1), hatter: _mgrDoll('hatter', 1.159), zhiwei: _mgrDoll('zhiwei', 1.121),
+    };
+    function _skinOf(key) { return _skins()[key] || BUILTIN_SKINS[key] || null; }
+    // 🚨回傳成不成功，別再靜靜吞掉。localStorage 有 5MB 上限，滿了以後這裡會拋 QuotaExceeded——
+    //   以前空 catch 掉了，於是：圖生好了→存不進去→下次進大廳查「生過沒」查不到→再生一次→
+    //   再存不進去。ComfyUI 白燒一輪又一輪，畫面上永遠是剪影，而且一句話都不會說。
+    function _saveSkin(key, skin) {
+        try {
+            const all = _skins();
+            if (skin) all[key] = skin; else delete all[key];
+            localStorage.setItem(SKIN_KEY, JSON.stringify(all));
+            return true;
+        } catch (e) {
+            const full = e && (e.name === 'QuotaExceededError' || e.code === 22 || /quota/i.test(e.message || ''));
+            console.warn('[LobbyStage] 皮膚存檔失敗' + (full ? '（本機空間滿了）' : '') + '：', key, e);
+            if (full) {
+                try {
+                    const T = AUI.toastr;
+                    T && T.error('本機儲存空間滿了，小人的新造型存不下來', '大廳');
+                } catch (_) {}
+            }
+            return false;
+        }
+    }
+    // 換裝：把角色元素整顆換掉（img↔div 走路圖兩種形態）
+    //   src 三種：網址字串＝單張；{ sheet }＝3×4 走路圖；{ views:{ front, side, back } }＝三面小人（單張的做法，照面向換那一張，見 placeActor）
+    //   opts.smooth＝這張不是像素圖（接好手腳的不倒翁），縮小時平滑
+    function _swapActorSrc(a, src, opts) {
+        const isSheet = (typeof src === 'object' && src && src.sheet);
+        const views = (!isSheet && typeof src === 'object' && src && src.views && src.views.front && src.views.side && src.views.back) ? src.views : null;
+        if (views) src = views.front;
+        a.views = views; a._viewK = views ? 'front' : null; a._hwRatio = null;
+        // 側面、背面先載好留著：換面時那張已經在手上，不會空一下
+        a._viewKeep = views ? [views.side, views.back].map(u => { const im = new Image(); im.src = u; return im; }) : null;
+        if (views) a.flip = false;
+        const el = document.createElement(isSheet ? 'div' : 'img');
+        el.className = 'lstage-actor' + (isSheet ? ' lstage-sheet' : '') + ((a.smooth || (opts && opts.smooth)) ? ' lstage-smooth' : '') + ' lstage-loading';   // 換好的圖載入才顯示
+        a.sheet = isSheet; a.dir = 0; a.frame = 1; a.animT = 0;
+        a.frameW = a.frameH = null;
+        a._left = a._top = a._z = a._bg = a._tf = a._trBase = null; a._sizedH = a._sizedW = null; a._walking = a._flipC = null;
+        a.bpad = a.wfrac = a.hw = null;   // 換新圖→清掉舊的量測值，重新量
+        if (isSheet) {
+            const probe = new Image();
+            if (!String(src.sheet).startsWith('data:')) probe.crossOrigin = 'anonymous';   // 要讀alpha量實寬
+            probe.onload = () => {
+                a.frameW = probe.naturalWidth / 3; a.frameH = probe.naturalHeight / 4;
+                el.style.backgroundImage = 'url("' + probe.src + '")';   // 🚨 CORS探針先載、bg再吃快取；反序會污染快取讀不到alpha（probe.src＝真的拿到的那個網址）
+                _measureSheetBounds(a, probe);
+                placeActor(a); a.el.classList.remove('lstage-loading');
+            };
+            _sfRetry(probe);
+            probe.src = src.sheet;
+        } else {
+            if (!String(src).startsWith('data:')) el.crossOrigin = 'anonymous';
+            el.src = src;
+            el.style.height = a.h + 'px';
+            el.addEventListener('load', () => { placeActor(a); _measureActorBounds(a); a.el.classList.remove('lstage-loading'); }, { once: true });
+        }
+        a.el.replaceWith(el);
+        a.el = el;
+        a._skinPending = false;
+        placeActor(a);
+    }
+    async function _applySkin(a, key) {
+        const skin = _skinOf(key);
+        if (!skin) return;
+        const src = await resolveRef(skin.ref);
+        if (!src || !a.el || !S.active) {   // 皮膚換不成→把先藏起來的預設圖還原顯示，別讓角色隱形
+            if (a) a._skinPending = false;
+            if (a && a.el) a.el.classList.remove('lstage-loading');
+            return;
+        }
+        // ⚠️ 皮膚只管大廳小人外觀，不碰 a.portrait——對話立繪另有來源(固定NPC自帶/訪客avatar_cache頭像/裝扮室「生成立繪」的sprite_cache)，兩者是不同東西(2026-07-17 定案)
+        //   舊 skin 可能殘留 asPortrait 旗標(已退役)，一律忽略。
+        // 🧸 三面（裝扮頁「生成不倒翁小人」存的：正面在 ref，側面、背面另外兩張）：跟三合一生成的 Q版三面同一種小人，走路、轉向會換面。
+        //   側面或背面讀不到就退成單張（只有正面，照舊左右鏡像）
+        if (skin.kind === 'views') {
+            // 🦶 接手腳之前存的三面：補接、改存成走路圖（lobby_dress.js 的 _dollUpgrade）；接不成照舊三面
+            let up = null;
+            try { const LD = window.LobbyDress; if (LD && typeof LD.dollUpgrade === 'function') up = await LD.dollUpgrade(key, skin); } catch (e) {}
+            if (up) {
+                const s2 = await resolveRef(up.ref);
+                if (!a.el || !S.active) return;
+                if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); _dollLive(a, key, up); return; }
+            }
+            let side = '', back = '';
+            try { side = (await resolveRef(skin.side)) || ''; back = (await resolveRef(skin.back)) || ''; } catch (e) {}
+            if (!a.el || !S.active) return;
+            _swapActorSrc(a, (side && back) ? { views: { front: src, side: side, back: back } } : src);
+            return;
+        }
+        // ✊ 11-17 之前接好手腳的不倒翁，手是估的小圓：換成衣櫥的拳頭、改存（lobby_dress.js 的 _dollRefist）；換不成就照舊那張
+        if (skin.kind === 'sheet' && skin.doll === 1) {
+            let up = null;
+            try { const LD = window.LobbyDress; if (LD && typeof LD.dollRefist === 'function') up = await LD.dollRefist(key, skin); } catch (e) {}
+            if (up) {
+                const s2 = await resolveRef(up.ref);
+                if (!a.el || !S.active) return;
+                if (s2) { _swapActorSrc(a, { sheet: s2 }, { smooth: true }); return; }
+            }
+        }
+        // 頭上有高帽、長耳朵的放大一點，身體才跟大家一樣大（內建的六位才有 hk）；擺設模式「人物−/＋」的 applyActorScale 也乘它
+        a._hk = skin.hk || null;
+        if (a._hk && a.baseH) a.h = Math.round(a.baseH * _actorScale() * a._hk);
+        _swapActorSrc(a, skin.kind === 'sheet' ? { sheet: src } : src, { smooth: !!skin.doll });
+        _dollLive(a, key, skin);
+    }
+    // ✂ 不倒翁有沒手沒腳的原圖＋切好的頭身：站著時照衣櫥的呼吸動（lobby_doll_cut.js；走路照舊這張走路圖）
+    function _dollLive(a, key, skin) {
+        if (!skin || !skin.doll || !skin.raw || !skin.cut) return;
+        try { const C = window.LobbyDollCut; if (C && C.bindLive) C.bindLive(a, key, skin); } catch (e) {}
+    }
+
+    // 👗 右鍵角色選單/裝扮室/對話紀錄窗/內建生成 → 拆到 lobby_dress.js（走 _b 橋；2026-07-16）
+
+    // ── 玩家 ─────────────────────────────────────────────
+    const PLAYER_H = 190, PLAYER_SPEED = 0.33;
+    const WALK_FRAMES = [0, 1, 2, 1], WALK_FRAME_MS = 150;
+    function initPlayer() {
+        // 單張立姿+彈跳翻面（定案：多角色出走路圖太累沒必要）；要走路圖時改傳 {sheet: ASSET.walkBase}
+        const src = (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF;
+        // 'arrive'=走門進場（落點可在擺設模式拖橘色門圓點調整）；落點在牆裡自動彈到最近地板
+        const raw = (S.spawnOverride === 'arrive' ? (CFG.points.arrive || CFG.points.player)
+                  : S.spawnOverride) || CFG.points.player;
+        S.spawnOverride = null;
+        const sp = findFreeSpot(raw.x, raw.y);
+        S.player = Object.assign(spawnActor(src, sp.x, sp.y, PLAYER_H), { dest: null, key: 'player', name: '你', defaultSrc: src });
+        if (_skins()['player']) S.player._skinPending = true;   // 玩家有自訂皮膚→預設圖先藏著(免閃)
+        _applySkin(S.player, 'player');
+        // ⌨ 方向鍵歸「最後一下點的地方」：點在大廳上歸小人，點在酒館的面板（世界書、設定…）就還給那邊。
+        //   10-07：方向鍵穿透到酒館面板，世界書輸入框左右移不動游標、Shift 圈不了字。以前只認 input／textarea，
+        //   別的可以打字的框（contenteditable 那種編輯器）不算；大廳沒在畫面上也照搶。
+        S.keysHome = true;
+        S.onPtr = (e) => {
+            const home = S.root && (S.root.closest('#aurelia-home-tab') || S.root.parentElement);
+            S.keysHome = !!(home && e.target && home.contains(e.target));
+        };
+        window.addEventListener('pointerdown', S.onPtr, true);
+        S.onKey = (e) => {
+            if (_keyTyping(e)) return;
+            // 🌱 全螢幕 app 蓋在大廳上時，按鍵是它的：
+            //    這裡是捕獲階段又會 stopImmediatePropagation，不讓開的話方向鍵永遠到不了那個 app，大廳小人還會在後面偷走
+            if (_appCovering()) return;
+            // 大廳沒在畫面上（切去別的分頁、VN 蓋著…）或最後一下點在別處：鍵不是大廳的，放回去
+            if (_stageHidden() || !S.keysHome) { S.keys = {}; return; }
+            const k = e.key.toLowerCase();
+            // 🎮 對話快捷鍵：走近 NPC 按 E/F 開聊；對話中按 E/F/Esc 收起（省得每次點 ✖）。不做「移動自動關」避免誤觸。
+            if (e.type === 'keydown' && (k === 'e' || k === 'f' || k === 'escape')) {
+                if (S.talkTarget) { endTalk(); e.preventDefault(); e.stopPropagation(); return; }
+                if (k !== 'escape' && S.player && !S.edit) {
+                    let best = null, bestD = Infinity;
+                    for (const n of S.npcs) {
+                        if (!n.hint || !_npcInReach(n)) continue;   // 搆得到才算（含桌子那塊 talkRect）
+                        const d = Math.hypot(n.x - S.player.x, n.y - S.player.y);
+                        if (d < bestD) { bestD = d; best = n; }
+                    }
+                    if (best) { if (best.onInteract) best.onInteract(best); else startTalk(best); e.preventDefault(); e.stopPropagation(); return; }
+                    if (S.hsNear && S.hsNear.el.isConnected) { S.hsNear.el.click(); e.preventDefault(); e.stopPropagation(); return; }   // 🪑 旁邊沒人、只有家具：開那件
+                }
+            }
+            if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) {
+                S.keys[k] = (e.type === 'keydown');
+                // 🚨 必須整條攔死：酒館本體綁了 ↑=編輯訊息、←→=swipe(會重新生成=燒API)
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            }
+        };
+        // 捕獲階段搶第一手，酒館的快捷鍵監聽器完全收不到
+        window.addEventListener('keydown', S.onKey, true);
+        window.addEventListener('keyup', S.onKey, true);
+        S.root.querySelector('.lstage-click').addEventListener('click', (e) => {
+            if (S.edit) return;
+            if (_lpSuppressClick) { _lpSuppressClick = false; return; }   // 長按剛開過選單→吃掉這次 click
+            if (S.talkTarget) { endTalk(); return; }
+            hideDialog();   // 點空地=收起跟瀅瀅的對話框
+            const r = S.world.getBoundingClientRect();
+            S.player.dest = { x: (e.clientX - r.left) / S.scale, y: (e.clientY - r.top) / S.scale };
+        });
+        // 🔍 擺設模式滾輪縮放：放大精細擺家具、縮小看全景。掛在 S.root（祖層）→滑到物件上也收得到；unmount 移除防累積。
+        S.onWheel = (e) => {
+            if (!S.edit) return;
+            if (e.target.closest('.lstage-layers-win, .lstage-edit-panel')) return;   // 圖層小窗/控制面板內的滾輪=捲它們自己的清單，別搶去縮放地圖
+            e.preventDefault();
+            const f = e.deltaY < 0 ? 1.15 : 1 / 1.15;
+            S.edit.zoom = Math.max(0.25, Math.min(6, (S.edit.zoom || 1) * f));   // 可縮到 0.25(地圖變小、四周留白好拖) ~ 6(放大看細節)
+            fitCamera();
+        };
+        S.root.addEventListener('wheel', S.onWheel, { passive: false });
+    }
+
+    // ── NPC ──────────────────────────────────────────────
+    const NPC_H = 180, INTERACT_R = 130;
+
+    // 🎯 搆不搆得到 NPC：預設是「離他多近」(INTERACT_R)。
+    //    但隔著一張大桌子的人搆不到——桌子的碰撞帶把你擋在 260px 外，圓形半徑再大也蓋不到桌子的左右前角。
+    //    → NPC 可以帶一塊 talkRect（通常就是他坐鎮的那張桌／櫃台）：人站在那塊範圍旁邊就算搆得到。
+    function _distToRect(px, py, r) {
+        const dx = Math.max(r.x - px, 0, px - (r.x + r.w));
+        const dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+        return Math.hypot(dx, dy);
+    }
+    // 🪑 家具熱點也照 NPC 那套「搆得到」：腳到家具下半截（人站的那一帶）的距離 < pad，取最近的那件（10-13：手機沒有滑鼠）
+    function _hsNearest(list, px, py, pad) {
+        let best = -1, bestD = Infinity;
+        for (let i = 0; i < list.length; i++) {
+            const b = list[i].box;
+            const r = { x: b.x, y: b.y + b.h * 0.45, w: b.w, h: b.h * 0.55 };
+            const dx = Math.max(r.x - px, 0, px - (r.x + r.w));
+            const dy = Math.max(r.y - py, 0, py - (r.y + r.h));
+            const d = Math.hypot(dx, dy);
+            if (d < pad + (list[i].reach || 0) && d < bestD) { bestD = d; best = i; }   // reach＝這件家具搆得比較遠（書咖菜單在櫃檯桌面上）
+        }
+        return best;
+    }
+    const HS_PAD = 60;   // 同 NPC talkRect 的預設 talkPad
+    // 亮／不亮：熱點掛 is-near（走近）或 is-flash（第一次進場閃一下），家具本身照 lit 那套鑲光
+    function _hsLight(h, on, cls) {
+        if (on) {
+            h.el.classList.add(cls); if (h.litEl) h.litEl.classList.add(...h.litCls);
+            if (h.orbit && cls === 'is-near') _orbOpen(h);   // 🌐 走近核心＝展開世界螢幕（第一次進場那下閃光不展開）
+            return;
+        }
+        h.el.classList.remove(cls);
+        const hover = !!(h.el.matches && h.el.matches(':hover'));
+        const still = h.el.classList.contains('is-near') || h.el.classList.contains('is-flash') || hover;
+        if (h.litEl && !still) h.litEl.classList.remove(...h.litCls);
+        if (h.orbit && !hover && !h.el.classList.contains('is-near')) _orbClose();
+    }
+    // 每一幀：最近、搆得到的那件浮出名字＋亮起來（跟 NPC 頭上的對話泡泡同一個時機）；講話中、擺設模式不冒
+    function _hsProximity(p) {
+        const list = S.hotspots || [];
+        if (!list.length && !S.hsNear) return;
+        const i = (S.talkTarget || S.edit || !p) ? -1 : _hsNearest(list, p.x, p.y, HS_PAD);
+        const h = i < 0 ? null : list[i];
+        if (h === S.hsNear) return;
+        if (S.hsNear) _hsLight(S.hsNear, false, 'is-near');
+        S.hsNear = h;
+        if (h) _hsLight(h, true, 'is-near');
+    }
+    // 🌐 世界門核心的環繞螢幕（10-26 搬進大廳；做法照 Vproject QUANTUM_CORE_HOVER_LAB）：
+    //   滑過核心（手機走近）→ 一圈半透明小螢幕從核心中心一片接一片浮出，沿壓扁的橢圓慢慢轉，每片放一個使用者世界的概念圖；
+    //   轉到後面變小變淡、被核心擋住，轉到前面變大蓋過核心，兩側會側過去；整圈跟著核心一起上下飄。移開 220ms 才收（滑鼠擦過邊緣不閃）。
+    //   熱點帶 orbit:true 才有（SCENES.hall 的世界門）。只有展開、收起途中跑自己的 rAF，收完就停；點開面板、舞台藏起來、擺設模式當下收掉；
+    //   換場景、離開舞台整組拆掉（_orbDrop）。
+    //   圖：先放使用者的世界（OS_WORLDGATE.orbitArts，只給真的生出來的概念圖），不夠 ORB_MAX 片拿藏書內建書的封面補滿（_orbLoad）；
+    //   都縮成 312×200 小張 blob 再放，不把整張 data URL 塞進畫面；讀不到的那張不放（不露壞圖）。
+    //   兩邊都拿不到圖（沒世界、封面也載不到）＝不展開，核心照舊亮光、浮出「世界門」。
+    //   大廳設置「演出動畫」關掉（aurelia_reveal_fx='0'）或系統要求減少動態：不轉、不飄、不閃、不跑 rAF，直接靜態排一圈（還看得到有哪些世界）。
+    const ORB_MAX = 7, ORB_PERIOD = 45, ORB_W = 156, ORB_H = 100, ORB_CORE_W = 221;   // ORB_CORE_W＝LAB 量位置時核心的寬，核心縮放過就照比例
+    const ORB = { h: null, scr: [], beams: null, target: 0, show: 0, rot: 0.6, last: 0, raf: 0, leaveT: 0, list: null, loading: false, still: false };
+    const _orbThumbs = new Map();   // 概念圖 → 小張 blob 網址（跨場景留著，同一張不重縮；清單換了就收掉沒用到的）
+    function _orbStill() {
+        try {
+            if (localStorage.getItem('aurelia_reveal_fx') === '0') return true;
+            return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        } catch (e) { return false; }
+    }
+    function _orbThumb(art, ay) {   // ay＝直式圖裁橫條時取哪一段（0 頂、1 底；預設置中）
+        ay = ay == null ? 0.5 : ay;
+        const key = ay + '|' + art.length + '|' + art.slice(0, 80) + art.slice(-80);
+        if (_orbThumbs.has(key)) return Promise.resolve({ key, url: _orbThumbs.get(key) });
+        return new Promise(res => {
+            const im = new Image();
+            if (!/^data:/.test(art)) im.crossOrigin = 'anonymous';
+            im.onload = () => {
+                try {
+                    const W = 312, H = 200, k = Math.max(W / im.naturalWidth, H / im.naturalHeight), sw = W / k, sh = H / k;
+                    const cv = document.createElement('canvas');
+                    cv.width = W; cv.height = H;
+                    cv.getContext('2d').drawImage(im, (im.naturalWidth - sw) / 2, (im.naturalHeight - sh) * ay, sw, sh, 0, 0, W, H);
+                    cv.toBlob(b => {
+                        if (!b) { res(null); return; }
+                        const url = URL.createObjectURL(b);
+                        _orbThumbs.set(key, url);
+                        res({ key, url });
+                    }, 'image/jpeg', 0.82);
+                } catch (e) { res(null); }   // 外站圖沒給 CORS（畫布讀不回來）→ 這張不放
+            };
+            im.onerror = () => res(null);
+            im.src = art;
+        });
+    }
+    async function _orbLoad() {
+        if (ORB.list || ORB.loading) return;
+        ORB.loading = true;
+        let arts = [];
+        try { arts = (await window.OS_WORLDGATE?.orbitArts?.(ORB_MAX)) || []; } catch (e) {}
+        const list = [], used = new Set();
+        for (const a of arts) {
+            const t = await _orbThumb(a.art);
+            if (t) { list.push({ name: a.name, src: t.url }); used.add(t.key); }
+        }
+        // 不夠一圈（或一個世界都還沒有）：拿藏書書架內建那幾本的封面補滿（10-26，就是 PWA 那幾張世界圖）。
+        //   清單只有一份，在 void_terminal.js 的 AURELIA_WORLDS（酒館、網頁版都載），別在這裡另抄網址；拿不到就只放使用者的世界。
+        //   封面是 640×960 直式插畫，裁橫條取偏上那段（天際線、龍都在那一帶）
+        const books = Object.values(window.AURELIA_WORLDS || {}).filter(bk => bk && bk.cover);
+        for (const bk of books) {
+            if (list.length >= ORB_MAX) break;
+            const t = await _orbThumb(bk.cover, 0.4);
+            if (t) { list.push({ name: String(bk.title || ''), src: t.url }); used.add(t.key); }
+        }
+        _orbThumbs.forEach((url, key) => { if (!used.has(key)) { URL.revokeObjectURL(url); _orbThumbs.delete(key); } });
+        ORB.loading = false;
+        if (!ORB.h || !ORB.h.el.isConnected || !S.world) return;   // 等圖的時候換場景／離開舞台了
+        ORB.list = list;
+        _orbBuild();
+        if (ORB.target) _orbKick();
+    }
+    function _orbClear() {
+        ORB.scr.forEach(s => s.el.remove());
+        ORB.scr = [];
+        if (ORB.beams) { ORB.beams.remove(); ORB.beams = null; }
+    }
+    function _orbBuild() {
+        _orbClear();
+        const n = ORB.list.length, core = ORB.h.litEl;
+        if (!n || !core) return;
+        const NS = 'http://www.w3.org/2000/svg';
+        const beams = document.createElementNS(NS, 'svg');
+        beams.setAttribute('class', 'lstage-orb-beams');
+        beams.setAttribute('width', MAP_W); beams.setAttribute('height', MAP_H);
+        beams.setAttribute('viewBox', '0 0 ' + MAP_W + ' ' + MAP_H);
+        beams.style.zIndex = String((parseInt(core.style.zIndex, 10) || 2) - 1);   // 光束整束在核心後面
+        S.world.appendChild(beams);
+        ORB.beams = beams;
+        ORB.scr = ORB.list.map((w, i) => {
+            const el = document.createElement('div');
+            el.className = 'lstage-orb-scr' + (ORB.still ? ' is-still' : '');
+            el.style.setProperty('--orb-i', i);   // 每片的閃、反光錯開
+            el.innerHTML = '<div class="lstage-orb-hd"><b></b><span></span><i></i></div><img alt="">' +
+                '<span class="lstage-orb-cn a"></span><span class="lstage-orb-cn b"></span><span class="lstage-orb-cn c"></span><span class="lstage-orb-cn d"></span>';
+            el.querySelector('b').textContent = 'W-' + String(i + 1).padStart(2, '0');
+            el.querySelector('.lstage-orb-hd span').textContent = w.name;
+            el.querySelector('img').src = w.src;
+            S.world.appendChild(el);
+            const ln = document.createElementNS(NS, 'line');
+            beams.appendChild(ln);
+            return { el, ln, base: i / n * Math.PI * 2, bobP: 3.6 + (i % 4) * 0.7, bobO: i * 1.7 };
+        });
+    }
+    // 跟核心身上的 CSS 漂浮（lstage-hover）同步：讀那支動畫的時間，算出現在往上飄了幾 px
+    function _orbFloat(core) {
+        const a = core.getAnimations ? core.getAnimations().find(x => x.animationName === 'lstage-hover') : null;
+        if (!a || a.currentTime == null) return 0;
+        const p = (a.currentTime / 1000 % 3.4) / 3.4, e = p < 0.5 ? p * 2 : (1 - p) * 2;
+        return -14 * (e < 0.5 ? 2 * e * e : 1 - Math.pow(-2 * e + 2, 2) / 2);
+    }
+    function _orbPlace(now) {
+        const b = ORB.h.box, core = ORB.h.litEl, still = ORB.still, n = ORB.scr.length;
+        const k = b.w / ORB_CORE_W, cx = b.x + b.w / 2, cy = b.y + b.h * 0.48;
+        const coreZ = parseInt(core.style.zIndex, 10) || 2, fy = still ? 0 : _orbFloat(core);
+        for (let i = 0; i < n; i++) {
+            const s = ORB.scr[i];
+            const t = Math.min(1, Math.max(0, ORB.show * 1.45 - i / n * 0.45));   // 一片接一片展開
+            const r = still ? ORB.show : 1 - Math.pow(1 - t, 3);
+            const a = s.base + ORB.rot, depth = Math.sin(a), spread = 0.18 + 0.82 * r;   // depth：1＝最前面、-1＝最後面
+            const bob = still ? 0 : Math.sin(now / 1000 * Math.PI * 2 / s.bobP + s.bobO) * 5 * k;
+            const x = cx + 272 * k * Math.cos(a) * spread;
+            const y = cy + fy + 80 * k * depth * spread - 14 * k * r + bob;
+            const sc = (0.74 + 0.26 * (depth + 1) / 2) * (0.3 + 0.7 * r) * k;
+            const turn = -Math.cos(a) * 32;   // 轉到兩側時側過去
+            s.el.style.transform = 'translate(' + (x - ORB_W / 2).toFixed(1) + 'px,' + (y - ORB_H / 2).toFixed(1) + 'px) perspective(520px) rotateY(' + turn.toFixed(1) + 'deg) scale(' + sc.toFixed(3) + ')';
+            s.el.style.opacity = (r * (0.5 + 0.45 * (depth + 1) / 2)).toFixed(3);
+            // 前後層只在核心上下 15 以內：轉到前面蓋過核心，但站在底座上、核心前面的人（最近腳在核心底邊下 18）還是蓋在螢幕前面（LAB 用 ±50 會把人蓋掉）
+            s.el.style.zIndex = String(coreZ + Math.round(depth * 15) + (depth >= 0 ? 1 : -1));
+            if (r > 0.02) {
+                s.ln.setAttribute('x1', cx.toFixed(1)); s.ln.setAttribute('y1', (cy + fy + 10 * k).toFixed(1));
+                s.ln.setAttribute('x2', x.toFixed(1)); s.ln.setAttribute('y2', (y + ORB_H * sc / 2 - 4 * k).toFixed(1));
+                s.ln.style.opacity = (r * (0.45 + 0.45 * (depth + 1) / 2)).toFixed(3);
+                s.ln.style.strokeDashoffset = still ? '0' : (-now / 40).toFixed(1);   // 虛線往螢幕那頭流，像資料在傳
+                s.ln.style.display = '';
+            } else s.ln.style.display = 'none';
+        }
+    }
+    function _orbHide() {
+        ORB.scr.forEach(s => { s.el.style.opacity = '0'; s.ln.style.display = 'none'; });
+    }
+    function _orbTick(now) {
+        ORB.raf = 0;
+        if (!ORB.h || !ORB.h.el.isConnected || !ORB.scr.length) return;
+        if (S.edit || _stageHidden()) { ORB.target = 0; ORB.show = 0; _orbHide(); return; }   // 擺設模式、舞台被蓋住：直接收，不在背後空轉
+        const dt = Math.min(0.05, (now - ORB.last) / 1000);
+        ORB.last = now;
+        ORB.show += (ORB.target - ORB.show) * (1 - Math.exp(-dt / (ORB.target ? 0.32 : 0.26)));
+        ORB.rot += dt * Math.PI * 2 / ORB_PERIOD;
+        if (!ORB.target && ORB.show < 0.004) { ORB.show = 0; _orbHide(); return; }   // 收完就停，不留 rAF
+        _orbPlace(now);
+        ORB.raf = requestAnimationFrame(_orbTick);
+    }
+    function _orbKick() {
+        if (!ORB.scr.length) return;
+        if (ORB.still) {   // 靜態：一步到位，不跑 rAF
+            if (ORB.raf) { cancelAnimationFrame(ORB.raf); ORB.raf = 0; }
+            ORB.show = ORB.target;
+            if (ORB.target) _orbPlace(0); else _orbHide();
+            return;
+        }
+        if (!ORB.raf) { ORB.last = performance.now(); ORB.raf = requestAnimationFrame(_orbTick); }
+    }
+    function _orbOpen(h) {
+        clearTimeout(ORB.leaveT);
+        if (ORB.h !== h) { _orbDrop(); ORB.h = h; }
+        if (S.edit || !h.litEl) return;
+        ORB.target = 1;
+        ORB.still = _orbStill();
+        ORB.scr.forEach(s => s.el.classList.toggle('is-still', ORB.still));
+        if (!ORB.list) { _orbLoad(); return; }   // 圖第一次要先拿：拿好了還在滑過／走近就自己展開
+        _orbKick();
+    }
+    function _orbClose(now) {
+        clearTimeout(ORB.leaveT);
+        if (!ORB.h) return;
+        const go = () => { ORB.target = 0; _orbKick(); };
+        if (now) go(); else ORB.leaveT = setTimeout(go, 220);
+    }
+    function _orbDrop() {
+        clearTimeout(ORB.leaveT);
+        if (ORB.raf) cancelAnimationFrame(ORB.raf);
+        ORB.raf = 0;
+        _orbClear();
+        ORB.h = null; ORB.list = null; ORB.target = 0; ORB.show = 0;
+    }
+    function _npcInReach(n) {
+        if (!S.player || !n) return false;
+        if (Math.hypot(n.x - S.player.x, n.y - S.player.y) < (n.talkR || INTERACT_R)) return true;
+        return !!n.talkRect && _distToRect(S.player.x, S.player.y, n.talkRect) < (n.talkPad || 60);
+    }
+
+    // 🧑‍🤝‍🧑 NPC 生成/名冊（愛麗絲/柴郡/瀅瀅駐點、SN名冊雷伊丹、日誌客人池＋訪客頭像掛載）→ 拆到 lobby_npcs.js（走 _b 橋；2026-07-16）
+    function addNpc(cfg) {
+        const a = spawnActor(cfg.src, cfg.x, cfg.y, cfg.h || NPC_H);
+        const keepH = a.h;   // spawnActor 已套 actorScale，別讓 cfg.h(未縮放) 蓋回去
+        const npc = Object.assign(a, cfg, { h: keepH, wanderT: 1500 + Math.random() * 3000, dest: null, defaultSrc: cfg.src });
+        if (cfg.smooth) npc.el.classList.add('lstage-smooth');   // 不是像素圖的小人（衣櫥拍的常客）：縮小時平滑，不要鋸齒
+        if (_skinOf(cfg.key)) npc._skinPending = true;   // 有自訂皮膚→預設圖先藏著，等 _applySkin 換好才顯示(免閃)
+        _applySkin(npc, cfg.key);
+        const tag = document.createElement('div');
+        tag.className = 'lstage-tag'; tag.textContent = cfg.name;
+        S.world.appendChild(tag); npc.tag = tag;
+        const hint = document.createElement('div');
+        hint.className = 'lstage-hint'; hint.style.display = 'none';
+        hint.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
+        hint.addEventListener('click', (e) => { e.stopPropagation(); if (npc.onInteract) { npc.onInteract(npc); return; } startTalk(npc); });
+        S.world.appendChild(hint); npc.hint = hint;
+        S.npcs.push(npc);
+        placeNpcExtras(npc);
+        return npc;
+    }
+    function placeNpcExtras(npc) {
+        const x = Math.round(npc.x), ty = Math.round(npc.y + 8), hy = Math.round(npc.y - npc.h - 6);
+        if (npc._ex === x && npc._ety === ty) return;   // 沒移動就不碰 DOM
+        npc._ex = x; npc._ety = ty;
+        // 名牌、搭話鈕跟著人走：寫 translate 屬性不寫 left/top（同 placeActor：不弄髒版面）；CSS 的 transform 置中照樣疊上去
+        if (!npc._exBase) { npc.tag.style.left = npc.tag.style.top = npc.hint.style.left = npc.hint.style.top = '0px'; npc._exBase = true; }
+        npc.tag.style.translate = x + 'px ' + ty + 'px';
+        npc.hint.style.translate = x + 'px ' + hy + 'px';
+    }
+    function updateNpcs(dt) {
+        S.npcs.forEach(n => {
+            // 🎭 小劇場：凍結當事 NPC 的漫步/跟隨/面向，維持面對面。凍的是走動不是搭話——
+            //    近距檢查照跑，否則玩家走過去搭話泡泡不會亮，愛麗絲/瀅瀅被抓去配對時就等於點不開。
+            //    自己決定下一步的 NPC 例外：他不凍，交給 lobby_decider.js 走過去找對方、面對面站著（09-23 定的）
+            if (n._theaterFrozen && !window.LobbyDecider?.exemptFromFreeze(n)) { _npcNearCheck(n); return; }
+            if (n.facePlayer && S.player) {   // 愛麗絲永遠面向玩家
+                if (n.sheet || n.views) n.dir = S.player.x < n.x ? 1 : 2;
+                else n.flip = S.player.x > n.x;   // 原圖朝左：玩家在右側才鏡像成朝右
+            }
+            if (n.follow && S.player && S.talkTarget !== n) {   // 跟隨優先於 noWander/漫步（客人本是站定，跟隨要能蓋過）；對話中先停不跟
+                const FOLLOW_GAP = 60;
+                // 串成一列：隊首跟玩家、其餘各跟前一個→彼此保持 GAP 不重疊（多角色跟隨）
+                const fi = S.followers.indexOf(n);
+                const lead = fi > 0 ? S.followers[fi - 1] : S.player;
+                const vx = lead.x - n.x, vy = lead.y - n.y, d = Math.hypot(vx, vy);
+                if (d > FOLLOW_GAP) {
+                    const step = Math.min(d - FOLLOW_GAP, 0.34 * dt);   // 略快於漫步以跟上玩家、又不衝過頭
+                    const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
+                    if (!(n.avoidBlocks && blockedPath(n.x, n.y, nx, ny, n.hw))) {
+                        n.x = nx; n.y = ny; n.walking = true;
+                        if (n.sheet) {
+                            n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
+                            n.animT = (n.animT || 0) + dt;
+                            n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                        } else _face(n, vx, vy);   // 單張：往右走才鏡像；三面小人：換面
+                    }
+                } else { n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
+                n.dest = null;
+                placeActor(n); placeNpcExtras(n); _npcNearCheck(n);
+                return;
+            }
+            if (S.talkTarget === n) {   // 💬 對話中：轉頭面向玩家（RPG 感）；走路圖設 dir、單張設 flip
+                n.walking = false;
+                if (S.player) {
+                    const vx = S.player.x - n.x, vy = S.player.y - n.y;
+                    if (n.sheet) { n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0); n.frame = 1; n.animT = 0; }
+                    else _face(n, vx, vy);   // 單張：玩家在右才鏡像；三面小人：轉向玩家那一面
+                }
+                placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return;
+            }
+            if (window.LobbyDecider?.step(n, dt)) return;   // 🎲 自己決定下一步的 NPC（lobby_decider.js；沒載到就照下面站著）
+            if (n.noWander) { n.walking = false; placeActor(n); placeNpcExtras(n); _npcNearCheck(n); return; }
+            n.wanderT -= dt;
+            if (n.wanderT <= 0 && !n.dest) {
+                const R = n.homeRect;
+                n.dest = { x: R.x + Math.random() * R.w, y: R.y + Math.random() * R.h };
+                n.wanderT = 2500 + Math.random() * 5000;
+            }
+            if (n.dest) {
+                const vx = n.dest.x - n.x, vy = n.dest.y - n.y, d = Math.hypot(vx, vy);
+                if (d < 5) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
+                else {
+                    const step = 0.12 * dt;
+                    const nx = n.x + vx / d * step, ny = n.y + vy / d * step;
+                    if (n.avoidBlocks && blockedPath(n.x, n.y, nx, ny, n.hw)) { n.dest = null; n.walking = false; if (n.sheet) { n.frame = 1; n.animT = 0; } }
+                    else {
+                        n.x = nx; n.y = ny;
+                        n.walking = true;
+                        if (n.sheet) {   // 有走路圖的NPC走真幀動畫
+                            n.dir = Math.abs(vx) >= Math.abs(vy) ? (vx < 0 ? 1 : 2) : (vy < 0 ? 3 : 0);
+                            n.animT = (n.animT || 0) + dt;
+                            n.frame = WALK_FRAMES[Math.floor(n.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                        } else _face(n, vx, vy);   // 單張：往右走才鏡像；三面小人：換面
+                    }
+                }
+            }
+            placeActor(n); placeNpcExtras(n);
+            _npcNearCheck(n);
+        });
+    }
+    function _npcNearCheck(n) {
+        const near = _npcInReach(n);
+        // 小劇場的泡泡掛在發起人頭頂正中（lobby_theater.js 的 _pairAnchor）：他的黃色聊天鈕先收起來，兩個才不疊、泡泡不用歪到旁邊
+        const inBubble = !!(S.theater && S.theater.a === n && !S.theater.playing);
+        n.hint.style.display = (near && !S.talkTarget && !inBubble) ? '' : 'none';
+    }
+
+    // ── NPC 各自的輕量對話歷史（localStorage，上限 40 條）──
+    //   cap 提到 40：給一對一記憶壓縮留 headroom（累積到閾值才壓，壓縮失敗時不會立刻擠掉未總結的舊訊息）
+    function getNpcHistory(key) {
+        try { return JSON.parse(localStorage.getItem('lstage_hist_' + key) || '[]'); } catch (e) { return []; }
+    }
+    // NPC 對話存不進去（多半是本機空間滿了）：說一聲，不然使用者不知道 NPC 下次會忘
+    let _npcHistWarnAt = 0;
+    function _npcHistFail(e) {
+        console.warn('[LobbyStage] NPC 對話存檔失敗：', e);
+        if (Date.now() - _npcHistWarnAt < 60000) return;
+        _npcHistWarnAt = Date.now();
+        try { AUI.toastr && AUI.toastr.error('本機儲存空間滿了，這段對話存不下來', '大廳'); } catch (_) {}
+    }
+    function pushNpcHistory(key, msg) {
+        try {
+            const arr = getNpcHistory(key);
+            arr.push(msg);
+            while (arr.length > 40) arr.shift();
+            localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
+        } catch (e) { _npcHistFail(e); }
+    }
+    // 覆寫整條歷史（歷史窗編輯/刪除/回退用）
+    function setNpcHistory(key, arr) {
+        try { localStorage.setItem('lstage_hist_' + key, JSON.stringify(Array.isArray(arr) ? arr : [])); } catch (e) { _npcHistFail(e); }
+    }
+    // 壓縮後裁短：只留最近 keepLast 條，回傳被裁掉的舊訊息（供組 chunk）
+    function truncateNpcHistory(key, keepLast) {
+        try {
+            const arr = getNpcHistory(key);
+            if (arr.length <= keepLast) return [];
+            const dropped = arr.slice(0, arr.length - keepLast);
+            localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr.slice(-keepLast)));
+            return dropped;
+        } catch (e) { _npcHistFail(e); return []; }
+    }
+    function popNpcHistoryTail(key, role) {
+        try {
+            const arr = getNpcHistory(key);
+            if (arr.length && arr[arr.length - 1].role === role) {
+                arr.pop();
+                localStorage.setItem('lstage_hist_' + key, JSON.stringify(arr));
+            }
+        } catch (e) { _npcHistFail(e); }
+    }
+
+    // ── 對話框顯隱＋像素立繪（VN風：平常收起、對話才浮出）──
+    const BUST_KEYS = new Set(['ying', 'alice', 'rabbit', 'zhiwei', 'hatter', 'cheshire']);
+    // 對話時站出來的那張圖（11-25：不用頭像，直接套用立繪，沒立繪就退回小人）：
+    //   有立繪（a.portrait：名冊手繪、裝扮室生的立繪）用立繪；沒有就用他在場上那隻小人（單張圖直接拿，
+    //   走路圖切正面站著那一格），標 .is-doll 縮小擺；都拿不到才用剪影。頭像（自拍、半身）一律不拿來用。
+    function _setTalkImg(p, a) {
+        const put = (src, doll, px) => { p.src = src; p.classList.toggle('is-doll', !!doll); p.classList.toggle('is-px', !!px); };
+        if (a.portrait) return put(a.portrait, false, false);
+        const el = a.el, px = !!(el && !el.classList.contains('lstage-smooth'));
+        if (el && el.tagName === 'IMG' && el.src) return put(el.src, true, px);
+        if (typeof a.defaultSrc === 'string') return put(a.defaultSrc, true, px);
+        const m = el && /url\(["']?(.+?)["']?\)/.exec(el.style.backgroundImage || '');
+        put(ASSET.mcM, true, false);   // 走路圖還在切：先放剪影，切好換上
+        if (!m) return;
+        const im = new Image();
+        if (!m[1].startsWith('data:')) im.crossOrigin = 'anonymous';
+        im.onload = () => {
+            try {
+                const w = Math.floor(im.naturalWidth / 3), h = Math.floor(im.naturalHeight / 4);   // 3×4：中間那欄＝站著、第一列＝面向前
+                const c = document.createElement('canvas'); c.width = w; c.height = h;
+                c.getContext('2d').drawImage(im, w, 0, w, h, 0, 0, w, h);
+                if (p.isConnected && S.talkTarget === a) put(c.toDataURL(), true, px);
+            } catch (e) {}
+        };
+        im.src = m[1];
+    }
+    function showDialog() {
+        const left = document.querySelector('.lobby-left');
+        if (!left || !S.active) return;
+        left.classList.remove('lstage-dlg-hidden');
+        // 立繪=說話對象的像素小人放大版（NPC=對方、跟瀅瀅聊=瀅瀅）
+        let p = left.querySelector('.lstage-talk-portrait');
+        if (!p) {
+            p = document.createElement('img');
+            p.className = 'lstage-talk-portrait';
+            left.appendChild(p);
+        }
+        const t = S.talkTarget;
+        if (t) _setTalkImg(p, t);
+        else { p.src = S.scene === 'hall' ? ASSET.alice : (S.scene === 'room404' ? ASSET.cheshire : ASSET.ying); p.classList.remove('is-doll', 'is-px'); }
+        // 管理員（瀅瀅、愛麗絲、白兔、紫薇、帽匠、柴郡）只露上半身：全身圖放大、腳收在對話框底下（11-25 改，不用全身）。
+        //   沒有對象＝跟這個場景的管理員講話，一樣算
+        p.classList.toggle('is-bust', !t || BUST_KEYS.has(t.key));
+        // 11-25 起沒有「離開」鈕：點空地就結束對話（跟立繪版一樣）
+        const box = document.getElementById('iris-dialogue-box');
+        // 📱 收起鈕：手機上停靠面板(書咖/交易所/世界門)跟對話搶空間，面板會被擠到看不清。
+        //    這顆只收對話、【不】結束對話，面板留著且會自己長高；要講話再點 💬 浮鈕叫回來。
+        //    跟點空地不同：點空地走 endTalk()，連面板一起收掉。只在手機＋面板開著時由 CSS 顯示。
+        if (box && !box.querySelector('.lstage-dlg-fold')) {
+            const fold = document.createElement('button');
+            fold.className = 'lstage-dlg-fold';
+            fold.title = '收起對話（面板留著）';
+            fold.innerHTML = '<i class="fa-solid fa-chevron-down"></i>';
+            fold.addEventListener('click', (e) => { e.stopPropagation(); left.classList.add('lstage-dlg-hidden'); });
+            box.appendChild(fold);
+        }
+    }
+    function hideDialog() {
+        const left = document.querySelector('.lobby-left');
+        if (!left) return;
+        left.classList.add('lstage-dlg-hidden');
+        left.querySelector('.lstage-talk-portrait')?.remove();
+        // 戳戳反應框一起收：開聊招呼走反應框（不受 lstage-dlg-hidden 管，漫遊戳戳要能冒泡）
+        // → 按 ✖ 關對話時它會自己留到計時器到期（最長15s）＝「背景關不掉」。這裡直接收掉。
+        const rb = document.getElementById('iris-reaction-box');
+        if (rb) rb.style.display = 'none';
+    }
+
+    // ── 停靠面板型 NPC：走近他們是為了「講話」或「辦事」，桌機兩件事並排放得下，手機放不下 ──
+    // win＝這個面板的浮窗選擇器。有寫的是右側停靠窗（左邊空著），面板態把立繪留下來，
+    //   跟占卜／造物工坊同一套長相。
+    const PANEL_OF = {
+        // 11-20：管理員走近只剩對話和劇場，面板改從家具開（瀅瀅＝菜單、愛麗絲同理，其他人也一樣；柴郡另見下面）
+        //   → pick:false＝走近他只剩對話（在小劇場裡多一顆偷聽）；面板改從家具開（愛麗絲＝大廳核心、瀅瀅＝菜單立牌、白兔＝交易所櫃檯），那幾個入口照樣讀這張表
+        alice:  { pick: false, label: '世界門',   icon: 'fa-globe',   win: '.wg-win',     open: () => window.OS_WORLDGATE?.openGate?.(), close: () => window.OS_WORLDGATE?.closeGate?.() },
+        rabbit: { pick: false, label: '交易所',   icon: 'fa-house',   win: '.os-pt-dock', open: () => window.OS_PT?.openExchange?.() },
+        ying:   { pick: false, label: '書咖櫃檯', icon: 'fa-mug-hot', win: '.oc-win',     open: () => window.OS_CAFE?.openWorkshop?.(), close: () => window.OS_CAFE?.closeWorkshop?.(), when: () => S.scene === 'cafe' },
+        // 🎬 柴郡＝混沌片場（他是那台導演機的主人）。窗位與規矩照世界門那扇：右側停靠、左邊留立繪。
+        //    他身上原本掛的是黑市，2026-09-02 黑市改點 404 房的圓桌，這個位置讓給片場。
+        //    11-20 搬到大電腦 → pick:false，走近柴郡只剩對話；片場改點 404 房右上那台弧形工作台（大電腦）
+        cheshire: { pick: false, label: '混沌片場', icon: 'fa-clapperboard', win: '#chaos-modal-root.chaos-dock',
+                    open: () => window.OS_CHAOS?.openModal?.() },
+        // 🔮 紫薇沒有面板鈕：走近她＝純聊天，占卜要點桌子（2026-08-21 定案）。
+        //    兩件事分開才不會「面板裡在解牌、底下對話框也在講話」。
+    };
+    function _panelFor(npc) {
+        const p = npc && PANEL_OF[npc.key];
+        if (!p || (p.when && !p.when())) return null;
+        return p;
+    }
+    // 斷點跟 lobby.css 的 @media (max-width:760px) 對齊：那份版型成立的地方才需要岔路
+    function _narrowScreen() {
+        try { return !!(window.matchMedia && window.matchMedia('(max-width:760px)').matches); } catch (e) { return false; }
+    }
+
+    // 📱 岔路：手機上這兩件事會互相擠，先問要哪一個，選了就整個畫面給它。
+    //    面板那條沿用既有的「對話收起」版型(lstage-dlg-hidden)——那個狀態本來就是為了讓面板長高吃滿螢幕，
+    //    不另外做一套全屏樣式。要邊看面板邊講話仍然按 💬 浮鈕，跟原本一樣。
+    // 10-13：管理員的對話選項以前總在底部、不好看；點空白處應該就是取消，不必點開
+    //   → 卡片改成浮在那位頭上（兩顆小鈕＋指向他的小尖角），底下鋪一層看不見的墊子：點畫面上其他任何地方＝取消（等於走開）。
+    //     以前靠「點地板」那層取消，但書咖地板擺滿桌椅，點下去其實點到家具，什麼都沒發生。
+    // 🎭 11-20：小劇場泡泡跟黃色聊天鈕分開兩顆、泡泡歪到旁邊不好看，改用這張卡
+    //   → 正在小劇場裡的人也走這張卡：多一顆「偷聽」（panel 可以沒有；有面板的管理員就是三顆）
+    function _showTalkPick(npc, panel, peek) {
+        _closeTalkPick();
+        const left = document.querySelector('.lobby-left');
+        if (!left) return;
+        // 岔路期間畫面上只留岔路：對話框與輸入列走 lstage-dlg-hidden，
+        // 🚨反應框(戳戳/放置語音)不歸它管、會直接留在原地跟岔路疊成兩張卡 → 照 hideDialog 那樣收掉。
+        left.classList.add('lstage-dlg-hidden', 'lstage-picking');
+        const rb = document.getElementById('iris-reaction-box');
+        if (rb) rb.style.display = 'none';
+        const scrim = document.createElement('div');
+        scrim.className = 'lstage-pick-scrim';
+        scrim.addEventListener('click', (e) => { e.stopPropagation(); endTalk(); });   // 點旁邊＝不找他了
+        left.appendChild(scrim);
+        S.pickScrim = scrim;
+        const box = document.createElement('div');
+        box.className = 'lstage-pick lstage-pick-float';
+        box.innerHTML =
+            '<div class="lstage-pick-row">' +
+              '<button class="lstage-pick-btn" data-go="talk"><i class="fa-solid fa-comment-dots"></i><span>對話</span></button>' +
+              (panel ? '<button class="lstage-pick-btn" data-go="panel"><i class="fa-solid ' + panel.icon + '"></i><span>' + panel.label + '</span></button>' : '') +
+              (peek ? '<button class="lstage-pick-btn" data-go="peek"><i class="fa-solid fa-ear-listen"></i><span>偷聽</span></button>' : '') +
+            '</div>';
+        // 岔路掛在 .lobby-left 底下、跟 S.root 是兄弟 → 點它不會冒泡到 .lstage-click(那層會判成點空地→結束對話)
+        box.addEventListener('click', (e) => {
+            const b = e.target.closest('.lstage-pick-btn');
+            if (!b) return;
+            _closeTalkPick();
+            // 偷聽：不找他講話了（收掉這次開聊），演他們那場（會叫模型，跟以前點泡泡偷聽一樣）
+            if (b.dataset.go === 'peek') { endTalk(); window.LobbyTheater?.present?.(); return; }
+            // 跟小劇場裡的人講話＝打斷他們那場（收泡泡、解凍）
+            if (S.theater && (npc === S.theater.a || npc === S.theater.b)) window.LobbyTheater?.end();
+            if (b.dataset.go === 'talk') { _enterTalk(npc); return; }
+            // 🧍 桌機的面板態把人留著：右側停靠窗只佔右半，左邊空著本來就是給立繪站的
+            //    （同占卜／造物工坊）。手機的窗吃滿寬，留了整張臉會蓋住面板 → 維持沒有人。
+            if (panel.win && !_narrowScreen()) _showPortraitOnly(npc);
+            try { panel.open(); } catch (err) { console.warn('[LobbyStage] 開面板失敗', err); }
+        });
+        left.appendChild(box);
+        S.pickEl = box;
+        S.pickNpc = npc;
+        _placeTalkPick();
+        if (!S._pickOnResize) { S._pickOnResize = () => _placeTalkPick(); window.addEventListener('resize', S._pickOnResize); }
+    }
+    // 卡片擺在那位頭頂上方、尖角對準他；頭上放不下（人站在畫面最上面）就改放腳下。位置用 --pick-x／--pick-y／--pick-tail 給 CSS
+    function _placeTalkPick() {
+        const box = S.pickEl, npc = S.pickNpc;
+        const left = document.querySelector('.lobby-left');
+        if (!box || !npc || !npc.el || !left) return;
+        const L = left.getBoundingClientRect(), r = npc.el.getBoundingClientRect();
+        // 每一格都會叫：位置沒變就不動，免得每格都重排
+        const sig = Math.round(r.left - L.left) + ',' + Math.round(r.top - L.top) + ',' + Math.round(r.width) + ',' + Math.round(L.width) + ',' + Math.round(L.height);
+        if (box._sig === sig) return;
+        box._sig = sig;
+        const w = box.offsetWidth, h = box.offsetHeight, gap = 12;
+        const cx = r.left + r.width / 2 - L.left;
+        let x = Math.max(8, Math.min(cx - w / 2, L.width - w - 8));
+        let y = r.top - L.top - h - gap;
+        const below = y < 8;
+        if (below) y = Math.min(r.bottom - L.top + gap, L.height - h - 8);
+        box.classList.toggle('lstage-pick-below', below);
+        box.style.setProperty('--pick-x', Math.round(x) + 'px');
+        box.style.setProperty('--pick-y', Math.round(y) + 'px');
+        box.style.setProperty('--pick-tail', Math.round(Math.max(18, Math.min(cx - x, w - 18))) + 'px');
+    }
+    function _closeTalkPick() {
+        S.pickEl?.remove(); S.pickEl = null; S.pickNpc = null;
+        S.pickScrim?.remove(); S.pickScrim = null;
+        if (S._pickOnResize) { window.removeEventListener('resize', S._pickOnResize); S._pickOnResize = null; }
+        document.querySelector('.lobby-left')?.classList.remove('lstage-picking');
+    }
+
+    // 對話本體（對話管線仍走 void_terminal.sendIrisMessage）
+    function _enterTalk(npc) {
+        showDialog();
+        // 瀅瀅/柴郡=對話目標，但管線走各自原生軌道（void_terminal 對這兩位不走 NPC 分支）
+        if (npc.key === 'ying' || npc.key === 'cheshire') {
+            // 🚨 10-13：跟丹的聊天跑到瀅瀅這裡、對話框互相滲透——招呼那句是另一個小框，
+            //   主對話框沒人重寫，留著上一位（丹）的最後一句，名牌卻換成瀅瀅。先清殘留（換成她自己的最後一句）再招呼
+            window.VoidTerminal?.primeStageDialog?.(npc);
+            window.dispatchEvent(new CustomEvent('lstage-poke-ying'));   // 開聊招呼=戳戳池抽一句(404房自動用柴郡池)
+            return;
+        }
+        window.VoidTerminal?.primeStageDialog?.(npc);   // 清掉殘留(瀅瀅預設/上一位)、改顯示這位自己的最後一句
+    }
+
+    // ── 對話目標 ──
+    function startTalk(npc) {
+        if (S.edit) return;
+        _closeWorkshopPanel();   // 🎩 同上：開聊＝收掉造物工坊面板
+        // 🎭 找的是小劇場裡的人：先問「對話／偷聽」（同管理員那張卡），選了對話才收掉配對（清泡泡＋解凍）；跟旁人聊不打斷等待中的小劇場
+        const inTheater = !!(S.theater && !S.theater.playing && (npc === S.theater.a || npc === S.theater.b));
+        _closeStorePanel();   // 🏪 同上：開聊＝收掉黑市（黑市改掛在圓桌上，不再跟著柴郡走）
+        S.talkTarget = npc;
+        S.npcs.forEach(n => { n.hint.style.display = 'none'; });
+        const tagSpan = document.querySelector('#iris-name-tag span');
+        const input = document.getElementById('iris-input');
+        if (tagSpan) tagSpan.textContent = npc.name;
+        if (input) input.placeholder = '和' + npc.name + '聊聊…（點空地結束）';
+
+        // 🚪 兩個口子：走近有面板的管理員（愛麗絲／瀅瀅／白兔／柴郡）先問要哪一件事。
+        //    桌機原本是「對話框與面板同時浮出來」——同一個人一邊在面板裡辦事、一邊在底下對話框
+        //    講話，跟占卜／造物工坊當初被否掉的是同一種割裂（2026-09-01 定：桌機跟隨手機）。
+        //    要邊看面板邊講話仍然按 💬 浮鈕，跟手機一樣。
+        const panel0 = _panelFor(npc), panel = panel0 && panel0.pick !== false ? panel0 : null;   // 面板搬去家具的管理員：走近不再問
+        if (panel || inTheater) { _showTalkPick(npc, panel, inTheater); return; }
+        _enterTalk(npc);
+    }
+    function endTalk() {
+        _closeTalkPick();   // 還停在岔路就走開 → 岔路跟著收
+        if (!S.talkTarget) return;
+        const t = S.talkTarget;
+        S.talkTarget = null;
+        // 對話結束→NPC 轉回正面（朝下）；facePlayer 的(愛麗絲)下一幀會自己再面向玩家，不影響
+        if (t) {
+            if (t.sheet) { t.dir = 0; t.frame = 1; t.animT = 0; } else { t.flip = false; if (t.views) t.dir = 0; }
+            if (t.el) placeActor(t);
+        }
+        _applySceneHeader();
+        hideDialog();
+        try { window.OS_PT?.closeExchange?.(); } catch (e) {}   // 離開白兔→收起買房面板
+        try { window.OS_CAFE?.closeWorkshop?.(); } catch (e) {}   // 離開瀅瀅→收起書咖櫃檯
+        try { window.OS_WORLDGATE?.closeGate?.(); } catch (e) {}   // 離開愛麗絲→收起世界門
+        try { window.OS_WORLDGATE?.closeMeet?.(); } catch (e) {}   // 離開旅人→收起組隊卡(身分卡不動,右鍵開的可獨立看)
+        try { window.OS_CHAOS?.closeModal?.(); } catch (e) {}   // 離開柴郡→收起混沌片場
+        // 🏪 黑市不在這裡收：它已經不是柴郡的面板，改掛在圓桌熱點上，關窗走 _winClosers（離場/開別的窗都會收）
+    }
+    // 場景預設門面：書咖=瀅瀅、大廳=愛麗絲、404=柴郡（場景牌/名牌/輸入框提示跟著場景走）
+    const SCENE_HEADER = {
+        cafe:    { name: '瀅瀅',   badge: '視差書咖', ph: '跟瀅瀅說說想要什麼故事…' },
+        hall:    { name: '愛麗絲', badge: '純白大廳', ph: '與愛麗絲對話、點中央的核心開世界門，或走向大門出去街區...' },
+        room404: { name: '柴郡',   badge: '404號房',  ph: '對404號房的看守者說話，或走底部出口離開...' },
+        city:    { name: '街區',   badge: '視差城市', ph: '在街區走走、點路人聊聊，或走進書咖／純白大廳...' },
+        exchange:{ name: '白兔先生', badge: '交易所', ph: '走近白兔先生，兌換屬於你的一席之地...' },
+        tarot:   { name: '紫薇老師', badge: '記憶吧檯', ph: '和紫薇老師聊聊，或點吧檯入座...' },
+        aptlobby:{ name: '1樓', badge: '公寓 1樓大廳', ph: '走到電梯上樓，點信箱上面的公告板看房產手帳，或從前面樓梯走出去...' },
+        workshop:{ name: '帽匠',   badge: '奇想工坊', ph: '和帽匠聊聊，或點中央的造物儀開始做東西...' },
+    };
+    function _applySceneHeader() {
+        // 房間：抬頭跟著是誰的房間走（進門時給），不是固定文案
+        const H = (SCENES[S.scene] && SCENES[S.scene].dynamic && S.dyn && S.dyn.header)
+            || (S.scene === 'aptcorr' && S.aptHeader)
+            || SCENE_HEADER[S.scene] || SCENE_HEADER.cafe;
+        const tagSpan = document.querySelector('#iris-name-tag span');
+        if (tagSpan) tagSpan.textContent = H.name;
+        if (window.VoidTerminal?._bridge?.setSceneBadge) window.VoidTerminal._bridge.setSceneBadge(H.badge);
+        const input = document.getElementById('iris-input');
+        if (input) input.placeholder = H.ph;
+    }
+    // 場景預設對話對象：大廳裡沒點人直接打字＝跟愛麗絲說話（書咖=null→走瀅瀅原軌道）
+    function getDefaultTarget() {
+        return S.scene === 'hall' ? (S.npcs.find(n => n.key === 'alice') || null) : null;
+    }
+
+    // ── 鏡頭 ─────────────────────────────────────────────
+    // 容器尺寸只在 fitCamera 讀（resize/ResizeObserver 觸發），RAF 內用快取——
+    // 每幀讀 clientWidth 是強制同步重排點，桌機聊天 DOM 肥時整條重排被拖著跑=走路卡卡的主因。
+    function fitCamera() {
+        if (!S.root) return;
+        const vw = S.root.clientWidth, vh = S.root.clientHeight;
+        if (!vw || !vh) return;
+        S._vw = vw; S._vh = vh;
+        // 建構模式：contain*0.9(留黑邊好抓邊角)；靜態點擊地圖：contain(整張置中看完)；一般遊玩：cover 填滿螢幕跟人跑
+        const SC = SCENES[S.scene];
+        S.scale = S.edit ? Math.min(vw / MAP_W, vh / MAP_H) * 0.9 * (S.edit.zoom || 1)   // 擺設模式：滾輪縮放(zoom≥1 放大看細節)
+            : (SC && SC.staticMap) ? Math.min(vw / MAP_W, vh / MAP_H)
+            : Math.max(vw / MAP_W, vh / MAP_H);
+        S._camX = S._camY = null;   // 縮放變了→強制重寫 transform（applyCamera 有快取）
+        applyCamera();
+        // 🗺️ 地圖場景小人跟鏡頭脫鉤：cover 縮放一變(resize/旋轉/全屏)就把固定螢幕尺寸重算一次
+        if (SCENES[S.scene] && SCENES[S.scene].outdoor) applyActorScale();
+    }
+    function applyCamera() {
+        if (!S.root) return;
+        const vw = S._vw, vh = S._vh;
+        if (!vw || !vh) return;
+        const focus = S.edit ? S.edit.cam : (S.player ? { x: S.player.x, y: S.player.y } : { x: MAP_W / 2, y: MAP_H / 2 });
+        // 底部對話框會蓋住下緣 → 跟隨模式把焦點擺在畫面偏上(38%)，人不會躲進對話框後面
+        const focusRatio = S.edit ? 0.5 : 0.38;
+        let cx = focus.x * S.scale - vw / 2, cy = focus.y * S.scale - vh * focusRatio;
+        const rangeX = MAP_W * S.scale - vw, rangeY = MAP_H * S.scale - vh;
+        if (SCENES[S.scene] && SCENES[S.scene].staticMap) {
+            cx = rangeX / 2; cy = rangeY / 2;   // 靜態地圖：整張置中（contain 時 range 為負→自動 letterbox 置中）
+        } else if (S.edit) {
+            // 建構模式：允許超出邊界平移（看到外圈黑邊、把被面板擋住的角落拖出來）
+            const overX = vw * 1.2, overY = vh * 1.2;
+            cx = Math.max(Math.min(0, rangeX) - overX, Math.min(Math.max(0, rangeX) + overX, cx));
+            cy = Math.max(Math.min(0, rangeY) - overY, Math.min(Math.max(0, rangeY) + overY, cy));
+        } else {
+            cx = Math.max(0, Math.min(rangeX, cx));
+            cy = Math.max(0, Math.min(rangeY, cy));
+        }
+        if (S._camX === cx && S._camY === cy) return;   // 鏡頭沒動就不重寫 transform
+        S._camX = cx; S._camY = cy;
+        S.world.style.transform = 'translate(' + (-cx) + 'px,' + (-cy) + 'px) scale(' + S.scale + ')';
+    }
+
+    // 舞台看不見就別燒 CPU：VN 劇情/閱讀器全螢幕蓋著、大廳分頁被切走、瀏覽器分頁背景化
+    // → 60fps 迴圈降成每 500ms 探一次「能醒了嗎」，不跟 VN 的打字機/生圖/語音搶主執行緒。
+    // 🌱 全螢幕 app（後院、故事日誌、房產…走 launchGameApp／showOsApp 開的那一格）蓋在大廳上
+    //    那一格是 fixed，offsetParent 永遠是 null，要用 getClientRects
+    // 這一下按鍵是不是在打字：輸入框、下拉選單、可以直接打字的編輯器（contenteditable）都算；shadow DOM 裡的也看得到
+    function _keyTyping(e) {
+        const ed = (x) => !!x && x.nodeType === 1 && (/^(input|textarea|select)$/i.test(x.tagName) || x.isContentEditable);
+        const t = (e && e.composedPath && e.composedPath()[0]) || (e && e.target);
+        return ed(t) || ed(document.activeElement);
+    }
+    function _appCovering() {
+        const appPanel = document.getElementById('aurelia-panel-container');
+        return !!(appPanel && appPanel.style.display !== 'none' && appPanel.getClientRects().length && appPanel.querySelector('#aurelia-iframe-container > *'));
+    }
+    // 下面那幾個讀 offsetParent／getClientRects 的檢查會強迫瀏覽器當場重排（前一格有人改過樣式的話），
+    //   每格都問＝每格多一次同步重排（10-20 卡頓量測：酒館聊天 DOM 肥時一格 2ms 上下）→ 結果留 250ms，便宜的檢查照每格做
+    let _hidAt = -1e9, _hidVal = false;
+    function _stageHidden() {
+        if (document.hidden) return true;
+        if (!S.root || !S.root.isConnected) return true;
+        const now = performance.now();
+        if (now - _hidAt < 250) return _hidVal;
+        _hidAt = now; _hidVal = _stageHiddenNow();
+        return _hidVal;
+    }
+    function _stageHiddenNow() {
+        try {
+            // app 蓋著時大廳也睡：NPC 在後面照走的話，每一格都在改樣式，酒館聊天 DOM 肥時整頁重排、前面的 app 跟著卡
+            if (_appCovering()) return true;
+            if (S.root.offsetParent === null) return true;   // 大廳分頁 display:none（切去其他 tab）
+            const vn = document.getElementById('aurelia-vn-panel');
+            if (vn && vn.offsetParent !== null) return true;   // VN 劇情面板開著（全螢幕蓋住舞台）
+            const rd = document.getElementById('vn-reader-sa');
+            if (rd && rd.offsetParent !== null) return true;   // VN 閱讀器同理
+        } catch (e) {}
+        return false;
+    }
+    // ── 🌦 天氣層：小雨/小雪 ──────────────────────────────
+    //    一張 canvas 蓋在場景上(螢幕座標)+百來顆粒子+共用主 tick(不另開迴圈;台面藏起來時 tick 睡=天氣自動停)。
+    //    只在 outdoor 場景下；擺設模式收掉(別干擾編輯)。
+    //    模式存 localStorage lobby_weather_v1：auto(進場擲骰 晴50/雨25/雪25)/clear/rain/snow；大廳設置可選。
+    let _wx = null;         // { cv, ctx, w, h, drops, mode }
+    let _wxSetting = null;  // 設定快取（設置窗改的時候直接改這個,免得每幀讀 localStorage）
+    function _weatherMode() {
+        if (_wxSetting == null) { try { _wxSetting = localStorage.getItem('lobby_weather_v1') || 'auto'; } catch (e) { _wxSetting = 'auto'; } }
+        if (_wxSetting !== 'auto') return _wxSetting;
+        if (S._wxRoll == null) S._wxRoll = Math.random();   // 進場擲一次(unmount 清)
+        return S._wxRoll < 0.5 ? 'clear' : S._wxRoll < 0.75 ? 'rain' : 'snow';
+    }
+    function _wxDrop(mode, w, h, anywhere) {
+        if (mode === 'snow') return {
+            x: Math.random() * (w + 60) - 30,
+            y: anywhere ? Math.random() * h : -12 - Math.random() * 30,
+            r: 1 + Math.random() * 1.6,           // 雪片半徑
+            spd: 0.05 + Math.random() * 0.07,     // 慢飄
+            phase: Math.random() * 1000,          // 左右搖擺相位
+        };
+        return {
+            x: Math.random() * (w + 80) - 40,
+            y: anywhere ? Math.random() * h : -30 - Math.random() * 40,
+            len: 9 + Math.random() * 8,          // 雨絲長
+            spd: 0.5 + Math.random() * 0.35,     // px/ms
+            drift: 0.05 + Math.random() * 0.05,  // 微斜
+        };
+    }
+    function _weatherTick(dt) {
+        const mode = (S.active && !S.edit && SCENES[S.scene] && SCENES[S.scene].outdoor) ? _weatherMode() : 'clear';
+        if (mode === 'clear') { if (_wx) { _wx.cv.remove(); _wx = null; } return; }
+        if (_wx && _wx.mode !== mode) { _wx.cv.remove(); _wx = null; }   // 換天氣→重鋪
+        if (!_wx) {
+            const cv = document.createElement('canvas');
+            cv.className = 'lstage-weather ' + mode;   // rain=陰天暗罩 / snow=雪天冷霧,見 CSS
+            S.root.appendChild(cv);
+            _wx = { cv, ctx: cv.getContext('2d'), w: 0, h: 0, drops: [], mode };
+        }
+        // 🚨 量尺寸別每幀來:getBoundingClientRect=版面讀取,混在每幀寫入裡會強迫重排(效能審計老病);~1秒查一次夠了
+        _wx.sizeTick = (_wx.sizeTick || 0) + 1;
+        let w = _wx.w, h = _wx.h;
+        if (!_wx.w || _wx.sizeTick % 60 === 1) {
+            const rc = S.root.getBoundingClientRect();
+            w = Math.max(1, Math.round(rc.width)); h = Math.max(1, Math.round(rc.height));
+        }
+        if (_wx.w !== w || _wx.h !== h) {   // 尺寸變了(轉向/縮放)→重鋪畫布+按面積配密度(封頂:雨150/雪120)
+            _wx.w = _wx.cv.width = w; _wx.h = _wx.cv.height = h;
+            const n = mode === 'snow' ? Math.min(120, Math.round(w * h / 11000)) : Math.min(150, Math.round(w * h / 9000));
+            _wx.drops = Array.from({ length: n }, () => _wxDrop(mode, w, h, true));
+        }
+        const { ctx, drops } = _wx;
+        ctx.clearRect(0, 0, w, h);
+        if (mode === 'rain') {
+            ctx.strokeStyle = 'rgba(205,222,255,.35)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for (const d of drops) {
+                d.y += d.spd * dt; d.x += d.drift * dt;
+                if (d.y > h + 20) Object.assign(d, _wxDrop('rain', w, h, false));
+                ctx.moveTo(d.x, d.y);
+                ctx.lineTo(d.x - d.drift * 22, d.y - d.len);
+            }
+            ctx.stroke();
+        } else {   // snow：白點慢飄+左右搖擺
+            ctx.fillStyle = 'rgba(255,255,255,.8)';
+            for (const d of drops) {
+                d.y += d.spd * dt;
+                d.x += Math.sin((d.y + d.phase) / 42) * 0.028 * dt;
+                if (d.y > h + 8) Object.assign(d, _wxDrop('snow', w, h, false));
+                ctx.beginPath(); ctx.arc(d.x, d.y, d.r, 0, 6.2832); ctx.fill();
+            }
+        }
+    }
+    function tick(now) {
+        if (_stageHidden()) {
+            S.raf = null;
+            S.sleepT = setTimeout(() => {
+                if (!S.active) return;
+                S.last = performance.now();
+                S.raf = requestAnimationFrame(tick);
+            }, 500);
+            return;
+        }
+        const dt = Math.min(50, now - S.last); S.last = now;
+        update(dt);
+        _weatherTick(dt);
+        if (S.pickEl) _placeTalkPick();   // 選擇卡跟著那位：鏡頭還在移（開場對準玩家、視窗變大小）時卡片才不會留在原地
+        S.raf = requestAnimationFrame(tick);
+    }
+    function update(dt) {
+        if (S.edit) { applyCamera(); return; }   // 擺設模式凍結移動/漫步
+        const p = S.player;
+        if (p && !S.talkTarget && !S.transitioning) {   // 過場期間凍結移動（防搖桿殘留方向在換場瞬間繼續推）
+            let dx = 0, dy = 0;
+            if (S.keys['arrowleft'] || S.keys['a']) dx -= 1;
+            if (S.keys['arrowright'] || S.keys['d']) dx += 1;
+            if (S.keys['arrowup'] || S.keys['w']) dy -= 1;
+            if (S.keys['arrowdown'] || S.keys['s']) dy += 1;
+            if (S.joy && (S.joy.x || S.joy.y)) { dx = S.joy.x; dy = S.joy.y; }   // 🕹️ 虛擬搖桿（手機）：方向覆蓋鍵盤/點擊
+            let stepMax = Infinity, nearDest = false;
+            if (dx || dy) p.dest = null;
+            else if (p.dest) {
+                const vx = p.dest.x - p.x, vy = p.dest.y - p.y, d = Math.hypot(vx, vy);
+                if (d < 6) p.dest = null;
+                else {
+                    // 🌀 點到走不到的地方（家具腳邊、牆角）：沿著擋路的東西左滑右滑、一直沒更靠近，面向就跟著轉個不停
+                    //   （11-20：點到一個地方，小人就一直在轉）→ 0.6 秒內沒有再靠近 3px 以上就當作走到了、停下來
+                    const now = performance.now();
+                    if (p._destRef !== p.dest) { p._destRef = p.dest; p._destBest = d; p._destT = now; }
+                    else if (d < p._destBest - 3) { p._destBest = d; p._destT = now; }
+                    if (now - p._destT > 600) p.dest = null;
+                    else {
+                        dx = vx / d; dy = vy / d;
+                        // 🎯 最後一步不跨過頭（11-24：點擊走路還是會在目的地轉來轉去）：一步 0.33px／毫秒，畫面一卡一步就 16px，
+                        //   比「到了」的範圍（6px）大，會在目的地前後來回跨、左右一直換面，直到上面 0.6 秒那條才停。現在最多走到目的地為止。
+                        stepMax = d;
+                        nearDest = d < 24;   // 快到了：面向不再跟著換（斜著走最後幾步，橫直差不多長，誰長一點就面向誰，會一直換）
+                    }
+                }
+            }
+            const len = Math.hypot(dx, dy);
+            if (len > 0) {
+                // 🧈 牆滑+轉角助推：被擋自動沿牆/繞角滑（朝目的地分量恆正→點擊移動不會繞圈）；完全頂死平牆才停
+                if (!_slideMove(p, dx / len, dy / len, Math.min(PLAYER_SPEED * dt, stepMax))) p.dest = null;
+                p.walking = true;
+                if (p.sheet) {
+                    // 方向列：0下/1左/2右/3上（主軸決定朝向），幀序 0,1,2,1
+                    //   橫直差不多長（差不到兩成）時照舊面向，不來回換；快到目的地也不換
+                    const ax = Math.abs(dx), ay = Math.abs(dy), keep = p.dir != null && (nearDest || Math.abs(ax - ay) < 0.2 * Math.max(ax, ay));
+                    const want = ax >= ay ? (dx < 0 ? 1 : 2) : (dy < 0 ? 3 : 0);
+                    const sameAxis = (want === 1 || want === 2) === (p.dir === 1 || p.dir === 2);
+                    p.dir = keep && !(sameAxis && want !== p.dir && !nearDest) ? p.dir : want;
+                    p.animT = (p.animT || 0) + dt;
+                    p.frame = WALK_FRAMES[Math.floor(p.animT / WALK_FRAME_MS) % WALK_FRAMES.length];
+                } else if (!nearDest) _face(p, dx, dy);   // 單張：往右走才鏡像；三面小人：換面（快到了不換，同上）
+            } else {
+                p.walking = false;
+                if (p.sheet) { p.frame = 1; p.animT = 0; }   // 立定=中幀
+            }
+            placeActor(p);
+            _updateSeeThrough();   // 👻 被建築蓋住→開圓形透視窗
+            // 🚪 過門判定：落地後必須先「走出」觸發區一次，門才重新武裝（防落點在門區內乒乓轉場）
+            if (!S.transitioning) {
+                // 🏘 帶 plot 的門＝那塊地上的房子，房子還沒蓋就沒有門可以進
+                const door = CFG.doors.find(D =>
+                    p.x > D.x && p.x < D.x + D.w && p.y > D.y && p.y < D.y + D.h
+                    && (!D.plot || _plotOccupied(D.plot)));
+                if (door) {
+                    if (S.doorArm && performance.now() > S.doorCd) {
+                        if (door.restore) {   // 404出口：走系統還原流程(void_terminal 收事件跑 restoreLobby)
+                            S.doorArm = false;
+                            S.doorCd = performance.now() + 2000;
+                            window.dispatchEvent(new CustomEvent('lstage-restore-lobby'));
+                        } else if (door.panel) {   // 面板型門（交易所…）：彈面板、不切場景；踏出後才重新武裝
+                            S.doorArm = false;
+                            S.doorCd = performance.now() + 1500;
+                            // detail 帶整扇門：同一個 panel 型別可以有好幾扇（出租房四棟共用 'rental'，靠 door.plot 分辨是哪一戶）
+                            window.dispatchEvent(new CustomEvent('lstage-open-' + door.panel, { detail: { door: door } }));
+                        } else if (door.to === 'city' && _cityLocked() && S.scene === 'tarot') {
+                            // 🔒 廣場鎖上：走出占卜小屋不能落在進不去的廣場→回進門前待的場景（同房間的 roomFrom）
+                            goScene(S.tarotFrom || 'hall');
+                        } else if (door.to === 'city' && _cityLocked() && S.scene === 'workshop') {
+                            goScene(S.workshopFrom || 'hall');   // 🔒 同上：走出帽匠工坊
+                        } else if (door.to === 'city' && _cityLocked() && S.scene === 'aptlobby') {
+                            goScene(S.aptFrom || 'hall');   // 🔒 同上：走出公寓大樓
+                        } else goScene(door.to, door.spawn);
+                    }
+                } else S.doorArm = true;
+            }
+        }
+        if (S.player) _hsProximity(S.player);   // 🪑 走近能點的家具＝浮出名字（手機沒有滑鼠）
+        updateNpcs(dt);
+        window.LobbyTheater?.follow?.();   // 🎭 配對泡泡跟著當事人頭頂走（有人走開就不會留在原地）
+        applyCamera();
+    }
+
+    // ── 🚪 場景切換（白光過場）──────────────────────────
+    // 🔊 場景廣播:大廳的 404 皮(dock 標籤/配色/BGM/立繪)要跟著「腳下的場景」走,
+    //    不能靠各自記旗標——用快轉地圖跳離 404 時舊寫法不會通知,皮就黏在身上(2026-08-18 回報)。
+    // 🎨 對話框的顏色跟立繪版同一張色票（lobby.css「顏色跟著地點走」）：在 .lobby-left 掛 data-lbh＝哪個地點的色。
+    //   公寓、房間算「我的家」那組；廣場和沒列到的用大廳的藍
+    const LBH_OF = { aptlobby: 'myhome', aptcorr: 'myhome', room: 'myhome' };
+    function _emitScene() {
+        const L = document.querySelector('.lobby-left');
+        if (L && S.scene) L.dataset.lbh = LBH_OF[S.scene] || S.scene;
+        try { window.dispatchEvent(new CustomEvent('lstage-scene', { detail: { scene: S.scene } })); } catch (e) {}
+    }
+    function goScene(to, spawn, spawnMode) {
+        if (S.transitioning || !SCENES[to]) return;
+        if (to === 'tarot' && S.scene !== 'tarot') S.tarotFrom = S.scene;   // 記住從哪進小屋的（出口要用）
+        if (to === 'workshop' && S.scene !== 'workshop') S.workshopFrom = S.scene;   // 記住從哪進工坊的（出口要用）
+        S.transitioning = true;
+        const left = document.querySelector('.lobby-left');
+        // 🧱 切塊換場（10-13，轉地圖都用，選了換場景那一下）：見 _sceneTileSwap；不演的時候照舊白光
+        const TF = window.AURELIA_TILEFX;
+        if (TF && TF.canRun() && S.root && S.root.parentNode) { _sceneTileSwap(to, spawn, spawnMode, TF); return; }
+        if (_tileSnap) { _tileSnap.remove(); _tileSnap = null; }   // 上一趟切塊還沒收完就改走白光（演出動畫剛關掉之類）：定格別留著
+        const fade = document.createElement('div');
+        fade.className = 'lstage-fade';
+        (left || S.root).appendChild(fade);
+        requestAnimationFrame(() => fade.classList.add('on'));
+        setTimeout(() => {
+            _swapScene(to, spawn, spawnMode);
+            S.transitioning = false;
+            fade.classList.remove('on');
+            setTimeout(() => fade.remove(), 400);
+        }, 320);
+    }
+    // 真的換場景那一步（白光、切塊兩條路共用）
+    function _swapScene(to, spawn, spawnMode) {
+        S._inSwap = true;   // 換場這一下的 unmount 不准收掉剛拍的定格
+        try { unmount(); } finally { S._inSwap = false; }
+        S.scene = to;
+        // 門帶 spawn={x,y} 就落在指定點（每扇門各自的門口）；沒帶才用目標場景的「落」圓點
+        S.spawnOverride = spawn || ((spawnMode === 'player') ? null : 'arrive');
+        S.doorCd = performance.now() + 900;   // 落地冷卻，防止秒回
+        tryMount();
+        _emitScene();   // 廣播「現在站在哪個場景」→ void_terminal 據此對齊 404 皮
+    }
+    // 🧱 切塊換場：舊場景拍一張定格（整棵 DOM 複製一份，畫布那層像天氣會是空的，不影響）墊在底下，
+    //    新場景照常掛上去、先整格藏著，等它的底圖載好（最多等 0.6 秒）再從中間往外一格格蓋上去，蓋完把定格拿掉。
+    //    換場當下就放行走路（跟白光那條一樣）；換到一半又換：上一趟的格線、定格先收掉，再拍新的定格。
+    let _tileSnap = null;
+    function _sceneTileSwap(to, spawn, spawnMode, TF) {
+        if (_tileSnap) { _tileSnap.remove(); _tileSnap = null; }
+        TF.clear(S.root);   // 上一趟還在拼的話先停掉，定格才會是整張
+        const snap = S.root.cloneNode(true);
+        snap.classList.add('lstage-snap');
+        snap.removeAttribute('id'); snap.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));   // 別讓 getElementById 先找到定格裡的
+        S.root.parentNode.insertBefore(snap, S.root);
+        _tileSnap = snap;
+        const dropSnap = () => { if (_tileSnap === snap) { snap.remove(); _tileSnap = null; } };
+        _swapScene(to, spawn, spawnMode);
+        S.transitioning = false;
+        const root = S.root;
+        if (!root) { dropSnap(); return; }
+        TF.hide(root);
+        let started = false;
+        const go = () => {
+            if (started) return;
+            started = true;
+            if (S.root !== root || !root.isConnected) { TF.clear(root); dropSnap(); return; }   // 等底圖時又換走了
+            TF.run(root, 'in', dropSnap);
+        };
+        const img = root.querySelector('.lstage-map');
+        if (!img || !img.getAttribute('src') || img.complete) { go(); return; }
+        img.addEventListener('load', go, { once: true });
+        img.addEventListener('error', go, { once: true });
+        setTimeout(go, 600);   // 底圖太慢就不等了
+    }
+    // 404 進出（void_terminal 的 enter404Room/restoreLobby 呼叫；stage 關著時只記場景）
+    function enter404Stage() {
+        if (S.active) goScene('room404', null, 'arrive');
+        else S.scene = 'room404';
+    }
+    function exit404Stage(target, spawn) {
+        // target/spawn：快轉地圖離開 404 帶目標場景（含點地圖任意落點）；沒帶＝回書咖（原還原流程）
+        const to = (typeof target === 'string' && SCENES[target] && target !== 'room404') ? target : 'cafe';
+        if (S.active) goScene(to, spawn || null, (to === 'cafe' && !spawn) ? 'player' : 'arrive');
+        else { S.scene = to; tryMount(); }
+    }
+
+    // ── 🏠 走進一間房 ────────────────────────────────────
+    //   房間不是素材場景：底圖＝那間房的成品圖(或還沒布置的空房)，可走區＝房間地板多邊形轉的白遮罩。
+    //   dyn = { base, mask, floorStage:[[x,y]…], header:{name,badge,ph}, exit:{to,spawn}, actorScale? }
+    //   落點＝地板重心；出口貼地板下緣正中＝房間正面那道門口，往下走到底才出去。
+    //   🚨 門的大小要跟著房間縮放：固定像素的觸發區在小房間會佔掉半個地板，走沒兩步就被傳出去。
+    function enterRoom(dyn) {
+        if (!dyn || !dyn.base || !dyn.mask) return false;
+        const poly = (Array.isArray(dyn.floorStage) && dyn.floorStage.length >= 3) ? dyn.floorStage : null;
+        let px = MAP_W / 2, py = Math.round(MAP_H * 0.66), maxY = Math.round(MAP_H * 0.9);
+        let dw = 190, dh = 48;
+        if (poly) {
+            let sx = 0, sy = 0, minX = 1e9, maxX = -1e9, minY = 1e9;
+            maxY = -1e9;
+            poly.forEach(p => {
+                sx += p[0]; sy += p[1];
+                minX = Math.min(minX, p[0]); maxX = Math.max(maxX, p[0]);
+                minY = Math.min(minY, p[1]); maxY = Math.max(maxY, p[1]);
+            });
+            px = Math.round(sx / poly.length);
+            py = Math.round(sy / poly.length);   // 落在地板正中，離門口最遠
+            dw = Math.round(Math.max(70, Math.min(190, (maxX - minX) * 0.24)));
+            dh = Math.round(Math.max(20, Math.min(48, (maxY - minY) * 0.12)));
+        }
+        // 小人多高：房間自己算出來的「一個人該多少 px」除以角色基準高；沒給才退回一個保守值。
+        const scale = dyn.actorPx ? (dyn.actorPx / PLAYER_H) : (dyn.actorScale || 0.62);
+        // 房間給了落點就用它（家具會擋路的房間：地板正中常常是床，落在那裡一進門就卡住）；門口照舊跟地板置中
+        const sp = (dyn.spawn && isFinite(dyn.spawn.x) && isFinite(dyn.spawn.y)) ? dyn.spawn : { x: px, y: py };
+        const pts = { player: { x: sp.x, y: sp.y }, arrive: { x: sp.x, y: sp.y }, actorScale: scale };
+        if (poly) pts.boundary = poly.map(p => ({ x: p[0], y: p[1] }));   // 遮罩沒載成功時的退路輪廓
+        SCENES.room.points = pts;
+        let ex = dyn.exit || { to: 'city' };
+        // 🔒 廣場鎖上時房間的出口不能還通向廣場，否則走出自己家就卡在一個進不去的場景。
+        //    退回「進這間房之前待的那個場景」——從書咖快轉進家、走出來就回書咖。
+        if (_cityLocked() && ex.to === 'city' && !ex.panel) ex = { to: S.roomFrom || 'cafe' };
+        // 觸發區貼著地板最下緣那一條，不往房間裡面吃
+        // 出口也可以是 panel 型：公寓裡走出一戶＝回到那層走廊，而不是一路彈回城市
+        SCENES.room.doors = [{
+            x: Math.round(px - dw / 2), y: Math.round(maxY - dh), w: dw, h: dh,
+            to: ex.to, spawn: ex.spawn, panel: ex.panel, floor: ex.floor, unitId: ex.unitId,
+        }];
+        // 🚪 房間自己帶的門（公寓走廊：一條走廊上好幾扇門，各自通到一戶）。
+        //    座標跟 floorStage 同一個系（舞台座標），沒給大小就沿用出口門那組。
+        if (Array.isArray(dyn.doors)) {
+            dyn.doors.forEach(dr => {
+                if (!dr) return;
+                SCENES.room.doors.push({
+                    x: Math.round(dr.x), y: Math.round(dr.y),
+                    w: Math.round(dr.w || dw), h: Math.round(dr.h || dh),
+                    to: dr.to, spawn: dr.spawn, panel: dr.panel, floor: dr.floor, unitId: dr.unitId,
+                });
+            });
+        }
+        S.dyn = dyn;
+        if (S.scene !== 'room') S.roomFrom = S.scene;   // 記住從哪裡進來的（房間套房間時不要被內層洗掉）
+        if (S.active) goScene('room', null, 'arrive');
+        else { S.scene = 'room'; tryMount(); }
+        return true;
+    }
+
+    // ── 🏢 走進公寓大樓（os_landlord_room.js 叫）──
+    //   scene：'aptlobby'（一樓大廳）或 'aptcorr'（樓上走廊）
+    //   opts：{ floor（房東算法的第幾層，大廳 0）, header:{name,badge,ph}, slots:{ home|a|b: { panel, unitId, plate, sub } }（只給走廊）,
+    //          spawnSlot（從哪一戶走出來就站那扇門前）, fromLift（大廳：搭電梯下來站電梯門口） }
+    //   走廊每層同一張圖，門通到哪、門牌由那邊照那層給；電梯門口那扇固定在 SCENES.aptcorr.liftDoor（11-23 起樓上沒有樓梯）。
+    function enterApt(scene, opts) {
+        const SC = SCENES[scene];
+        if (!SC || !SC.apt) return false;
+        opts = opts || {};
+        if (scene === 'aptcorr') {
+            const doors = [Object.assign({}, SC.liftDoor, { floor: opts.floor || 1 })], plates = [];   // 樓上沒有樓梯：電梯門口開「這棟樓」
+            Object.keys(SC.slots).forEach(k => {
+                const g = SC.slots[k], t = (opts.slots || {})[k];
+                if (!t) return;
+                doors.push({ x: g.x, y: g.y, w: g.w, h: g.h, panel: t.panel, unitId: t.unitId, floor: opts.floor });
+                if (t.plate) plates.push({ x: g.plate.x, y: g.plate.y, w: g.plate.w, text: String(t.plate), sub: t.sub ? String(t.sub) : '' });
+            });
+            SC.doors = doors;
+            S.aptPlates = plates;
+            const hd = SC.layout.find(o => o.homeDoor);
+            if (hd) hd.file = opts.homeDoor === false ? 'property_corridor_obj_door_1a_svg_v1.svg' : 'property_corridor_obj_door_home_svg_v2.svg';
+            S.aptHeader = opts.header || null;
+        }
+        S.aptFloor = scene === 'aptcorr' ? (opts.floor || 1) : 0;
+        let spawn = null;
+        if (opts.spawnSlot && SC.slots && SC.slots[opts.spawnSlot]) spawn = Object.assign({}, SC.slots[opts.spawnSlot].out);
+        else if (opts.fromLift && SC.liftSpot) spawn = Object.assign({}, SC.liftSpot);
+        if (['aptlobby', 'aptcorr', 'room'].indexOf(S.scene) < 0) S.aptFrom = S.scene;   // 記住從哪進這棟的（廣場鎖上時出口要用）
+        if (S.active) goScene(scene, spawn, 'arrive');
+        else { S.scene = scene; S.spawnOverride = spawn || 'arrive'; tryMount(); }
+        return true;
+    }
+    // 樓上走廊的門牌：疊在門上那塊銅牌的位置；誰住裡面寫在牌子下面（名字是 AI 定調來的，一律轉義）
+    function _mountAptPlates() {
+        if (S.scene !== 'aptcorr' || !Array.isArray(S.aptPlates) || !S.world) return;
+        const esc = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        S.aptPlates.forEach(p => {
+            const el = document.createElement('div');
+            el.className = 'lstage-apt-plate';
+            el.style.left = p.x + 'px'; el.style.top = p.y + 'px'; el.style.width = p.w + 'px';
+            el.innerHTML = '<b>' + esc(p.text) + '</b>' + (p.sub ? '<small>' + esc(p.sub) + '</small>' : '');
+            S.world.appendChild(el);
+        });
+    }
+
+    // 🕹️ 手機虛擬搖桿：左下角圓盤拖動→餵 S.joy 方向向量（給 update 當 dx/dy）。只在觸控裝置建立。
+    function _setupJoystick(root) {
+        try { if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return; } catch (e) { return; }
+        const base = document.createElement('div');
+        base.className = 'lstage-joy';
+        const knob = document.createElement('div');
+        knob.className = 'lstage-joy-knob';
+        base.appendChild(knob);
+        root.appendChild(base);
+        const R = 46, DEAD = 8;   // R=拉桿半徑；DEAD=死區(px)
+        let active = false, cx = 0, cy = 0;
+        const setKnob = (x, y) => { knob.style.transform = 'translate(' + x + 'px,' + y + 'px)'; };
+        const onDown = (e) => {
+            active = true;
+            try { base.setPointerCapture(e.pointerId); } catch (_) {}
+            const r = base.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+            onMove(e);
+        };
+        const onMove = (e) => {
+            if (!active || !base.isConnected) return;   // 換場銷毀舊搖桿後，殘留 capture 的 move 別再寫 S.joy（防換場後卡方向飄移）
+            let dx = e.clientX - cx, dy = e.clientY - cy;
+            const d = Math.hypot(dx, dy);
+            if (d > R) { dx = dx / d * R; dy = dy / d * R; }
+            setKnob(dx, dy);
+            S.joy = (Math.hypot(dx, dy) < DEAD) ? null : { x: dx / R, y: dy / R };
+            e.preventDefault();
+        };
+        const onUp = () => { active = false; S.joy = null; setKnob(0, 0); };
+        base.addEventListener('pointerdown', onDown);
+        base.addEventListener('pointermove', onMove);
+        base.addEventListener('pointerup', onUp);
+        base.addEventListener('pointercancel', onUp);
+    }
+
+    // ── 🗺 快轉小地圖（🏙 鈕）：廣場俯瞰縮圖＝點哪傳哪；點建築＝直接進室內/落它門口；下排快捷區 ──
+    function _openCityMap() {
+        _closeWins();
+        const K = 0.2;   // 縮圖比例（1536×1024 → 307×205）
+        const isNight = _sceneIsNight(SCENES.city);
+        // 城市佈局跨場景讀：存檔(layoutFull)優先,沒有用預設——當前 CFG 是本場景的,不能用
+        let layout = SCENES.city.layout || [];
+        try {
+            const saved = JSON.parse(localStorage.getItem(SCENES.city.cfgKey) || 'null');
+            if (saved && Array.isArray(saved.layoutFull) && saved.layoutFull.length) layout = _fixCityLayout(saved.layoutFull);
+        } catch (e) {}
+        const _vt = window.VoidTerminal || {};   // jump() 進出 404 要用（enter404Room/restoreLobby）
+        const locked = _cityLocked();   // 🔒 廣場鎖上：不給「廣場」這個目的地，地圖本身還是照畫（它就是這張快轉圖）
+        // 🧭 chip 與熱點都讀 lobby_places 的地點清單（單一真相）——以前寫死在這裡，
+        //    加一個地方就要記得回來改，占卜小屋上線時就漏過一次。
+        const PLACES = (window.LobbyPlaces && window.LobbyPlaces.list()) || [];
+        const chips = PLACES.filter(p => p.scene || p.chip).map(p => [p.id, p.name]);   // chip：沒有場景的地點（SN 32 樓）也給一顆，點了直接開面板
+        // 🚪 統一跳場口：進 404 走 enter404Room（glitch 特效+音效+柴郡開場）；從 404 離開走 restoreLobby 還原流程再落到目標
+        const jump = (to, spawn) => {
+            if (to === 'room404' && S.scene !== 'room404') {
+                if (_vt.enter404Room) { _vt.enter404Room(); return; }
+            } else if (S.scene === 'room404' && to !== 'room404') {
+                if (_vt.restoreLobby) { _vt.restoreLobby(to, spawn); return; }
+            }
+            goScene(to, spawn);
+        };
+        const box = document.createElement('div');
+        box.className = 'lstage-citymap';
+        const closeMap = _regOnce(() => box.remove());
+        box.innerHTML =
+            '<div class="lcm-title"><i class="fa-solid fa-map-location-dot"></i> ' +
+              (locked ? '快轉——點地圖上的地標' : '快轉——點地圖上任何地方') +
+              '<button class="lcm-close"><i class="fa-solid fa-xmark"></i></button></div>' +
+            '<div class="lcm-map is-loading" style="width:' + Math.round((SCENES.city.mapW || MAP_W0) * K) + 'px;height:' + Math.round(MAP_H * K) + 'px"><span class="lcm-wait">地圖載入中…</span></div>' +
+            '<div class="lcm-chips">' +
+              chips.map(c => '<button class="lcm-chip" data-go="' + c[0] + '"' + (S.scene === c[0] ? ' disabled' : '') + '>' + c[1] + '</button>').join('') +
+            '</div>';
+        const map = box.querySelector('.lcm-map');
+        const df = (f) => (isNight && CITY_NIGHT[f]) ? CITY_NIGHT[f] : f;   // 日夜對照
+        const put = (fileOrRef, x, y, w, z, flip) => {
+            const im = document.createElement('img');
+            im.className = 'lcm-obj';
+            im.style.left = Math.round(x * K) + 'px';
+            im.style.top = Math.round(y * K) + 'px';
+            im.style.width = Math.round(w * K) + 'px';
+            im.style.zIndex = String(z);
+            if (flip) im.style.transform = 'scaleX(-1)';
+            resolveRef(typeof fileOrRef === 'string' ? { file: fileOrRef } : fileOrRef).then(src => { if (src) im.src = src; });
+            map.appendChild(im);
+            return im;
+        };
+        // 底板 + 前後牆框（跟真場景同一套圖與層級）
+        //   底板還沒到時先寫「載入中」，別只露一塊灰框（小斐 11-17：圖片先出現空白灰框）
+        const CW = SCENES.city.mapW || MAP_W0;   // 大地圖預覽：照城市自己的寬（人可能正在別間）
+        const baseIm = put(df(SCENES.city.base), 0, 0, CW, 1);
+        const mapReady = () => map.classList.remove('is-loading');
+        baseIm.addEventListener('load', mapReady); baseIm.addEventListener('error', mapReady);
+        setTimeout(mapReady, 6000);
+        (Array.isArray(SCENES.city.lower) ? SCENES.city.lower : (SCENES.city.lower ? [SCENES.city.lower] : [])).forEach(f => put(df(f), 0, 0, CW, 2));
+        (Array.isArray(SCENES.city.upper) ? SCENES.city.upper : (SCENES.city.upper ? [SCENES.city.upper] : [])).forEach(f => put(df(f), 0, 0, CW, 4000));
+        // 物件（地塊空↔房照真實狀態）
+        layout.forEach(o => {
+            if ((o.plot && !_plotOccupied(o.plot)) || (o.plotFrame && _plotOccupied(o.plotFrame))) return;
+            const s = o.s || 1;
+            const z = o.layer === 'floor' ? 1 : o.layer === 'back' ? 2 : 2 + Math.round(o.y + Math.round(o.h * s) + (o.zb || 0));
+            const nf = isNight ? (o.nightFile || CITY_NIGHT[o.file]) : null;
+            put(nf ? { file: nf } : o, o.x, o.y, o.w * s, z, o.flipX);
+        });
+        // 建築熱點：認 PLACES 裡的 obj（檔名片段）。書咖/大廳/占卜小屋＝直接進室內，
+        //   所以廣場鎖著也照樣能點；我的家＝直接進屋（不是傳到門口再走一次）。
+        const dests = [];
+        layout.forEach(o => {
+            const f = String(o.file || ''), s = o.s || 1;
+            const front = { x: Math.round(o.x + o.w * s / 2), y: Math.round(o.y + o.h * s + 18) };
+            const P = PLACES.find(p => p.obj && f.indexOf(p.obj) >= 0);
+            if (P && (!o.plot || _plotOccupied(o.plot))) {
+                dests.push({ o, label: P.name, go: () => (P.scene ? jump(P.scene) : (P.open && P.open())) });
+                return;
+            }
+            // 鄰居家沒有屋內可進（廣場裡也沒有給它們的門），它的作用就是傳到那戶門口 → 廣場鎖上就沒有落點，整顆收起來
+            if (!locked && /npc_house/.test(f) && (!o.plot || _plotOccupied(o.plot))) dests.push({ o, label: '鄰居家', go: () => jump('city', front) });
+        });
+        dests.forEach(d => {
+            const o = d.o, s = o.s || 1;
+            const hs = document.createElement('button');
+            hs.className = 'lcm-spot';
+            hs.style.left = Math.round(o.x * K) + 'px';
+            hs.style.top = Math.round(o.y * K) + 'px';
+            hs.style.width = Math.round(o.w * s * K) + 'px';
+            hs.style.height = Math.round(o.h * s * K) + 'px';
+            hs.innerHTML = '<span>' + d.label + '</span>';
+            hs.addEventListener('click', (e) => { e.stopPropagation(); closeMap(); d.go(); });
+            map.appendChild(hs);
+        });
+        // 點空地＝傳送到廣場的該點（落點若在牆裡,掛載後的遮罩檢查會自動彈到最近可走處）
+        // 🔒 廣場鎖上時整個關掉：那是唯一一條「走進廣場」的捷徑，留著等於鎖了個寂寞
+        if (!locked) {
+            map.addEventListener('click', (e) => {
+                const r = map.getBoundingClientRect();
+                const x = Math.round((e.clientX - r.left) / K), y = Math.round((e.clientY - r.top) / K);
+                closeMap();
+                jump('city', { x, y });
+            });
+        }
+        box.querySelector('.lcm-close').addEventListener('click', closeMap);
+        box.querySelectorAll('.lcm-chip').forEach(b => b.addEventListener('click', () => {
+            closeMap();
+            const P = PLACES.find(p => p.id === b.dataset.go);
+            if (P && !P.scene && P.open) { P.open(); return; }   // chip:true 那種：沒有場景，直接開面板
+            jump(b.dataset.go);
+        }));
+        S.root.appendChild(box);
+    }
+
+    // ── 🔮 占卜面板（小屋裡點紫薇）：塔羅 app 本來就吃容器，直接掛進浮窗、面板一行都不用改 ──
+    //    ❮ 返回鈕：塔羅的 HTML 寫死呼叫 PhoneSystem.goHome（它原本住在手機殼裡）。
+    //    小屋沒有手機 → 開窗時暫借這個方法指向「關窗」，關窗再還原，跟 phone_shell 借法一致。
+    // 只掛立繪、不開對話框：占卜面板開著時她人還站在旁邊，只是白框跟輸入列收起來。
+    //（hideDialog 會把立繪 remove 掉，所以收完框要用這個把她掛回來）
+    function _showPortraitOnly(npc) {
+        const left = document.querySelector('.lobby-left');
+        if (!left || !npc) return;
+        let p = left.querySelector('.lstage-talk-portrait');
+        if (!p) { p = document.createElement('img'); p.className = 'lstage-talk-portrait'; left.appendChild(p); }
+        _setTalkImg(p, npc);
+    }
+
+    // 🍸 記憶迴廊（lobby_memory.js）：整個畫面換成紫薇的抽卡片，先把大廳上的窗、對話收乾淨
+    function _openMemory() {
+        const M = window.LobbyMemory;
+        if (!M || !M.open) { console.warn('[LobbyStage] 記憶迴廊還沒載入'); return; }
+        _closeWins(); endTalk(); hideDialog();
+        M.open();
+    }
+    // ── 🎩 造物工坊面板（工坊裡點造物儀）：面板本體在 lobby_workshop.js，這裡只負責那扇浮窗 ──
+    //    版型照以前的占卜浮窗（11-26 拆了）：右側靠邊、左邊留給帽匠立繪；開面板＝收掉對話框但人留著。
+    //    差別是這扇窗沒有自己的標題列——面板自帶阿洛畫的標題與 ✕（一頁只留一顆離開鈕）。
+    let _wsWin = null;   // 造物工坊浮窗單例（開聊時要收掉，見 startTalk）
+    function _closeWorkshopPanel() { if (_wsWin) { try { _wsWin(); } catch (e) {} } }
+    function _openWorkshopPanel() {
+        _closeWins();
+        endTalk();      // 正在跟帽匠聊 → 結束（順帶收掉立繪與其他面板）
+        hideDialog();   // 沒在聊但框還浮著 → 也收掉
+        _showPortraitOnly(S.npcs.find(n => n.key === 'hatter'));   // 🧍 人留著，收的是白框與輸入列
+        const box = document.createElement('div');
+        box.className = 'lstage-wswin';
+        const host = document.querySelector('.lobby-left') || S.root;
+        const close = _regOnce(() => {
+            box.remove();
+            _wsWin = null;
+            if (!S.talkTarget) host.querySelector('.lstage-talk-portrait')?.remove();
+            try { host.classList.remove('void-dock-open'); } catch (e) {}
+        });
+        _wsWin = close;
+        host.appendChild(box);
+        host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所）
+        if (window.LobbyWorkshop) window.LobbyWorkshop.mount(box, { onClose: close });
+        else box.innerHTML = '<div class="lws-fail">造物工坊面板載入失敗</div>';
+    }
+
+    // ── 📚 書咖的沙發組：點沙發＝我的角色，點旁邊的圓几＝世界書 ──
+    //    浮窗跟帽匠工坊同一種（同一個 class、同一套開關與互斥），差別只在裡面直接放創作室那一頁，
+    //    不再先給一張卡片首頁 —— 一顆熱點就是一件事。
+    // 🚨 創作室自己會生一層覆蓋層蓋滿容器、返回鈕把自己移除；所以這裡不必畫返回，只要給它一個盒子。
+    function _openCafeStudio(mode, label) {
+        _closeWins();
+        endTalk();      // 正在跟瀅瀅聊 → 結束（同占卜桌那條：辦事跟講話不同時發生）
+        hideDialog();   // 沒在聊但框還浮著 → 也收掉
+        _showPortraitOnly(S.npcs.find(n => n.key === 'ying'));   // 🧍 人留著，收的是白框與輸入列
+        const box = document.createElement('div');
+        box.className = 'lstage-wswin lstage-cafewin';
+        const host = document.querySelector('.lobby-left') || S.root;
+        const close = _regOnce(() => {
+            box.remove();
+            _wsWin = null;
+            if (!S.talkTarget) host.querySelector('.lstage-talk-portrait')?.remove();
+            try { host.classList.remove('void-dock-open'); } catch (e) {}
+        });
+        _wsWin = close;
+        host.appendChild(box);
+        host.classList.add('void-dock-open');   // 手機版靠這個 class 讓面板改吃滿寬（同世界門/交易所/帽匠）
+        if (window.OS_STUDIO && window.OS_STUDIO.launch) {
+            window.OS_STUDIO.launch(box, mode);
+            // 創作室的返回鈕是把它自己那層移除 → 盒子空了就等於按了返回，把浮窗一起收掉
+            if (window.MutationObserver) {
+                const ob = new MutationObserver(() => {
+                    if (box.querySelector('#os_studio_app')) return;
+                    ob.disconnect(); close();
+                });
+                ob.observe(box, { childList: true, subtree: true });
+            }
+        } else {
+            box.innerHTML = '<div class="lws-fail">創作室還沒載入（' + label + '）</div>';
+        }
+    }
+
+    // ── 🏪 黑市（404 房點圓桌）：面板本體是蓋滿畫面的 overlay（panels.js 的 store-panel-overlay），
+    //    這裡只負責開關與互斥圈。跟占卜／造物工坊的差別是它蓋滿畫面＝留立繪也看不到，所以不留人。
+    function _closeStorePanel() { try { window.VoidPanels?.closeStore?.(); } catch (e) {} }
+    function _openStorePanel() {
+        _closeWins();
+        endTalk();      // 正在跟柴郡聊 → 結束（同占卜桌那條：辦事跟講話不同時發生）
+        hideDialog();   // 沒在聊但框還浮著 → 也收掉
+        try { window.VoidPanels?.openStore?.(); }
+        catch (e) { console.warn('[LobbyStage] 黑市面板開啟失敗', e); }
+    }
+
+    // ── ⚙️ 大廳的設定：畫進「設置」窗口的「大廳」那一頁（os_phone/os/os_settings_window.js 叫 mountSettings）──
+    //   11-17 以前是舞台上自己的一個小面板（齒輪開）；三個設置合成一個窗口之後，齒輪改開那個窗口、停在「大廳」。
+    //   分三堆：聲音和動畫／大廳裡的人／書咖。改了就生效，不用保存。說明都收進小問號。零件的樣式（.asw-*）在 css/os_settings_window.css。
+    function _openLobbySettings() {
+        _closeWins();
+        const W = window.OS_SETTINGS_WINDOW;
+        if (W && W.open) W.open('lobby');
+    }
+    if (window.AUI && window.AUI.registerHelp) window.AUI.registerHelp({
+        lset_sfx: { title: '按鈕提示音', body: '大廳按鈕點擊、滑過與開關面板時的音效。調整音量時會播放一次試聽。' },
+        lset_reveal: { title: '演出動畫', body: '劇情冒出新線索時，線索頁會先拉近、用小卡片講一遍再收進清單（每條只演一次）；電腦上打開故事日誌會先翻開封面，換故事、換書籤時翻一頁；大廳開大窗口、換地點時畫面會一格一格換。\n\n關閉後直接顯示，不播放動畫。' },
+        lset_weather: { title: '城市天氣', body: '只影響戶外大地圖。選「自動」時，每次進城隨機切換晴、雨、雪。' },
+        lset_theater: { title: '小劇場', body: '大廳裡偶爾會有兩人聊天，點頭頂的泡泡或右上角「小劇場」即可收看。' },
+        lset_story: { title: '同步其他故事近況', body: '開啟後，大廳裡的人會知道你在其他故事裡的近況，對話裡可能會提到。關閉時，各本故事互不相通。' },
+        lset_guestblock: { title: '客人名稱排除名單', body: '下列名字不會出現在大廳的客人中：\n・管理員（瀅瀅、愛麗絲等），簡繁體視為同一名字\n・你在故事中扮演過的主角\n\n若有同名角色被誤排除，關閉該列即可放行，大廳客人會立即重新產生。' },
+        lset_lore: { title: '讀取完整世界書', body: '預設使用大總結整理的世界觀。開啟後改讀角色卡的完整世界書，包含大總結不會記錄的角色關係。切換後會重新載入這個場景。' },
+        lset_cafe: { title: '常客自動來訪', body: '常客會在你離開後自行來店消費，並留下紀錄；每位第一次上門會記一次口味。關閉後書咖不營業。' },
+    });
+    // 🚫 「不會刷成客人的名字」的名單窗（11-23）：開在設置窗裡面（吃它的顏色和兩套長相），一列一個名字＋開關，關掉＝放行
+    //   關閉鈕 class 帶 close → Esc 由 AUI 統一關（按畫面最上面那顆）
+    function _openGuestBlock(box, onChange) {
+        const host = box.closest('.asw-root') || document.body;
+        if (host.querySelector('.asw-pop')) return;
+        const esc = v => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const pop = document.createElement('div');
+        pop.className = 'asw-pop';
+        pop.innerHTML = '<section class="asw-pop-card" role="dialog" aria-label="客人名稱排除名單">' +
+            '<header class="asw-pop-head"><strong>客人名稱排除名單</strong>' +
+            '<button type="button" class="asw-pop-close" aria-label="關閉"><i class="fa-solid fa-xmark"></i></button></header>' +
+            '<div class="asw-pop-body"><div class="asw-hint">讀取中…</div></div></section>';
+        host.appendChild(pop);
+        const body = pop.querySelector('.asw-pop-body');
+        // Esc 只關這一層：設置窗自己也聽 Esc（會整個關掉），這裡在最前面（window 捕獲）接走、擋下來
+        const onKey = (e) => { if (e.key !== 'Escape' || !pop.isConnected) return; e.preventDefault(); e.stopImmediatePropagation(); close(); };
+        const close = () => { window.removeEventListener('keydown', onKey, true); pop.remove(); if (onChange) onChange(); };
+        window.addEventListener('keydown', onKey, true);
+        pop.querySelector('.asw-pop-close').addEventListener('click', close);
+        pop.addEventListener('click', (e) => { if (e.target === pop) close(); });
+        const L = window.LobbyNpcs;
+        if (!L || !L.blockedList) { body.innerHTML = '<div class="asw-hint">大廳角色尚未載入，請稍後再開啟。</div>'; return; }
+        L.blockedList().then(list => {
+            if (!pop.isConnected) return;
+            body.innerHTML = list.length ? list.map(b => '<label class="asw-row"><span class="asw-row-tx">' + esc(b.name) +
+                '<span class="asw-pop-why">' + esc(b.why) + (b.story ? '・' + esc(b.story) : '') + '</span></span>' +
+                '<input type="checkbox" class="asw-check" data-gb="' + esc(b.key) + '"' + (b.blocked ? ' checked' : '') + ' aria-label="排除' + esc(b.name) + '"></label>').join('')
+                : '<div class="asw-hint">名單是空的。</div>';
+            body.querySelectorAll('.asw-check[data-gb]').forEach(el => el.addEventListener('change', (e) => {
+                const t = e.target;
+                if (!L.setUnblocked(t.dataset.gb, !t.checked)) { t.checked = !t.checked; return; }   // 沒存到：開關退回去
+                if (S.active) { unmount(); tryMount(); }   // 客人重刷一次
+            }));
+        }).catch(e => { if (pop.isConnected) body.innerHTML = '<div class="asw-hint">名單讀取失敗，請重新開啟。</div>'; console.warn('[LobbyStage] 擋人名單讀取失敗', e); });
+    }
+    function mountSettings(box) {
+        const H = (k) => (window.AUI && window.AUI.helpBtn) ? window.AUI.helpBtn(k) : '';
+        const ls = (k) => localStorage.getItem(k);
+        const sfxOn = window.VoidUiSfx ? window.VoidUiSfx.isOn() : false;
+        const sfxVol = String(Math.round((window.VoidUiSfx ? window.VoidUiSfx.getVol() : 0.35) * 100));
+        const chk = (k, label, on, help) => '<label class="asw-row"><span class="asw-row-tx">' + label + (help ? H(help) : '') + '</span>' +
+            '<input type="checkbox" class="asw-check" data-k="' + k + '"' + (on ? ' checked' : '') + '></label>';
+        const seg = (label, attr, cur, opts, off, help) => '<div class="asw-row"><span class="asw-row-tx">' + label + (help ? H(help) : '') + '</span>' +
+            '<span class="asw-seg' + (off ? ' is-off' : '') + '" data-segrow="' + attr + '">' +
+            opts.map(o => '<button type="button" class="asw-seg-btn' + (cur === o[0] ? ' is-on' : '') + '" data-' + attr + '="' + o[0] + '">' + o[1] + '</button>').join('') +
+            '</span></div>';
+        const group = (title, rows, late) => '<section class="asw-group' + (late ? ' asw-late' : '') + '"><h3 class="asw-group-title">' + title + '</h3>' + rows + '</section>';
+        box.innerHTML = '<div class="asw-cols">' +
+            '<div class="asw-col">' +
+              group('聲音和動畫',
+                chk('uisfx', '按鈕提示音', sfxOn, 'lset_sfx') +
+                seg('提示音音量', 'vol', sfxVol, [['15', '小'], ['35', '中'], ['60', '大']], !sfxOn) +
+                chk('revealfx', '演出動畫', ls('aurelia_reveal_fx') !== '0', 'lset_reveal') +
+                seg('城市天氣', 'wx', ls('lobby_weather_v1') || 'auto', [['auto', '自動'], ['clear', '晴'], ['rain', '雨'], ['snow', '雪']], false, 'lset_weather')) +
+              group('書咖',
+                chk('cafe', '常客自動來訪', ls('cafe_offline_visits') !== '0', 'lset_cafe') +
+                (window.LobbyDecider ? window.LobbyDecider.settingsHtml() : ''), true) +   // 🎲 店員自己決定去哪那三格（lobby_decider.js）；true＝手機一欄時排在「大廳裡的人」後面
+            '</div>' +
+            '<div class="asw-col">' +
+              group('大廳裡的人',
+                chk('theater', '小劇場', ls('lobby_theater_on') !== '0', 'lset_theater') +
+                seg('出現頻率', 'freq', ls('lobby_theater_freq') || 'mid', [['low', '少'], ['mid', '中'], ['high', '多']], ls('lobby_theater_on') === '0') +
+                chk('story', '同步其他故事近況', ls('lobby_npc_see_current_story') === '1', 'lset_story') +
+                chk('lore', '讀取完整世界書', ls('lobby_worldview_use_lorebook') === '1', 'lset_lore') +
+                // 🚫 不會刷成客人的名字（11-23）：名單會越來越長 → 這裡只放一顆按鈕，點了開一個窗（modal）
+                '<div class="asw-row"><span class="asw-row-tx">客人名稱排除名單' + H('lset_guestblock') + '</span>' +
+                '<button type="button" class="asw-btn" data-guestblock>名單</button></div>') +
+              '<div class="asw-note"><b class="asw-note-title">即時生效</b>修改後立即套用，不需保存。</div>' +
+            '</div>' +
+          '</div>';
+        const gb = box.querySelector('[data-guestblock]');
+        const gbCount = () => { if (window.LobbyNpcs && window.LobbyNpcs.blockedList) window.LobbyNpcs.blockedList().then(list => { if (gb.isConnected) gb.textContent = '名單（' + list.filter(b => b.blocked).length + '）'; }).catch(() => {}); };
+        if (gb) { gbCount(); gb.addEventListener('click', () => _openGuestBlock(box, gbCount)); }
+        const segOff = (attr, off) => { const r = box.querySelector('[data-segrow="' + attr + '"]'); if (r) r.classList.toggle('is-off', off); };
+        const segPick = (attr, btn) => box.querySelectorAll('.asw-seg-btn[data-' + attr + ']').forEach(b => b.classList.toggle('is-on', b === btn));
+        box.querySelectorAll('.asw-check[data-k]').forEach(chkEl => chkEl.addEventListener('change', (e) => {
+            const k = e.target.dataset.k, on = e.target.checked;
+            if (k === 'lore') {
+                // 沒存成功就不重掛：重掛會照舊值讀回來，等於白閃一次
+                if (!AUI.lsSet('lobby_worldview_use_lorebook', on ? '1' : '0', '「讀取完整世界書」的開關')) return;
+                if (S.active) { unmount(); tryMount(); }
+            } else if (k === 'story') {
+                AUI.lsSet('lobby_npc_see_current_story', on ? '1' : '0', '「同步其他故事近況」的開關');
+            } else if (k === 'theater') {
+                AUI.lsSet('lobby_theater_on', on ? '1' : '0', '「小劇場」的開關');
+                segOff('freq', !on);
+            } else if (k === 'revealfx') {
+                AUI.lsSet('aurelia_reveal_fx', on ? '1' : '0', '「演出動畫」的開關');
+            } else if (k === 'cafe') {
+                AUI.lsSet('cafe_offline_visits', on ? '1' : '0', '「常客自動來訪」的開關');
+            } else if (k === 'uisfx') {
+                window.VoidUiSfx?.setOn(on);
+                segOff('vol', !on);
+                if (on) window.VoidUiSfx?.play('toggle');
+            }
+        }));
+        window.LobbyDecider?.bindSettings(box);   // 🎲 店員自己決定去哪那三格
+        box.querySelectorAll('.asw-seg-btn[data-vol]').forEach(btn => btn.addEventListener('click', () => {
+            window.VoidUiSfx?.setVol(parseInt(btn.dataset.vol, 10));
+            segPick('vol', btn);
+            window.VoidUiSfx?.play('click');   // 改完馬上放一聲，不用關掉設置去試
+        }));
+        box.querySelectorAll('.asw-seg-btn[data-freq]').forEach(btn => btn.addEventListener('click', () => {
+            AUI.lsSet('lobby_theater_freq', btn.dataset.freq, '小劇場多常出現');
+            segPick('freq', btn);
+        }));
+        box.querySelectorAll('.asw-seg-btn[data-wx]').forEach(btn => btn.addEventListener('click', () => {
+            AUI.lsSet('lobby_weather_v1', btn.dataset.wx, '城市天氣的設定');
+            _wxSetting = btn.dataset.wx;   // 快取同步→下一幀立即生效
+            S._wxRoll = null;              // 切回自動時重擲
+            segPick('wx', btn);
+        }));
+    }
+
+    // ── 掛載/卸載 ─────────────────────────────────────────
+    function tryMount() {
+        const left = document.querySelector('.lobby-left');
+        if (!left || S.active || !isOn()) return;
+        MAP_W = SCENES[S.scene].mapW || MAP_W0;   // 這間的地圖多寬（要在讀擺設、遮罩之前）
+        CFG = _loadCfg(); rebuildBlocks(); loadMask();
+        const isStatic = !!SCENES[S.scene].staticMap;   // 🗺️ 靜態點擊地圖（大地圖）：不生小人/不走路/不碰撞
+        const root = document.createElement('div');
+        root.className = 'lstage-root';
+        root.innerHTML = '<div class="lstage-world">' +
+            '<img class="lstage-map" src="' + (SCENES[S.scene].dynamic ? ((S.dyn && S.dyn.base) || '') : (CDN + _sceneBase(SCENES[S.scene]))) + '" width="' + MAP_W + '" height="' + MAP_H + '">' +
+            '<div class="lstage-click"></div></div>' +
+            '<button class="lstage-set-btn" title="設置"><i class="fa-solid fa-gear"></i></button>' +
+            '<button class="lstage-edit-btn" title="擺設模式"><i class="fa-solid fa-pen-ruler"></i></button>' +
+            '<button class="lstage-theater-btn" title="小劇場"><i class="fa-solid fa-clapperboard"></i><span class="ltb-badge"></span></button>' +
+            // 🏙 快轉地圖：每個走得到的場景都要有（404 進出走完整轉場流程，見 _openCityMap 的 jump）
+            //    room＝住家／房客的房／公寓走廊。廣場鎖上之後那裡面唯一的出路是走到門口，
+            //    別的地方都能一鍵跳、只有屋裡要用走的說不過去。
+            (['cafe', 'hall', 'exchange', 'city', 'room404', 'room', 'tarot', 'workshop', 'aptlobby', 'aptcorr'].indexOf(S.scene) >= 0
+                ? '<button class="lstage-city-btn" title="快轉地圖"><i class="fa-solid fa-map-location-dot"></i></button>' : '');
+            // ☕ 書咖櫃檯入口=跟瀅瀅開聊(startTalk 掛鉤,同白兔成例);獨立鈕已退役
+        left.appendChild(root);
+        if (S._theaterTimer) clearInterval(S._theaterTimer);
+        S._theaterTimer = setInterval(() => window.LobbyTheater?.tick(), 15000);   // 🎭 小劇場輪詢（實作在 lobby_theater.js）
+        root.querySelector('.lstage-set-btn').addEventListener('click', () => _openLobbySettings());
+        // 🎬 小劇場窗口：有未查看的配對→開「正在對話」，否則直接看「回顧」
+        root.querySelector('.lstage-theater-btn').addEventListener('click', () => window.LobbyTheater?.openWin(S.theater && !S.theater.playing ? 'live' : 'review'));
+        root.querySelector('.lstage-city-btn')?.addEventListener('click', () => _openCityMap());   // 🏙 快轉地圖（廣場俯瞰縮圖,點哪去哪）
+        left.classList.add('lstage-on', 'lstage-dlg-hidden');   // 對話框預設收起，開聊才浮出
+        // 💬 聊天符號（自由漫遊時的浮鈕）：點了浮出「對話框＋輸入框」一組
+        const fab = document.createElement('button');
+        fab.className = 'lstage-chat-fab';
+        fab.title = '開啟對話';
+        fab.innerHTML = '<i class="fa-solid fa-comment-dots"></i>';
+        fab.addEventListener('click', (e) => { e.stopPropagation(); showDialog(); });
+        left.appendChild(fab);
+        if (!isStatic) _setupJoystick(root);   // 🕹️ 手機左下角虛擬搖桿（靜態地圖沒走路→不需要）
+        S.root = root; S.world = root.querySelector('.lstage-world'); S.active = true;
+        // 🖱 點地板的那層要有地圖那麼大：世界層裡的東西全是 absolute，世界層本身是 0×0，
+        //    .lstage-click 寫 inset:0 就跟著變 0×0、點地板從來沒接到過（11-17 小斐健檢 HC-1117 抓到）。尺寸交給 CSS 變數。
+        root.style.setProperty('--lstage-map-w', MAP_W + 'px');
+        root.style.setProperty('--lstage-map-h', MAP_H + 'px');
+        S.doorArm = false;   // 剛進場先解除門武裝，走出門區才啟動
+        _emitScene();        // 掛載當下也報一次場景 → 大廳的 404 皮跟腳下對齊
+        // 底圖：本機/網址覆蓋（建構模式「換底圖」）
+        if (CFG.baseOverride) {
+            const mapImg = root.querySelector('.lstage-map');
+            resolveRef(CFG.baseOverride).then(src => { if (src && mapImg) mapImg.src = src; });
+        }
+        // 🌳 前景上層：外圈樹/前景素材蓋在角色之上（走到樹後被遮，不會踩在樹上）；z 高於所有小人；編輯模式隱藏
+        // 🧱 背景遮擋層 lower：在底圖之上、所有物件/角色之下（被全部物件遮住）；如廣場北牆(後牆)。可單張或陣列。
+        const _dayNight = (f) => (_sceneIsNight(SCENES[S.scene]) && CITY_NIGHT[f]) ? CITY_NIGHT[f] : f;   // 🌙 牆框層也吃夜版對照
+        if (SCENES[S.scene].lower) {
+            const _lowers = Array.isArray(SCENES[S.scene].lower) ? SCENES[S.scene].lower : [SCENES[S.scene].lower];
+            for (const _lf of _lowers) {
+                const lo = document.createElement('img');
+                lo.className = 'lstage-lower';
+                lo.width = MAP_W; lo.height = MAP_H;
+                resolveRef({ file: _dayNight(_lf) }).then(src => { if (src) lo.src = src; });
+                S.world.appendChild(lo);
+            }
+        }
+        //    upper 可給單張或陣列（多張前景層，如廣場南牆/前牆）
+        if (SCENES[S.scene].upper) {
+            const _uppers = Array.isArray(SCENES[S.scene].upper) ? SCENES[S.scene].upper : [SCENES[S.scene].upper];
+            for (const _uf of _uppers) {
+                const up = document.createElement('img');
+                up.className = 'lstage-upper';
+                up.width = MAP_W; up.height = MAP_H;
+                resolveRef({ file: _dayNight(_uf) }).then(src => { if (src) up.src = src; });
+                S.world.appendChild(up);
+            }
+        }
+        S.objEls = CFG.layout.map(o => _spawnObjEl(o));
+        const editBtn = root.querySelector('.lstage-edit-btn');
+        if (isStatic || SCENES[S.scene].dynamic || SCENES[S.scene].apt) editBtn.style.display = 'none';   // 靜態地圖／房間／公寓大樓沒有可存的佈局→藏擺設鈕
+        else editBtn.addEventListener('click', () => window.LobbyEditor?.toggle());   // 🖊 擺設模式（實作在 lobby_editor.js）
+        // 🗺️ 靜態點擊地圖：畫建築點擊區（點了白光過場進室內），跳過所有走路系統
+        _mountHotspots(isStatic);
+        _mountAptPlates();
+        if (isStatic) {
+            _applySceneHeader();
+            fitCamera();
+            window.addEventListener('resize', fitCamera);
+            try { S._ro = new ResizeObserver(() => fitCamera()); S._ro.observe(root); } catch (e) {}
+            console.log('[LobbyStage] mounted (static map)');
+            return;
+        }
+        // 🎯 場景熱點：地圖上一塊可點的區域。原本只有靜態大地圖在用（點建築進室內），
+    //    現在一般場景也吃 → 家具可以變成互動點（占卜桌＝點了開占卜面板）。
+    //    hs.obj＝跟著 layout 裡的某件家具走（在擺設模式挪家具，熱點自己跟上，不用回來改座標）
+    //    hs.to＝切場景；hs.open＝呼叫 HOTSPOT_ACTIONS 裡的動作
+    const HOTSPOT_ACTIONS = {
+        tarot: () => _openMemory(),   // 舊存檔／舊熱點的 open:'tarot' 也一起開記憶吧檯
+        memory: () => _openMemory(),
+        workshop: () => _openWorkshopPanel(),
+        store: () => _openStorePanel(),
+        // 📚 書咖那張單人沙發組：2026-09-20 從手機的應用工坊搬過來的兩樣東西。
+        //    當初那兩張卡的註解就寫著「書咖還沒做，現在搬過去會變孤兒」——書咖做好了，兌現。
+        persona:   () => _openCafeStudio('persona',   '我的角色'),
+        worldbook: () => _openCafeStudio('worldbook', '整理世界書'),
+        worldgate:   () => _openPanelFromObject('alice'),   // 純白大廳中央的核心
+        cafeCounter: () => _openPanelFromObject('ying'),
+        exchange:    () => _openPanelFromObject('rabbit'),
+        landlordBook: () => { try { window.OS_LANDLORD_BOOK?.open?.(); } catch (e) { console.warn('[LobbyStage] 房產手帳開不了', e); } },   // 🏢 公寓一樓信箱上面的公告板
+        aptLift:     () => window.dispatchEvent(new CustomEvent('lstage-open-apartment-lift', { detail: { door: { floor: S.aptFloor || 0 } } })),   // 🏢 一樓、樓上的電梯：這棟樓
+        chaos:       () => _openPanelFromObject('cheshire'),   // 404 房的大電腦＝混沌片場（11-20 從柴郡身上搬來）  // 交易所櫃檯（11-20 白兔走近只剩對話，交易所改點櫃檯）    // 書咖櫃檯上的菜單立牌（櫃檯窗本來就開在「菜單」那頁）
+    };
+    // 🎯 點家具開某位管理員的面板（大廳核心＝愛麗絲的世界門、書咖菜單＝瀅瀅的櫃檯）：
+    //   跟走近他選面板那條同一個面板（PANEL_OF），人一樣留著（桌機把他留在面板旁邊；手機的窗吃滿寬，不放）。
+    //   那些面板的 ✕ 只叫 endTalk，沒在聊就不會收立繪 → 窗一被拿掉就收掉。
+    //   🚨 用 MutationObserver 不用輪詢：它在畫面重畫之前就跑。10-14 先用 0.4 秒輪詢，關窗後愛麗絲立繪會多閃一下。
+    //      subtree：立繪模式下窗會被搬進窗格，不一定是 .lobby-left 的直屬孩子；seen：窗出現過才開始等它不見（面板可能晚一步才掛上）。
+    function _openPanelFromObject(npcKey) {
+        const panel = PANEL_OF[npcKey];
+        if (!panel) return;
+        _closeWins();
+        endTalk();
+        hideDialog();
+        const npc = S.npcs.find(n => n.key === npcKey);
+        if (npc && panel.win && !_narrowScreen()) _showPortraitOnly(npc);
+        try { panel.open(); }
+        catch (e) { console.warn('[LobbyStage] 開面板失敗', npcKey, e); }
+        const left = document.querySelector('.lobby-left');
+        if (!left || !panel.win) return;
+        const dropPortrait = () => { if (!S.talkTarget) left.querySelector('.lstage-talk-portrait')?.remove(); };
+        let seen = !!left.querySelector(panel.win);
+        const closer = _regOnce(() => { obs.disconnect(); try { panel.close && panel.close(); } catch (e) {} dropPortrait(); });
+        const obs = new MutationObserver(() => {
+            if (left.querySelector(panel.win)) { seen = true; return; }
+            if (!seen) return;
+            obs.disconnect();
+            dropPortrait();
+            _unregWin(closer);   // 面板自己關了：退出互斥圈，免得之後開別的窗又替它叫一次 close
+        });
+        obs.observe(left, { childList: true, subtree: true });
+    }
+    function _mountHotspots(isStatic) {
+        _orbDrop();
+        S.hotspots = []; S.hsNear = null;
+        (SCENES[S.scene].hotspots || []).forEach(hs => {
+            let box = hs;
+            let litEl = null;   // hs.lit＝滑過時亮的是家具本身（見下面 lstage-obj-lit）
+            if (hs.obj) {
+                const oi = (CFG.layout || []).findIndex(l => String(l.file || '').indexOf(hs.obj) >= 0);
+                const o = oi < 0 ? null : CFG.layout[oi];
+                if (!o || o._plotOff) return;   // 家具不在（換過素材／地塊沒蓋）→ 這顆熱點就不要
+                if (hs.lit) litEl = S.objEls?.[oi] || null;
+                const s = o.s || 1;
+                // hRatio＝只取家具上半那一段（不給就是整件；熱點要跟 hoverImg 對齊時務必留 1）
+                box = { x: o.x, y: o.y, w: o.w * s, h: o.h * s * (hs.hRatio || 1) };
+                // rect＝[左, 上, 寬, 高] 的比例框：一件家具上要放兩顆熱點時用
+                //   （書咖那張圖是「沙發＋圓几」兩件東西畫在一起，一顆管一件）。
+                //   照樣跟著家具走 —— 在擺設模式挪沙發組，兩顆自己跟上。
+                if (Array.isArray(hs.rect)) {
+                    const W = o.w * s, H = o.h * s;
+                    box = { x: o.x + W * hs.rect[0], y: o.y + H * hs.rect[1], w: W * hs.rect[2], h: H * hs.rect[3] };
+                }
+            }
+            const el = document.createElement('div');
+            el.className = 'lstage-hotspot' + (hs.cls ? ' ' + hs.cls : '');
+            el.style.left = box.x + 'px'; el.style.top = box.y + 'px';
+            el.style.width = box.w + 'px'; el.style.height = box.h + 'px';
+            if (hs.radius) el.style.borderRadius = hs.radius;
+            // 🖼 hoverImg＝滑過時疊上去的描邊圖（手繪，沿家具真實輪廓）。
+            //    熱點框＝家具的完整矩形，圖用 100% 100% 鋪滿 → 跟家具本體像素對齊。
+            //    圖只留外圈金邊、中間透明，才不會蓋掉椅背與走到桌前的小人（熱點在 z:1500）。
+            if (hs.hoverImg) el.style.setProperty('--hs-hover-img', 'url("' + CDN + hs.hoverImg + '")');
+            // ✨ hs.lit＝不用另外畫描邊圖：滑過去的時候讓「那張家具圖自己」鑲一圈光。
+            //    光是照圖片本身的形狀長出來的，所以沙發亮沙發、圓几亮圓几，各是各的輪廓。
+            //    🚨 前提是一張圖只畫一件東西 —— 一張圖畫三件，一圈光會把三件一起框起來。
+            const litCls = ['lstage-obj-lit'].concat(hs.litCls ? [hs.litCls] : []);   // litCls＝這間的光換顏色（帽匠工坊是紫的）
+            const H = { el, box, litEl, litCls, reach: hs.reach || 0, orbit: !!(hs.orbit && litEl && !isStatic) };
+            if (litEl) {
+                el.addEventListener('mouseenter', () => { litEl.classList.add(...litCls); if (H.orbit) _orbOpen(H); });
+                el.addEventListener('mouseleave', () => {
+                    if (!el.classList.contains('is-near') && !el.classList.contains('is-flash')) litEl.classList.remove(...litCls);
+                    if (H.orbit && !el.classList.contains('is-near')) _orbClose();
+                });
+            }
+            if (!isStatic) S.hotspots.push(H);
+            if (hs.label) el.innerHTML = '<span class="lstage-hotspot-chip"><i class="fa-solid ' +
+                (hs.icon || 'fa-door-open') + '"></i> ' + hs.label + '</span>';
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();   // 別冒泡到 .lstage-click（那層會判成點空地→走過去/結束對話）
+                if (H.orbit) { _orbClose(true); ORB.list = null; }   // 🌐 開面板就收螢幕；面板裡可能建／刪世界，下次滑過重拿一次
+                if (hs.open && HOTSPOT_ACTIONS[hs.open]) HOTSPOT_ACTIONS[hs.open]();
+                else if (hs.to) goScene(hs.to, hs.spawn, 'arrive');
+            });
+            S.world.appendChild(el);
+        });
+        // 🌟 第一次走進這個場景：能點的家具一起亮一下、浮出名字，2.4 秒後收掉（10-13：第一次容易錯過，手機沒有滑鼠，不知道哪裡能點）
+        try {
+            const seenKey = 'lstage_hs_seen_' + S.scene;
+            if (S.hotspots.length && !localStorage.getItem(seenKey)) {
+                AUI.lsSet(seenKey, '1', '「第一次進來家具亮一下」的紀錄');
+                const list = S.hotspots.slice();
+                list.forEach(h => _hsLight(h, true, 'is-flash'));
+                setTimeout(() => list.forEach(h => _hsLight(h, false, 'is-flash')), 2400);
+            }
+        } catch (e) {}
+    }
+
+    // 座標命中角色（不動角色 pointer-events）：桌機右鍵、手機長按共用
+        const _hitAt = (clientX, clientY) => {
+            const r = S.world.getBoundingClientRect();
+            const mx = (clientX - r.left) / S.scale, my = (clientY - r.top) / S.scale;
+            return ((S.player ? [S.player] : []).concat(S.npcs)).find(a => {
+                const w = Math.max(50, a.h * ((a.frameW && a.frameH) ? a.frameW / a.frameH : 0.6));
+                return mx > a.x - w / 2 && mx < a.x + w / 2 && my > a.y - a.h && my < a.y;
+            });
+        };
+        // 👗 桌機：右鍵角色→下拉單
+        root.addEventListener('contextmenu', (e) => {
+            if (S.edit) return;
+            const hit = _hitAt(e.clientX, e.clientY);
+            if (!hit) return;
+            e.preventDefault(); e.stopPropagation();
+            window.LobbyDress?.openMenu(hit, e.clientX, e.clientY);
+        });
+        // 📱 手機：長按角色→下拉單（contextmenu 手機不可靠，改自訂長按計時器；移動/放開即取消）
+        let _lpTimer = null, _lpX = 0, _lpY = 0;
+        root.addEventListener('pointerdown', (e) => {
+            if (e.pointerType !== 'touch' || S.edit) return;
+            if (e.target.closest('.lstage-joy, .lstage-edit-btn, .lstage-chat-fab, .lstage-hint, #iris-dialogue-box')) return;
+            _lpX = e.clientX; _lpY = e.clientY;
+            clearTimeout(_lpTimer);
+            _lpTimer = setTimeout(() => {
+                _lpTimer = null;
+                const hit = _hitAt(_lpX, _lpY);
+                if (hit) { _lpSuppressClick = true; window.LobbyDress?.openMenu(hit, _lpX, _lpY); }
+            }, 450);
+        });
+        const _lpCancel = (e) => {
+            if (!_lpTimer) return;
+            if (e && e.type === 'pointermove' && Math.hypot(e.clientX - _lpX, e.clientY - _lpY) <= 12) return;   // 小抖動不算移動
+            clearTimeout(_lpTimer); _lpTimer = null;
+        };
+        root.addEventListener('pointermove', _lpCancel);
+        root.addEventListener('pointerup', _lpCancel);
+        root.addEventListener('pointercancel', _lpCancel);
+        initPlayer();
+        window.LobbyNpcs?.init();   // 🧑‍🤝‍🧑 NPC 生成（實作在 lobby_npcs.js；async 不等——NPC 陸續刷出即可）
+        _applySceneHeader();
+        fitCamera();
+        window.addEventListener('resize', fitCamera);
+        // 容器自身變寬窄（漢堡全屏、佈局模式切換）不一定觸發 window resize → ResizeObserver 補刀
+        try { S._ro = new ResizeObserver(() => fitCamera()); S._ro.observe(root); } catch (e) {}
+        S.last = performance.now();
+        S.raf = requestAnimationFrame(tick);
+        // 🏘 MC地塊真狀態在 OS_PT(OS_DB)：掛載後異步對帳（買過→蓋房；沒買→空地）；本場景沒MC地塊也無害
+        try { window.OS_PT?.getPlotBuilt?.('player')?.then?.(b => { if (S.active) setPlot('player', !!b); }); } catch (e) {}
+        // 掛好了才發：要往場景上加東西的模組(如房間的布置工具)靠這個知道「現在可以掛了」
+        try { window.dispatchEvent(new CustomEvent('lstage-mounted', { detail: { scene: S.scene } })); } catch (e) {}
+        console.log('[LobbyStage] mounted');
+    }
+    function _spawnObjEl(o) {
+        const img = document.createElement('img');
+        img.className = 'lstage-actor lstage-obj';
+        if (o.float) img.classList.add('lstage-float');   // 飄浮物件（如 LUNA-VII 核心）
+        // 夜間成對素材：手動 nightFile 優先，其次 CITY_NIGHT 對照表；場景是夜才換（座標/佔地不變）
+        const _nf = _sceneIsNight(SCENES[S.scene]) ? (o.nightFile || CITY_NIGHT[o.file]) : null;
+        const ref = _nf ? Object.assign({}, o, { file: _nf }) : o;
+        const wantAlpha = !!SCENES[S.scene].alphaFoot;   // 大地圖建築：抽 alpha 形狀做碰撞
+        resolveRef(ref).then(src => {
+            if (!src) return;
+            // 🚨 alphaFoot：顯示圖本身就掛 crossOrigin（避免先無 CORS 載一次污染快取→canvas 讀不到 alpha）；直接從這張抽，不開第二探針
+            if (wantAlpha && !String(src).startsWith('data:')) img.crossOrigin = 'anonymous';
+            img.src = src;
+            if (wantAlpha) {
+                const grab = () => _queueAlpha(o, img);   // 排隊抽,別在進場瞬間全擠主執行緒
+                if (img.complete && img.naturalWidth) grab();
+                else img.addEventListener('load', grab, { once: true });
+            }
+        });
+        placeObj(img, o);
+        _applyPlotVis(o, img);   // 🏘 地塊：這件是「沒入住的房」或「已蓋房的空地框」→藏起來(擺設模式半透明可調)
+        S.world.appendChild(img);
+        if (img._fx) S.world.appendChild(img._fx);
+        // 🎩 造物儀會動（11-20，lobby_loom.js）：家具那張換成底座、上面疊會轉的環和繞圈的小卡；排過的存檔照樣是這件（看檔名，不看存檔有沒有欄位）
+        if (/lobby_workshop_obj_loom_svg/.test(o.file || '') && window.LobbyLoom) {
+            try {
+                img._live = window.LobbyLoom.attach(img, o);
+                if (img._live) { const rm = img.remove.bind(img); img.remove = () => { window.LobbyLoom.detach(img._live); rm(); }; }
+            } catch (e) { console.warn('[LobbyStage] 造物儀動不起來，照舊靜止那張', e); }
+        }
+        return img;
+    }
+    // ✨ 家具的動態層（o.fx：404 工作台的螢幕）：同一個位置、大小，疊在家具正上方、不擋點擊；
+    //   跟著 placeObj 走（擺設模式拖家具它一起動），家具被拿掉時一起拿掉
+    function _objFx(img, o) {
+        if (!o.fx) { if (img._fx) { img._fx.remove(); img._fx = null; } return null; }
+        if (!img._fx) {
+            const fx = document.createElement('img');
+            fx.className = 'lstage-actor lstage-obj lstage-obj-fx';
+            resolveRef({ file: o.fx }).then(src => { if (src) fx.src = src; });
+            img._fx = fx;
+            const rm = img.remove.bind(img);
+            img.remove = () => { if (img._fx) img._fx.remove(); rm(); };
+            if (img.parentNode) img.parentNode.insertBefore(fx, img.nextSibling);
+        }
+        return img._fx;
+    }
+    function placeObj(img, o) {
+        const d = effDims(o);
+        img.style.left = o.x + 'px';
+        img.style.top = o.y + 'px';
+        img.style.width = d.ew + 'px';
+        // 深度層級：floor=地板(壓最底、人踩上面)、back=牆背景(在物件後面)、其餘=自動腳底深度(能走前走後)
+        let z;
+        if (o.layer === 'floor') z = 1;
+        else if (o.layer === 'back') z = 2;
+        else z = 2 + Math.round(o.y + d.eh + (o.zb || 0));   // zb=疊層微調(±px)：小物件立在大物件前緣(看板在屋前)時,底邊比不過→手動往前擠
+        img.style.zIndex = String(z);
+        img.style.transform = o.flipX ? 'scaleX(-1)' : '';   // 水平翻轉（一張素材當左右兩用）
+        const fx = _objFx(img, o);
+        if (fx) { fx.style.left = img.style.left; fx.style.top = img.style.top; fx.style.width = img.style.width; fx.style.zIndex = img.style.zIndex; fx.style.transform = img.style.transform; }
+        if (img._live) img._live.place();   // 造物儀那層跟著走（lobby_loom.js）
+    }
+    function unmount() {
+        if (!S.active) return;
+        // 🧱 切塊換場演到一半就離開舞台：這一趟的格線收掉；不是換場那一下的話，墊在底下的舊場景定格也拿掉
+        try { window.AURELIA_TILEFX?.clear?.(S.root); } catch (e) {}
+        if (!S._inSwap && _tileSnap) { _tileSnap.remove(); _tileSnap = null; }
+        if (S._theaterTimer) { clearInterval(S._theaterTimer); S._theaterTimer = null; }
+        window.LobbyTheater?.end();
+        if (S.edit) window.LobbyEditor?.exit(false);
+        if (S.onWheel) { try { S.root?.removeEventListener('wheel', S.onWheel, { passive: false }); } catch (e) {} S.onWheel = null; }
+        _orbDrop();   // 🌐 世界門的環繞螢幕：停 rAF、拆掉
+        _closeWins();
+        S.joy = null;   // 清搖桿殘留方向
+        endTalk();
+        cancelAnimationFrame(S.raf);
+        if (S.sleepT) { clearTimeout(S.sleepT); S.sleepT = null; }
+        _wx = null; S._wxRoll = null;   // 🌦 天氣層 canvas 跟著 S.root.remove() 一起走;auto骰子下次進場重擲
+        window.removeEventListener('resize', fitCamera);
+        if (S._ro) { try { S._ro.disconnect(); } catch (e) {} S._ro = null; }
+        if (S.onKey) {
+            window.removeEventListener('keydown', S.onKey, true);
+            window.removeEventListener('keyup', S.onKey, true);
+            S.onKey = null;
+        }
+        if (S.onPtr) { window.removeEventListener('pointerdown', S.onPtr, true); S.onPtr = null; }
+        S.root?.remove();
+        const _left = document.querySelector('.lobby-left');
+        if (_left) {
+            _left.classList.remove('lstage-on', 'lstage-dlg-hidden');
+            delete _left.dataset.lbh;
+            _left.querySelector('.lstage-talk-portrait')?.remove();
+            _left.querySelector('.lstage-chat-fab')?.remove();
+        }
+        _closeTalkPick();
+        S.root = S.world = null;
+        S.player = null; S.npcs = []; S.talkTarget = null; S.followers = []; S.keys = {}; S.objEls = []; S.hotspots = []; S.hsNear = null;
+        S.mask = null;
+        S.active = false;
+        console.log('[LobbyStage] unmounted');
+    }
+
+    // 🖊 擺設模式（編輯器：拖物件/站位/門區/鋼索、佔地調整、換底圖遮罩、匯出存檔）→ 拆到 lobby_editor.js（走 _b 橋；2026-07-16）
+
+    // 建構模式選圖：貼網址或留空→從電腦選擇圖片（上傳存進本機資產庫 IndexedDB）
+    // ── 🧊 像素處理管線：去背（邊緣連通 BFS）＋掃碎片；opts.noGrid=true 時「不壓縮」──
+    //   壓縮（縮到 96px 高、nearest=大顆粒）只給手動「壓成像素小小人」用；
+    //   裝扮室「生成單張立姿圖」走 noGrid＝畫風原封不動（以後要換不同Q版畫風，有些畫風不能壓）。
+    //   去背只挖「從四邊連通進來、跟邊框主色相近」的像素，不做全域色鍵——
+    //   全域色鍵會把身體內部同色塊一起挖掉（老教訓）。
+    function _loadImg(src) {
+        return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+    }
+    async function _pixelify(src, opts) {
+        try {
+            // 網址圖先抓成 dataURL（直接畫進 canvas 會被跨網域汙染、readback 直接炸）
+            if (/^https?:/i.test(String(src))) {
+                try {
+                    const b = await (await fetch(src)).blob();
+                    src = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(b); });
+                } catch (e) { return null; }
+            }
+            const img = await _loadImg(src);
+            let W, H;
+            if (opts && opts.noGrid) {
+                W = img.naturalWidth || 1; H = img.naturalHeight || 1;   // 原尺寸原畫風，不格點化
+            } else {
+                H = 96; W = Math.max(1, Math.round((img.naturalWidth || 1) * H / (img.naturalHeight || 1)));
+            }
+            const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+            const ctx = cv.getContext('2d', { willReadFrequently: true });
+            ctx.imageSmoothingEnabled = false;   // 關平滑=最近鄰取樣（noGrid 時 1:1 畫、無影響）
+            ctx.drawImage(img, 0, 0, W, H);
+            const d = ctx.getImageData(0, 0, W, H), px = d.data;
+            // 邊框主色：四邊像素投票；夠一致（>40%）才視為單色背景
+            const votes = new Map(); let borderN = 0, transparentN = 0;
+            const at = (x, y) => (y * W + x) * 4;
+            const border = [];
+            for (let x = 0; x < W; x++) border.push([x, 0], [x, H - 1]);
+            for (let y = 1; y < H - 1; y++) border.push([0, y], [W - 1, y]);
+            for (const [x, y] of border) {
+                const i = at(x, y); borderN++;
+                if (px[i + 3] < 16) { transparentN++; continue; }
+                const k = (px[i] >> 4) + ',' + (px[i + 1] >> 4) + ',' + (px[i + 2] >> 4);   // 量化到16階再投票（抗輕微雜訊）
+                votes.set(k, (votes.get(k) || 0) + 1);
+            }
+            if (transparentN < borderN * 0.5 && votes.size) {   // 邊框大多已透明=本來就去過背，跳過
+                let bestK = '', bestC = 0;
+                votes.forEach((c, k) => { if (c > bestC) { bestC = c; bestK = k; } });
+                if (bestC > borderN * 0.4) {
+                    const [br, bg, bb] = bestK.split(',').map(n => (parseInt(n, 10) << 4) + 8);
+                    const near = (i) => px[i + 3] > 0 && (Math.abs(px[i] - br) + Math.abs(px[i + 1] - bg) + Math.abs(px[i + 2] - bb)) < 72;
+                    const seen = new Uint8Array(W * H); const q = [];
+                    for (const [x, y] of border) { const p = y * W + x; if (!seen[p] && near(p * 4)) { seen[p] = 1; q.push(p); } }
+                    while (q.length) {
+                        const p = q.pop(); px[p * 4 + 3] = 0;
+                        const x = p % W, y = (p / W) | 0;
+                        if (x > 0 && !seen[p - 1] && near((p - 1) * 4)) { seen[p - 1] = 1; q.push(p - 1); }
+                        if (x < W - 1 && !seen[p + 1] && near((p + 1) * 4)) { seen[p + 1] = 1; q.push(p + 1); }
+                        if (y > 0 && !seen[p - W] && near((p - W) * 4)) { seen[p - W] = 1; q.push(p - W); }
+                        if (y < H - 1 && !seen[p + W] && near((p + W) * 4)) { seen[p + W] = 1; q.push(p + W); }
+                    }
+                }
+            }
+            // 🧹 掃碎片：去背後常剩「飄在主體周圍的雜點/迷你分身」（SDXL 像素圖通病）。
+            //   連通塊分析：只留最大塊＋面積≥最大塊25%的大附件；碎屑/旁邊的小複製人全清。
+            //   全圖不透明（去背沒發生）＝整張一塊，自然跳過、不誤傷。
+            //   ⚠️ 走路圖(sheet)必須跳過：3×4的12格各是獨立連通塊，掃碎片會把11格角色當碎屑刪光。
+            if (!(opts && opts.sheet)) {
+                const label = new Int32Array(W * H).fill(-1);
+                const areas = [];
+                const qq = [];
+                for (let p0 = 0; p0 < W * H; p0++) {
+                    if (label[p0] !== -1 || px[p0 * 4 + 3] === 0) continue;
+                    const id = areas.length; let area = 0;
+                    label[p0] = id; qq.length = 0; qq.push(p0);
+                    while (qq.length) {
+                        const p = qq.pop(); area++;
+                        const x = p % W, y = (p / W) | 0;
+                        if (x > 0     && label[p - 1] === -1 && px[(p - 1) * 4 + 3] > 0) { label[p - 1] = id; qq.push(p - 1); }
+                        if (x < W - 1 && label[p + 1] === -1 && px[(p + 1) * 4 + 3] > 0) { label[p + 1] = id; qq.push(p + 1); }
+                        if (y > 0     && label[p - W] === -1 && px[(p - W) * 4 + 3] > 0) { label[p - W] = id; qq.push(p - W); }
+                        if (y < H - 1 && label[p + W] === -1 && px[(p + W) * 4 + 3] > 0) { label[p + W] = id; qq.push(p + W); }
+                    }
+                    areas.push(area);
+                }
+                if (areas.length > 1) {
+                    const biggest = Math.max.apply(null, areas);
+                    const keepMin = Math.max(12, biggest * 0.25);
+                    for (let p = 0; p < W * H; p++) {
+                        const id = label[p];
+                        if (id !== -1 && areas[id] < keepMin) px[p * 4 + 3] = 0;
+                    }
+                }
+            }
+            ctx.putImageData(d, 0, 0);
+            // ✂️ 收緊透明邊：原圖(如512×728)角色多半只佔中間一塊，去背後大量留白仍撐著畫布，
+            //   舞台照畫布高度縮放 → 角色被留白吃掉顯得特別小、腳還會浮空。裁到人物外框，
+            //   尺寸才對得上走路圖角色（瀅瀅/玩家塞滿整格）。全不透明(沒去背)＝外框=全圖，自然跳過不誤傷。
+            //   ⚠️ 走路圖(sheet)跳過：整片裁切會打亂3×4的格線對齊。
+            if (!(opts && opts.sheet)) {
+                let minX = W, minY = H, maxX = -1, maxY = -1;
+                for (let y = 0; y < H; y++) {
+                    for (let x = 0; x < W; x++) {
+                        if (px[(y * W + x) * 4 + 3] > 0) {
+                            if (x < minX) minX = x;
+                            if (x > maxX) maxX = x;
+                            if (y < minY) minY = y;
+                            if (y > maxY) maxY = y;
+                        }
+                    }
+                }
+                if (maxX >= minX && maxY >= minY && (maxX - minX + 1 < W || maxY - minY + 1 < H)) {
+                    const cw = maxX - minX + 1, ch = maxY - minY + 1;
+                    const out = document.createElement('canvas'); out.width = cw; out.height = ch;
+                    out.getContext('2d').drawImage(cv, minX, minY, cw, ch, 0, 0, cw, ch);
+                    return out.toDataURL('image/png');
+                }
+            }
+            return cv.toDataURL('image/png');
+        } catch (e) { console.warn('[LobbyStage] _pixelify 失敗', e); return null; }
+    }
+
+    async function _askImage(cb) {
+        const url = await AUI.prompt('貼上圖片網址；或留空按「確定」改為從電腦選擇圖片');
+        if (url === null) return;
+        if (url.trim()) { cb({ url: url.trim() }); return; }
+        const inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = 'image/*';
+        inp.onchange = () => {
+            const f = inp.files && inp.files[0];
+            if (!f) return;
+            const rd = new FileReader();
+            rd.onload = async () => {
+                const id = 'img_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+                try { await idbPut(id, rd.result); cb({ idb: id }, rd.result); }
+                catch (e) { console.warn('[LobbyStage] 圖片存檔失敗', e); }
+            };
+            rd.readAsDataURL(f);
+        };
+        inp.click();
+    }
+
+    // ── 🔌 拆檔橋＋窗口互斥登記制 ──
+    //    子模組（lobby_theater.js…）經 window.LobbyStage._b 借核心狀態/工具，載入順序=lobby_stage 先。
+    //    各小窗把自己的 close 函式 regWin() 進互斥圈；誰要開窗先 closeWins() 全關（含自己的舊窗）。
+    const _winClosers = [_closeStorePanel];   // 裝扮室三小窗在 lobby_dress.js 自己 regWin
+    function _regWin(fn) { _winClosers.push(fn); return fn; }
+    function _unregWin(fn) { const i = _winClosers.indexOf(fn); if (i >= 0) _winClosers.splice(i, 1); }
+    // 每開一次就登記一次的窗（快轉地圖、占卜、工坊、點家具開的面板）走這支：收掉時順手退出互斥圈、只收一次。
+    //   以前直接 _regWin(close)：自己按 ✕ 關掉後 close 還留在圈裡，之後每開別的窗就再跑一遍
+    //   （拿掉別的面板掛上的 void-dock-open、收掉別人的立繪），圈子也只增不減。
+    function _regOnce(fn) {
+        let done = false;
+        const once = () => { _unregWin(once); if (done) return; done = true; fn(); };
+        return _regWin(once);
+    }
+    function _closeWins() { _winClosers.slice().forEach(fn => { try { fn(); } catch (e) {} }); }   // 複本：_regOnce 的會邊跑邊把自己拿掉
+
+    window.LobbyStage = {
+        tryMount, unmount,
+        mountSettings,                      // ⚙️ 「設置」窗口的「大廳」那一頁（os_settings_window.js 叫）
+        enter404Stage, exit404Stage,
+        enterRoom,                          // 🏠 走進一間房（房產／公寓那條線用）
+        enterApt,                           // 🏢 走進公寓大樓（一樓大廳／樓上走廊；os_landlord_room.js 用）
+        isActive: () => S.active,
+        isOn,
+        getTalkTarget: () => S.talkTarget,
+        getDefaultTarget,
+        setTalkTarget: (t) => { S.talkTarget = t || null; },
+        endTalk,
+        showDialog,
+        hideDialog,
+        getNpcHistory,
+        pushNpcHistory,
+        popNpcHistoryTail,
+        truncateNpcHistory,
+        setNpcHistory,
+        setPlot,                            // 🏘 地塊「空地↔蓋房」切換（經濟③入住流程呼叫；console 也可手動）
+        // 🧍 主角在大廳的樣子（裝扮室換過的皮膚，沒有就是剪影）：後院那種別的舞台也用同一個小人
+        //   回 { src } 單張立姿（原圖朝左）或 { sheet } 3×4 走路圖
+        playerLook: async () => {
+            const skin = _skins()['player'];
+            const src = skin ? await resolveRef(skin.ref).catch(() => null) : null;
+            if (src) return skin.kind === 'sheet' ? { sheet: src } : { src };
+            return { src: (localStorage.getItem('lobby_stage_mc') === 'm') ? ASSET.mcM : ASSET.mcF };
+        },
+        plotOccupied: _plotOccupied,
+        openCityMap: _openCityMap,          // 🧭 快轉地圖（lobby_places 的統一入口在舞台模式下走這條）
+        openMemory: _openMemory,            // 🍸 紫薇的記憶吧檯（占卜＋記憶迴廊；立繪模式也從這裡開）
+        openWorkshopPanel: _openWorkshopPanel,   // 🎩 造物工坊面板（同上：立繪模式沒有工坊可以走進去）
+        rollGuestPool: () => window.LobbyNpcs?.rollGuestPool(),   // console 診斷用：看日誌 NPC 池撈到誰（無 F12 環境靠這個；懶解析到 lobby_npcs.js，async 透傳）
+        pixelify: _pixelify,                // console 診斷用：手動壓小小人（回 dataURL）
+        orbState: () => ({ open: ORB.target, show: +ORB.show.toFixed(3), screens: ORB.scr.length, rafRunning: !!ORB.raf, still: ORB.still }),   // console 診斷用：世界門環繞螢幕現在怎樣
+        openDressRoom: (a) => window.LobbyDress?.openRoom(a),   // console 診斷用：直接開某個角色的裝扮室（傳 _S.npcs 裡的物件）
+        _S: S,
+        _b: {   // 🔌 拆檔橋：子模組專用（lobby_theater.js…），外部腳本別戳
+            S,
+            stageHidden: _stageHidden,   // 舞台被蓋住（劇情、app、切到別頁）：lobby_ember.js 的小人那層跟著睡
+            get CFG() { return CFG; },   // CFG 會整顆換（_loadCfg），必須走 getter
+            get MAP_W() { return MAP_W; }, get MAP_H() { return MAP_H; }, SCENES, SCENE_HEADER,   // getter：現在這間的地圖大小
+            goScene, cityLocked: _cityLocked,   // 給 lobby_places.js（地點清單）
+            placeActor,
+            regWin: _regWin, closeWins: _closeWins,
+            // 給 lobby_dress.js（裝扮室/歷史窗）：皮膚存取/換裝/圖片工具/NPC歷史資料
+            skins: _skins, saveSkin: _saveSkin,
+            swapActorSrc: _swapActorSrc, applySkin: _applySkin, face: _face,
+            sfRetry: _sfRetry, sfMirror: _sfMirror,   // 素材庫的圖抓不到→換 raw 再試一次（lobby_cafe_regulars.js 的走路圖、坐姿圖；lobby_places.js 的縮圖）
+            pixelify: _pixelify, askImage: _askImage,
+            resolveRef, idbPut, idbDel,
+            getNpcHistory, setNpcHistory,
+            // 給 lobby_editor.js（擺設模式）：物件擺放/佔地/碰撞重建/遮罩/人物縮放/相機重算
+            placeObj, spawnObjEl: _spawnObjEl, footRect,
+            rebuildBlocks, loadMask, applyActorScale, fitCamera,
+            setPlot, plotOccupied: _plotOccupied,   // 🏘 地塊切換（編輯器「蓋房/空地」鈕）
+            // 給 lobby_decider.js（自己決定下一步的 NPC）：找路走路、放置小人、面向、設置頁重進場景
+            findFreeSpot, blockedPath, slideMove: _slideMove, isNightNow: _isNightNow,
+            placeNpcExtras, npcNearCheck: _npcNearCheck, WALK_FRAMES, WALK_FRAME_MS,
+            remount: () => { unmount(); tryMount(); },
+            // 給 lobby_npcs.js（NPC 生成/名冊）：素材表/生NPC/碰撞判定/站位開闊度採樣
+            ASSET, addNpc, blocked, whiteRatio: _whiteRatio,
+            startTalk,   // 給 os_worldgate.js（旅人偶遇窗「隨便聊聊」退回自由對話軌道）
+        },
+    };
+})();

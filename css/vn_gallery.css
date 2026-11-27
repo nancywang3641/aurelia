@@ -1,0 +1,280 @@
+/* ============================================================
+   VN 圖庫（世界感知）—— 圖片為主的網格畫廊
+   縮圖大、狀態標籤、右上「⋯」選單放編輯/刪除/複製；點圖看大圖。
+   ============================================================ */
+.vng-bar { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+.vng-sel {
+    flex:1 1 160px; min-width:140px; padding:7px 9px; border-radius:8px;
+    background:rgba(255,255,255,0.07); color:inherit;
+    border:1px solid rgba(128,128,128,0.3); font-size:12px;
+}
+.vng-chips { display:flex; gap:6px; flex-shrink:0; }
+.vng-chip {
+    padding:5px 12px; border-radius:999px; font-size:11px; cursor:pointer;
+    border:1px solid rgba(128,128,128,0.3); background:transparent; color:inherit; opacity:0.65;
+}
+.vng-chip.active { background:#d4af37; color:#1a1a1a; border-color:#d4af37; opacity:1; font-weight:700; }
+
+.vng-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(104px, 1fr)); gap:10px; }
+.vng-card {
+    position:relative; border-radius:10px; overflow:hidden; cursor:pointer;
+    background:rgba(120,120,140,0.12); border:1px solid rgba(128,128,128,0.18);
+    box-shadow:0 2px 8px rgba(0,0,0,0.18); aspect-ratio:3 / 4;
+    transition:transform .15s, box-shadow .15s;
+}
+.vng-card.kind-bg { aspect-ratio:16 / 10; }
+/* 立繪是透明 PNG → 棋盤格底色襯托透明區 */
+.vng-card.kind-sprite {
+    background-color:#2b2d36;
+    background-image:
+        linear-gradient(45deg, rgba(255,255,255,0.06) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.06) 75%),
+        linear-gradient(45deg, rgba(255,255,255,0.06) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.06) 75%);
+    background-size:16px 16px; background-position:0 0, 8px 8px;
+}
+.vng-card.kind-sprite img { object-fit:contain; }
+.vng-card:hover { transform:translateY(-2px); box-shadow:0 6px 16px rgba(0,0,0,0.32); }
+.vng-card img { width:100%; height:100%; object-fit:cover; display:block; }
+.vng-ph { width:100%; height:100%; display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.4); font-size:24px; }
+.vng-foot {
+    position:absolute; left:0; right:0; bottom:0; padding:16px 8px 6px;
+    font-size:11px; color:#fff; font-weight:600; pointer-events:none;
+    background:linear-gradient(to top, rgba(0,0,0,0.8), transparent);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.vng-badge {
+    position:absolute; top:6px; left:6px; font-size:9px; font-weight:700;
+    padding:2px 8px; border-radius:999px; letter-spacing:.5px; z-index:2;
+}
+.vng-badge.fav { background:#d4af37; color:#1a1a1a; }
+.vng-badge.unclassed { background:rgba(0,0,0,0.6); color:#ffe9b8; border:1px solid rgba(255,221,150,0.5); }
+.vng-badge.src { left:auto; right:36px; background:rgba(0,0,0,0.6); color:#cfe3ff; border:1px solid rgba(150,190,255,0.5); }
+.vng-more {
+    position:absolute; top:5px; right:5px; width:26px; height:26px; border-radius:50%;
+    border:none; background:rgba(0,0,0,0.5); color:#fff; font-size:15px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:2;
+}
+.vng-more:hover { background:rgba(0,0,0,0.78); }
+
+.vng-menu {
+    position:fixed; z-index:100000; min-width:150px; padding:5px;
+    background:#23252e; border:1px solid rgba(255,255,255,0.12); border-radius:10px;
+    box-shadow:0 12px 34px rgba(0,0,0,0.5);
+}
+.vng-menu button {
+    display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+    background:none; border:none; color:#e8e8ec; font-size:13px;
+    padding:9px 11px; border-radius:7px; cursor:pointer; white-space:nowrap;
+}
+.vng-menu button:hover { background:rgba(255,255,255,0.08); }
+.vng-menu button.danger { color:#ff8a8a; }
+
+.vng-lightbox { position:fixed; inset:0; z-index:100001; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; padding:24px; }
+.vng-lightbox img { max-width:100%; max-height:100%; border-radius:8px; box-shadow:0 0 44px rgba(0,0,0,0.6); }
+
+.vng-modal { position:fixed; inset:0; z-index:100001; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:20px; }
+.vng-modal-box { width:min(440px, 92vw); background:#23252e; border-radius:14px; padding:18px; box-shadow:0 16px 50px rgba(0,0,0,0.55); }
+.vng-modal-box h4 { margin:0 0 10px; font-size:15px; color:#f0f0f4; }
+.vng-modal-box textarea {
+    width:100%; min-height:100px; resize:vertical; box-sizing:border-box;
+    background:rgba(255,255,255,0.06); border:1px solid rgba(128,128,128,0.35);
+    border-radius:8px; color:#eee; font-size:13px; padding:10px; line-height:1.5;
+}
+.vng-modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+.vng-modal-actions button { padding:8px 18px; border-radius:8px; border:none; cursor:pointer; font-size:13px; }
+.vng-btn-ok { background:#d4af37; color:#1a1a1a; font-weight:700; }
+.vng-btn-cancel { background:rgba(255,255,255,0.1); color:#ddd; }
+.vng-empty { color:#888; font-size:.85rem; padding:28px 0; text-align:center; }
+/* 舊圖補記進度（只有改版後第一次開會出現） */
+.vng-indexing { color:#888; font-size:.78rem; margin:-4px 0 10px; font-variant-numeric:tabular-nums; }
+
+/* ── 立繪去背工作室（從頭像轉立繪）── */
+.vng-pick { cursor:pointer; }
+.vng-card.is-sel { outline:3px solid #d4af37; outline-offset:-2px; }
+.vng-studio-sel { flex-direction:column; gap:8px; margin-top:12px; padding:12px; background:rgba(212,175,55,0.07); border:1px solid rgba(212,175,55,0.28); border-radius:10px; }
+.vng-studio-sel-name { font-size:13px; font-weight:700; color:#f0e6c8; }
+.vng-studio-prompt { width:100%; box-sizing:border-box; min-height:60px; resize:vertical; background:rgba(0,0,0,0.28); border:1px solid rgba(128,128,128,0.35); border-radius:8px; color:#ddd; font-size:12px; padding:8px; font-family:inherit; line-height:1.5; }
+.vng-studio-sel-row { display:flex; gap:10px; align-items:flex-start; flex-wrap:wrap; }
+.vng-studio-gen { padding:10px 22px; border:none; border-radius:8px; background:#d4af37; color:#1a1a1a; font-weight:700; font-size:13px; cursor:pointer; white-space:nowrap; }
+.vng-studio-tpl { flex:1; min-width:170px; font-size:11px; }
+.vng-studio-tpl summary { cursor:pointer; padding:6px 0; color:#bbb; }
+.vng-studio-preview {
+    margin-top:12px; min-height:200px; border-radius:10px; padding:10px;
+    display:flex; align-items:center; justify-content:center;
+    background-color:#2b2d36;
+    background-image:linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%), linear-gradient(45deg, rgba(255,255,255,0.05) 25%, transparent 25%, transparent 75%, rgba(255,255,255,0.05) 75%);
+    background-size:18px 18px; background-position:0 0, 9px 9px;
+}
+.vng-studio-preview img { max-width:100%; max-height:320px; border-radius:6px; }
+.vng-studio-bar { display:flex; gap:8px; margin-top:12px; }
+.vng-studio-act { flex:1; min-width:0; box-sizing:border-box; padding:10px 6px; border:1px solid rgba(128,128,128,0.35); border-radius:8px; background:rgba(255,255,255,0.06); color:inherit; font-size:12px; white-space:nowrap; text-align:center; cursor:pointer; transition:opacity .15s; }
+.vng-studio-act.primary { background:#d4af37; color:#1a1a1a; font-weight:700; border-color:#d4af37; }
+.vng-studio-strength { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:11px; color:#aaa; }
+.vng-studio-strength input { flex:1; }
+.vng-studio-hint { font-size:10px; color:#888; white-space:nowrap; }
+.vng-studio-status { margin-top:8px; font-size:11px; min-height:14px; color:#aaa; }
+
+/* ── 劇情閱讀器：搜尋 + 閱讀方式（一章一張 / 連著讀）── */
+.vrd-tools { display:flex; align-items:center; gap:8px; margin:0 0 8px; }
+.vrd-search { flex:1; min-width:0; display:flex; align-items:center; gap:7px; background:rgba(255,255,255,0.04); border:1px solid rgba(212,175,55,0.2); border-radius:8px; padding:0 10px; }
+.vrd-search:focus-within { border-color:rgba(212,175,55,0.5); }
+.vrd-search-ico { color:#8a8172; font-size:12px; flex-shrink:0; }
+.vrd-search-input { flex:1; min-width:0; background:transparent; border:0; outline:none; color:#e8dfc8; font-family:inherit; font-size:12.5px; padding:9px 0; }
+.vrd-search-input::placeholder { color:#6d675c; }
+.vrd-mode-btn { flex-shrink:0; display:flex; align-items:center; gap:6px; background:transparent; border:1px solid rgba(212,175,55,0.25); border-radius:8px; color:#d4af37; font-family:inherit; font-size:12px; padding:9px 12px; cursor:pointer; transition:background .15s, border-color .15s; }
+.vrd-mode-btn:hover { background:rgba(212,175,55,0.1); border-color:rgba(212,175,55,0.5); }
+.vrd-count { font-size:11px; color:#8a8172; margin:0 0 10px 2px; }
+.vrd-empty { text-align:center; color:#6d675c; font-size:12.5px; padding:40px 20px; line-height:1.8; }
+.vrd-dim { color:#6d675c; }
+.vrd-detail-time { color:#6d675c; font-size:11.5px; margin:0 0 12px; }
+
+/* 連著讀：整本攤成一頁，章節之間留一條分隔 */
+.vrd-flow { padding:0 0 18px; margin:0 0 18px; border-bottom:1px solid rgba(212,175,55,0.14); }
+.vrd-flow:last-child { border-bottom:0; }
+.vrd-flow-hd { display:flex; align-items:center; gap:8px; margin:0 0 10px; }
+.vrd-flow-body { font-size:0.88rem; line-height:1.85; color:#d8d0c0; word-break:break-word; }
+.vrd-flow-body p { margin:0 0 0.6em; }
+.vrd-flow-body p:last-child { margin-bottom:0; }
+
+/* 詳情頁的摺疊區塊（摘要 / 這章開始時的數值）*/
+.vrd-fold { width:100%; margin-bottom:8px; }
+.vrd-fold-hd { display:flex; align-items:center; gap:7px; padding:7px 12px; background:rgba(212,175,55,0.08); border:1px solid rgba(212,175,55,0.22); border-radius:6px; cursor:pointer; font-size:0.78rem; color:#d4af37; user-select:none; transition:background .2s; }
+.vrd-fold-hd:hover { background:rgba(212,175,55,0.16); }
+.vrd-fold-arrow { font-size:9px; transition:transform .2s; }
+.vrd-fold-ico { font-size:11px; opacity:.8; }
+.vrd-fold.open .vrd-fold-arrow { transform:rotate(90deg); }
+.vrd-fold.open .vrd-fold-hd { border-radius:6px 6px 0 0; }
+.vrd-fold-body { display:none; padding:11px 14px; background:rgba(30,22,8,0.55); border:1px solid rgba(212,175,55,0.18); border-top:none; border-radius:0 0 6px 6px; font-size:0.8rem; color:#c9c0ae; line-height:1.75; word-break:break-word; max-height:320px; overflow-y:auto; }
+.vrd-fold.open .vrd-fold-body { display:block; }
+.vrd-kv { display:flex; gap:10px; padding:3px 0; border-bottom:1px dashed rgba(212,175,55,0.12); }
+.vrd-kv:last-child { border-bottom:0; }
+.vrd-kv-k { flex:0 0 38%; color:#a89a78; word-break:break-word; }
+.vrd-kv-v { flex:1; min-width:0; color:#e8dfc8; word-break:break-word; }
+
+/* ── 劇情閱讀器：章節選擇卡片 → 點進去看全文 ── */
+.vrd-cards { display:flex; flex-direction:column; gap:12px; }
+.vrd-card { background:rgba(255,255,255,0.04); border:1px solid rgba(212,175,55,0.2); border-radius:12px; padding:13px 14px; cursor:pointer; display:flex; flex-direction:column; gap:8px; transition:transform .15s, box-shadow .15s, border-color .15s; }
+.vrd-card:hover { transform:translateY(-2px); border-color:rgba(212,175,55,0.5); box-shadow:0 6px 18px rgba(0,0,0,0.3); }
+.vrd-card-hd { display:flex; align-items:center; gap:8px; }
+.vrd-card-no { font-family:'Courier New',monospace; font-size:12px; font-weight:800; color:#d4af37; flex-shrink:0; }
+.vrd-card-title { flex:1; min-width:0; font-size:14px; font-weight:700; color:#e8dfc8; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vrd-card-time { font-size:10px; color:#777; flex-shrink:0; }
+.vrd-card-summary { font-size:12.5px; line-height:1.7; color:#b6ad9c; }
+.vrd-card-readmore { font-size:11px; color:#d4af37; opacity:.85; text-align:right; }
+/* 全文詳情頁 */
+/* sticky 的 top 是對齊捲動區的內容框，body 有 16px padding-top → 吸頂時上面會露出 16px 縫隙讓正文透出來。
+   往上多吃 16px（top/margin 負值 + padding 補回）讓背景蓋滿到頂，靜止時的位置維持不變。 */
+.vrd-detail-bar { display:flex; align-items:center; gap:10px; margin:-16px 0 8px; position:sticky; top:-16px; background:rgba(6,6,10,0.97); padding:22px 0 6px; z-index:1; }
+.vrd-detail-title { flex:1; min-width:0; font-size:14px; font-weight:700; color:#d4af37; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vrd-back-btn { background:transparent; border:1px solid rgba(212,175,55,0.3); color:#d4af37; padding:6px 14px; border-radius:8px; cursor:pointer; font-size:12px; flex-shrink:0; }
+.vrd-back-btn:hover { background:rgba(212,175,55,0.1); }
+.vrd-back-btn.primary { background:rgba(212,175,55,0.14); border-color:rgba(212,175,55,0.55); font-weight:700; }
+.vrd-back-btn.primary:hover { background:rgba(212,175,55,0.24); }
+/* 章節編輯（獨立版）：原始文字直接改，存回去會連動重算 */
+.vrd-edit { display:flex; flex-direction:column; gap:8px; margin-top:4px; }
+.vrd-edit-hint { font-size:11px; line-height:1.7; color:#8a8172; }
+.vrd-edit-ta { width:100%; box-sizing:border-box; min-height:46vh; resize:vertical; background:rgba(30,22,8,0.7); border:1px solid rgba(212,175,55,0.28); border-radius:6px; color:#d4b87a; padding:11px 12px; font-family:'Consolas','Monaco',monospace; font-size:12.5px; line-height:1.7; outline:none; white-space:pre-wrap; }
+.vrd-edit-ta:focus { border-color:rgba(212,175,55,0.55); }
+.vrd-edit-bar { display:flex; justify-content:flex-end; gap:8px; padding-bottom:20px; }
+.vrd-edit-bar.busy { opacity:0.5; pointer-events:none; }
+/* 標題列按鈕 */
+.vrd-hd-ico { font-size:0.9em; margin-right:2px; }
+.vrd-hd-btn { color:#888; font-size:0.78rem; cursor:pointer; padding:3px 8px; border:1px solid rgba(212,175,55,0.2); border-radius:4px; transition:color .15s, border-color .15s; }
+.vrd-hd-btn:hover { color:#d4af37; border-color:rgba(212,175,55,0.5); }
+.vrd-hd-icobtn { color:#666; font-size:1.05rem; line-height:1; cursor:pointer; padding:2px 4px; transition:color .15s; }
+.vrd-hd-icobtn:hover { color:#d4af37; }
+.vrd-hd-close { font-size:1.25rem; }
+/* 設置頁 */
+.vrd-set { display:flex; flex-direction:column; gap:9px; padding:2px 2px 24px; }
+.vrd-set-bar { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+.vrd-set-sec { font-size:13px; font-weight:700; color:#d4af37; letter-spacing:1px; margin-top:4px; }
+.vrd-set-note { font-size:11.5px; line-height:1.7; color:#8a8172; }
+.vrd-set-label { font-size:11px; color:#9c9384; letter-spacing:1px; margin-top:6px; }
+.vrd-set-input { width:100%; box-sizing:border-box; background:rgba(255,255,255,0.04); border:1px solid rgba(212,175,55,0.18); border-radius:6px; color:#e8dfc8; padding:9px 11px; font-family:'Courier New',monospace; font-size:12.5px; outline:none; }
+.vrd-set-input:focus { border-color:rgba(212,175,55,0.5); }
+.vrd-set-preview { min-height:38px; background:rgba(255,255,255,0.03); border:1px dashed rgba(212,175,55,0.22); border-radius:6px; padding:9px 11px; font-size:12px; line-height:1.65; color:#b6ad9c; white-space:pre-wrap; word-break:break-word; }
+.vrd-set-preview.miss { border-color:rgba(220,120,120,0.35); color:#c98a8a; }
+.vrd-set-acts { display:flex; gap:8px; margin-top:14px; }
+.vrd-set-btn { flex:1; min-width:0; background:transparent; border:1px solid rgba(255,255,255,0.14); color:#999; padding:8px 10px; border-radius:6px; cursor:pointer; font-size:12.5px; font-family:inherit; }
+.vrd-set-btn:hover { border-color:rgba(212,175,55,0.4); color:#d4af37; }
+.vrd-set-btn.primary { background:rgba(212,175,55,0.12); border-color:rgba(212,175,55,0.4); color:#d4af37; font-weight:700; }
+
+/* ── 創作室：劇情面板自訂 CSS 框（像酒館自訂樣式）── */
+.vth-mini { padding:6px 12px; font-size:12px; border-radius:7px; border:1px solid rgba(128,128,128,0.35); background:rgba(255,255,255,0.06); color:inherit; cursor:pointer; white-space:nowrap; }
+.vth-mini.primary { background:#d4af37; color:#1a1a1a; font-weight:700; border-color:#d4af37; }
+.vth-css-wrap { display:flex; flex-direction:column; gap:10px; height:100%; }
+.vth-css-bar { display:flex; align-items:center; gap:10px; }
+.vth-css-world { flex:1; min-width:0; font-size:12px; color:#d4af37; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vth-css-area { min-height:180px; width:100%; box-sizing:border-box; resize:vertical; background:rgba(0,0,0,0.4); border:1px solid rgba(128,128,128,0.35); border-radius:8px; color:#d8e8ff; font-family:'Courier New',monospace; font-size:12.5px; line-height:1.6; padding:12px; outline:none; }
+.vth-css-area:focus { border-color:#d4af37; }
+.vth-css-hint { font-size:11px; color:#888; line-height:1.5; }
+.vth-ai-row { display:flex; gap:8px; align-items:center; }
+.vth-ai-desc { flex:1; min-width:0; padding:8px 10px; border-radius:8px; background:rgba(0,0,0,0.3); border:1px solid rgba(128,128,128,0.35); color:#ddd; font-size:12.5px; }
+.vth-ai-desc:focus { border-color:#d4af37; outline:none; }
+.vth-mini.danger { color:#ff8a8a; border-color:rgba(255,138,138,0.4); }
+
+/* 主題工坊：生成 → 即時預覽 → 主題庫 */
+/* 版型照創作室那套：左邊工作欄（世界／AI／CSS／主題庫）、右邊即時預覽固定在側邊。
+   容器窄（手機殼、或創作室判成單欄）就收回上下排，預覽在上。 */
+.vth-wrap { display:flex; flex-direction:row; gap:14px; align-items:stretch; height:100%; min-height:0; }
+.vth-col-work { flex:1; min-width:280px; display:flex; flex-direction:column; gap:11px; min-height:0; overflow-y:auto; }
+.vth-col-prev { flex:1.15; min-width:300px; display:flex; flex-direction:column; gap:10px; min-height:0; overflow:hidden; }
+/* 💬 左欄＝對話（照 VN 組件那套：講一句改一次），泡泡直接用創作室那組 class，配色兩邊都已經有了 */
+/* 🚨這裡是聊天室，要跟其他創作室的聊天區長成同一個東西（以前跟其他創作室長得太不一樣）：
+   同一張紙底、同一條裝訂線、同一個外框，而不是一片沒有邊界的空白。 */
+.vth-chat {
+    flex:1; min-height:120px; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
+    padding:14px 14px 14px 46px;
+    border:1px solid rgba(142, 101, 51, 0.28);
+    border-radius:10px;
+    background:
+        linear-gradient(90deg, rgba(119, 76, 34, 0.035) 1px, transparent 1px) 38px 0 / 1px 100% no-repeat,
+        linear-gradient(rgba(255, 252, 243, 0.18), rgba(229, 207, 167, 0.10));
+}
+/* 右欄底部的動作列：對齊其他創作室右下角那顆「確定創建」 */
+.vth-act-bar { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; flex:none; }
+.vth-chat-empty { font-size:12px; line-height:1.7; color:#8a8a8a; padding:10px 4px; }
+.vth-undo-row { display:none; }
+.vth-undo-row.on { display:flex; justify-content:flex-end; gap:8px; }
+.vth-undo-row [hidden] { display:none; }
+.vth-say-wrap { padding:0; gap:8px; align-items:flex-end; }
+.vth-say-wrap .studio-textarea { min-height:46px; max-height:120px; }
+/* 右欄三個分頁：即時預覽／CSS／主題庫（一次只看一件事，不再一長條疊下去） */
+.vth-ptabs { display:flex; gap:6px; flex:0 0 auto; }
+.vth-ptab { flex:1; padding:7px 4px; font-size:12px; border-radius:8px; border:1px solid rgba(128,128,128,0.3);
+  background:transparent; color:#bbb; cursor:pointer; white-space:nowrap; }
+.vth-ptab.active { background:#d4af37; color:#1a1a1a; border-color:#d4af37; font-weight:700; }
+.vth-pane { display:none; flex:1; min-height:0; overflow-y:auto; flex-direction:column; gap:10px; }
+.vth-pane.on { display:flex; }
+.vth-pane-css .vth-css-area { flex:1; min-height:220px; }
+.studio-mobile .vth-wrap, .vth-wrap.is-narrow { flex-direction:column; height:auto; }
+.studio-mobile .vth-col-work, .studio-mobile .vth-col-prev { overflow:visible; min-height:0; }
+@media (max-width:768px) { .vth-wrap { flex-direction:column; height:auto; } .vth-col-work, .vth-col-prev { overflow:visible; } }
+.vth-prev-head { display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+.vth-prev-label { font-size:12px; color:#d4af37; font-weight:700; }
+.vth-mode-tabs { display:flex; gap:4px; flex-wrap:wrap; }
+.vth-mode { padding:4px 11px; font-size:11px; border-radius:6px; border:1px solid rgba(128,128,128,0.3); background:transparent; color:#bbb; cursor:pointer; }
+.vth-mode.active { background:#d4af37; color:#1a1a1a; border-color:#d4af37; font-weight:700; }
+.vth-vp-tabs { display:flex; gap:4px; }
+.vth-vp { padding:4px 9px; font-size:12px; border-radius:6px; border:1px solid rgba(128,128,128,0.3); background:transparent; color:#bbb; cursor:pointer; line-height:1; }
+.vth-vp.active { background:#d4af37; color:#1a1a1a; border-color:#d4af37; font-weight:700; }
+.vth-vp-w { width:62px; padding:4px 6px; font-size:11px; border-radius:6px; border:1px solid rgba(128,128,128,0.3); background:#08080a; color:#d4af37; }
+.vth-preview-wrap { width:100%; display:flex; justify-content:center; }
+.vth-preview-box { overflow:hidden; border:1px solid rgba(212,175,55,0.25); border-radius:10px; background:#08080a; }
+.vth-preview { border:0; background:#08080a; display:block; }
+
+.vth-gal { border-top:1px solid rgba(128,128,128,0.2); padding-top:12px; display:flex; flex-direction:column; gap:10px; }
+.vth-gal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.vth-gal-label { font-size:12px; color:#d4af37; font-weight:700; }
+.vth-gal-save { display:flex; gap:6px; align-items:center; }
+.vth-gal-name { width:140px; padding:6px 9px; border-radius:7px; background:rgba(0,0,0,0.3); border:1px solid rgba(128,128,128,0.35); color:#ddd; font-size:12px; }
+.vth-gal-name:focus { border-color:#d4af37; outline:none; }
+.vth-gal-empty { color:#888; font-size:12px; padding:14px 2px; line-height:1.6; }
+.vth-gal-list { display:grid; grid-template-columns:repeat(auto-fill, minmax(152px, 1fr)); gap:12px; }
+.vth-gal-card { border:1px solid rgba(128,128,128,0.2); border-radius:10px; overflow:hidden; background:rgba(255,255,255,0.03); display:flex; flex-direction:column; }
+.vth-gal-thumb-wrap { width:100%; height:108px; overflow:hidden; background:#08080a; }
+.vth-gal-thumb { width:100%; height:140px; border:none; display:block; pointer-events:none; }
+.vth-gal-name-row { padding:7px 9px 2px; }
+.vth-gal-cname { font-size:12px; color:#e8dfc8; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; }
+.vth-gal-acts { display:flex; gap:4px; padding:6px 8px 8px; }
+.vth-gal-acts .vth-mini { flex:1; padding:5px 0; font-size:11px; text-align:center; }
+.vth-gal-acts .vth-mini.danger { flex:0 0 auto; padding:5px 9px; }

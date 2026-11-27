@@ -1,0 +1,822 @@
+﻿// ----------------------------------------------------------------
+// [檔案] os_settings_comfyui.js — 系統設置 🧩 ComfyUI 直連設定（2026-07-17 自 os_settings.js 拆出）
+// 職責：LoRA 行＋測試連線/抓模型清單；預設包（modal/grid/另存/覆蓋/匯出入/清空/風格預覽/拖圖還原工作流）；
+//       面板欄位＝ComfyUI「目前的設定」，底部保存只存它；預設包只有「儲存至此包」改得到（2026-10-01 起；四個桶照存檔原樣留著，面板不讀寫）。
+// 依賴：參數注入 ctx = { imgConfig, container }（都是 os_settings.js launchApp 的閉包變數，開面板時組好傳入）；
+//       入口＝window.OS_SETTINGS_COMFY.wire(ctx)。對外發布 window._cfdPreset（預設包牆）／_cfdEdit（面板上載的是目前的設定還是哪個包）
+//       （HTML onclick 用），
+//       另加 window._cfdGetPresets 給核心存檔收包庫（cfdPresets 原是閉包變數）。
+//       載入順序排 os_settings.js 之後（index.js PHONE_FILES）；wire 在 launchApp 執行期才被呼叫。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+
+    function wire(ctx) {
+        const imgConfig = ctx.imgConfig;   // launchApp 的 loadImageConfig() 結果（os_image_config）
+        const container = ctx.container;   // 設定面板根 DOM
+
+        // ===== ComfyUI 直連：LoRA 行 + 測試連線 =====
+        let cfdPresets = [...((imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.presets) || [])];
+        // 🧷 包庫＝全域一份（鐵則：各桶可以各記「套用哪個包」，但包庫本身絕不分家）。
+        //   舊版「每桶各自包庫」把庫拆成四份副本 → 在插圖桶加的包別桶看不到＝「加了幾條發現不見」。
+        //   遷移：啟動時把四桶裡散落的包全部併回同一庫（id/名字去重），之後桶不再自帶包庫。
+        (function(){
+            try {
+                const bk = imgConfig.comfyuiDirect && imgConfig.comfyuiDirect.buckets;
+                if (!bk || typeof bk !== 'object') return;
+                const keyOf = p => (p && (p.id || p.name)) || '';
+                const seen = new Set(cfdPresets.map(keyOf).filter(Boolean));
+                Object.values(bk).forEach(b => {
+                    (b && Array.isArray(b.presets) ? b.presets : []).forEach(p => {
+                        const k = keyOf(p);
+                        if (!k || seen.has(k)) return;
+                        seen.add(k); cfdPresets.push(p);
+                    });
+                });
+            } catch (e) {}
+        })();
+        (function setupComfyDirect(){
+            const cfd = (imgConfig && imgConfig.comfyuiDirect) || ((window.parent || window).OS_IMAGE_MANAGER && (window.parent || window).OS_IMAGE_MANAGER.config && (window.parent || window).OS_IMAGE_MANAGER.config.comfyuiDirect) || {};
+            const lorasBox = container.querySelector('#img-cfd-loras');
+            // 屬性和選項文字都用這支（檔名、包名可能帶 & 或 <），所以四種都要轉，不能只轉引號
+            function escAttr(s){ return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+            // 模型類型（標準/Flux）：切換 Flux 欄位 + 依類型過濾模型下拉（checkpoint vs UNet）
+            let lastModels = null;
+            function curType(){ const t = container.querySelector('#img-cfd-type'); return (t && t.value) || 'checkpoint'; }
+            function refreshModels(){
+                if (!Array.isArray(lastModels)) return;
+                const isUnet = (curType() === 'flux' || curType() === 'anima');
+                const arr = lastModels.filter(function(x){ const t = (x && x.text) || ''; return isUnet ? /^UNet:/i.test(t) : !/^(UNet|GGUF):/i.test(t); });
+                const sel = container.querySelector('#img-cfd-model');
+                if (!sel) return;
+                const cur = sel.value;
+                let opts = arr.map(function(x){ return (x && x.value != null) ? x.value : x; });
+                if (cur && opts.indexOf(cur) === -1) opts.push(cur);
+                sel.innerHTML = opts.map(function(v){ return '<option value="' + escAttr(v) + '"' + (v === cur ? ' selected' : '') + '>' + escAttr(v) + '</option>'; }).join('');
+            }
+            const typeSel = container.querySelector('#img-cfd-type');
+            if (typeSel) typeSel.addEventListener('change', function(){
+                const ff = container.querySelector('#img-cfd-flux-fields');
+                if (ff) ff.classList.toggle('hidden', typeSel.value !== 'flux');
+                const af = container.querySelector('#img-cfd-anima-fields');
+                if (af) af.classList.toggle('hidden', typeSel.value !== 'anima');
+                refreshModels();
+            });
+            // 工作流模式：自訂時顯示貼上框
+            const wfModeSel = container.querySelector('#img-cfd-wfmode');
+            if (wfModeSel) wfModeSel.addEventListener('change', function(){
+                const box = container.querySelector('#img-cfd-custom-wf');
+                if (box) box.classList.toggle('hidden', wfModeSel.value !== 'custom');
+            });
+            function makeLoraRow(L){
+                L = L || { on: true, name: '', strengthModel: 1, strengthClip: 1 };
+                const row = document.createElement('div');
+                row.className = 'cfd-lora-row';
+                // 兩行式（手機窄屏友善）：第一行 勾選+名字(拉滿)+刪除；第二行 模型/CLIP 強度帶中文標籤。靠 row 的 flex-wrap + 第二行 100% 寬強制換行
+                row.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px 6px; align-items:center; margin-bottom:8px; padding-bottom:8px; border-bottom:1px dashed rgba(var(--os-ink-rgb, 26, 28, 40), 0.12);';
+                row.innerHTML =
+                    '<input type="checkbox" class="cfd-lora-on" ' + (L.on !== false ? 'checked' : '') + ' title="啟用" style="margin:0 2px; flex:0 0 auto;">' +
+                    '<input type="text" class="cfd-lora-name set-input" list="img-cfd-lora-list" placeholder="LoRA 檔名" value="' + escAttr(L.name) + '" style="flex:1 1 0; min-width:0;">' +
+                    '<button type="button" class="cfd-lora-del" title="刪除" style="background:none;border:none;color:#e74c3c;cursor:pointer;font-size:18px;padding:0 4px; flex:0 0 auto;">✕</button>' +
+                    '<div style="flex:1 1 100%; display:flex; gap:6px; align-items:center; padding-left:24px;">' +
+                        '<span style="font-size:11px; color:rgba(var(--os-ink-rgb, 26, 28, 40), 0.7); white-space:nowrap;">模型</span>' +
+                        '<input type="number" class="cfd-lora-sm set-input" step="0.1" min="0" max="2" value="' + escAttr(L.strengthModel != null ? L.strengthModel : 1) + '" title="模型強度" style="width:60px; flex:0 0 auto;">' +
+                        '<span style="font-size:11px; color:rgba(var(--os-ink-rgb, 26, 28, 40), 0.7); white-space:nowrap; margin-left:6px;">CLIP</span>' +
+                        '<input type="number" class="cfd-lora-sc set-input" step="0.1" min="0" max="2" value="' + escAttr(L.strengthClip != null ? L.strengthClip : 1) + '" title="CLIP強度" style="width:60px; flex:0 0 auto;">' +
+                    '</div>';
+                row.querySelector('.cfd-lora-del').addEventListener('click', function(){ row.remove(); });
+                return row;
+            }
+            if (lorasBox) {
+                lorasBox.innerHTML = '';
+                (Array.isArray(cfd.loras) ? cfd.loras : []).forEach(function(L){ lorasBox.appendChild(makeLoraRow(L)); });
+            }
+            const addBtn = container.querySelector('#img-cfd-add-lora');
+            if (addBtn) addBtn.addEventListener('click', function(){ if (lorasBox) lorasBox.appendChild(makeLoraRow()); });
+
+            const testBtn = container.querySelector('#img-cfd-test');
+            const statusEl = container.querySelector('#img-cfd-status');
+            if (testBtn) testBtn.addEventListener('click', async function(){
+                const url = (container.querySelector('#img-cfd-url')?.value || '').trim();
+                if (!url) { if (statusEl) statusEl.textContent = '請先填網址'; return; }
+                if (statusEl) statusEl.textContent = '連線中…';
+                const W = window.parent || window;
+                const IM = W.OS_IMAGE_MANAGER;
+                if (!IM || !IM.fetchComfyLists) { if (statusEl) statusEl.textContent = '圖片引擎未載入'; return; }
+                const fillDatalist = function(id, arr, useValue){
+                    const dl = container.querySelector('#' + id);
+                    if (!dl || !Array.isArray(arr)) return 0;
+                    dl.innerHTML = arr.map(function(x){ const v = useValue ? (x && x.value != null ? x.value : x) : x; return '<option value="' + escAttr(v) + '">'; }).join('');
+                    return arr.length;
+                };
+                const fillSelect = function(id, arr, useValue, addEmpty){
+                    const sel = container.querySelector('#' + id);
+                    if (!sel || !Array.isArray(arr)) return 0;
+                    const cur = sel.value;
+                    let opts = arr.map(function(x){ return useValue ? (x && x.value != null ? x.value : x) : x; });
+                    if (addEmpty) opts.unshift('');
+                    if (cur && opts.indexOf(cur) === -1) opts.push(cur);
+                    sel.innerHTML = opts.map(function(v){ const lbl = (v === '' ? '（內建 VAE）' : v); return '<option value="' + escAttr(v) + '"' + (v === cur ? ' selected' : '') + '>' + escAttr(lbl) + '</option>'; }).join('');
+                    return arr.length;
+                };
+                let models = null, samplers = null, schedulers = null, vaes = null, loras = null;
+                try {
+                    const lists = await IM.fetchComfyLists(url);
+                    models = lists.models; samplers = lists.samplers; schedulers = lists.schedulers; vaes = lists.vaes; loras = lists.loras;
+                } catch (e) {
+                    // 照實講是哪一種連不上。以前一律叫人開 --enable-cors-header，但手機 PWA 最常見的是
+                    //   https 網頁去連 http 網址被瀏覽器擋（錯誤只有一句 Load failed），開那個參數沒用。
+                    const _u = String(url || '');
+                    const _onPhone = /iPhone|iPad|Android/i.test(navigator.userAgent || '');
+                    let _why;
+                    if (location.protocol === 'https:' && /^http:\/\//i.test(_u)) {
+                        _why = '這個網頁是 https 開的，瀏覽器不准它連 http 開頭的網址。要給 ComfyUI 一個 https 開頭的網址';
+                    } else if (_onPhone && /^https?:\/\/(127\.0\.0\.1|localhost)(:|\/|$)/i.test(_u)) {
+                        _why = '在手機上 127.0.0.1 指的是手機自己，要填電腦的網址';
+                    } else {
+                        _why = (e.message || e) + '。檢查網址對不對、ComfyUI 開著沒；網頁跟 ComfyUI 不在同一個網址時，ComfyUI 要開 --enable-cors-header';
+                    }
+                    if (statusEl) statusEl.textContent = '連不上：' + _why;
+                    return;
+                }
+                if (models === null && samplers === null) { if (statusEl) statusEl.textContent = '連不上（檢查網址、ComfyUI 開著沒）'; return; }
+                lastModels = models || [];
+                refreshModels();
+                const mc = (Array.isArray(models) ? models.length : 0);
+                if (samplers) fillSelect('img-cfd-sampler', samplers, false, false);
+                if (schedulers) fillSelect('img-cfd-scheduler', schedulers, false, false);
+                if (vaes) fillSelect('img-cfd-vae', vaes, false, true);
+                const lc = fillDatalist('img-cfd-lora-list', loras || [], false);
+                if (statusEl) statusEl.textContent = '連上！模型 ' + mc + ' 個' + (loras ? ('、LoRA ' + lc + ' 個可下拉') : '（LoRA 清單酒館未提供→手打檔名）');
+            });
+
+            // ── 預設包：modal + grid + 風格預覽縮圖 ──
+            const setVal = function(id, v){ const el = container.querySelector(id); if (el && v !== undefined) el.value = v; };
+            const setSelectVal = function(id, v){ // select：值不在選項就先補一個 option 再選
+                const sel = container.querySelector(id); if (!sel || v == null) return;
+                if (![].slice.call(sel.options).some(function(o){ return o.value === String(v); })) {
+                    const o = document.createElement('option'); o.value = v; o.textContent = (v === '' ? '（內建 VAE）' : v); sel.appendChild(o);
+                }
+                sel.value = v;
+            };
+            // 從面板目前欄位打包一個預設包物件（另存 / 覆蓋 共用）
+            function buildCfdPreset(name){
+                const g  = function(id){ return (container.querySelector(id)?.value || '').trim(); };
+                const gi = function(id, d){ const v = parseInt(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
+                const gf = function(id, d){ const v = parseFloat(container.querySelector(id)?.value ?? d); return isNaN(v) ? d : v; };
+                return {
+                    name: name,
+                    modelType: g('#img-cfd-type') || 'checkpoint',
+                    model:     g('#img-cfd-model'),
+                    vae:       g('#img-cfd-vae'),
+                    sampler:   g('#img-cfd-sampler') || 'euler',
+                    scheduler: g('#img-cfd-scheduler') || 'normal',
+                    steps:     gi('#img-cfd-steps', 28),
+                    cfg:       gf('#img-cfd-cfg', 6.5),
+                    width:     gi('#img-cfd-width', 1024),
+                    height:    gi('#img-cfd-height', 1024),
+                    clipSkip:  gi('#img-cfd-clipskip', 0),
+                    basePrompt:g('#img-cfd-base'),
+                    negPrompt: g('#img-cfd-neg'),
+                    fluxClipL: g('#img-cfd-clipl') || 'clip_l.safetensors',
+                    fluxT5:    g('#img-cfd-t5xxl') || 't5xxl_fp8_e4m3fn.safetensors',
+                    fluxAe:    g('#img-cfd-ae') || 'ae.safetensors',
+                    guidance:  gf('#img-cfd-guidance', 3.5),
+                    animaClip: g('#img-cfd-anima-clip') || 'qwen_3_06b_base.safetensors',
+                    animaVae:  g('#img-cfd-anima-vae') || 'qwen_image_vae.safetensors',
+                    loras: Array.from(container.querySelectorAll('#img-cfd-loras .cfd-lora-row')).map(function(r){ return {
+                        on:   r.querySelector('.cfd-lora-on')?.checked ?? true,
+                        name: (r.querySelector('.cfd-lora-name')?.value || '').trim(),
+                        strengthModel: parseFloat(r.querySelector('.cfd-lora-sm')?.value ?? 1),
+                        strengthClip:  parseFloat(r.querySelector('.cfd-lora-sc')?.value ?? 1)
+                    }; }).filter(function(l){ return l.name; }),
+                    // 自訂模式時把整份工作流也存進預設包（拖圖還原的卡靠這個攜帶）
+                    customWorkflow: (g('#img-cfd-wfmode') === 'custom') ? g('#img-cfd-custom-wf-text') : ''
+                };
+            }
+            function getPreviewPrompt(){
+                const el = container.querySelector('#img-cfd-preview-prompt');
+                return (el && el.value.trim()) || '1 person, upper body portrait, looking at viewer, simple background';
+            }
+            // 把 ComfyUI API 工作流「拆解」成面板可編輯的預設卡欄位（模型/LoRA/採樣器/步數/CFG/尺寸/正負提示詞…）
+            // → 載入後每一格都能在奧瑞亞面板調，不丟工作流。認得標準 KSampler + Checkpoint/Flux/Anima 三種載入法。
+            // 回傳 { preset, parsed:{model,sampler,prompt,...哪些抓到了} }；抓不到的欄位留合理預設。
+            function parseComfyApiToPreset(api, fallbackName){
+                const g = api || {};
+                const get = function(id){ return g[id]; };
+                const idOf = function(ref){ return (Array.isArray(ref) && ref.length) ? String(ref[0]) : null; };
+                const byType = function(types){
+                    const ids = Object.keys(g);
+                    for (let i = 0; i < ids.length; i++){ const n = g[ids[i]]; if (n && types.indexOf(n.class_type) >= 0) return { id: ids[i], node: n }; }
+                    return null;
+                };
+                const p = {
+                    name: fallbackName || 'ComfyUI', modelType: 'checkpoint', model: '', vae: '',
+                    sampler: 'euler', scheduler: 'normal', steps: 28, cfg: 6.5,
+                    width: 1024, height: 1024, clipSkip: 0, basePrompt: '', negPrompt: '',
+                    fluxClipL: '', fluxT5: '', fluxAe: '', guidance: 3.5,
+                    animaClip: '', animaVae: '', loras: [], customWorkflow: ''
+                };
+                const parsed = { model:false, sampler:false, prompt:false, size:false, loras:0 };
+                // 沿提示詞鏈往回找 CLIPTextEncode 的文字（可能中間隔 FluxGuidance/Conditioning* 節點）
+                function extractText(startId){
+                    let id = startId, hop = 0;
+                    while (id && hop++ < 6){
+                        const n = get(id); if (!n) break;
+                        if (n.class_type === 'CLIPTextEncode') return String((n.inputs && n.inputs.text) || '');
+                        const inp = n.inputs || {};
+                        id = idOf(inp.conditioning || inp.conditioning_1 || inp.cond);
+                    }
+                    return '';
+                }
+                // 沿 model 鏈往回：收集 LoraLoader，走到底層 Checkpoint/UNET 載入器
+                function walkModel(startId){
+                    let id = startId, hop = 0;
+                    while (id && hop++ < 16){
+                        const n = get(id); if (!n) break;
+                        const ct = n.class_type, inp = n.inputs || {};
+                        if (ct === 'LoraLoader' || ct === 'LoraLoaderModelOnly'){
+                            p.loras.push({ on:true, name:String(inp.lora_name||''),
+                                strengthModel:(typeof inp.strength_model==='number'?inp.strength_model:1),
+                                strengthClip:(typeof inp.strength_clip==='number'?inp.strength_clip:1) });
+                            id = idOf(inp.model); continue;
+                        }
+                        if (ct === 'CheckpointLoaderSimple'){ p.modelType='checkpoint'; p.model=String(inp.ckpt_name||''); parsed.model=true; break; }
+                        if (ct === 'UNETLoader'){ p.model=String(inp.unet_name||''); parsed.model=true; break; }
+                        id = idOf(inp.model);  // 未知中繼(ModelSamplingFlux 等)→繼續往回
+                    }
+                    p.loras.reverse();  // 由近到遠→還原載入順序
+                }
+                // 取樣器：抓步數/CFG/採樣器/排程 + 提示詞 + 尺寸 + model 鏈
+                const samp = byType(['KSampler','KSamplerAdvanced']);
+                if (samp){
+                    const inp = samp.node.inputs || {};
+                    if (typeof inp.steps === 'number'){ p.steps = inp.steps; parsed.sampler = true; }
+                    if (typeof inp.cfg === 'number') p.cfg = inp.cfg;
+                    if (inp.sampler_name){ p.sampler = String(inp.sampler_name); parsed.sampler = true; }
+                    if (inp.scheduler) p.scheduler = String(inp.scheduler);
+                    p.basePrompt = extractText(idOf(inp.positive));
+                    p.negPrompt  = extractText(idOf(inp.negative));
+                    if (p.basePrompt || p.negPrompt) parsed.prompt = true;
+                    const latN = get(idOf(inp.latent_image));
+                    if (latN && latN.inputs){ if (typeof latN.inputs.width==='number'){ p.width=latN.inputs.width; parsed.size=true; } if (typeof latN.inputs.height==='number'){ p.height=latN.inputs.height; parsed.size=true; } }
+                    walkModel(idOf(inp.model));
+                }
+                // 模型類型 + 專用檔（Flux=UNET+DualCLIP、Anima=UNET+單CLIPLoader）
+                const unet = byType(['UNETLoader']), dual = byType(['DualCLIPLoader']), single = byType(['CLIPLoader']);
+                if (unet){
+                    if (dual){ p.modelType='flux'; p.fluxClipL=String(dual.node.inputs.clip_name1||''); p.fluxT5=String(dual.node.inputs.clip_name2||''); }
+                    else if (single){ p.modelType='anima'; p.animaClip=String(single.node.inputs.clip_name||''); }
+                    else p.modelType='flux';
+                }
+                // 沒經取樣器 model 鏈也補抓一次底層載入器
+                if (!p.model){
+                    const ck = byType(['CheckpointLoaderSimple']);
+                    if (ck){ p.modelType='checkpoint'; p.model=String(ck.node.inputs.ckpt_name||''); parsed.model=true; }
+                    else if (unet){ p.model=String(unet.node.inputs.unet_name||''); parsed.model=true; }
+                }
+                // clipSkip（CLIPSetLastLayer 的 stop_at_clip_layer 是負數 → 取絕對值）
+                const csl = byType(['CLIPSetLastLayer']);
+                if (csl && typeof csl.node.inputs.stop_at_clip_layer==='number') p.clipSkip = Math.abs(csl.node.inputs.stop_at_clip_layer);
+                // FluxGuidance
+                const fg = byType(['FluxGuidance']);
+                if (fg && typeof fg.node.inputs.guidance==='number') p.guidance = fg.node.inputs.guidance;
+                // VAE：依模型類型放對欄位
+                const vae = byType(['VAELoader']);
+                if (vae && vae.node.inputs.vae_name){
+                    const vn = String(vae.node.inputs.vae_name);
+                    if (p.modelType==='flux') p.fluxAe = vn; else if (p.modelType==='anima') p.animaVae = vn; else p.vae = vn;
+                }
+                p.loras = p.loras.filter(function(l){ return l.name; });
+                parsed.loras = p.loras.length;
+                return { preset: p, parsed: parsed };
+            }
+            // File → dataURL（給拖圖預覽縮圖用）
+            function fileToDataUrl(file){
+                return new Promise(function(resolve, reject){
+                    const r = new FileReader();
+                    r.onload = function(){ resolve(String(r.result)); };
+                    r.onerror = function(){ reject(new Error('讀檔失敗')); };
+                    r.readAsDataURL(file);
+                });
+            }
+            // 把預設包填回面板（套用）
+            function applyPresetToPanel(p){
+                if (!p) return;
+                const mt = p.modelType || 'checkpoint';
+                setVal('#img-cfd-type', mt);
+                const ff = container.querySelector('#img-cfd-flux-fields');
+                if (ff) ff.classList.toggle('hidden', mt !== 'flux');
+                const af = container.querySelector('#img-cfd-anima-fields');
+                if (af) af.classList.toggle('hidden', mt !== 'anima');
+                refreshModels();
+                setSelectVal('#img-cfd-model', p.model || '');
+                setSelectVal('#img-cfd-vae', p.vae || '');
+                setSelectVal('#img-cfd-sampler', p.sampler || 'euler');
+                setSelectVal('#img-cfd-scheduler', p.scheduler || 'normal');
+                setVal('#img-cfd-steps', p.steps != null ? p.steps : 28);
+                setVal('#img-cfd-cfg', p.cfg != null ? p.cfg : 6.5);
+                setVal('#img-cfd-width', p.width != null ? p.width : 1024);
+                setVal('#img-cfd-height', p.height != null ? p.height : 1024);
+                setVal('#img-cfd-clipskip', p.clipSkip != null ? p.clipSkip : 0);
+                setVal('#img-cfd-base', p.basePrompt || '');
+                setVal('#img-cfd-neg', p.negPrompt || '');
+                setVal('#img-cfd-clipl', p.fluxClipL || 'clip_l.safetensors');
+                setVal('#img-cfd-t5xxl', p.fluxT5 || 't5xxl_fp8_e4m3fn.safetensors');
+                setVal('#img-cfd-ae', p.fluxAe || 'ae.safetensors');
+                setVal('#img-cfd-guidance', p.guidance != null ? p.guidance : 3.5);
+                setVal('#img-cfd-anima-clip', p.animaClip || 'qwen_3_06b_base.safetensors');
+                setVal('#img-cfd-anima-vae', p.animaVae || 'qwen_image_vae.safetensors');
+                if (lorasBox) { lorasBox.innerHTML = ''; (Array.isArray(p.loras) ? p.loras : []).forEach(function(L){ lorasBox.appendChild(makeLoraRow(L)); }); }
+                // 工作流模式：優先尊重 p.workflowMode（桶會明確帶）；沒帶才用「有無 customWorkflow」推斷(拖圖還原的卡)
+                const wfSel = container.querySelector('#img-cfd-wfmode');
+                const wfBox = container.querySelector('#img-cfd-custom-wf');
+                const wfTa  = container.querySelector('#img-cfd-custom-wf-text');
+                const _wantCustom = (p.workflowMode != null) ? (p.workflowMode === 'custom') : !!p.customWorkflow;
+                if (_wantCustom) {
+                    if (wfTa)  wfTa.value = p.customWorkflow || '';
+                    if (wfSel) wfSel.value = 'custom';
+                    if (wfBox) wfBox.classList.remove('hidden');
+                } else {
+                    if (wfTa)  wfTa.value = p.customWorkflow || '';   // 留著內容但不切自訂（auto 桶通常已清空）
+                    if (wfSel) wfSel.value = 'auto';
+                    if (wfBox) wfBox.classList.add('hidden');
+                }
+            }
+            // 把生成的圖縮成 ~256px JPEG 縮圖（避免 localStorage 爆肥）
+            // 🚨縮不出來就不要縮圖，絕對不能退回原圖：這些預設包存在 localStorage（全站共用 5MB），
+            //   一張沒縮成的原圖就是一兩 MB，足以把整個空間吃掉，之後所有 localStorage 寫入
+            //   （大廳小人皮膚就是其一）全部開始靜默失敗，而且完全查不出跟這裡有關。
+            const THUMB_MAX = 120 * 1024;
+            function toThumb(dataUrl){
+                return new Promise(function(resolve){
+                    try {
+                        const img = new Image();
+                        img.onload = function(){
+                            try {
+                                const max = 256; let w = img.width, h = img.height;
+                                if (w >= h) { if (w > max){ h = Math.round(h*max/w); w = max; } }
+                                else { if (h > max){ w = Math.round(w*max/h); h = max; } }
+                                const c = document.createElement('canvas'); c.width = w; c.height = h;
+                                c.getContext('2d').drawImage(img, 0, 0, w, h);
+                                const out = c.toDataURL('image/jpeg', 0.7);
+                                // 壓完還是過大（多半是畫布被污染或格式沒吃到）→ 寧可沒有縮圖
+                                resolve(out && out.length <= THUMB_MAX ? out : '');
+                            } catch(e){ resolve(''); }
+                        };
+                        img.onerror = function(){ resolve(''); };
+                        img.src = dataUrl;
+                    } catch(e){ resolve(''); }
+                });
+            }
+            function cardStatus(i, msg){
+                const el = container.querySelector('.cfd-card-status[data-idx="' + i + '"]');
+                if (el) el.textContent = msg || '';
+            }
+            function renderPresetGrid(){
+                const grid = container.querySelector('#img-cfd-preset-grid');
+                if (!grid) return;
+                const openBtn = container.querySelector('#img-cfd-preset-open');
+                if (openBtn) openBtn.innerHTML = '<i class="fa-solid fa-table-cells-large"></i> 瀏覽預設包 · ' + cfdPresets.length;
+                const countEl = container.querySelector('#img-cfd-preset-count');
+                if (countEl) countEl.textContent = cfdPresets.length ? String(cfdPresets.length) : '';
+                if (!cfdPresets.length) { grid.innerHTML = '<div class="cfd-pack-empty">還沒有預設包。把面板調好後，關掉這個窗按「<i class="fa-solid fa-plus"></i> 另存新包」，或把以前用 ComfyUI 生的圖拖到下面。</div>'; return; }
+                // 面板上現在載的是哪個包：那張卡框起來（_editing 宣告在下面，經 _cfdEdit 問，開窗前還沒建好就當沒有）
+                const cur = (window._cfdEdit && window._cfdEdit.current) ? window._cfdEdit.current() : '';
+                grid.innerHTML = cfdPresets.map(function(p, i){
+                    const thumb = p.preview
+                        ? '<img class="cfd-pack-thumb" loading="lazy" src="' + escAttr(p.preview) + '">'
+                        : '<div class="cfd-pack-thumb cfd-pack-thumb-empty">尚無預覽</div>';
+                    return '<div class="cfd-pack-card' + (cur && p.name === cur ? ' is-on' : '') + '">' +
+                        thumb +
+                        '<div class="cfd-pack-name" data-idx="' + i + '" title="' + escAttr(p.name) + (p.customWorkflow ? '（自帶工作流）' : '') + '　點名字可以改名" onclick="window._cfdPreset.renameIdx(' + i + ')">' +
+                          (p.customWorkflow ? '<i class="fa-solid fa-gear cfd-pack-wf"></i>' : '') + escAttr(p.name) +
+                        '</div>' +
+                        '<div class="cfd-pack-acts">' +
+                          '<span class="cfd-pack-act is-apply" onclick="window._cfdPreset.applyIdx(' + i + ')">套用</span>' +
+                        '</div>' +
+                        '<div class="cfd-pack-acts">' +
+                          '<span class="cfd-pack-act" title="生成風格預覽" onclick="window._cfdPreset.genPreviewIdx(' + i + ')"><i class="fa-solid fa-image"></i></span>' +
+                          '<span class="cfd-pack-act" title="改名" onclick="window._cfdPreset.renameIdx(' + i + ')"><i class="fa-solid fa-pen-to-square"></i></span>' +
+                          '<span class="cfd-pack-act is-overwrite" title="用目前面板設定覆蓋（會清掉預覽）" onclick="window._cfdPreset.overwriteIdx(' + i + ')"><i class="fa-solid fa-rotate"></i></span>' +
+                          '<span class="cfd-pack-act is-del" title="刪除" onclick="window._cfdPreset.delIdx(' + i + ')"><i class="fa-solid fa-trash"></i></span>' +
+                        '</div>' +
+                        '<div class="cfd-card-status" data-idx="' + i + '"></div>' +
+                      '</div>';
+                }).join('');
+            }
+            // 🚨改名不是只換一個字串：ComfyUI 的預設包**沒有 id 欄**（lobby_dress 的 presetKeyOf = p.id || p.name），
+            //   所以名字就是身分。別處記著這個名字的地方全部要一起換，不然裝扮室／貼紙煉丹／世界門立姿
+            //   會靜靜地「找不到包」——世界門那條甚至寫死「包被刪或改名→整批停手」。
+            function _renamePresetEverywhere(oldName, newName){
+                const res = { ok: true, err: '', touched: false };
+                const _w = window.parent || window;
+                // 面板若被塞進 iframe，兩個 window 各有一份 localStorage；讀這些鍵的人散在大廳與手機 app → 兩邊都寫
+                const stores = [window.localStorage];
+                try { if (_w && _w !== window && _w.localStorage) stores.push(_w.localStorage); } catch(e) {}
+                // 寫不進去（空間滿了）要記在 res 上，畫面才會說「存不進本機空間」；以前別的鍵寫失敗是靜靜吞掉
+                const put = function(st, key, val){
+                    try { st.setItem(key, val); return true; }
+                    catch(e) { res.ok = false; res.err = res.err || (e && e.message) || String(e); return false; }
+                };
+
+                // ① 正在改的包＋圖片設置「畫風」頁每一列選的包（os_img_routes 記的是 comfy:名字）
+                if (_editing === oldName) { _editing = newName; _fillEditSel(); }
+                stores.forEach(function(st){
+                    try {
+                        const raw = st.getItem('os_img_routes'); if (!raw) return;
+                        const o = JSON.parse(raw); if (!o || typeof o !== 'object') return;
+                        let hit = false;
+                        Object.keys(o).forEach(function(k){ if (o[k] && o[k].conn === 'comfy:' + oldName) { o[k].conn = 'comfy:' + newName; hit = true; } });
+                        if (hit && put(st, 'os_img_routes', JSON.stringify(o))) res.touched = true;
+                    } catch(e) {}
+                });
+
+                // ② 生圖引擎手上那份 config 是 init() 時的快照、不跟著 localStorage 走 → 直接改活物件
+                try {
+                    const M = _w.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER;
+                    const arr = M && M.config && M.config.comfyuiDirect && M.config.comfyuiDirect.presets;
+                    if (Array.isArray(arr)) arr.forEach(function(x){ if (x && x.name === oldName) x.name = newName; });
+                } catch(e) {}
+
+                // ③ 落地 os_image_config：改名就是改名，不該還要她再按一次底部保存才算數
+                try {
+                    const raw = window.localStorage.getItem('os_image_config');
+                    if (raw) {
+                        const cfg = JSON.parse(raw);
+                        const cd = cfg && cfg.comfyuiDirect;
+                        if (cd) {
+                            if (Array.isArray(cd.presets)) cd.presets.forEach(function(x){ if (x && x.name === oldName) x.name = newName; });
+                            if (cd.buckets && typeof cd.buckets === 'object') Object.keys(cd.buckets).forEach(function(b){
+                                if (cd.buckets[b] && cd.buckets[b].activePreset === oldName) cd.buckets[b].activePreset = newName;
+                            });
+                            window.localStorage.setItem('os_image_config', JSON.stringify(cfg));
+                        }
+                    }
+                } catch(e) { res.ok = false; res.err = (e && e.message) || String(e); }
+
+                // ④ 別的模組各自記著的名字
+                const patch = function(key, fn){
+                    stores.forEach(function(st){
+                        try {
+                            const raw = st.getItem(key); if (!raw) return;
+                            const o = JSON.parse(raw); if (!o || typeof o !== 'object') return;
+                            if (fn(o) && put(st, key, JSON.stringify(o))) res.touched = true;
+                        } catch(e) {}
+                    });
+                };
+                patch('lstage_dress_gen_v1', function(o){ if (o.comfyPreset === oldName) { o.comfyPreset = newName; return true; } return false; });   // 大廳裝扮室：生小小人
+                patch('avs_sticker_gen_v1',  function(o){ if (o.comfyPreset === oldName) { o.comfyPreset = newName; return true; } return false; });   // 變數工坊：世界貼紙
+                patch('wg_sprite_pack_v1',   function(o){ if (o.src !== 'novelai' && o.key === oldName) { o.key = newName; return true; } return false; });   // 世界門：旅人立姿
+                // 包租婆整房生圖的畫風包：這個鍵存的是純字串不是 JSON
+                stores.forEach(function(st){
+                    try { if (st.getItem('aurelia_room_style_preset') === oldName && put(st, 'aurelia_room_style_preset', newName)) res.touched = true; } catch(e) {}
+                });
+
+                // ⑤ 這張設定頁上兩個「用名字當 value」的下拉是開面板時一次組好的 → 不同步就會停在舊名，
+                //    而它們是 onchange 就寫檔的，她之後隨手挑一下等於把舊名寫回去。
+                const fixSelect = function(sel, matchVal, nextVal, matchLabel, nextLabel){
+                    if (!sel) return;
+                    Array.prototype.forEach.call(sel.options, function(op){
+                        if (op.value === matchVal) op.value = nextVal;
+                        if (op.textContent === matchLabel) op.textContent = nextLabel;
+                    });
+                };
+                fixSelect(container.querySelector('#img-wg-sprite'),
+                          'comfyui_direct|' + oldName, 'comfyui_direct|' + newName,
+                          'ComfyUI｜' + oldName, 'ComfyUI｜' + newName);
+                fixSelect(container.querySelector('#img-room-comfy-style'), oldName, newName, oldName, newName);
+                return res;
+            }
+            window._cfdPreset = {
+                open: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.classList.add('is-open'); this._cancelImport(); renderPresetGrid(); },
+                close: function(){ const m = container.querySelector('#img-cfd-preset-modal'); if (m) m.classList.remove('is-open'); },
+                applyIdx: function(i){
+                    const p = cfdPresets[i]; if (!p) return;
+                    _pick(p.name || '');   // 打開這個包來改（面板上方「正在改的預設包」跟著換）
+                    this.close();
+                },
+                // 就地改名：點名字或 ✏️ → 那格變輸入框。Enter/移開焦點＝改，Esc＝不改。
+                renameIdx: function(i){
+                    const p = cfdPresets[i]; if (!p) return;
+                    const host = container.querySelector('.cfd-pack-name[data-idx="' + i + '"]');
+                    if (!host || host.classList.contains('is-editing')) return;   // 已經在改了（點輸入框會冒泡回這裡）
+                    const oldName = String(p.name || '');
+                    host.classList.add('is-editing');
+                    host.textContent = '';
+                    const inp = document.createElement('input');
+                    inp.type = 'text';
+                    inp.className = 'cfd-pack-name-input';
+                    inp.value = oldName;
+                    host.appendChild(inp);
+                    inp.focus({ preventScroll: true }); inp.select();
+                    let done = false;
+                    const finish = function(commit){
+                        if (done) return; done = true;
+                        const nn = commit ? inp.value.trim() : '';
+                        if (!nn || nn === oldName) { renderPresetGrid(); return; }
+                        const norm = function(s){ return String(s == null ? '' : s).trim().toLowerCase(); };
+                        if (cfdPresets.some(function(x, j){ return j !== i && norm(x.name) === norm(nn); })) {
+                            renderPresetGrid();
+                            cardStatus(i, '已經有同名的包了，沒有改');
+                            return;
+                        }
+                        cfdPresets[i].name = nn;
+                        const r = _renamePresetEverywhere(oldName, nn);
+                        renderPresetGrid();
+                        cardStatus(i, r.ok
+                            ? ('已改名' + (r.touched ? '，套用它的地方也一起換了' : ''))
+                            : ('名字改了但存不進本機空間（' + r.err + '），關掉重開會變回原名'));
+                    };
+                    inp.addEventListener('keydown', function(e){
+                        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+                        else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+                    });
+                    inp.addEventListener('blur', function(){ finish(true); });
+                },
+                // 🖼️ 拖/選一張以前 ComfyUI 生的圖 → 讀出當初工作流 → 直接變成一張帶工作流的預設包卡（原圖當預覽縮圖）
+                importImage: function(){
+                    const fi = container.querySelector('#img-cfd-wf-img');
+                    if (fi) { fi.value = ''; fi.click(); }
+                },
+                _setImgStatus: function(msg, err){
+                    const st = container.querySelector('#img-cfd-wf-status');
+                    if (st) { st.textContent = msg || ''; st.classList.toggle('is-err', !!err); }
+                },
+                _handleImage: async function(file){
+                    if (!file) return;
+                    const self = this;
+                    const W = window.parent || window;
+                    const RECIPE = W.NAI_RECIPE || window.NAI_RECIPE;
+                    if (!RECIPE || !RECIPE.extractComfyWorkflow){ self._setImgStatus('解析模組未就緒（重進一次設定再試）', true); return; }
+                    self._setImgStatus('讀取圖片工作流…');
+                    let res; try { res = await RECIPE.extractComfyWorkflow(file); } catch(e){ res = { ok:false, error: String((e && e.message) || e) }; }
+                    if (!res || !res.ok){ self._setImgStatus((res && res.error) || '讀不到工作流', true); return; }
+                    // 預設名：檔名去副檔名；同名自動加序號
+                    let base = String(file.name || 'ComfyUI').replace(/\.[a-z0-9]+$/i, '').trim() || 'ComfyUI';
+                    let name = base, n = 2;
+                    while (cfdPresets.some(function(p){ return p.name === name; })) { name = base + ' ' + (n++); }
+                    // 把工作流「拆解」進面板可編輯欄位（模型/LoRA/採樣器/提示詞…）
+                    const r = parseComfyApiToPreset(res.api, name);
+                    const preset = r.preset, pd = r.parsed;
+                    // 原圖 → 縮圖當預覽（拖進來的那張圖就是它的預覽）
+                    try { preset.preview = await toThumb(await fileToDataUrl(file)); } catch(e){}
+                    cfdPresets.push(preset);
+                    renderPresetGrid();
+                    // 報告抓到哪些（讓她知道有沒有漏、要不要手動補）
+                    const got = [];
+                    if (pd.model) got.push('模型'); if (pd.loras) got.push('LoRA×' + pd.loras);
+                    if (pd.sampler) got.push('採樣器/步數/CFG'); if (pd.prompt) got.push('正負提示詞'); if (pd.size) got.push('尺寸');
+                    const miss = !pd.model && !pd.sampler && !pd.prompt;
+                    // 底詞污染提醒：工作流的正向 CLIP 會整串被存成底詞，而底詞是「每張圖都會加」的。
+                    //   拖進來的圖若是拿某個具體場景測出來的，那個場景就會黏在之後每一張插圖上
+                    //   → 背景穿越、畫面多出人。這裡只提醒不自動刪（風格詞跟場景詞沒有可靠機器判準）。
+                    const _polluteHit = (function(){
+                        try {
+                            const _W = window.parent || window;
+                            const re = (_W.OS_IMAGE_MANAGER && _W.OS_IMAGE_MANAGER._SCENE_SIGNALS)
+                                || /(?:\b\d+\s*(?:boys?|girls?|males?|females?|others?|people)\b|\bon the (?:left|right)\b|##\s*C?\d+[^#]*##)/i;
+                            const m = String(preset.basePrompt || '').match(re);
+                            return m ? m[0] : '';
+                        } catch (e) { return ''; }
+                    })();
+                    const _polluteMsg = _polluteHit
+                        ? '　這張圖的正向詞裡有具體人物／場景字樣（' + _polluteHit + '），已被存成這張卡的「底詞」。底詞會加到每一張圖 → 套用前先把底詞清成只剩畫質／風格／LoRA 觸發詞，否則舊背景舊人物會跟著跑。'
+                        : '';
+                    self._setImgStatus((miss
+                        ? '已建卡「' + name + '」，但這張圖的工作流結構特殊、只抓到少數欄位 → 套用後請自己在面板核對補齊。記得按底部「保存」。'
+                        : '已拆進預設卡「' + name + '」：' + (got.join('、') || '基本設定') + '。點「套用」就能在面板逐格微調，改完按底部「保存」。') + _polluteMsg, miss || !!_polluteHit);
+                },
+                overwriteIdx: async function(i){
+                    const old = cfdPresets[i]; if (!old) return;
+                    if (!await AUI.confirm('用目前面板的設定覆蓋預設包「' + old.name + '」？\n（舊預覽圖會清掉，需重新生成）')) return;
+                    cfdPresets[i] = buildCfdPreset(old.name);  // 沿用原名、預覽清空
+                    renderPresetGrid();
+                },
+                delIdx: async function(i){
+                    const old = cfdPresets[i]; if (!old) return;
+                    let used = [];
+                    try {
+                        const M = (window.parent || window).OS_IMAGE_MANAGER;
+                        const rt = (M && M.getRoutes) ? M.getRoutes() : {};
+                        used = ((M && M.USES) || []).filter(function(u){ return rt[u.id] && rt[u.id].conn === 'comfy:' + old.name; }).map(function(u){ return u.name; });
+                    } catch(e) {}
+                    if (!await AUI.confirm('刪除預設包「' + old.name + '」？' + (used.length ? '\n用它的地方（' + used.join('、') + '）會改回照原本的設定。' : ''))) return;
+                    cfdPresets.splice(i, 1);
+                    renderPresetGrid();
+                    window._cfdEdit._dropped(old.name);
+                    try { window._imgPersistPresets && window._imgPersistPresets(); } catch(e) {}
+                },
+                genPreviewIdx: async function(i){
+                    const p = cfdPresets[i]; if (!p) return;
+                    const W = window.parent || window;
+                    const mgr = W.OS_IMAGE_MANAGER;
+                    if (!mgr || typeof mgr.previewComfyPreset !== 'function') { cardStatus(i, '生圖模組未就緒'); return; }
+                    cardStatus(i, '生成中…(15-40秒)');
+                    try {
+                        const url = await mgr.previewComfyPreset(p, getPreviewPrompt());
+                        if (!url) { cardStatus(i, '失敗（檢查 ComfyUI 連線/模型）'); return; }
+                        const thumb = await toThumb(url);
+                        if (cfdPresets[i]) cfdPresets[i].preview = thumb;
+                        renderPresetGrid();
+                        cardStatus(i, '完成（記得按底部保存）');
+                    } catch(e){ cardStatus(i, String(e && e.message || e)); }
+                },
+                exportPack: function(){
+                    if (!cfdPresets.length) { AUI.alert('還沒有預設包可以匯出。'); return; }
+                    const data = { type: 'aurelia_image_presets', version: 1, presets: cfdPresets };
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const a = document.createElement('a');
+                    a.href = URL.createObjectURL(blob);
+                    const d = new Date();
+                    a.download = '生圖預設包_' + d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0') + '.json';
+                    a.click();
+                    setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+                },
+                importPack: function(){
+                    const fi = container.querySelector('#img-cfd-preset-file');
+                    if (fi) { fi.value = ''; fi.click(); }
+                },
+                // 把外來 JSON 收斂成乾淨的預設包物件（只留認識的欄位，缺的補預設值）
+                _sanitizePreset: function(p){
+                    const num = function(v, d){ const n = parseFloat(v); return isNaN(n) ? d : n; };
+                    const int = function(v, d){ const n = parseInt(v); return isNaN(n) ? d : n; };
+                    const s = function(v){ return (v == null) ? '' : String(v).trim(); };
+                    return {
+                        name: s(p.name),
+                        modelType: ['checkpoint','flux','anima'].indexOf(p.modelType) >= 0 ? p.modelType : 'checkpoint',
+                        model: s(p.model), vae: s(p.vae),
+                        sampler: s(p.sampler) || 'euler', scheduler: s(p.scheduler) || 'normal',
+                        steps: int(p.steps, 28), cfg: num(p.cfg, 6.5),
+                        width: int(p.width, 1024), height: int(p.height, 1024),
+                        clipSkip: int(p.clipSkip, 0),
+                        basePrompt: s(p.basePrompt), negPrompt: s(p.negPrompt),
+                        fluxClipL: s(p.fluxClipL) || 'clip_l.safetensors',
+                        fluxT5: s(p.fluxT5) || 't5xxl_fp8_e4m3fn.safetensors',
+                        fluxAe: s(p.fluxAe) || 'ae.safetensors',
+                        guidance: num(p.guidance, 3.5),
+                        animaClip: s(p.animaClip) || 'qwen_3_06b_base.safetensors',
+                        animaVae: s(p.animaVae) || 'qwen_image_vae.safetensors',
+                        loras: (Array.isArray(p.loras) ? p.loras : []).map(function(L){
+                            return { on: !!(L && L.on !== false), name: s(L && L.name),
+                                     strengthModel: num(L && L.strengthModel, 1), strengthClip: num(L && L.strengthClip, 1) };
+                        }).filter(function(L){ return L.name; }),
+                        customWorkflow: s(p.customWorkflow),
+                        preview: (typeof p.preview === 'string' && p.preview.indexOf('data:image') === 0) ? p.preview : ''
+                    };
+                },
+                _importFile: function(file){
+                    const self = this;
+                    const reader = new FileReader();
+                    reader.onload = function(){
+                        try {
+                            const j = JSON.parse(String(reader.result));
+                            const arr = Array.isArray(j) ? j : (Array.isArray(j.presets) ? j.presets : null);
+                            if (!arr || !arr.length) { AUI.alert('這個檔案裡找不到預設包，確認拿到的是畫風包檔（.json）再試一次。'); return; }
+                            // 收斂＋濾掉沒名字的，暫存等使用者選「覆蓋同名 / 全部新增」
+                            const clean = arr.filter(function(p){ return p && String(p.name || '').trim(); }).map(function(p){ return self._sanitizePreset(p); });
+                            if (!clean.length) { AUI.alert('檔案裡的預設包都沒有名稱，讀不進來。'); return; }
+                            self._pendingImport = clean;
+                            // 牆上還沒有任何包 → 不用問，直接全部加
+                            if (!cfdPresets.length) { self._applyImport('append'); return; }
+                            const msg = container.querySelector('#img-cfd-import-msg');
+                            if (msg) msg.textContent = '讀到 ' + clean.length + ' 個預設包。要怎麼放進現有的 ' + cfdPresets.length + ' 個裡？';
+                            const box = container.querySelector('#img-cfd-import-choice');
+                            if (box) box.style.display = 'block';
+                        } catch(e) { AUI.alert('這個檔案讀不出來，確認是畫風包檔（.json）再試一次。'); }
+                    };
+                    reader.readAsText(file);
+                },
+                _cancelImport: function(){
+                    this._pendingImport = null;
+                    const box = container.querySelector('#img-cfd-import-choice');
+                    if (box) box.style.display = 'none';
+                },
+                // mode='overwrite'：同名更新、其餘新增；mode='append'：全部當新的加（同名自動加序號避免混淆）
+                _applyImport: function(mode){
+                    const clean = this._pendingImport;
+                    const box = container.querySelector('#img-cfd-import-choice');
+                    if (box) box.style.display = 'none';
+                    if (!clean || !clean.length) { this._pendingImport = null; return; }
+                    const norm = function(s){ return String(s || '').trim(); };
+                    let added = 0, updated = 0;
+                    clean.forEach(function(c){
+                        if (mode === 'overwrite') {
+                            const idx = cfdPresets.findIndex(function(x){ return norm(x.name) === norm(c.name); });
+                            if (idx >= 0) {
+                                if (!c.preview && cfdPresets[idx].preview) c.preview = cfdPresets[idx].preview; // 沒帶縮圖就沿用舊的
+                                cfdPresets[idx] = c; updated++; return;
+                            }
+                            cfdPresets.push(c); added++;
+                        } else {
+                            // 全部新增：同名就加序號，讓兩份都在、不互蓋
+                            let nm = c.name, n = 2;
+                            while (cfdPresets.some(function(x){ return norm(x.name) === norm(nm); })) { nm = c.name + ' ' + (n++); }
+                            c.name = nm; cfdPresets.push(c); added++;
+                        }
+                    });
+                    this._pendingImport = null;
+                    renderPresetGrid();
+                    AUI.alert('匯入完成：新增 ' + added + ' 個' + (updated ? ('、覆蓋更新 ' + updated + ' 個') : '') + '。\n記得按底部「保存」才會真的存住。');
+                },
+                clearAll: async function(){
+                    if (!cfdPresets.length) { AUI.alert('目前沒有預設包可以清空。'); return; }
+                    if (!await AUI.confirm('確定清空全部 ' + cfdPresets.length + ' 個預設包？\n（要按底部「保存」後才真的生效；沒保存前重進設定就會復原）')) return;
+                    cfdPresets.length = 0;
+                    renderPresetGrid();
+                    if (statusEl) statusEl.textContent = '預設包已清空（記得按底部「保存」才會真的存住）';
+                }
+            };
+            // 匯入用的隱藏檔案選擇器
+            (function(){
+                const fi = container.querySelector('#img-cfd-preset-file');
+                if (fi) fi.addEventListener('change', function(){
+                    const f = fi.files && fi.files[0];
+                    if (f) window._cfdPreset._importFile(f);
+                });
+            })();
+            // 🖼️ 拖圖還原工作流 → 建預設包卡：拖放 + 點擊選檔
+            (function(){
+                const drop = container.querySelector('#img-cfd-wf-drop');
+                const fi = container.querySelector('#img-cfd-wf-img');
+                if (!drop || !fi) return;
+                drop.addEventListener('click', function(){ window._cfdPreset.importImage(); });
+                fi.addEventListener('change', function(){ const f = fi.files && fi.files[0]; if (f) window._cfdPreset._handleImage(f); });
+                drop.addEventListener('dragover', function(e){ e.preventDefault(); drop.classList.add('is-over'); });
+                drop.addEventListener('dragleave', function(){ drop.classList.remove('is-over'); });
+                drop.addEventListener('drop', function(e){ e.preventDefault(); drop.classList.remove('is-over'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) window._cfdPreset._handleImage(f); });
+            })();
+
+            // ===== 面板＝目前的設定；上面選包＝載進來改（2026-09-24 起，10-01 改成這樣）=====
+            //   面板上這些欄位＝ComfyUI「目前的設定」（扁平那份，跟 NAI 頁一樣）：底部「保存所有設定」存的就是它，絕不動任何預設包。
+            //   上面選一個包＝把那個包的內容載進面板；預設包只有「儲存至此包」（存進選著的那個）／「另存新包」會改。
+            //   哪個地方用目前的設定、哪個用某個包，在「畫風」頁一列一列選（ComfyUI・目前的設定＝conn 'comfy'）。
+            //   四個桶照存檔原樣留著，只給沒選過的舊列當底；面板不讀寫它們。
+            let _editing = '';   // 空＝面板上是目前的設定；有值＝載進來的那個包的名字
+            const _editSel = container.querySelector('#img-cfd-edit-sel');
+            const _editStatus = container.querySelector('#img-cfd-edit-status');
+            // 存檔後 os_settings 會把 imgConfig.comfyuiDirect 換成新的那份 → 每次現讀，別抓開面板當下那個物件
+            function _curCfg(){ return (imgConfig && imgConfig.comfyuiDirect) || cfd || {}; }
+            function _fillEditSel(){
+                if (!_editSel) return;
+                _editSel.innerHTML = '<option value=""' + (_editing ? '' : ' selected') + '>目前的設定</option>'
+                    + cfdPresets.map(function(p){ return '<option value="' + escAttr(p.name) + '"' + (p.name === _editing ? ' selected' : '') + '>' + escAttr(p.name) + '</option>'; }).join('');
+            }
+            function _pick(name){
+                const p = name ? cfdPresets.find(function(x){ return x.name === name; }) : null;
+                applyPresetToPanel(p || _curCfg());
+                _editing = p ? name : '';
+                _fillEditSel();
+                if (_editStatus) _editStatus.textContent = '';
+            }
+            function _afterEdit(msg){
+                renderPresetGrid(); _fillEditSel();
+                try { window._imgPersistPresets && window._imgPersistPresets(); } catch(e) {}
+                if (_editStatus) _editStatus.textContent = msg;
+            }
+            window._cfdEdit = {
+                pick: _pick,
+                current: function(){ return _editing; },
+                // 面板上載的是哪個包就存回哪個；面板上是目前的設定（沒有包可存回）＝另存新包
+                saveBack: function(){
+                    const i = _editing ? cfdPresets.findIndex(function(x){ return x.name === _editing; }) : -1;
+                    if (i < 0) { this.saveAs(); return; }
+                    const old = cfdPresets[i];
+                    cfdPresets[i] = Object.assign(buildCfdPreset(old.name), old.preview ? { preview: old.preview } : {});
+                    _afterEdit('已存回「' + old.name + '」');
+                },
+                saveAs: async function(){
+                    const name = String(await AUI.prompt('新預設包的名字', '', { title: '另存新包' }) || '').trim();
+                    if (!name) return;
+                    if (cfdPresets.some(function(x){ return x.name === name; })) { AUI.toastr.warning('已經有叫「' + name + '」的包了'); return; }
+                    cfdPresets.push(buildCfdPreset(name));
+                    _editing = name;
+                    _afterEdit('已另存「' + name + '」');
+                },
+                // 底部「保存所有設定」收的：面板上這一份＝目前的設定（不管是不是從某個包載進來的，都不寫回包）
+                panelFields: function(){
+                    const f = buildCfdPreset('');
+                    delete f.name;
+                    const ta = container.querySelector('#img-cfd-custom-wf-text');
+                    f.workflowMode = ((container.querySelector('#img-cfd-wfmode') || {}).value === 'custom') ? 'custom' : 'auto';
+                    f.customWorkflow = ta ? String(ta.value || '').trim() : '';   // 自動模式也留著框裡的字，切回自訂還在
+                    return f;
+                },
+                // 刪掉的包剛好載在面板上 → 面板換回目前的設定，免得下拉寫「目前的設定」、欄位卻是被刪的那包
+                _dropped: function(name){ if (_editing === name) _pick(''); else _fillEditSel(); },
+                // 開面板、第一次轉換完：載目前的設定（已經載了某個包就留著）
+                refresh: function(){
+                    if (_editing && cfdPresets.some(function(x){ return x.name === _editing; })) { _fillEditSel(); return; }
+                    _pick('');
+                },
+            };
+            if (_editSel) _editSel.addEventListener('change', function(){ _pick(_editSel.value); });
+            window._cfdEdit.refresh();
+        })();
+
+        // 給核心存檔收包庫：cfdPresets 原是 launchApp 閉包變數，拆檔後核心經這個窗口拿（同一個陣列引用、形狀不變）
+        window._cfdGetPresets = function(){ return cfdPresets; };
+    }
+
+    window.OS_SETTINGS_COMFY = { wire: wire };
+})();

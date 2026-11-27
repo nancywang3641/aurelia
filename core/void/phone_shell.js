@@ -1,0 +1,1439 @@
+// core/void/phone_shell.js
+// 大廳「📱 手機殼」浮窗 —— 置中、一支手機造型外框 + app 切換。
+// 一次顯示一個 app；點主畫面圖標進 app、底部 home bar / 返回鈕切回主畫面。
+// 能吃容器的 app(微信/微薄/閱讀/RPG)直接渲染進手機螢幕；自開大面板的從手機啟動、開它自己的面板。
+(function () {
+    'use strict';
+    const win = window;
+
+    // 🚨 底下這些 go 以前一律寫成 `模組 && 模組.fn && 模組.fn(c)`：模組沒載到時**靜靜回 undefined**，
+    //    手機螢幕就停在剛被清空的狀態——使用者看到的是一片白，連一個字都沒有，而使用者沒有 console 可以查。
+    //    圖標清單是寫死的，所以「圖標在」不代表「那支程式在」。改成講清楚是哪一支沒到。
+    // 出事當下的現場：哪些 app 登記了、關鍵的全域在不在、那幾支 js 的標籤在不在。
+    //   標籤在但全域不在＝檔案載進來了卻中途死掉；標籤不在＝根本沒被載（清單或部署的問題）。
+    function _scene() {
+        const L = [];
+        try {
+            const reg = win.__PHONE_APPS ? Object.keys(win.__PHONE_APPS) : null;
+            L.push('已登記的 app：' + (reg ? (reg.join('、') || '（一個都沒有）') : '（沒有 __PHONE_APPS）'));
+        } catch (e) { L.push('已登記的 app：讀不到'); }
+        [['PhoneSystem', 'PhoneSystem'], ['wxApp', '微信'], ['WX_CARDS', '微信卡片'],
+         ['OS_DB', '資料庫'], ['OS_SETTINGS', '設定']].forEach(function (pair) {
+            var here = false;
+            try { here = !!(win[pair[0]] || window[pair[0]]); } catch (e) {}
+            L.push(pair[1] + '：' + (here ? '在' : '不在'));
+        });
+        try {
+            const srcs = Array.prototype.map.call(document.querySelectorAll('script[src]'), function (t) { return t.src || ''; });
+            L.push('頁面上的 js：' + srcs.length + ' 支');
+            ['phone_system.js', 'wx_core.js', 'wx_cards.js'].forEach(function (f) {
+                L.push('　' + f + ' 的標籤：' + (srcs.some(function (u) { return u.indexOf(f) >= 0; }) ? '在' : '不在'));
+            });
+        } catch (e) { L.push('頁面上的 js：讀不到'); }
+        return L.join('\n');
+    }
+    function _need(mod, label) {
+        if (!mod) throw new Error(label + '：這個 app 的程式沒有登記進手機（它那支 js 沒載到）');
+        return mod;
+    }
+    // mode: 'inside' = 渲染進手機螢幕(吃容器 div)；'out' = 開它自己的全屏面板(從手機啟動)；
+    //       'over' = 它自己開一個窗蓋在手機上面，手機留在主畫面不動（設置）
+    const APPS = [
+        { id: 'wx',     name: '微信', icon: 'fa-comment',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['微信'], '微信')(c); } },
+        { id: 'wb',     name: '微薄', icon: 'fa-eye',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['微博'], '微薄')(c); } },
+        { id: 'cal',    name: '日曆', icon: 'fa-calendar-days',  mode: 'inside', go: function (c) { return _need(win.__PHONE_APPS && win.__PHONE_APPS['日曆'], '日曆')(c); } },
+        // 🔮 塔羅已搬進廣場的占卜小屋（快轉地圖→占卜小屋→點紫薇→占卜）；手機不再重複開一個門。
+        //    PWA 獨立版還是走手機那條（那邊沒有廣場），見 index.js / index.html 的 PhoneSystem.install。
+        // 🏢 房產/家具已移出手機：合併成「房產手帳」獨立窗口（大廳右側 dock 的房產鈕）
+        { id: 'reader', name: '閱讀', icon: 'fa-book-open',  mode: 'inside', go: function (c) {
+            _need(win.VN_READER && win.VN_READER.show ? win.VN_READER : null, '閱讀').show(c);
+            const x = document.getElementById('vn-reader-sa-close');
+            if (x) x.onclick = _home;   // 統一返回：閱讀 ✕ → 回手機主畫面
+        } },
+        // 🌱 後院：阿洛的農場＋牧場（os_phone/os/os_farm.js，第一次打開才載入那批檔）。自己走的舞台，要整個畫面 → out
+        { id: 'farm', name: '後院', icon: 'fa-seedling', mode: 'out', go: function () {
+            if (win.AureliaControlCenter && win.AureliaControlCenter.launchGameApp) win.AureliaControlCenter.launchGameApp('farm');
+        } },
+        // 🏪 黑市已搬到 404 號房的柴郡身上（快轉地圖→404→點柴郡→黑市；立繪模式走前往→黑市）；手機不再重複開一個門。
+        { id: 'settings', name: '樣式', icon: 'fa-paintbrush', mode: 'inside', go: function (c) { _renderSettings(c); } },
+        { id: 'appstore', name: '應用商城', icon: 'fa-bag-shopping', mode: 'inside', go: function (c) { return _need(win.APP_STORE && win.APP_STORE.launch ? win.APP_STORE : null, '應用商城').launch(c); } },
+        // 🧩 組件：應用商城的對照物 —— 商城是「拿到一個應用、裝到桌面」，這裡是「做一個組件、放到主畫面」
+        { id: 'widgets', name: '組件', icon: 'fa-shapes', mode: 'inside', go: function (c) { return _need(win.OS_WIDGETS && win.OS_WIDGETS.launch ? win.OS_WIDGETS : null, '組件').launch(c); } },
+        { id: 'ctrlroom', name: '本機引擎', icon: 'fa-sliders', mode: 'inside', go: function (c) { return _need(win.OS_CONTROL_ROOM && win.OS_CONTROL_ROOM.launchApp ? win.OS_CONTROL_ROOM : null, '控制室').launchApp(c); } },
+        // 🤖 AI 助手已移出手機：入口收攏成大廳 dock 的「宿舍」一顆（房間是獨立擴展，
+        //    分兩個入口＝朋友沒裝時要顧兩處，而且以後住戶要站到舞台上也只該有一個門）。
+    ];
+
+    let _el = null;
+    let _savedGoHome = null;   // app 內部「返回」會呼叫 PhoneSystem.goHome，開 app 時暫借、回主畫面/關閉時還原
+    let _leaveApp = null;      // 需要善後的 app 離開時 → 存回呼，清空前先跑
+
+    // 引號也要轉：這支有放進屬性裡的（網址格的 value="…"、色票的 data-css="…"），網址或字體名裡有個 " 就把屬性截斷
+    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    // 本機設定一律走 AUI.lsSet：空間滿了不會整條斷掉，而且會跳一句說哪個沒存到
+    function _lsSet(key, val, what) { return (win.AUI || window.AUI).lsSet(key, val, what); }
+
+    function _restoreGoHome() {
+        if (_savedGoHome !== null && win.PhoneSystem) { win.PhoneSystem.goHome = _savedGoHome; }
+        _savedGoHome = null;
+    }
+    let _inLeave = false;   // 正在收 app（回主畫面／換 app／關手機）：這時角色中心被關掉，不要再叫一次回主畫面
+    function _runLeave() {
+        if (_leaveApp) { try { _leaveApp(); } catch (e) {} _leaveApp = null; }
+        // 角色中心開在手機的 app 區裡（不在 app 內容那層，清空 app 清不到它）→ 換 app／回主畫面／關手機時一起關
+        const G = win.OS_CHAR_GALLERY;
+        if (G && _el && _el.querySelector('.acg-root')) { _inLeave = true; try { G.close(); } catch (e) {} _inLeave = false; }
+    }
+
+    // ── 手機主題（CSS 變數驅動，掛在 .aps-frame；app 不需知道主題的存在、自動相容）──
+    const THEME_KEY = 'aurelia_phone_theme';
+    // 可調項 → CSS 變數。加新可調項：這加一行 + 設置面板加個控制項，app 完全不用動。
+    const THEME_VARS = {
+        wallpaper:  '--aps-wallpaper',    // 主畫面背景（漸層 / 純色 / url(...)）
+        iconBg:     '--aps-icon-bg',      // app 圖標容器底色
+        iconRadius: '--aps-icon-radius',  // 圖標圓角
+        labelColor: '--aps-label-color',  // 圖標文字色
+        sbColor:    '--aps-sb-color',     // 狀態列文字色
+        font:       '--aps-font',         // 字體
+        photoUrl:   '--aps-photo-1-url',  // 拍立得裡那張照片（沒填＝露出程式畫的示意風景）
+    };
+
+    // ── 內建主題 ────────────────────────────────────────────────────
+    const DEFAULT_THEME = 'clean';
+    // 🚨 主題的值一個都不在這裡 —— 全部在 css/aurelia_theme.css，那支檔就是一套主題的全部。
+    //    這邊只留代號與顯示名字；設置頁那顆預覽小圓的顏色也定義在那支的 :root。
+    //    加一套：那支複製一個區塊填滿格子，這裡加一列，就會出現在設置裡。
+    const THEMES = [
+        { id: 'clean', name: '留白相片' },
+        { id: 'cute',  name: '奶油貼紙' },
+        { id: 'glass', name: '白瓷玻璃' },
+        { id: 'dark',  name: '霧夜薄荷' },
+    ];
+    // ── 使用者自己做的主題（創作室生成的）─────────────────────────────────
+    //   內建那四套的值寫在 css/aurelia_theme.css；使用者做的那些存在這裡，開機時拼成一段
+    //   <style> 貼進 <head>，格式跟內建那四套一模一樣（.theme-<代號> { 一堆格子 }）。
+    //   那段是後來才貼上去的，所以同名格子贏得過樣式檔裡的——使用者做的主題可以只填幾格，
+    //   沒填的自然沿用留白相片的值。
+    const USER_THEMES_KEY = 'aurelia_phone_user_themes';   // [{ id, name, swatch, vars:{ '--os-nav-bg': '…' } }]
+    function _loadUserThemes() {
+        try { const l = JSON.parse(win.localStorage.getItem(USER_THEMES_KEY)); return Array.isArray(l) ? l : []; } catch (e) { return []; }
+    }
+    function _saveUserThemes(list) {
+        const ok = _lsSet(USER_THEMES_KEY, JSON.stringify(list || []), '自己做的手機主題');
+        _injectUserThemeCss();
+        return ok;
+    }
+    // 🚨 手機那個外殼（金屬邊框、側邊按鍵）不給使用者做的主題碰：那是「這支手機」本身，不是介面。
+    //    以前生了一套紅色的主題，整支手機的邊框跟著變紅。
+    //    內建那四套是手工配的、可以動框色；生成的那些一律跳過這兩格。
+    const NOT_FOR_USER_THEMES = ['--aps-frame-bg', '--aps-frame-line'];
+    function _userThemeCss(t) {
+        const vars = (t && t.vars) || {};
+        // 墊在選中那顆圖標後面那塊底，上面的字色由「那塊底的深淺」決定（算色的那一份在工坊那支）。
+        // 這裡補算是為了使用者之前已經存的那些主題——沒有這一格的話圖標會埋進墊底裡。
+        try {
+            if (!vars['--os-nav-on-ink'] && win.OS_PHONE_THEME && win.OS_PHONE_THEME.onInk) {
+                const ink = win.OS_PHONE_THEME.onInk(vars['--os-nav-on-bg']);
+                if (ink) vars['--os-nav-on-ink'] = ink;
+            }
+        } catch (e) {}
+        const body = Object.keys(vars).filter(function (k) { return NOT_FOR_USER_THEMES.indexOf(k) < 0; }).map(function (k) { return '  ' + k + ': ' + String(vars[k]) + ';'; }).join(String.fromCharCode(10));
+        const NL = String.fromCharCode(10);
+        return '.theme-' + t.id + ' {' + NL + body + NL + '}';
+    }
+    function _injectUserThemeCss() {
+        try {
+            const doc = win.document || document;
+            let el = doc.getElementById('aps-user-themes');
+            if (!el) { el = doc.createElement('style'); el.id = 'aps-user-themes'; doc.head.appendChild(el); }
+            el.textContent = _loadUserThemes().map(_userThemeCss).join(String.fromCharCode(10, 10));
+        } catch (e) {}
+    }
+    // 內建 ＋ 使用者做的，合成一張清單。挑主題那排、套主題、還原預設全部照這張走。
+    function _allThemes() {
+        return THEMES.concat(_loadUserThemes().map(function (t) { return { id: t.id, name: t.name, user: true, swatch: t.swatch || '' }; }));
+    }
+    function _themeById(id) { return _allThemes().find(function (t) { return t.id === id; }) || THEMES[0]; }
+    // 換主題＝換一整套，所以把「使用者之前單獨改過、而這套主題管得到」的那幾項一起清掉。
+    // 不清的話換主題會有東西沒跟上（桌布還是上一套的），看起來就像主題壞了。
+    // 圖庫資料夾不清 —— 那是使用者放的圖，跟配色無關，清掉等於把使用者的圖弄不見。
+    const THEME_OWNED = ['wallpaper', 'iconBg', 'iconRadius', 'labelColor', 'sbColor', 'font'];
+    function _setThemeId(id) {
+        const t = _loadTheme();
+        t.themeId = _themeById(id).id;
+        THEME_OWNED.forEach(function (k) { delete t[k]; });
+        _lsSet(THEME_KEY, JSON.stringify(t), '手機主題');
+        // 🚨 class 要自己掛一次：_applyTheme 沒有手機殼就直接跳出去了，而系統面板可以在
+        //    完全沒開過手機的情況下全屏開著（跟這支最後面那段「載入時先套一次」同一個道理）。
+        _applyThemeClass(t.themeId);
+        _applyTheme();
+    }
+    function _loadTheme() { try { return JSON.parse(win.localStorage.getItem(THEME_KEY)) || {}; } catch (e) { return {}; } }
+    function _saveTheme(patch) {
+        const t = Object.assign(_loadTheme(), patch);
+        Object.keys(patch).forEach(function (k) { if (patch[k] === '' || patch[k] == null) delete t[k]; });   // 空 = 還原預設
+        _lsSet(THEME_KEY, JSON.stringify(t), '手機樣式');
+        _applyTheme();
+    }
+    function _applyTheme() {
+        if (!_el) return;
+        const frame = _el.querySelector('.aps-frame');
+        if (!frame) return;
+        const t = _loadTheme();
+        // 主題：整組格子是 CSS 那邊換的，這裡只負責把名字掛上去。
+        _applyThemeClass(t.themeId || DEFAULT_THEME);
+        // 使用者在設置裡單獨改過的那幾項寫成行內 —— 行內贏過主題那組 class，個別設定優先，這是故意的
+        Object.keys(THEME_VARS).forEach(function (k) {
+            if (t[k]) frame.style.setProperty(THEME_VARS[k], t[k]);
+            else frame.style.removeProperty(THEME_VARS[k]);   // 沒設 = 用主題的值
+        });
+        // 字體「硬套用」：有設且非預設 → 加 class，CSS 用 !important 蓋掉所有 app(連寫死的)、只放過 fa 圖標
+        frame.classList.toggle('aps-font-on', !!(t.font && t.font !== 'inherit'));
+        // 桌布換成一張照片時，圖標名字要戴回毛玻璃膠囊才讀得出來（漸層與純色不掛，那是主題配好的）
+        frame.classList.toggle('aps-wp-photo', /^url\(/i.test(String(t.wallpaper || '')));
+        // 圖標要跟著主題的顏色，還是各 app 原本的品牌色（微信綠、日曆紅…）
+        frame.classList.toggle('aps-icon-colorful', !!t.iconColorful);
+        _applyIcons();
+    }
+    // 🚨 主題的 class 掛在 <html> 上，不是掛在手機殼上：
+    //    手機設置、控制室那些面板有時候是全屏開的，根本不在手機殼裡面，掛在殼上它們吃不到。
+    //    掛在根上，兩組格子（手機的 --aps-* 與面板的 --os-*）從根一路流下去，兩邊都吃得到。
+    // 🚨 也因為這樣，格子不准寫回 .aps-frame 上面 —— 直接命中的規則會贏過從根繼承下來的值，
+    //    主題就換不動了。使用者在設置裡單獨改的那幾項是行內樣式，行內照樣贏，那是故意的。
+    function _applyThemeClass(id) {
+        try {
+            const root = (win.document || document).documentElement;
+            if (!root) return;
+            const use = _themeById(id).id;
+            // 🚨 一律照「現在根上掛著哪些 theme-」清，不是照清單清 —— 使用者把自己做的那套刪掉之後，
+            //    那個代號已經不在清單裡了，照清單清會把它的 class 留在根上，等於刪了還套著。
+            const keep = 'theme-' + use;
+            Array.prototype.slice.call(root.classList).forEach(function (c) {
+                if (c.indexOf('theme-') === 0 && c !== keep) root.classList.remove(c);
+            });
+            root.classList.add(keep);
+        } catch (e) {}
+    }
+
+    // icon pack（VN 素材式）：給一個圖庫資料夾網址，每個 app 自動抓 <資料夾>/<代號>.png
+    // (試 .png/.webp/.jpg；<代號> 抓不到時也試中文名)。全抓不到 → 維持預設圖示。
+    const _ICON_EXTS = ['png', 'webp', 'jpg'];
+    function _applyIcons() {
+        if (!_el) return;
+        const folder = (_loadTheme().iconFolder || '').trim();
+        const base = folder ? (folder.replace(/\/+$/, '') + '/') : '';
+        _el.querySelectorAll('.aps-icon-em[data-app-em]').forEach(function (em) {
+            em.style.backgroundImage = ''; em.classList.remove('aps-icon-img');   // 先還原預設圖示
+            if (!base) return;
+            const id = em.dataset.appEm;
+            const app = APPS.find(function (a) { return a.id === id; });
+            const names = app ? [id, app.name] : [id];
+            const cands = [];
+            names.forEach(function (n) { _ICON_EXTS.forEach(function (e) { cands.push(base + encodeURIComponent(n) + '.' + e); }); });
+            (function tryNext(i) {
+                if (i >= cands.length) return;   // 全失敗 → 維持預設圖示
+                const img = new Image();
+                img.onload = function () { em.style.backgroundImage = 'url("' + cands[i] + '")'; em.classList.add('aps-icon-img'); };
+                img.onerror = function () { tryNext(i + 1); };
+                img.src = cands[i];
+            })(0);
+        });
+    }
+    function _saveIconFolder(v) {
+        const t = _loadTheme();
+        if (v) t.iconFolder = v; else delete t.iconFolder;
+        _lsSet(THEME_KEY, JSON.stringify(t), '圖示的圖庫資料夾');
+        _applyTheme();
+    }
+
+    // ── 狀態列的字色：跟著 app 自己的標頭走 ──
+    // 真手機是 app 把自己的標頭延伸到動態島底下，島那條就是 app 的顏色；系統不會畫一條黑的蓋住。
+    // 所以字色不能寫死也不能只跟主題 —— 微信還有自己的深色模式，同一套主題下深淺是會變的。
+    // 做法：量一次島底下那塊真正的底色。狀態列自己是 pointer-events:none，
+    //       elementFromPoint 會直接穿過它拿到底下的 app 標頭，不必每個 app 都來登記一遍。
+    // 回主畫面時清掉，讓主題自己那個顏色回來。
+    //   09-27 起還負責「塗色」：app 區整個從狀態列底下開始（phone_shell.css），狀態列那條照正下方那塊塗——
+    //   量的點從「狀態列中間」改成「狀態列正下方」，那裡就是 app 最上面那一列（標頭）。
+    //   橫向漸層（Win98 那種左深右淺的標頭）連漸層一起抄；直向漸層只取最上面那個顏色，接得上標頭頂端。
+    //   商城裝的 app 在自己的窗口裡：伸進窗口裡量同一個位置（同源 srcdoc 讀得到），窗口還沒載完就等它載完再量一次。
+    function _clearSbPaint(frame) {
+        delete frame.dataset.sb; delete frame.dataset.sbPaint;
+        frame.style.removeProperty('--aps-sb-app-bg'); frame.style.removeProperty('--aps-sb-app-img');
+    }
+    function _rgbOf(s) { const m = String(s || '').match(/rgba?\(([^)]+)\)/); if (!m) return null; const p = m[1].split(/[\s,\/]+/).filter(Boolean).map(Number); return (p.length >= 3) ? p : null; }
+    function _sampleTop(doc, x, y) {
+        let hit = doc.elementFromPoint(x, y);
+        if (hit && hit.tagName === 'IFRAME') {
+            let inner = null;
+            try { inner = hit.contentDocument; } catch (e) {}
+            if (!inner || inner.readyState !== 'complete' || !inner.body) return { wait: hit };
+            const ir = hit.getBoundingClientRect();
+            return _sampleTop(inner, Math.max(1, x - ir.left), Math.max(1, y - ir.top));
+        }
+        const view = (doc.defaultView || win);
+        let n = hit, color = null, img = null;
+        while (n && n.nodeType === 1) {
+            const cs = view.getComputedStyle(n);
+            if (!img && /gradient\(/.test(cs.backgroundImage)) img = cs.backgroundImage;
+            const c = _rgbOf(cs.backgroundColor);
+            if (c && (c[3] === undefined || c[3] > 0.85)) { color = c; break; }
+            n = n.parentElement;
+        }
+        return { color: color, img: img };
+    }
+    function _syncStatusBar() {
+        if (!_el) return;
+        const frame = _el.querySelector('.aps-frame');
+        if (!frame) return;
+        const app = _el.querySelector('#aps-app');
+        if (!app || app.style.display === 'none') { _clearSbPaint(frame); return; }
+        // 等 app 把自己畫出來再量；沒畫完就量會抓到還沒上色的容器
+        win.requestAnimationFrame(function () {
+            try {
+                const sb = _el.querySelector('.aps-statusbar');
+                const r = sb.getBoundingClientRect();
+                const s = _sampleTop(document, Math.round(r.left + r.width / 2), Math.round(r.bottom + 2));
+                if (s.wait) { s.wait.addEventListener('load', function () { win.setTimeout(_syncStatusBar, 60); }, { once: true }); return; }
+                let tone = s.color;
+                let paintImg = 'none', paintBg = s.color ? 'rgb(' + s.color.slice(0, 3).join(',') + ')' : '';
+                if (s.img) {
+                    const first = _rgbOf(s.img);
+                    const horizontal = /gradient\(\s*(?:to (?:left|right)|-?(?:90|270)deg)/i.test(s.img);
+                    if (horizontal) paintImg = s.img;
+                    else if (first) paintBg = 'rgb(' + first.slice(0, 3).join(',') + ')';
+                    if (first) tone = first;
+                }
+                if (!tone) { _clearSbPaint(frame); return; }
+                frame.style.setProperty('--aps-sb-app-bg', paintBg || 'transparent');
+                frame.style.setProperty('--aps-sb-app-img', paintImg);
+                frame.dataset.sbPaint = '1';
+                const lin = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+                const lum = 0.2126 * lin(tone[0]) + 0.7152 * lin(tone[1]) + 0.0722 * lin(tone[2]);
+                frame.dataset.sb = lum < 0.45 ? 'light' : 'dark';
+            } catch (e) { _clearSbPaint(frame); }
+        });
+    }
+    // app 開起來之後畫面還會再變：創作室、聊天設置那種整頁蓋上來的，底下那塊顏色跟著換
+    //   （創作室是深紫、聊天設置是淺灰），只在開 app 那一刻量一次，時間就會變成深字壓在深底上看不見。
+    //   所以 app 區塊只要有變動就重量一次，收斂成一次、免得聊天一直冒字就一直量。
+    let _sbT = 0;
+    function _watchStatusBar(body) {
+        if (!body || !win.MutationObserver) return;
+        const later = function () {
+            if (_sbT) return;
+            _sbT = win.setTimeout(function () { _sbT = 0; _syncStatusBar(); }, 250);
+        };
+        const mo = new win.MutationObserver(later);
+        mo.observe(body, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+        // 沒有固定標頭、整頁一起捲的面板：捲動後頂端那塊換了顏色，狀態列要跟上
+        body.addEventListener('scroll', later, { capture: true, passive: true });
+        // 換主題（聊天 app 主題、泡泡、手機主題…）是把樣式塞進 <head>，app 區裡什麼都沒動 → 也要重量。
+        //   盯 head 一次就好，不必每個主題功能各自來通知。
+        try { new win.MutationObserver(later).observe(document.head, { childList: true, subtree: true, characterData: true }); } catch (e) {}
+    }
+
+    // ── 狀態列時鐘 ──
+    const _WEEK = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+    function _tickClock() {
+        if (!_el) return;
+        const d = new Date();
+        const hhmm = ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        const sb = _el.querySelector('#aps-sb-time');
+        if (sb) sb.textContent = hhmm;
+        _paintWidgets();   // 🧩 時鐘組件跟著走
+        const big = _el.querySelector('#aps-lock-time');
+        if (big) big.textContent = hhmm;
+        const date = _el.querySelector('#aps-lock-date');
+        if (date) date.textContent = (d.getMonth() + 1) + '/' + d.getDate() + ' ' + _WEEK[d.getDay()];
+    }
+
+    // ── 今日心情：點一下換下一個，記在 localStorage ──────────────────────
+    //   跟日期綁在一起：換一天就回到第一個，不然昨天挑的心情會一直掛在那。
+    const MOODS = ['☀️', '⛅', '🌧️', '🌙', '✨', '🌸', '☕', '😴', '🔥', '🫧'];
+    // 畫面用的圖示（MOODS 本身是存檔的鍵，舊資料照讀，所以不改）；顏色在 phone_shell.css 照 data-mood 上
+    const MOOD_ICONS = ['fa-sun', 'fa-cloud-sun', 'fa-cloud-rain', 'fa-moon', 'fa-star', 'fa-spa', 'fa-mug-hot', 'fa-bed', 'fa-fire', 'fa-soap'];
+    // 拍立得下面那行手寫字用的名字，跟上面兩排一一對齊（圖標講不出來的東西，一個詞講得出來）
+    const MOOD_WORDS = ['今天是晴天', '有點多雲', '下雨的一天', '安靜的夜', '亮晶晶的一天', '喘口氣', '配一杯咖啡', '想睡', '整個燒起來', '泡泡一樣輕'];
+    const MOOD_KEY = 'aurelia_phone_mood';
+    function _todayKey() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+    function _loadMood() {
+        try {
+            const m = JSON.parse(win.localStorage.getItem(MOOD_KEY));
+            if (m && m.day === _todayKey() && MOODS.indexOf(m.em) >= 0) return m.em;
+        } catch (e) {}
+        return MOODS[0];
+    }
+    function _saveMood(em) {
+        _lsSet(MOOD_KEY, JSON.stringify({ day: _todayKey(), em: em, text: _loadMoodText() }), '今天的心情');
+    }
+    // 拍立得下面那行字：使用者自己寫的優先，沒寫過才用心情的預設句。
+    // 跟心情一樣綁日期 —— 這是「今天的拍立得」，不是一句掛在那裡不會變的簽名。
+    function _loadMoodText() {
+        try {
+            const m = JSON.parse(win.localStorage.getItem(MOOD_KEY));
+            if (m && m.day === _todayKey() && typeof m.text === 'string') return m.text;
+        } catch (e) {}
+        return '';
+    }
+    function _saveMoodText(t) {
+        let m = {};
+        try { m = JSON.parse(win.localStorage.getItem(MOOD_KEY)) || {}; } catch (e) {}
+        const same = m.day === _todayKey();
+        _lsSet(MOOD_KEY, JSON.stringify({
+            day: _todayKey(), em: (same && m.em) || MOODS[0], text: String(t || '')
+        }), '拍立得底下那行字');
+        _paintMood();
+    }
+    async function _editMoodText() {
+        const A = win.AUI || window.AUI;
+        const now = _loadMoodText();
+        const i = Math.max(0, MOODS.indexOf(_loadMood()));
+        if (!A || !A.prompt) return;   // 對話窗還沒載到就先不擋著使用者，什麼都不做
+        const v = await A.prompt('今天想寫什麼？', now, {
+            title: '拍立得', placeholder: MOOD_WORDS[i], hint: '留空就回到今天的心情那句。', okText: '寫上去'
+        });
+        if (v === null) return;        // 取消
+        _saveMoodText(v.trim());
+    }
+    // 時鐘那顆心情膠囊與拍立得是同一份資料的兩個臉：膠囊給圖示，拍立得給那句話。
+    // 兩邊都能點，點了都是換下一個 —— 所以一律走這支重畫，不要各畫各的。
+    function _paintMood() {
+        if (!_el) return;
+        const i = Math.max(0, MOODS.indexOf(_loadMood()));
+        const el = _el.querySelector('#aps-mood-em');
+        if (el) {
+            el.dataset.mood = String(i);
+            el.innerHTML = '<i class="fa-solid ' + MOOD_ICONS[i] + '"></i>';
+        }
+        _paintWidgets();   // 🧩 拍立得那句話現在畫在組件裡（心情膠囊跟它是同一份資料）
+    }
+    function _cycleMood() {
+        const i = MOODS.indexOf(_loadMood());
+        const next = MOODS[(i + 1) % MOODS.length];
+        _saveMood(next);
+        _paintMood();
+    }
+
+    // ── 設置 app：手機主題（先做背景；圖標/字體之後照同模式加，零衝突）──
+    const WALLPAPERS = [
+        { name: '夜墨', css: 'linear-gradient(160deg,#2b2d42,#4a4e69)' },
+        { name: '抹茶', css: 'linear-gradient(160deg,#a8c66c,#7d9a4f)' },
+        { name: '奶橘', css: 'linear-gradient(160deg,#f6d365,#fda085)' },
+        { name: '霧紫', css: 'linear-gradient(160deg,#a18cd1,#fbc2eb)' },
+        { name: '海藍', css: 'linear-gradient(160deg,#4facfe,#00f2fe)' },
+        { name: '純白', css: '#eef0f6' },
+    ];
+    // 這排是系統字體：本機有就有、沒有就退回預設。要別的字體用下面那格自己填。
+    const FONTS = [
+        { name: '預設',  css: '' },   // 空＝把這一項刪掉，字體交還給主題（以前寫 inherit 會蓋掉主題挑的字）
+        { name: '思源宋', css: "'Noto Serif TC',serif" },
+        { name: '優雅',  css: "'Playfair Display','Noto Serif TC',serif" },
+        { name: '黑體',  css: "system-ui,'PingFang TC','Microsoft JhengHei',sans-serif" },
+        { name: '等寬',  css: "'Courier New',monospace" },
+    ];
+    // 電腦裡裝好的字體：填名字就用，完全不連外、只有這台看得到。
+    //   這個字串會直接進 CSS，所以走白名單不走黑名單——只留字體名真的會用到的字元
+    //   （中日韓、英數、空格、- _ .）。黑名單剃引號分號還會漏掉 url( 這種，白名單一次擋完。
+    function _fontCssFromName(name) {
+        const clean = String(name || '')
+            .replace(/[^\w一-鿿぀-ヿㇰ-ㇿ가-힯㐀-䶿 .\-]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim();
+        if (!clean) return '';
+        return "'" + clean + "',system-ui,sans-serif";
+    }
+    // 反查：目前存的字體是不是「自己填的」（不在上面清單裡）→ 是的話把名字挖回來填進輸入框
+    function _customFontName(cssVal) {
+        if (!cssVal || cssVal === 'inherit') return '';
+        if (FONTS.some(function (f) { return f.css === cssVal; })) return '';
+        const m = String(cssVal).match(/^'([^']+)'/);
+        return m ? m[1] : '';
+    }
+
+    function _urlOf(v) { return (v && String(v).indexOf('url(') === 0) ? String(v).slice(4).split(')')[0] : ''; }
+    function _renderSettings(c) {
+        const t = _loadTheme();
+        const sw = function (arr, key) { return arr.map(function (w) { return '<button class="aps-set-sw" data-k="' + key + '" data-css="' + _esc(w.css) + '" type="button" style="background:' + w.css + '"><span>' + _esc(w.name) + '</span></button>'; }).join(''); };
+        const ftCh = FONTS.map(function (f) { return '<button class="aps-set-chip" data-k="font" data-css="' + _esc(f.css) + '" type="button" style="font-family:' + f.css + '">' + _esc(f.name) + '</button>'; }).join('');
+        const icHintRows = APPS.map(function (a) {
+            return '<div class="aps-set-icrow">'
+                 + '<span class="aps-set-icprev" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
+                 + '<span class="aps-set-icname">' + _esc(a.name) + '</span>'
+                 + '<span class="aps-set-ichint">' + a.id + '.png</span>'
+                 + '</div>';
+        }).join('');
+        const curTheme = _themeById(t.themeId || DEFAULT_THEME).id;
+        const thBtns = _allThemes().map(function (x) {
+            // 內建四套那顆小圓的三段色寫在樣式檔（.aps-th-sw-<代號>）；使用者自己做的那些是資料，寫行內
+            const sw = x.user
+                ? '<span class="aps-set-th-sw" style="background:' + _esc(x.swatch || 'linear-gradient(135deg,#ddd,#bbb)') + '"></span>'
+                : '<span class="aps-set-th-sw aps-th-sw-' + x.id + '"></span>';
+            return '<button class="aps-set-th' + (x.id === curTheme ? ' on' : '') + '" data-theme="' + x.id + '" type="button">'
+                 + sw
+                 + '<span class="aps-set-th-name">' + _esc(x.name) + '</span>'
+                 + (x.user ? '<span class="aps-set-th-del" data-delth="' + x.id + '" title="刪掉這套">×</span>' : '')
+                 + '</button>';
+        }).join('');
+        c.innerHTML =
+            '<div class="aps-set">'
+          +   '<div class="aps-set-top sysh"><button class="aps-set-back sysh-back" id="aps-set-back" type="button" title="返回">‹</button><span class="aps-set-h sysh-title">手機設置</span></div>'
+          +   '<div class="aps-set-sec">主題</div><div class="aps-set-ths">' + thBtns + '</div>'
+          +   '<div class="aps-set-row"><button id="aps-set-newth" class="aps-set-btn ghost" type="button">做一套新的</button></div>'
+          +   '<div class="aps-set-subnote">一套主題會換掉桌布、圖標排法、時鐘位置、底排，還有各個系統頁面的配色。下面幾項可以再單獨蓋過它。</div>'
+          +   '<div class="aps-set-sec">App 圖標的顏色</div><div class="aps-set-chips">'
+          +     '<button class="aps-set-chip' + (t.iconColorful ? '' : ' on') + '" data-iconcolor="0" type="button">跟著主題</button>'
+          +     '<button class="aps-set-chip' + (t.iconColorful ? ' on' : '') + '" data-iconcolor="1" type="button">各自的原色</button>'
+          +   '</div>'
+          +   '<div class="aps-set-sec">拍立得的照片</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-polurl" class="aps-set-input" type="text" placeholder="貼一張照片網址 https://..." value="' + _esc(_urlOf(t.photoUrl)) + '"><button id="aps-set-polurl-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-subnote">留空＝用主題自己畫的那張風景。主畫面上點拍立得可以寫今天那句話，點時鐘旁邊那顆換心情。</div>'
+          +   '<div class="aps-set-sec">背景</div><div class="aps-set-swgrid">' + sw(WALLPAPERS, 'wallpaper') + '</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-wpurl" class="aps-set-input" type="text" placeholder="或貼背景圖網址 https://..." value="' + _esc(_urlOf(t.wallpaper)) + '"><button id="aps-set-wpurl-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-sec">APP 圖標（一個圖庫資料夾、自動對名）</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-icfolder" class="aps-set-input" type="text" placeholder="圖庫資料夾網址 https://.../icons/" value="' + _esc(t.iconFolder || '') + '"><button id="aps-set-icf-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-subnote">把圖放進這資料夾、用下方代號當檔名(.png/.webp/.jpg 都行)。建議<b>正方形、120×120px 以上</b>(顯示成圓角方塊、會裁切，太小會糊)；沒放的自動用預設符號：</div>'
+          +   '<div class="aps-set-iclist">' + icHintRows + '</div>'
+          +   '<div class="aps-set-sec">字體（套用到所有 app）</div><div class="aps-set-chips">' + ftCh + '</div>'
+          +   '<div class="aps-set-row"><input id="aps-set-fontname" class="aps-set-input" type="text" placeholder="或填你電腦裡的字體名，例如 微軟正黑體" value="' + _esc(_customFontName(t.font)) + '"><button id="aps-set-fontname-btn" class="aps-set-btn" type="button">套用</button></div>'
+          +   '<div class="aps-set-subnote">先在電腦裡把字體<b>安裝好</b>再填它的名字。這條完全不連網，只有你這台看得到；換台電腦沒裝就會變回預設。留空＝改用上面那排。</div>'
+          +   '<div class="aps-set-row"><button id="aps-set-reset" class="aps-set-btn ghost" type="button">還原全部預設</button></div>'
+          +   '<div class="aps-set-note">字體會「硬套用」蓋掉所有 app(連寫死字體的也蓋)，只放過 fa 圖標不破壞。</div>'
+          + '</div>';
+        const back = c.querySelector('#aps-set-back'); if (back) back.addEventListener('click', _home);
+        // 🎨 做一套新的：直接在同一格開手機主題工坊（它自己帶返回鍵，按了回主畫面）
+        const newTh = c.querySelector('#aps-set-newth');
+        if (newTh) newTh.addEventListener('click', function () {
+            if (win.OS_PHONE_THEME && win.OS_PHONE_THEME.launch) win.OS_PHONE_THEME.launch(c);
+            else c.innerHTML = '<div class="aps-fail">手機主題工坊還沒載入</div>';
+        });
+        // 換主題後整頁重畫：底下那幾項的「目前是什麼」跟著主題變了，不重畫會顯示上一套的值
+        c.querySelectorAll('[data-theme]').forEach(function (b) {
+            b.addEventListener('click', function (e) {
+                // 使用者自己做的那幾套右上角有個 ×：點它是刪掉，不是選它
+                const del = e.target.closest && e.target.closest('[data-delth]');
+                if (del) {
+                    e.stopPropagation();
+                    const id = del.dataset.delth;
+                    _saveUserThemes(_loadUserThemes().filter(function (x) { return x.id !== id; }));
+                    if ((_loadTheme().themeId || DEFAULT_THEME) === id) _setThemeId(DEFAULT_THEME);
+                    _renderSettings(c);
+                    return;
+                }
+                _setThemeId(b.dataset.theme); _renderSettings(c);
+            });
+        });
+        c.querySelectorAll('[data-iconcolor]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                const t2 = _loadTheme();
+                if (b.dataset.iconcolor === '1') t2.iconColorful = true; else delete t2.iconColorful;
+                _lsSet(THEME_KEY, JSON.stringify(t2), '圖示的配色');
+                _applyTheme(); _renderSettings(c);
+            });
+        });
+        const polBtn = c.querySelector('#aps-set-polurl-btn');
+        if (polBtn) polBtn.addEventListener('click', function () {
+            const u = (c.querySelector('#aps-set-polurl').value || '').trim();
+            _saveTheme({ photoUrl: u ? ('url("' + u.replace(/"/g, '%22') + '")') : '' });
+        });
+        c.querySelectorAll('[data-k]').forEach(function (b) {
+            b.addEventListener('click', function () { const p = {}; p[b.dataset.k] = b.dataset.css; _saveTheme(p); });
+        });
+        const wpBtn = c.querySelector('#aps-set-wpurl-btn');
+        if (wpBtn) wpBtn.addEventListener('click', function () { const u = (c.querySelector('#aps-set-wpurl').value || '').trim(); _saveTheme({ wallpaper: u ? ('url(' + u + ') center/cover no-repeat') : '' }); });
+        const fnBtn = c.querySelector('#aps-set-fontname-btn');
+        if (fnBtn) fnBtn.addEventListener('click', function () {
+            const css = _fontCssFromName(c.querySelector('#aps-set-fontname').value);
+            _saveTheme({ font: css || '' });   // 清空＝把這一項刪掉、退回主題的字體，不然會卡在上一個自訂字體
+        });
+        const icfBtn = c.querySelector('#aps-set-icf-btn');
+        if (icfBtn) icfBtn.addEventListener('click', function () { _saveIconFolder((c.querySelector('#aps-set-icfolder').value || '').trim()); });
+        const reset = c.querySelector('#aps-set-reset');
+        if (reset) reset.addEventListener('click', function () { try { win.localStorage.removeItem(THEME_KEY); } catch (e) {} _applyTheme(); _renderSettings(c); });
+    }
+
+    // ── 已安裝 app（app 商店裝的功能型 HTML app）──
+    // 圖標：內建 app 用 Font Awesome（顏色在 phone_shell.css 照 data-ic 上）；使用者 app 用它自己挑的 emoji
+    function _icHTML(a) { return a.icon ? '<i class="fa-solid ' + a.icon + '"></i>' : _esc(a.emoji || ''); }
+    const INSTALLED_KEY = 'aurelia_phone_apps';   // 與 app_store.js 同 key：[{id,name,emoji,iconUrl}]
+    function _loadInstalled() { try { return JSON.parse(win.localStorage.getItem(INSTALLED_KEY)) || []; } catch (e) { return []; } }
+    function _saveInstalled(list) { return _lsSet(INSTALLED_KEY, JSON.stringify(list || []), '已安裝的 app 清單'); }
+    function _cacheInstalled(meta) { try { var l = _loadInstalled().filter(function (m) { return m && m.id !== meta.id; }); l.push({ id: meta.id, name: meta.name || 'App', emoji: meta.emoji || '', icon: meta.icon || '', iconUrl: meta.iconUrl || '' }); _saveInstalled(l); } catch (e) {} }
+
+    // 使用者 app 啟動：點開才從 OS_DB 撈 HTML，丟給 AppRuntime 跑成 iframe
+    function _userAppGo(id) {
+        return function (container) {
+            if (!container) return;
+            var _o = {};
+            try { _o = JSON.parse(win.localStorage.getItem('aurelia_app_opened')) || {}; } catch (e) {}
+            _o[id] = Date.now(); _lsSet('aurelia_app_opened', JSON.stringify(_o), 'app 最近打開的時間');   // 最近使用時間(給應用工坊顯示)
+            container.innerHTML = '<div class="aps-loading">載入中…</div>';
+            const dbp = (win.OS_DB && win.OS_DB.getPhoneApp) ? win.OS_DB.getPhoneApp(id) : Promise.resolve(null);
+            Promise.resolve(dbp).then(async function (rec) {
+                if (!rec || !rec.html) { container.innerHTML = '<div class="aps-fail">app 內容遺失，請到應用商店重裝</div>'; return; }
+                const R = win.AppRuntime;
+                if (!R || !R.mountAppIframe) { container.innerHTML = '<div class="aps-fail">app 執行器未載入</div>'; return; }
+                // 🔐 匯入後沒預覽過就裝上桌面的別人做的 app：第一次打開先問（按「先不要」回主畫面，不跑）
+                if (R.ensureConsent && !(await R.ensureConsent(rec))) { _home(); return; }
+                R.mountAppIframe(container, rec.html, { preview: false, appId: rec.id || id, provider: rec.provider });
+            }).catch(function () { container.innerHTML = '<div class="aps-fail">app 載入失敗</div>'; });
+            // iframe 由 _home 清空容器時一併移除，無需回傳 cleanup
+        };
+    }
+    // 使用者 app 的圖標：自己挑的 emoji 照用；沒挑的用 FA（創作室做的記在 icon 欄）。舊資料的 📦／🧩 是當年塞的預設值，當作沒挑
+    function _userEm(meta) { const e = String((meta && meta.emoji) || '').trim(); return (e && e !== '📦' && e !== '🧩') ? e : ''; }
+    function _userIc(meta) { const i = String((meta && meta.icon) || ''); if (/^fa-[a-z0-9-]+$/.test(i)) return i; return (meta && meta.emoji === '🧩') ? 'fa-puzzle-piece' : 'fa-cube'; }
+    function _makeUserApp(meta) {
+        return { id: meta.id, name: meta.name || 'App', emoji: _userEm(meta), icon: _userEm(meta) ? '' : _userIc(meta), iconUrl: meta.iconUrl || '', mode: 'inside', go: _userAppGo(meta.id) };
+    }
+    // 首次建殼/開機：從 localStorage 把已安裝 app 補回 APPS（去重）
+    function _restoreInstalledApps() {
+        // ① localStorage 快取（快、可能空）
+        _loadInstalled().forEach(function (meta) {
+            if (meta && meta.id && !APPS.find(function (a) { return a.id === meta.id; })) APPS.push(_makeUserApp(meta));
+        });
+        // ② 真來源 OS_DB（跟「我的應用」同源）：補回所有已建手機 app。
+        //    修「重開後桌面圖標消失」根因——INSTALLED_KEY 之前從沒被 setItem 過、localStorage 永遠空，
+        //    桌面圖標只靠 addApp 的 in-memory push（重開即丟）。改從 OS_DB 補回並回填快取。
+        try {
+            var dbp = (win.OS_DB && win.OS_DB.getAllPhoneApps) ? win.OS_DB.getAllPhoneApps() : null;
+            if (dbp && dbp.then) {
+                dbp.then(function (apps) {
+                    var added = false;
+                    (apps || []).forEach(function (rec) {
+                        if (rec && rec.id && !APPS.find(function (a) { return a.id === rec.id; })) {
+                            APPS.push(_makeUserApp(rec)); _cacheInstalled(rec); added = true;
+                        }
+                    });
+                    if (added && _el) _renderGrid();
+                }).catch(function () {});
+            }
+        } catch (e) {}
+    }
+
+    // ── 寫作工具（從舊「寫作頁」搬來，直接在手機殼螢幕內開）──────────────
+    // launchFn(c) 把工具渲染進手機容器。返回鈕統一回手機主畫面：
+    //   多數工具的返回鈕呼叫 PhoneSystem.goHome（_openApp 已暫改寫為 _home）→ 自動 OK；
+    //   世界書(onclick="goHome()") / 創作室(自刪 os_studio_app) → 這裡補綁。
+    function _mountTool(launchFn, c) {
+        if (typeof launchFn !== 'function') { c.innerHTML = '<div class="aps-fail">工具尚未載入</div>'; return; }
+        c.style.position = 'relative';   // 給自帶 absolute 版面的工具(創作室)當定位基準
+        c.style.height = '100%';
+        try { launchFn(c); }
+        catch (e) { console.warn('[PhoneShell] 寫作工具掛載失敗', e); c.innerHTML = '<div class="aps-fail">這個工具載入失敗</div>'; return; }
+        win.setTimeout(function () {
+            c.querySelectorAll('.wb-back-btn,[onclick*="goHome"],#studio-back-btn').forEach(function (b) {
+                b.removeAttribute('onclick');
+                b.onclick = function (e) { if (e) { e.preventDefault(); e.stopPropagation(); } _home(); };
+            });
+        }, 250);
+    }
+    // 把寫作工具補進 APPS（世界書/提示詞原本就只有 standalone 版才有 → 只在 standalone 顯示）
+    function _addWritingTools() {
+        const standalone = !!document.getElementById('aurelia-standalone-root');
+        const tools = [
+            // ⚙️ 設置（11-17）：不再在手機裡畫設置頁，點了開「設置」窗口（os_settings_window.js，蓋在手機上面），關掉就回到手機主畫面
+            { id: 'sysset', name: '設置', icon: 'fa-gear', mode: 'over', go: function () { var W = win.OS_SETTINGS_WINDOW; if (W && W.open) W.open('home'); else if (win.AUI && win.AUI.toast) win.AUI.toast('設置還沒載入完整，請重新整理一次', { type: 'warn' }); } },
+            { id: 'album',  name: '相簿',   icon: 'fa-images', mode: 'inside', go: function (c) { _mountTool(win.OS_SETTINGS && win.OS_SETTINGS.launchAlbum, c); } },
+            // 🎭 角色中心（11-16）：每個角色的素材和裝扮。它自己開一個窗蓋在 app 區上，按它的返回＝回主畫面
+            { id: 'chars',  name: '角色中心', icon: 'fa-address-book', mode: 'inside', go: function (c) { var G = win.OS_CHAR_GALLERY; if (G && G.open) { G.open('', { from: c, onClose: function () { if (!_inLeave) _home(); } }); } else { c.innerHTML = '<div class="aps-fail">角色中心還沒載入</div>'; } } },
+            { id: 'avsvar', name: '狀態檔案', icon: 'fa-dice', mode: 'inside', go: function (c) { _mountTool(win.OS_AVS && (win.OS_AVS.launchApp || win.OS_AVS.launch), c); } },
+            // 創作室獨立 app 已移除：所有創作功能都從「應用商城」進(工坊首頁已內含 製作面板/主題/世界書/我的角色 等入口)
+            { id: 'phone',  name: '電話',   icon: 'fa-phone', mode: 'inside', go: function (c) { if (win.OS_DIALER && win.OS_DIALER.launch) { win.OS_DIALER.launch(c); } else { c.innerHTML = '<div class="aps-fail">電話模組未載入</div>'; } } },
+        ];
+        if (standalone) {
+            tools.push({ id: 'lorebook', name: '世界書', icon: 'fa-book-atlas', mode: 'inside', go: function (c) { _mountTool(win.OS_WORLDBOOK && (win.OS_WORLDBOOK.launchApp || win.OS_WORLDBOOK.launch), c); } });
+            tools.push({ id: 'prompts',  name: '提示詞', icon: 'fa-scroll', mode: 'inside', go: function (c) { _mountTool(win.OS_PROMPTS && (win.OS_PROMPTS.launchApp || win.OS_PROMPTS.launch), c); } });
+        }
+        tools.forEach(function (t) { if (!APPS.find(function (a) { return a.id === t.id; })) APPS.push(t); });
+    }
+    // ── 主畫面排列：使用者自己排的順序、放進 dock 的、從桌面拿掉的，都記在這裡 ──
+    //   { grid:[id…], dock:[id…], hidden:[id…] }；沒記過的 app（新裝的）排在最後面。
+    //   「從桌面移除」只是不擺出來，不是刪除：拿掉的都在應用商城「我的應用」最上面，可以放回來。
+    const LAYOUT_KEY = 'aurelia_phone_layout';
+    const DOCK_IDS = ['sysset', 'settings', 'album', 'phone'];   // 第一次開的 dock
+    const DOCK_MAX = 4;
+    // 不能從桌面拿掉的：應用商城是「放回桌面」的地方，設置是退路——拿掉這兩個就回不來了
+    const PINNED = ['appstore', 'sysset'];
+    function _loadLayout() {
+        let l = null;
+        try { l = JSON.parse(win.localStorage.getItem(LAYOUT_KEY)); } catch (e) {}
+        l = l || {};
+        return {
+            grid: Array.isArray(l.grid) ? l.grid : [],
+            dock: Array.isArray(l.dock) ? l.dock : DOCK_IDS.slice(),
+            hidden: Array.isArray(l.hidden) ? l.hidden.filter(function (id) { return PINNED.indexOf(id) < 0; }) : [],
+            seen: Array.isArray(l.seen) ? l.seen : []   // 🧩 這幾個組件已經決定過要不要上桌面（見 _seedWidgets）
+        };
+    }
+    function _saveLayout(l) { return _lsSet(LAYOUT_KEY, JSON.stringify(l), '手機桌面的擺法'); }
+    function _has(id) { return APPS.some(function (a) { return a.id === id; }); }
+    function _dockApps(L) {
+        L = L || _loadLayout();
+        return L.dock.filter(function (id) { return _has(id) && L.hidden.indexOf(id) < 0; }).slice(0, DOCK_MAX)
+            .map(function (id) { return APPS.find(function (a) { return a.id === id; }); });
+    }
+    function _gridApps(L) {
+        L = L || _loadLayout();
+        const inDock = _dockApps(L).map(function (a) { return a.id; });
+        const pos = function (a) { const i = L.grid.indexOf(a.id); return i < 0 ? 1e6 + APPS.indexOf(a) : i; };
+        return APPS.filter(function (a) { return inDock.indexOf(a.id) < 0 && L.hidden.indexOf(a.id) < 0; })
+            .sort(function (a, b) { return pos(a) - pos(b); });
+    }
+    // ── 🧩 組件（widget）：跟圖標住同一個格子、記在同一份排列裡 ──────────────
+    //   所以長按編輯、拖著換位置、左上角減號移除那一整套完全不用重寫 —— 組件的殼用的是
+    //   同一個 .aps-icon 與 data-app，差別只在它比較寬、裡面畫的是一塊畫面而不是一顆圖標。
+    //   組件本身（有哪些、長什麼樣、點下去做什麼）在 os_widgets.js。
+    const WIDGET_OFF_BY_DEFAULT = ['wdg_clock', 'wdg_note'];   // 內建但預設不放上桌面，要使用者自己去「組件」加
+    function _W() { return win.OS_WIDGETS || null; }
+    // 第一次看到一個組件就決定它要不要上桌面，之後不再自己動 —— 使用者拿掉的東西不可以自己跑回來
+    function _seedWidgets() {
+        const W = _W(); if (!W) return;
+        const L = _loadLayout();
+        let changed = false;
+        W.all().forEach(function (w) {
+            if (L.seen.indexOf(w.id) >= 0) return;
+            L.seen.push(w.id); changed = true;
+            if (WIDGET_OFF_BY_DEFAULT.indexOf(w.id) >= 0 && L.hidden.indexOf(w.id) < 0) L.hidden.push(w.id);
+            else if (w.id === 'wdg_lock') L.grid.unshift(w.id);   // 大時鐘本來就在最上面，第一次出現時排第一
+        });
+        if (changed) _saveLayout(L);
+    }
+    function _homeWidgets(L) {
+        const W = _W(); if (!W) return [];
+        L = L || _loadLayout();
+        return W.all().filter(function (w) { return L.hidden.indexOf(w.id) < 0; });
+    }
+    // 桌面上要畫的東西：圖標 ＋ 組件，混成一串照同一份排列排
+    function _gridItems(L) {
+        L = L || _loadLayout();
+        const apps = _gridApps(L).map(function (a) { return { id: a.id, app: a }; });
+        const wds  = _homeWidgets(L).map(function (w) { return { id: w.id, widget: w }; });
+        const all = apps.concat(wds);
+        const pos = function (o, i) { const k = L.grid.indexOf(o.id); return k < 0 ? 1e6 + i : k; };
+        return all.map(function (o, i) { return { o: o, k: pos(o, i) }; })
+                  .sort(function (a, b) { return a.k - b.k; })
+                  .map(function (x) { return x.o; });
+    }
+    // ── 📄 分頁：一頁一屏，左右滑 ────────────────────────────────────
+    //   一頁太擠，要有第二頁第三頁。分法照「排列順序裝箱」：裝滿一頁就開下一頁，
+    //   所以使用者拖曳換位置就等於決定了誰在第幾頁，不必另外記「這個在第幾頁」——
+    //   多記一份就會跟排列漂掉（使用者刪了 app、換了組件大小之後對不上）。
+    //   一頁的容量用格數算：主畫面三欄，一頁五行＝十五格。圖標一格，組件照它佔的欄乘列。
+    const PAGE_UNITS = 15;
+    function _unitsOf(o) {
+        if (!o.widget) return 1;
+        const W = _W(); if (!W) return 1;
+        const sz = W.sizeOf(o.widget);
+        return Math.max(1, (sz.cols || 1) * (sz.rows || 1));
+    }
+    function _paginate(items) {
+        const pages = [[]];
+        let used = 0;
+        items.forEach(function (o) {
+            const u = _unitsOf(o);
+            if (used + u > PAGE_UNITS && pages[pages.length - 1].length) { pages.push([]); used = 0; }
+            pages[pages.length - 1].push(o);
+            used += u;
+        });
+        return pages;
+    }
+    function _pagesEl() { return _el && _el.querySelector('#aps-pages'); }
+    function _pageCount() { const p = _pagesEl(); return p ? p.children.length : 1; }
+    function _curPage() {
+        const p = _pagesEl(); if (!p) return 0;
+        const w = p.clientWidth || 1;
+        return Math.max(0, Math.min(_pageCount() - 1, Math.round(p.scrollLeft / w)));
+    }
+    function _goPage(i, smooth) {
+        const p = _pagesEl(); if (!p) return;
+        const n = Math.max(0, Math.min(_pageCount() - 1, i));
+        try { p.scrollTo({ left: n * p.clientWidth, behavior: smooth === false ? 'auto' : 'smooth' }); }
+        catch (e) { p.scrollLeft = n * p.clientWidth; }
+    }
+    function _paintDots() {
+        const dots = _el && _el.querySelector('#aps-dots');
+        if (!dots) return;
+        const n = _pageCount(), cur = _curPage();
+        // 只有一頁就不要畫那排點：一顆孤零零的點看起來像壞掉
+        dots.innerHTML = n <= 1 ? '' : Array.from({ length: n }, function (_, i) {
+            return '<span class="aps-dot' + (i === cur ? ' on' : '') + '" data-page="' + i + '"></span>';
+        }).join('');
+    }
+
+    function _cellHTML(o) { return o.widget ? _widgetCell(o.widget) : _iconBtn(o.app); }
+    function _widgetCell(w) {
+        const W = _W();
+        // 🚨 殼用 div 不用 button：大時鐘組件裡面有一顆真的按鈕（心情膠囊），
+        //    按鈕包按鈕是無效的 HTML，瀏覽器會把內層那顆拆出去。拖曳與點擊都認 .aps-icon，不認標籤。
+        return '<div class="aps-icon aps-w" role="button" tabindex="0" data-app="' + w.id + '" data-w-size="' + W.sizeKeyOf(w) + '"'
+             + (w.bare ? ' data-w-bare="1"' : '') + '>'
+             + '<span class="aps-icon-del" data-del="' + w.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>'
+             + (W.hasSettings(w) ? '<span class="aps-w-cog" data-w-cog="' + w.id + '" title="這個組件的設定"><i class="fa-solid fa-gear"></i></span>' : '')
+             + '<span class="aps-w-body" data-w-body="' + w.id + '">' + W.innerHTML(w) + '</span>'
+             + '</div>';
+    }
+    // 會動的部分（時鐘走分針、拍立得跟著今天那句話變）交給組件自己畫
+    function _paintWidgets() {
+        const W = _W(); if (!W || !_el) return;
+        _el.querySelectorAll('[data-w-body]').forEach(function (body) {
+            const w = W.get(body.dataset.wBody);
+            if (w) W.paint(body, w);
+        });
+    }
+
+    function _iconBtn(a) {
+        return '<button class="aps-icon" data-app="' + a.id + '" type="button">'
+             + (PINNED.indexOf(a.id) < 0 ? '<span class="aps-icon-del" data-del="' + a.id + '" title="從桌面移除"><i class="fa-solid fa-minus"></i></span>' : '')
+             + '<span class="aps-icon-em" data-app-em="' + a.id + '" data-ic="' + a.id + '">' + _icHTML(a) + '</span>'
+             + '<span class="aps-badge" data-badge="' + a.id + '" hidden></span>'
+             + '<span class="aps-icon-name">' + _esc(a.name) + '</span></button>';
+    }
+    // 🔴 紅點：app 自己說有幾件新的（OS_APP_TOOLS.badge，一個故事一份），使用者打開就清掉
+    function _paintBadges() {
+        if (!_el) return;
+        const T = win.OS_APP_TOOLS;
+        _el.querySelectorAll('[data-badge]').forEach(function (b) {
+            const n = (T && T.getBadge) ? T.getBadge(b.dataset.badge) : 0;
+            b.textContent = n > 9 ? '9+' : (n ? String(n) : '');
+            b.hidden = !n;
+        });
+    }
+    function _renderDock() {
+        if (!_el) return;
+        const dockEl = _el.querySelector('.aps-dock');
+        if (dockEl) dockEl.innerHTML = _dockApps().map(_iconBtn).join('');
+    }
+    // 重畫主畫面圖標格（APPS 或排列變動後呼叫）；點擊／長按走 _bindHome 的事件委派，這裡不綁
+    function _renderGrid() {
+        if (!_el) return;
+        const pagesEl = _pagesEl();
+        if (!pagesEl) return;
+        _seedWidgets();
+        // 📄 重畫會把捲動位置歸零 → 使用者拖完東西就被彈回第一頁。先記住在第幾頁，畫完放回去。
+        const keep = _curPage();
+        pagesEl.innerHTML = _paginate(_gridItems()).map(function (items) {
+            return '<div class="aps-page"><div class="aps-grid">' + items.map(_cellHTML).join('') + '</div></div>';
+        }).join('');
+        _goPage(keep, false);
+        _paintDots();
+        _renderDock();
+        _applyIcons();
+        _paintBadges();
+        _paintMood();   // 🧩 內含重畫組件：心情那顆圖示長在大時鐘組件裡，格子一重畫就要補回去
+    }
+    // 對外：app 商店安裝/卸載時呼叫（只動 runtime 與圖標；持久化是商店的事）
+    function addApp(meta) {
+        if (!meta || !meta.id) return;
+        if (!APPS.find(function (a) { return a.id === meta.id; })) APPS.push(_makeUserApp(meta));
+        _cacheInstalled(meta);   // 持久化 meta（之前漏寫→重開桌面圖標消失）
+        _renderGrid();
+    }
+    function removeApp(id) {
+        const i = APPS.findIndex(function (a) { return a.id === id; });
+        if (i >= 0) APPS.splice(i, 1);
+        try { _saveInstalled(_loadInstalled().filter(function (m) { return m && m.id !== id; })); } catch (e) {}
+        const L = _loadLayout();   // 卸載了就連排列裡的位置一起清掉
+        ['grid', 'dock', 'hidden'].forEach(function (k) { L[k] = L[k].filter(function (x) { return x !== id; }); });
+        _saveLayout(L);
+        _renderGrid();
+    }
+    // 對外：應用商城「不在桌面上」那一區用
+    function hiddenApps() {
+        const L = _loadLayout();
+        return APPS.filter(function (a) { return L.hidden.indexOf(a.id) >= 0; })
+            .map(function (a) { return { id: a.id, name: a.name, icon: a.icon || '', emoji: a.emoji || '' }; });
+    }
+    function unhide(id) {
+        const L = _loadLayout();
+        L.hidden = L.hidden.filter(function (x) { return x !== id; });
+        L.grid = L.grid.filter(function (x) { return x !== id; }).concat([id]);   // 放回來排在最後面
+        _saveLayout(L);
+        _renderGrid();
+    }
+    async function _hideApp(id) {
+        const W = _W();
+        const isW = !!(W && W.isWidgetId(id));   // 🧩 組件也能從桌面拿掉（放回去的地方不一樣）
+        const a = isW ? W.get(id) : APPS.find(function (x) { return x.id === id; });
+        if (!a || (!isW && PINNED.indexOf(id) >= 0)) return;
+        const back = isW ? '「組件」' : '應用商城「我的應用」';
+        const ok = await AUI.confirm('把「' + a.name + '」從桌面移除？\n不會刪掉，想要時到' + back + '放回桌面。', { okText: '移除', danger: false });
+        if (!ok) return;
+        const L = _loadLayout();
+        if (L.hidden.indexOf(id) < 0) L.hidden.push(id);
+        L.dock = L.dock.filter(function (x) { return x !== id; });
+        _saveLayout(L);
+        _renderGrid();
+    }
+
+    // ── 長按進入編輯：圖標搖晃、可以拖著換位置、左上角「−」從桌面移除 ──
+    //   跟 iOS 一樣：長按一下進去，點「完成」或點空白處出來。拖到 dock 上：dock 滿了就跟那格互換。
+    const LONG_PRESS_MS = 450;
+    let _editing = false, _press = null, _drag = null, _eatUntil = 0;
+    // 長按／拖完放開那一下，瀏覽器可能會補一個 click（也可能不會）→ 只吃掉緊接著的那一下，不能一直掛著
+    function _eatNextClick() { _eatUntil = Date.now() + 400; }
+    function _setEditing(on) {
+        _editing = !!on;
+        const home = _el && _el.querySelector('#aps-home');
+        if (home) home.classList.toggle('aps-editing', _editing);
+    }
+    function _saveFromDom() {
+        const L = _loadLayout();
+        const ids = function (sel) { return [..._el.querySelectorAll(sel + ' > .aps-icon')].map(function (b) { return b.dataset.app; }); };
+        const W = _W();
+        const isW = function (id) { return !!(W && W.isWidgetId(id)); };
+        // 🧩 保險：組件永遠不進底部那排（拖曳那邊已經擋住了，這裡再擋一次存檔）。
+        //    一塊跨兩欄又比較高的組件擠進那排會把它整個撐爆，連帶把主畫面擠壞。
+        // 📄 好幾頁：照頁的先後串成同一串（排列本身就是分頁的依據，不另外記頁碼）
+        const grid = [..._el.querySelectorAll('.aps-page > .aps-grid > .aps-icon')].map(function (b) { return b.dataset.app; });
+        const dock = ids('.aps-dock').filter(function (id) { return !isW(id); });
+        // 格子裡的排在前面，其他（沒擺出來的）照舊保留在後面
+        L.grid = grid.concat(L.grid.filter(function (x) { return grid.indexOf(x) < 0 && dock.indexOf(x) < 0; }));
+        L.dock = dock;
+        _saveLayout(L);
+    }
+    // 位置換了的格子滑過去，不要瞬移
+    function _flip(mutate) {
+        const els = [..._el.querySelectorAll('.aps-grid > .aps-icon, .aps-dock > .aps-icon')];
+        const before = new Map(els.map(function (e) { return [e, e.getBoundingClientRect()]; }));
+        mutate();
+        els.forEach(function (e) {
+            const a = before.get(e), b = e.getBoundingClientRect();
+            const dx = a.left - b.left, dy = a.top - b.top;
+            if (!dx && !dy) return;
+            e.style.transition = 'none';
+            e.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+            void e.offsetWidth;
+            e.style.transition = 'transform .22s ease';
+            e.style.transform = '';
+        });
+    }
+    function _homeScale(home) { const r = home.getBoundingClientRect(); return { r: r, k: r.width / (home.offsetWidth || 1) }; }
+    function _startDrag(btn, ev) {
+        const home = _el.querySelector('#aps-home');
+        const hs = _homeScale(home);
+        const br = btn.getBoundingClientRect();
+        const ghost = btn.cloneNode(true);
+        ghost.classList.add('aps-drag-ghost');
+        ghost.style.width = (br.width / hs.k) + 'px';
+        home.appendChild(ghost);
+        _drag = { btn: btn, ghost: ghost, dx: (ev.clientX - br.left) / hs.k, dy: (ev.clientY - br.top) / hs.k, last: null };
+        btn.classList.add('aps-drag-src');
+        _moveGhost(ev);
+    }
+    function _moveGhost(ev) {
+        const home = _el.querySelector('#aps-home');
+        const hs = _homeScale(home);
+        _drag.ghost.style.left = ((ev.clientX - hs.r.left) / hs.k - _drag.dx) + 'px';
+        _drag.ghost.style.top = ((ev.clientY - hs.r.top) / hs.k - _drag.dy) + 'px';
+    }
+    // 🧩 離手指最近的那一格（拖著的那一格自己不算）。
+    //   本來是用「手指正壓在誰身上」判斷，圖標小的時候沒問題；組件跨兩欄又比較高，
+    //   手指得先整個離開組件本身才會有反應 —— 體感就是拖不動、卡卡的。
+    function _nearestCell(ev, box, src) {
+        const dist2 = function (el) {
+            const r = el.getBoundingClientRect();
+            const dx = ev.clientX - (r.left + r.width / 2), dy = ev.clientY - (r.top + r.height / 2);
+            return dx * dx + dy * dy;
+        };
+        let best = null, bestD = Infinity;
+        [...box.children].forEach(function (el) {
+            if (el === src || !el.classList || !el.classList.contains('aps-icon')) return;
+            const d = dist2(el);
+            if (d < bestD) { bestD = d; best = el; }
+        });
+        // 🚨 手指還比較靠近「自己原本那一格」就不要換：不加這道，手指在組件上稍微動一下
+        //    就會整排重排，變成另一種難用（大組件很寬，中心附近的小移動不該算是要換位）。
+        //    src 不在這個容器裡（從底部那排拖上來）就沒有這個問題，照舊。
+        if (best && src && src.parentElement === box && dist2(src) <= bestD) return null;
+        return best;
+    }
+    // 📄 手指現在落在哪一頁的格子上（好幾頁之後不能再永遠抓第一頁）。
+    //   跟著手指的那一份不吃事件、被拿起來那格是隱形的，所以這裡不會抓到它們自己。
+    function _gridAt(ev) {
+        const el = document.elementFromPoint(ev.clientX, ev.clientY);
+        const g = el && el.closest ? el.closest('.aps-grid') : null;
+        return g || (_el.querySelectorAll('.aps-page > .aps-grid')[_curPage()] || _el.querySelector('.aps-grid'));
+    }
+    let _pageFlipAt = 0;
+    function _dragOver(ev) {
+        const src = _drag.btn;
+        const dock = _el.querySelector('.aps-dock');
+        const pagesEl = _pagesEl();
+        // 📄 拖到左右邊緣就翻頁（這樣才搬得到別頁去）。要節流，不然一路翻到底。
+        if (pagesEl && _pageCount() > 1) {
+            const pr = pagesEl.getBoundingClientRect();
+            const now = Date.now();
+            if (now - _pageFlipAt > 620) {
+                if (ev.clientX < pr.left + 26) { _pageFlipAt = now; _goPage(_curPage() - 1); }
+                else if (ev.clientX > pr.right - 26) { _pageFlipAt = now; _goPage(_curPage() + 1); }
+            }
+        }
+        const grid = _gridAt(ev);
+        // 拖到格子上下緣就捲一下
+        const gr = grid.getBoundingClientRect();
+        if (ev.clientY < gr.top + 24) grid.scrollTop -= 8; else if (ev.clientY > gr.bottom - 24 && ev.clientY < gr.bottom + 4) grid.scrollTop += 8;
+        const inDock = ev.clientY >= dock.getBoundingClientRect().top;
+        // 🚨 組件不准進底部那排：那排是橫向排的固定幾顆，塞一塊跨兩欄又比較高的組件進去會把它整個撐爆，
+        //    連帶把主畫面擠壞。手指移到那排上面時，組件就停在原位不動。
+        if (inDock && src.classList.contains('aps-w')) return;
+        const t = _nearestCell(ev, inDock ? dock : grid, src);
+        const key = t ? t.dataset.app : (inDock ? '#dock' : '#grid');
+        if (!key || key === _drag.last) return;
+        _drag.last = key;
+        const dockCount = dock.querySelectorAll(':scope > .aps-icon:not(.aps-drag-src)').length;
+        const srcInDock = src.parentElement === dock;
+        _flip(function () {
+            if (t && t.parentElement === dock && !srcInDock && dockCount >= DOCK_MAX) {
+                // dock 滿了：跟那一格互換（拖的那個佔它的位置，它回到拖的那個原本的位置）
+                const srcNext = src.nextSibling;
+                dock.insertBefore(src, t);
+                grid.insertBefore(t, srcNext);
+                return;
+            }
+            if (t) {
+                const r = t.getBoundingClientRect();
+                const same = t.parentElement === src.parentElement;
+                const sibs = [...t.parentElement.children];
+                const after = same ? sibs.indexOf(src) < sibs.indexOf(t) : ev.clientX > r.left + r.width / 2;
+                t.parentElement.insertBefore(src, after ? t.nextSibling : t);
+            } else if (inDock && !srcInDock && dockCount < DOCK_MAX) {
+                dock.appendChild(src);
+            } else if (!inDock && srcInDock) {
+                grid.appendChild(src);
+            }
+        });
+    }
+    function _endDrag() {
+        if (!_drag) return;
+        _drag.ghost.remove();
+        _drag.btn.classList.remove('aps-drag-src');
+        _drag = null;
+        _saveFromDom();
+    }
+    function _bindHome(home) {
+        home.addEventListener('contextmenu', function (e) { if (e.target.closest('.aps-icon')) e.preventDefault(); });
+        home.addEventListener('pointerdown', function (e) {
+            const btn = e.target.closest('.aps-icon');
+            if (!btn || e.target.closest('.aps-icon-del') || (e.button != null && e.button > 0)) return;
+            _press = { btn: btn, x: e.clientX, y: e.clientY, id: e.pointerId, timer: 0 };
+            if (!_editing) {
+                _press.timer = setTimeout(function () {
+                    if (!_press) return;
+                    _setEditing(true);
+                    _eatUntil = Date.now() + 1e9;   // 手指還按著：放開那一下不要開 app（放開時再改成只吃 400ms）
+                    try { navigator.vibrate && navigator.vibrate(12); } catch (err) {}
+                }, LONG_PRESS_MS);
+            }
+        });
+        home.addEventListener('pointermove', function (e) {
+            if (!_press || e.pointerId !== _press.id) return;
+            const moved = Math.hypot(e.clientX - _press.x, e.clientY - _press.y);
+            if (_drag) { e.preventDefault(); _moveGhost(e); _dragOver(e); return; }
+            if (!_editing) { if (moved > 8) { clearTimeout(_press.timer); _press = null; } return; }
+            if (moved > 6) {
+                try { home.setPointerCapture(e.pointerId); } catch (err) {}
+                _startDrag(_press.btn, e);
+            }
+        });
+        const up = function (e) {
+            if (_press && e.pointerId === _press.id) { clearTimeout(_press.timer); _press = null; }
+            const dragged = !!_drag;
+            if (_drag) _endDrag();
+            if (dragged || _eatUntil > Date.now()) _eatNextClick();   // 拖完／長按完放開：只吃接下來 400ms 內那一下 click
+        };
+        home.addEventListener('pointerup', up);
+        home.addEventListener('pointercancel', up);
+        home.addEventListener('click', function (e) {
+            // 🧩 心情膠囊長在大時鐘組件裡：它自己有事要做（換下一個心情），
+            //    不能讓它冒泡上去被當成「點了這個組件」。組件會重畫，所以綁在這裡不綁在節點上。
+            const mood = e.target.closest('.aps-mood');
+            if (mood && !_editing) { e.stopPropagation(); _cycleMood(); return; }
+            const del = e.target.closest('.aps-icon-del');
+            if (del && _editing) { e.stopPropagation(); _hideApp(del.dataset.del); return; }
+            // 🧩 組件自己的設定（照片在組件上就可以換，不必跑樣式面板）
+            const cog = e.target.closest('[data-w-cog]');
+            if (cog && _editing) {
+                e.stopPropagation();
+                const W = _W(); const w = W && W.get(cog.dataset.wCog);
+                if (w) W.openSettings(w);
+                return;
+            }
+            if (e.target.closest('.aps-edit-done')) { _setEditing(false); return; }
+            const btn = e.target.closest('.aps-icon');
+            if (Date.now() < _eatUntil) { _eatUntil = 0; return; }
+            if (_editing) { if (!btn) _setEditing(false); return; }   // 編輯中點空白處＝完成
+            if (btn) _openApp(btn.dataset.app);
+        });
+    }
+
+    function _build() {
+        const ov = document.createElement('div');
+        ov.id = 'aurelia-phone-shell';
+        ov.className = 'aps-overlay';
+        ov.style.display = 'none';
+        // 手機殼不加自己的 header／返回 —— 用 app 原本的 header/返回（返回會呼叫 goHome→回主畫面）。
+        // 只留底部 home bar + 右上 ✕ 當萬用退出。
+        ov.innerHTML =
+            '<div class="aps-frame">'
+          +   '<div class="aps-notch"></div>'
+          +   '<div class="aps-screen">'
+          +     '<div class="aps-statusbar"><span class="aps-sb-time" id="aps-sb-time">--:--</span><span class="aps-sb-icons"><i class="fa-solid fa-signal"></i><i class="fa-solid fa-wifi"></i><i class="fa-solid fa-battery-full"></i></span></div>'
+          +     '<div class="aps-home" id="aps-home">'
+          // 🧩 大時鐘以前焊在這裡，是主畫面最上面那條固定的列。照 Apple 的做法時間也是一個組件、
+          //    可以自己調，所以它現在也是格子裡的一個組件（預設排在最前面），能拖能拿掉。見 os_widgets.js。
+          // 🧩 拍立得以前焊在這裡（時鐘跟圖標格中間那一條，位置動不了）。
+          //    現在它是格子裡的一個組件，跟圖標住同一格、可以拖可以拿掉，設定也在它自己身上
+          //    ——照片點組件就能換，不必再跑一趟樣式面板。見 os_widgets.js。
+          +       '<div class="aps-pages" id="aps-pages"></div>'
+          +       '<div class="aps-dots" id="aps-dots"></div>'
+          +       '<div class="aps-dock" id="aps-dock"></div>'
+          +       '<button class="aps-edit-done" type="button">完成</button>'
+          +     '</div>'
+          +     '<div class="aps-app" id="aps-app"><div class="aps-app-body" id="aps-app-body"></div></div>'
+          +   '</div>'
+          +   '<div class="aps-homebar"><button class="aps-home-btn" id="aps-home-btn" type="button" title="回主畫面"></button></div>'
+          +   '<button class="aps-close" id="aps-close" type="button" title="關閉">✕</button>'
+          + '</div>';
+        document.body.appendChild(ov);
+
+        ov.addEventListener('click', function (e) { if (e.target === ov) close(); });   // 點背景關閉
+        ov.querySelector('#aps-close').addEventListener('click', function () { close(); });   // 別把 click 事件當成 instant 傳進去
+        ov.querySelector('#aps-home-btn').addEventListener('click', _home);
+        _bindHome(ov.querySelector('#aps-home'));
+        // 📄 滑到哪一頁就把那顆點亮起來。捲動事件很密，用一次 rAF 收斂。
+        {
+            const pg = ov.querySelector('#aps-pages');
+            let tick = 0;
+            if (pg) pg.addEventListener('scroll', function () {
+                if (tick) return;
+                tick = requestAnimationFrame(function () { tick = 0; _paintDots(); });
+            }, { passive: true });
+            const dots = ov.querySelector('#aps-dots');
+            if (dots) dots.addEventListener('click', function (e) {
+                const d = e.target.closest('.aps-dot');
+                if (d) _goPage(parseInt(d.dataset.page, 10) || 0);
+            });
+            // 🖱 桌機用滑鼠：翻頁本來整個靠手指左右滑（瀏覽器自己的橫向捲動），滑鼠沒有「滑」這個動作，
+            //    於是在電腦上只剩底下那排小點能點——「主畫面滑不動」就是這件事。補兩種滑鼠做得到的：
+            //    滾輪翻一頁、按著左右拖。手指照舊走瀏覽器原本那條，一個字都不動。
+            if (pg) {
+                let wheelAt = 0;
+                pg.addEventListener('wheel', function (e) {
+                    if (_pageCount() <= 1) return;
+                    const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+                    if (!d) return;
+                    // 這一頁的格子自己還能上下捲就先讓它捲（圖標多到一頁裝不下時），捲到頭了才翻頁
+                    const grid = e.target && e.target.closest ? e.target.closest('.aps-grid') : null;
+                    if (grid && Math.abs(e.deltaY) > Math.abs(e.deltaX) && grid.scrollHeight > grid.clientHeight + 1) {
+                        const atTop = grid.scrollTop <= 0;
+                        const atEnd = grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 1;
+                        if (!((d < 0 && atTop) || (d > 0 && atEnd))) return;
+                    }
+                    e.preventDefault();
+                    const now = Date.now();
+                    if (now - wheelAt < 380) return;   // 滾輪一格會連發好幾次，一次只翻一頁
+                    wheelAt = now;
+                    _goPage(_curPage() + (d > 0 ? 1 : -1));
+                }, { passive: false });
+
+                let sw = null;
+                pg.addEventListener('pointerdown', function (e) {
+                    if (e.pointerType !== 'mouse' || (e.button != null && e.button > 0)) return;
+                    if (_editing || _pageCount() <= 1) return;   // 編輯中按著是要搬圖標，不要搶
+                    const w = pg.clientWidth || 1;
+                    sw = { x: e.clientX, y: e.clientY, left: pg.scrollLeft, from: Math.round(pg.scrollLeft / w), id: e.pointerId, on: false };
+                });
+                pg.addEventListener('pointermove', function (e) {
+                    if (!sw || e.pointerId !== sw.id) return;
+                    const dx = e.clientX - sw.x;
+                    if (!sw.on) {
+                        // 橫向動得夠多才算在翻頁，不然直著拖會變成翻頁
+                        if (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(e.clientY - sw.y)) return;
+                        sw.on = true;
+                        pg.style.scrollSnapType = 'none';   // 拖的時候關掉貼齊，不然跟著手走會一直被吸回去
+                        try { pg.setPointerCapture(e.pointerId); } catch (err) {}
+                    }
+                    e.preventDefault();
+                    pg.scrollLeft = sw.left - dx;
+                });
+                const swEnd = function (e) {
+                    if (!sw || (e.pointerId != null && e.pointerId !== sw.id)) return;
+                    const on = sw.on, dx = e.clientX - sw.x, from = sw.from;
+                    sw = null;
+                    pg.style.scrollSnapType = '';
+                    if (!on) return;
+                    _eatNextClick();   // 拖完放開那一下不要順手開了 app
+                    const w = pg.clientWidth || 1;
+                    _goPage(Math.abs(dx) > w / 3 ? from + (dx < 0 ? 1 : -1) : from);   // 拖過三分之一才換頁，不然彈回去
+                };
+                pg.addEventListener('pointerup', swEnd);
+                pg.addEventListener('pointercancel', swEnd);
+            }
+        }
+        _el = ov;
+        _watchStatusBar(ov.querySelector('#aps-app-body'));   // 畫面一變就重量一次狀態列字色
+        _addWritingTools();        // 寫作工具（系統設置/變數工坊/創作室＋standalone:世界書/提示詞）
+        _restoreInstalledApps();   // 從 localStorage 補回已安裝 app
+        _renderGrid();             // 統一畫圖標格 + 綁定 + 套圖庫圖標
+        _paintMood();
+        _tickClock();                                              // 先畫一次，別讓主畫面停在 --:--
+        try { win.setInterval(_tickClock, 15000); } catch (e) {}   // 狀態列＋主畫面時鐘
+        return ov;
+    }
+
+    // 回手機主畫面（清空目前 app）
+    function _home() {
+        if (!_el) return;
+        _setEditing(false);
+        _runLeave();
+        _restoreGoHome();
+        const body = _el.querySelector('#aps-app-body');
+        if (body) body.innerHTML = '';
+        const _app = _el.querySelector('#aps-app');
+        _app.style.display = 'none';
+        _app.style.opacity = '';           // 下次開才不會卡在透明
+        delete _app.dataset.open;
+        _syncStatusBar();
+        // 🚨 不准寫死 'flex'：主畫面現在是 grid（時鐘／widget／圖標格／底排四列）。
+        //    寫死 flex 會把那四列攤成一橫排 —— 畫面會變成圖標格不見、底排變一整塊直條。
+        //    清成空字串就好，讓 CSS 自己決定用什麼排。
+        _el.querySelector('#aps-home').style.display = '';
+    }
+
+    function _openApp(id) {
+        // 🧩 組件不是應用：點它是它自己的事（寫今天那句、翻下一張），不開全螢幕
+        const W = _W();
+        if (W && W.isWidgetId(id)) {
+            const w = W.get(id);
+            if (w && _el) W.tap(_el.querySelector('[data-w-body="' + id + '"]'), w);
+            return;
+        }
+        const app = APPS.find(function (a) { return a.id === id; });
+        if (!app || !_el) return;
+        if (app.mode === 'over') {
+            // 自己開窗蓋在手機上面的（設置）：手機不動，關掉那個窗就回到這個主畫面
+            try { app.go(); } catch (e) { console.warn('[PhoneShell] 開啟失敗', id, e); }
+            return;
+        }
+        if (app.mode === 'out') {
+            // 大面板：關掉手機殼、開它自己的全屏面板（不演滑下去，馬上讓位）
+            close(true);
+            try { app.go(); } catch (e) { console.warn('[PhoneShell] 開啟失敗', id, e); }
+            return;
+        }
+        // 🔴 打開了＝看過了，app 自己說的紅點清掉（聊天 app 那種照未讀算的不清，看完那間才會少）
+        try { const T = win.OS_APP_TOOLS; if (T && T.openedApp) T.openedApp(id); } catch (e) {}
+        // inside：渲染進手機螢幕
+        _runLeave();   // 防禦：清空前先還原上一個借單例的 app
+        const body = _el.querySelector('#aps-app-body');
+        body.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'aps-mount';
+        body.appendChild(div);
+        // app 內部「返回/home」按鈕原本呼叫 PhoneSystem.goHome → 暫時改成回手機主畫面
+        if (win.PhoneSystem) { _savedGoHome = win.PhoneSystem.goHome; win.PhoneSystem.goHome = _home; }
+        // 🚨🚨 2026-09-20 回報過兩次：面板閃白一下才出現。
+        //    第一次我以為是容器自己的底色，先鋪對顏色就好 —— 沒有用，白的是別層。
+        //    第二次換做法，不去猜白的是哪一層：**app 畫好之前根本不讓使用者看到那一層**。
+        //    主畫面先留著不收、app 那層先全透明蓋在上面；等它真的畫出東西（或失敗）再一起切換。
+        //    聊天 app 開起來要先讀完資料庫、再掃整本正文重建聊天室，那段路很長，
+        //    中間使用者看到的是原本的主畫面，不是任何一塊空白。
+        const homeEl = _el.querySelector('#aps-home');
+        const appEl = _el.querySelector('#aps-app');
+        appEl.dataset.open = id;
+        appEl.style.display = 'flex';
+        appEl.style.opacity = '0';
+        let _shown = false;
+        const _reveal = function () {
+            if (_shown) return;
+            _shown = true;
+            homeEl.style.display = 'none';
+            appEl.style.opacity = '';
+        };
+        // 🚨 保險：只防「那支 app 既不回報完成、也沒把東西畫進來」那種壞掉的情況。
+        //    正常的 app 有三條更早的路會切過去（自己回報完成、畫面長出東西、載入失敗），
+        //    所以這裡要設得夠久 —— 聊天 app 開起來要先讀資料庫、再掃整本正文重建聊天室，
+        //    故事長的時候會超過一秒，設太短會提早切過去、又讓使用者看到空的那一層。
+        const _revealTimer = setTimeout(_reveal, 3000);
+        // 畫面上真的長出東西就立刻切（多數 app 這一步很快，看起來就是直接開）
+        if (window.MutationObserver) {
+            const _ob = new MutationObserver(function () {
+                if (!div.children.length && !String(div.innerHTML).trim()) return;
+                _ob.disconnect(); clearTimeout(_revealTimer); _reveal();
+            });
+            _ob.observe(div, { childList: true, subtree: true });
+        }
+        _syncStatusBar();
+        // 🚨 app 的 go() 可能是 async（微信就是）。以前只 try/catch 同步錯誤 → 非同步炸掉時
+        //    整個 promise 靜靜地 reject，螢幕上只剩那個空的 .aps-mount＝使用者看到的「白屏」，
+        //    而使用者沒有 console 可以看是什麼錯。現在兩種都接，並且把錯誤直接印在螢幕上讓使用者複製。
+        const fail = function (e) {
+            console.warn('[PhoneShell] 掛載失敗', id, e);
+            _reveal();   // 失敗訊息塞在外層、不在我們盯著的那一塊，這裡要自己切過去，不然使用者只看到主畫面沒反應
+            body.innerHTML = '<div class="aps-fail"><b>這個 app 載入失敗</b>'
+                + '<div class="aps-fail-why"></div>'
+                + '<button class="aps-fail-copy" type="button">複製錯誤</button></div>';
+            const why = body.querySelector('.aps-fail-why');
+            // 🚨 光有堆疊還不夠：「沒登記」到底是「那支檔沒載到」還是「載到了但中途死掉」，
+            //    差很多而使用者沒有 console 可以查。把現場一起印出來，一則訊息就分得出來。
+            const text = '[' + id + '] ' + ((e && (e.stack || e.message)) || String(e)) + '\n\n— 現場 —\n' + _scene();
+            if (why) why.textContent = text;
+            const cp = body.querySelector('.aps-fail-copy');
+            if (cp) cp.onclick = function () {
+                const D = win.OS_DASHBOARD;
+                if (D && D.copy) { D.copy(text, '載入失敗的錯誤', function (m) { cp.textContent = m; }); return; }
+                try { win.navigator.clipboard.writeText(text); cp.textContent = '已複製'; }
+                catch (_) { cp.textContent = '請自己選取上面那段'; }
+            };
+        };
+        // go() 沒丟錯，但容器到頭來還是空的 → 也算失敗，講一句（純白畫面對使用者＝零資訊）
+        const _emptyGuard = function () {
+            if (!div.isConnected) return;
+            if (body.querySelector('.aps-fail')) return;
+            if (div.children.length || String(div.innerHTML).trim()) return;
+            fail(new Error(app.name + '：開起來了，但畫面上什麼都沒有（那支程式沒有把東西畫進來）'));
+        };
+        try {
+            const cleanup = app.go(div);
+            if (cleanup && typeof cleanup.then === 'function') {
+                cleanup.then(function (cl) {
+                    if (typeof cl === 'function') _leaveApp = cl;
+                    _reveal();   // app 自己說畫完了＝最準的時機（上面那個看畫面長東西的只是保險）
+                    setTimeout(_emptyGuard, 600);
+                }, fail);
+            } else {
+                if (typeof cleanup === 'function') _leaveApp = cleanup;
+                _reveal();   // 同步畫完的 app：這裡就已經畫好了
+                setTimeout(_emptyGuard, 1800);   // 同步的 app 也可能自己再去 await 東西，給它久一點
+            }
+        } catch (e) { fail(e); }
+    }
+
+    // 📱 出場：從畫面底下直直滑上來，關的時候滑回底下、背景跟著淡進淡出
+    //    （10-13 從三種小樣挑了 A，小樣在 參考資料/PHONE_OPEN_SLIDE_LAB.html）。
+    //    動的是外框的 translate，不是 transform：電腦版螢幕矮的時候用 transform: scale 把整支縮小，
+    //    寫 transform 會把縮小蓋掉；translate 是另一個屬性，兩個疊在一起。
+    const SLIDE_IN_MS = 380, SLIDE_OUT_MS = 260, SLIDE_ID = 'aps-slide';
+    let _closing = 0;   // 退場跑到一半：收尾計時器。中途又被打開就取消它
+    function _calm() {
+        try { return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) { return false; }
+    }
+    function _stopSlide(ov) {
+        if (_closing) { clearTimeout(_closing); _closing = 0; }
+        [ov, ov.querySelector('.aps-frame')].forEach(function (el) {
+            if (el && el.getAnimations) el.getAnimations().forEach(function (a) { if (a.id === SLIDE_ID) a.cancel(); });
+        });
+        ov.style.pointerEvents = '';
+    }
+    // 外框要往下推多少才整支離開畫面（含電腦版置中後上面那段空白、手機版的安全區）
+    function _slideDown(fr) {
+        const h = window.innerHeight || document.documentElement.clientHeight || 800;
+        return '0 ' + Math.ceil(h - fr.getBoundingClientRect().top + 24) + 'px';
+    }
+
+    function open() {
+        const ov = _el || _build();
+        const wasShown = ov.style.display !== 'none' && !_closing;   // 已經開著（劇情的手機鈕再按一次）就不重演
+        _stopSlide(ov);
+        _home();
+        _applyTheme();
+        _tickClock();
+        _paintMood();   // 心情是綁日期的，每次開都要重讀——只在 _build 畫一次的話跨日還掛著昨天那個
+        _paintBadges(); // 紅點一個故事一份：換了故事再打開要重讀
+        ov.style.display = 'flex';
+        // 🎮 模擬市民模式：小窗本身就是手機，不演滑上來（小窗藏著時動畫不前進，叫出來會看到手機卡在半路）
+        if (wasShown || _calm() || !ov.animate || (win.OS_SIMS && win.OS_SIMS.active)) return;
+        const fr = ov.querySelector('.aps-frame');
+        const bg = getComputedStyle(ov).backgroundColor;
+        try {
+            fr.animate([{ translate: _slideDown(fr) }, { translate: '0 0' }],
+                { id: SLIDE_ID, duration: SLIDE_IN_MS, easing: 'cubic-bezier(.2,.8,.2,1)' });
+            ov.animate([{ backgroundColor: 'rgba(0, 0, 0, 0)' }, { backgroundColor: bg }],
+                { id: SLIDE_ID, duration: 240, easing: 'ease-out' });
+        } catch (e) {}   // 不支援就照舊直接出現
+    }
+    // instant＝不演、馬上收（開「大面板」那種 app：手機殼要立刻讓位給它）
+    function close(instant) {
+        if (!_el) return;
+        // 🎮 模擬市民模式（os_sims.js）：疊在遊戲上的小窗本身就是手機，收起來只剩一片空白、也沒有大廳可回 → 回主畫面
+        if (win.OS_SIMS && win.OS_SIMS.active) { _home(); return; }
+        const ov = _el;
+        _setEditing(false);
+        try { window.AUI?.kbReset?.(); } catch (e) {}   // 打字打到一半關掉：別讓下次打開還縮在鍵盤上面（AUI 的鍵盤跟隨）
+        // 收尾（清掉 app）放在滑完之後：滑下去的那一路畫面還是使用者剛剛在看的那個 app，不是先變空白
+        const finish = function () {
+            _stopSlide(ov);
+            _runLeave();
+            _restoreGoHome();
+            const body = ov.querySelector('#aps-app-body');
+            if (body) body.innerHTML = '';
+            ov.querySelector('#aps-app').style.display = 'none';
+            ov.style.display = 'none';
+        };
+        if (instant === true || ov.style.display === 'none' || _calm() || !ov.animate) { finish(); return; }
+        if (_closing) return;   // 已經在滑下去了
+        _stopSlide(ov);         // 滑上來到一半就被關：從現在的位置改成往下
+        const fr = ov.querySelector('.aps-frame');
+        const bg = getComputedStyle(ov).backgroundColor;
+        try {
+            fr.animate([{ translate: '0 0' }, { translate: _slideDown(fr) }],
+                { id: SLIDE_ID, duration: SLIDE_OUT_MS, easing: 'cubic-bezier(.4,0,1,1)', fill: 'forwards' });
+            ov.animate([{ backgroundColor: bg }, { backgroundColor: 'rgba(0, 0, 0, 0)' }],
+                { id: SLIDE_ID, duration: SLIDE_OUT_MS, easing: 'ease-in', fill: 'forwards' });
+        } catch (e) { finish(); return; }
+        ov.style.pointerEvents = 'none';   // 滑下去的這一下就讓底下的大廳點得到
+        // 用計時器收尾、不等動畫的 finished：畫面藏著時動畫不前進，等它的話手機殼會永遠關不掉
+        _closing = setTimeout(finish, SLIDE_OUT_MS + 40);
+    }
+    function toggle() { if (_el && _el.style.display !== 'none' && !_closing) close(); else open(); }
+
+    // 系統面板（控制室、狀態檔案那些）可以完全不開手機就被叫出來，而手機殼是第一次開才建。
+    // 所以色票在載入時就先套一次，不能等 _applyTheme —— 那支沒有手機殼就直接跳出去了。
+    // 使用者自己做的主題那段 CSS 也要在這時候貼好 —— 不然使用者選的是自己那套時，畫面會先閃一下預設的
+    try { _injectUserThemeCss(); } catch (e) {}
+    try { _applyThemeClass(_loadTheme().themeId || DEFAULT_THEME); } catch (e) {}
+
+    win.VoidPhoneShell = { open: open, close: close, toggle: toggle, addApp: addApp, removeApp: removeApp, home: _home, hiddenApps: hiddenApps, unhide: unhide,
+        // 🎮 模擬市民模式（os_sims.js）用：開機直接打開聊天 app、第一次把桌面收成只剩那幾個
+        openApp: _openApp, appIds: function () { return APPS.map(function (a) { return a.id; }); },
+        //   系統自己的 app（不是創作室做的，不存進「我的應用」、不走 app 執行環境）：go(c) 直接畫進手機螢幕
+        addSystemApp: function (app) {
+            if (!app || !app.id || APPS.find(function (a) { return a.id === app.id; })) return;
+            APPS.push({ id: app.id, name: app.name || app.id, icon: app.icon || '', mode: 'inside', go: app.go });
+            _renderGrid();
+        },
+        renderHome: _renderGrid, repaintMood: _paintMood, paintBadges: _paintBadges,
+        // 📷 拍立得那張照片：樣式面板與組件是「同一份資料」的兩個入口。
+        //    樣式面板換照片很麻煩，所以組件上也能換 —— 但不可以各存一份，不然兩邊會是兩張照片。
+        polaroidPhoto: function () { return _urlOf(_loadTheme().photoUrl).replace(/^["']|["']$/g, ''); },
+        setPolaroidPhoto: function (u) {
+            u = String(u || '').trim();
+            _saveTheme({ photoUrl: u ? ('url("' + u.replace(/"/g, '%22') + '")') : '' });
+            _renderGrid();
+        },
+        // 🧩 給「組件」那一頁用：桌面上有哪幾個、放回桌面、從桌面收起來
+        homeWidgetIds: function () { return _homeWidgets().map(function (w) { return w.id; }); },
+        unhideWidget: unhide,
+        // 🎨 使用者自己做的主題（創作室那邊生成之後存進來，樣式面板就會多一顆）
+        getUserThemes: _loadUserThemes,
+        saveUserTheme: function (t) {
+            if (!t || !t.id) return false;
+            const list = _loadUserThemes().filter(function (x) { return x.id !== t.id; });
+            list.push({ id: String(t.id), name: String(t.name || '我的主題'), swatch: String(t.swatch || ''), vars: t.vars || {} });
+            return _saveUserThemes(list);   // 沒存成功要回 false：呼叫端（創作室、小機）才不會報「存好了」
+        },
+        removeUserTheme: function (id) {
+            _saveUserThemes(_loadUserThemes().filter(function (x) { return x.id !== id; }));
+            if ((_loadTheme().themeId || DEFAULT_THEME) === id) _setThemeId(DEFAULT_THEME);
+        },
+        useTheme: function (id) { _setThemeId(id); },
+        builtinThemes: function () { return THEMES.map(function (t) { return { id: t.id, name: t.name }; }); },   // 內建那四套（小機的「改主題」列清單用）
+        currentThemeId: function () { return _loadTheme().themeId || DEFAULT_THEME; },
+        hideWidget: function (id) {
+            const L = _loadLayout();
+            if (L.hidden.indexOf(id) < 0) L.hidden.push(id);
+            L.grid = L.grid.filter(function (x) { return x !== id; });
+            _saveLayout(L); _renderGrid();
+        } };
+    console.log('✅ VoidPhoneShell（大廳手機殼浮窗）模組就緒');
+})();

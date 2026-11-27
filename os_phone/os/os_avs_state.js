@@ -1,0 +1,1162 @@
+// ----------------------------------------------------------------
+// [檔案] os_avs_state.js
+// 路徑：os_phone/os/os_avs_state.js
+// 職責：AVS「📊 目前狀態」分頁的「唯一」渲染者 —— 從舊 status_panel 的 STATE tab 搬來並整合。
+//       設計目標：給「非工程的玩家」看的直觀 UI。
+//         • 主畫面只放「人話版」目前狀態（角色數值、任務、物品…），不露任何 JSON / 大括號 / 技術字。
+//         • 所有開發者操作（追蹤設定、抽取、重生、清理、還原、跨世界…）收進可摺疊的「⚙️ 進階」。
+//         • 全程 AVS 亮色系，跟變數工坊一致，不再是浮在亮底的暗色開發者面板。
+// 依賴：window._AVS_ENGINE（getKey/read/restore/initFromPack）
+//       window.OS_STATE_SCHEMA（generate/addField/updateField/deleteField）
+//       window.OS_STATE_RUNTIME（forceExtract/clearPatches/getActiveSchema/listAllStateData/removeStateData/normalizeChatId/setEnabled）
+//       window.OS_AVS_ADAPTER（getStoryId/getStoryTitle）、window.OS_DB（getStateData/getAllVnChapters）
+// 對外：window.OS_AVS_STATE = { renderInto(host,opts), refresh, openStateManagerModal, 欄位 CRUD API }
+// 樣式：css/os_avs.css 的 .avs-st-* / .avs-sm-* （亮色）
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    console.log('[AVS State] 載入 os_avs_state.js（目前狀態分頁，人性化整合版）');
+
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    // 放進 onclick="…('這裡')" 的字（欄位名多半是模型取的）：先照 JS 字串轉，再照屬性轉。
+    //   只做 esc 不夠：屬性裡的 &#39; 會先被解回 '，名字帶單引號就跳出字串、後面接什麼都會跑
+    function _jsArg(s) {
+        return esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
+    }
+
+    // ── 建檔畫面的「常用追蹤項」（使用者自己存的快捷，跨世界共用、不隨聊天室走）──
+    //    只是一串短句，量很小 → 直接 localStorage，不動 OS_DB schema（升版加 store 會 deadlock）
+    const MY_CHIPS_KEY = 'avs_init_my_chips';
+    function _loadMyChips() {
+        try { const a = JSON.parse(localStorage.getItem(MY_CHIPS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+        catch (e) { return []; }
+    }
+    function _saveMyChips(arr) {
+        return win.AUI.lsSet(MY_CHIPS_KEY, JSON.stringify(arr || []), '常用項');
+    }
+    // 標籤只顯示前幾個字（完整內容放 title / data-k，送 AI 的是完整的）
+    function _chipLabel(v) {
+        const s = String(v || '').replace(/\s+/g, ' ').trim();
+        return s.length > 12 ? s.slice(0, 12) + '…' : s;
+    }
+
+    let _host = null;
+    let _packs = [];
+    let _editingFieldName = null; // null / 欄位名 / '__new__'
+    // 兩層換頁：'home'(瀏覽) → 'current'(目前狀態＋更新操作) / 'fields'(追蹤欄位) / 'data'(資料管理)
+    // 按「操作對象」分頁，不設第三層子分頁——動狀態值的操作跟著狀態頁走，破壞性/跨世界操作集中在資料管理
+    let _page = 'home';
+    let _editingValues = false;   // 「✏️ 改數值」模式：把目前狀態的每個值變成可填的小格子（非 JSON），手動修正 AI 填錯
+    // 🚀 換頁快取：schema/抽取紀錄只有「抽取完成/改欄位/整理」才變，純換頁(home↔目前狀態↔進階)沒必要重讀 DB。
+    //    沒快取就走 loading→await→填內容（會閃一下、無法避免）；有快取＝整趟同步渲染，點下去立刻換頁不閃。
+    //    數值(cur)一律從引擎記憶體現讀，不進快取 → 換頁看到的數字永遠是最新的。
+    let _cache = { ready: false, key: '', fields: null, data: null };
+
+    // ── 人話版狀態渲染 ───────────────────────────────────────────
+    function _isObj(v) { return v && typeof v === 'object' && !Array.isArray(v); }
+    function _scalar(v) { return (v === null || v === undefined || v === '') ? '—' : String(v); }
+    function _icon(k) {
+        if (/系[統统]|時間|时间|場景|场景|地[點点]|世界|環境|环境/.test(k)) return '<i class="fa-solid fa-map"></i>';
+        if (/角色|人物|npc|character/i.test(k)) return '<i class="fa-solid fa-masks-theater"></i>';
+        if (/玩家|主角|自己|player|我/i.test(k)) return '<i class="fa-solid fa-face-smile"></i>';
+        if (/背包|道具|物品|裝備|装备|inventory|item/i.test(k)) return '<i class="fa-solid fa-suitcase"></i>';
+        if (/任務|任务|目標|目标|quest|mission/i.test(k)) return '<i class="fa-solid fa-bullseye"></i>';
+        if (/關係|关系|好感|relation/i.test(k)) return '<i class="fa-solid fa-heart"></i>';
+        return '•';
+    }
+    function _renderRows(obj) {
+        return Object.entries(obj).map(([k, v]) =>
+            `<div class="avs-st-row"><span class="avs-st-row-k">${esc(k)}</span><span class="avs-st-row-v">${esc(_scalar(v))}</span></div>`
+        ).join('');
+    }
+    function _renderValue(v) {
+        if (Array.isArray(v)) {
+            if (!v.length) return '<div class="avs-st-dim">（空）</div>';
+            return `<div class="avs-st-chips">${v.map(x => `<span class="avs-st-chip">${esc(_isObj(x) ? Object.values(x).join(' · ') : _scalar(x))}</span>`).join('')}</div>`;
+        }
+        if (_isObj(v)) {
+            const entries = Object.entries(v);
+            if (!entries.length) return '<div class="avs-st-dim">（空）</div>';
+            const allScalar = entries.every(([, vv]) => !_isObj(vv) && !Array.isArray(vv));
+            if (allScalar) return _renderRows(v);
+            return entries.map(([k, vv]) =>
+                `<div class="avs-st-entity"><div class="avs-st-entity-hd">${esc(k)}</div>${_renderValue(vv)}</div>`
+            ).join('');
+        }
+        return `<div class="avs-st-row"><span class="avs-st-row-v solo">${esc(_scalar(v))}</span></div>`;
+    }
+    function _humanize(cur) {
+        const keys = Object.keys(cur || {});
+        if (!keys.length) {
+            return `<div class="avs-st-empty">還沒有任何狀態紀錄。<br>開啟上方「即時記錄」之後，跑團時系統會自動把角色數值、任務進度、身上的物品記在這裡。</div>`;
+        }
+        return keys.map(k =>
+            `<div class="avs-st-section"><div class="avs-st-section-hd">${_icon(k)} ${esc(k)}</div><div class="avs-st-section-body">${_renderValue(cur[k])}</div></div>`
+        ).join('');
+    }
+
+    // ── 「✏️ 改數值」可編輯渲染：葉值→小格子；實體（如 NPC，多實體容器下的物件）→名稱可改 + 可標記刪除 ──
+    function _editFields(obj, prefix, out, entityLevel) {
+        Object.keys(obj || {}).forEach(k => {
+            const path = prefix ? prefix + '.' + k : k;
+            const v = obj[k];
+            if (Array.isArray(v)) {
+                const allScalar = v.every(x => !_isObj(x) && !Array.isArray(x));
+                out.push(allScalar
+                    ? `<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><input class="avs-st-edit-input" data-path="${esc(path)}" data-arr="1" value="${esc(v.join('、'))}"></div>`
+                    : `<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><span class="avs-st-dim">（清單較複雜，暫不可手改）</span></div>`);
+            } else if (_isObj(v)) {
+                if (entityLevel) {
+                    // k = 一個實體（例如某個 NPC 名）→ 名稱可改、整個可刪
+                    out.push(`<div class="avs-st-edit-entity"><div class="avs-st-edit-entityhd">`
+                        + `<input class="avs-st-edit-name" data-rename-path="${esc(path)}" value="${esc(k)}" title="改名（例如 冒險者 → 加侖）">`
+                        + `<button class="avs-st-edit-del" data-del-path="${esc(path)}" type="button" title="標記刪除這個">×</button>`
+                        + `</div>`);
+                    _editFields(v, path, out, false);
+                    out.push(`</div>`);
+                } else {
+                    // 「多實體容器」判定（容器內每個子物件 = 可改名/刪除的實體，如 NPC）。
+                    //   舊版用 every(全部都是物件) 太脆：NPC 容器只要被副模型多塞「一個」純量(數量/旗標/備註)，
+                    //   every 立刻 false → 整組 NPC 的改名/刪除 × 全消失（這就是「乎有乎沒」的真因）。
+                    //   放寬成：全是物件(原行為，覆蓋單一/多個乾淨 NPC) 或「≥2 個物件子節點」(容忍夾雜純量) → 仍算多實體。
+                    //   單一物件夾純量(1 obj + 純量)維持不算實體，避免「主角.外觀」這種單一子物件被誤判成可刪實體。
+                    const _vals = Object.values(v);
+                    const _objN = _vals.filter(x => _isObj(x)).length;
+                    const childMulti = _vals.length > 0 && (_objN === _vals.length || _objN >= 2);
+                    out.push(`<div class="avs-st-edit-group"><div class="avs-st-edit-grouphd">${esc(k)}</div>`);
+                    _editFields(v, path, out, childMulti);
+                    out.push(`</div>`);
+                }
+            } else {
+                out.push(`<div class="avs-st-edit-row"><span class="avs-st-edit-k">${esc(k)}</span><input class="avs-st-edit-input" data-path="${esc(path)}" value="${esc(_scalar(v) === '—' ? '' : String(v))}"></div>`);
+            }
+        });
+        return out;
+    }
+    function _humanizeEditable(cur) {
+        if (!Object.keys(cur || {}).length) return `<div class="avs-st-empty">還沒有狀態可編輯。</div>`;
+        return _editFields(cur, '', [], false).join('');
+    }
+    function _getByPath(obj, path) {
+        if (!path) return obj;
+        return String(path).split('.').reduce((o, k) => (o && typeof o === 'object') ? o[k] : undefined, obj);
+    }
+    function _setByPath(obj, path, val) {
+        const parts = String(path).split('.');
+        let o = obj;
+        for (let i = 0; i < parts.length - 1; i++) {
+            if (!o[parts[i]] || typeof o[parts[i]] !== 'object') o[parts[i]] = {};
+            o = o[parts[i]];
+        }
+        o[parts[parts.length - 1]] = val;
+    }
+    async function _saveStateValues() {
+        const eng = win._AVS_ENGINE;
+        let cur = {};
+        try { cur = JSON.parse(JSON.stringify((eng && eng.read && eng.read()) || {})); } catch (e) {}
+        const h = _host;
+        // 1) 葉值編輯（用舊路徑）
+        (h ? h.querySelectorAll('.avs-st-edit-input[data-path]') : []).forEach(inp => {
+            const path = inp.getAttribute('data-path');
+            let val = inp.value;
+            if (inp.getAttribute('data-arr')) {
+                val = String(val).split(/[、,，\n]/).map(s => s.trim()).filter(Boolean);
+            } else {
+                const t = String(val).trim();
+                if (t !== '' && /^-?\d+(\.\d+)?$/.test(t)) val = Number(t);
+            }
+            _setByPath(cur, path, val);
+        });
+        // 2) 刪除被標記的實體（路人大媽、重複項…）
+        (h ? h.querySelectorAll('.avs-st-edit-entity.deleting [data-del-path]') : []).forEach(b => {
+            const dp = b.getAttribute('data-del-path');
+            const parts = String(dp).split('.');
+            const parent = _getByPath(cur, parts.slice(0, -1).join('.'));
+            if (parent && typeof parent === 'object') delete parent[parts[parts.length - 1]];
+        });
+        // 3) 實體改名（新名≠舊名）；改進已存在的同名實體＝合併（舊資料併進去），治「冒險者後來叫加侖」的重複
+        (h ? h.querySelectorAll('.avs-st-edit-name[data-rename-path]') : []).forEach(inp => {
+            const ent = inp.closest('.avs-st-edit-entity');
+            if (ent && ent.classList.contains('deleting')) return;   // 已刪的不改名
+            const oldPath = inp.getAttribute('data-rename-path');
+            const parts = String(oldPath).split('.');
+            const oldKey = parts[parts.length - 1];
+            const newName = String(inp.value || '').trim();
+            if (!newName || newName === oldKey) return;
+            const parent = _getByPath(cur, parts.slice(0, -1).join('.'));
+            if (parent && typeof parent === 'object' && parent[oldKey] !== undefined) {
+                parent[newName] = (parent[newName] && typeof parent[newName] === 'object')
+                    ? Object.assign({}, parent[newName], parent[oldKey])
+                    : parent[oldKey];
+                delete parent[oldKey];
+            }
+        });
+        try { if (eng && eng.write) eng.write(cur); } catch (e) { console.warn('[AVS State] 手動存值失敗', e); }
+        _editingValues = false;
+        _build();
+    }
+
+    // ── schema 欄位編輯表單（進階區內）────────────────────────────
+    // ⚠️ 一定要含 object：「角色狀態」這種裝所有角色的容器就是 object，
+    //    少了它，編輯既有 object 欄位時下拉選不到原型別 → 落到第一個(string) → 一按儲存整個容器被改成 string。
+    const TYPE_OPTIONS = ['string', 'number', 'enum', 'list', 'object'];
+    function renderFieldEdit(name, type, desc, isNew) {
+        const dataName = isNew ? '__new__' : name;
+        const safe = _jsArg(dataName);
+        return `<div class="avs-st-field-edit" data-edit-name="${esc(dataName)}">
+            <div class="avs-st-fe-row"><span class="avs-st-fe-label">名稱</span>
+                <input class="avs-input" data-edit-key="name" ${isNew ? 'data-edit-focus placeholder="例：體力 / 心情 / 任務" value=""' : `value="${esc(name)}" disabled`} /></div>
+            <div class="avs-st-fe-row"><span class="avs-st-fe-label">類型</span>
+                <select class="avs-select" data-edit-key="type" ${(!isNew && type === 'object') ? 'disabled title="這是裝所有角色的容器，改型別會把裡面的角色資料全毀掉"' : ''}>${TYPE_OPTIONS.map(t => `<option value="${t}" ${t === type ? 'selected' : ''}>${t.toUpperCase()}</option>`).join('')}</select></div>
+            ${(!isNew && type === 'object') ? '<div class="avs-st-fe-hint">這欄裝的是所有角色，類型不能改；要調整記什麼請改下面的說明。</div>' : ''}
+            <div class="avs-st-fe-row"><span class="avs-st-fe-label">說明</span>
+                <textarea class="avs-textarea" data-edit-key="desc" ${isNew ? '' : 'data-edit-focus'} placeholder="這欄位記什麼、何時會變">${esc(desc || '')}</textarea></div>
+            <div class="avs-st-fe-actions">
+                <button class="avs-btn avs-btn-outline avs-st-fe-btn" onclick="window.OS_AVS_STATE.cancelEditField()">取消</button>
+                <button class="avs-btn avs-btn-primary avs-st-fe-btn" onclick="window.OS_AVS_STATE.saveFieldEdit('${safe}')">${isNew ? '新增' : '儲存'}</button>
+            </div></div>`;
+    }
+    function _renderSchemaList(fields) {
+        let html = Object.entries(fields).map(([name, def]) => {
+            const type = (def && def.type) || '?';
+            const desc = (def && def.desc) || '';
+            if (_editingFieldName === name) return renderFieldEdit(name, type, desc, false);
+            return `<div class="avs-st-field">
+                <div class="avs-st-field-main">
+                    <div class="avs-st-field-row"><span class="avs-st-field-name">${esc(name)}</span><span class="avs-st-field-type">${esc(type)}</span></div>
+                    ${desc ? `<div class="avs-st-field-desc">${esc(desc)}</div>` : ''}
+                </div>
+                <div class="avs-st-field-acts">
+                    <button class="avs-st-field-act" onclick="window.OS_AVS_STATE.startEditField('${_jsArg(name)}')" title="編輯"><i class="fa-solid fa-pen"></i></button>
+                    <button class="avs-st-field-act danger" onclick="window.OS_AVS_STATE.deleteFieldConfirm('${_jsArg(name)}')" title="刪除">×</button>
+                </div></div>`;
+        }).join('');
+        if (_editingFieldName === '__new__') html += renderFieldEdit('', 'string', '', true);
+        else html += `<div class="avs-st-field-add" onclick="window.OS_AVS_STATE.startAddField()">＋ 新增追蹤欄位</div>`;
+        return html;
+    }
+
+    // ── 主建構 ───────────────────────────────────────────────────
+    // 🚨 分艙鍵一律走 adapter：PWA 沒有酒館可問，那邊的「當前 chat」＝當前故事(storyId)。
+    //    這支面板以前四處直接讀 SillyTavern.getContext().chatId → PWA 一律空字串，症狀是
+    //    狀態讀不到資料、「沿用其他故事的設定」點下去回「目前沒有進行中的聊天」、資料管理頁標不出目前這個世界。
+    function _curChatId() {
+        try { return win.OS_AVS_ADAPTER?.getCurrentChatId?.() || ''; } catch (e) { return ''; }
+    }
+    // 第二層（目前狀態／追蹤欄位／資料管理）整屏：收起 app 標頭與分頁列，換上同款標頭，左上那顆就是回上一層。
+    //   以前第二層自己在內容裡放一顆「‹ 返回」，上面 app 標頭的「‹」還在（按了是離開整個 app），
+    //   兩顆返回疊在一起，她一直按到上面那顆。
+    const L2_TITLES = {
+        current: '<i class="fa-solid fa-chart-simple"></i> 目前狀態',
+        fields: '<i class="fa-solid fa-gear"></i> 追蹤欄位',
+        data: '<i class="fa-solid fa-folder-tree"></i> 資料管理',
+    };
+    function _syncL2Bar() {
+        const box = _host && _host.closest('.avs-container');
+        if (!box) return;
+        const on = !!L2_TITLES[_page];
+        box.classList.toggle('avs-l2-full', on);
+        if (!on) return;
+        let bar = box.querySelector(':scope > .avs-l2-bar');
+        if (!bar) {
+            bar = document.createElement('div');
+            bar.className = 'avs-header sysh avs-l2-bar';
+            bar.innerHTML = '<div class="avs-back-btn sysh-back avs-l2-back">‹</div><div class="avs-title sysh-title"></div><div class="sysh-act"></div>';
+            const hd = box.querySelector(':scope > .avs-header');
+            if (hd) hd.after(bar); else box.prepend(bar);
+        }
+        bar.querySelector('.sysh-title').innerHTML = L2_TITLES[_page];
+        bar.querySelector('.avs-l2-back').onclick = () => {
+            _page = 'home'; _editingValues = false; _build();
+            try { _host.closest('.avs-content')?.scrollTo?.(0, 0); } catch (e) {}
+        };
+    }
+
+    async function _build(opts) {
+        if (!_host) return;
+        _syncL2Bar();
+        if (_refreshPending && !_editingValues) { _refreshPending = false; opts = Object.assign({}, opts || {}, { fresh: true }); }
+        const eng = win._AVS_ENGINE;
+        const chatId = _curChatId();
+        // fresh=true（外部事件、資料真的變了）才重讀；換頁沿用快取＝不清空、不 await、不閃
+        const _useCache = !(opts && opts.fresh) && _cache.ready && _cache.key === chatId;
+        if (!_useCache) _host.innerHTML = `<div class="avs-st"><div class="avs-st-loading">載入狀態中…</div></div>`;
+        const storyId = win.OS_AVS_ADAPTER?.getStoryId?.() || localStorage.getItem('vn_current_story_id') || '';
+        const stateKey = eng ? eng.getKey() : (storyId ? `avs_state_${storyId}` : 'avs_current_state');
+        const storyTitle = win.OS_AVS_ADAPTER?.getStoryTitle?.() || localStorage.getItem('vn_current_story_title') || storyId || '';
+
+        let snapCount = 0;
+        try { snapCount = JSON.parse(localStorage.getItem(`avs_snap_${stateKey}`) || '[]').length; } catch (e) {}
+
+        let fields = null, data = null, cur = {};
+        if (_useCache) {
+            fields = _cache.fields; data = _cache.data;
+        } else {
+            // 🧾 讀資料前先對帳一次：刪樓事件在某些環境不會觸發，靠事件回滾會讓面板一直顯示已刪劇情的舊值。
+            //    對帳自己會判斷「有沒有東西要回滾」，沒事就是一次輕量比對。
+            // 獨立版走自己那條：酒館的對帳是掃聊天檔的 avs 標記回滾 patch，PWA 沒有聊天樓
+            //   （它在 PWA 一定停在「連樓號都拿不到，保守不動」）。PWA 的數值在刪章當下就重放過了，
+            //   這裡只要清掉「指向已刪章節」的側邊殘留（記憶／人物檔案），一個數值都不碰。
+            if (win.OS_API?.isStandalone?.()) {
+                try { await win.VN_READER?.reconcileOrphans?.('開面板'); } catch (e) {}
+            } else {
+                try { await win.OS_STATE_RUNTIME?.reconcile?.('開面板'); } catch (e) {}
+            }
+            try { fields = await win.OS_STATE_RUNTIME?.getActiveSchema?.(); } catch (e) {}
+            try { if (chatId && win.OS_DB?.getStateData) data = await win.OS_DB.getStateData(chatId); } catch (e) {}
+            _cache = { ready: true, key: chatId, fields, data };
+            if (!_host.isConnected) return;   // await 期間面板被關掉 → 別往空殼寫
+        }
+        try { cur = (eng?.read?.()) || data?.current || {}; } catch (e) { cur = data?.current || {}; }
+        const hasSchema = fields && Object.keys(fields).length > 0;
+        const patchesCount = Array.isArray(data?.patches) ? data.patches.length : (data?.patches ? Object.keys(data.patches).length : 0);
+        const runtimeOn = localStorage.getItem('aurelia_state_runtime_enabled') === '1';
+
+        // 🔗「我的檔案」(#avs-view-packs)在第一層(home)瀏覽頁露出，且需「狀態檔案」tab 真的可見：
+        //    ① 進第二層(目前狀態/進階操作頁)就收起檔案卡，兩層才乾淨。
+        //    ② 背景事件(抽取/生成/開關 → hooks 呼叫 _build)在記憶 tab 觸發時，別把檔案卡塞進記憶 tab。
+        //    （建檔按鈕「簡易預設/AI生成」是否顯示，由 renderPackList 依「當前有沒有卡」決定，不在這。）
+        try {
+            const _pv = document.querySelector('#avs-view-packs');
+            const _stateActive = !!document.querySelector('#avs-view-state')?.classList.contains('active');
+            if (_pv) _pv.classList.toggle('active', !!hasSchema && _stateActive && _page === 'home');
+        } catch (e) {}
+
+        const storyHtml = `<div class="avs-card avs-st-story">
+            <div class="avs-st-story-label">目前故事</div>
+            <div class="avs-st-story-name">${storyTitle ? esc(storyTitle) : '<span class="avs-st-dim">（尚未開啟故事）</span>'}</div>
+        </div>`;
+
+        // 🎬 導演卡片：11-18 起開關、這個故事的導演重點、導演稿都搬到「設置 → 劇情 → 導演」，
+        //    這裡只留一張說明卡＋一顆過去的鈕。跟 AVS 追蹤解耦——AVS 未初始化(init 畫面)也要照樣露出
+        const _dirOn = !!(win.OS_STATE_RUNTIME?.director?.isOn?.());
+        const directorCardHtml = `<div class="avs-card avs-st-director-card">
+            <div class="avs-st-toggle-row">
+                <div class="avs-st-toggle-text">
+                    <div class="avs-st-toggle-name"><i class="fa-solid fa-clapperboard"></i> 導演模式・${_dirOn ? '開著' : '關著'}</div>
+                    <div class="avs-st-toggle-desc">要不要開導演、這個故事要多留意什麼，以及查看或修改導演稿，都在「設置 → 劇情 → 導演」。</div>
+                </div>
+                <button class="avs-btn avs-btn-outline" id="avs-st-director-go"><i class="fa-solid fa-gear"></i> 去設置</button>
+            </div>
+        </div>`;
+
+        // 沿用區：把別的聊天已經做好的追蹤欄位＋條件規則＋UI 面板整套搬過來（不帶數值）。
+        //   重玩同一張卡時最常用——開新聊天不必再等 AI 生成、也不必重煉 UI。舊聊天原封不動。
+        const _adoptable = _adoptCandidates(chatId);
+        //   用浮層挑（不用原生下拉）：原生 select 的清單由瀏覽器畫在最上層、會衝出手機殼；
+        //   而且同一張卡的檔案常常同名，浮層才擺得下「幾項/幾條規則/哪個聊天」這些分辨資訊。
+        const adoptHtml = _adoptable.length ? `
+            <div class="avs-st-adv-sec">
+                <div class="avs-st-adv-hd">沿用其他故事的設定<span class="avs-st-adv-hint">追蹤欄位、條件規則、UI 面板一起搬過來，不會帶入舊數值</span></div>
+                <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-adopt-open"><i class="fa-solid fa-clipboard"></i> 從其他故事挑一份（${_adoptable.length}）</button>
+            </div>` : '';
+
+        if (!hasSchema) {
+            if (_page !== 'home') { _page = 'home'; _editingValues = false; _syncL2Bar(); }
+            _host.innerHTML = `<div class="avs-st">
+                ${storyHtml}
+                ${directorCardHtml}
+                ${adoptHtml ? `<div class="avs-card">${adoptHtml}</div>` : ''}
+                <div class="avs-card avs-st-init">
+                    <div class="avs-st-init-icon"><i class="fa-solid fa-satellite"></i></div>
+                    <div class="avs-st-init-title">這個世界還沒開始追蹤狀態</div>
+                    <div class="avs-st-init-desc">寫故事時，會自動幫你記下下面這些狀態。不需要的按 × 刪掉；想多記一項，打在下面的輸入框。若全部留著，就交給遊戲自己判斷該記哪些。</div>
+                    <div class="avs-st-init-tags">
+                        <div class="avs-st-chips" id="avs-st-tags">
+                            <span class="avs-st-chip removable" data-k="角色外貌：髮色/眼色/體型" data-warn="1"><i class="fa-solid fa-masks-theater"></i> 角色外貌<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="每個角色對主角的好感度"><i class="fa-solid fa-heart"></i> 好感度<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="劇情目標：長期目標＋短期待辦"><i class="fa-solid fa-bullseye"></i> 劇情目標<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="每個角色眼下在謀劃什麼（不要開時限／倒數欄位）"><i class="fa-solid fa-clipboard"></i> 角色待辦<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="當前場景／地點"><i class="fa-solid fa-location-dot"></i> 當前場景<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="主角攜帶／持有的物品（只有主角一份 list，NPC 不要開物品欄）"><i class="fa-solid fa-suitcase"></i> 物品攜帶<i class="fa-solid fa-xmark chip-x"></i></span>
+                            <span class="avs-st-chip removable" data-k="題材專屬數值（HP／理智／倒計時等）"><i class="fa-solid fa-gear"></i> 題材數值<i class="fa-solid fa-xmark chip-x"></i></span>
+                            ${_loadMyChips().map(v => `<span class="avs-st-chip removable is-mine" data-k="${esc(v)}" title="${esc(v)}">${esc(_chipLabel(v))}<i class="fa-solid fa-xmark chip-x"></i></span>`).join('')}
+                        </div>
+                    </div>
+                    <textarea class="avs-textarea avs-st-init-prompt" id="avs-st-init-prompt" placeholder="（選填）還想追蹤什麼，或對上面的追蹤項有特別要求，打在這"></textarea>
+                    <button class="avs-btn avs-btn-outline avs-st-chip-add" id="avs-st-chip-add" title="把上面那句存起來，下次開建檔畫面直接點，不用再打一次"><i class="fa-solid fa-plus"></i> 存成常用項</button>
+                    <button class="avs-btn avs-btn-primary avs-st-init-btn" id="avs-st-init">開始追蹤狀態 ▸</button>
+                    <div class="avs-st-init-foot">第一次整理大約需要 5 到 30 秒。若不想等，可以用下面的現成方案：</div>
+                    <div class="avs-st-init-alt">
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-preset" title="不叫 AI，直接套形象／身分／好感度三欄"><i class="fa-solid fa-feather"></i> 簡易預設</button>
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-manual" title="自己填欄位名／型別／預設值／說明"><i class="fa-solid fa-pen-to-square"></i> 自己建</button>
+                    </div>
+                    <div class="avs-st-init-alt">
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-prism" title="世界門專用：所在世界／本趟目標／當地貨幣／角色形態，面板走量子白稜鏡"><i class="fa-solid fa-star"></i> 視差預設・稜鏡</button>
+                        <button class="avs-btn avs-btn-outline avs-st-init-btn" id="avs-st-px-cheshire" title="欄位與稜鏡完全相同，只有面板外觀換成柴郡貼紙"><i class="fa-solid fa-cat"></i> 視差預設・柴郡</button>
+                    </div>
+                </div>
+            </div>`;
+            // 預設 TAG 可刪（🎭 外貌 data-warn=1 → 刪前警告生圖會不一致）
+            const _tagWrap = _host.querySelector('#avs-st-tags');
+            //  ⚠️ _totalTags ＝「可選的全部項目數」，跟 _kept 比對來判斷有沒有刪過：
+            //     加常用項時要 ++（kept 也同步 +1 → 不會誤判成刪過）；刪 chip 時【不要】動它，否則永遠比不出差
+            let _totalTags = _tagWrap ? _tagWrap.querySelectorAll('.avs-st-chip').length : 0;
+            // ×：預設項＝這次不用；自己存的(.is-mine)＝連常用清單一起拿掉（要復原就再打一次按 ＋）
+            const _bindChipX = (x) => {
+                x.onclick = async () => {
+                    const chip = x.closest('.avs-st-chip');
+                    if (!chip) return;
+                    if (chip.dataset.warn === '1' && !await AUI.confirm('刪掉「角色外貌」後，AI 不會記角色的髮色/眼色/體型——之後生圖角色長相每次可能都不一樣。確定要刪？')) return;
+                    if (chip.classList.contains('is-mine')) _saveMyChips(_loadMyChips().filter(v => v !== chip.dataset.k));
+                    chip.remove();
+                };
+            };
+            if (_tagWrap) _tagWrap.querySelectorAll('.chip-x').forEach(_bindChipX);
+            // ＋：把輸入框那句存成常用項（跨世界共用），立刻變成一顆 chip，下次開建檔畫面自動帶出來
+            const _addBtn = _host.querySelector('#avs-st-chip-add');
+            if (_addBtn && _tagWrap) _addBtn.onclick = () => {
+                const ta = _host.querySelector('#avs-st-init-prompt');
+                const v = (ta?.value || '').trim();
+                if (!v) { ta?.focus({ preventScroll: true }); return; }
+                const arr = _loadMyChips();
+                if (!arr.includes(v)) { arr.push(v); _saveMyChips(arr); }
+                if (!_tagWrap.querySelector(`.avs-st-chip.is-mine[data-k="${CSS.escape(v)}"]`)) {
+                    const chip = document.createElement('span');
+                    chip.className = 'avs-st-chip removable is-mine';
+                    chip.dataset.k = v;
+                    chip.title = v;
+                    chip.innerHTML = esc(_chipLabel(v)) + '<i class="fa-solid fa-xmark chip-x"></i>';
+                    _bindChipX(chip.querySelector('.chip-x'));
+                    _tagWrap.appendChild(chip);
+                    _totalTags++;
+                }
+                ta.value = '';
+            };
+            // ✏️ 自己建欄位：不叫 AI，直接開檔案編輯器自己填欄位名／型別／預設值／說明
+            const _manualBtn = _host.querySelector('#avs-st-manual');
+            if (_manualBtn) _manualBtn.onclick = () => {
+                if (!win.OS_AVS?.openNewPackEditor?.()) AUI.alert('檔案編輯器還沒載入完，請稍候再試');
+            };
+
+            const ib = _host.querySelector('#avs-st-init');
+            if (ib) ib.onclick = async () => {
+                if (!win.OS_AVS?.generateAndSaveSchema) { AUI.alert('AVS 模組未就緒，請稍候再試'); return; }
+                // 組指令：有刪 TAG 才告訴 AI「只追蹤保留的」；全留＝不送排除指令(純自動)。再加輸入框自訂。
+                const _kept = [...(_tagWrap?.querySelectorAll('.avs-st-chip') || [])].map(c => c.dataset.k).filter(Boolean);
+                const _custom = (_host.querySelector('#avs-st-init-prompt')?.value || '').trim();
+                // 自己存的常用項要單獨再點名一次：沒刪過任何預設 chip 時上面那條排除指令不會送，
+                // 只靠 _kept 的話這些自訂維度就整個沒進 prompt
+                const _mine = [...(_tagWrap?.querySelectorAll('.avs-st-chip.is-mine') || [])].map(c => c.dataset.k).filter(Boolean);
+                let _up = '';
+                if (_totalTags && _kept.length < _totalTags) _up += '【使用者只要追蹤這些維度，沒列到的別硬生】' + _kept.join('、');
+                if (_mine.length) _up += (_up ? '\n' : '') + '【使用者指定一定要追蹤這些】' + _mine.join('、');
+                if (_custom) _up += (_up ? '\n' : '') + '【額外要求】' + _custom;
+                const orig = ib.textContent;
+                ib.textContent = 'AI 分析中…';
+                ib.style.pointerEvents = 'none';
+                try {
+                    const r = await win.OS_AVS.generateAndSaveSchema(_up);   // 生成 schema + 存進變數包（帶 TAG 取捨＋選填要求）
+                    if (r) _build({ fresh: true });   // 重繪：此時變數包已有剛生成的 schema → 顯示追蹤狀態
+                } catch (e) {
+                    console.error('[AVS State] AI 生成失敗:', e);
+                    AUI.alert('生成失敗：' + (e?.message || e));
+                } finally {
+                    ib.textContent = orig;
+                    ib.style.pointerEvents = '';
+                }
+            };
+            // 🪶 簡易預設：跳過 AI 的快速建檔入口。套用後 os_avs 會 call OS_AVS_STATE.refresh()
+            //    把這張 init 卡刷新成追蹤視圖。
+            const pb = _host.querySelector('#avs-st-preset');
+            if (pb) pb.onclick = () => {
+                if (win.OS_AVS?.applySimplePreset) win.OS_AVS.applySimplePreset(pb);
+                else AUI.alert('簡易預設未就緒，請稍候再試');
+            };
+            // 🌌 視差預設：兩張皮各一顆按鈕。不彈確認窗——TauriTavern 會擋原生 confirm，
+            //    點下去就是決定；兩張皮都會裝進同一個包，之後在 UI 面板還能切換。
+            [['#avs-st-px-prism', 'prism'], ['#avs-st-px-cheshire', 'cheshire']].forEach(([sel, skin]) => {
+                const b = _host.querySelector(sel);
+                if (!b) return;
+                b.onclick = () => {
+                    if (win.OS_AVS?.applyParallaxPreset) win.OS_AVS.applyParallaxPreset(b, skin);
+                    else AUI.alert('視差預設未就緒，請稍候再試');
+                };
+            });
+            _bindDirector();   // 🎬 導演卡片在 init 畫面也露出，綁定它的開關與按鈕
+            _bindAdopt();      // 開新聊天第一眼就在這頁 → 沿用入口也得在這裡綁
+            return;
+        }
+
+        // 「複製狀態數據」小按鈕：搬進「目前狀態」操作頁
+        const copyBtnHtml = `<button class="avs-btn avs-btn-outline avs-st-sm" id="avs-st-copy-diag"><i class="fa-solid fa-microscope"></i> 複製狀態數據</button>`;
+
+        // ── 第二層：📊 目前狀態 操作頁 ──────────────────────────────
+        if (_page === 'current') {
+            _host.innerHTML = `<div class="avs-st avs-st-l2">
+                <div class="avs-st-cur-editbar">
+                    ${copyBtnHtml}
+                    <div class="avs-st-editbar-r">
+                        ${_editingValues
+                            ? `<button class="avs-btn avs-btn-primary avs-st-fe-btn" id="avs-st-val-save"><i class="fa-solid fa-floppy-disk"></i> 儲存</button><button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-cancel">取消</button>`
+                            : `<button class="avs-btn avs-btn-outline avs-st-fe-btn" id="avs-st-val-edit"><i class="fa-solid fa-pen"></i> 改數值</button><span class="avs-st-editbar-hint">AI 偶爾填錯？點這手動改</span>`}
+                    </div>
+                </div>
+                <div class="avs-st-current-body">${_editingValues ? _humanizeEditable(cur) : _humanize(cur)}</div>
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">更新這份狀態${patchesCount ? `（已記 ${patchesCount} 筆）` : ''}</div>
+                    <div class="avs-st-btn-grid col3">
+                        <button class="avs-btn avs-btn-outline" id="avs-st-extract"><i class="fa-solid fa-satellite"></i> 立即抽一次</button>
+                        <button class="avs-btn avs-btn-outline" id="avs-st-deep" title="用主模型把整份狀態清一輪：合併重複角色、移除純路人、按大總結修正過期欄位。整理前自動快照，可還原上一步。"><i class="fa-solid fa-arrows-rotate"></i> 深度整理</button>
+                        <button class="avs-btn avs-btn-outline${snapCount === 0 ? ' disabled' : ''}" id="avs-st-rollback"><i class="fa-solid fa-rotate-left"></i> 還原上一步${snapCount ? ` (${snapCount})` : ''}</button>
+                    </div>
+                </div>
+            </div>`;
+            _bind(stateKey, snapCount);
+            return;
+        }
+
+        // ── 第二層：⚙️ 追蹤欄位（只管「AI 要盯著記什麼」，不混資料操作）──
+        if (_page === 'fields') {
+            _host.innerHTML = `<div class="avs-st avs-st-l2">
+                <div class="avs-st-adv is-page">
+                    <div class="avs-st-adv-sec">
+                        <div class="avs-st-adv-hd">追蹤欄位（${Object.keys(fields).length}）<span class="avs-st-adv-hint">AI 會盯著這些東西記錄</span></div>
+                        <div class="avs-st-field-list">${_renderSchemaList(fields)}</div>
+                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-regen"><i class="fa-solid fa-dna"></i> 重新生成欄位</button>
+                    </div>
+                </div>
+            </div>`;
+            _bind(stateKey, snapCount);
+            return;
+        }
+
+        // ── 第二層：🗂️ 資料管理（破壞性操作與跨世界，集中一處免得散落）──
+        if (_page === 'data') {
+            _host.innerHTML = `<div class="avs-st avs-st-l2">
+                <div class="avs-st-adv is-page">
+                    ${adoptHtml}
+                    <div class="avs-st-adv-sec">
+                        <div class="avs-st-adv-hd">這個故事</div>
+                        <div class="avs-st-initpack">
+                            <select class="avs-select" id="avs-st-initpack-sel">
+                                <option value="">用檔案的預設值初始化…</option>
+                                ${(_packs || []).map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}
+                            </select>
+                            <button class="avs-btn avs-btn-primary" id="avs-st-initpack-btn">套用</button>
+                        </div>
+                        <div class="avs-st-btn-grid">
+                            <button class="avs-btn avs-btn-danger" id="avs-st-clearstate">清空目前狀態</button>
+                            <button class="avs-btn avs-btn-danger" id="avs-st-clearpatches">清空抽取紀錄</button>
+                        </div>
+                    </div>
+                    <div class="avs-st-adv-sec">
+                        <div class="avs-st-adv-hd">所有世界</div>
+                        <button class="avs-btn avs-btn-outline avs-st-wide" id="avs-st-cross"><i class="fa-solid fa-globe"></i> 跨世界管理 — 所有已追蹤的世界</button>
+                        <button class="avs-btn avs-btn-outline avs-st-wide avs-st-gc" id="avs-st-gc"><i class="fa-solid fa-broom"></i> 清理已刪除世界的殘留資料</button>
+                    </div>
+                </div>
+            </div>`;
+            _bind(stateKey, snapCount);
+            return;
+        }
+
+        // ── 第一層：home（瀏覽）：故事 + 開關 + 兩個換頁入口 ──────────
+        // 排序（定案）：目前故事 → 即時記錄 → 導演模式 → 目前狀態 → 資料管理 → 追蹤欄位 →（我的檔案在另一個容器）
+        //   順序就照這裡的先後，CSS 不再用 order 干預（舊的那套已刪）。要改順序＝改這裡。
+        _host.innerHTML = `<div class="avs-st">
+            ${storyHtml}
+
+            <div class="avs-card avs-st-toggle-row avs-st-runtime-toggle">
+                <div class="avs-st-toggle-text">
+                    <div class="avs-st-toggle-name">即時記錄狀態</div>
+                    <div class="avs-st-toggle-desc">開啟後，每次劇情推進都會自動更新下面的狀態</div>
+                </div>
+                <div class="avs-st-toggle${runtimeOn ? ' on' : ''}" id="avs-st-toggle" role="switch"></div>
+            </div>
+
+            ${directorCardHtml}
+
+            <button class="avs-st-nav" id="avs-st-nav-cur">
+                <span class="avs-st-nav-txt"><i class="fa-solid fa-chart-simple"></i> 目前狀態<span class="avs-st-nav-sub">角色數值、任務、物品；抽取與還原也在裡面</span></span>
+                <span class="avs-st-nav-chev">›</span>
+            </button>
+            <button class="avs-st-nav" id="avs-st-nav-data">
+                <span class="avs-st-nav-txt"><i class="fa-solid fa-folder-tree"></i> 資料管理<span class="avs-st-nav-sub">初始化、清空、所有已追蹤的世界</span></span>
+                <span class="avs-st-nav-chev">›</span>
+            </button>
+            <button class="avs-st-nav" id="avs-st-nav-fields">
+                <span class="avs-st-nav-txt"><i class="fa-solid fa-gear"></i> 追蹤欄位<span class="avs-st-nav-sub">AI 要盯著記錄哪些東西</span></span>
+                <span class="avs-st-nav-chev">›</span>
+            </button>
+        </div>`;
+
+        _bind(stateKey, snapCount);
+    }
+
+    // 🎬 變數工坊那張導演卡只剩一顆「去設置」（11-18 搬家）。init 畫面與 home 佈局都要綁
+    function _bindDirector() {
+        const go = _host && _host.querySelector('#avs-st-director-go');
+        if (go) go.onclick = () => {
+            const W = win.OS_SETTINGS_WINDOW || window.OS_SETTINGS_WINDOW;
+            if (W && W.open) W.open('story', { sub: 'director' });
+        };
+    }
+
+    // ── 🎬 設置 → 劇情 → 導演（os_settings_window.js 的 story/director 叫它）──
+    //   開關（同一把 sp_director_on）、這個故事的導演重點（OS_STATE_RUNTIME.director.getFocus/setFocus，一個故事一份）、
+    //   導演稿查看／改／立刻產一份。改了就生效，不用按保存。零件一律 .asw-*，不寫 inline style。
+    let _dirHelpDone = false;
+    function _dirHelp() {
+        if (_dirHelpDone) return;
+        const A = win.AUI || window.AUI;
+        if (!A || !A.registerHelp) return;
+        _dirHelpDone = true;
+        A.registerHelp({
+            ds_on: { title: '導演模式（其他故事用）', body: '給「不是白板企劃世界」的故事用：角色卡、奧瑞亞本篇、自己許願建的世界。白板企劃展開的世界有上面的場記表在管，那裡建議關掉這個，省一通錢。\n開著時，每輪劇情寫完會另外整理一份「導演稿」：大家都知道的事、每個人自己才知道的事、誰做了什麼、這一輪可以推的點。下一輪寫劇情時一起交給寫正文的 AI，角色才不會讀心、旁白不會洩底。\n用哪個模型：設置 → AI 模型 →「哪件事走哪個模型」的「導演模式」那列（預設主模型）。開著的時候，「狀態抽取 / 記憶 / 人物檔案」那一通也會改走主模型（那列另外指定了通道的照它）。\n每輪多花一通模型的錢；開著狀態欄的話，導演稿會搭狀態那一通一起寫，不多打。' },
+            ds_focus: { title: '導演關注重點', body: '選這個故事偏哪一種，導演整理時就多留意那方面：戀愛會多記人物之間的距離和沒說出口的心意，懸疑會多記誰握著哪條線索，冒險會多記傷勢、資源和下一步的代價。\n選了之後下面會顯示交給導演的那段話；直接在框裡改，就變成「自己寫」。\n每個故事各存一份。只改導演留意什麼、往哪個方向挑可以推的點，不改導演稿的格式。\n世界門場記表請大模型想下一步時也會看這段。' },
+            ds_push: { title: '劇情推進力道', body: '導演每輪會列幾個「可以推的點」給寫正文的 AI 參考。\n輕：多留白，最多一個；沒有適合的時機就只寫「留白」。\n平常：照導演自己判斷。\n積極：除非剛打完、受傷或累壞了，每輪至少給一個能讓劇情往前走的點。\n都只是建議，不會逼角色硬撐。\n世界門場記表：輕＝連 5 章、平常＝3 章、積極＝2 章沒有新局面，才請大模型想下一步。' },
+            ec_on: { title: '末尾檢查（試用）', body: '每章寫完，記狀態那一通順便檢查這一章有沒有跟前面對不上的地方：不在場的人知道了、受傷的人在跑跳、時間地點對不上、性格突然變了。列出「原句 → 建議改成」，整章歪掉也會說；這裡看得到。\n試用中只標不改：正文一個字都不動，不會自動重新生成，也不會多叫一次模型。\n看幾章覺得它抓得準，之後再做「直接改」；一點用也沒有，就把一般版導演模式拿掉。所有故事都適用。' },
+            ds_log: { title: '世界門場記表', body: '白板企劃展開的世界裡，寫劇情的 AI 不再拿整份企劃（岔路、結局），只拿「已經發生過的局面、祕密、這一幕不能提、下一幕可以往哪走」，比較不會劇透、不會為了走到某個結局硬推。\n每輪記狀態那一通會順便判你走到哪個岔路：碰到那個情況先記在場記表，做了選擇岔路圖才亮。結局會先請大模型確認才算。\n大模型（「哪件事走哪個模型」的「導演模式」那列）只在進門第一章、換地點、連兩章做的事都跟岔路無關、連著好幾章沒有新局面時，出來想一下下一步；一個世界大概幾次。\n關掉就回到以前：整份企劃交給寫劇情的 AI，岔路由它自己標。' },
+        });
+    }
+    function mountDirector(box) {
+        const D = win.OS_STATE_RUNTIME && win.OS_STATE_RUNTIME.director;
+        if (!D || !D.getFocus) { box.innerHTML = '<div class="asw-note">劇情狀態那支還沒載好，關掉窗口等幾秒再打開。</div>'; return; }
+        _dirHelp();
+        const A = win.AUI || window.AUI;
+        const H = (k) => (A && A.helpBtn) ? A.helpBtn(k) : '';
+        const toast = (m, t) => { try { A && A.toast && A.toast(m, { type: t || 'info' }); } catch (e) {} };
+        const cid = (D.chatId && D.chatId()) || '';
+        const title = cid ? (win.OS_AVS_ADAPTER?.getStoryTitle?.() || localStorage.getItem('vn_current_story_title') || '') : '';
+        let f = D.getFocus(cid);
+        const presetText = (id) => { const x = D.FOCUS.find(o => o.id === id); return x ? x.text : ''; };
+        const group = (t, rows, late) => '<section class="asw-group' + (late ? ' asw-late' : '') + '"><h3 class="asw-group-title">' + t + '</h3>' + rows + '</section>';
+        const noStory = '<div class="asw-hint">先打開一個故事，才能幫它設。</div>';
+
+        const storyRows = cid
+            ? '<div class="asw-hint">' + (title ? '目前這個故事是「' + esc(title) + '」。' : '') + '每個故事的導演設定是分開保存的。</div>'
+              + '<div class="asw-chiprow"><span class="asw-chiprow-tx">導演關注重點' + H('ds_focus') + '</span>'
+              + '<div class="asw-chips">' + D.FOCUS.map(x => '<button type="button" class="asw-chip' + (f.pick === x.id ? ' is-on' : '') + '" data-dfocus="' + x.id + '">' + esc(x.name) + '</button>').join('') + '</div>'
+              + '<textarea class="asw-text" id="asw-dfocus-text" rows="5"></textarea></div>'
+              + '<div class="asw-row"><span class="asw-row-tx">劇情推進力道' + H('ds_push') + '</span><span class="asw-seg">'
+              + [['soft', '輕'], ['normal', '平常'], ['bold', '積極']].map(o => '<button type="button" class="asw-seg-btn' + (f.push === o[0] ? ' is-on' : '') + '" data-dpush="' + o[0] + '">' + o[1] + '</button>').join('')
+              + '</span></div>'
+            : noStory;
+        const draftRows = cid
+            ? '<div class="asw-row asw-row-end"><button type="button" class="asw-btn" id="asw-ddraft-view">查看／改導演稿</button><button type="button" class="asw-btn" id="asw-ddraft-now">立刻產一份</button></div>'
+              + '<div class="asw-ddraft" id="asw-ddraft" hidden><textarea class="asw-text asw-text-tall" id="asw-ddraft-text"></textarea>'
+              + '<div class="asw-row asw-row-end"><button type="button" class="asw-btn is-main" id="asw-ddraft-save">存起來（下一輪生效）</button></div></div>'
+            : noStory;
+        const R0 = win.OS_STATE_RUNTIME && win.OS_STATE_RUNTIME.endCheck;   // 🔎 末尾檢查（試用）
+        const W = win.OS_WORLDGATE || window.OS_WORLDGATE;
+        const logRows = (W && W.logOn)
+            ? '<label class="asw-row"><span class="asw-row-tx">啟用場記表' + H('ds_log') + '</span><input type="checkbox" class="asw-check" id="asw-log-on"' + (W.logOn() ? ' checked' : '') + '></label>'
+              + '<div class="asw-dlog" id="asw-dlog"><div class="asw-hint">讀取中…</div></div>'
+            : '<div class="asw-hint">世界門還沒載好。</div>';
+        box.innerHTML = '<div class="asw-cols">'
+            + '<div class="asw-col">'
+            +   group('世界門場記表', logRows)
+            +   group('導演模式・其他故事用', '<div class="asw-hint">角色卡、奧瑞亞本篇，以及你自己許願建立的世界，都用這個導演模式。若是白板企劃展開的世界，請改用上面的場記表。</div>'
+                  + '<label class="asw-row"><span class="asw-row-tx">整理導演稿' + H('ds_on') + '</span><input type="checkbox" class="asw-check" id="asw-dir-on"' + (D.isOn() ? ' checked' : '') + '></label>'
+                  + '<div class="asw-hint asw-dir-dup" id="asw-dir-dup" hidden>現在這個故事在白板企劃的世界裡，場記表已經在管；這個開著會每輪多花一通主模型，可以關掉。</div>')
+            +   group('這個故事的導演', storyRows)
+            + '</div>'
+            + '<div class="asw-col">'
+            +   group('末尾檢查・試用', '<label class="asw-row"><span class="asw-row-tx">章節末檢查' + H('ec_on') + '</span><input type="checkbox" class="asw-check" id="asw-echk-on"' + (R0 && R0.isOn() ? ' checked' : '') + '></label>'
+                  + (cid ? '<div class="asw-dlog" id="asw-echk"><div class="asw-hint">讀取中…</div></div>' : noStory), true)
+            +   group('導演稿', draftRows, true)
+            +   '<div class="asw-note"><b class="asw-note-title">即時生效</b>修改後立即套用，不需保存；導演重點與力道自下一輪起套用。</div>'
+            + '</div>'
+            + '</div>';
+
+        const q = (s) => box.querySelector(s);
+        // 🎬 場記表：開關＋這個世界走到哪（平常那層不劇透；「我要當作者」才看得到碰到了還沒選的、下一幕方向、不能提、偏向哪個結局）
+        const logOnEl = q('#asw-log-on');
+        if (logOnEl) logOnEl.addEventListener('change', async () => {
+            const ok = await W.setLogOn(logOnEl.checked);
+            if (!ok) { logOnEl.checked = !logOnEl.checked; toast('沒存到，請再試一次', 'error'); return; }
+            toast(logOnEl.checked ? '場記表開了：寫劇情的 AI 下一輪起只拿場記' : '場記表關了：回到整份企劃交給寫劇情的 AI', 'success');
+        });
+        const logBox = q('#asw-dlog');
+        if (logBox && W && W.logView) (async () => {
+            let v = null;
+            try { v = await W.logView(); } catch (e) {}
+            if (!logBox.isConnected) return;
+            if (!v) { logBox.innerHTML = '<div class="asw-hint">現在還沒進入由白板企劃展開的世界。到那種世界裡玩完一章，場記就會出現在這裡。</div>'; return; }
+            const ago = (t) => { const m = Math.round((Date.now() - t) / 60000); return m < 60 ? m + ' 分鐘前' : m < 1440 ? Math.round(m / 60) + ' 小時前' : Math.round(m / 1440) + ' 天前'; };
+            const line = (k, val) => '<div class="asw-dlog-line"><span class="asw-dlog-k">' + k + '</span><span class="asw-dlog-v">' + val + '</span></div>';
+            const H2 = v.hint;
+            const dup = q('#asw-dir-dup'), dirOn = q('#asw-dir-on');
+            const syncDup = () => { if (dup) dup.hidden = !((logOnEl ? logOnEl.checked : v.on) && dirOn && dirOn.checked); };
+            syncDup();
+            if (dirOn) dirOn.addEventListener('change', syncDup);
+            if (logOnEl) logOnEl.addEventListener('change', syncDup);
+            logBox.innerHTML = '<div class="asw-hint">「' + esc(v.world) + '」・記了 ' + v.chapters + ' 章</div>'
+                + line('走過的岔路', v.done.length ? esc(v.done.join('、')) + '（' + v.done.length + '／' + v.nodesTotal + '）' : '還沒有（共 ' + v.nodesTotal + ' 個）')
+                + (v.ended.length ? line('走到的結局', esc(v.ended.join('、'))) : '')
+                + line('連著沒有新局面', v.stall + ' 章')
+                + (H2 ? line('上次請大模型想下一步', esc(H2.why) + '・' + ago(H2.at)) : '')
+                + '<div class="asw-row asw-row-end"><button type="button" class="asw-btn" id="asw-dlog-author">我要當作者（會劇透）</button></div>'
+                + '<div class="asw-ddraft" id="asw-dlog-more" hidden>'
+                +   line('碰到了、還沒選', v.near.length ? esc(v.near.join('、')) : '沒有')
+                +   (H2 ? line('下一幕方向', esc(H2.next) + (H2.used ? '（已經交給寫劇情的 AI 用過了）' : '（下一輪會交給寫劇情的 AI）'))
+                        + line('這一幕不能提', H2.forbid.length ? H2.forbid.map(x => esc(x)).join('<br>') : '沒有')
+                        + line('看起來偏向', H2.lean ? esc(H2.lean) : '看不出來')
+                      : line('大模型', '還沒出場過'))
+                + '</div>';
+            const btn = logBox.querySelector('#asw-dlog-author'), more = logBox.querySelector('#asw-dlog-more');
+            if (btn && more) btn.addEventListener('click', () => { more.hidden = !more.hidden; btn.textContent = more.hidden ? '我要當作者（會劇透）' : '收起來'; });
+        })();
+        // 🔎 末尾檢查：開關＋最近 5 章找到的（原句 → 建議改成、整章歪了、下一章可能會歪）
+        const ecOn = q('#asw-echk-on');
+        if (ecOn) ecOn.addEventListener('change', () => {
+            const ok = R0 && R0.setOn(ecOn.checked);
+            if (ok === false) { ecOn.checked = !ecOn.checked; toast('沒存到，請再試一次', 'error'); return; }
+            toast(ecOn.checked ? '末尾檢查開了：下一章寫完就檢查（只標不改）' : '末尾檢查關了', 'success');
+        });
+        const ecBox = q('#asw-echk');
+        if (ecBox && R0) (async () => {
+            let list = [];
+            try { list = await R0.list(); } catch (e) {}
+            if (!ecBox.isConnected) return;
+            if (!list.length) { ecBox.innerHTML = '<div class="asw-hint">還沒有檢查紀錄；打開這個選項並寫完一章後，就會出現。</div>'; return; }
+            const when = (t) => { const d = new Date(t); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); };
+            const line = (k, val) => '<div class="asw-dlog-line"><span class="asw-dlog-k">' + k + '</span><span class="asw-dlog-v">' + val + '</span></div>';
+            ecBox.innerHTML = list.slice(0, 5).map(r => {
+                const head = '<div class="asw-hint">' + esc(when(r.at)) + (r.broken ? '・<b>可能整章歪了</b>' : '') + (!r.fixes.length && !r.broken && !r.warn.length ? '・沒找到對不上的' : '') + '</div>';
+                return head
+                    + (r.broken ? line('為什麼', esc(r.brokenWhy || '沒寫原因')) : '')
+                    + r.fixes.map(f => line(f.found ? '原句' : '原句(找不到)', esc(f.find)) + line('建議改成', esc(f.replace)) + line('因為', esc(f.why))).join('')
+                    + r.warn.map(w => line('下一章小心', esc(w))).join('');
+            }).join('');
+        })();
+        const on = q('#asw-dir-on');
+        if (on) on.addEventListener('change', () => { D.setOn(on.checked); toast(on.checked ? '導演模式開了，下一輪劇情寫完就整理第一份' : '導演模式關了', 'success'); });
+
+        const ta = q('#asw-dfocus-text');
+        const paint = () => {
+            box.querySelectorAll('[data-dfocus]').forEach(b => b.classList.toggle('is-on', b.dataset.dfocus === f.pick));
+            box.querySelectorAll('[data-dpush]').forEach(b => b.classList.toggle('is-on', b.dataset.dpush === f.push));
+            if (!ta) return;
+            ta.value = f.pick === 'custom' ? f.custom : presetText(f.pick);
+            ta.placeholder = f.pick === 'custom' ? '寫你希望導演整理時特別留意什麼、可以推的點往哪個方向挑' : '沒特別指定的話，導演會用平常的方式整理劇情。想走特定方向，選上面的選項，或直接在這裡寫下來。';
+        };
+        const save = (patch, quiet) => {
+            const ok = D.setFocus(patch, cid);
+            if (ok === false) { toast('沒存到，請再試一次', 'error'); return false; }
+            f = D.getFocus(cid);
+            if (!quiet) toast('這個故事的導演重點存好了，下一輪開始用', 'success');
+            return true;
+        };
+        paint();
+        box.querySelectorAll('[data-dfocus]').forEach(b => b.addEventListener('click', () => {
+            const id = b.dataset.dfocus;
+            if (id === f.pick) return;
+            // 換到「自己寫」：框裡還沒寫過就拿剛才那段當起點
+            if (id === 'custom') { if (save({ pick: 'custom', text: f.custom || presetText(f.pick) })) paint(); return; }
+            if (save({ pick: id })) paint();
+        }));
+        let _t = null;
+        if (ta) ta.addEventListener('input', () => {
+            // 在預設的那段上直接改＝變成自己寫
+            if (f.pick !== 'custom') { f = { ...f, pick: 'custom' }; box.querySelectorAll('[data-dfocus]').forEach(b => b.classList.toggle('is-on', b.dataset.dfocus === 'custom')); }
+            clearTimeout(_t);
+            _t = setTimeout(() => save({ pick: 'custom', text: ta.value }, true), 400);
+        });
+        box.querySelectorAll('[data-dpush]').forEach(b => b.addEventListener('click', () => { if (save({ push: b.dataset.dpush })) paint(); }));
+
+        const ed = q('#asw-ddraft'), dt = q('#asw-ddraft-text');
+        const load = async () => { const t = await D.getText(); if (dt) dt.value = t || ''; if (dt) dt.placeholder = '還沒有導演稿：推進一輪劇情，或按「立刻產一份」'; };
+        const view = q('#asw-ddraft-view');
+        if (view) view.addEventListener('click', async () => {
+            if (ed.hidden) { await load(); ed.hidden = false; view.textContent = '收起導演稿'; }
+            else { ed.hidden = true; view.textContent = '查看／改導演稿'; }
+        });
+        const sv = q('#asw-ddraft-save');
+        if (sv) sv.addEventListener('click', async () => {
+            let ok = false;
+            try { ok = await D.saveText(dt.value); } catch (e) {}
+            toast(ok ? '導演稿存好了，下一輪生效' : '沒存到：這個故事還沒有可以掛導演稿的那一輪', ok ? 'success' : 'error');
+        });
+        const now = q('#asw-ddraft-now');
+        if (now) now.addEventListener('click', async () => {
+            if (now.disabled) return;
+            now.disabled = true; now.textContent = '產稿中…';
+            try { await D.extractNow(); } catch (e) {}
+            now.disabled = false; now.textContent = '立刻產一份';
+            if (ed && !ed.hidden) await load();
+        });
+    }
+
+    // 「沿用其他故事的設定」：整套搬 追蹤欄位(變數包) + 條件規則 + UI 面板 到當前聊天。
+    //   不碰來源故事、不帶任何數值 —— 重玩同一張卡開新聊天時，省掉重新生成與重煉 UI。
+    //   init 畫面與資料管理頁共用（init 分支不走 _bind，各自呼叫一次）。
+    // 可沿用的清單：綁在「別的聊天」的檔案；排除「簡易預設」——那個按建檔畫面的按鈕就能直接建，
+    // 內容也都一樣，列進來只是佔位子。
+    function _adoptCandidates(curChatId) {
+        return (_packs || []).filter(p => p && p.chatId && p.chatId !== curChatId
+            && !String(p.name || '').includes('簡易預設'));
+    }
+
+    // chatId 是 ST 的聊天檔名「角色卡名 - YYYY-MM-DD@時間」→ 取前面那段當角色卡名
+    function _cardNameOf(chatId) {
+        const s = String(chatId || '');
+        const m = s.match(/^(.*?)\s-\s\d{4}-\d{2}-\d{2}@/);
+        return (m ? m[1] : s).trim() || '（未命名）';
+    }
+    // 聊天檔名去掉角色卡名後剩下的時間戳，當同一張卡底下各個故事的區分
+    function _chatStampOf(chatId) {
+        const s = String(chatId || '');
+        const n = _cardNameOf(chatId);
+        return s.startsWith(n) ? s.slice(n.length).replace(/^\s*-\s*/, '') : s;
+    }
+    // 角色卡頭像（酒館才有；PWA 取不到就不顯示圖）
+    function _cardAvatarOf(cardName) {
+        try {
+            const list = win.SillyTavern?.getContext?.()?.characters || [];
+            const c = list.find(x => x && x.name === cardName);
+            if (c && c.avatar) return '/thumbnail?type=avatar&file=' + encodeURIComponent(c.avatar);
+        } catch (e) {}
+        return '';
+    }
+
+    function _bindAdopt() {
+        const btn = _host.querySelector('#avs-st-adopt-open');
+        if (btn) btn.onclick = () => _openAdoptModal();
+    }
+
+    // 挑選浮層：建在最外層 document（不受手機殼裁切），一列一個故事、附可分辨的細節
+    function _ensureAdoptModal() {
+        const doc = win.document || document;
+        let m = doc.getElementById('avs-adopt-modal');
+        if (m) return m;
+        m = doc.createElement('div');
+        m.id = 'avs-adopt-modal';
+        m.className = 'avs-sm-modal';
+        m.innerHTML = `<div class="avs-sm-card">
+            <div class="avs-sm-title"><i class="fa-solid fa-clipboard"></i> 沿用其他故事的設定</div>
+            <div class="avs-sm-desc">追蹤欄位、條件規則、UI 面板會一起搬到目前這個故事；不會帶入舊數值，來源故事也完全不受影響。</div>
+            <div id="avs-adopt-list" class="avs-sm-list"></div>
+            <div class="avs-sm-actions"><button class="avs-btn avs-btn-outline avs-sm-close-btn" id="avs-adopt-close">關閉</button></div>
+        </div>`;
+        (doc.body || doc.documentElement).appendChild(m);
+        m.addEventListener('click', e => { if (e.target === m) m.classList.remove('active'); });
+        m.querySelector('#avs-adopt-close').onclick = () => m.classList.remove('active');
+        return m;
+    }
+
+    async function _openAdoptModal() {
+        const m = _ensureAdoptModal();
+        m.classList.add('active');
+        const listEl = m.querySelector('#avs-adopt-list');
+        listEl.innerHTML = '<div class="avs-sm-tip">載入中…</div>';
+        const chatId = _curChatId();
+        const items = _adoptCandidates(chatId);
+        if (!items.length) { listEl.innerHTML = '<div class="avs-sm-tip">還沒有其他故事的設定可以沿用</div>'; return; }
+        let rules = [], tpls = [];
+        try { rules = win.OS_AVS_RULES?.loadRules?.() || []; } catch (e) {}
+        try { tpls = (await win.OS_DB.getAllUITemplates?.()) || []; } catch (e) {}
+        // 按「角色卡」分頁：同一張卡玩過幾輪就會有幾份設定，混在一起很難挑
+        const groups = new Map();
+        items.forEach(p => {
+            const k = _cardNameOf(p.chatId);
+            if (!groups.has(k)) groups.set(k, []);
+            groups.get(k).push(p);
+        });
+        const names = [...groups.keys()].sort((a, b) => groups.get(b).length - groups.get(a).length);
+        const _rowHtml = (p) => {
+            const nR = rules.filter(r => r && r.packId === p.id).length;
+            const nT = tpls.filter(t => t && t.packId === p.id).length;
+            return `<div class="avs-sm-row" data-adopt="${esc(p.id)}">
+                <div class="avs-sm-row-main">
+                    <div class="avs-sm-row-id">${esc(p.name)}</div>
+                    <div class="avs-sm-row-meta">${(p.variables || []).length} 個追蹤項 · ${nR} 條規則 · ${nT ? nT + ' 個 UI 面板' : '沒有 UI 面板'}</div>
+                    <div class="avs-sm-row-meta">${esc(_chatStampOf(p.chatId))}</div>
+                </div>
+                <button class="avs-btn avs-btn-primary avs-st-sm">沿用</button>
+            </div>`;
+        };
+        // 只有一張卡就不必分頁，直接列
+        if (names.length <= 1) {
+            listEl.innerHTML = items.map(_rowHtml).join('');
+        } else {
+            const tabs = names.map((n, i) => {
+                const av = _cardAvatarOf(n);
+                return `<button class="avs-adopt-tab${i === 0 ? ' on' : ''}" data-tab="${esc(n)}" title="${esc(n)}">
+                    ${av ? `<img class="avs-adopt-ava" src="${esc(av)}" alt="">` : ''   /* 找不到角色卡就不留位，別掛一顆空灰圓 */}
+                    <span class="avs-adopt-tab-name">${esc(n)}</span><span class="avs-adopt-tab-n">${groups.get(n).length}</span>
+                </button>`;
+            }).join('');
+            const panels = names.map((n, i) =>
+                `<div class="avs-adopt-panel${i === 0 ? ' on' : ''}" data-panel="${esc(n)}">${groups.get(n).map(_rowHtml).join('')}</div>`
+            ).join('');
+            listEl.innerHTML = `<div class="avs-adopt-tabs">${tabs}</div>${panels}`;
+            listEl.querySelectorAll('.avs-adopt-tab').forEach(t => {
+                t.onclick = () => {
+                    const k = t.getAttribute('data-tab');
+                    listEl.querySelectorAll('.avs-adopt-tab').forEach(x => x.classList.toggle('on', x === t));
+                    listEl.querySelectorAll('.avs-adopt-panel').forEach(x => x.classList.toggle('on', x.getAttribute('data-panel') === k));
+                };
+            });
+            // 頭像抓不到（PWA／卡片已刪）就把位子收掉，不要留一顆灰圓
+            listEl.querySelectorAll('.avs-adopt-ava').forEach(img => {
+                if (img.tagName === 'IMG') img.onerror = () => img.remove();
+            });
+        }
+        listEl.querySelectorAll('[data-adopt]').forEach(row => {
+            const b = row.querySelector('button');
+            if (b) b.onclick = () => { m.classList.remove('active'); _doAdopt(row.getAttribute('data-adopt')); };
+        });
+    }
+
+    // 實際搬移：變數包 + 條件規則 + UI 面板 → 當前聊天；來源與數值都不動
+    async function _doAdopt(srcId) {
+        const src = (_packs || []).find(p => p.id === srcId);
+        const chatId = _curChatId();
+        if (!src) { AUI.alert('找不到這個故事的設定'); return; }
+        if (!chatId) { AUI.alert('還沒有進行中的故事'); return; }
+        if (!await AUI.confirm(`把「${src.name}」的設定沿用到這個故事？\n\n・追蹤欄位、條件規則、UI 面板都會複製過來\n・不會帶入舊故事的數值，從空白開始記錄\n・原本那個故事完全不受影響`)) return;
+        try {
+            const newPackId = 'pack_' + Date.now();
+            const copy = JSON.parse(JSON.stringify(src));
+            copy.id = newPackId;
+            copy.chatId = chatId;
+            delete copy.wgOwn;   // 「屬於哪個世界」是原本那個聊天室的事；搬過來是新的一包，世界門照這裡建的時間再認
+            await win.OS_DB.saveVarPack(copy);
+            let nRules = 0, nTpl = 0;
+            try {   // 條件規則跟著變數包走（packId 綁定）
+                const rules = win.OS_AVS_RULES?.loadRules?.() || [];
+                const mine = rules.filter(r => r && r.packId === src.id);
+                if (mine.length && win.OS_AVS_RULES?.saveRules) {
+                    const added = mine.map(r => Object.assign({}, r, { id: win.OS_AVS_RULES.newId(), packId: newPackId }));
+                    win.OS_AVS_RULES.saveRules(rules.concat(added));
+                    nRules = added.length;
+                }
+            } catch (e) { console.warn('[AVS State] 規則沿用失敗', e); }
+            try {   // 煉丹爐做的 UI 面板也綁 packId，一起搬（含啟用狀態）
+                const all = (await win.OS_DB.getAllUITemplates?.()) || [];
+                for (const t of all.filter(t => t && t.packId === src.id)) {
+                    const c = JSON.parse(JSON.stringify(t));
+                    c.id = 'tpl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    c.packId = newPackId;
+                    c.packName = copy.name;
+                    await win.OS_DB.saveUITemplate(c);
+                    nTpl++;
+                }
+            } catch (e) { console.warn('[AVS State] UI 面板沿用失敗', e); }
+            _packs = (_packs || []).concat([copy]);
+            try { win.dispatchEvent(new Event('AVS_PACKS_UPDATED')); } catch (e) {}
+            AUI.alert(`已沿用「${src.name}」\n\n・追蹤欄位 ${(copy.variables || []).length} 項\n・條件規則 ${nRules} 條\n・UI 面板 ${nTpl} 個\n\n數值從空白開始，推進劇情就會自動記錄。`);
+            _build({ fresh: true });
+        } catch (e) {
+            AUI.alert('沿用失敗：' + ((e && e.message) || e));
+        }
+    }
+
+    function _bind(stateKey, snapCount) {
+        const h = _host;
+        const q = sel => h.querySelector(sel);
+        const eng = win._AVS_ENGINE;
+
+        // 兩層換頁：入口 → 操作頁 → 返回（三個操作頁各自只綁得到自己那頁的鈕，q() 找不到就跳過）
+        const _goTop = () => { try { h.closest('.avs-content')?.scrollTo?.(0, 0); } catch (e) {} };
+        { const b = q('#avs-st-nav-cur'); if (b) b.onclick = () => { _page = 'current'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-nav-fields'); if (b) b.onclick = () => { _page = 'fields'; _build(); _goTop(); }; }
+        { const b = q('#avs-st-nav-data'); if (b) b.onclick = () => { _page = 'data'; _build(); _goTop(); }; }
+        // ✏️ 改數值 / 💾 儲存 / 取消（手動修正 AI 填錯的狀態值）
+        { const eb = q('#avs-st-val-edit'); if (eb) eb.onclick = () => { _editingValues = true; _page = 'current'; _build(); }; }
+        { const sb = q('#avs-st-val-save'); if (sb) sb.onclick = () => { _saveStateValues(); }; }
+        { const cb = q('#avs-st-val-cancel'); if (cb) cb.onclick = () => { _editingValues = false; _build(); }; }
+        // 實體 × 鈕：切換「標記刪除」(再點一次取消)，儲存時才真的刪
+        h.querySelectorAll('.avs-st-edit-del').forEach(b => b.onclick = () => { const e = b.closest('.avs-st-edit-entity'); if (e) e.classList.toggle('deleting'); });
+
+        // 即時記錄開關
+        const toggle = q('#avs-st-toggle');
+        if (toggle) toggle.onclick = function () {
+            const on = this.classList.toggle('on');
+            win.AUI.lsSet('aurelia_state_runtime_enabled', on ? '1' : '0', '即時記錄開關');
+            try { win.OS_STATE_RUNTIME?.setEnabled?.(on); } catch (e) {}
+        };
+
+        // 🎬 導演模式綁定：抽成獨立函式，init 畫面(AVS 未初始化)也要綁
+        _bindDirector();
+        _bindAdopt();
+
+        const bind = (sel, fn) => { const b = q(sel); if (b) b.onclick = fn; };
+        // 🔬 複製全部狀態診斷數據（引擎當前 + 本輪抽取 + 持久化 patches/base）→ 貼給工程師
+        bind('#avs-st-copy-diag', async () => {
+            const b = q('#avs-st-copy-diag');
+            try {
+                const dump = {
+                    engineState: win._AVS_ENGINE?.read?.() || null,
+                    lastExtract: win.OS_STATE_RUNTIME?.getLastExtract?.() || null,
+                    persisted: (win.OS_STATE_RUNTIME?.getStateDataDump) ? await win.OS_STATE_RUNTIME.getStateDataDump() : null
+                };
+                await navigator.clipboard.writeText(JSON.stringify(dump, null, 2));
+                if (b) { b.textContent = '已複製'; setTimeout(() => { b.innerHTML = '<i class="fa-solid fa-microscope"></i> 複製狀態數據'; }, 2200); }
+            } catch (e) {
+                if (b) b.textContent = '複製失敗：' + (e?.message || e);
+            }
+        });
+        bind('#avs-st-extract', () => win.OS_STATE_RUNTIME?.forceExtract?.());
+        bind('#avs-st-deep', async () => {
+            if (!await AUI.confirm('用主模型深度整理目前狀態？\n・合併重複角色（繁簡／別名）\n・移除無關係、無物品、任務無牽扯的純路人\n・按大總結修正過期欄位（如任務其實已完成）\n\n整理前會自動快照，事後可按「還原上一步」撤銷。')) return;
+            const b = q('#avs-st-deep'); if (b) { b.textContent = '整理中…'; b.classList.add('disabled'); }
+            try {
+                const r = await win.OS_STATE_RUNTIME?.deepConsolidate?.();
+                if (r && r.ok) AUI.alert(`整理完成：合併 ${r.merged}、移除 ${r.removed}、修正 ${r.fixed}`);
+                else AUI.alert('整理失敗：' + ((r && r.msg) || '未知錯誤') + '\n（狀態未被更動）');
+            } catch (e) { AUI.alert('整理失敗：' + (e?.message || e) + '\n（狀態未被更動）'); }
+            _build({ fresh: true });
+        });
+        bind('#avs-st-regen', async () => { if (await AUI.confirm('重新生成追蹤欄位？已記錄的內容會保留。')) win.OS_STATE_SCHEMA?.generate?.(); });
+        bind('#avs-st-clearpatches', async () => { if (await AUI.confirm('清空抽取紀錄？追蹤欄位保留。')) win.OS_STATE_RUNTIME?.clearPatches?.(); });
+        bind('#avs-st-cross', () => openStateManagerModal());
+
+        // 還原上一步
+        bind('#avs-st-rollback', () => {
+            if (!eng || snapCount === 0) return;
+            if (eng.restore()) _build();
+        });
+        // 清空目前狀態
+        bind('#avs-st-clearstate', async () => {
+            if (!await AUI.confirm('確定清空這個故事目前的所有狀態數值？')) return;
+            try { eng?.write?.({}); } catch (e) {}   // 酒館模式權威庫在 OS_DB(經 adapter 寫回)——只清 localStorage 清不掉、重開又冒回來
+            try { localStorage.removeItem(stateKey); localStorage.removeItem(`avs_snap_${stateKey}`); } catch (e) {}
+            _build();
+        });
+        // 從變數包初始化
+        bind('#avs-st-initpack-btn', async () => {
+            const sel = q('#avs-st-initpack-sel'); if (!sel) return;
+            const pack = (_packs || []).find(p => p.id === sel.value);
+            if (!pack || !eng) return;
+            if (!await AUI.confirm(`用「${pack.name}」的預設值初始化目前狀態？原本的數值會被覆蓋。`)) return;
+            eng.initFromPack(pack); _build({ fresh: true });
+        });
+        // 清理孤兒
+        bind('#avs-st-gc', async () => {
+            if (!await AUI.confirm('比對現有劇本，自動刪掉「已被刪除的故事」殘留的狀態資料。\n確定執行？')) return;
+            const btn = q('#avs-st-gc'); if (btn) { btn.textContent = '掃描中…'; btn.classList.add('disabled'); }
+            try {
+                const chapters = (await win.OS_DB?.getAllVnChapters?.()) || [];
+                const alive = new Set(chapters.map(c => c.storyId).filter(Boolean));
+                const cur = localStorage.getItem('vn_current_story_id'); if (cur) alive.add(cur);
+                const del = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const k = localStorage.key(i);
+                    if (k && (k.startsWith('avs_state_') || k.startsWith('avs_snap_avs_state_'))) {
+                        const id = k.replace('avs_snap_avs_state_', '').replace('avs_state_', '');
+                        if (id && id !== 'avs_current_state' && !alive.has(id)) del.push(k);
+                    }
+                }
+                del.forEach(k => localStorage.removeItem(k));
+                setTimeout(() => { AUI.alert(`清理完成，回收了 ${del.length} 筆殘留資料。`); _build({ fresh: true }); }, 200);
+            } catch (e) {
+                AUI.alert('清理失敗：' + (e?.message || e));
+                _build({ fresh: true });
+            }
+        });
+    }
+
+    // ── 對外 ─────────────────────────────────────────────────────
+    async function renderInto(host, opts) {
+        if (!host) return;
+        _host = host;
+        _packs = (opts && opts.packs) || [];
+        // 面板重新掛載＝從首頁開始。不重置的話會停在上次的第二層，
+        // 而那頁在新條件下可能根本不該存在（例如已無追蹤欄位卻停在資料管理頁）→ 使用者回不了首頁。
+        // refresh()（背景事件）刻意不重置，讓人留在正在看的那頁。
+        _page = 'home';
+        _editingValues = false;
+        await _build({ fresh: true });
+    }
+    // 對外刷新＝背景事件(抽取完成/開關/生成)→資料可能變了，重讀。
+    //   🚨 她正在改數值時先不重畫（會把手上填到一半的格子洗掉），記著，改完回到一般畫面再重讀
+    let _refreshPending = false;
+    function refresh() {
+        if (_editingValues) { _refreshPending = true; return; }
+        _build({ fresh: true });
+    }
+
+    function startEditField(name) { _editingFieldName = name; _page = 'fields'; _build(); }
+    function startAddField() { _editingFieldName = '__new__'; _page = 'fields'; _build(); }
+    function cancelEditField() { _editingFieldName = null; _build(); }
+    async function saveFieldEdit(originalName) {
+        const scope = _host || document;
+        const card = scope.querySelector(`.avs-st-field-edit[data-edit-name="${String(originalName).replace(/"/g, '&quot;')}"]`) || scope.querySelector('.avs-st-field-edit');
+        if (!card) return;
+        const isNew = originalName === '__new__';
+        const name = (card.querySelector('[data-edit-key="name"]')?.value || '').trim();
+        const type = (card.querySelector('[data-edit-key="type"]')?.value || 'string').trim();
+        const desc = (card.querySelector('[data-edit-key="desc"]')?.value || '').trim();
+        if (isNew && !name) { AUI.alert('請輸入欄位名'); return; }
+        if (isNew) { const ok = await win.OS_STATE_SCHEMA?.addField?.(name, { type, desc }); if (!ok) return; }
+        else { await win.OS_STATE_SCHEMA?.updateField?.(originalName, { type, desc }); }
+        _editingFieldName = null; _build({ fresh: true });
+    }
+    async function deleteFieldConfirm(name) {
+        if (!await AUI.confirm(`刪除欄位「${name}」？\n會從追蹤設定、目前狀態、所有紀錄一起清掉，不可復原。`)) return;
+        await win.OS_STATE_SCHEMA?.deleteField?.(name);
+        if (_editingFieldName === name) _editingFieldName = null;
+        _build({ fresh: true });
+    }
+
+    // 跨世界管理 modal（亮色，動態建在 parent document）
+    function _ensureModal() {
+        const doc = win.document || document;
+        let modal = doc.getElementById('avs-state-manager-modal');
+        if (modal) return modal;
+        modal = doc.createElement('div');
+        modal.id = 'avs-state-manager-modal';
+        modal.className = 'avs-sm-modal';
+        modal.innerHTML = `<div class="avs-sm-card">
+            <div class="avs-sm-title"><i class="fa-solid fa-globe"></i> 跨世界管理</div>
+            <div class="avs-sm-desc">所有曾經開始追蹤過的世界。<i class="fa-solid fa-star"></i> = 你現在這個 · <i class="fa-solid fa-trash-can"></i> 刪掉單筆</div>
+            <div id="avs-state-manager-list" class="avs-sm-list"></div>
+            <div class="avs-sm-actions"><button class="avs-btn avs-btn-outline avs-sm-close-btn" id="avs-sm-close">關閉</button></div>
+        </div>`;
+        (doc.body || doc.documentElement).appendChild(modal);
+        modal.addEventListener('click', e => { if (e.target === modal) modal.classList.remove('active'); });
+        modal.querySelector('#avs-sm-close').onclick = () => modal.classList.remove('active');
+        return modal;
+    }
+    async function renderStateManager() {
+        const modal = _ensureModal();
+        const listEl = modal.querySelector('#avs-state-manager-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<div class="avs-sm-tip">載入中…</div>';
+        if (!win.OS_STATE_RUNTIME?.listAllStateData) { listEl.innerHTML = '<div class="avs-sm-tip err">狀態模組未載入</div>'; return; }
+        try {
+            const all = await win.OS_STATE_RUNTIME.listAllStateData();
+            if (!all.length) { listEl.innerHTML = '<div class="avs-sm-tip">還沒有任何世界開始追蹤</div>'; return; }
+            const currentId = _curChatId();
+            listEl.innerHTML = all.map(e => {
+                const isCur = e.chatId === currentId;
+                const date = e.timestamp ? new Date(e.timestamp).toLocaleString() : '—';
+                return `<div class="avs-sm-row${isCur ? ' cur' : ''}">
+                    <div class="avs-sm-row-main">
+                        <div class="avs-sm-row-id">${isCur ? '<i class="fa-solid fa-star"></i> ' : ''}${esc(e.chatId)}</div>
+                        <div class="avs-sm-row-meta">欄位 ${e.schemaCount} · 紀錄 ${e.patchesCount} · 目前 ${e.currentCount} 項　·　${date}</div>
+                    </div>
+                    <button class="avs-sm-del" data-state-del="${esc(e.chatId)}" title="刪除這個世界的狀態資料"><i class="fa-solid fa-trash-can"></i></button>
+                </div>`;
+            }).join('');
+            listEl.querySelectorAll('[data-state-del]').forEach(btn => btn.addEventListener('click', async () => {
+                const id = btn.getAttribute('data-state-del');
+                if (!await AUI.confirm(`刪除 [${id}] 的狀態資料？\n追蹤欄位 + 紀錄 + 目前狀態全部清掉，不可復原。`)) return;
+                await win.OS_STATE_RUNTIME.removeStateData(id);
+                renderStateManager(); _build({ fresh: true });
+            }));
+        } catch (e) {
+            listEl.innerHTML = `<div class="avs-sm-tip err">載入失敗：${esc(String(e?.message || e))}</div>`;
+        }
+    }
+    function openStateManagerModal() { _ensureModal().classList.add('active'); renderStateManager(); }
+
+    // 抽取 / schema 變動事件 → 自動刷新（面板開著時）
+    (function hooks() {
+        if (!win.eventOn) { setTimeout(hooks, 1000); return; }
+        ['AURELIA_STATE_SCHEMA_GENERATED', 'AURELIA_STATE_PATCHED', 'AURELIA_STATE_RUNTIME_TOGGLED', 'AURELIA_STATE_DATA_REMOVED'].forEach(ev => {
+            try { win.eventOn(ev, () => { if (_host) _build({ fresh: true }); }); } catch (e) {}   // 抽取/schema 真的變了 → 必須重讀
+        });
+    })();
+
+    win.OS_AVS_STATE = { renderInto, refresh, mountDirector, isHost: function (el) { return !!el && _host === el && el.isConnected; }, openStateManagerModal, startEditField, startAddField, cancelEditField, saveFieldEdit, deleteFieldConfirm };
+    window.OS_AVS_STATE = win.OS_AVS_STATE;
+})();

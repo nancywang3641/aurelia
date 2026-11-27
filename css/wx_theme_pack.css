@@ -1,0 +1,126 @@
+/* ================================================================
+   wx_theme_pack.css —— 聊天 app 的「主題」頁（我 → 設置 → 外觀 → 主題）
+   一整頁：主題清單（第一列永遠是「原本的樣子」），底部兩顆：匯入／請 AI 做一套。
+   匯入與 AI 各自從下面滑出一張單子；每套主題的「⋯」是一張小選單。
+   🚨 這一頁自己不吃主題（顏色寫死在這裡）：套了一套壞掉的主題，還要能回到這頁把它換掉。
+   ================================================================ */
+
+.wxtp-root {
+    position: absolute;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    background: #f4f3f1;
+    color: #26241f;
+    font-family: -apple-system, 'PingFang TC', 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+    animation: wxtp-in .2s ease;
+}
+.wxtp-root.is-back { animation: none; }
+@keyframes wxtp-in { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+.wxtp-offscreen { position: absolute; left: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; }
+
+.wxtp-head { display: flex; align-items: center; gap: 6px; padding: 10px 10px 8px; flex-shrink: 0; }
+.wxtp-back, .wxtp-head-pad { width: 36px; height: 36px; flex-shrink: 0; }
+.wxtp-back { border: none; background: none; color: #26241f; font-size: 17px; cursor: pointer; border-radius: 50%; }
+.wxtp-back:active { background: rgba(38, 36, 31, .08); }
+.wxtp-title { flex: 1; text-align: center; font-size: 16px; font-weight: 700; letter-spacing: .04em; }
+
+.wxtp-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 14px 16px; }
+
+.wxtp-list { display: flex; flex-direction: column; border-radius: 14px; background: #fff; overflow: hidden; box-shadow: 0 1px 3px rgba(38, 36, 31, .07); }
+.wxtp-row { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 8px 8px 8px 16px; border-top: 1px solid rgba(38, 36, 31, .07); }
+.wxtp-row:first-child { border-top: none; }
+.wxtp-row.is-on { background: #f7faf6; }
+.wxtp-row-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.wxtp-row-t b { font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wxtp-row-t span { font-size: 11.5px; color: rgba(38, 36, 31, .5); }
+.wxtp-use {
+    flex-shrink: 0; height: 32px; padding: 0 16px; border-radius: 16px;
+    border: 1.5px solid rgba(38, 36, 31, .18); background: #fff; color: #26241f;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.wxtp-use:active { background: rgba(38, 36, 31, .06); }
+.wxtp-using { flex-shrink: 0; display: flex; align-items: center; gap: 5px; height: 32px; padding: 0 6px; font-size: 13px; font-weight: 700; color: #2f8a4c; }
+.wxtp-more, .wxtp-more-pad { flex-shrink: 0; width: 34px; height: 34px; }
+.wxtp-more { border: none; background: none; color: rgba(38, 36, 31, .45); font-size: 16px; border-radius: 50%; cursor: pointer; }
+.wxtp-more:active { background: rgba(38, 36, 31, .08); }
+
+.wxtp-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; padding: 30px 24px 10px; color: rgba(38, 36, 31, .5); font-size: 12.5px; line-height: 1.55; }
+.wxtp-empty i { font-size: 30px; color: rgba(38, 36, 31, .25); margin-bottom: 4px; }
+.wxtp-empty div { font-size: 14.5px; font-weight: 700; color: #26241f; }
+.wxtp-note { margin: 14px 4px 0; font-size: 12px; line-height: 1.6; color: rgba(38, 36, 31, .5); }
+
+.wxtp-bar { flex-shrink: 0; display: flex; gap: 10px; padding: 10px 14px 12px; background: #fff; box-shadow: 0 -1px 0 rgba(38, 36, 31, .08); }
+.wxtp-bar-b {
+    flex: 1; min-width: 0; height: 44px; border-radius: 22px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    border: 1.5px solid rgba(38, 36, 31, .16); background: #fff; color: #26241f;
+    font-size: 14px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.wxtp-bar-b.is-main { flex: 1.4; border-color: #26241f; background: #26241f; color: #fff; }
+.wxtp-bar-b:active { opacity: .85; }
+
+/* 從下面滑出來的單子（匯入／請 AI 做） */
+.wxtp-sheet {
+    position: absolute; inset: 0; z-index: 2;
+    display: flex; flex-direction: column;
+    background: #f4f3f1;
+    animation: wxtp-up .22s ease;
+}
+@keyframes wxtp-up { from { transform: translateY(18px); opacity: 0; } to { transform: none; opacity: 1; } }
+.wxtp-sheet-bar { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; flex-shrink: 0; }
+.wxtp-sheet-x, .wxtp-sheet-ok, .wxtp-sheet-pad { flex-shrink: 0; min-width: 56px; height: 34px; }
+.wxtp-sheet-x, .wxtp-sheet-ok { border: none; background: none; font-size: 15px; cursor: pointer; border-radius: 17px; }
+.wxtp-sheet-x { color: rgba(38, 36, 31, .6); }
+.wxtp-sheet-ok { color: #2f8a4c; font-weight: 700; }
+.wxtp-sheet-ok:disabled { color: rgba(38, 36, 31, .25); cursor: default; }
+.wxtp-sheet-t { flex: 1; text-align: center; font-size: 15px; font-weight: 700; }
+.wxtp-sheet-body { flex: 1; min-height: 0; overflow-y: auto; padding: 4px 14px 16px; display: flex; flex-direction: column; gap: 10px; }
+
+.wxtp-in, .wxtp-area {
+    width: 100%; box-sizing: border-box;
+    border-radius: 12px; border: 1px solid rgba(38, 36, 31, .12) !important;
+    background: #fff !important; color: #26241f !important;
+    font-size: 14px; outline: none; font-family: inherit;
+}
+.wxtp-in { height: 44px; padding: 0 14px; }
+.wxtp-area { min-height: 220px; padding: 12px 14px; line-height: 1.5; resize: vertical; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; }
+.wxtp-area-s { min-height: 120px; font-family: inherit; font-size: 14px; }
+.wxtp-in:focus, .wxtp-area:focus { border-color: #26241f !important; }
+
+.wxtp-file, .wxtp-go {
+    height: 44px; border-radius: 22px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 14px; font-weight: 700; cursor: pointer;
+}
+.wxtp-file { border: 1.5px dashed rgba(38, 36, 31, .25); background: transparent; color: #26241f; }
+.wxtp-go { border: none; background: #26241f; color: #fff; }
+.wxtp-go:disabled { opacity: .6; cursor: default; }
+.wxtp-hint { font-size: 12px; line-height: 1.6; color: rgba(38, 36, 31, .5); text-align: center; }
+
+.wxtp-warn { display: flex; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #fff6e6; color: #6b4a10; }
+.wxtp-warn > i { font-size: 16px; margin-top: 2px; flex-shrink: 0; }
+.wxtp-warn > div { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; line-height: 1.55; }
+.wxtp-warn b { font-size: 13.5px; }
+.wxtp-mini {
+    align-self: flex-start; margin-top: 4px; height: 34px; padding: 0 14px; border-radius: 17px;
+    display: inline-flex; align-items: center; gap: 6px;
+    border: none; background: #6b4a10; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.wxtp-mini:disabled { opacity: .6; cursor: default; }
+
+/* ⋯ 的小選單 */
+.wxtp-menu-mask { position: absolute; inset: 0; z-index: 3; background: rgba(0, 0, 0, .32); display: flex; align-items: flex-end; }
+/* 底部要讓出手機那條橫槓：選單是蓋在整頁上的，外層讓過的位置它吃不到 */
+.wxtp-menu { width: 100%; background: #fff; border-radius: 16px 16px 0 0; padding: 6px 0 calc(28px + var(--aps-safe-bottom, 0px)); animation: wxtp-up .2s ease; }
+.wxtp-menu-t { padding: 10px 20px 8px; font-size: 12.5px; color: rgba(38, 36, 31, .5); text-align: center; }
+.wxtp-menu button {
+    width: 100%; height: 50px; border: none; background: none;
+    display: flex; align-items: center; gap: 12px; padding: 0 22px;
+    font-size: 15px; color: #26241f; cursor: pointer; text-align: left;
+}
+.wxtp-menu button i { width: 18px; text-align: center; color: rgba(38, 36, 31, .55); }
+.wxtp-menu button:active { background: rgba(38, 36, 31, .05); }
+.wxtp-menu button.is-danger, .wxtp-menu button.is-danger i { color: #d23b3b; }
+.wxtp-menu button.is-cancel { justify-content: center; color: rgba(38, 36, 31, .6); border-top: 6px solid #f4f3f1; }

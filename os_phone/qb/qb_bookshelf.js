@@ -1,0 +1,1916 @@
+﻿// ---------------------------------------------------------------
+// [檔案] qb_bookshelf.js (v1.6 - 動態人設防汙染預覽版)
+// 職責：書架視窗模組 — 銀藍書架（一格一本封面、左右滑頁）、書封面展開、撰寫新書、刪除確認彈窗
+// 從 void_terminal.js 抽出，完全無狀態，依賴全域物件：
+//   window.AURELIA_WORLDS / AURELIA_CUSTOM_WORLDS
+//   window.OS_API_ENGINE  (generateText — 撰寫新書用)
+//   window.OS_DB          (deleteVarPack / worldbook CRUD)
+//   window.OS_WORLDBOOK   (getAvailablePacks)
+//   window.OS_API         (isStandalone)
+//   window.OS_CARD_IMPORT (openImportPanel)
+//   window.VoidTerminal   (playSequence — 錯誤回饋台詞)
+//   window.AureliaControlCenter (switchPage)
+//   window.VN_Core        (openGeneratePanel)
+//   window.StoryExtractor (show)
+// ---------------------------------------------------------------
+(function() {
+    'use strict';
+
+    // 書架清單寫回：走匯入角色卡那支配額安全寫入（空間滿先把舊封面瘦身）。
+    //   🚨 以前這裡是 setItem 包空 catch：封面大、空間一滿，新書／改過的開場白當下看起來存好了，重整就不見
+    function _persistWorlds() {
+        const list = window.AURELIA_CUSTOM_WORLDS || [];
+        const CI = (window.parent && window.parent.OS_CARD_IMPORT) || window.OS_CARD_IMPORT;
+        let r;
+        if (CI && typeof CI.saveWorlds === 'function') r = CI.saveWorlds(list);
+        else { try { localStorage.setItem('aurelia_custom_worlds', JSON.stringify(list)); r = { ok: true }; } catch (e) { r = { ok: false }; } }
+        const T = (window.parent && window.parent.AUI && window.parent.AUI.toastr) || (window.AUI && window.AUI.toastr);
+        try {
+            if (!r.ok) T && T.error('本機儲存空間滿了，書架這次的修改存不下來', '書架');
+            else if (r.droppedCovers) T && T.warning('本機空間不夠，把幾本書的封面拿掉騰出空間', '書架');
+        } catch (e) {}
+        return r.ok;
+    }
+
+    // 其他本機設定的寫入：走 AUI.lsSet（不丟例外，空間滿了自己跳「○○沒存下來」），回 true／false
+    //   以前這些是 setItem 包空 catch，寫不進去也不會知道
+    function _lsSet(key, value, what) {
+        const A = (window.parent && window.parent.AUI) || window.AUI;
+        return A.lsSet(key, value, what);
+    }
+
+    // ── 自由書籍常數 & 歷史助手 ──────────────────────────────────
+    const FREE_SCRIPT_WID        = '__free_script__';
+    const FREE_SCRIPT_HISTORY_KEY = 'vn_free_history';
+
+    const _FREE_WORLD = {
+        id: FREE_SCRIPT_WID,
+        isFreeScript: true,
+        title: '自由劇情',
+        icon: 'fa-pen-nib',
+        cover: '',
+        desc: '不限角色，自由輸入劇情指令',
+        wbPacks: [],
+        custom: false
+    };
+
+    // 📂 具名開場白：跟舊的「AI 生成劇情」面板共用同一份鍵（os_vn_gen_presets）。
+    //    兩個入口合併成一個之後，你以前在那邊存的那幾筆直接就在這裡看得到，不用重打。
+    //    它跟下面的「過往開場」語意不同：這份是你主動命名收藏的，那份是每次踏入自動記的。
+    const GEN_PRESETS_KEY = 'os_vn_gen_presets';
+    // 書脊／書封上的圖示：新資料存 FA 類名；舊資料是 emoji（✍️ 📘 👤 這幾個預設值換成對應圖示，其他照舊顯示）
+    const _OLD_ICON = { '✍️': 'fa-pen-nib', '📘': 'fa-book', '👤': 'fa-user' };
+    function _wIcon(w) {
+        const i = String((w && w.icon) || '');
+        const fa = /^fa-[a-z0-9-]+$/.test(i) ? i : _OLD_ICON[i];
+        return fa ? '<i class="fa-solid ' + fa + '"></i>' : i.replace(/</g, '&lt;');
+    }
+    function _getPresets() {
+        try { const a = JSON.parse(localStorage.getItem(GEN_PRESETS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+        catch(e) { return []; }
+    }
+    function _savePreset(title, request) {
+        if (!title) return;                                   // 沒命名就不收藏，只進歷史
+        const list = _getPresets().filter(p => p && p.title !== title);   // 同名覆蓋
+        list.unshift({ title, request, savedAt: Date.now() });
+        _lsSet(GEN_PRESETS_KEY, JSON.stringify(list), '收藏的開場白');
+    }
+    function _delPreset(title) {
+        _lsSet(GEN_PRESETS_KEY, JSON.stringify(_getPresets().filter(p => p && p.title !== title)), '刪掉收藏開場白這一步');
+    }
+
+    function _getFreeHistory() {
+        try { return JSON.parse(localStorage.getItem(FREE_SCRIPT_HISTORY_KEY) || '[]'); } catch(e) { return []; }
+    }
+    function _addFreeHistory(title, request) {
+        const list = _getFreeHistory();
+        // 同指令去重（只保留最新）
+        const key = (request || '').slice(0, 40);
+        const deduped = list.filter(h => (h.request || '').slice(0, 40) !== key);
+        deduped.unshift({ id: 'fh_' + Date.now(), title, request, ts: Date.now() });
+        _lsSet(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(deduped.slice(0, 30)), '過往開場紀錄');
+    }
+    function _deleteFreeHistory(id) {
+        const list = _getFreeHistory().filter(h => h.id !== id);
+        _lsSet(FREE_SCRIPT_HISTORY_KEY, JSON.stringify(list), '刪掉過往開場這一步');
+    }
+
+    // ── HTML 轉義 ─────────────────────────────────────────────────
+    function _escHtml(str) {
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+    // style="background:url('這裡')" 的網址（封面可能是匯入的、生圖接口回的）：CSS 字串裡的 \ 和 ' 先轉，再照屬性轉
+    function _cssUrl(s) {
+        return _escHtml(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ''));
+    }
+
+    // ── 書籍刪除確認彈窗 ──────────────────────────────────────────
+    function _confirmDeleteWorld(w, afterDelete) {
+        const old = document.getElementById('qb-del-world-dialog');
+        if (old) old.remove();
+
+        const hasVarPack = !!w.autoPackId;
+        const cardName   = w.title || w.id;
+
+        const dlg = document.createElement('div');
+        dlg.id = 'qb-del-world-dialog';
+        dlg.style.cssText = `
+            position:fixed;inset:0;z-index:99999;
+            background:var(--qbs-scrim);backdrop-filter:blur(4px);
+            display:flex;align-items:center;justify-content:center;
+        `;
+        dlg.innerHTML = `
+            <div style="
+                background:var(--qbs-sheet);
+                border:1px solid var(--qbs-line-strong);
+                border-radius:10px;padding:24px 28px;max-width:340px;width:90%;
+                box-shadow:0 12px 40px var(--qbs-shadow);color:var(--qbk-ink);font-family:'Noto Sans TC',sans-serif;
+            ">
+                <div style="font-size:15px;font-weight:700;margin-bottom:8px;"><i class="fa-solid fa-book"></i> 刪除《${_escHtml(cardName)}》</div>
+                <div style="font-size:12px;color:var(--qbk-ink);margin-bottom:18px;line-height:1.6;">
+                    請選擇刪除範圍：
+                </div>
+
+                <div id="qb-del-scope" style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid var(--qbk-line);transition:border-color 0.2s;" id="qb-del-opt-book">
+                        <input type="radio" name="qb-del-scope" value="book" checked style="margin-top:2px;accent-color:var(--qbk-accent);">
+                        <span>
+                            <strong style="font-size:13px;">只刪書籍</strong>
+                            <div style="font-size:11px;color:var(--qbk-ink-dim);margin-top:2px;">書脊移除，其他資料保留</div>
+                        </span>
+                    </label>
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;padding:8px 10px;border-radius:6px;border:1px solid var(--qbk-line);transition:border-color 0.2s;" id="qb-del-opt-all">
+                        <input type="radio" name="qb-del-scope" value="all" style="margin-top:2px;accent-color:#e53e3e;">
+                        <span>
+                            <strong style="font-size:13px;color:var(--qbs-bad);">完整清除</strong>
+                            <div style="font-size:11px;color:var(--qbk-ink-dim);margin-top:2px;">
+                                書籍${hasVarPack ? '、追蹤欄位' : ''}、世界書條目（分類「${_escHtml(cardName)}」）
+                            </div>
+                        </span>
+                    </label>
+                </div>
+
+                <div style="display:flex;gap:10px;">
+                    <button id="qb-del-cancel" class="qb-btn-ghost" style="flex:1;">取消</button>
+                    <button id="qb-del-confirm" class="qb-btn-danger" style="flex:1;">確認刪除</button>
+                </div>
+            </div>
+        `;
+
+        // 高亮選中選項
+        const radios = dlg.querySelectorAll('input[name="qb-del-scope"]');
+        const labels = [dlg.querySelector('#qb-del-opt-book'), dlg.querySelector('#qb-del-opt-all')];
+        radios.forEach((r, i) => {
+            r.onchange = () => labels.forEach((l, j) => {
+                l.style.borderColor = j === i ? 'var(--qbs-line-strong)' : 'var(--qbk-line)';
+            });
+        });
+        labels[0].style.borderColor = 'var(--qbs-line-strong)';
+
+        dlg.querySelector('#qb-del-cancel').onclick  = () => dlg.remove();
+        dlg.querySelector('#qb-del-confirm').onclick = async () => {
+            const scope = dlg.querySelector('input[name="qb-del-scope"]:checked')?.value || 'book';
+            dlg.remove();
+
+            // 1. 從書架移除
+            window.AURELIA_CUSTOM_WORLDS = (window.AURELIA_CUSTOM_WORLDS || []).filter(x => x.id !== w.id);
+            _persistWorlds();
+
+            if (scope === 'all') {
+                // 2. 刪這本書自帶的追蹤欄位範本（匯入／生成時建的那一份）
+                if (hasVarPack && window.OS_DB?.deleteVarPack) {
+                    try { await window.OS_DB.deleteVarPack(w.autoPackId); } catch(e) { console.warn('[DelWorld] 追蹤欄位刪除失敗', e); }
+                }
+                // 3. 刪世界書條目（category = 書名）
+                if (window.OS_DB?.getAllWorldbookEntries && window.OS_DB?.deleteWorldbookEntry) {
+                    try {
+                        const entries = await window.OS_DB.getAllWorldbookEntries();
+                        const targets = entries.filter(e => e.category === cardName);
+                        for (const e of targets) {
+                            await window.OS_DB.deleteWorldbookEntry(e.id).catch(() => {});
+                        }
+                        console.log(`[DelWorld] 已刪世界書條目 ${targets.length} 筆（分類：${cardName}）`);
+                    } catch(e) { console.warn('[DelWorld] 世界書刪除失敗', e); }
+                }
+                // 4. 刪條件規則（worldId） - 修復鍵值錯誤
+                try {
+                    const rulesKey = 'avs_condition_rules'; // ✅ 已修正為正確的 AVS 規則鍵值
+                    const allRules = JSON.parse(localStorage.getItem(rulesKey) || '[]');
+                    const filtered = allRules.filter(r => r.worldId !== w.id);
+                    if (_lsSet(rulesKey, JSON.stringify(filtered), '刪掉這本書的條件規則這一步')) console.log(`[DelWorld] 已刪條件規則 ${allRules.length - filtered.length} 條`);
+                } catch(e) { console.warn('[DelWorld] 條件規則讀不出來，沒動', e); }
+                // 5. 這本書的卡片自帶美化規則（匯入角色卡時收的那一包）
+                try { const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX); if (_CR && _CR.removePack) await _CR.removePack(w.id); } catch(e) { console.warn('[DelWorld] 美化規則沒清掉', e); }
+            }
+
+            if (typeof afterDelete === 'function') afterDelete();
+        };
+
+        document.body.appendChild(dlg);
+    }
+
+    // ── 書架（銀藍版）───────────────────────────────────────────
+    //   2026-09-16 換成阿洛的 B 稿（參考資料/aurelia_bookshelf_b_lab）：一格一本、封面是圖、
+    //   書名是字，一頁 2×3（書區太矮就 2×2、再矮 2×1），左右滑換頁（原生 scroll-snap）。
+    //   自由劇情是上面那張長卡，匯入角色卡／撰寫新書在底部那條。
+    //   書架層＝#qb-shelf-stage，開書封、撰寫新書、匯入面板時整層藏起來，退回來再亮。
+    let _currentPage = 0;
+    let _pageSize = 6;
+    let _pageCount = 1;
+    let _dragMoved = false;
+
+    function _stage() { return document.getElementById('qb-shelf-stage'); }
+    function _track() { return document.getElementById('qb-shelf-carousel'); }
+    // 開書封／撰寫新書／踏入故事那幾條拿這個藏、還原書架層
+    function _getShelves() { const s = _stage(); return s ? [s] : []; }
+
+    // 從書封、匯入面板退回書架：收掉那一層、書架層亮回來、重畫
+    function showShelf() {
+        const panel = document.getElementById('qb-book-cover-panel');
+        if (panel) { panel.style.display = 'none'; panel.innerHTML = ''; }
+        _getShelves().forEach(s => s.style.display = '');
+        render();
+    }
+
+    // 書區夠高放三排，不夠放兩排，再矮一排；一律兩欄
+    function _capacity(track) {
+        const h = track.clientHeight;
+        if (!h) return 6;
+        return (h > 440 ? 3 : (h > 230 ? 2 : 1)) * 2;
+    }
+
+    function _makeBook(w) {
+        const card = document.createElement('div');
+        card.className = 'qbs-book';
+        card.dataset.wid = w.id;
+
+        const obj = document.createElement('div');
+        obj.className = 'qbs-book-obj';
+        const spine = document.createElement('span');
+        spine.className = 'qbs-spine';
+
+        const face = document.createElement('button');
+        face.type = 'button';
+        face.className = 'qbs-face';
+        face.title = w.title || '';
+        const slot = document.createElement('span');
+        slot.className = 'qbs-cover';
+        const empty = () => {
+            const e = document.createElement('span');
+            e.className = 'qbs-cover-empty';
+            e.innerHTML = _wIcon(w) || '<i class="fa-solid fa-book"></i>';
+            return e;
+        };
+        if (w.cover) {
+            const img = document.createElement('img');
+            img.alt = '';
+            img.draggable = false;
+            img.loading = 'lazy';
+            img.decoding = 'async';
+            img.addEventListener('error', () => slot.replaceChildren(empty()), { once: true });   // 封面壞掉就留書的圖示，書框照舊
+            img.src = w.cover;
+            slot.appendChild(img);
+        } else {
+            slot.appendChild(empty());
+        }
+        face.appendChild(slot);
+        face.onclick = () => { if (!_dragMoved) openCover(w); };
+
+        const plinth = document.createElement('span');
+        plinth.className = 'qbs-plinth';
+        obj.append(spine, face, plinth);
+
+        if (w.custom) {
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'qbs-del';
+            del.title = '下架';
+            del.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            del.onclick = (e) => { e.stopPropagation(); _confirmDeleteWorld(w, () => render()); };
+            obj.appendChild(del);
+        }
+
+        const title = document.createElement('div');
+        title.className = 'qbs-title';
+        title.textContent = w.title || '';   // 書名是匯入的角色卡名，不進 innerHTML
+        card.append(obj, title);
+        return card;
+    }
+
+    function _go(p) {
+        const track = _track();
+        if (!track) return;
+        const t = Math.max(0, Math.min(p, _pageCount - 1));
+        const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        track.scrollTo({ left: t * track.clientWidth, behavior: reduce ? 'instant' : 'smooth' });
+    }
+
+    function _updatePager() {
+        const nav   = document.getElementById('qb-shelf-nav');
+        const prev  = document.getElementById('qb-page-prev');
+        const next  = document.getElementById('qb-page-next');
+        const label = document.getElementById('qb-page-label');
+        const dots  = document.getElementById('qb-page-dots');
+        if (nav) nav.classList.toggle('single', _pageCount <= 1);   // 只有一頁：位置留著、東西藏起來，書區高度才不會跟著跳
+        if (prev) prev.disabled = _currentPage === 0;
+        if (next) next.disabled = _currentPage >= _pageCount - 1;
+        if (label) label.textContent = (_currentPage + 1) + ' / ' + _pageCount;
+        if (dots) {
+            dots.replaceChildren();
+            const start = Math.max(0, Math.min(_currentPage - 2, _pageCount - 5));   // 頁點最多五顆，跟著目前頁移動
+            for (let i = start; i < Math.min(start + 5, _pageCount); i++) {
+                const d = document.createElement('button');
+                d.type = 'button';
+                d.className = 'qbs-dot' + (i === _currentPage ? ' on' : '');
+                d.title = '第 ' + (i + 1) + ' 頁';
+                d.onclick = () => _go(i);
+                dots.appendChild(d);
+            }
+        }
+    }
+
+    function _wireOnce() {
+        const stage = _stage();
+        const track = _track();
+        if (!stage || !track || stage._qbsWired) return;
+        stage._qbsWired = true;
+
+        document.getElementById('qb-page-prev').onclick = () => _go(_currentPage - 1);
+        document.getElementById('qb-page-next').onclick = () => _go(_currentPage + 1);
+        document.getElementById('qb-free-story-btn').onclick = () => openCover(_FREE_WORLD);
+        document.getElementById('qb-write-book-btn').onclick = () => openCreate();
+        document.getElementById('qb-import-card-btn').onclick = () => window.OS_CARD_IMPORT?.openImportPanel?.(stage);
+
+        // 滑到哪一頁：手指滑是原生捲動，這裡只跟著更新頁點與箭頭
+        track.addEventListener('scroll', () => {
+            const w = track.clientWidth;
+            if (!w) return;
+            const n = Math.max(0, Math.min(_pageCount - 1, Math.round(track.scrollLeft / w)));
+            if (n !== _currentPage) { _currentPage = n; _updatePager(); }
+        }, { passive: true });
+
+        track.addEventListener('keydown', (e) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            e.preventDefault();
+            _go(_currentPage + (e.key === 'ArrowRight' ? 1 : -1));
+        });
+
+        // 桌機滑鼠拖一下也能換頁；拖過的那次放開不算點書
+        let mouseStart = null;
+        track.addEventListener('pointerdown', (e) => {
+            if (e.pointerType === 'mouse') mouseStart = { x: e.clientX, page: _currentPage };
+        });
+        window.addEventListener('pointerup', (e) => {
+            if (!mouseStart) return;
+            const dx = e.clientX - mouseStart.x;
+            if (Math.abs(dx) > 45) {
+                _go(mouseStart.page + (dx < 0 ? 1 : -1));
+                _dragMoved = true;
+                setTimeout(() => { _dragMoved = false; }, 0);
+            }
+            mouseStart = null;
+        });
+        window.addEventListener('pointercancel', () => { mouseStart = null; });
+
+        // 視窗大小變了（轉橫、桌機拉窗）：一頁放幾本變了就重排並停在原本那幾本，沒變只對齊頁
+        if (window.ResizeObserver) {
+            new ResizeObserver(() => {
+                if (!track.clientWidth || !track.clientHeight) return;
+                const cap = _capacity(track);
+                if (cap !== _pageSize) {
+                    _currentPage = Math.floor((_currentPage * _pageSize) / cap);
+                    render();
+                } else {
+                    track.scrollTo({ left: _currentPage * track.clientWidth, behavior: 'instant' });
+                }
+            }).observe(track);
+        }
+    }
+
+    function render() {
+        const stage = _stage();
+        const track = _track();
+        if (!stage || !track) return;
+        // 回到書架這一層就不是在讀開場白了 → 收掉滿版態
+        try { document.getElementById('qb-bookshelf-overlay')?.classList.remove('qb-reading'); } catch (e) { }
+        _wireOnce();
+
+        const books = Object.values(window.AURELIA_WORLDS || {})
+            .concat(window.AURELIA_CUSTOM_WORLDS || []);
+
+        _pageSize  = _capacity(track);
+        _pageCount = Math.max(1, Math.ceil(books.length / _pageSize));
+        _currentPage = Math.max(0, Math.min(_currentPage, _pageCount - 1));
+
+        const frag = document.createDocumentFragment();
+        for (let p = 0; p < _pageCount; p++) {
+            const page = document.createElement('section');
+            page.className = 'qbs-page rows-' + (_pageSize / 2);
+            const rows = books.slice(p * _pageSize, (p + 1) * _pageSize);
+            if (!rows.length) {
+                const e = document.createElement('div');
+                e.className = 'qbs-empty';
+                e.textContent = '書架還空著';
+                page.appendChild(e);
+            }
+            rows.forEach(w => page.appendChild(_makeBook(w)));
+            frag.appendChild(page);
+        }
+        track.replaceChildren(frag);
+        track.scrollTo({ left: _currentPage * track.clientWidth, behavior: 'instant' });
+        _updatePager();
+
+        // 匯入角色卡的模組沒載到就不給按（按了也沒反應）
+        const imp = document.getElementById('qb-import-card-btn');
+        if (imp) imp.classList.toggle('qb-hidden', !window.OS_CARD_IMPORT?.openImportPanel);
+    }
+
+    // ── 撰寫新書面板 ─────────────────────────────────────────────
+    // ── 撰寫新書（＋書脊）─────────────────────────────────────
+    //   2026-09-06 從已拆掉的視差委託板 qb_core.js 搬過來：書脊「＋」建自訂世界這件事是書架的，
+    //   跟挑任務那層殼無關。AI 叫用改走 OS_API_ENGINE，店長台詞走 VoidTerminal.playSequence。
+    async function _askAI(msg) {
+        try {
+            if (window.OS_API_ENGINE && typeof window.OS_API_ENGINE.generateText === 'function') return await window.OS_API_ENGINE.generateText('general_assistant', msg, { task: 'world_gen' });
+            console.warn('[書架] 尚未掛載獨立 API 引擎 (OS_API_ENGINE)。'); return null;
+        } catch (e) { console.error('[書架] API 崩潰:', e); return null; }
+    }
+    async function createCustomWorld(keyword, lorebookContext) {
+        if (!keyword && !lorebookContext) return null;
+
+        // 有世界書內容時，把它加進提示
+        const loreBlock = lorebookContext
+            ? `\n\n以下是已知的世界書資料，請參考融入設計：\n${lorebookContext.slice(0, 2000)}`
+            : '';
+
+        // 1. 生成世界觀描述
+        const promptMsg = keyword
+            ? `請根據關鍵字「${keyword}」設計一個視差宇宙的RPG世界。${loreBlock}\n請直接輸出一段50字以內的精簡描述，不要任何多餘的對話或格式。`
+            : `請根據以下世界書資料，用50字以內總結這個世界的氛圍與背景，直接輸出描述，不要任何格式：${loreBlock}`;
+        const desc = await _askAI(promptMsg) || `這是一個由「${keyword || '世界書'}」構成的奇妙世界，充滿未知的挑戰與機遇。`;
+
+        // 2. 自動生成 AVS 變數包
+        let autoPackId = null;
+        try {
+            const varPrompt = `根據這個世界觀：「${desc}」${loreBlock}
+請列出 5～8 個在這個世界跑團時最值得追蹤的數值變數，每行一個，格式為「變數名 = 預設值」。
+規則：
+- 變數名用英文或中文都可以，簡短清楚
+- 預設值只能是數字或帶引號的字串
+- 不要任何說明文字，直接輸出清單
+
+範例格式：
+hp = 100
+gold = 0
+好感度 = 0
+status = "正常"`;
+
+            const varRaw = await _askAI(varPrompt) || '';
+
+            const variables = [];
+            varRaw.split('\n').forEach(line => {
+                const m = line.trim().match(/^([^\s=]+)\s*=\s*(.+)$/);
+                if (!m) return;
+                const name = m[1].trim();
+                const raw  = m[2].trim().replace(/^["']|["']$/g, '');
+                if (name) variables.push({ name, defaultValue: raw });
+            });
+
+            if (variables.length > 0 && window.OS_DB?.saveVarPack) {
+                autoPackId = 'pack_' + Date.now();
+                const worldId = 'custom_' + Date.now(); // 先生成 worldId，後面建世界用同一個
+                await window.OS_DB.saveVarPack({
+                    id:        autoPackId,
+                    name:      keyword || '自訂世界',
+                    notes:     `由 AI 根據《${keyword || '世界書條目'}》世界觀自動生成`,
+                    variables
+                });
+                console.log(`[AVS] 自動建立變數包「${keyword}」，共 ${variables.length} 個變數`);
+
+                // 自動生成條件規則（按世界綁定）
+                if (window.OS_AVS_RULES?.generateRulesForWorld) {
+                    await window.OS_AVS_RULES.generateRulesForWorld({
+                        worldId,
+                        worldTitle: keyword || '自訂世界',
+                        worldDesc:  desc.replace(/<[^>]*>/g, '').trim() + (loreBlock ? loreBlock.slice(0, 500) : ''),
+                        variables,
+                        callApi: (k, m) => window.OS_API_ENGINE?.generateText?.(k, m)
+                    });
+                }
+                // 把 worldId 記下來，等下建世界物件時用
+                window._pendingAutoWorldId = worldId;
+            }
+        } catch(e) { console.warn('[AVS] 自動建立變數包失敗（不影響建世界）:', e); }
+
+        // 3. 生成書本封面 (調用 OS_IMAGE_MANAGER)
+        let coverUrl = '';
+        if (window.OS_IMAGE_MANAGER && typeof window.OS_IMAGE_MANAGER.generateItem === 'function') {
+            try {
+                coverUrl = await window.OS_IMAGE_MANAGER.generateItem(`book cover, ${keyword}, cinematic lighting, highly detailed, masterpiece, no text`, { width: 512, height: 768, use: 'item' });
+            } catch(e) { console.warn('書封生成失敗', e); }
+        }
+
+        // 沿用自動生成規則時建好的 worldId，確保規則與世界 ID 一致
+        const newId = window._pendingAutoWorldId || ('custom_' + Date.now());
+        delete window._pendingAutoWorldId;
+        const worldTitle = keyword || desc.slice(0, 12).replace(/[，。！？\s]/g, '') || '自訂世界';
+        const newWorld = {
+            id: newId,
+            title: worldTitle,
+            icon: 'fa-book',
+            desc: desc.replace(/<[^>]*>/g, '').trim(),
+            danger: Math.floor(Math.random() * 5) + 3,
+            cover: coverUrl || 'https://files.catbox.moe/3ub4va.png',
+            custom: true,
+            autoPackId  // 記錄對應的自動變數包 ID，供以後快速初始化用
+        };
+
+        // 存入全域供大廳書櫃讀取
+        window.AURELIA_CUSTOM_WORLDS = window.AURELIA_CUSTOM_WORLDS || [];
+        window.AURELIA_CUSTOM_WORLDS.push(newWorld);
+        // 持久化到 localStorage
+        _persistWorlds();
+
+        const packNote = autoPackId ? '，變數包也幫你備好了！' : '！';
+        window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|smile|「寫好了！這本《${worldTitle}》絕對是我本月的得意之作，快打開看看吧${packNote}」]`);
+        return newWorld;
+    }
+
+    function openCreate() {
+        const panel   = document.getElementById('qb-book-cover-panel');
+        const shelves = _getShelves();
+        if (!panel) return;
+
+        panel.innerHTML = `
+            <div style="position:absolute;inset:0;background:var(--qbs-page);"></div>
+            <div style="position:absolute;inset:0;background-image:repeating-linear-gradient(180deg,rgba(255,255,255,0.015) 0px,rgba(255,255,255,0.015) 1px,transparent 1px,transparent 20px);pointer-events:none;"></div>
+
+            <button id="qb-create-back" style="position:absolute;top:12px;left:12px;background:var(--qbs-field);backdrop-filter:blur(6px);border:1px solid var(--qbk-line);color:var(--qbk-ink);padding:6px 14px;border-radius:20px;cursor:pointer;font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
+
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 28px 28px;z-index:2;gap:0;overflow-y:auto;">
+                <div style="font-size:30px;margin-bottom:14px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-pen-nib"></i></div>
+                <div style="font-size:16px;font-weight:800;color:var(--qbk-ink);letter-spacing:2px;margin-bottom:6px;">撰寫新書</div>
+                <div style="font-size:11px;color:var(--qbk-ink-dim);letter-spacing:1px;margin-bottom:18px;">描述你想前往的世界</div>
+
+                <input id="qb-create-input" type="text" placeholder="例：蒸汽朋克工業帝國、末日後的海底城市…"
+                    style="width:100%;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:4px;color:var(--qbk-ink);font-size:13px;padding:12px 14px;outline:none;text-align:center;letter-spacing:0.5px;font-family:'Noto Sans TC',sans-serif;">
+                <div style="margin-top:6px;font-size:10px;color:var(--qbk-ink-faint);letter-spacing:0.5px;">按 Enter 或點下方按鈕送出</div>
+
+                <div style="width:100%;margin-top:14px;">
+                    <button id="qb-wb-toggle" style="
+                        width:100%;background:var(--qbs-bar);
+                        border:1px solid var(--qbk-line);
+                        color:var(--qbk-ink);padding:8px 14px;
+                        border-radius:4px;cursor:pointer;font-size:11px;
+                        letter-spacing:1px;text-align:left;transition:border-color 0.2s;">
+                        從世界書條目生成
+                    </button>
+                    <div id="qb-wb-list" style="
+                        display:none;max-height:150px;overflow-y:auto;margin-top:4px;
+                        background:var(--qbs-field);border:1px solid var(--qbk-line);
+                        border-radius:4px;padding:6px 10px;">
+                        <div style="font-size:10px;color:var(--qbk-ink-faint);text-align:center;padding:10px;">
+                            載入中…
+                        </div>
+                    </div>
+                    <div id="qb-wb-hint" style="display:none;margin-top:5px;font-size:10px;color:var(--qbk-ink-faint);text-align:center;">
+                        已勾選的條目內容將提供給 AI 作為世界觀參考
+                    </div>
+                </div>
+
+                <button id="qb-create-submit" class="qb-btn-primary">創建世界</button>
+            </div>
+        `;
+
+        panel.style.display = 'block';
+        shelves.forEach(s => s.style.display = 'none');
+
+        const input    = panel.querySelector('#qb-create-input');
+        const submit   = panel.querySelector('#qb-create-submit');
+        const wbToggle = panel.querySelector('#qb-wb-toggle');
+        const wbList   = panel.querySelector('#qb-wb-list');
+        const wbHint   = panel.querySelector('#qb-wb-hint');
+
+        let wbLoaded = false;
+        wbToggle.onclick = async () => {
+            const isOpen = wbList.style.display !== 'none';
+            wbList.style.display = isOpen ? 'none' : 'block';
+            wbHint.style.display = isOpen ? 'none' : 'block';
+            wbToggle.textContent = `從世界書條目生成 ${isOpen ? '▼' : '▲'}`;
+            wbToggle.style.borderColor = isOpen
+                ? 'var(--qbk-line)' : 'var(--qbs-line-strong)';
+
+            if (!isOpen && !wbLoaded) {
+                wbLoaded = true;
+                try {
+                    const entries = await window.OS_DB?.getAllWorldbookEntries?.() || [];
+                    if (entries.length === 0) {
+                        wbList.innerHTML = `<div style="font-size:11px;color:var(--qbk-ink-faint);text-align:center;padding:12px;">世界書目前沒有條目</div>`;
+                    } else {
+                        wbList.innerHTML = entries.map(e => `
+                            <label style="display:flex;align-items:flex-start;gap:8px;padding:5px 2px;cursor:pointer;border-bottom:1px solid var(--qbk-line);">
+                                <input type="checkbox" data-id="${_escHtml(e.id)}" data-content="${encodeURIComponent(e.content || '')}"
+                                    style="margin-top:2px;accent-color:var(--qbk-accent);flex-shrink:0;">
+                                <span style="font-size:11px;color:var(--qbk-ink);line-height:1.5;">
+                                    <span style="color:var(--qbk-accent);">${_escHtml(e.title || '未命名')}</span>
+                                    ${e.keys ? `<span style="color:var(--qbk-ink-faint);font-size:10px;"> · ${_escHtml(e.keys.slice(0,30))}</span>` : ''}
+                                </span>
+                            </label>
+                        `).join('');
+                    }
+                } catch(err) {
+                    wbList.innerHTML = `<div style="font-size:11px;color:var(--qbs-bad-line);text-align:center;padding:12px;">載入失敗</div>`;
+                }
+            }
+        };
+
+        const getCheckedLore = () => {
+            const checked = wbList.querySelectorAll('input[type=checkbox]:checked');
+            if (!checked.length) return '';
+            return Array.from(checked).map(cb => {
+                const label   = cb.closest('label');
+                const title   = label?.querySelector('span > span')?.textContent || '';
+                const content = decodeURIComponent(cb.dataset.content || '');
+                return `【${title}】\n${content}`;
+            }).join('\n\n');
+        };
+
+        const doCreate = async () => {
+            const keyword = input.value.trim();
+            const lore    = getCheckedLore();
+            if (!keyword && !lore) {
+                input.focus({ preventScroll: true });
+                input.style.borderColor = 'var(--qbs-bad-line)';
+                setTimeout(() => { input.style.borderColor = 'var(--qbk-line)'; }, 1500);
+                return;
+            }
+            submit.textContent = '撰寫中…';
+            submit.disabled = true;
+            await createCustomWorld(keyword || lore.slice(0, 20), lore);
+            panel.style.display = 'none';
+            shelves.forEach(s => s.style.display = 'flex');
+            render();
+        };
+
+        input.onkeydown = (e) => { if (e.key === 'Enter') doCreate(); };
+        submit.onclick  = doCreate;
+        panel.querySelector('#qb-create-back').onclick = () => {
+            panel.style.display = 'none';
+            panel.innerHTML = '';
+            shelves.forEach(s => s.style.display = 'flex');
+            render();
+        };
+        setTimeout(() => input.focus({ preventScroll: true }), 50);   // 面板剛滑進來：別把外層一起捲歪
+    }
+
+    // ── 自由書籍封面（獨立渲染路徑）──────────────────────────────
+    function _openFreeScriptCover() {
+        const panel   = document.getElementById('qb-book-cover-panel');
+        const shelves = _getShelves();
+        if (!panel) return;
+
+        panel.innerHTML = `
+            <div style="position:absolute;inset:0;background:var(--qbs-page);"></div>
+            <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 40%,rgba(60,120,255,0.12),transparent 65%);"></div>
+
+            <button id="qb-cover-back" style="
+                position:absolute;top:12px;left:12px;
+                background:var(--qbs-field);backdrop-filter:blur(6px);
+                border:1px solid var(--qbs-cool-line);color:var(--qbs-cool);
+                padding:6px 14px;border-radius:20px;cursor:pointer;
+                font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
+
+            <div id="qb-cover-view" style="
+                position:absolute;bottom:0;left:0;right:0;
+                padding:20px 20px 32px;text-align:center;z-index:2;
+                display:flex;flex-direction:column;align-items:center;">
+
+                <div style="font-size:48px;margin-bottom:8px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-pen-nib"></i></div>
+                <div style="font-size:24px;font-weight:900;color:var(--qbs-cool);
+                            letter-spacing:3px;text-shadow:none;
+                            margin-bottom:6px;font-family:'Noto Sans TC',sans-serif;">自由劇情</div>
+                <div style="font-size:12px;color:var(--qbs-cool-dim);margin-bottom:24px;letter-spacing:1px;">
+                    不限角色，自由輸入劇情指令
+                </div>
+
+                <button id="qb-free-open-inner-btn" class="qb-btn-primary">翻閱開場白</button>
+            </div>
+
+            <div id="qb-free-inner-view" style="
+                display:none;position:absolute;inset:0;z-index:10;
+                background:var(--qbs-page);
+                flex-direction:column;">
+
+                <div style="padding:14px 18px;border-bottom:1px solid var(--qbs-cool-line);
+                            display:flex;align-items:center;justify-content:space-between;
+                            background:var(--qbs-bar);flex-shrink:0;">
+                    <div style="font-size:13px;font-weight:bold;color:var(--qbs-cool);letter-spacing:1px;">
+                        <i class="fa-solid fa-pen-nib"></i> 自由劇情 · 指令輸入
+                    </div>
+                    <button id="qb-free-inner-close" style="
+                        background:none;border:none;color:var(--qbs-cool-dim);
+                        font-size:24px;cursor:pointer;line-height:1;padding:0 5px;"
+                        onmouseover="this.style.color='var(--qbs-cool)'" onmouseout="this.style.color='var(--qbs-cool-dim)'">×</button>
+                </div>
+
+                <div style="padding:14px 18px;border-bottom:1px solid var(--qbs-cool-line);flex-shrink:0;">
+                    <div style="font-size:11px;color:var(--qbs-cool-dim);letter-spacing:1px;margin-bottom:5px;">故事標題（可留空）</div>
+                    <input id="qb-free-title-input" placeholder="例：廢土女傭兵" style="
+                        width:100%;box-sizing:border-box;
+                        background:var(--qbs-field);border:1px solid var(--qbs-cool-line);
+                        border-radius:6px;color:var(--qbk-ink);font-size:13px;
+                        padding:8px 10px;outline:none;font-family:inherit;
+                        transition:border-color 0.2s;"
+                        onfocus="this.style.borderColor='var(--qbs-cool)'"
+                        onblur="this.style.borderColor='var(--qbs-cool-line)'">
+                    <div style="font-size:11px;color:var(--qbs-cool-dim);letter-spacing:1px;margin:10px 0 5px;">劇情指令</div>
+                    <textarea id="qb-free-request-input" rows="4" placeholder="直接描述你想要的開場情境、角色設定、世界觀…" style="
+                        width:100%;box-sizing:border-box;
+                        background:var(--qbs-field);border:1px solid var(--qbs-cool-line);
+                        border-radius:6px;color:var(--qbk-ink);font-size:13px;line-height:1.6;
+                        padding:10px 12px;resize:none;font-family:inherit;outline:none;
+                        transition:border-color 0.2s;scrollbar-width:none;"
+                        onfocus="this.style.borderColor='var(--qbs-cool)'"
+                        onblur="this.style.borderColor='var(--qbs-cool-line)'"></textarea>
+                </div>
+
+                <div style="flex:1;overflow-y:auto;padding:10px 18px;scrollbar-width:thin;scrollbar-color:var(--qbk-line) transparent;">
+                    <!-- 📂 收藏：主動命名存下的開場白（跟舊「AI 生成劇情」面板同一份資料） -->
+                    <div id="qb-free-presets-wrap" class="qbfp-wrap">
+                        <div class="qbfp-hd">收藏的開場白<span id="qb-free-presets-count" class="qbfp-count"></span></div>
+                        <div id="qb-free-presets-list" class="qbfp-list"></div>
+                    </div>
+                    <div style="font-size:10px;color:var(--qbs-cool-dim);letter-spacing:2px;margin-bottom:8px;text-transform:uppercase;">過往開場</div>
+                    <div id="qb-free-history-list" style="display:flex;flex-direction:column;gap:6px;"></div>
+                </div>
+
+                <div style="padding:12px 18px;border-top:1px solid var(--qbs-cool-line);flex-shrink:0;">
+                    <button id="qb-free-dive-btn" class="qb-btn-primary cool block">踏入故事</button>
+                </div>
+            </div>
+        `;
+
+        panel.style.display = 'block';
+        shelves.forEach(s => s.style.display = 'none');
+
+        const coverView  = panel.querySelector('#qb-cover-view');
+        const innerView  = panel.querySelector('#qb-free-inner-view');
+        const titleInput = panel.querySelector('#qb-free-title-input');
+        const reqInput   = panel.querySelector('#qb-free-request-input');
+
+        // ── 開啟/關閉內頁 ───────────────────────────────────────
+        panel.querySelector('#qb-free-open-inner-btn').onclick = () => {
+            coverView.style.display = 'none';
+            panel.querySelector('#qb-cover-back').style.display = 'none';
+            innerView.style.display = 'flex';
+            _renderPresets();
+            _renderFreeHistory();
+            setTimeout(() => reqInput?.focus({ preventScroll: true }), 150);
+        };
+        panel.querySelector('#qb-free-inner-close').onclick = () => {
+            innerView.style.display = 'none';
+            coverView.style.display = 'flex';
+            panel.querySelector('#qb-cover-back').style.display = 'block';
+        };
+        panel.querySelector('#qb-cover-back').onclick = () => {
+            panel.style.display = 'none';
+            shelves.forEach(s => s.style.display = 'flex');
+        };
+
+        // ── 收藏的開場白（主動命名存的，同名覆蓋）────────────────
+        function _renderPresets() {
+            const wrap = panel.querySelector('#qb-free-presets-wrap');
+            const listEl = panel.querySelector('#qb-free-presets-list');
+            const cntEl = panel.querySelector('#qb-free-presets-count');
+            if (!wrap || !listEl) return;
+            const list = _getPresets();
+            wrap.classList.toggle('qbfp-none', !list.length);   // 一筆都沒有就整區收掉，不留空標題
+            if (cntEl) cntEl.textContent = list.length ? '共 ' + list.length + ' 筆' : '';
+            listEl.innerHTML = '';
+            list.forEach((p) => {
+                if (!p || !p.title) return;
+                const chip = document.createElement('span');
+                chip.className = 'qbfp-chip';
+                chip.title = String(p.request || '').slice(0, 120);
+                const nm = document.createElement('span');
+                nm.className = 'qbfp-chip-nm';
+                nm.textContent = p.title;                        // textContent：標題是使用者打的，不進 innerHTML
+                const del = document.createElement('i');
+                del.className = 'qbfp-chip-del';
+                del.textContent = '✕';
+                chip.appendChild(nm); chip.appendChild(del);
+                chip.onclick = (ev) => {
+                    if (ev.target === del) { _delPreset(p.title); _renderPresets(); return; }
+                    if (titleInput) titleInput.value = p.title;
+                    if (reqInput) { reqInput.value = p.request || ''; reqInput.focus({ preventScroll: true }); }
+                };
+                listEl.appendChild(chip);
+            });
+        }
+
+        // ── 歷史列表渲染 ──────────────────────────────────────────
+        function _renderFreeHistory() {
+            const listEl = panel.querySelector('#qb-free-history-list');
+            if (!listEl) return;
+            const hist = _getFreeHistory();
+            if (!hist.length) {
+                listEl.innerHTML = `<div style="font-size:12px;color:var(--qbk-ink-faint);text-align:center;padding:12px;">尚無歷史紀錄</div>`;
+                return;
+            }
+            listEl.innerHTML = hist.map(h => `
+                <div class="qb-free-hist-item" data-id="${_escHtml(h.id)}" style="
+                    background:var(--qbs-soft);border:1px solid var(--qbs-cool-line);
+                    border-radius:6px;padding:10px 12px;cursor:pointer;
+                    transition:background 0.15s,border-color 0.15s;position:relative;"
+                    onmouseover="this.style.background='var(--qbs-cool-line)';this.style.borderColor='var(--qbs-cool-line)'"
+                    onmouseout="this.style.background='var(--qbs-soft)';this.style.borderColor='var(--qbs-cool-line)'">
+                    ${h.title ? `<div style="font-size:11px;color:var(--qbs-cool);font-weight:bold;margin-bottom:4px;letter-spacing:1px;">${_escHtml(h.title)}</div>` : ''}
+                    <div style="font-size:12px;color:var(--qbk-ink);line-height:1.5;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${_escHtml(h.request || '')}</div>
+                    <div style="font-size:10px;color:var(--qbs-cool-dim);margin-top:4px;">${new Date(h.ts).toLocaleDateString('zh-TW')}</div>
+                    <button class="qb-free-hist-del" data-id="${_escHtml(h.id)}" style="
+                        position:absolute;top:6px;right:6px;
+                        background:var(--qbs-bad-line);border:none;color:#fff;
+                        font-size:10px;width:18px;height:18px;border-radius:50%;
+                        cursor:pointer;line-height:1;padding:0;display:flex;align-items:center;justify-content:center;"
+                        onclick="event.stopPropagation();">✕</button>
+                </div>
+            `).join('');
+
+            listEl.querySelectorAll('.qb-free-hist-item').forEach(item => {
+                item.onclick = () => {
+                    const id = item.dataset.id;
+                    const h  = _getFreeHistory().find(x => x.id === id);
+                    if (!h) return;
+                    if (titleInput) titleInput.value = h.title || '';
+                    if (reqInput)   reqInput.value   = h.request || '';
+                    reqInput?.focus({ preventScroll: true });
+                };
+            });
+            listEl.querySelectorAll('.qb-free-hist-del').forEach(btn => {
+                btn.onclick = () => {
+                    _deleteFreeHistory(btn.dataset.id);
+                    _renderFreeHistory();
+                };
+            });
+        }
+
+        // ── 踏入故事 ──────────────────────────────────────────────
+        panel.querySelector('#qb-free-dive-btn').onclick = () => {
+            const title   = (titleInput?.value || '').trim();
+            const request = (reqInput?.value || '').trim();
+            if (!request) {
+                reqInput.style.borderColor = 'var(--qbs-bad-line)';
+                setTimeout(() => { reqInput.style.borderColor = 'var(--qbs-cool-line)'; }, 1500);
+                reqInput?.focus({ preventScroll: true });
+                return;
+            }
+
+            _addFreeHistory(title, request);
+            _savePreset(title, request);   // 有命名才會收藏，沒填就只進歷史
+
+            // 清除舊世界書狀態
+            localStorage.removeItem('vn_active_wb_packs');
+            localStorage.removeItem('vn_current_world_id');
+            // 自由劇情不屬於任何一本書，但一樣是一條新故事線 → 這裡就生 id
+            try { window.VN_Core?.newStoryId?.(title || '自由劇情', ''); } catch(e) {}
+
+            // 收起書架
+            const overlay = document.getElementById('qb-bookshelf-overlay');
+            if (overlay) overlay.style.display = 'none';
+            panel.style.display = 'none';
+            shelves.forEach(s => s.style.display = 'flex');
+
+            // 跟下面六本書同一條路：showVnPanel 建出 VN 舞台，再直接把指令交給生成器。
+            //   🚨 以前是切 nav-story 那一頁、再留一張 _pendingFreeScriptDive 等 VN 啟動時去撿：
+            //      那一頁早就拆了（容器裡只剩大廳與使用者），切過去＝大廳被藏、什麼都沒補上，整片白；
+            //      那張紙條也只有 VN 第一次啟動時才會被讀，VN 開過一次之後按了等於沒按。
+            //   酒館那條照舊（沒驗過、不在這次範圍）。
+            if (!(window.OS_API?.isStandalone?.() ?? false)) {
+                if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                return;
+            }
+            if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel();
+            setTimeout(() => {
+                const P = window.VN_PLAYER || window.VN_Core;
+                if (P && P.runFreeDive) P.runFreeDive({ title, request });
+                else console.warn('[書架] 生成器還沒就緒，這次自由劇情沒跑起來');
+            }, 0);
+        };
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // 📇 篇章目錄 —— 一本書開過的故事線清單（＝酒館一張卡底下的那些聊天室）
+    // ──────────────────────────────────────────────────────────────
+    // 清單來源 vn_story_index（踏入時寫的 storyId → worldId / wbPacks / title / createdAt），
+    // 章數與最後更新時間再從 OS_DB 章節補。索引裡有、章節數 0 的是「踏進去但沒生成成功」，
+    // 照樣列出來也照樣切得過去 —— 那就是酒館的空聊天室。
+    // ══════════════════════════════════════════════════════════════
+    function _storyIndex() {
+        try { return JSON.parse(localStorage.getItem('vn_story_index') || '{}') || {}; } catch (e) { return {}; }
+    }
+
+    async function _renderToc(w, panel) {
+        const listEl = panel.querySelector('#qb-toc-list');
+        if (!listEl) return;
+        listEl.innerHTML = '<div class="qb-toc-empty">讀取中…</div>';
+
+        const idx = _storyIndex();
+        const mine = Object.keys(idx).filter(sid => (idx[sid] || {}).worldId === w.id);
+        let chapters = [];
+        try { chapters = (await window.OS_DB?.getAllVnChapters?.()) || []; } catch (e) {}
+        const byStory = {};
+        chapters.forEach(c => { if (c.storyId) (byStory[c.storyId] = byStory[c.storyId] || []).push(c); });
+
+        const rows = mine.map(sid => {
+            const meta = idx[sid] || {};
+            const chs  = byStory[sid] || [];
+            const last = chs.length ? Math.max(...chs.map(c => c.createdAt || 0)) : (meta.createdAt || 0);
+            return { sid, title: meta.title || sid, n: chs.length, last };
+        }).sort((a, b) => b.last - a.last);
+
+        if (!rows.length) {
+            listEl.innerHTML = '<div class="qb-toc-empty">這本書還沒有篇章</div>';
+            return;
+        }
+
+        const cur = window.VN_Core?._currentStoryId || localStorage.getItem('vn_current_story_id') || '';
+        listEl.innerHTML = '';
+        rows.forEach(r => {
+            const when = r.last ? new Date(r.last).toLocaleString('zh-TW', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+            const row = document.createElement('div');
+            row.className = 'qb-toc-item' + (r.sid === cur ? ' now' : '');
+            row.innerHTML = `<div class="qb-toc-item-main">
+                    <span class="qb-toc-item-t">${_escHtml(r.title)}</span>
+                    <span class="qb-toc-item-m">${r.n ? r.n + ' 章' : '尚未開始'}${when ? '　' + when : ''}</span>
+                    ${r.sid === cur ? '<span class="qb-toc-now">進行中</span>' : ''}
+                </div>
+                <button class="qb-toc-del" title="刪除這條篇章"><i class="fa-solid fa-trash"></i></button>`;
+            row.querySelector('.qb-toc-item-main').onclick = () => _resumeStory(r, w, panel);
+            row.querySelector('.qb-toc-del').onclick = async (ev) => {
+                ev.stopPropagation();
+                // 整條刪掉＝章節、記憶、人物檔案、追蹤數值全走；問清楚再動手
+                if (!await AUI.confirm(`刪除篇章「${r.title}」？
+
+這條的章節、記憶、人物檔案與追蹤數值都會一起刪掉，救不回來。`)) return;
+                try { await window.VN_Core?.deleteStoryLine?.(r.sid); }
+                catch (e) { console.warn('[書架] 刪除篇章失敗:', e); AUI.alert('刪除失敗，請看 console'); return; }
+                await _renderToc(w, panel);
+            };
+            listEl.appendChild(row);
+        });
+    }
+
+    // 接著玩某一條：切分艙鑰匙 → 把那條當初掛的書與世界書帶回來 → 載入最新一章開播
+    async function _resumeStory(r, w, panel) {
+        try {
+            const meta = _storyIndex()[r.sid] || {};
+            window.VN_Core?._setStoryId?.(r.sid, r.title);
+            // 書和世界書寫不進去就停：下面切世界書、開播都照這兩格認書，寫一半會接到別本書（提示 lsSet 會跳）
+            if (meta.worldId && !_lsSet('vn_current_world_id', meta.worldId, '這次選的書')) return;
+            if (Array.isArray(meta.wbPacks) && !_lsSet('vn_active_wb_packs', JSON.stringify(meta.wbPacks), '這本書掛的世界書')) return;
+            try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch (e) {}
+            try { window.AureliaControlCenter?.setChatTitle?.(r.title); } catch (e) {}
+
+            let chs = [];
+            try { chs = ((await window.OS_DB?.getAllVnChapters?.()) || []).filter(c => c.storyId === r.sid); } catch (e) {}
+            chs.sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+
+            // 空篇章（踏進去沒生成成功）→ 只切過去，讓她從「創建新篇章」重來
+            if (!chs.length) {
+                await _renderToc(w, panel);
+                console.log(`[書架] 已切到「${r.title}」，這條還沒有章節`);
+                return;
+            }
+
+            const overlay = document.getElementById('qb-bookshelf-overlay');
+            if (overlay) overlay.style.display = 'none';
+            panel.style.display = 'none';
+            _getShelves().forEach(s => s.style.display = 'flex');
+
+            window._lobbyPendingChapter = chs[chs.length - 1];
+            if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel('autoload');
+        } catch (e) {
+            console.warn('[書架] 切換篇章失敗:', e);
+        }
+    }
+
+    // ── 書封面與內頁展開面板 (雙層結構 + 滑動卡片) ────────────────────────
+    function openCover(w) {
+        const panel = document.getElementById('qb-book-cover-panel');
+        const shelves = _getShelves();
+        if (!panel) return;
+
+        // 自由書籍走獨立路徑
+        if (w.isFreeScript) { _openFreeScriptCover(); return; }
+
+        const dangerFill  = '▮'.repeat(w.danger || 0);
+        const dangerEmpty = '▯'.repeat(Math.max(0, 5 - (w.danger || 0)));
+
+        // 角色卡：有開場白列表
+        const greetings = (w.cardImport && Array.isArray(w.greetings) && w.greetings.length)
+            ? w.greetings : null;
+        const isCard    = !!greetings;
+
+        // 🔥 動態獲取面板中最新切換的人設名字 (UI 防汙染蒙版核心)
+        const currentUserName = window.OS_PERSONA?.getName ? window.OS_PERSONA.getName() : 'User';
+
+        panel.innerHTML = `
+            <div style="position:absolute;inset:0;background:url('${_cssUrl(w.cover)}') center/cover;"></div>
+            <div style="position:absolute;inset:0;background:linear-gradient(180deg,
+                rgba(240,243,250,0) 0%,rgba(240,243,250,0) 25%,
+                rgba(240,243,250,0.82) 55%,rgba(240,243,250,0.98) 100%);"></div>
+
+            <button id="qb-cover-back" style="
+                position:absolute;top:12px;left:12px;
+                background:var(--qbs-field);backdrop-filter:blur(6px);
+                border:1px solid var(--qbk-line);color:var(--qbk-ink);
+                padding:6px 14px;border-radius:20px;cursor:pointer;
+                font-size:12px;letter-spacing:1px;z-index:30;">返回書架</button>
+
+            <div id="qb-cover-view" style="
+                position:absolute;bottom:0;left:0;right:0;
+                padding:20px 20px 32px;text-align:center;z-index:2;
+                display:flex;flex-direction:column;align-items:center;">
+                
+                <div style="font-size:40px;margin-bottom:4px;filter:drop-shadow(0 2px 6px var(--qbs-shadow));">${_wIcon(w)}</div>
+                <div style="font-size:24px;font-weight:900;color:var(--qbk-ink);
+                            letter-spacing:3px;text-shadow:none;
+                            margin-bottom:14px;font-family:'Noto Sans TC',sans-serif;line-height:1.3;">${_escHtml(w.title || '')}</div>
+                
+                ${!isCard ? `
+                <div style="font-size:13px;color:var(--qbk-ink);line-height:2;font-style:italic;
+                            text-shadow:none;margin-bottom:18px;">${_escHtml(w.desc || '')}</div>
+                <div style="color:var(--qbs-bad);font-size:11px;letter-spacing:2px;margin-bottom:16px;
+                            text-shadow:none;">
+                    危&ensp;險&ensp;度 &nbsp;${dangerFill}<span style="opacity:0.3;">${dangerEmpty}</span>
+                </div>
+                ` : `
+                <div style="font-size:12px;color:var(--qbk-ink);margin-bottom:16px;letter-spacing:1px;">
+                    收錄 ${greetings.length} 條開場白記憶
+                </div>
+                `}
+
+                <div id="qb-wb-pack-slot" style="
+                    width: 100%; margin-bottom: 24px;
+                    display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                    <div style="display:flex; align-items:center; gap:8px; width:75%;">
+                        <div style="flex:1; height:1px; background:linear-gradient(90deg, transparent, var(--qbk-line));"></div>
+                        <span style="font-size:10px; color:var(--qbk-ink-dim); letter-spacing:3px; text-shadow:none; font-weight:bold;">擴充館藏</span>
+                        <div style="flex:1; height:1px; background:linear-gradient(270deg, transparent, var(--qbk-line));"></div>
+                    </div>
+                    <div style="display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:6px; width:100%;">
+                        <div id="qb-wb-pack-tags" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;"></div>
+                        <select id="qb-wb-pack-add" style="
+                            background:var(--qbs-field); border:1px dashed var(--qbk-line);
+                            border-radius:12px; color:var(--qbk-ink-dim); font-size:10px;
+                            padding:3px 8px; outline:none; font-family:inherit; cursor:pointer; text-align:center;
+                            transition:all 0.2s;">
+                            <option value="">掛載</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="qb-sprite-mode-row" class="qb-spmode-row">
+                    <span class="qb-spmode-label">表情</span>
+                    <button class="qb-spmode-btn" data-mode="main">主模型寫</button>
+                    <button class="qb-spmode-btn" data-mode="side">副模型補</button>
+                    <button class="qb-spmode-btn" data-mode="off">不寫</button>
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;justify-content:center;flex-wrap:wrap;">
+                    <button id="qb-toc-open-btn" class="qb-btn-primary">${isCard ? '翻閱開場白' : '踏入故事'}</button>
+                    ${w.custom ? `<button class="qb-remove-world-btn qb-btn-danger" data-wid="${w.id}">下架</button>` : ''}
+                </div>
+            </div>
+
+            <!-- 📇 篇章目錄：這本書開過幾條故事線（＝酒館的聊天室列表）。
+                 一律先經過這一層，跟酒館「選卡片先看到聊天室清單」同一個心智模型。
+                 「創建新篇章」那一格放的就是原本封面上的那顆鈕(id/class 都沒動)，
+                 所以既有的開場白內頁與 dive 綁定完全不用改。 -->
+            <div id="qb-toc-view" style="
+                display:none;position:absolute;inset:0;z-index:9;
+                background:var(--qbs-page);
+                flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
+                <div style="padding:16px 20px;border-bottom:1px solid var(--qbk-line);
+                            display:flex;align-items:center;justify-content:space-between;
+                            background:var(--qbs-bar);flex-shrink:0;">
+                    <div style="font-size:14px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">${_escHtml(w.title)}</div>
+                    <button id="qb-toc-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
+                </div>
+                <div class="qb-toc-body" id="qb-toc-body">
+                    <div class="qb-toc-new">
+                        ${isCard
+                            ? `<button id="qb-open-inner-btn" class="qb-btn-primary block">創建新篇章</button>`
+                            : `<button class="qb-dive-world-btn qb-btn-primary block" data-wid="${w.id}">創建新篇章</button>`}
+                    </div>
+                    <div class="qb-toc-label">歷史篇章</div>
+                    <div id="qb-toc-list"></div>
+                </div>
+            </div>
+
+            ${isCard ? `
+            <div id="qb-inner-view" style="
+                display:none;position:absolute;inset:0;z-index:10;
+                background:var(--qbs-page);
+                flex-direction:column;animation:panelSlideIn 0.25s ease-out;">
+                
+                <!-- 標題列不寫「選擇開場白：《書名》」：都點進這本書了，不必再報一次是誰的開場白。
+                     返回擺左邊，跟啟程幕同一個位置。 -->
+                <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);
+                            display:flex;align-items:center;justify-content:space-between;
+                            background:var(--qbs-bar);flex-shrink:0;">
+                    <button id="qb-inner-close" style="
+                        background:none;border:none;color:var(--qbk-ink-dim);
+                        font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button id="qb-greet-beautify-btn" class="qb-btn-ghost qb-hidden" title="這張卡自帶的美化面板">美化</button>
+                        <button id="qb-greet-replace-btn" class="qb-btn-ghost" title="文字取代">取代</button>
+                    </div>
+                </div>
+
+                <!-- 批量取代：獨立 modal（原本是內嵌展開，一開就把正文擠掉，
+                     那一列三個欄位並排在手機寬度直接爆出畫面外）-->
+                <div id="qb-greet-replace-panel" style="display:none;position:absolute;inset:0;z-index:30;background:var(--qbs-scrim);align-items:center;justify-content:center;padding:18px;box-sizing:border-box;">
+                    <div id="qb-greet-replace-box" style="width:100%;max-width:340px;max-height:92%;overflow-y:auto;box-sizing:border-box;background:var(--qbs-sheet);border:1px solid var(--qbk-line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:10px;box-shadow:0 12px 40px var(--qbs-shadow);">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:1px;">全部開場白批量取代</div>
+                            <button id="qb-greet-replace-close" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:20px;line-height:1;cursor:pointer;padding:0 2px;">×</button>
+                        </div>
+                        <input id="qb-greet-find" placeholder="搜尋文字…" style="width:100%;box-sizing:border-box;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
+                        <div style="text-align:center;color:var(--qbk-ink-faint);font-size:13px;line-height:1;">↓</div>
+                        <input id="qb-greet-repl" placeholder="替換為…（留空＝刪掉這段字）" style="width:100%;box-sizing:border-box;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);padding:9px 10px;font-size:13px;outline:none;font-family:inherit;">
+                        <button id="qb-greet-replace-do" class="qb-btn-primary" style="width:100%;">取代全部</button>
+                        <div id="qb-greet-replace-msg" style="font-size:12px;color:var(--qbs-good);min-height:16px;text-align:center;"></div>
+                        <div id="qb-greet-saved-rules" style="display:none;border-top:1px solid var(--qbk-line);padding-top:12px;flex-direction:column;gap:8px;">
+                            <div style="font-size:11px;color:var(--qbk-ink-faint);letter-spacing:1px;">已儲存規則（點擊套用）</div>
+                            <div id="qb-greet-rules-list" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="qb-greeting-slider" style="flex:1; overflow:hidden; position:relative; width:100%; display:flex; flex-direction:column;">
+                    <div id="qb-greeting-track" style="display:flex; width:100%; height:100%; transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);">
+                        
+                        ${greetings.map((g, i) => `
+                            <div class="qb-greet-slide" data-greet-idx="${i}" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 10px 12px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
+                                <div style="border:1px solid var(--qbk-line); background:var(--qbs-field); border-radius:10px; padding:14px 16px; flex:1; display:flex; flex-direction:column;">
+                                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;border-bottom:1px solid var(--qbk-line);padding-bottom:8px;">
+                                        <span style="font-size:14px;color:var(--qbk-ink);letter-spacing:2px;font-weight:bold;">
+                                            開場白 ${i + 1}
+                                        </span>
+                                        <div style="display:flex;align-items:center;gap:6px;">
+                                            <button class="qb-greet-edit-btn qb-btn-ghost" data-idx="${i}" title="編輯此開場白">編輯</button>
+                                            <input type="radio" name="qb-greeting" value="${i}" ${i === 0 ? 'checked' : ''} style="display:none;">
+                                        </div>
+                                    </div>
+                                    <div class="qb-greet-text" data-idx="${i}" style="font-size:14px;color:var(--qbk-ink);line-height:1.8;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;">
+                                        ${_escHtml(g).replace(/\{\{\s*user\s*\}\}/gi, () => _escHtml(currentUserName)).replace(/\{\{\s*char\s*\}\}/gi, () => _escHtml(w.title || ''))}
+                                    </div>
+                                    <textarea class="qb-greet-editor" data-idx="${i}" style="display:none;flex:1;min-height:200px;background:var(--qbs-field);border:1px solid var(--qbk-line);border-radius:6px;color:var(--qbk-ink);font-size:13px;line-height:1.8;padding:12px;resize:vertical;font-family:inherit;outline:none;"></textarea>
+                                    <div class="qb-greet-save-row" data-idx="${i}" style="display:none;justify-content:flex-end;gap:8px;margin-top:10px;">
+                                        <button class="qb-greet-cancel-btn qb-btn-ghost" data-idx="${i}">取消</button>
+                                        <button class="qb-greet-save-btn qb-btn-ghost" data-idx="${i}">儲存</button>
+                                    </div>
+                                    <div class="qb-greet-go-row">
+                                        <button class="qb-goto-embark-btn qb-btn-primary block" data-idx="${i}" data-wid="${w.id}">與TA相遇</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                        
+                        <div class="qb-greet-slide" style="flex: 0 0 100%; max-width: 100%; box-sizing: border-box; padding: 10px 12px; display:flex; flex-direction:column; overflow-y:auto; scrollbar-width:none;">
+                            <div style="border:1px solid var(--qbs-cool-line); background:var(--qbs-soft); border-radius:10px; padding:20px; flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+                                <input type="radio" name="qb-greeting" value="-1" style="display:none;">
+                                <div style="font-size:48px; margin-bottom:20px; filter:drop-shadow(0 2px 6px var(--qbs-shadow));"><i class="fa-solid fa-dice"></i></div>
+                                <span style="font-size:18px;color:var(--qbs-cool);font-weight:bold;letter-spacing:3px;">讓 AI 自由發揮</span>
+                                <div style="font-size:13px;color:var(--qbs-cool-dim);margin-top:12px;text-align:center;line-height:1.6;">無預設開場故事<br>直接踏入這個世界的未知領域</div>
+                                <div class="qb-greet-go-row">
+                                    <button class="qb-goto-embark-btn qb-btn-primary block" data-idx="-1" data-wid="${w.id}">與TA相遇</button>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                    
+                </div>
+
+                <div style="padding:10px 16px 14px;border-top:1px solid var(--qbk-line);
+                            background:var(--qbs-field);flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:10px;">
+                    
+                    <div style="display:flex;align-items:center;justify-content:center;gap:14px;width:100%;">
+                    <button id="qb-greet-prev-btn" style="flex-shrink:0;background:var(--qbs-field);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-left"></i></button>
+                    <div id="qb-greet-dots" style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap;max-width:70%;">
+                        ${greetings.map((_, i) => `<div class="qb-greet-dot" data-idx="${i}" style="width:8px;height:8px;border-radius:50%;background:var(--qbk-ink);opacity:${i===0?'1':'0.3'};cursor:pointer;transition:all 0.2s;"></div>`).join('')}
+                        <div class="qb-greet-dot" data-idx="${greetings.length}" style="width:8px;height:8px;border-radius:50%;background:var(--qbs-cool);opacity:0.3;cursor:pointer;transition:all 0.2s;"></div>
+                    </div>
+                    <button id="qb-greet-next-btn" style="flex-shrink:0;background:var(--qbs-field);border:1px solid var(--qbk-line);color:var(--qbk-ink);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:12px;padding:0;"><i class="fa-solid fa-caret-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- ✍️ 啟程：第一句回應自己一幕（跟酒館版同一個心智模型），不再跟開場白擠在同一頁 -->
+                <div id="qb-embark-view" style="display:none;position:absolute;inset:0;z-index:25;background:var(--qbs-page);flex-direction:column;">
+                    <div style="padding:10px 16px;border-bottom:1px solid var(--qbk-line);display:flex;align-items:center;justify-content:space-between;background:var(--qbs-bar);flex-shrink:0;">
+                        <button id="qb-embark-back" style="background:none;border:none;color:var(--qbk-ink-dim);font-size:13px;letter-spacing:1px;cursor:pointer;line-height:1;padding:4px 2px;">‹ 返回</button>
+                        <div style="font-size:13px;font-weight:bold;color:var(--qbk-ink);letter-spacing:3px;">啟程</div>
+                        <span style="width:44px;"></span>
+                    </div>
+                    <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding:14px 16px;box-sizing:border-box;">
+                        <div style="font-size:12px;color:var(--qbk-ink-dim);letter-spacing:1px;text-align:center;">寫下你踏入故事的第一步——行動、對白或心聲都可以，也可以留空</div>
+                        <textarea id="qb-user-reply" placeholder="在這裡寫下你的第一句…" style="
+                            flex:1;min-height:0;width:100%;box-sizing:border-box;
+                            background:var(--qbs-field);border:1px solid var(--qbk-line);
+                            border-radius:8px;color:var(--qbk-ink);font-size:14px;line-height:1.8;
+                            padding:12px 14px;resize:none;font-family:inherit;outline:none;
+                            scrollbar-width:none;"></textarea>
+                    </div>
+                    <div style="padding:0 16px 16px;flex-shrink:0;">
+                        <button class="qb-dive-world-btn qb-btn-primary block" data-wid="${w.id}">與TA相遇</button>
+                    </div>
+                </div>
+            </div>
+            ` : ''}
+        `;
+
+        panel.style.display = 'block';
+        shelves.forEach(s => s.style.display = 'none');
+
+        // ── 📚 擴充館藏插槽 初始化 ───────────────────────────────
+        if (!Array.isArray(w.wbPacks)) {
+            w.wbPacks = w.cardImport ? [w.title] : [];
+        }
+
+        function _saveWbPacks() {
+            const idx = (window.AURELIA_CUSTOM_WORLDS || []).findIndex(x => x.id === w.id);
+            if (idx !== -1) {
+                window.AURELIA_CUSTOM_WORLDS[idx].wbPacks = w.wbPacks;
+                _persistWorlds();
+            }
+        }
+
+        function _renderPackTags() {
+            const tagsEl = panel.querySelector('#qb-wb-pack-tags');
+            if (!tagsEl) return;
+            tagsEl.innerHTML = '';
+            (w.wbPacks || []).forEach(pack => {
+                const chip = document.createElement('div');
+                // 美化：輕量化的半透明小標籤
+                chip.style.cssText = `display:inline-flex;align-items:center;gap:4px;
+                    background:var(--qbs-soft);border:1px solid var(--qbk-line);
+                    border-radius:12px;padding:3px 10px;font-size:10px;
+                    color:var(--qbk-ink);backdrop-filter:blur(2px);`;
+                chip.innerHTML = `<span>${_escHtml(pack)}</span>
+                    <span style="cursor:pointer;opacity:0.6;font-size:12px;line-height:1;margin-left:2px;"
+                          class="wb-chip-remove" data-pack="${_escHtml(pack)}">×</span>`;
+                chip.querySelector('.wb-chip-remove').onclick = () => {
+                    w.wbPacks = w.wbPacks.filter(p => p !== pack);
+                    _saveWbPacks();
+                    _renderPackTags();
+                    _populatePackSelect();
+                };
+                tagsEl.appendChild(chip);
+            });
+            if (!w.wbPacks.length) {
+                tagsEl.innerHTML = `<span style="font-size:10px;color:var(--qbk-ink-faint);font-style:italic;">
+                    （尚無掛載館藏）</span>`;
+            }
+        }
+
+        function _populatePackSelect() {
+            const sel = panel.querySelector('#qb-wb-pack-add');
+            if (!sel) return;
+            sel.innerHTML = '<option value="">掛載</option>';
+            const allPacks  = window.OS_WORLDBOOK?.getAvailablePacks?.() || [];
+            const available = allPacks.filter(p => !(w.wbPacks || []).includes(p));
+            available.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                sel.appendChild(opt);
+            });
+            if (!available.length) {
+                const opt = document.createElement('option');
+                opt.value = '';
+                opt.disabled = true;
+                opt.textContent = '（無其他可掛載）';
+                sel.appendChild(opt);
+            }
+        }
+
+        function _packSelectChange() {
+            const sel = panel.querySelector('#qb-wb-pack-add');
+            if (!sel || !sel.value) return;
+            const pack = sel.value;
+            if (!w.wbPacks.includes(pack)) {
+                w.wbPacks.push(pack);
+                _saveWbPacks();
+                _renderPackTags();
+                _populatePackSelect();
+            }
+            sel.value = '';
+        }
+
+        _renderPackTags();
+        _populatePackSelect();
+        const _packSel = panel.querySelector('#qb-wb-pack-add');
+        if (_packSel) _packSel.onchange = _packSelectChange;
+
+        // ── 立繪模式（圖庫／自由）──────────────────────────────
+        //   酒館那邊這組在藏書開場白提取器裡，PWA 的藏書長得不一樣、一直沒有地方放 →
+        //   放在這本書的設定列（跟擴充館藏、變數包同一區）。按書記（w.id），不是按開場白記，
+        //   所以同一本書開新故事不用重選。只在獨立版顯示，免得跟酒館那組變成兩個入口。
+        (function _initSpriteMode() {
+            const row = panel.querySelector('#qb-sprite-mode-row');
+            if (!row) return;
+            const FM = window.VN_FREE_MODE;
+            const standalone = window.OS_API?.isStandalone?.() ?? false;
+            if (!FM || !standalone) { row.style.display = 'none'; return; }
+            // 11-04 起三選一（VN_FREE_MODE.exprMode）：主模型寫＝原本的圖庫、不寫＝原本的自由、副模型補＝主模型不寫、副模型讀劇本時順便挑
+            const btns = row.querySelectorAll('.qb-spmode-btn');
+            const TIP = { main: '主模型寫劇情時每句台詞自己帶表情（多幾個字）', side: '主模型不寫；副模型本來就要讀一次劇本，順便替有表情圖的角色挑表情', off: '不要表情：立繪一直用同一張，主模型也省字' };
+            const paint = () => {
+                const m = FM.exprMode ? FM.exprMode(w.id) : (FM.isFree(w.id) ? 'off' : 'main');
+                btns.forEach(b => b.classList.toggle('on', b.dataset.mode === m));
+            };
+            btns.forEach(b => {
+                b.title = TIP[b.dataset.mode];
+                b.onclick = async () => {
+                    if (FM.setExprMode) await FM.setExprMode(b.dataset.mode, w.id);
+                    paint();
+                };
+            });
+            paint();
+        })();
+
+
+        // ── 開場白儲存輔助 ────────────────────────────────────────────
+        function _saveGreetings() {
+            const idx = (window.AURELIA_CUSTOM_WORLDS || []).findIndex(x => x.id === w.id);
+            if (idx !== -1) {
+                window.AURELIA_CUSTOM_WORLDS[idx].greetings = w.greetings;
+                _persistWorlds();
+            }
+        }
+
+        // ── 📇 篇章目錄（兩種書共用）───────────────────────────────
+        (function _initToc() {
+            const tocView  = panel.querySelector('#qb-toc-view');
+            const coverView= panel.querySelector('#qb-cover-view');
+            const coverBack= panel.querySelector('#qb-cover-back');
+            const openBtn  = panel.querySelector('#qb-toc-open-btn');
+            if (!tocView || !openBtn) return;
+
+            const _shelfWin = () => document.getElementById('qb-bookshelf-overlay');
+            const showToc = async () => {
+                coverView.style.display = 'none';
+                if (coverBack) coverBack.style.display = 'none';
+                tocView.style.display = 'flex';
+                _shelfWin()?.classList.add('qb-reading');    // 滿版+藏木框標題列:整層只留一顆返回
+                await _renderToc(w, panel);
+            };
+            const hideToc = () => {
+                tocView.style.display = 'none';
+                _shelfWin()?.classList.remove('qb-reading');
+                coverView.style.display = 'flex';
+                if (coverBack) coverBack.style.display = 'block';
+            };
+            openBtn.onclick = showToc;
+            panel.querySelector('#qb-toc-close').onclick = hideToc;
+            panel._qbHideToc = hideToc;   // 開場白內頁關閉時要退回目錄，不是退回封面
+        })();
+
+        // ── 視圖切換與滑動卡片邏輯 (角色卡專屬) ───────────────────────
+        if (isCard) {
+            const coverView = panel.querySelector('#qb-cover-view');
+            const innerView = panel.querySelector('#qb-inner-view');
+            const coverBack = panel.querySelector('#qb-cover-back');
+            const tocView   = panel.querySelector('#qb-toc-view');
+
+            // 開啟內頁（現在是從目錄的「創建新篇章」進來）
+            // 「與TA相遇」→ 先進啟程幕寫第一句（真正 dive 的是啟程幕裡那顆，走既有 qb-dive-world-btn）
+            const embarkView = panel.querySelector('#qb-embark-view');
+            const gotoEmbarkBtns = panel.querySelectorAll('.qb-goto-embark-btn');
+            if (embarkView && gotoEmbarkBtns.length) {
+                gotoEmbarkBtns.forEach(btn => {
+                    btn.onclick = () => {
+                        // 按鈕現在跟在每一張開場白的內容末尾 → 按哪一張就選哪一張，
+                        //   不再靠「當前這張剛好是選取的那張」這個隱性前提。
+                        const v = String(btn.dataset.idx);
+                        const radio = panel.querySelector('input[name="qb-greeting"][value="' + v + '"]');
+                        if (radio) radio.checked = true;
+                        if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();   // 寫第一句時背後不該還有卡片 BGM 在響
+                        embarkView.style.display = 'flex';
+                        setTimeout(() => { try { panel.querySelector('#qb-user-reply')?.focus({ preventScroll: true }); } catch (e) { } }, 40);
+                    };
+                });
+                panel.querySelector('#qb-embark-back').onclick = () => { embarkView.style.display = 'none'; };
+            }
+
+            // 讀開場白時整個書架窗滿版、木框標題列退場（內容被上下兩層殼夾成一小條，看不下去）
+            const _reading = (on) => {
+                try { document.getElementById('qb-bookshelf-overlay')?.classList.toggle('qb-reading', !!on); } catch (e) { }
+            };
+
+            panel.querySelector('#qb-open-inner-btn').onclick = () => {
+                if (tocView) tocView.style.display = 'none';
+                coverView.style.display = 'none';
+                coverBack.style.display = 'none';
+                innerView.style.display = 'flex';
+                _reading(true);
+                updateSlider(); // 初始化顯示第一張
+            };
+
+            // 關閉內頁 → 退回目錄那一層（從哪裡進來就退回哪裡）
+            panel.querySelector('#qb-inner-close').onclick = () => {
+                if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();
+                innerView.style.display = 'none';
+                // 退回目錄：目錄現在也是滿版，滿版態要留著；只有退到書封才收回木框書架窗
+                if (tocView) { tocView.style.display = 'flex'; }
+                else { _reading(false); coverView.style.display = 'flex'; coverBack.style.display = 'block'; }
+            };
+
+            // 滑動核心邏輯
+            const track = panel.querySelector('#qb-greeting-track');
+            const slides = panel.querySelectorAll('.qb-greet-slide');
+            const dots = panel.querySelectorAll('.qb-greet-dot');
+            const prevBtn = panel.querySelector('#qb-greet-prev-btn');
+            const nextBtn = panel.querySelector('#qb-greet-next-btn');
+            const totalSlides = slides.length;
+            let currentSlide = 0;
+
+            function updateSlider() {
+                // 平滑推動軌道
+                track.style.transform = `translateX(-${currentSlide * 100}%)`;
+
+                // 更新內部隱藏的 radio (為了最後點擊「與TA相遇」能讀取正確值)
+                slides.forEach((s, i) => {
+                    const radio = s.querySelector('input[type="radio"]');
+                    if (radio) radio.checked = (i === currentSlide);
+                });
+
+                // 更新底部小圓點
+                dots.forEach((d, i) => {
+                    d.style.opacity = (i === currentSlide) ? '1' : '0.3';
+                    d.style.transform = (i === currentSlide) ? 'scale(1.3)' : 'scale(1)';
+                });
+
+                // 控制左右按鈕的顯示 (非觸控裝置輔助)
+                // 移到底部圓點列兩端後改用 visibility:位置留著,列才不會隨著到頭/到尾左右跳
+                if (prevBtn) prevBtn.style.visibility = (currentSlide === 0) ? 'hidden' : 'visible';
+                if (nextBtn) nextBtn.style.visibility = (currentSlide === totalSlides - 1) ? 'hidden' : 'visible';
+
+                // 翻到的這一張才做美化（函式在下面宣告，updateSlider 只在使用者操作時才跑得到）
+                try { _renderSlideText(currentSlide); } catch (e) {}
+            }
+
+            // ── 卡片自帶的美化面板：只做「現在這一張」──────────────────────
+            //   一張卡動輒十幾則開場白，每個面板都是一份完整 HTML 文件(iframe)；
+            //   全部一次渲染會直接把手機拖死，所以跟著 updateSlider 走，翻到哪張才做哪張。
+            const _CR = window.OS_CARD_REGEX || (window.parent && window.parent.OS_CARD_REGEX);
+            const beautifyBtn = panel.querySelector('#qb-greet-beautify-btn');
+            let _beautifyOn = false;
+            const _greetRaw = (i) => String(w.greetings[i] || '')
+                .replace(/\{\{\s*user\s*\}\}/gi, currentUserName)
+                .replace(/\{\{\s*char\s*\}\}/gi, w.title);
+            // 面板是整份 HTML 文件，塞進 iframe 後沒有高度可言 → 交給共用那支撐高
+            //   （它會順手把收起來的 <details> 展開、並盯著內容變動重量，見 os_card_regex.fitCardFrames）
+            function _fitCardFrames(root) {
+                if (_CR && _CR.fitCardFrames) _CR.fitCardFrames(root);
+            }
+            // 🔇 卡片的音樂面板會自己播：只要不是「現在正在看的那一張」，一律拆成純文字。
+            //   iframe 從 DOM 移掉＝它的 document 連同 <audio> 一起銷毀，這是唯一保證停得掉的做法
+            //   （只 pause 擋不住腳本抓完網址後才呼叫的 .play()）。
+            function _teardownSlides(keepIdx) {
+                panel.querySelectorAll('.qb-greet-slide').forEach(slide => {
+                    const i = parseInt(slide.dataset.greetIdx, 10);
+                    if (i === keepIdx) return;
+                    const td = slide.querySelector('.qb-greet-text');
+                    if (!td || !td.querySelector('iframe, audio, video')) return;   // 已經是純文字就別重畫
+                    if (_CR && _CR.stopMedia) _CR.stopMedia(td, true);
+                    td.innerHTML = _escHtml(_greetRaw(i));
+                });
+            }
+            // 卡片面板裡的「切換開場白」按鈕：在酒館是把第 0 樓換成第 N 個版本，這裡＝翻到第 N 則開場白。
+            //   面板腳本透過 OS_CARD_REGEX 的酒館助手替身找到這個主人（見 os_card_regex.js 的 _tavernStandIn）。
+            const _cardHost = {
+                charName: () => w.title,
+                greetings: () => w.greetings.map((g, i) => _greetRaw(i)),
+                current: () => Math.min(currentSlide, w.greetings.length - 1),   // 最後那張「讓 AI 自由發揮」不是開場白
+                select: (i) => {
+                    i = Number(i);
+                    if (!(i >= 0 && i < w.greetings.length) || i === currentSlide) return;
+                    currentSlide = i;
+                    updateSlider();
+                },
+                // 面板上「送出一句話」的按鈕：故事還沒開始，沒有東西可以送 → 選定現在這則、進啟程頁、那句填進第一句
+                send: (text) => {
+                    const t = String(text || '').trim();
+                    if (!t || !embarkView) return;
+                    const v = currentSlide >= w.greetings.length ? '-1' : String(currentSlide);
+                    const radio = panel.querySelector('input[name="qb-greeting"][value="' + v + '"]');
+                    if (radio) radio.checked = true;
+                    _leaveGreetings();
+                    embarkView.style.display = 'flex';
+                    const ta = panel.querySelector('#qb-user-reply');
+                    if (ta) ta.value = t;
+                }
+            };
+            // 離開開場白這一頁（返回／進啟程幕／踏進故事）→ 全部拆光，不留任何還在響的面板
+            function _leaveGreetings() {
+                try { _teardownSlides(-1); } catch (e) {}
+                try { if (_CR && _CR.getHost && _CR.getHost() === _cardHost) _CR.setHost(null); } catch (e) {}
+            }
+            panel._qbLeaveGreetings = _leaveGreetings;   // 給同檔其它路徑（踏入故事那顆按鈕）叫，同 panel._qbHideToc 的做法
+
+            function _renderSlideText(i) {
+                const slide = panel.querySelector(`.qb-greet-slide[data-greet-idx="${i}"]`);
+                const textDiv = slide && slide.querySelector('.qb-greet-text');
+                if (!textDiv) return;
+                _teardownSlides(i);   // 先把別張拆乾淨，再畫這一張
+                if (_CR && _CR.stopMedia) _CR.stopMedia(textDiv, false);   // 這一張自己的舊面板先閉嘴
+                const raw = _greetRaw(i);
+                if (_beautifyOn && _CR) {
+                    try { if (_CR.setHost) _CR.setHost(_cardHost); } catch (e) {}   // 面板要能叫「翻到第 N 則」
+                    try {
+                        const html = _CR.renderRichHtml(raw, _escHtml, w.id);
+                        if (html) { textDiv.innerHTML = html; _fitCardFrames(textDiv); return; }
+                    } catch (e) { console.warn('[書架] 開場白美化失敗，退回原文', e); }
+                }
+                textDiv.innerHTML = _escHtml(raw);
+            }
+            function _syncBeautifyBtn() {
+                if (!beautifyBtn) return;
+                beautifyBtn.textContent = _beautifyOn ? '美化' : '原文';
+                beautifyBtn.classList.toggle('qb-btn-on', _beautifyOn);
+            }
+            if (_CR && beautifyBtn) {
+                _CR.getPack(w.id).then(pack => {
+                    if (!pack || !Array.isArray(pack.scripts) || !pack.scripts.length) return;   // 這張卡沒帶正則＝按鈕不出現
+                    beautifyBtn.classList.remove('qb-hidden');
+                    _beautifyOn = pack.enabled !== false;
+                    _syncBeautifyBtn();
+                    // 🚨 只有「開場白那一頁真的開著」才畫。這支是非同步回來的，
+                    //    在書封就畫下去＝人還在看封面，卡片的音樂面板已經在背景響了。
+                    if (innerView && innerView.style.display !== 'none') _renderSlideText(currentSlide);
+                }).catch(() => {});
+                beautifyBtn.onclick = async () => {
+                    _beautifyOn = !_beautifyOn;
+                    _syncBeautifyBtn();
+                    // 這個開關同時決定劇情播放時要不要套（就是這本書的正則總開關），所以寫回正則庫
+                    try { await _CR.setEnabled(w.id, _beautifyOn); } catch (e) {}
+                    _renderSlideText(currentSlide);
+                };
+            }
+
+            // 綁定點擊按鈕切換
+            if (prevBtn) prevBtn.onclick = () => { if (currentSlide > 0) { currentSlide--; updateSlider(); } };
+            if (nextBtn) nextBtn.onclick = () => { if (currentSlide < totalSlides - 1) { currentSlide++; updateSlider(); } };
+            dots.forEach((d, i) => d.onclick = () => { currentSlide = i; updateSlider(); });
+
+            // 綁定移動端手勢滑動 (Swipe)
+            const sliderContainer = panel.querySelector('#qb-greeting-slider');
+            let startX = 0;
+            let isSwiping = false;
+
+            sliderContainer.addEventListener('touchstart', (e) => {
+                startX = e.changedTouches[0].screenX;
+                isSwiping = true;
+            }, { passive: true });
+
+            sliderContainer.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+                isSwiping = false;
+                let endX = e.changedTouches[0].screenX;
+                let diff = startX - endX;
+
+                // 滑動超過 50px 判定為翻頁
+                if (diff > 50 && currentSlide < totalSlides - 1) {
+                    currentSlide++;
+                    updateSlider();
+                } else if (diff < -50 && currentSlide > 0) {
+                    currentSlide--;
+                    updateSlider();
+                }
+            }, { passive: true });
+
+            // ── ✏️ 逐張編輯開場白 ─────────────────────────────────────
+            function _enterEditMode(idx) {
+                const slide = innerView.querySelector(`.qb-greet-slide[data-greet-idx="${idx}"]`);
+                if (!slide) return;
+                const textDiv  = slide.querySelector('.qb-greet-text');
+                const editor   = slide.querySelector('.qb-greet-editor');
+                const saveRow  = slide.querySelector('.qb-greet-save-row');
+                const editBtn  = slide.querySelector('.qb-greet-edit-btn');
+                if (!textDiv || !editor) return;
+                // 填入原始文字（未轉義、未替換），供用戶編輯
+                editor.value = w.greetings[idx] || '';
+                textDiv.style.display   = 'none';
+                editor.style.display    = 'block';
+                if (saveRow) saveRow.style.display = 'flex';
+                if (editBtn) editBtn.style.display  = 'none';
+            }
+
+            function _exitEditMode(idx, save) {
+                const slide = innerView.querySelector(`.qb-greet-slide[data-greet-idx="${idx}"]`);
+                if (!slide) return;
+                const textDiv  = slide.querySelector('.qb-greet-text');
+                const editor   = slide.querySelector('.qb-greet-editor');
+                const saveRow  = slide.querySelector('.qb-greet-save-row');
+                const editBtn  = slide.querySelector('.qb-greet-edit-btn');
+                if (save) {
+                    const newText = editor.value;
+                    w.greetings[idx] = newText;
+                    _saveGreetings();
+                    _renderSlideText(idx);   // 走同一支重畫：美化開著就重新長面板，關著就是轉義原文
+                }
+                textDiv.style.display   = '';
+                editor.style.display    = 'none';
+                if (saveRow) saveRow.style.display = 'none';
+                if (editBtn) editBtn.style.display  = '';
+            }
+
+            // 綁定所有「編輯」按鈕
+            innerView.querySelectorAll('.qb-greet-edit-btn').forEach(btn => {
+                btn.onclick = () => _enterEditMode(parseInt(btn.dataset.idx));
+            });
+            // 綁定所有「儲存」按鈕
+            innerView.querySelectorAll('.qb-greet-save-btn').forEach(btn => {
+                btn.onclick = () => _exitEditMode(parseInt(btn.dataset.idx), true);
+            });
+            // 綁定所有「取消」按鈕
+            innerView.querySelectorAll('.qb-greet-cancel-btn').forEach(btn => {
+                btn.onclick = () => _exitEditMode(parseInt(btn.dataset.idx), false);
+            });
+
+            // ── 🔄 批量文字取代 + 規則儲存 ───────────────────────────
+            const _RULES_KEY  = 'aurelia_greet_replace_rules';
+            const replaceBtn  = innerView.querySelector('#qb-greet-replace-btn');
+            const replacePanel= innerView.querySelector('#qb-greet-replace-panel');
+            const findInput   = innerView.querySelector('#qb-greet-find');
+            const replInput   = innerView.querySelector('#qb-greet-repl');
+            const doReplBtn   = innerView.querySelector('#qb-greet-replace-do');
+            const replMsg     = innerView.querySelector('#qb-greet-replace-msg');
+            const savedRulesWrap = innerView.querySelector('#qb-greet-saved-rules');
+            const rulesList   = innerView.querySelector('#qb-greet-rules-list');
+
+            // 讀取 / 儲存規則到 localStorage
+            function _loadRules() {
+                try { return JSON.parse(localStorage.getItem(_RULES_KEY) || '[]'); } catch(e) { return []; }
+            }
+            function _persistRules(rules) {
+                return _lsSet(_RULES_KEY, JSON.stringify(rules), '開場白的取代規則');
+            }
+            function _addRule(find, repl) {
+                const rules = _loadRules();
+                // 去重：相同 find 直接更新 repl
+                const existing = rules.findIndex(r => r.find === find);
+                if (existing !== -1) { rules[existing].repl = repl; }
+                else { rules.unshift({ find, repl }); }
+                if (rules.length > 30) rules.length = 30;  // 最多 30 條
+                return _persistRules(rules);
+            }
+            function _deleteRule(find) {
+                _persistRules(_loadRules().filter(r => r.find !== find));
+            }
+
+            // 渲染規則 chips
+            function _renderRules() {
+                if (!rulesList) return;
+                const rules = _loadRules();
+                if (!rules.length) {
+                    if (savedRulesWrap) savedRulesWrap.style.display = 'none';
+                    return;
+                }
+                if (savedRulesWrap) savedRulesWrap.style.display = 'flex';
+                rulesList.innerHTML = '';
+                rules.forEach(r => {
+                    const chip = document.createElement('div');
+                    chip.style.cssText = 'display:inline-flex;align-items:center;gap:5px;background:var(--qbs-soft);border:1px solid var(--qbk-line);border-radius:20px;padding:4px 10px 4px 12px;cursor:pointer;transition:background 0.15s;max-width:100%;';
+                    chip.title = `點擊填入：「${r.find}」→「${r.repl}」`;
+
+                    const label = document.createElement('span');
+                    label.style.cssText = 'font-size:12px;color:var(--qbk-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:180px;';
+                    label.textContent = `${r.find} → ${r.repl || '（刪除）'}`;
+
+                    const del = document.createElement('button');
+                    del.textContent = '×';
+                    del.style.cssText = 'background:none;border:none;color:var(--qbk-ink-faint);cursor:pointer;font-size:14px;line-height:1;padding:0;flex-shrink:0;';
+                    del.title = '刪除此規則';
+                    del.onclick = e => {
+                        e.stopPropagation();
+                        _deleteRule(r.find);
+                        _renderRules();
+                    };
+
+                    chip.appendChild(label);
+                    chip.appendChild(del);
+                    chip.addEventListener('mouseenter', () => chip.style.background = 'var(--qbk-line)');
+                    chip.addEventListener('mouseleave', () => chip.style.background = 'var(--qbk-line)');
+                    // 點擊 chip → 填入輸入框並立即執行
+                    chip.onclick = () => {
+                        if (findInput) findInput.value = r.find;
+                        if (replInput) replInput.value = r.repl;
+                        doReplBtn?.click();
+                    };
+                    rulesList.appendChild(chip);
+                });
+            }
+
+            // 執行取代的核心函式
+            function _doReplace(find, repl) {
+                if (!find) {
+                    if (replMsg) { replMsg.textContent = '請輸入搜尋文字'; replMsg.style.color = 'var(--qbs-warn)'; }
+                    return;
+                }
+                let count = 0;
+                w.greetings = w.greetings.map(g => {
+                    const updated = g.split(find).join(repl);
+                    if (updated !== g) count++;
+                    return updated;
+                });
+                if (count > 0) {
+                    _saveGreetings();
+                    // 更新所有顯示中的文字
+                    innerView.querySelectorAll('.qb-greet-text').forEach(el => {
+                        const i = parseInt(el.dataset.idx);
+                        el.innerHTML = _escHtml(w.greetings[i])
+                            .replace(/\{\{\s*user\s*\}\}/gi, () => _escHtml(currentUserName))
+                            .replace(/\{\{\s*char\s*\}\}/gi, () => _escHtml(w.title || ''));
+                    });
+                    // 若有正在編輯的框也同步
+                    innerView.querySelectorAll('.qb-greet-editor').forEach(el => {
+                        const i = parseInt(el.dataset.idx);
+                        if (el.style.display !== 'none') el.value = w.greetings[i];
+                    });
+                    // 儲存這條規則
+                    const ruleSaved = _addRule(find, repl);   // 存不下來 lsSet 會跳提示，這裡就不說「已儲存」
+                    _renderRules();
+                    if (replMsg) { replMsg.textContent = ruleSaved ? `已取代 ${count} 個開場白，規則已儲存` : `已取代 ${count} 個開場白（規則沒存下來）`; replMsg.style.color = 'var(--qbs-good)'; }
+                } else {
+                    if (replMsg) { replMsg.textContent = '未找到匹配文字'; replMsg.style.color = 'var(--qbs-warn)'; }
+                }
+                setTimeout(() => { if (replMsg) replMsg.textContent = ''; }, 3000);
+            }
+
+            if (replaceBtn && replacePanel) {
+                const closeRepl = () => { replacePanel.style.display = 'none'; };
+                replaceBtn.onclick = () => {
+                    replacePanel.style.display = 'flex';
+                    _renderRules();
+                    setTimeout(() => { try { findInput?.focus({ preventScroll: true }); } catch (e) { } }, 30);
+                };
+                innerView.querySelector('#qb-greet-replace-close').onclick = closeRepl;
+                replacePanel.onclick = (e) => { if (e.target === replacePanel) closeRepl(); };   // 點遮罩收掉
+                replacePanel.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); closeRepl(); } });
+            }
+
+            if (doReplBtn) {
+                doReplBtn.onclick = () => _doReplace(findInput?.value || '', replInput?.value ?? '');
+            }
+
+            // Enter 鍵快捷觸發
+            [findInput, replInput].forEach(inp => {
+                if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') doReplBtn?.click(); });
+            });
+        }
+
+        // 返回書架按鈕
+        panel.querySelector('#qb-cover-back').onclick = () => {
+            panel.style.display = 'none';
+            panel.innerHTML = '';
+            shelves.forEach(s => s.style.display = 'flex');
+            render();
+        };
+
+        // 下架按鈕
+        const removeBtn = panel.querySelector('.qb-remove-world-btn');
+        if (removeBtn) {
+            removeBtn.onclick = () => {
+                _confirmDeleteWorld(w, () => {
+                    panel.style.display = 'none';
+                    panel.innerHTML = '';
+                    shelves.forEach(s => s.style.display = 'flex');
+                    render();
+                });
+            };
+        }
+
+        // 踏入故事 / 與TA相遇 按鈕
+        panel.querySelectorAll('.qb-dive-world-btn').forEach(btn => {
+            btn.onclick = async () => {
+                // 踏進故事＝開場白預覽退場：先把卡片自帶的音樂面板拆掉，
+                //   不然生成 loading 的整段時間它都還在放（面板只是被蓋住，iframe 還活著）。
+                if (panel._qbLeaveGreetings) panel._qbLeaveGreetings();
+                const isStandalone = window.OS_API?.isStandalone?.() ?? false;
+
+                // ── 角色卡路徑（cardImport）─────────────────────────
+                if (w.cardImport) {
+                    const sel = panel.querySelector('input[name="qb-greeting"]:checked');
+                    const idx = sel ? parseInt(sel.value) : 0;
+                    // 讀 w.greetings 不讀開頭抓的 greetings：「取代」會把 w.greetings 換成新陣列，
+                    //   抓舊參照的話按「與TA相遇」送出去的是取代前的開場白
+                    const chosenGreeting = (idx >= 0 && Array.isArray(w.greetings) && w.greetings[idx]) ? w.greetings[idx] : '';
+                    const userReply = (panel.querySelector('#qb-user-reply')?.value || '').trim();
+
+                    // 書和世界書寫不進去就不往下開：後面建聊天室、切世界書都照這兩格認書（提示 lsSet 會跳）
+                    if (!_lsSet('vn_current_world_id', w.id, '這次選的書')) return;
+                    localStorage.removeItem('vn_pending_first_mes');
+                    if (!_lsSet('vn_active_wb_packs', JSON.stringify(w.wbPacks || []), '這本書掛的世界書')) return;
+                    try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}     // 這一刻＝建立聊天室
+                    // 🚨 一定要等：這支會撥 VN 指令的總綱開關（固定版/自由版二選一）。
+                    //    以前沒 await，切換還在寫 IDB，prompt 就已經組好送出 →
+                    //    選了「自由」的第一輪，AI 讀到的還是固定版總綱，照樣每句寫表情格。
+                    try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
+
+                    document.getElementById('qb-bookshelf-overlay').classList.remove('qb-reading');
+                    document.getElementById('qb-bookshelf-overlay').style.display = 'none';
+                    panel.style.display = 'none';
+                    shelves.forEach(s => s.style.display = 'flex');
+
+                    if (isStandalone) {
+                        // 直接把參數交給生成器，不再設 pending 等面板自己去撿 ——
+                        //   那條路得先叫出生成面板才跑得動，面板一拆整個 dive 就斷了。
+                        const _dive = { worldId: w.id, greeting: chosenGreeting, title: w.title, userReply };
+                        if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                        // 🚨 VN 的舞台 DOM（#page-game / #text-panel-wrapper …）是 showVnPanel → launchApp 建的。
+                        //    以前這裡只切 nav-story，舞台從沒被建出來 → 生成完要開播時 hideOverlays 讀到
+                        //    null.style 直接炸掉，畫面就停在白底。（續讀舊篇章那條本來就有叫 showVnPanel，
+                        //    所以只有「新開的第一輪」會中。）showVnPanel 內部有 vnInited 旗標，重複叫不會重建。
+                        if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel();
+                        // 舞台 DOM 是 showVnPanel → launchApp 當場同步建好的，不必再空等。
+                        //   等的那段時間畫面上是「VN 上一次停在哪一頁」（空舞台或主選單），
+                        //   看起來就是劇情頁先漏出來、進度遮罩慢半拍才蓋上。
+                        setTimeout(() => {
+                            // 🚨掛在 VN_PLAYER 不是 VN_Core：舊碼寫成 VN_Core，?. 把它整個吞掉，
+                            //   角色卡 Dive 一直是空打。找不到就出聲，不要再靜靜失敗。
+                            const P = window.VN_PLAYER || window.VN_Core;
+                            if (P && P.runCardDive) P.runCardDive(_dive);
+                            else console.warn('[書架] 生成器還沒就緒，這次 dive 沒跑起來');
+                        }, 0);
+                    } else {
+                        if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                        if (window.StoryExtractor?.show) window.StoryExtractor.show();
+                    }
+                    return;
+                }
+
+                // ── 一般世界路徑：踏入＝直接開這個世界的故事（挑任務那層殼已拆）───────────────────────
+                if (!_lsSet('vn_active_wb_packs', JSON.stringify(w.wbPacks || []), '這本書掛的世界書')) return;
+                // 這條路以前沒寫 vn_current_world_id，留著上一次 dive 的舊值 →
+                //   「這本書」的設定（立繪模式、AVS 條件規則的 worldId）全部認錯書。寫不進去一樣停在這裡
+                if (!_lsSet('vn_current_world_id', w.id, '這次選的書')) return;
+                // 🚨 故事線的 id 要在這裡就生出來（＝酒館建立聊天室的那一刻）。
+                //    下面的變數包初始化、AVS、記憶、手機資料都按 storyId 分艙，
+                //    晚一步生就會全部寫進「上一本書」的桶裡。
+                try { window.VN_Core?.newStoryId?.(w.title, w.id); } catch(e) {}
+                // 🚨 同上：等世界書切完再往下走，不然第一輪的總綱是舊的
+                try { await window.VN_FREE_MODE?.applyForCurrent?.(true); } catch(e) {}
+
+                // 這本書自帶的追蹤欄位範本（匯入角色卡／生成世界時順手建的，不是手動綁的）→
+                //   倒進「剛生出來的這條篇章」的狀態桶。順序很重要：newStoryId 要在前面。
+                if (w.autoPackId && window.OS_DB && window._AVS_ENGINE) {
+                    window.OS_DB.getAllVarPacks?.().then(packs => {
+                        const pack = (packs || []).find(p => p.id === w.autoPackId);
+                        if (pack) {
+                            window._AVS_ENGINE.initFromPack(pack);
+                            window.OS_AVS?.activateTemplateForPack?.(w.autoPackId);
+                            console.log(`[QB] 已初始化追蹤欄位：${pack.name}`);
+                        }
+                    }).catch(e => console.warn('[QB] 追蹤欄位初始化失敗:', e));
+                }
+
+                document.getElementById('qb-bookshelf-overlay').classList.remove('qb-reading');
+                document.getElementById('qb-bookshelf-overlay').style.display = 'none';
+                panel.style.display = 'none';
+                shelves.forEach(s => s.style.display = 'flex');
+
+                if (isStandalone) {
+                    // 視差委託板（挑任務→組隊→LINK START 那層殼）2026-09-06 拆了，被世界門＋創作室組件取代。
+                    //   踏入一本書＝直接開這個世界的故事：走跟自由劇情同一條生成路，世界名與簡介當請求。
+                    //   舞台 DOM 要先由 showVnPanel 建出來（同角色卡那條的教訓），生成器掛在 VN_PLAYER。
+                    const _req = `世界背景：${w.title}（${w.desc || ''}）`;
+                    if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                    if (window.AureliaControlCenter?.showVnPanel) window.AureliaControlCenter.showVnPanel();
+                    setTimeout(() => {
+                        const P = window.VN_PLAYER || window.VN_Core;
+                        if (P && P.runFreeDive) P.runFreeDive({ title: w.title, request: _req });
+                        else console.warn('[書架] 生成器還沒就緒，這次踏入沒跑起來');
+                    }, 0);
+                } else {
+                    if (window.AureliaControlCenter?.switchPage) window.AureliaControlCenter.switchPage('nav-story');
+                    if (window.StoryExtractor?.show) window.StoryExtractor.show();
+                    else window.VoidTerminal?.playSequence?.(`[Char|瀅瀅|think|「哎呀，故事提取器還沒準備好 (StoryExtractor 未連線)。」]`);
+                }
+            };
+        });
+    }
+
+    // ── 公開 API ─────────────────────────────────────────────────
+
+    window.QbBookshelf = { render, showShelf, openCover, openCreate };
+
+    console.log('✅ QbBookshelf 模組就緒 (v1.6 - 動態人設防汙染預覽版)');
+})();

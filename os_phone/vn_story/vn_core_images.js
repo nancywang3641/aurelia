@@ -1,0 +1,1003 @@
+// ----------------------------------------------------------------
+// [檔案] vn_core_images.js
+// 路徑：os_phone/vn_story/vn_core_images.js
+// 職責：VN 背景/場景CG/道具 AI 生圖管線（自 vn_core.js 拆出）
+//       含 fallback 圖庫(Pixabay/LoremFlickr)、預熱(prewarm)、mem+IDB 快取、in-flight 去重
+// ⚠️ 方法搬家、Object.assign 掛回同一顆 VN_Core（this 語義不變）；必須在 vn_core.js 之後載入
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    const VN = window.VN_Core;
+    if (!VN) { console.warn('[VN_CoreImages] VN_Core 不存在，生圖管線未掛載（vn_core.js 必須先載入）'); return; }
+
+    // 與 vn_core.js 同源的 short-name 別名（vn_cache 必須在本檔之前載入）
+    const VN_Cache = window.VN_Cache;
+    const VN_Image = window.VN_Image;
+
+    Object.assign(VN, {
+        _toDataUrl: function(url) {
+            return new Promise((res) => {
+                if (!url) return res('');
+                if (!url.startsWith('blob:')) return res(url); 
+                fetch(url)
+                    .then(r => r.blob())
+                    .then(blob => {
+                        const reader = new FileReader();
+                        reader.onload  = () => res(reader.result);
+                        reader.onerror = () => res('');
+                        reader.readAsDataURL(blob);
+                    })
+                    .catch(() => res(''));
+            });
+        },
+
+        _toObjectUrl: async function(source) {
+            if (!source) return '';
+            try {
+                const res = await fetch(source);
+                const blob = await res.blob();
+                return URL.createObjectURL(blob);
+            } catch(e) { return ''; }
+        },
+
+        // 測試用：console 跑 VN_Core.testFallback('描述', '黎明_候機大廳') 直接套一張 fallback 圖
+        // 走完整 chain：Pixabay → LoremFlickr，回報哪個接住
+        testFallback: async function(prompt, cacheId) {
+            prompt = prompt || 'cafe interior daylight';
+            console.log(`[VN] testFallback prompt: "${prompt}", cacheId: "${cacheId || '(無)'}"`);
+            let url = await this._pixabayFallback(prompt, cacheId || '');
+            let source = 'Pixabay';
+            if (!url) { url = await this._loremFlickrFallback(prompt, cacheId || ''); source = 'LoremFlickr'; }
+            if (!url) { console.error('[VN] testFallback: 兩個 fallback 都失敗'); return null; }
+            console.log(`[VN] ✓ ${source} 接住:`, url);
+            const bg = document.getElementById('game-bg');
+            if (bg) this._setBgImage(bg, url + '#fallback');
+            else console.warn('[VN] #game-bg 不存在，先進 VN 場景再測');
+            return url;
+        },
+
+        // 統一 BG 套用：URL hash 標記 fallback 等級
+        // #fallback        → 中度磨砂（Pixabay，圖經審核可看清場景）
+        // #fallback-strong → 重度磨砂（LoremFlickr，圖未審核糊到只剩色塊氛圍）
+        _setBgImage: function(el, url) {
+            // 舞台還沒建好就套背景＝整張圖白生：以前這裡直接 return，畫面黑黑的什麼都不說
+            if (!el) { console.warn('[VN] 背景套用失敗：找不到 #game-bg（VN 舞台還沒建起來？）'); return; }
+            if (url) {
+                el.style.backgroundImage = `url('${url}')`;
+                el.classList.toggle('bg-fallback', String(url).includes('#fallback'));
+            } else {
+                el.style.backgroundImage = 'none';
+                el.classList.remove('bg-fallback');
+            }
+        },
+
+        // 提取 fallback 用的英文關鍵字（cacheId 地點 → 翻譯 → 過濾 AI 修飾詞）
+        _buildFallbackKeywords: async function(prompt, cacheId) {
+            const pureTranslate = async (text) => {
+                if (!text || !/[一-龥]/.test(text)) return text;
+                if (win.TranslationManager?.translate) {
+                    try { return await win.TranslationManager.translate(text, 'zh', 'en'); } catch (e) {}
+                }
+                return text;
+            };
+
+            let searchSrc = '';
+            if (cacheId) {
+                const idx = String(cacheId).indexOf('_');
+                const place = idx >= 0 ? String(cacheId).slice(idx + 1) : String(cacheId);
+                searchSrc = place.replace(/_/g, ' ').trim();
+                searchSrc = await pureTranslate(searchSrc);
+            }
+            if (!searchSrc || !/[a-zA-Z]/.test(searchSrc)) {
+                searchSrc = await pureTranslate(String(prompt || '').slice(0, 60));
+            }
+
+            const STOPWORDS = new Set([
+                'photorealistic','realistic','photo','photography','cinematic','dramatic',
+                'high','quality','best','detailed','intricate','masterpiece',
+                '4k','8k','hd','uhd','ultra','sharp','focus','rendering','render',
+                'illustration','painting','artwork','digital','art'
+            ]);
+            return String(searchSrc || '')
+                .replace(/[^a-zA-Z0-9 ]/g, ' ')
+                .split(/\s+/)
+                .filter(w => w.length > 2 && !STOPWORDS.has(w.toLowerCase()))
+                .slice(0, 3);
+        },
+
+        // Pixabay 退路圖庫（高品質，需要 API key）
+        _pixabayFallback: async function(prompt, cacheId) {
+            const cfg = (win.OS_SETTINGS?.getImageConfig?.()) || {};
+            const key = cfg.pixabayKey;
+            if (!key) return '';
+
+            const kwArr = await this._buildFallbackKeywords(prompt, cacheId);
+            if (!kwArr.length) { console.warn('[VN] Pixabay: 沒英文關鍵字'); return ''; }
+            const keywords = kwArr.join('+');
+            try {
+                const url = `https://pixabay.com/api/?key=${encodeURIComponent(key)}&q=${encodeURIComponent(keywords)}&image_type=photo&orientation=horizontal&per_page=20&safesearch=true`;
+                const res = await fetch(url);
+                const json = await res.json();
+                if (!json.hits || !json.hits.length) { console.warn('[VN] Pixabay 無匹配:', keywords); return ''; }
+                const pick = json.hits[Math.floor(Math.random() * json.hits.length)];
+                console.log(`[VN] Pixabay fallback hit: "${keywords}" → ${pick.tags || ''}`);
+                return pick.largeImageURL || pick.webformatURL || '';
+            } catch (e) {
+                console.error('[VN] Pixabay fallback 失敗:', e);
+                return '';
+            }
+        },
+
+        // LoremFlickr 退路圖庫（免註冊，URL 直接帶關鍵字，最後一搏）
+        _loremFlickrFallback: async function(prompt, cacheId) {
+            const kwArr = await this._buildFallbackKeywords(prompt, cacheId);
+            if (!kwArr.length) { console.warn('[VN] LoremFlickr: 沒英文關鍵字'); return ''; }
+            // LoremFlickr 用逗號分隔多個關鍵字
+            const tags = kwArr.join(',');
+            const url = `https://loremflickr.com/1280/720/${encodeURIComponent(tags)}`;
+            console.log(`[VN] LoremFlickr fallback: "${tags}" → ${url}`);
+            return url;
+        },
+
+        // [Bg|季节|时间状态_设施名|描述...] → 生圖提示詞 = 第二格(设施名,底線換空格) + 第三格(描述)。
+        // 第二格身兼兩用：既當快取ID/場景標籤、也進提示詞（補上第三格沒有的具體设施名）。
+        // 舊的單格 [Bg|描述] 維持只用該格。live 與 prewarm 共用此函式，確保提示詞一致、快取不錯位。
+        _bgGenPrompt: function(parts) {
+            const label = (parts.length >= 3 && parts[1]) ? String(parts[1]).replace(/_/g, ' ') : '';
+            const desc  = parts[2] || (parts.length === 1 ? parts[0] : '');
+            return [label, desc].filter(Boolean).join(', ') || null;
+        },
+
+        // [Item|✒️名稱|描述|外觀] → 生圖提示詞 = 外觀（劇情 AI 用英文寫的物件長相）；舊章沒這格就只用名稱。名稱仍兼任快取ID。
+        //   描述是寫給玩家看的前因後果，以前整段拿去翻譯生圖：專有名詞被翻壞、
+        //   畫不出來的劇情也塞進去，還連 ✒️ 一起送。描述從此不進生圖。
+        _itemGenPrompt: function(name, look) {
+            look = String(look || '').trim();
+            if (look) return look;
+            return String(name || '').replace(/[\p{Extended_Pictographic}️‍]/gu, '').trim();
+        },
+
+        // 去重包裝：同一 cacheId 若已在生成中(預熱/現場)，共用同一個 promise，
+        // 避免兩邊各生一張(競態) → 顯示一張、快取被另一張覆蓋 → 重開變不同圖。
+        //   retryFailed=true（現場播到 [Bg|] 那一格時傳）：預熱失敗過的也再給一次機會。
+        //   🚨 預熱只是「先做著」——它逾時/失敗就把 cacheId 記進黑名單，會害玩家眼前這一格
+        //      永遠是黑的（ComfyUI 其實把圖生出來了，只是預熱那趟等不到）。預熱失敗不該連累現場。
+        _safeFetchBg: function(cacheId, prompt, retryFailed) {
+            if (this._bgMemCache[cacheId]) return Promise.resolve(this._bgMemCache[cacheId]);
+            if (this._bgInflight[cacheId]) return this._bgInflight[cacheId];
+            if (this._bgFailed[cacheId]) {
+                if (!retryFailed) return Promise.resolve('');   // 預熱路徑：同場景不重打(白燒)
+                delete this._bgFailed[cacheId];
+                console.log(`[VN] 背景 ${cacheId} 預熱時失敗過 → 現場再試一次`);
+            }
+            const self = this;
+            const p = this._doFetchBg(cacheId, prompt);
+            this._bgInflight[cacheId] = p;
+            p.then(function (url) {
+                if (!url) self._bgFailed[cacheId] = Date.now();   // 回空＝失敗 → 記下、同 cacheId 不再自動觸發
+            }, function () {
+                self._bgFailed[cacheId] = Date.now();
+            }).then(function () { delete self._bgInflight[cacheId]; });
+            return p;
+        },
+        _doFetchBg: async function(cacheId, prompt) {
+            // 🆘 fallback(退路真實圖+磨砂)是「主來源掛掉時的應急」、不是正式背景：記憶體/IDB 都不吃它的快取，
+            //    一律往下重新走主來源 → 主來源恢復 / 切了來源後就能拿正式清晰圖(治「切了來源還是糊、舊糊圖卡快取」)。
+            if (this._bgMemCache[cacheId] && !String(this._bgMemCache[cacheId]).includes('#fallback')) return this._bgMemCache[cacheId];
+            const cached = await VN_Cache.get('bg_cache', cacheId);
+            if (cached && cached.fallback) {
+                try { await VN_Cache.delete('bg_cache', cacheId); } catch (e) {}   // 清掉殘留的應急糊圖快取，下面重生
+            } else if (cached && cached.url) {
+                if (cached.url.startsWith('blob:')) {
+                    await VN_Cache.delete('bg_cache', cacheId);
+                } else {
+                    const objUrl = await this._toObjectUrl(cached.url);
+                    this._bgMemCache[cacheId] = objUrl || cached.url;   // 正式圖，無 #fallback 磨砂
+                    this._preloadImg(cacheId, this._bgMemCache[cacheId]);
+                    return this._bgMemCache[cacheId];
+                }
+            }
+            const meta = {};
+            // 強制 fallback 測試模式
+            let forceFallback = false;
+            try { forceFallback = JSON.parse(localStorage.getItem('os_image_config') || '{}').fallbackForce === true; } catch(e) {}
+
+            // 背景主來源 + timeout：所有來源都是「await 等真的生完才回」，本機 ComfyUI 生一張 1024×768 背景動輒 20~60 秒，
+            //   逾時給 150 秒（跟頭像/場景同量級），別把還在生的圖砍掉、誤掉進 Pixabay 真實圖 fallback。
+            //   （以前 Pollinations 只組網址、瞬間回，所以它另外給 12 秒；2026-11-17 拿掉了。）
+            //   還沒接生圖接口的話 generateBackgroundAsync 直接回空 → 走下面的 Pixabay / LoremFlickr 備援。
+            const _IM = win.OS_IMAGE_MANAGER || window.OS_IMAGE_MANAGER || (window.parent && window.parent.OS_IMAGE_MANAGER);
+            let _bgSvc = '';
+            try { if (_IM && typeof _IM.serviceForUse === 'function') _bgSvc = _IM.serviceForUse('bg') || ''; else if (_IM && typeof _IM.serviceFor === 'function') _bgSvc = _IM.serviceFor('bg') || ''; } catch (e) {}
+            const _bgTimeoutMs = 150000;
+            let raw = '';
+            if (!forceFallback) {
+                try {
+                    raw = await Promise.race([
+                        VN_Image.getBg(prompt, meta),
+                        new Promise((_, reject) => setTimeout(() => reject(new Error('bg timeout ' + _bgTimeoutMs + 'ms / ' + _bgSvc)), _bgTimeoutMs))
+                    ]);
+                } catch (e) {
+                    console.warn('[VN] 背景主來源逾時/失敗，啟用 Pixabay fallback:', e.message);
+                    raw = '';
+                }
+            }
+
+            // Fallback chain：Pixabay (有 key) → LoremFlickr (永遠 work)
+            let isFallback = false;
+            if (!raw) {
+                raw = await this._pixabayFallback(prompt, cacheId);
+                if (raw) { isFallback = true; console.log('[VN] fallback source: Pixabay'); }
+            }
+            if (!raw) {
+                raw = await this._loremFlickrFallback(prompt, cacheId);
+                if (raw) { isFallback = true; console.log('[VN] fallback source: LoremFlickr'); }
+            }
+            if (!raw) {
+                // 三條路(主來源→Pixabay→LoremFlickr)都空手 → 這格背景註定是黑的，說清楚別讓人猜
+                console.warn(`[VN] 背景三條路都沒拿到圖：${cacheId}｜主來源 ${_bgSvc || '(問不到)'}｜提示詞「${String(prompt).slice(0, 60)}」`);
+                return '';
+            }
+
+            const savedPrompt = meta.translatedPrompt || prompt;
+            try {
+                // 下載逾時保險：遠端網址（備援圖）下載卡住的話這格會永遠 pending → 90 秒放棄，改走備援
+                const _ac = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+                const _timer = _ac ? setTimeout(() => { try { _ac.abort(); } catch (e) {} }, 90000) : null;
+                let fetchRes;
+                try {
+                    fetchRes = await fetch(raw, _ac ? { signal: _ac.signal } : undefined);
+                } finally {
+                    if (_timer) clearTimeout(_timer);
+                }
+                if (!fetchRes.ok) console.warn(`[VN] 背景圖下載回 ${fetchRes.status}：${cacheId}`);
+                const blob = await fetchRes.blob();
+                const objUrl = URL.createObjectURL(blob);
+                const dataUrl = await new Promise(r => {
+                    const reader = new FileReader();
+                    reader.onload = () => r(reader.result);
+                    reader.onerror = () => r('');
+                    reader.readAsDataURL(blob);
+                });
+                const tagged = isFallback ? objUrl + '#fallback' : objUrl;
+                this._bgMemCache[cacheId] = tagged;
+                this._preloadImg(cacheId, tagged);
+                if (dataUrl) await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url: dataUrl, fallback: isFallback });
+                return tagged;
+            } catch(e) {
+                const _aborted = e && e.name === 'AbortError';
+                if (_aborted) console.warn('[VN] 背景下載逾時(90秒)，改走備援:', cacheId);
+                else console.warn(`[VN] 背景圖抓取失敗：${cacheId}｜${e && e.message || e}｜來源 URL 開頭「${String(raw).slice(0, 60)}」`);
+                // 主來源失敗且還沒用過備援 → 補一輪 Pixabay → LoremFlickr，別讓進度永遠缺一格
+                if (!isFallback) {
+                    try {
+                        let fb = await this._pixabayFallback(prompt, cacheId);
+                        if (!fb) fb = await this._loremFlickrFallback(prompt, cacheId);
+                        if (fb) {
+                            const tagged2 = fb.includes('#') ? fb : fb + '#fallback';
+                            this._bgMemCache[cacheId] = tagged2;
+                            this._preloadImg(cacheId, tagged2);
+                            console.log('[VN] 背景備援接手:', cacheId);
+                            return tagged2;
+                        }
+                    } catch (e2) {}
+                }
+                if (_aborted) return '';   // 雲端死透：放掉這張，別再沿同一條死路重試
+                const url = await this._toDataUrl(raw);
+                if (url) {
+                    const tagged = isFallback ? url + '#fallback' : url;
+                    this._bgMemCache[cacheId] = tagged;
+                    this._preloadImg(cacheId, tagged);
+                    await VN_Cache.set('bg_cache', cacheId, { prompt: savedPrompt, rawUrl: raw, url, fallback: isFallback });
+                }
+                return this._bgMemCache[cacheId] || '';
+            }
+        },
+
+        _preloadImg: function(cacheId, url) {
+            if (!url || this._decodedImgs[cacheId]) return;
+            const img = new Image();
+            img.src = url;
+            if (typeof img.decode === 'function') {
+                img.decode().catch(() => {}); 
+            }
+            this._decodedImgs[cacheId] = img; 
+        },
+
+        // 判斷 tag 是不是「動態標籤區塊」（創作室 isBlock 模板，如 <ChapterCard>）
+        _isDynBlockTag: function(tag) {
+            const dp = window.VN_DynamicParser;
+            if (!dp || !dp.activeTemplates || !tag) return false;
+            const t = tag.toLowerCase();
+            return dp.activeTemplates.some(x => x.isBlock && x.tagId && x.tagId.toLowerCase() === t);
+        },
+        // 回傳 this.script 中「不在動態標籤區塊內」的行。
+        // 動態區塊（如 <ChapterCard>）內容是「卡片資料」，裡面的 [Bg|]/[Item|]/[Scene|] 不是 VN 指令；
+        // prewarm 預掃必須跳過，否則會把卡片資料當真背景/道具去生成 → 污染真實 VN 的 bg/bgm。
+        _linesOutsideDynBlocks: function() {
+            const out = [];
+            let inBlock = false, closeTag = '';
+            for (const line of this.script) {
+                if (inBlock) { if (line === closeTag) inBlock = false; continue; }
+                const m = line.match(/^<([A-Za-z一-鿿][\w一-鿿-]*)>$/);
+                if (m && this._isDynBlockTag(m[1])) { inBlock = true; closeTag = '</' + m[1] + '>'; continue; }
+                out.push(line);
+            }
+            return out;
+        },
+        // 卡片區塊（如 <ChapterCard>）裡若含真 VN 場景指令（[BGM]/[Bg]/[Scene]）→ 在區塊「前面」插入副本，
+        // 讓 VN 引擎照常執行（播音樂、設背景）；區塊內原行仍被 processLine 收進卡片當顯示資料。
+        // 解決：把開場 [BGM]/[Bg] 包進美化卡後，音樂/背景失效的問題（不包時正常、包了就被吞）。
+        _hoistSceneDirectivesFromDynBlocks: function() {
+            const SCENE = /^\[(BGM|Bg|Scene)\|/i;
+            const out = [];
+            let i = 0;
+            while (i < this.script.length) {
+                const line = this.script[i];
+                const m = line.match(/^<([A-Za-z一-鿿][\w一-鿿-]*)>$/);
+                if (m && this._isDynBlockTag(m[1])) {
+                    const closeTag = '</' + m[1] + '>';
+                    let j = i + 1;
+                    while (j < this.script.length && this.script[j] !== closeTag) j++;
+                    // 先吐場景指令副本（VN 引擎執行）
+                    for (let k = i + 1; k < j; k++) { if (SCENE.test(this.script[k])) out.push(this.script[k]); }
+                    // 再吐原區塊（open ~ close）給卡片渲染
+                    for (let k = i; k <= j && k < this.script.length; k++) out.push(this.script[k]);
+                    i = j + 1;
+                } else {
+                    out.push(line);
+                    i++;
+                }
+            }
+            this.script = out;
+        },
+        _prewarmBgs: function() {
+            const tasks = [];
+            const seen = new Set();
+            for (const line of this._linesOutsideDynBlocks()) {
+                if (!line.startsWith('[Bg|')) continue;
+                const parts = line.slice(4, -1).split('|');
+                const cacheId = parts[1];
+                const prompt  = this._bgGenPrompt(parts);   // 與 live 同一組合：第二格 + 第三格
+                if (!cacheId || !prompt || seen.has(cacheId)) continue;
+                seen.add(cacheId);
+                tasks.push({ cacheId, prompt });
+            }
+            if (!tasks.length) return;
+            console.log(`[VN] 預熱背景：共 ${tasks.length} 張，依序生成中（含 fallback）...`);
+            (async () => {
+                this._imgScanStart();
+                try {
+                    for (const { cacheId, prompt } of tasks) {
+                        this._imgJobStart();
+                        try { await this._safeFetchBg(cacheId, prompt); } finally { this._imgJobEnd(); }
+                    }
+                } finally { this._imgScanEnd(); }
+                console.log('[VN] 所有背景預熱完成');
+            })();
+        },
+
+        _prewarmItems: function() {
+            const tasks = [];
+            const seen = new Set();
+            for (const line of this._linesOutsideDynBlocks()) {
+                if (!line.startsWith('[Item|')) continue;
+                const _ip = line.slice(6, -1).split('|');
+                const itemName = _ip[0];
+                if (!itemName || seen.has(itemName)) continue;
+                seen.add(itemName);
+                tasks.push({ name: itemName, look: _ip[2] || '' });
+            }
+            if (!tasks.length) return;
+            console.log(`[VN] 預熱道具圖：共 ${tasks.length} 張，依序生成中...`);
+            (async () => {
+                this._imgScanStart();
+                try {
+                    for (const { name: itemName, look } of tasks) {
+                        // 走 _safeFetchItem：與現場 [Item|] 共用 in-flight promise，防重複生成
+                        this._imgJobStart();
+                        try { await this._safeFetchItem(itemName, look); } finally { this._imgJobEnd(); }
+                    }
+                } finally { this._imgScanEnd(); }
+                console.log('[VN] 所有道具圖預熱完成');
+            })();
+        },
+
+        // 🎩 把道具圖掛上彈窗舞台。去背成功＝裸物件浮空(柔光＋投影)；去背失敗/關閉＝加 vnitem-raw 走羽化遮罩，
+        //   不然一塊白底方塊浮在半透明黑幕上，比原本的卡片還難看。url 空＝回到「等圖」狀態（轉著的菱形）。
+        _itemShowImg: function(itemName, url) {
+            const img = document.getElementById('item-img');
+            const stage = document.getElementById('item-stage');
+            if (!img) return;
+            img.classList.remove('vnitem-in');
+            if (stage) stage.classList.remove('loaded');
+            if (!url) { img.removeAttribute('src'); return; }
+            img.classList.toggle('vnitem-raw', this._itemCutOk[itemName] !== true);
+            img.onload = function () {
+                img.classList.add('vnitem-in');
+                if (stage) stage.classList.add('loaded');
+            };
+            img.src = url;
+        },
+
+        // 道具去背總開關：localStorage.vn_item_cut = '0' 關掉（關了就是帶底原圖＋羽化遮罩顯示）
+        _itemCutEnabled: function() {
+            try { return localStorage.getItem('vn_item_cut') !== '0'; } catch (e) { return true; }
+        },
+        // ✂️ 道具去背：回 { url(可存的圖), cut(有沒有真的去掉底) }，任何一步失敗都原樣把圖送回去。
+        //   走跟立繪同一支 AI 去背(isnet，吃任何背景)，不用純色 flood-fill——道具很多是淺色紙張/白瓷/銀器，
+        //   跟白底只差一點點，容差一定會吃進物件本體（立繪那邊就是為了這個把 flood-fill 砍掉的）。
+        //   _stripSpriteBgAI 自帶序列化鏈，預熱一次生好幾張也不會併發搶 CPU。
+        _cutItemImage: async function(srcUrl) {
+            if (!srcUrl || !this._itemCutEnabled()) return { url: srcUrl, cut: false };
+            let blob = null;
+            try { blob = await (await fetch(srcUrl)).blob(); } catch (e) {}
+            if (!blob) return { url: srcUrl, cut: false };
+            let out = null;
+            try { out = await this._stripSpriteBgAI(blob); } catch (e) {}
+            if (!out) { console.warn('[VN] ⚠️ 道具去背失敗 → 用帶底原圖（彈窗退成羽化遮罩）。往上找「AI 去背失敗」的原因，多半是去背模型下載不了'); return { url: srcUrl, cut: false }; }
+            try { out = (await this._fillItemHoles(blob, out)) || out; } catch (e) { console.warn('[VN] 道具去背補洞失敗，照去背結果用:', e); }
+            const du = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(String(rd.result)); rd.onerror = () => r(''); rd.readAsDataURL(out); });
+            return du ? { url: du, cut: true } : { url: srcUrl, cut: false };
+        },
+
+        // 🕳 去背補洞：isnet 認不出線稿裡大片淺色的「內部」（例如牛皮紙袋：外框留著、袋子裡面整塊挖空，看得到後面的街景）。
+        //   被物件包住（跟圖邊的背景不相連）的透明區塊，原圖那塊顏色跟背景差很多＝其實是物件本體 → 從原圖補回、不透明；
+        //   跟背景差不多＝真的洞（項鍊圈、鑰匙孔、把手中間）→ 照樣透明。
+        //   🚨 一定要拿原圖補：去背結果全透明的地方顏色已經被清成黑的，存起來的舊圖補不回來。回 null＝沒洞可補。
+        _fillItemHoles: async function(origBlob, cutBlob) {
+            const [cb, ob] = await Promise.all([createImageBitmap(cutBlob), createImageBitmap(origBlob)]);
+            const W = cb.width, H = cb.height, N = W * H;
+            const canvasOf = function (bmp, w, h) {
+                const c = document.createElement('canvas'); c.width = W; c.height = H;
+                const x = c.getContext('2d', { willReadFrequently: true });
+                x.drawImage(bmp, 0, 0, w, h);
+                return { c, x, img: x.getImageData(0, 0, W, H) };
+            };
+            const C = canvasOf(cb, W, H), O = canvasOf(ob, W, H), o = O.img.data, d = C.img.data;
+            this._freeCanvas(O.c);                       // 原圖只要像素，畫布先還（iPhone 畫布記憶體很小）
+            try { cb.close(); ob.close(); } catch (e) {}
+            try { return await this._fillItemHolesOn(C, o, d, W, H, N); }
+            finally { this._freeCanvas(C.c); }
+        },
+        _fillItemHolesOn: async function (C, o, d, W, H, N) {
+            const LOW = 128, DIFF = 48;   // 透明度低於一半算「被挖掉」；原圖顏色跟背景差超過這麼多（RGB 距離）算物件本體
+            const OUT = -1;
+            const lab = new Int32Array(N), q = new Int32Array(N);
+            // 1) 從圖邊往裡走，被挖掉而且連得到圖邊的＝外面的背景
+            let qh = 0, qt = 0;
+            const seed = function (p) { if (!lab[p] && d[p * 4 + 3] < LOW) { lab[p] = OUT; q[qt++] = p; } };
+            for (let x = 0; x < W; x++) { seed(x); seed((H - 1) * W + x); }
+            for (let y = 0; y < H; y++) { seed(y * W); seed(y * W + W - 1); }
+            const nb = function (p, fn) { const x = p % W; if (x > 0) fn(p - 1); if (x < W - 1) fn(p + 1); if (p >= W) fn(p - W); if (p < N - W) fn(p + W); };
+            while (qh < qt) nb(q[qh++], seed);
+            let br = 0, bg = 0, bb = 0, bn = 0;
+            for (let p = 0; p < N; p++) if (lab[p] === OUT) { br += o[p * 4]; bg += o[p * 4 + 1]; bb += o[p * 4 + 2]; bn++; }
+            const bgc = bn ? [br / bn, bg / bn, bb / bn] : [255, 255, 255];
+            // 2) 剩下被挖掉的一塊一塊算：原圖那塊平均顏色跟背景比
+            const fillIds = [];
+            let id = 0;
+            for (let s = 0; s < N; s++) {
+                if (lab[s] || d[s * 4 + 3] >= LOW) continue;
+                id++; qh = 0; qt = 0; lab[s] = id; q[qt++] = s;
+                let r = 0, g = 0, b = 0;
+                while (qh < qt) {
+                    const p = q[qh++];
+                    r += o[p * 4]; g += o[p * 4 + 1]; b += o[p * 4 + 2];
+                    nb(p, function (n) { if (!lab[n] && d[n * 4 + 3] < LOW) { lab[n] = id; q[qt++] = n; } });
+                }
+                const dist = Math.hypot(r / qt - bgc[0], g / qt - bgc[1], b / qt - bgc[2]);
+                if (dist > DIFF) fillIds[id] = 1;
+            }
+            if (!fillIds.length) return null;
+            // 3) 補回原圖、不透明；洞的邊緣那圈半透明也一起補（往外兩格，不碰外面的背景）
+            const fill = new Uint8Array(N);
+            for (let p = 0; p < N; p++) if (lab[p] > 0 && fillIds[lab[p]]) fill[p] = 1;
+            for (let k = 0; k < 2; k++) {
+                const grow = [];
+                for (let p = 0; p < N; p++) if (fill[p]) nb(p, function (n) { if (!fill[n] && lab[n] !== OUT && d[n * 4 + 3] < 255) grow.push(n); });
+                grow.forEach(function (n) { fill[n] = 1; });
+            }
+            let filled = 0;
+            for (let p = 0; p < N; p++) if (fill[p]) { const i = p * 4; d[i] = o[i]; d[i + 1] = o[i + 1]; d[i + 2] = o[i + 2]; d[i + 3] = 255; filled++; }
+            C.x.putImageData(C.img, 0, 0);
+            console.log('[VN] 道具去背補洞：' + Math.round(filled / N * 100) + '% 補回原圖');
+            return await new Promise(function (r) { C.c.toBlob(function (bl) { r(bl); }, 'image/png'); });
+        },
+
+        // 🎴 三合一生成（VN_Image.getTrio）：一張三格圖 → 找分隔線切三塊 → 立繪、Q版去背，自拍留背景當頭像。
+        //   切法跟 參考資料/SPRITE_TRIO_LAB.js 同一套（ComfyUI 五角色×四種子 20 張實測全切對）：
+        //   不照比例硬切——模型會整張挪一點、右上那格高矮差很多（41%~49%）。
+        //   有母圖：找「沿著它亮度不變又夠黑」的線＋外框；沒母圖：找格子之間的縫（一條亮度不變又夠窄的直欄／橫列），
+        //   沒有縫就找左右（上下）亮度差最大那條邊界。🚨 一定要限寬：白底大片空白也是「亮度不變」。
+        _trioCut: function (cv, withTpl) {
+            const w = cv.width, h = cv.height;
+            const d = cv.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+            const L = new Float32Array(w * h);
+            for (let p = 0, i = 0; p < w * h; p++, i += 4) L[p] = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2];
+            const stat = function (vertical, k, a, b) {
+                let s = 0, s2 = 0, n = 0;
+                const step = Math.max(1, Math.floor((b - a) / 120));
+                for (let j = a; j < b; j += step) { const v = L[vertical ? j * w + k : k * w + j]; s += v; s2 += v * v; n++; }
+                const m = s / n; return { m: m, sd: Math.sqrt(Math.max(0, s2 / n - m * m)) };
+            };
+            const findRun = function (isLine, lo, hi, exp, maxW) {
+                const runs = []; let run = null;
+                for (let k = lo; k <= hi; k++) {
+                    if (isLine(k)) { if (!run) run = { a: k, b: k }; else run.b = k; }
+                    else if (run) { runs.push(run); run = null; }
+                }
+                if (run) runs.push(run);
+                const ok = runs.filter(function (r) { return r.b - r.a + 1 <= maxW; });
+                if (!ok.length) return null;
+                ok.sort(function (p, q) { return Math.abs((p.a + p.b) / 2 - exp) - Math.abs((q.a + q.b) / 2 - exp); });
+                return ok[0];
+            };
+            const edgeAt = function (vertical, lo, hi, s0, s1) {
+                let best = 0, at = -1;
+                const step = Math.max(1, Math.floor((s1 - s0) / 160));
+                for (let k = Math.max(1, lo); k <= hi; k++) {
+                    let s = 0, n = 0;
+                    for (let j = s0; j < s1; j += step) {
+                        const p = vertical ? j * w + k : k * w + j, q = vertical ? p - 1 : p - w;
+                        s += Math.abs(L[p] - L[q]); n++;
+                    }
+                    if (s / n > best) { best = s / n; at = k; }
+                }
+                return best >= 12 ? { a: at - 1, b: at } : null;
+            };
+            const line = function (st) { return st.sd < 22 && (!withTpl || st.m < 90); };
+            const maxW = Math.max(4, Math.round(Math.min(w, h) * 0.06));
+            const lp = VN_Image.TRIO_LP, tp = VN_Image.TRIO_TP;
+            let L0 = 0, R0 = w, T0 = 0, B0 = h;
+            if (withTpl) {   // 外框：從四邊往裡找貼邊那段黑線
+                const ey0 = Math.round(h * 0.1), ey1 = Math.round(h * 0.9), ex0 = Math.round(w * 0.1), ex1 = Math.round(w * 0.9);
+                let r;
+                r = findRun(function (x) { return line(stat(true, x, ey0, ey1)); }, 0, Math.round(w * 0.08), 0, maxW); if (r) L0 = r.b + 1;
+                r = findRun(function (x) { return line(stat(true, x, ey0, ey1)); }, w - 1 - Math.round(w * 0.08), w - 1, w - 1, maxW); if (r) R0 = r.a;
+                r = findRun(function (y) { return line(stat(false, y, ex0, ex1)); }, 0, Math.round(h * 0.08), 0, maxW); if (r) T0 = r.b + 1;
+                r = findRun(function (y) { return line(stat(false, y, ex0, ex1)); }, h - 1 - Math.round(h * 0.08), h - 1, h - 1, maxW); if (r) B0 = r.a;
+            }
+            const vExp = Math.round(w * lp), vWin = Math.round(w * 0.12);
+            const yA = T0 + Math.round((B0 - T0) * 0.1), yB = B0 - Math.round((B0 - T0) * 0.1);
+            const vLo = Math.max(L0, vExp - vWin), vHi = Math.min(R0 - 1, vExp + vWin);
+            let v = findRun(function (x) { return line(stat(true, x, yA, yB)); }, vLo, vHi, vExp, maxW);
+            if (!v && !withTpl) v = edgeAt(true, vLo, vHi, T0, B0);
+            const vFound = !!v;
+            if (!v) { const t = VN_Image.trioLine(w, h); v = { a: vExp - Math.ceil(t / 2), b: vExp + Math.floor(t / 2) }; }
+            // 橫的那條只在右半邊找；沒母圖時右上那格高矮差很多，範圍放寬到 25%~80%
+            const hExp = Math.round(h * tp), hWin = Math.round(h * 0.12);
+            const hLo = withTpl ? Math.max(T0, hExp - hWin) : Math.round(h * 0.25), hHi = withTpl ? Math.min(B0 - 1, hExp + hWin) : Math.round(h * 0.80);
+            const xA = v.b + 1 + Math.round((R0 - v.b) * 0.1), xB = R0 - Math.round((R0 - v.b) * 0.1);
+            let hz = findRun(function (y) { return line(stat(false, y, xA, xB)); }, hLo, hHi, hExp, maxW);
+            if (!hz && !withTpl) hz = edgeAt(false, hLo, hHi, v.b + 1, R0);
+            const hFound = !!hz;
+            if (!hz) { const t = VN_Image.trioLine(w, h); hz = { a: hExp - Math.ceil(t / 2), b: hExp + Math.floor(t / 2) }; }
+            // 右下那格的左邊不一定跟右上對齊：沒母圖時模型常把 Q版那排畫得比自拍寬（畫成三面圖尤其），照直的分界切會把最左那隻削掉一條。
+            //   分界那欄在右下這段高度裡有東西 → 往左找跟左格之間那條空白，切在空白中間；找不到（是左格的人伸過來）就不動。
+            let bx = v.b + 1;
+            if (!withTpl) {
+                const by0 = hz.b + 1, by1 = B0;
+                const blank = function (x) { return stat(true, x, by0, by1).sd < 8; };
+                if (by1 - by0 > 8 && !blank(v.b + 1)) {
+                    const lim = Math.max(L0, v.a - Math.round(w * 0.12));
+                    let g1 = v.a;
+                    while (g1 > lim && !blank(g1)) g1--;
+                    if (g1 > lim) {
+                        let g0 = g1;
+                        while (g0 - 1 > lim && blank(g0 - 1)) g0--;
+                        bx = Math.round((g0 + g1) / 2);
+                    }
+                }
+            }
+            const pad = withTpl ? 3 : 0;   // 黑線邊緣常有一兩格灰邊，往裡多切一點
+            const box = function (x0, y0, x1, y1) { return { x: Math.max(0, x0), y: Math.max(0, y0), w: Math.max(1, Math.min(w, x1) - Math.max(0, x0)), h: Math.max(1, Math.min(h, y1) - Math.max(0, y0)) }; };
+            return {
+                vFound: vFound, hFound: hFound, vPct: (v.a + v.b) / 2 / w, hPct: (hz.a + hz.b) / 2 / h,
+                boxes: {
+                    left: box(L0 + pad, T0 + pad, v.a - pad, B0 - pad),
+                    top: box(v.b + 1 + pad, T0 + pad, R0 - pad, hz.a - pad),
+                    bottom: box(bx + pad, hz.b + 1 + pad, R0 - pad, B0 - pad),
+                },
+            };
+        },
+        // 去背後只留主體：切的時候萬一帶到隔壁格一小條，去背會把它當前景留下來 → 只留最大那塊（和夠大的幾塊，例如手上拿的東西）
+        _keepMainPiece: async function (blob) {
+            const bmp = await createImageBitmap(blob);
+            const W = bmp.width, H = bmp.height, N = W * H;
+            const c = document.createElement('canvas'); c.width = W; c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+            try { bmp.close(); } catch (e) {}
+            try { return await this._keepMainPieceOn(c, g, W, H, N); }
+            finally { this._freeCanvas(c); }
+        },
+        _keepMainPieceOn: async function (c, g, W, H, N) {
+            const img = g.getImageData(0, 0, W, H), d = img.data;
+            const lab = new Int32Array(N), q = new Int32Array(N), sizes = [0];
+            let id = 0;
+            for (let s = 0; s < N; s++) {
+                if (lab[s] || d[s * 4 + 3] < 64) continue;
+                id++; let qh = 0, qt = 0; lab[s] = id; q[qt++] = s;
+                while (qh < qt) {
+                    const p = q[qh++], x = p % W;
+                    const nb = [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, p >= W ? p - W : -1, p < N - W ? p + W : -1];
+                    for (let k = 0; k < 4; k++) { const n = nb[k]; if (n >= 0 && !lab[n] && d[n * 4 + 3] >= 64) { lab[n] = id; q[qt++] = n; } }
+                }
+                sizes.push(qt);
+            }
+            if (id <= 1) return null;
+            const big = Math.max.apply(null, sizes);
+            let dropped = 0;
+            for (let p = 0; p < N; p++) { const l = lab[p]; if (l && sizes[l] < big * 0.08) { d[p * 4 + 3] = 0; dropped++; } }
+            if (!dropped) return null;
+            g.putImageData(img, 0, 0);
+            return await new Promise(function (r) { c.toBlob(function (b) { r(b); }, 'image/png'); });
+        },
+        // 🧸 Q版那格畫成三面圖（正面、側面、背面並排）→ 切成三張，回 [正面, 側面, 背面] 的 Blob；不是三隻回 null（整格照舊當一張）。
+        //   吃去背後的圖：數「夠大的塊」（≥ 最大那塊的 35%），剛好三塊、左右不重疊才算；分界切在兩隻中間的空隙，由左到右＝正面、側面、背面。
+        //   每張左右留一樣寬的邊（小人在正中）、上下不裁：三張同高同腳底，換面不會跳，站在大廳的大小也跟整格當一張時同一個算法。
+        _chibiViews: async function (blob) {
+            const bmp = await createImageBitmap(blob);
+            const W = bmp.width, H = bmp.height, N = W * H;
+            const c = document.createElement('canvas'); c.width = W; c.height = H;
+            const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0);
+            try { bmp.close(); } catch (e) {}
+            try {
+                const d = g.getImageData(0, 0, W, H).data;
+                const lab = new Uint8Array(N), q = new Int32Array(N), comps = [], colHas = new Uint8Array(W);
+                for (let s = 0; s < N; s++) {
+                    if (lab[s] || d[s * 4 + 3] < 64) continue;
+                    let qh = 0, qt = 0, x0 = W, x1 = -1; lab[s] = 1; q[qt++] = s;
+                    while (qh < qt) {
+                        const p = q[qh++], x = p % W;
+                        if (x < x0) x0 = x; if (x > x1) x1 = x; colHas[x] = 1;
+                        const nb = [x > 0 ? p - 1 : -1, x < W - 1 ? p + 1 : -1, p >= W ? p - W : -1, p < N - W ? p + W : -1];
+                        for (let k = 0; k < 4; k++) { const n = nb[k]; if (n >= 0 && !lab[n] && d[n * 4 + 3] >= 64) { lab[n] = 1; q[qt++] = n; } }
+                    }
+                    comps.push({ n: qt, x0: x0, x1: x1 });
+                }
+                if (comps.length < 3) return null;
+                const big = Math.max.apply(null, comps.map(function (o) { return o.n; }));
+                const main = comps.filter(function (o) { return o.n >= big * 0.35; }).sort(function (a, b) { return a.x0 - b.x0; });
+                if (main.length !== 3) return null;
+                if (main[1].x0 <= main[0].x1 || main[2].x0 <= main[1].x1) return null;
+                const cuts = [0, Math.round((main[0].x1 + main[1].x0) / 2), Math.round((main[1].x1 + main[2].x0) / 2), W];
+                const pad = Math.round(H * 0.04), out = [];
+                for (let i = 0; i < 3; i++) {
+                    let a = cuts[i], b = cuts[i + 1] - 1;
+                    const lo = a, hi = b;
+                    while (a < b && !colHas[a]) a++;
+                    while (b > a && !colHas[b]) b--;
+                    const p = Math.max(0, Math.min(pad, a - lo, hi - b));
+                    const sx = a - p, sw = (b + p) - sx + 1;
+                    const o = document.createElement('canvas'); o.width = sw; o.height = H;
+                    o.getContext('2d').drawImage(c, sx, 0, sw, H, 0, 0, sw, H);
+                    out.push(await new Promise(function (r) { o.toBlob(function (bl) { r(bl); }, 'image/png'); }));
+                    this._freeCanvas(o);
+                }
+                return out.every(Boolean) ? out : null;
+            } finally { this._freeCanvas(c); }
+        },
+        // 回 { objUrl, dataUrl(立繪), face(頭像), chibi(Q版；畫成三面時＝正面那隻), chibiSide／chibiBack(三面時才有) }；失敗回 null（不退成單張立繪：定案是三種一起）。
+        //   🚨 不准往外丟錯：單張那條（_makeCharImageOne）失敗是回 null，開口時那條靠它退到「最終預設立繪」；丟出去就整個卡住。
+        _makeTrio: async function (prompt, force) {
+            try { return await this._makeTrioRaw(prompt, force); }
+            catch (e) { console.warn('[VN] 三合一生成失敗：', (e && e.message) || e); return null; }
+        },
+        _makeTrioRaw: async function (prompt, force) {
+            const r = await VN_Image.getTrio(prompt, force);
+            if (!r || !r.raw) return null;
+            let blob = null;
+            try { blob = await (await fetch(r.raw)).blob(); }
+            catch (e) { try { const du = await this._toDataUrl(r.raw); if (du) blob = await (await fetch(du)).blob(); } catch (e2) {} }
+            if (!blob) return null;
+            // 🧷 切格這段在 iPhone 上最吃記憶體：記一筆（被整頁重開的話下次會講是這一步），用完的點陣圖、畫布馬上還
+            this._heavyBegin('trio');
+            try { return await this._trioSplit(blob, r); }
+            finally { this._heavyEnd(); }
+        },
+        _trioSplit: async function (blob, r) {
+            const bmp = await createImageBitmap(blob);
+            const cv = document.createElement('canvas'); cv.width = bmp.width; cv.height = bmp.height;
+            cv.getContext('2d').drawImage(bmp, 0, 0);
+            try { bmp.close(); } catch (e) {}
+            let a = this._trioCut(cv, r.withTpl);
+            // 有送母圖但它沒照畫格線（或那個站不收參考圖）→ 照沒母圖的找法再找一次
+            if (r.withTpl && !(a.vFound && a.hFound)) a = this._trioCut(cv, false);
+            console.log('[VN] 三合一生成：直的分界 ' + (a.vPct * 100).toFixed(1) + '%' + (a.vFound ? '' : '（沒找到，照預設）') + '、橫的 ' + (a.hPct * 100).toFixed(1) + '%' + (a.hFound ? '' : '（沒找到，照預設）'));
+            // 切下來的邊上常留一條殘線（線邊緣那圈灰）或白邊（模型把整張挪了一點）：四邊是「一整條亮度不變」的就往裡修，最多修掉 5%
+            const trim = function (b) {
+                const g = cv.getContext('2d', { willReadFrequently: true });
+                const d = g.getImageData(b.x, b.y, b.w, b.h).data, W = b.w, H = b.h;
+                // 只看還沒修掉的那段：左邊那欄底下碰到一點橫線殘色，不該讓左邊整條白邊修不掉 → 一圈一圈修到四邊都不動
+                const flat = function (vertical, k, a, z) {
+                    let s = 0, s2 = 0, n = 0;
+                    const step = Math.max(1, Math.floor((z - a + 1) / 100));
+                    for (let j = a; j <= z; j += step) {
+                        const i = (vertical ? j * W + k : k * W + j) * 4;
+                        const v = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]; s += v; s2 += v * v; n++;
+                    }
+                    const m = s / n; return Math.sqrt(Math.max(0, s2 / n - m * m)) < 22;
+                };
+                const mx = Math.round(W * 0.05), my = Math.round(H * 0.05);
+                let l = 0, r = W - 1, t = 0, bt = H - 1, moved = true;
+                while (moved) {
+                    moved = false;
+                    while (l < mx && flat(true, l, t, bt)) { l++; moved = true; }
+                    while (W - 1 - r < mx && flat(true, r, t, bt)) { r--; moved = true; }
+                    while (t < my && flat(false, t, l, r)) { t++; moved = true; }
+                    while (H - 1 - bt < my && flat(false, bt, l, r)) { bt--; moved = true; }
+                }
+                return { x: b.x + l, y: b.y + t, w: Math.max(1, r - l + 1), h: Math.max(1, bt - t + 1) };
+            };
+            const crop = function (b0) { const b = trim(b0); const c = document.createElement('canvas'); c.width = b.w; c.height = b.h; c.getContext('2d').drawImage(cv, b.x, b.y, b.w, b.h, 0, 0, b.w, b.h); return c; };
+            const toBlob = function (c, type, qq) { return new Promise(function (res) { c.toBlob(res, type || 'image/png', qq); }); };
+            const toData = function (b) { return new Promise(function (res) { const rd = new FileReader(); rd.onload = function () { res(String(rd.result)); }; rd.onerror = function () { res(''); }; rd.readAsDataURL(b); }); };
+            const self = this;
+            const cutOut = async function (c, what) {
+                const b = await toBlob(c);
+                self._freeCanvas(c);
+                let o = null;
+                try { o = await self._stripSpriteBgAI(b); } catch (e) {}
+                if (!o) { console.warn('[VN] ⚠️ 三合一生成：' + what + '去背失敗 → 先用帶背景的。往上找「AI 去背失敗」的原因'); return b; }
+                try { o = (await self._keepMainPiece(o)) || o; } catch (e) {}
+                return o;
+            };
+            // 三塊先從大圖裁好，大圖就能先還；去背一張一張排在後面
+            const cLeft = crop(a.boxes.left), cBottom = crop(a.boxes.bottom), cTop = crop(a.boxes.top);
+            this._freeCanvas(cv);
+            const faceBlob = await toBlob(cTop, 'image/jpeg', 0.9);   // 自拍有背景、不用透明，存小一點
+            this._freeCanvas(cTop);
+            const spriteBlob = await cutOut(cLeft, '立繪');
+            const chibiBlob = await cutOut(cBottom, 'Q版');
+            // Q版那格畫成正面／側面／背面三隻 → 切三張：正面那隻照舊當 chibi（大廳小人），側面、背面另外存
+            let views = null;
+            try { views = await this._chibiViews(chibiBlob); } catch (e) { console.warn('[VN] 三合一生成：Q版切三面失敗，整格當一張：', (e && e.message) || e); }
+            if (views) console.log('[VN] 三合一生成：Q版那格是三面圖 → 切成正面／側面／背面');
+            const out = await Promise.all([toData(spriteBlob), toData(views ? views[0] : chibiBlob), toData(faceBlob)].concat(views ? [toData(views[1]), toData(views[2])] : []));
+            const res = { objUrl: URL.createObjectURL(spriteBlob), dataUrl: out[0], chibi: out[1], face: out[2] };
+            if (views) { res.chibiSide = out[3]; res.chibiBack = out[4]; }
+            return res;
+        },
+
+        // 去重包裝：同一道具若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
+        _safeFetchItem: function(itemName, look) {
+            if (this._itemMemCache[itemName]) return Promise.resolve(this._itemMemCache[itemName]);
+            if (this._itemInflight[itemName]) return this._itemInflight[itemName];
+            const self = this;
+            const p = this._doFetchItem(itemName, look);
+            this._itemInflight[itemName] = p;
+            p.then(function () {}, function () {}).then(function () { delete self._itemInflight[itemName]; });
+            return p;
+        },
+        _doFetchItem: async function(itemName, look) {
+            if (this._itemMemCache[itemName]) return this._itemMemCache[itemName];
+            const cached = await VN_Cache.get('item_cache', itemName);
+            if (cached && cached.url && !cached.url.startsWith('blob:')) {
+                // cut 旗標是「彈窗改成去背浮空版」之後才有的：舊快取存的一定是帶底原圖，
+                //   直接拿來浮在黑幕上就是一塊白方塊 → 補去背一次、存回去，之後就不必再跑。
+                //   去背關著的時候不補、也不寫旗標——寫了 false 就等於把這張圖釘死，之後開回來也不會再去背。
+                if (cached.cut === undefined && this._itemCutEnabled()) {
+                    const re = await this._cutItemImage(cached.url);
+                    await VN_Cache.set('item_cache', itemName, { prompt: itemName, url: re.url, cut: re.cut });
+                    this._itemCutOk[itemName] = re.cut;
+                    const reObj = await this._toObjectUrl(re.url);
+                    this._itemMemCache[itemName] = reObj || re.url;
+                    return this._itemMemCache[itemName];
+                }
+                this._itemCutOk[itemName] = (cached.cut === true);
+                const objUrl = await this._toObjectUrl(cached.url);
+                this._itemMemCache[itemName] = objUrl || cached.url;
+                return this._itemMemCache[itemName];
+            }
+            if (cached && cached.url && cached.url.startsWith('blob:')) {
+                await VN_Cache.delete('item_cache', itemName);
+            }
+            const raw = await VN_Image.getItem(this._itemGenPrompt(itemName, look));
+            if (!raw) return '';
+            // 先轉成可存的圖再去背：去背吐的是新的 PNG，原本那顆 blob 用不上了
+            let src = '';
+            try {
+                const blob = await (await fetch(raw)).blob();
+                src = await new Promise(r => {
+                    const reader = new FileReader();
+                    reader.onload = () => r(String(reader.result));
+                    reader.onerror = () => r('');
+                    reader.readAsDataURL(blob);
+                });
+            } catch(e) {}
+            if (!src) src = await this._toDataUrl(raw);   // 抓不下來(CORS等)＝原網址硬上，去背那步會自己再試一次
+            if (!src) return '';
+            const cut = await this._cutItemImage(src);
+            this._itemCutOk[itemName] = cut.cut;
+            const objUrl = await this._toObjectUrl(cut.url);
+            this._itemMemCache[itemName] = objUrl || cut.url;
+            const rec = { prompt: itemName, url: cut.url };
+            if (this._itemCutEnabled()) rec.cut = cut.cut;   // 同上：關著的時候不留旗標
+            await VN_Cache.set('item_cache', itemName, rec);
+            return this._itemMemCache[itemName];
+        },
+
+        // 解析 <scene> block 內容行 → { cacheId, prompt }。
+        // 可選首部「scene-id: Xxx」指定快取ID/存檔名（scene_Xxx.png），該行不進生圖 prompt；
+        // 沒給 id 就退回 prompt 雜湊。預熱預掃與正片播放必須共用此函式，
+        // 算出同一個 cacheId，in-flight 去重才接得上。
+        _parseSceneBlock: function(rawLines) {
+            let id = '';
+            const pLines = [];
+            for (const raw of rawLines) {
+                const l = String(raw).trim();
+                if (!l || l.startsWith('//')) continue;
+                const m = l.match(/^scene[-_ ]?id\s*[:：]\s*(.+)$/i);
+                if (m) { id = m[1].trim().replace(/\s+/g, '_'); continue; }
+                pLines.push(l);
+            }
+            const prompt = pLines.join('\n').trim();
+            const cacheId = id || (prompt ? 'sc_' + Math.abs(prompt.split('').reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0)) : '');
+            return { cacheId, prompt };
+        },
+
+        _prewarmScenes: function() {
+            const tasks = [];
+            const seen = new Set();
+            const _lines = this._linesOutsideDynBlocks();
+            // 格式 A：[Scene|cacheId|prompt] 單行
+            for (let i = 0; i < _lines.length; i++) {
+                const line = _lines[i];
+                if (line.startsWith('[Scene|')) {
+                    const parts = line.slice(7, -1).split('|');
+                    const cacheId = parts[0], prompt = parts[1];
+                    if (!cacheId || !prompt || seen.has(cacheId)) continue;
+                    seen.add(cacheId); tasks.push({ cacheId, prompt });
+                }
+                // 格式 B：<scene>...</scene> 多行 block（可選 scene-id: 首部）
+                if (line === '<scene>') {
+                    const _raw = [];
+                    let j = i + 1;
+                    while (j < _lines.length && _lines[j] !== '</scene>') { _raw.push(_lines[j]); j++; }
+                    const { cacheId, prompt } = this._parseSceneBlock(_raw);
+                    if (prompt && !seen.has(cacheId)) { seen.add(cacheId); tasks.push({ cacheId, prompt }); }
+                }
+            }
+            if (!tasks.length) return;
+            console.log(`[VN] 預熱場景CG：共 ${tasks.length} 張，依序排隊生成（NAI 不支援並發）...`);
+            (async () => {
+                this._imgScanStart();
+                try {
+                    for (const { cacheId, prompt } of tasks) {
+                        // 走 _safeFetchScene：與現場 [Scene|] 共用 in-flight promise，
+                        // 防「預熱在生、正片又播到同場景」各生一張（同 prompt 重複扣錢）
+                        this._imgJobStart();
+                        try { await this._safeFetchScene(cacheId, prompt); } finally { this._imgJobEnd(); }
+                    }
+                } finally { this._imgScanEnd(); }
+                console.log('[VN] 所有場景CG預熱完成');
+            })();
+        },
+
+        // 將 scene dataUrl 儲存到 ST user/images/[角色名]/scene_[id].png（gallery 可見）
+        _saveSceneToDisk: async function(cacheId, dataUrl) {
+            try {
+                const p = window.parent || window;
+                const ctx = p.SillyTavern?.getContext?.();
+                if (!ctx) return;
+                const charName = ctx.characters?.[ctx.characterId]?.name || '';
+                if (!charName) return;
+                const headers = ctx.getRequestHeaders ? ctx.getRequestHeaders() : { 'Content-Type': 'application/json' };
+                const base64 = dataUrl.replace(/^data:image\/\w+;base64,/, '');
+                const fmt    = (dataUrl.match(/^data:image\/(\w+);/) || ['','png'])[1];
+                const res = await fetch('/api/images/upload', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ image: base64, format: fmt, ch_name: charName, filename: 'scene_' + cacheId })
+                });
+                if (res.ok) { const d = await res.json(); console.log('[VN] Scene → disk:', d.path); }
+            } catch(e) { console.warn('[VN] Scene disk save failed:', e); }
+        },
+
+        // 去重包裝：同一 cacheId 若已在生成中(預熱/現場)，共用同一個 promise（同 _safeFetchBg）
+        _safeFetchScene: function(cacheId, prompt, force) {
+            if (this._sceneMemCache[cacheId]) return Promise.resolve(this._sceneMemCache[cacheId]);
+            if (this._sceneInflight[cacheId]) return this._sceneInflight[cacheId];
+            // 這個 cacheId 剛生圖失敗過(如拼車撞 NAI 429) → 不自動重打：否則「預熱→插入→渲染」序列會同一張各打一次、白燒額度又易被風控。
+            // 要重生按場景 CG 的 🔄（retrySceneCg 會清掉這個標記）；重整頁面也會重置（記憶體 map）。
+            if (this._sceneFailed[cacheId]) return Promise.resolve('');
+            // 本輪已撞失敗(拼車 NAI 429) → 不再自動猛打後續插圖：標記失敗、回空(顯示佔位卡＋重生鈕)。手動重生/新一輪解除。
+            if (this._sceneGenBackoff) { this._sceneFailed[cacheId] = Date.now(); return Promise.resolve(''); }
+            const self = this;
+            const p = this._doFetchScene(cacheId, prompt, force);
+            this._sceneInflight[cacheId] = p;
+            p.then(function (url) {
+                if (!url) { self._sceneFailed[cacheId] = Date.now(); self._sceneGenBackoff = Date.now(); }   // 回空＝生失敗 → 記下＋本輪起退避，後續不再猛打
+            }, function () {
+                self._sceneFailed[cacheId] = Date.now(); self._sceneGenBackoff = Date.now();                // 例外也算失敗
+            }).then(function () { delete self._sceneInflight[cacheId]; });
+            return p;
+        },
+        // 🔄 「重生」鈕：撞 NAI 500 後 fallback 出的 poll 圖會卡進 mem/IndexedDB 快取，
+        // 這裡清掉卡住的圖、用同個 prompt（沿用 cacheId，完全不碰 LLM）重打生圖。
+        retrySceneCg: async function() {
+            const cur = this._sceneCgCur;
+            if (!cur || !cur.cacheId) return;
+            const cacheId = cur.cacheId, prompt = cur.prompt;
+            const cgImg = document.getElementById('scene-cg-img');
+            const btn   = document.getElementById('scene-cg-retry');
+            if (btn) { btn.disabled = true; btn.classList.add('spinning'); }
+            try {
+                delete this._sceneMemCache[cacheId];
+                delete this._sceneInflight[cacheId];
+                delete this._sceneFailed[cacheId];   // 清失敗標記，允許這次手動重生
+                this._sceneGenBackoff = 0;           // 手動重生：解除本輪退避，這張一定要重打
+                // 刪舊圖前先把「畫到誰」讀回來登記，重生才帶得到參考圖
+                try {
+                    const _old = await VN_Cache.get('scene_cache', cacheId);
+                    const _IM = (window.parent || window).OS_IMAGE_MANAGER;
+                    if (_old && Array.isArray(_old.cast) && _old.cast.length && _IM && _IM.setSceneCast) _IM.setSceneCast(prompt, _old.cast);
+                } catch (e) {}
+                try { await VN_Cache.delete('scene_cache', cacheId); } catch (e) {}
+                // force：上面清的是這邊兩層，生圖那邊（OS_IMAGE_MANAGER._urlCache）還記著同一句的舊圖
+                const url = await this._safeFetchScene(cacheId, prompt, true);
+                if (url && cgImg) { cgImg.src = url; this._setSceneCgFailed(false); }
+                else { this._setSceneCgFailed(true); }   // 還是失敗(朋友還在生) → 維持佔位卡，可再按
+            } finally {
+                if (btn) { btn.disabled = false; btn.classList.remove('spinning'); }
+            }
+        },
+        // 插圖失敗(拼車撞 429 等) → 加佔位狀態：顯示佔位底＋置中重生鈕、且 hold 住不淡出；成功則清掉恢復正常淡出
+        _setSceneCgFailed: function(on) {
+            const ov = document.getElementById('scene-cg-overlay');
+            if (ov) ov.classList.toggle('scene-cg-failed', !!on);
+            this._sceneCgHold = !!on;   // 失敗→hold(renderVN 不遞減 linger、hideOverlays 不關)；成功→解除照常淡出
+            this._sceneCgFailLinger = on ? 3 : 0;   // 失敗佔位也給 3 則寬限：沒手動重生就自己淡出、不永遠卡著
+        },
+        _doFetchScene: async function(cacheId, prompt, force) {
+            if (this._sceneMemCache[cacheId]) return this._sceneMemCache[cacheId];
+            const cached = await VN_Cache.get('scene_cache', cacheId);
+            if (cached && cached.url) {
+                if (cached.url.startsWith('blob:')) {
+                    await VN_Cache.delete('scene_cache', cacheId);
+                } else {
+                    const objUrl = await this._toObjectUrl(cached.url);
+                    this._sceneMemCache[cacheId] = objUrl || cached.url;
+                    this._preloadImg('scene_' + cacheId, this._sceneMemCache[cacheId]);
+                    return this._sceneMemCache[cacheId];
+                }
+            }
+            if (!prompt) return '';   // 沒 prompt 沒得生（ID-only 標籤走相簿路，正常不會到這；防空 prompt 白燒生圖）
+            const raw = await VN_Image.getScene(prompt, force);
+            if (!raw) return '';
+            try {
+                const fetchRes = await fetch(raw);
+                const blob = await fetchRes.blob();
+                const objUrl = URL.createObjectURL(blob);
+                const dataUrl = await new Promise(r => {
+                    const reader = new FileReader();
+                    reader.onload = () => r(reader.result);
+                    reader.onerror = () => r('');
+                    reader.readAsDataURL(blob);
+                });
+                this._sceneMemCache[cacheId] = objUrl;
+                this._preloadImg('scene_' + cacheId, objUrl);
+                if (dataUrl) {
+                    // 畫到誰一起存（帶參考圖用）：重整後按重生，記憶體裡的登記已經不在了，要從這裡讀回
+                    let _cast = [];
+                    try { const _IM = (window.parent || window).OS_IMAGE_MANAGER; if (_IM && _IM.sceneCastOf) _cast = _IM.sceneCastOf(prompt); } catch (e) {}
+                    await VN_Cache.set('scene_cache', cacheId, { prompt, rawUrl: raw, url: dataUrl, cast: _cast.length ? _cast : undefined });
+                    this._saveSceneToDisk(cacheId, dataUrl); // fire-and-forget → user/images/[char]/scene_[id].png
+                }
+                return objUrl;
+            } catch(e) {
+                const url = await this._toDataUrl(raw);
+                if (url) {
+                    this._sceneMemCache[cacheId] = url;
+                    await VN_Cache.set('scene_cache', cacheId, { prompt, rawUrl: raw, url });
+                    this._saveSceneToDisk(cacheId, url); // fire-and-forget
+                }
+                return this._sceneMemCache[cacheId] || '';
+            }
+        },
+    });
+
+    console.log('[PhoneOS] 已掛載 VN 生圖管線 (vn_core_images.js — 背景/場景CG/道具)');
+})();

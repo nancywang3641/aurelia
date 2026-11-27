@@ -1,0 +1,235 @@
+// ----------------------------------------------------------------
+// [檔案] worldgate.js — 視差世界門 ②切書機制（2026-07-22）
+// 職責：奧瑞亞卡的世界書自動切換。
+//   主世界模式：主書=【奧瑞亞世界】(表世界) ＋ 附加【奧瑞亞-人物核心】
+//   視差模式  ：主書卸下(null)            ＋ 附加【奧瑞亞-視差】
+//   🚨人物核心只在主世界（2026-08-19 改）：熟人條目的鑰匙全是裸名（「丹」「雷伊」…），
+//     異世界隨便生一個撞名NPC就會把熟人人設炸進場、AI把NPC演成熟人；
+//     表世界的配對/世界狀態常駐條目也不該漏進異世界（認知隔離）。
+//   她自己另掛的附加書一律原樣保留。
+// 守衛：綁定裡出現任一本奧瑞亞書才動手——其他作者的卡一律不碰（跨卡隔離）。
+// 對帳：載入/換聊天時檢查殘局（上次切到一半當機＝主書空但視差也不在→復原表世界）。
+// 依賴：TavernHelper（getCharLorebooks/setCurrentCharLorebooks/getLorebooks），呼叫時才取用。
+// 下游：③世界門面板 DIVE/撤離時呼叫 enterParallax()/exitParallax()。
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+
+    const BOOK_MAIN = '【奧瑞亞世界】';       // 表世界（角色卡主書）
+    const BOOK_CORE = '【奧瑞亞-人物核心】';   // 永遠開
+    const BOOK_PARA = '【奧瑞亞-視差】';       // 進視差開
+
+    function _th() {
+        return window.TavernHelper || (window.parent && window.parent.TavernHelper) || null;
+    }
+
+    // ── 網頁版（10-20）：沒有「角色卡掛書」這一層 ──
+    //   PWA 沒有酒館的聊天室層，但有 storyid，世界門的資料直接綁這個 id
+    //   → 酒館綁聊天室 id、網頁版綁故事 id（踏入故事那一刻生的那把）：這段故事在不在視差，記在 vn_story_index 那一筆的 parallax。
+    //   守衛照酒館：只有藏書「奧瑞亞」那本（worldId aurelia）有世界門，別本書一律不動。
+    //   換書的實際效果在組提示詞那邊：OS_BUILTIN_LORE.forBook 看 isInParallax() 收起奧瑞亞那份、改帶「這是視差裡的一個世界」，
+    //   世界檔案由 OS_WORLDGATE.pwaWorldLore 從檔案庫現組（不寫世界書，也就沒有燈要開關）。
+    function _pwa() {
+        try { const A = window.OS_API || (window.parent && window.parent.OS_API); return !!(A && A.isStandalone && A.isStandalone()); } catch (e) { return false; }
+    }
+    function _pwaSid() {
+        try {
+            const A = window.OS_AVS_ADAPTER || (window.parent && window.parent.OS_AVS_ADAPTER);
+            return (A && A.getStoryId && A.getStoryId()) || localStorage.getItem('vn_current_story_id') || '';
+        } catch (e) { return ''; }
+    }
+    function _pwaIdx() { try { return JSON.parse(localStorage.getItem('vn_story_index') || '{}') || {}; } catch (e) { return {}; } }
+    function _pwaOurs() {
+        let wid = '';
+        try { wid = localStorage.getItem('vn_current_world_id') || ''; } catch (e) {}
+        const B = window.OS_BUILTIN_LORE || (window.parent && window.parent.OS_BUILTIN_LORE);
+        return !!(B && B.isAureliaBook ? B.isAureliaBook(wid) : wid === 'aurelia');
+    }
+    function _pwaIn() { return _pwaOurs() && !!(_pwaIdx()[_pwaSid()] || {}).parallax; }
+    function _pwaSet(on) {
+        const sid = _pwaSid();
+        if (!sid) return on ? { ok: false, msg: '還沒有進行中的故事：先到藏書打開「奧瑞亞」，踏入故事' } : { ok: true, msg: '已在主世界' };
+        const idx = _pwaIdx();
+        const cur = idx[sid] || {};
+        if (!!cur.parallax === on) return { ok: true, msg: on ? '已在視差模式' : '已在主世界' };
+        idx[sid] = Object.assign({}, cur, { parallax: on });
+        const AUI = window.AUI || (window.parent && window.parent.AUI);
+        const saved = (AUI && AUI.lsSet) ? AUI.lsSet('vn_story_index', JSON.stringify(idx), '這段故事在哪個世界')
+            : (function () { try { localStorage.setItem('vn_story_index', JSON.stringify(idx)); return true; } catch (e) { return false; } })();
+        if (!saved) return { ok: false, msg: '沒存下來（本機空間滿了）' };
+        console.log('[Worldgate] ' + (on ? '🌌 這段故事進了視差' : '🏙 這段故事回到奧瑞亞') + '（網頁版，故事 ' + sid + '）');
+        return { ok: true, msg: on ? '已切入視差' : '已返回主世界' };
+    }
+
+    // 讀當前卡的綁定快照；ours=這是奧瑞亞卡（綁了任一本奧瑞亞書）
+    function _snapshot() {
+        const TH = _th();
+        if (!TH || typeof TH.getCharLorebooks !== 'function') return null;
+        let c = null;
+        try { c = TH.getCharLorebooks(); } catch (e) { return null; }
+        const primary = (c && c.primary) || null;
+        const additional = (c && Array.isArray(c.additional)) ? c.additional.slice() : [];
+        const ours = primary === BOOK_MAIN ||
+            additional.indexOf(BOOK_MAIN) >= 0 || additional.indexOf(BOOK_CORE) >= 0 || additional.indexOf(BOOK_PARA) >= 0;
+        return { primary, additional, ours };
+    }
+
+    function isInParallax() {
+        if (_pwa()) return _pwaIn();
+        const s = _snapshot();
+        return !!(s && s.ours && s.additional.indexOf(BOOK_PARA) >= 0 && s.primary !== BOOK_MAIN);
+    }
+
+    // 三本書都匯入了才准切（沒匯入就動手會把綁定指到不存在的書）
+    function _missingBooks(TH) {
+        let names = [];
+        try { names = TH.getLorebooks() || []; } catch (e) { return null; }
+        return [BOOK_MAIN, BOOK_CORE, BOOK_PARA].filter(b => names.indexOf(b) < 0);
+    }
+
+    // 進視差：表世界主書收起、人物核心也收起，只掛視差書
+    async function enterParallax() {
+        if (_pwa()) {
+            if (!_pwaOurs()) return { ok: false, msg: '現在打開的故事不是「奧瑞亞」那本，世界門只在奧瑞亞那本能用' };
+            return _pwaSet(true);
+        }
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return { ok: false, msg: '世界書 API 不可用' };
+        if (!s.ours) return { ok: false, msg: '當前角色卡不是奧瑞亞卡，不動它的世界書' };
+        const missing = _missingBooks(TH);
+        if (missing === null) return { ok: false, msg: '世界書清單讀取失敗' };
+        if (missing.length) return { ok: false, msg: '還沒匯入：' + missing.join('、') };
+        // 「已在視差」還得核心不在場才算數：舊版把核心一起掛著，那種狀態要重寫一次剝掉
+        if (s.primary !== BOOK_MAIN && s.additional.indexOf(BOOK_PARA) >= 0 && s.additional.indexOf(BOOK_CORE) < 0) return { ok: true, msg: '已在視差模式' };
+        const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
+        add.push(BOOK_PARA);
+        try {
+            await TH.setCurrentCharLorebooks({ primary: null, additional: add });
+        } catch (e) {
+            console.error('[Worldgate] 切入視差失敗:', e);
+            return { ok: false, msg: '切書失敗：' + (e && e.message || e) };
+        }
+        console.log('[Worldgate] 🌌 已切入視差（表世界書收起）');
+        return { ok: true, msg: '已切入視差' };
+    }
+
+    // 回主世界：表世界主書掛回，視差收起（核心保留）
+    async function exitParallax() {
+        if (_pwa()) return _pwaOurs() ? _pwaSet(false) : { ok: true, msg: '不是奧瑞亞那本，不用切' };
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return { ok: false, msg: '世界書 API 不可用' };
+        if (!s.ours) return { ok: false, notOurs: true, msg: '當前角色卡不是奧瑞亞卡，不動它的世界書' };   // notOurs：沒有要切的書，世界門照常清掉「在哪個世界」（不是切書失敗）
+        // 🚨已經是主世界就不要寫：寫綁定會讓酒館重載聊天(觸發 CHAT_CHANGED)，
+        //   而這支現在也掛在 CHAT_CHANGED 上——無條件寫＝重載→再寫→無限刷頁（正則那邊出過這個事故）。
+        if (s.primary === BOOK_MAIN && s.additional.indexOf(BOOK_PARA) < 0) return { ok: true, msg: '已在主世界' };
+        const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
+        add.push(BOOK_CORE);
+        try {
+            await TH.setCurrentCharLorebooks({ primary: BOOK_MAIN, additional: add });
+        } catch (e) {
+            console.error('[Worldgate] 返回主世界失敗:', e);
+            return { ok: false, msg: '切書失敗：' + (e && e.message || e) };
+        }
+        console.log('[Worldgate] 🏙 已返回主世界（表世界書掛回）');
+        return { ok: true, msg: '已返回主世界' };
+    }
+
+    // 殘局對帳：主書空、視差也不在＝上次切到一半當機 → 自動掛回表世界
+    async function reconcile() {
+        if (_pwa()) return;   // 網頁版沒有切一半的綁定可以對
+        const s = _snapshot();
+        if (!s || !s.ours) return;
+        if (!s.primary && s.additional.indexOf(BOOK_PARA) < 0) {
+            console.warn('[Worldgate] 偵測到殘局（主書空且非視差模式），自動復原表世界');
+            await exitParallax();
+        } else if (s.primary !== BOOK_MAIN && s.additional.indexOf(BOOK_PARA) >= 0 && s.additional.indexOf(BOOK_CORE) >= 0) {
+            // 舊版視差把人物核心一起掛著 → 剝掉（寫完核心不在了，下一輪對帳直接命中「已在視差」不再寫）
+            console.warn('[Worldgate] 視差模式下人物核心還掛著（舊版狀態），自動收起');
+            await enterParallax();
+        }
+    }
+
+    // 換聊天/開機時對帳（跨卡由 ours 守衛；事件不可用就只做開機對帳）
+    function _hookEvents() {
+        try {
+            const ev = window.eventOn || (window.parent && window.parent.eventOn);
+            const TE = window.tavern_events || (window.parent && window.parent.tavern_events);
+            if (ev && TE && TE.CHAT_CHANGED) ev(TE.CHAT_CHANGED, () => { reconcile(); });
+        } catch (e) {}
+        setTimeout(() => { reconcile(); }, 4000);   // 開機晚點跑，等 TavernHelper 就緒
+    }
+    _hookEvents();
+
+    // 給世界門面板體檢用:它要判斷的是「這張卡歸不歸我們管」與「書齊不齊」,
+    // 🚨不是「視差書在不在」——主世界模式下視差書本來就被收起來,拿它當判準會永遠誤報沒掛。
+    function status() {
+        if (_pwa()) return { ours: _pwaOurs(), inParallax: _pwaIn(), missing: [], pwa: true };
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return null;                    // 問不到就不判定,不要亂提示
+        return { ours: s.ours, inParallax: isInParallax(), missing: _missingBooks(TH) || [] };
+    }
+    // 把一張還沒綁過的卡設成奧瑞亞卡(主世界模式)。刻意不掛視差書:那本由切書機制在 DIVE 時才掛,
+    // 手動掛上去會變成兩個世界的設定同時在場,而且下一次校正就會被收走。
+    async function bindMain() {
+        if (_pwa()) return { ok: false, msg: '網頁版不用掛書：到藏書打開「奧瑞亞」那本就好' };
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return { ok: false, msg: '世界書 API 不可用' };
+        const missing = _missingBooks(TH);
+        if (missing === null) return { ok: false, msg: '世界書清單讀取失敗' };
+        if (missing.length) return { ok: false, msg: '還沒匯入：' + missing.join('、') };
+        const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
+        add.push(BOOK_CORE);
+        try { await TH.setCurrentCharLorebooks({ primary: BOOK_MAIN, additional: add }); }
+        catch (e) { return { ok: false, msg: '掛載失敗：' + (e && e.message || e) }; }
+        return { ok: true, msg: '已掛上奧瑞亞的世界書' };
+    }
+
+    // 🩺 給「關於我 → 世界書」分頁看的：照這段聊天該在哪（inWorld＝世界門記著這室在某個異世界）比對現在實際掛的。
+    //   她怕程式換書卡住自己沒發現（10-14），所以列的是「哪本不該在／哪本沒掛」這種看得懂的句子，不是狀態碼。
+    function diagnose(inWorld) {
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return null;
+        if (!s.ours) return { ours: false, problems: [] };
+        const missing = _missingBooks(TH) || [];
+        const problems = [];
+        if (missing.length) problems.push('還沒匯入：' + missing.join('、'));
+        const has = (b) => s.additional.indexOf(b) >= 0;
+        if (inWorld) {
+            if (s.primary === BOOK_MAIN) problems.push('人在異世界，奧瑞亞世界卻還掛著');
+            if (has(BOOK_CORE)) problems.push('人在異世界，人物核心卻還掛著');
+            if (!has(BOOK_PARA)) problems.push('人在異世界，視差沒掛上');
+        } else {
+            if (s.primary !== BOOK_MAIN) problems.push('奧瑞亞世界沒掛上');
+            if (!has(BOOK_CORE)) problems.push('人物核心沒掛上');
+            if (has(BOOK_PARA)) problems.push('人在奧瑞亞，視差卻還掛著');
+        }
+        return { ours: true, problems, missing };
+    }
+    // 照這段聊天該在哪，整組重掛一次（不走 enter/exit 的「已經是這樣就不寫」守衛：那兩支只認主書與視差，少了人物核心時會以為沒事）
+    async function repair(inWorld) {
+        const TH = _th();
+        const s = _snapshot();
+        if (!TH || !s) return { ok: false, msg: '世界書 API 不可用' };
+        if (!s.ours) return { ok: false, msg: '當前角色卡不是奧瑞亞卡，不動它的世界書' };
+        const missing = _missingBooks(TH);
+        if (missing === null) return { ok: false, msg: '世界書清單讀取失敗' };
+        if (missing.length) return { ok: false, msg: '還沒匯入：' + missing.join('、') };
+        const add = s.additional.filter(b => b !== BOOK_PARA && b !== BOOK_CORE);
+        add.push(inWorld ? BOOK_PARA : BOOK_CORE);
+        try { await TH.setCurrentCharLorebooks({ primary: inWorld ? null : BOOK_MAIN, additional: add }); }
+        catch (e) { return { ok: false, msg: '重掛失敗：' + (e && e.message || e) }; }
+        console.log('[Worldgate] 🩺 依這段聊天重掛世界書：' + (inWorld ? '異世界' : '奧瑞亞'));
+        return { ok: true, msg: '掛好了' };
+    }
+
+    window.AURELIA_WORLDGATE = {
+        isInParallax, enterParallax, exitParallax, reconcile, status, bindMain, diagnose, repair,
+        BOOKS: { main: BOOK_MAIN, core: BOOK_CORE, para: BOOK_PARA },
+    };
+    console.log('[Worldgate] 視差切書模組已載入');
+})();

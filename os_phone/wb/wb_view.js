@@ -1,0 +1,395 @@
+// ----------------------------------------------------------------
+// [微博] wb_view.js (V3.7 - Comment List Extract)
+// 職責：渲染微博介面
+// 升級：
+// 1. 抽取 renderCommentList 獨立方法，支援局部更新評論列表
+// 2. 修復評論區「我」的頭像顯示為綠色預設圖的問題，現在會正確使用用戶頭像
+// 3. 增強名字顯示邏輯，若暱稱未同步，優先顯示真名而不是「我」
+// ----------------------------------------------------------------
+(function() {
+    const win = window.parent || window;
+
+    // 微博的貼文、評論、作者、投票、影片、位置、#標籤 整篇都是模型寫的（她自己發的也是她打的字）：
+    //   _esc：名字、標題這種純文字；_rich：貼文和評論正文——照格式顯示（原本就當 HTML 畫，粗體換行照留），但 <script>、onerror、javascript: 一律拿掉；
+    //   _jsArg：塞進 onclick="…('這裡')" 的字串參數；_cssUrl：塞進 style="background-image:url('這裡')" 的網址。
+    function _esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function _jsArg(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029'));
+    }
+    function _cssUrl(s) {
+        return _esc(String(s == null ? '' : s).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/[\r\n]/g, ''));
+    }
+    function _rich(s) {
+        const A = win.AUI || window.AUI;
+        return (A && A.safeHtml) ? A.safeHtml(String(s)) : _esc(s);
+    }
+
+    win.WB_VIEW = {
+        
+        getAvatar: function(name) {
+            return `https://api.dicebear.com/7.x/identicon/svg?seed=${encodeURIComponent(name || 'User')}`;
+        },
+
+        // 卡片上的時間：AI 寫的換不動的原字優先，否則按真實時間戳算「多久以前」，會隨時間老去
+        fmtTime: function(post) {
+            if (post && post.whenText) return post.whenText;
+            const ts = post && post.timestamp;
+            if (!ts) return post && post.time ? post.time : '剛剛';
+            const diff = Date.now() - ts;
+            if (diff < 60e3) return '剛剛';
+            if (diff < 3600e3) return Math.floor(diff / 60e3) + ' 分鐘前';
+            if (diff < 86400e3) return Math.floor(diff / 3600e3) + ' 小時前';
+            const d = new Date(ts);
+            const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+            if (diff < 2 * 86400e3) return '昨天 ' + hm;
+            if (diff < 7 * 86400e3) return Math.floor(diff / 86400e3) + ' 天前';
+            return (d.getMonth() + 1) + ' 月 ' + d.getDate() + ' 日';
+        },
+
+        getMyDisplayName: function() {
+            let nickname = '我';
+            let realName = 'User';
+            if (win.WB_ACCOUNT && typeof win.WB_ACCOUNT.getCurrentAccount === 'function') {
+                const acc = win.WB_ACCOUNT.getCurrentAccount();
+                nickname = acc.weiboNickname || 'User';
+                realName = acc.realName || 'User';
+            }
+            if (nickname === realName) return nickname;
+            return `${nickname} (${realName})`;
+        },
+
+        // 輔助：獲取我的真實頭像
+        getMyAvatar: function() {
+            if (win.WB_ACCOUNT && typeof win.WB_ACCOUNT.getCurrentAccount === 'function') {
+                const acc = win.WB_ACCOUNT.getCurrentAccount();
+                if (acc.avatar) return acc.avatar;
+            }
+            return this.getAvatar('Me');
+        },
+
+        // --- 1. 渲染單張卡片 ---
+        renderCard: function(post, isDetail = false) {
+            // 如果是本人發帖，強制使用最新頭像
+            const avatar = post.isMe ? this.getMyAvatar() : (post.avatar || this.getAvatar(post.user));
+            let contentHtml = post.content || '';
+            let displayName = post.user;
+            
+            if (post.isMe) displayName = this.getMyDisplayName();
+
+            // 🔥 优先从 post.media 读取媒体信息（由 wb_core.js 解析）
+            let voteHtml = '';
+            let videoHtml = '';
+            let imagesHtml = '';
+
+            if (post.media) {
+                if (post.media.type === 'vote') {
+                    const title = post.media.title || '投票';
+                    const options = post.media.options || [];
+                    const totalVotes = Math.floor(Math.random() * 5000) + 500;
+                    let optionHtmls = options.map(opt => {
+                        const percent = Math.floor(Math.random() * 80) + 10;
+                        return `<div class="wb-vote-option"><div class="wb-vote-bar-bg"><div class="wb-vote-bar-fill" style="width: ${percent}%"></div><span class="wb-vote-txt">${_esc(opt)}</span><span class="wb-vote-count">${percent * 12}票</span></div></div>`;
+                    }).join('');
+                    voteHtml = `<div class="wb-vote-card"><div class="wb-vote-title"><span class="wb-vote-icon">投票</span> ${_esc(title)}</div>${optionHtmls}<div style="font-size:11px; color:#999; margin-top:5px;">${totalVotes} 人參與 · 已結束</div></div>`;
+                } else if (post.media.type === 'video') {
+                    const title = post.media.title || '視頻';
+                    const desc = post.media.desc || '';
+                    videoHtml = `<div class="wb-video-card" onclick="event.stopPropagation(); this.classList.toggle('wb-video-card--open')">
+                        <div class="wb-video-overlay"></div>
+                        <div class="wb-play-icon"><div class="wb-play-arrow"></div></div>
+                        <div class="wb-video-tag">03:45</div>
+                        <div class="wb-video-caption"><div class="wb-video-title">${_esc(title)}</div>${desc ? `<div class="wb-video-desc">${_esc(desc)}</div>` : ''}</div>
+                    </div>`;
+                } else if (post.media.type === 'location') {
+                    const name = post.media.name || '';
+                    const desc = post.media.desc || '';
+                    videoHtml = `<div class="wb-loc-card"><i class="fa-solid fa-location-dot"></i><div class="wb-loc-text"><div class="wb-loc-name">${_esc(name)}</div>${desc ? `<div class="wb-loc-desc">${_esc(desc)}</div>` : ''}</div></div>`;
+                } else if (post.media.type === 'image' || post.media.type === 'images') {
+                    // 圖片走三個手機 app 共用的管道；ref = 貼文 id｜第幾張，生完寫回 post.media
+                    const PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+                    const list = post.media.type === 'images' ? (post.media.list || []) : [post.media.desc || ''];
+                    const count = list.length;
+                    const cols = count === 1 ? 1 : (count <= 4 ? 2 : 3);
+                    const items = list.map((desc, idx) => `<div class="wb-img-item">${PI ? PI.render(desc, { app: 'wb', ref: `${post.id}|${idx}`, fill: true }) : ''}</div>`).join('');
+                    imagesHtml = `<div class="wb-img-grid" data-photo-scope style="grid-template-columns: repeat(${cols}, 1fr);">${items}</div>`;
+                }
+            }
+
+            // 🔥 兜底：如果 post.media 没有，尝试从 content 中提取
+            if (!voteHtml) {
+                const voteMatch = contentHtml.match(/\[(Vote|投票)[:：]\s*(.*?)(?:\||：)\s*(.*?)\]/i);
+                if (voteMatch) {
+                    const title = voteMatch[2].trim();
+                    const options = voteMatch[3].split(/[,，]/).map(s => s.trim()).filter(s => s);
+                    const totalVotes = Math.floor(Math.random() * 5000) + 500;
+                    let optionHtmls = options.map(opt => {
+                        const percent = Math.floor(Math.random() * 80) + 10;
+                        return `<div class="wb-vote-option"><div class="wb-vote-bar-bg"><div class="wb-vote-bar-fill" style="width: ${percent}%"></div><span class="wb-vote-txt">${_esc(opt)}</span><span class="wb-vote-count">${percent * 12}票</span></div></div>`;
+                    }).join('');
+                    voteHtml = `<div class="wb-vote-card"><div class="wb-vote-title"><span class="wb-vote-icon">投票</span> ${_esc(title)}</div>${optionHtmls}<div style="font-size:11px; color:#999; margin-top:5px;">${totalVotes} 人參與 · 已結束</div></div>`;
+                    contentHtml = contentHtml.replace(voteMatch[0], '');
+                }
+            }
+
+            if (!videoHtml) {
+                const videoMatch = contentHtml.match(/\[(Video|视频|視頻)[:：]\s*(.*?)\]/i);
+                if (videoMatch) {
+                    const desc = videoMatch[2].trim();
+                    // encodeURIComponent 不轉 ' ( ) -：一句 '-alert(1)-' 就能從 window.open 的字串跳出去，外面再包一層 _jsArg
+                    videoHtml = `<div class="wb-video-card" onclick="event.stopPropagation(); window.open('https://www.bilibili.com/results?search_query=${_jsArg(encodeURIComponent(desc))}')"><div class="wb-video-overlay"></div><div class="wb-play-icon"><div class="wb-play-arrow"></div></div><div class="wb-video-tag">03:45</div><div style="position:absolute; bottom:10px; left:10px; color:white; font-size:12px; font-weight:bold; z-index:2; text-shadow:0 1px 2px rgba(0,0,0,0.5);">${_esc(desc)}</div></div>`;
+                    contentHtml = contentHtml.replace(videoMatch[0], '');
+                }
+            }
+
+            if (!imagesHtml) {
+                const imgMatches = contentHtml.match(/\[(Img|图片|圖片)[:：]\s*(.*?)\]/gi);
+                if (imgMatches) {
+                    let imgList = [];
+                    imgMatches.forEach(tag => {
+                        let url = tag.replace(/\[(Img|图片|圖片)[:：]\s*/i, '').replace(']', '').trim();
+                        if(!url.startsWith('http')) url = '';
+                        imgList.push(url);
+                        contentHtml = contentHtml.replace(tag, '');
+                    });
+                    if (imgList.length > 0) {
+                        imagesHtml = `<div class="wb-img-grid" data-photo-scope style="grid-template-columns: repeat(${Math.min(3, imgList.length)}, 1fr);">${imgList.map(url => { const bg = url ? `background-image:url('${_cssUrl(url)}')` : `background:#ddd; display:flex; align-items:center; justify-content:center; color:#999; font-size:20px;`; const inner = url ? '' : '<i class="fa-solid fa-image"></i>'; return `<div class="wb-img-item" style="${bg}"${url ? ` data-photo="${_esc(url)}"` : ''} onclick="event.stopPropagation(); var V = (window.parent.OS_PHOTO_VIEWER || window.OS_PHOTO_VIEWER); if (V && this.dataset.photo) V.openFrom(this);">${inner}</div>`; }).join('')}</div>`;
+                    }
+                }
+            }
+
+            // 提取 hashtag，從正文移除，底部獨立渲染成橘色標籤
+            const hashtagRegex = /#[^\s，。！？,.!?\[\]{}\n#]+/g;
+            const hashTags = contentHtml.match(hashtagRegex) || [];
+            if (hashTags.length > 0) {
+                contentHtml = contentHtml.replace(hashtagRegex, '').trim();
+            }
+            const tagsHtml = hashTags.length > 0
+                ? `<div class="wb-tags">${hashTags.map(t => `<span class="wb-tag">${_esc(t)}</span>`).join('')}</div>`
+                : '';
+
+            const appRef = "(window.parent.wbApp || window.wbApp)";
+            const clickAttr = isDetail ? '' : `onclick="${appRef}.openDetail('${post.id}')"`;
+            const cardClass = isDetail ? 'wb-detail-card' : 'wb-card';
+            const deleteBtn = (post.isMe) ? `<span style="color:#576b95; font-size:12px; margin-left:auto; cursor:pointer;" onclick="event.stopPropagation(); ${appRef}.deletePost('${post.id}')">删除</span>` : '';
+
+            return `
+                <div class="${cardClass}" ${clickAttr}>
+                    <div class="wb-user-row">
+                        <div class="wb-avatar" style="background-image: url('${_cssUrl(avatar)}')"></div>
+                        <div class="wb-user-info">
+                            <div class="wb-username">${_esc(displayName)}${post.verified ? ' <i class="fa-solid fa-circle-check wb-verified"></i>' : ''} ${deleteBtn}</div>
+                            <div class="wb-time">${_esc(this.fmtTime(post))} · 來自 PhoneOS</div>
+                        </div>
+                        ${post.isMe ? '<div class="wb-me-badge">本人</div>' : ''}
+                    </div>
+                    <div class="wb-text">${_rich(contentHtml.trim())}</div>
+                    ${tagsHtml}
+                    ${voteHtml} ${videoHtml} ${imagesHtml}
+                    
+                    <div class="wb-actions">
+                        <div class="wb-act-btn" onclick="event.stopPropagation(); ${appRef}.shareToWx('${post.id}')"><i class="fa-solid fa-retweet"></i> 轉發</div>
+                        <div class="wb-act-btn"><i class="fa-regular fa-comment"></i> ${post.comments ? post.comments.length : 0}</div>
+                        <div class="wb-act-btn" onclick="event.stopPropagation(); if (!this.classList.contains('wb-liked')) { this.classList.add('wb-liked'); const b = this.querySelector('b'); b.textContent = (parseInt(b.textContent, 10) || 0) + 1; }"><i class="fa-solid fa-thumbs-up"></i> <b>${post.likes || 0}</b></div>
+                    </div>
+                </div>
+            `;
+        },
+
+        // --- 2A. 渲染評論列表 (獨立方法，用於局部更新) ---
+        renderCommentList: function(post) {
+            const appRef = "(window.parent.wbApp || window.wbApp)";
+            if (post.comments && post.comments.length > 0) {
+                // 🔥 Debug: 顯示評論原始數據
+                console.log('[WB_VIEW] 評論原始數據:', post.comments);
+
+                return post.comments.map((c, index) => {
+                    let cName = '路人';
+                    let cContent = c;
+                    if (typeof c === 'object') { cName = c.author || '路人'; cContent = c.content; }
+                    else if (typeof c === 'string' && c.includes(':')) { const parts = c.split(/[:：]/); if (parts.length >= 2) { cName = parts[0].trim(); cContent = parts.slice(1).join(':').trim(); } }
+
+                    // 🔥 Debug: 顯示解析後的名字
+                    console.log(`[WB_VIEW] 評論 #${index} - 原始:`, c, '→ 解析名字:', cName);
+
+                    let isMyComment = false;
+                    let displayCommentName = cName;
+
+                    if (post.isMe && cName === '我') isMyComment = true;
+                    if (cName === '我' || cName === 'User' || cName === 'Me') isMyComment = true;
+                    if (win.WB_ACCOUNT && typeof win.WB_ACCOUNT.getCurrentAccount === 'function') {
+                        const acc = win.WB_ACCOUNT.getCurrentAccount();
+                        if (cName === acc.weiboNickname || cName === acc.realName) isMyComment = true;
+                    }
+                    if (isMyComment) displayCommentName = this.getMyDisplayName();
+
+                    // 🔥 [修復] 使用正確的頭像
+                    const cAvatar = isMyComment ? this.getMyAvatar() : this.getAvatar(displayCommentName);
+
+                    // 🔥 [全開刪除權限] 所有評論都可以刪除
+                    const delHtml = `<span class="wb-cmt-del" onclick="${appRef}.deleteComment('${post.id}', ${index})">删除</span>`;
+                    const highlightStyle = isMyComment ? 'color:#ff8200;' : '';
+
+                    // 回覆按鈕：點擊後在輸入框填入 "回覆 名字: "
+                    //   名字是模型寫的：以前只轉了單引號，一個雙引號就把 onclick 截斷、後面接什麼都會跑。照 JS 字串＋屬性兩層轉
+                    const escapedName = _jsArg(cName);
+                    const replyHtml = `<span class="wb-cmt-reply" onclick="const inp=(window.parent&&window.parent.document||document).getElementById('wb-comment-input'); if(inp){inp.value='回覆 ${escapedName}: '; inp.focus({preventScroll:true}); const btn=inp.parentElement&&inp.parentElement.nextElementSibling; if(btn)btn.classList.add('active');}">回覆</span>`;
+
+                    return `
+                        <div class="wb-comment-item">
+                            <div class="wb-cmt-avatar" style="background-image:url('${_cssUrl(cAvatar)}')"></div>
+                            <div class="wb-cmt-body">
+                                <div class="wb-cmt-user"><span style="${highlightStyle}">${_esc(displayCommentName)}</span> ${delHtml}</div>
+                                <div class="wb-cmt-content">${_rich(cContent)}</div>
+                                <div class="wb-cmt-time">剛剛 ${replyHtml}</div>
+                            </div>
+                        </div>`;
+                }).join('');
+            } else {
+                return '<div class="wb-empty">暫無評論，快來搶沙發！</div>';
+            }
+        },
+
+        // --- 2. 渲染詳情頁 ---
+        renderDetailPage: function(post) {
+            const appRef = "(window.parent.wbApp || window.wbApp)";
+            const commentsHtml = this.renderCommentList(post);
+
+            return `
+                <div class="wb-detail-page">
+                    <div class="wb-header">
+                        <div class="wb-header-btn" onclick="${appRef}.closeDetail()"><i class="fa-solid fa-chevron-left"></i></div>
+                        <div class="wb-header-title">微博正文</div>
+                    </div>
+                    <div class="wb-detail-content">
+                        ${this.renderCard(post, true)}
+                        <div class="wb-comment-sec">
+                            <div class="wb-comment-header">評論 ${post.comments ? post.comments.length : 0}</div>
+                            <div id="wb-comment-list">${commentsHtml}</div>
+                            <div class="wb-load-more" id="wb-load-more-btn" onclick="${appRef}.startLoadMore(this, '${post.id}')"><i class="fa-solid fa-rotate-right"></i> 載入更多評論</div>
+                        </div>
+                    </div>
+                    <div class="wb-input-bar">
+                        <div class="wb-input-wrapper">
+                            <input type="text" class="wb-input" id="wb-comment-input" placeholder="寫評論..." oninput="const btn=this.parentElement.nextElementSibling; if(this.value.trim()) btn.classList.add('active'); else btn.classList.remove('active');">
+                        </div>
+                        <div class="wb-send-btn" onclick="${appRef}.sendComment('${post.id}')">發送</div>
+                    </div>
+                </div>
+            `;
+        },
+
+        // --- 發文卡：大字框；圖片只有一顆相機鈕，按了上拉單選「寫描述／選照片」，選完在字框下方掛一枚附件 ---
+        renderCompose: function(state) {
+            const appRef = "(window.parent.wbApp || window.wbApp)";
+            const st = state || {};
+            const esc = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            let attach = '';
+            const m = st.media;
+            if (m && m.type === 'image' && String(m.desc || '').startsWith('data:')) {
+                attach = `<div class="wb-compose-preview"><img src="${esc(m.desc)}"><div class="wb-compose-preview-x" onclick="${appRef}.composeClearImage()"><i class="fa-solid fa-xmark"></i></div></div>`;
+            } else if (m) {
+                const icon = { image: 'fa-regular fa-image', video: 'fa-solid fa-video', vote: 'fa-solid fa-square-poll-horizontal', location: 'fa-solid fa-location-dot' }[m.type] || 'fa-solid fa-paperclip';
+                const _PI = win.OS_PHONE_IMAGE || window.OS_PHONE_IMAGE;
+                const label = m.type === 'image' ? ((_PI && _PI.textOnly) ? _PI.textOnly(m.desc) : m.desc) : (m.type === 'location' ? m.name : m.title);
+                attach = `<div class="wb-compose-chip" onclick="${appRef}.composeEditMedia()"><i class="${icon}"></i><span class="wb-compose-chip-text">${esc(label)}</span><i class="fa-solid fa-xmark wb-compose-chip-x" onclick="event.stopPropagation(); ${appRef}.composeClearImage()"></i></div>`;
+            }
+            return `<div class="wb-compose-mask" onclick="if (event.target === this) ${appRef}.closeCompose()">
+                    <div class="wb-compose-card">
+                        <textarea class="wb-compose-text" id="wb-compose-text" placeholder="說點什麼…">${esc(st.text)}</textarea>
+                        <div class="wb-compose-tools">
+                            <div class="wb-compose-attach">${attach}</div>
+                            <div class="wb-compose-photo" onclick="${appRef}.composePickImage()"><i class="fa-solid fa-camera"></i></div>
+                        </div>
+                        <div class="wb-compose-btns">
+                            <div class="wb-compose-btn wb-compose-cancel" onclick="${appRef}.closeCompose()">取消</div>
+                            <div class="wb-compose-btn wb-compose-send" onclick="${appRef}.submitCompose()">發佈</div>
+                        </div>
+                    </div>
+                </div>`;
+        },
+
+        renderMePage: function(isDark = false) {
+            let account = { weiboNickname: 'User', realName: 'User', bio: '...', avatar: '', followers: 1024, following: 128, posts: 0 };
+            if (win.WB_ACCOUNT && typeof win.WB_ACCOUNT.getCurrentAccount === 'function') account = win.WB_ACCOUNT.getCurrentAccount();
+            const avatarStyle = account.avatar ? `background-image: url('${_cssUrl(account.avatar)}')` : `background-image: url('${_cssUrl(this.getAvatar(account.weiboNickname))}')`;
+            const appRef = "(window.parent.wbApp || window.wbApp)";
+
+            const pageBg      = isDark ? '#111'     : '#fff';
+            const cardBg      = isDark ? '#1c1c1e'  : '#fff';
+            const borderColor = isDark ? '#2a2a2a'  : '#f0f0f0';
+            const textColor   = isDark ? '#f0f0f0'  : '#333';
+            const subColor    = isDark ? '#666'     : '#999';
+            const shadowStyle = isDark ? ''         : 'box-shadow: 0 2px 10px rgba(0,0,0,0.05);';
+            const verColor    = isDark ? '#444'     : '#ccc';
+            const darkBadge   = isDark
+                ? '<span style="background:#ff8200; color:#fff; font-size:11px; padding:2px 8px; border-radius:10px;">已開啟</span>'
+                : '<span style="background:#ddd; color:#999; font-size:11px; padding:2px 8px; border-radius:10px;">已關閉</span>';
+
+            return `<div style="background: ${pageBg}; height: 100%; overflow-y: auto;">
+                    <div style="background: linear-gradient(to bottom, #ffae00, #ff8200); padding: 40px 20px 20px 20px; color: #fff; display:flex; flex-direction:column; align-items:center;">
+                        <div style="width: 70px; height: 70px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.5); ${avatarStyle}; background-size: cover; margin-bottom: 10px; background-color:#fff;"></div>
+                        <div style="font-size: 18px; font-weight: bold; margin-bottom: 5px;">${_esc(account.weiboNickname)}</div>
+                        <div style="font-size: 12px; opacity: 0.9; margin-bottom: 5px;">真名：${_esc(account.realName)}</div>
+                        <div style="font-size: 12px; opacity: 0.8; margin-bottom: 15px; max-width:80%; text-align:center;">${_esc(account.bio)}</div>
+                        <div style="display:flex; gap: 30px; font-size: 13px; text-align:center;">
+                            <div><div style="font-weight:bold; font-size:16px;">${(win.wbApp && win.wbApp.followList) ? win.wbApp.followList().length : account.following}</div><div>關注</div></div>
+                            <div><div style="font-weight:bold; font-size:16px;">${account.followers}</div><div>粉絲</div></div>
+                            <div><div style="font-weight:bold; font-size:16px;">${account.posts}</div><div>微博</div></div>
+                        </div>
+                    </div>
+                    <div style="padding: 10px;">
+                        <div style="background: ${cardBg}; border-radius: 8px; ${shadowStyle} overflow: hidden;">
+                            <div class="wb-cell" onclick="${appRef}.showContacts()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-user-group"></i><span style="font-size:14px; font-weight:500; color:${textColor};">關注列表</span></div><span style="color:${subColor};">›</span></div>
+                            <div class="wb-cell" onclick="${appRef}.editNickname()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-tag"></i><span style="font-size:14px; font-weight:500; color:${textColor};">編輯暱稱</span></div><span style="color:${subColor};">›</span></div>
+                            <div class="wb-cell" onclick="${appRef}.editBio()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-pen-to-square"></i><span style="font-size:14px; font-weight:500; color:${textColor};">編輯個性簽名</span></div><span style="color:${subColor};">›</span></div>
+                            <div class="wb-cell" onclick="${appRef}.toggleDarkMode()" style="padding: 15px; border-bottom: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-moon"></i><span style="font-size:14px; font-weight:500; color:${textColor};">黑夜模式</span></div>${darkBadge}</div>
+                            <div class="wb-cell" onclick="${appRef}.clearAllData()" style="padding: 15px; border-top: 1px solid ${borderColor}; display:flex; justify-content:space-between; align-items:center; cursor:pointer;"><div style="display:flex; align-items:center; gap:10px;"><i class="wb-cell-icon fa-solid fa-trash"></i><span style="font-size:14px; font-weight:500; color:#ff4444;">清空所有微博</span></div></div>
+                        </div>
+                        <div style="margin-top:20px; text-align:center; color:${verColor}; font-size:12px;">PhoneOS Weibo V3.7</div>
+                    </div>
+                </div>`;
+        },
+
+        renderApp: function(posts, activeTab = 'home', isLoading = false, isDark = false) {
+            const appRef = "(window.parent.wbApp || window.wbApp)";
+            let contentArea = '';
+            let loadingHtml = '';
+            if (isLoading) {
+                loadingHtml = `<div class="wb-loader-box"><div class="wb-spinner"></div><div>正在連接世界信號...</div></div>`;
+            }
+
+            if (activeTab === 'home') {
+                if ((!posts || posts.length === 0) && !isLoading) {
+                    contentArea = `<div class="wb-empty">還沒有動態<br>按右上角刷新，讓世界動起來</div>`;
+                } else {
+                    contentArea = posts.map(p => this.renderCard(p, false)).join('');
+                    contentArea = loadingHtml + contentArea;
+                }
+            } else if (activeTab === 'me') {
+                contentArea = this.renderMePage(isDark);
+            }
+
+            const fabStyle = activeTab === 'me' ? 'display:none;' : '';
+            return `
+                <div class="wb-shell${isDark ? ' wb-dark' : ''}">
+                    <div class="wb-header">
+                        <div class="wb-header-btn" onclick="(window.parent.PhoneSystem || window.PhoneSystem).goHome()"><i class="fa-solid fa-chevron-left"></i></div>
+                        <div class="wb-header-title">微博</div>
+                        <div class="wb-header-btn wb-header-btn--right${isLoading ? ' wb-spinning' : ''}" onclick="${appRef}.triggerPost()"><i class="fa-solid fa-rotate"></i></div>
+                    </div>
+                    <div class="wb-content" id="wb-feed">${contentArea}</div>
+                    <div class="wb-fab" onclick="${appRef}.openCompose()" style="${fabStyle}"><i class="fa-solid fa-pen"></i></div>
+                    <div class="wb-tab-bar">
+                        <div class="wb-tab ${activeTab === 'home' ? 'active' : ''}" onclick="${appRef}.switchTab('home')"><i class="wb-tab-icon fa-solid fa-house"></i><span class="wb-tab-label">首頁</span></div>
+                        <div class="wb-tab ${activeTab === 'me' ? 'active' : ''}" onclick="${appRef}.switchTab('me')"><i class="wb-tab-icon fa-solid fa-user"></i><span class="wb-tab-label">我</span></div>
+                    </div>
+                    <div id="wb-detail-container"></div>
+                </div>
+            `;
+        }
+    };
+})();

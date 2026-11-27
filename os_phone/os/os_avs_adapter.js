@@ -1,0 +1,244 @@
+// ----------------------------------------------------------------
+// [檔案] os_avs_adapter.js (V1)
+// 路徑：os_phone/os/os_avs_adapter.js
+// 職責：AVS 系統的「資料來源切換層」。
+//       PWA 獨立端 → 讀寫 localStorage（保留原 AVS engine 行為，不破壞）
+//       酒館擴展端 → 變數讀 OS_DB.state_data.current（副模型抽出來的）
+//                    規則用獨立 localStorage key，跨 chat 共用
+//
+// 設計目標：engine / rules / UI 不必動內部演算法，
+//          只把 storage 存取點換成 adapter 即可雙端通吃。
+// ----------------------------------------------------------------
+(function() {
+    console.log('🎲 [AVS Adapter] V1 載入');
+    const win = window.parent || window;
+
+    // 變數狀態的記憶體 cache（酒館模式用，因為 OS_DB 是 async，
+    // 但 engine.read() 是 sync 接口，所以維護一份 sync 可讀的鏡像）
+    let _cache = { chatId: null, vars: {}, schema: null, ts: 0 };
+    let _writeQ = Promise.resolve();   // writeState 的 DB 寫入排隊
+    let _refreshing = false;
+
+    function isStandalone() {
+        return !!(win.OS_API?.isStandalone?.());
+    }
+
+    function normalizeChatId(raw) {
+        if (win.OS_STATE_RUNTIME?.normalizeChatId) {
+            return win.OS_STATE_RUNTIME.normalizeChatId(raw);
+        }
+        if (!raw) return '';
+        return String(raw).split(/[\\/]/).pop().replace(/\.jsonl?$/i, '').trim();
+    }
+
+    // 🚨 PWA 沒有酒館可問，「當前 chat」＝當前這本故事(storyId)。以前 standalone 一律回 ''，連鎖三件事：
+    //    ① state_schema 擋在「沒有 chatId，無法生成 schema」② 生出來的變數包 chatId 是空的
+    //    ③ 檔案清單那條 (p.chatId && p.chatId === 當前) 永遠不成立 → PWA 的 AVS 檔案永遠是空的。
+    //    存取點只有這一支，getStoryId 也用它，兩邊不會再各寫一份而漂移。
+    function _pwaStoryId() {
+        try { return localStorage.getItem('vn_current_story_id') || ''; } catch(e) { return ''; }
+    }
+
+    function getCurrentChatId() {
+        if (isStandalone()) return _pwaStoryId();
+        try {
+            const ctx = win.SillyTavern?.getContext?.();
+            return normalizeChatId(ctx?.chatId);
+        } catch(e) { return ''; }
+    }
+
+    // ===== Tavern：refresh 記憶體 cache（OS_DB → memory）=====
+    async function _refreshTavernCache() {
+        if (_refreshing) return;
+        _refreshing = true;
+        try {
+            const cid = getCurrentChatId();
+            if (!cid || !win.OS_DB?.getStateData) {
+                _cache = { chatId: cid, vars: {}, schema: null, ts: Date.now() };
+                return;
+            }
+            const data = await win.OS_DB.getStateData(cid);
+            _cache = {
+                chatId: cid,
+                vars: data?.current || {},
+                schema: data?.schema || null,
+                ts: Date.now()
+            };
+        } catch(e) {
+            console.warn('[AVS Adapter] refresh cache 失敗:', e);
+        } finally {
+            _refreshing = false;
+        }
+    }
+
+    // ===== PWA：localStorage 直連（保留原 AVS engine 行為）=====
+    function _pwaStateKey() {
+        const sid = _pwaStoryId();
+        return sid ? `avs_state_${sid}` : 'avs_current_state';
+    }
+    function _pwaReadState() {
+        try { return JSON.parse(localStorage.getItem(_pwaStateKey()) || '{}'); } catch(e) { return {}; }
+    }
+    // 以前失敗只印 console：劇情狀態沒存下來，她要到重整後數值退回去才發現
+    function _pwaWriteState(state) {
+        let s;
+        try { s = JSON.stringify(state); } catch (e) { console.error('[AVS Adapter] PWA 狀態轉不成文字:', e); return; }
+        win.AUI.lsSet(_pwaStateKey(), s, '劇情狀態');
+    }
+
+    // ===== 規則 storage（兩端各自 key，PWA 沿用原 avs_condition_rules）=====
+    const RULES_KEY_PWA    = 'avs_condition_rules';
+    const RULES_KEY_TAVERN = 'aurelia_rules_tavern';
+
+    function _rulesKey() {
+        return isStandalone() ? RULES_KEY_PWA : RULES_KEY_TAVERN;
+    }
+
+    // ================================================================
+    // 對外 API
+    // ================================================================
+    win.OS_AVS_ADAPTER = {
+        isStandalone,
+        getCurrentChatId,
+
+        /** sync 讀變數狀態（engine.read / rules.getActiveContext 用）*/
+        readState() {
+            if (isStandalone()) return _pwaReadState();
+            // 防串卡：cache 不是「當前這張卡」的(切卡後還沒刷新/正在 race) → 別回傳別張卡的資料，先回空 + 觸發刷新
+            if (_cache.chatId !== getCurrentChatId()) { try { _refreshTavernCache(); } catch (e) {} return {}; }
+            return { ..._cache.vars };
+        },
+
+        /** 寫變數狀態（async；PWA 走 localStorage，酒館寫 OS_DB.state_data.current）*/
+        // 🚨 必須用 spread 保留整份資料：這裡以前只列 schema/patches/current 三個欄位重建物件，
+        //    等於每寫一次狀態就把 base / sigs / director / npcLedger / npcDossiers 全部抹掉。
+        //    「還原上一步」「回滾」「手動改值」都會走這條 → 按幾次就洗幾次，逐輪紀錄(patches)
+        //    最後變成 {}，之後任何自動回溯都沒東西可退。這是 AVS 回溯反覆失效的根本原因。
+        async writeState(state) {
+            if (isStandalone()) { _pwaWriteState(state); return; }
+            const cid = getCurrentChatId();
+            if (!cid || !win.OS_DB?.getStateData) return;
+            // 🚨 記憶體那份先換掉（readState 是同步讀它的）：以前等 DB 寫完才換，
+            //    一則回覆裡有好幾塊 <vars> 時，後一塊讀到的還是舊值，前一塊的改動被蓋掉
+            _cache = { chatId: cid, vars: { ...(state || {}) }, schema: _cache.chatId === cid ? _cache.schema : null, ts: Date.now() };
+            // 寫 DB 排隊：一次一筆，免得先送的比後送的晚寫完、把新值蓋回舊值
+            const job = _writeQ.then(async () => {
+                const data = (await win.OS_DB.getStateData(cid)) || {};
+                await win.OS_DB.saveStateData(cid, {
+                    ...data,                                      // ← 其餘欄位原封不動帶過去
+                    schema: data.schema || _cache.schema,
+                    current: state || {}
+                });
+                if (_cache.chatId === cid && !_cache.schema) _cache.schema = data.schema;
+            });
+            _writeQ = job.catch(() => {});
+            return job;
+        },
+
+        /** sync 讀規則陣列 */
+        loadRules() {
+            try { return JSON.parse(localStorage.getItem(_rulesKey()) || '[]'); } catch(e) { return []; }
+        },
+
+        /** sync 寫規則陣列 */
+        //   🚨 寫失敗一定要讓人看見：localStorage 撞上限之後這裡會一直失敗，
+        //      但畫面上 AI 照樣報「已生成 N 條規則」——規則其實一條都沒存下來，
+        //      而她要到下一輪劇情不吃規則時才發現。console 她看不到，所以走 toast。
+        saveRules(rules) {
+            try { localStorage.setItem(_rulesKey(), JSON.stringify(rules || [])); return true; } catch(e) {
+                console.error('[AVS Adapter] 規則寫入失敗:', e);
+                try {
+                    const full = /quota|exceeded/i.test(String(e && (e.name || e.message)));
+                    AUI.toastr && AUI.toastr.error(
+                        full ? '瀏覽器空間已滿，條件規則沒能存下來。到書架刪幾本不玩的書再試一次。' : '條件規則存檔失敗，請看 console。',
+                        'AVS 規則', { timeOut: 12000 });
+                } catch (e2) {}
+                return false;
+            }
+        },
+
+        /** storyId：用於 engine snapshot 等的 storage 分艙（酒館用 chatId）*/
+        getStoryId() {
+            if (isStandalone()) return _pwaStoryId();
+            return getCurrentChatId();
+        },
+
+        /** worldId：rules filter 用（規則.worldId === 當前 worldId 才生效；酒館用 chatId）*/
+        getWorldId() {
+            if (isStandalone()) return localStorage.getItem('vn_current_world_id') || '';
+            return getCurrentChatId();
+        },
+
+        /** 格式化變數值給 UI 顯示用（list / JSON array 字串 → 頓號連接純文字）
+         *  程式儲存層仍是 array / JSON 字串，這只是顯示層美化
+         */
+        formatVarValue(v) {
+            if (v == null) return '';
+            if (Array.isArray(v)) return v.map(x => String(x)).join('、');
+            if (typeof v === 'string') {
+                const trim = v.trim();
+                if (trim.startsWith('[') && trim.endsWith(']')) {
+                    try {
+                        const arr = JSON.parse(trim);
+                        if (Array.isArray(arr)) return arr.map(x => String(x)).join('、');
+                    } catch(e) {
+                        // 不合法 JSON 但長相像陣列 → 拿掉方括號 + 引號，按逗號切
+                        return trim.slice(1, -1).replace(/["']/g, '').split(',').map(s => s.trim()).filter(Boolean).join('、');
+                    }
+                }
+                return v;
+            }
+            if (typeof v === 'object') {
+                try { return JSON.stringify(v); } catch(e) { return String(v); }
+            }
+            return String(v);
+        },
+
+        /** 故事標題（給變數工坊 UI 顯示「當前故事」用）
+         *  PWA → vn_current_story_title；酒館 → 角色卡名 fallback chatId
+         */
+        getStoryTitle() {
+            if (isStandalone()) {
+                return localStorage.getItem('vn_current_story_title') || localStorage.getItem('vn_current_story_id') || '';
+            }
+            try {
+                const ctx = win.SillyTavern?.getContext?.();
+                const charName = ctx?.name2 || ctx?.characters?.[ctx?.characterId]?.name;
+                return charName || getCurrentChatId() || '';
+            } catch(e) { return getCurrentChatId() || ''; }
+        },
+
+        /** 強制 refresh cache（酒館才有用；PWA 走 localStorage 不需要）*/
+        async refreshCache() {
+            if (!isStandalone()) await _refreshTavernCache();
+        }
+    };
+
+    // ===== 酒館模式：監聽相關事件自動 refresh cache =====
+    function setupTavernHooks() {
+        if (isStandalone()) return;
+        if (win.eventOn && win.tavern_events) {
+            if (win.tavern_events.CHAT_CHANGED) {
+                win.eventOn(win.tavern_events.CHAT_CHANGED, _refreshTavernCache);
+            }
+            // state_runtime 抽完 patch / schema 更新 / 用戶手動編輯欄位 都要 refresh
+            try { win.eventOn?.('AURELIA_STATE_PATCHED', _refreshTavernCache); } catch(e) {}
+            try { win.eventOn?.('AURELIA_STATE_SCHEMA_GENERATED', _refreshTavernCache); } catch(e) {}
+            try { win.eventOn?.('AURELIA_STATE_DATA_REMOVED', _refreshTavernCache); } catch(e) {}
+        }
+        // 啟動時跑一次
+        _refreshTavernCache();
+    }
+
+    // 等待 OS_API / OS_DB / SillyTavern 都載完
+    function init() {
+        if (typeof win.OS_API?.isStandalone !== 'function') {
+            setTimeout(init, 500);
+            return;
+        }
+        setupTavernHooks();
+        console.log(`🎲 [AVS Adapter] Ready · 模式=${isStandalone() ? 'PWA' : 'TAVERN'}`);
+    }
+
+    init();
+})();

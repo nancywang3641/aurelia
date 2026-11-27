@@ -1,0 +1,405 @@
+// ----------------------------------------------------------------
+// [檔案] os_avs_memory.js
+// 路徑：os_phone/os/os_avs_memory.js
+// 職責：AVS「📝 記憶」分頁 —— 把現成的「向量記憶」收進變數工坊、酒館也看得到。
+//       給非工程玩家的直觀 UI：
+//         • 一個開關「劇情記憶（防 AI 失憶）」= os_vector_config.enabled
+//         • 記憶清單：列出 AI 自動記下的事實卡，可單條刪除
+//         • 服務設定（端點/模型/Key/召回條數 + 測試連線）收進「⚙️ 進階」摺疊
+//       存的引擎（提取/向量化/搜尋）由 os_vector_engine.js 提供，這裡只做 UI + 設定。
+// 依賴：window.OS_VECTOR_ENGINE（embed/isEnabled）、window.OS_DB（getAllVnMemories/deleteVnMemory）
+//       window.VN_Core._currentStoryId / window.OS_AVS_ADAPTER.getStoryId
+// 對外：window.OS_AVS_MEMORY = { renderInto(host) }
+// 樣式：css/os_avs.css 的 .avs-mem-*（沿用 .avs-st-toggle / .avs-st-adv / .avs-card / .avs-btn / .avs-input）
+// ----------------------------------------------------------------
+(function () {
+    'use strict';
+    const win = window.parent || window;
+    console.log('[AVS Memory] 載入 os_avs_memory.js（📝 記憶分頁）');
+
+    const CFG_KEY = 'os_vector_config';
+    function esc(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function _cfg() { try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}'); } catch (e) { return {}; } }
+    function _saveCfg(c) { return win.AUI.lsSet(CFG_KEY, JSON.stringify(c), '記憶設定'); }
+
+    // ❔ 這一頁的說明全放小問號（09-27：「對齊劇情」這類功能容易忘記用途，一律補問號說明）
+    //   面板上不掛成段說明；會變的狀態字（已記幾條、轉入提醒）照舊留在面板上。
+    const _H = (k) => ((win.AUI || window.AUI) && (win.AUI || window.AUI).helpBtn) ? (win.AUI || window.AUI).helpBtn(k) : '';
+    try {
+        (win.AUI || window.AUI).registerHelp({
+            mem_on:       { title: '劇情記憶', body: '每存一章，會自動把重點記下來；AI 下筆前會翻出相關的記憶給它看，避免忘記以前發生過的事。\n關掉就不記、也不翻。' },
+            mem_tidy:     { title: '整理舊記憶', body: '把比較舊、零零碎碎的記憶合併成少量精簡的幾條，每輪送給 AI 的東西會少一點。\n重要的人物、關係、代表台詞不動，最近 40 條不動；原本那些只是藏起來，不會刪。\n會呼叫模型：按下去前會先告訴你叫幾次；用哪個模型在 設置 → AI 模型 → 通道 的「整理舊記憶」。想定期自動整理，到 CTX 面板打開「自動整理記憶」。' },
+            mem_reconcile:{ title: '對齊劇情', body: '刪掉或重寫劇情之後用。\n把「來源那一樓已經不在了」的記憶清掉，AI 就不會再想起被刪掉的事。現有劇情的記憶一條都不動；讀不到完整劇情會自己停下，不會誤刪。\n不呼叫模型、不花錢。' },
+            mem_backfill: { title: '建立記憶向量', body: '讓記憶可以照「意思」被找出來，不只是比對字面。\n剛開記憶服務、或換了本地模型之後，舊的記憶要補算一次。用的是記憶服務，不是聊天用的模型。' },
+            mem_service:  { title: '記憶服務', body: '用來算「記憶之間像不像」的服務，找相關記憶時用。\n用本地模型：在你電腦裡算，文字不外流。\n用線上服務：填 SiliconFlow 這類服務，免費的 BAAI/bge-m3 就夠用。' },
+            mem_local:    { title: '用本地模型', body: '在你電腦裡算，文字不外流、最安心，也沒有封號風險。\n第一次要從網路下載 30–60MB，之後存在瀏覽器裡不用重下。換模型之後要重新「建立記憶向量」。' },
+            mem_share_key:{ title: '與主模型共用金鑰', body: '主模型也是用 SiliconFlow 的話打勾，就不用再填一次 Key。' },
+            mem_src:      { title: '記憶來源', body: '全文：拿整章去記，完整，但比較花。\n摘要：拿 AI 每輪寫的摘要去記，比較省，但可能漏掉對話細節；那一章沒有摘要時會自動改用全文。' },
+            mem_main_recent:{ title: '只帶近期與角色記憶', body: '打勾後，每輪只把最近的記憶和人物記憶送給 AI，比較省。\n比較舊的記憶交給副模型挑出需要的再補上；沒有在用副模型挑記憶的，別勾。' },
+            mem_move:     { title: '轉入記憶', body: '換了聊天、或改用備份檔之後，記憶會對不上這個聊天。\n在這裡把舊的那份記憶「複製」到目前這個；舊的保留不刪，確認沒問題再自己清。' },
+        });
+    } catch (e) {}
+
+    function _storyId() {
+        // 隔離鍵：OS_AVS_ADAPTER.getStoryId 在「酒館回 chatId、PWA 回 vn_current_story_id」——一律以它為準。
+        //   ❌ 別優先 VN_Core._currentStoryId(全域 storyTitle_timestamp、不隨換聊天室變)→ 會害酒館跨聊天室記憶混同桶。
+        const sid = win.OS_AVS_ADAPTER?.getStoryId?.();
+        if (sid) return sid;
+        return (win.VN_Core && win.VN_Core._currentStoryId) || localStorage.getItem('vn_current_story_id') || '';
+    }
+    function _typeLabel(t) {
+        const M = { npc: '角色', event: '事件', item: '物品', location: '地點', rule: '規則', relationship: '關係', sex: '性事', dialogue: '語氣' };
+        return M[t] || ('• ' + (t || '記憶'));
+    }
+
+    let _host = null;
+    let _advOpen = false;
+    let _memCache = [];        // 目前世界全部記憶（篩選用，免重抓 DB）
+    let _memFilter = 'all';    // 分類篩選（type）
+    let _memSearch = '';       // 關鍵字搜尋
+
+    function _filterMems(list) {
+        let r = list || [];
+        if (_memFilter && _memFilter !== 'all') r = r.filter(m => m.type === _memFilter);
+        const kw = (_memSearch || '').trim().toLowerCase();
+        if (kw) r = r.filter(m => (m.text || '').toLowerCase().includes(kw) || (m.tags || []).some(t => String(t).toLowerCase().includes(kw)));
+        return r;
+    }
+
+    function _memTypeOpts(mems) {
+        const present = [...new Set((mems || []).map(m => m.type).filter(Boolean))];
+        if (_memFilter !== 'all' && !present.includes(_memFilter)) _memFilter = 'all';   // 篩選值已不存在(資料變了)退回全部
+        return `<option value="all"${_memFilter === 'all' ? ' selected' : ''}>全部分類</option>` +
+            present.map(t => `<option value="${esc(t)}"${_memFilter === t ? ' selected' : ''}>${esc(_typeLabel(t))}</option>`).join('');
+    }
+
+    function _bindMemDelete() {
+        if (!_host) return;
+        _host.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
+            const id = btn.getAttribute('data-del');
+            if (!await AUI.confirm('刪掉這條記憶？AI 之後就不會再想起它。')) return;
+            try { await win.OS_DB?.deleteVnMemory?.(id); } catch (e) {}
+            _build();
+        });
+    }
+
+    function _updateMemList() {
+        const listEl = _host && _host.querySelector('#avs-mem-list');
+        if (listEl) listEl.innerHTML = _renderList(_filterMems(_memCache));
+        _bindMemDelete();
+    }
+
+    function _renderList(mems) {
+        if (!mems.length) {
+            return `<div class="avs-mem-empty">還沒有記憶。<br>把上面的開關打開、在「<i class="fa-solid fa-gear"></i> 進階」設好記憶服務後，跑團存章節時系統會自動把重點記在這裡。</div>`;
+        }
+        // 份量只在夠重時標出來（門檻同 os_vector_inject 的 HEAVY_MIN）。每張卡都掛數字會吵，
+        // 而且看不出重點；只標重的，一眼就知道副模型把哪些事判成「還沒收尾」。數字照實印，
+        // 判得準不準要靠她看得到原始值——全部都標成懸著本身就是個訊號。
+        const _weightTag = (m) => {
+            const w = Number(m && m.weight);
+            if (!Number.isFinite(w) || w < 0.7) return '';
+            return `<span class="avs-mem-tag" title="這條被判成之後還會被牽動，召回時會留位置給它">懸著 ${w.toFixed(1)}</span>`;
+        };
+        return mems.map(m => `<div class="avs-mem-card" data-id="${esc(m.id)}">
+            <div class="avs-mem-card-top">
+                <span class="avs-mem-type">${esc(_typeLabel(m.type))}</span>
+                ${_weightTag(m)}
+                <button class="avs-mem-del" data-del="${esc(m.id)}" title="刪掉這條">×</button>
+            </div>
+            <div class="avs-mem-text">${esc(m.text)}</div>
+            ${(m.tags && m.tags.length) ? `<div class="avs-mem-tags">${m.tags.map(t => `<span class="avs-mem-tag">${esc(t)}</span>`).join('')}</div>` : ''}
+        </div>`).join('');
+    }
+
+    async function _build() {
+        if (!_host) return;
+        _host.innerHTML = `<div class="avs-mem"><div class="avs-mem-loading">載入記憶中…</div></div>`;
+
+        const cfg = _cfg();
+        const on = cfg.enabled === true;
+        const sid = _storyId();
+        const engOk = !!win.OS_VECTOR_ENGINE;
+        const _standalone = !!(win.OS_API?.isStandalone?.());   // PWA/獨立版＝true（用向量搜尋）；酒館(index.js載入)＝false（目錄挑碼、不需 embeddings）
+
+        let mems = [];
+        try { if (win.OS_DB?.getAllVnMemories) mems = (await win.OS_DB.getAllVnMemories(sid) || []).filter(m => m && !m.merged); } catch (e) {}   // 隱藏被壓縮的原始條目
+        _memCache = mems;
+        // 還沒建向量的條數（回填鈕用）：開了記憶 + 設好服務(雲端有端點 or 本地) + 有「當前模型沒算過」的記憶 才提示回填
+        const _curModel = win.OS_VECTOR_ENGINE?.curModelId?.();
+        const _svcReady = cfg.embeddingLocal === true || !!cfg.embeddingUrl;
+        const _noVec = (on && engOk && _svcReady && _curModel) ? mems.filter(m => !(Array.isArray(m.vector) && m.vector.length && m.vecModel === _curModel)).length : 0;
+
+        // 其他「有記憶」的世界（給「轉入記憶」用）——換聊天/備份檔 chatId 變了，可把舊世界記憶搬過來
+        let _srcOptions = '';
+        let _otherTotal = 0;
+        try {
+            if (win.OS_DB?.getAllVnMemories) {
+                const all = await win.OS_DB.getAllVnMemories('') || [];
+                const grp = {};
+                for (const m of all) { const w = m.storyId || ''; if (w && w !== sid) { grp[w] = (grp[w] || 0) + 1; _otherTotal++; } }
+                _srcOptions = Object.keys(grp).map(w => `<option value="${esc(w)}">${esc(w)}（${grp[w]} 條）</option>`).join('');
+            }
+        } catch (e) {}
+        // 記憶改用 chatId 隔離後，舊的 storyId 桶記憶不會自動出現在這 → 提示去「轉入記憶」搬過來（保留向量、不丟）
+        const _migrateHint = (mems.length === 0 && _otherTotal > 0)
+            ? `<div class="avs-mem-srchint avs-mem-migrate"><i class="fa-solid fa-triangle-exclamation"></i> 這個聊天目前 0 條，但偵測到 ${_otherTotal} 條記憶在「別的識別碼」下（可能是改用聊天室隔離前存的）。到下面「<i class="fa-solid fa-gear"></i> 進階 → 轉入記憶」把它搬到目前聊天就回來了，向量會一起保留。</div>`
+            : '';
+
+        const statusTxt = !engOk
+            ? '記憶引擎未載入'
+            : (!on
+                ? '目前關閉中 — 打開開關並設好服務才會開始記'
+                : ((!_standalone || cfg.embeddingUrl)
+                    ? `已記 ${mems.length} 條　·　目前故事：${sid ? esc(sid) : '（未開故事）'}`
+                    : '已開啟，但還沒設定記憶服務（去下面「進階」填）'));
+
+        _host.innerHTML = `<div class="avs-mem">
+            <div class="avs-card avs-mem-top">
+                <div class="avs-mem-top-text">
+                    <div class="avs-mem-top-name">劇情記憶（防 AI 失憶）${_H('mem_on')}</div>
+                </div>
+                <div class="avs-st-toggle${on ? ' on' : ''}" id="avs-mem-toggle" role="switch"></div>
+            </div>
+
+            <div class="avs-mem-status">${statusTxt}</div>
+            ${_migrateHint}
+
+            <div class="avs-st-btn-grid">
+                <span class="avs-mem-bwrap"><button class="avs-btn avs-btn-outline" id="avs-mem-tidy"><i class="fa-solid fa-compress"></i> 整理舊記憶</button>${_H('mem_tidy')}</span>
+                <span class="avs-mem-bwrap"><button class="avs-btn avs-btn-outline" id="avs-mem-reconcile"><i class="fa-solid fa-broom"></i> 對齊劇情</button>${_H('mem_reconcile')}</span>
+                ${_noVec > 0 ? `<span class="avs-mem-bwrap"><button class="avs-btn avs-btn-outline" id="avs-mem-backfill"><i class="fa-solid fa-list-ol"></i> 建立記憶向量（${_noVec} 待補）</button>${_H('mem_backfill')}</span>` : ''}
+            </div>
+            <div class="avs-mem-srchint avs-mem-progress" id="avs-mem-tidy-result"></div>
+
+            <button class="avs-st-adv-btn${_advOpen ? ' open' : ''}" id="avs-mem-adv-btn"><i class="fa-solid fa-gear"></i> 進階：記憶服務設定</button>
+            <div class="avs-st-adv${_advOpen ? ' open' : ''}" id="avs-mem-adv">
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">記憶服務${_H('mem_service')}</div>
+                    <div class="avs-mem-cfg">
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-local" ${cfg.embeddingLocal ? 'checked' : ''}><span><i class="fa-solid fa-lock"></i> 用本地模型${_H('mem_local')}</span></label>
+                        ${cfg.embeddingLocal ? `<label class="avs-mem-fld"><span>本地模型</span>
+                            <select class="avs-input" id="avs-mem-localmodel">
+                                <option value="Xenova/bge-small-zh-v1.5"${(cfg.localModel || 'Xenova/bge-small-zh-v1.5') === 'Xenova/bge-small-zh-v1.5' ? ' selected' : ''}>中文小模型（快、約 30MB）</option>
+                                <option value="Xenova/multilingual-e5-small"${cfg.localModel === 'Xenova/multilingual-e5-small' ? ' selected' : ''}>多語小模型（約 60MB）</option>
+                                <option value="Xenova/bge-m3"${cfg.localModel === 'Xenova/bge-m3' ? ' selected' : ''}>多語大模型（較準、較大較慢）</option>
+                            </select>
+                        </label>
+` : `
+                        <label class="avs-mem-fld"><span>端點</span><input class="avs-input" id="avs-mem-url" placeholder="https://api.siliconflow.cn/v1" value="${esc(cfg.embeddingUrl || '')}"></label>
+                        <label class="avs-mem-fld"><span>模型</span><input class="avs-input" id="avs-mem-model" placeholder="BAAI/bge-m3" value="${esc(cfg.embeddingModel || 'BAAI/bge-m3')}"></label>
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-sync" ${cfg.syncKeyWithPrimary !== false ? 'checked' : ''}><span>與主模型共用金鑰${_H('mem_share_key')}</span></label>
+                        <label class="avs-mem-fld"><span>Key</span><input class="avs-input" id="avs-mem-key" type="password" placeholder="sk-...（沒勾共用才要填）" value="${esc(cfg.embeddingKey || '')}"></label>`}
+                        ${(win.OS_API?.isStandalone?.()) ? `<label class="avs-mem-fld"><span>召回條數</span><input class="avs-input avs-mem-num" id="avs-mem-topk" type="number" min="1" max="20" value="${parseInt(cfg.topK) || 5}"></label>` : ''}
+                        <label class="avs-mem-fld"><span>記憶來源${_H('mem_src')}</span>
+                            <select class="avs-input" id="avs-mem-src">
+                                <option value="content"${(cfg.extractSource || 'content') !== 'summary' ? ' selected' : ''}>全文（完整、較花）</option>
+                                <option value="summary"${cfg.extractSource === 'summary' ? ' selected' : ''}>摘要（省、但可能漏對話）</option>
+                            </select>
+                        </label>
+                        <label class="avs-mem-fld avs-mem-chk"><input type="checkbox" id="avs-mem-main-recent" ${cfg.mainRecentOnly ? 'checked' : ''}><span>只帶近期與角色記憶${_H('mem_main_recent')}</span></label>
+                    </div>
+                    <div class="avs-st-btn-grid">
+                        <button class="avs-btn avs-btn-primary" id="avs-mem-save"><i class="fa-solid fa-floppy-disk"></i> 儲存設定</button>
+                        ${cfg.embeddingLocal ? `<button class="avs-btn avs-btn-outline" id="avs-mem-local-test"><i class="fa-solid fa-lock"></i> 測試本地模型</button>` : `<button class="avs-btn avs-btn-outline" id="avs-mem-test"><i class="fa-solid fa-plug"></i> 測試連線</button>`}
+                    </div>
+                    <div class="avs-mem-test-result" id="avs-mem-test-result"></div>
+                </div>
+                <div class="avs-st-adv-sec">
+                    <div class="avs-st-adv-hd">轉入記憶${_H('mem_move')}</div>
+                    ${_srcOptions
+                        ? `<div class="avs-mem-move">
+                            <select class="avs-input" id="avs-mem-src-world"><option value="">選擇來源世界…</option>${_srcOptions}</select>
+                            <button class="avs-btn avs-btn-primary" id="avs-mem-move-btn">轉入到目前</button>
+                        </div>
+`
+                        : `<div class="avs-mem-srchint">目前沒有其他世界的記憶可轉。</div>`}
+                </div>
+            </div>
+
+            <div class="avs-mem-list-hd-row">
+                <div class="avs-mem-list-hd"><i class="fa-solid fa-pen-to-square"></i> 記住的事</div>
+                <div class="avs-mem-filter">
+                    <select class="avs-input avs-mem-filter-sel" id="avs-mem-filter">${_memTypeOpts(mems)}</select>
+                    <input class="avs-input avs-mem-filter-search" id="avs-mem-search" placeholder="搜尋…" value="${esc(_memSearch)}">
+                </div>
+            </div>
+            <div class="avs-mem-list" id="avs-mem-list">${_renderList(_filterMems(mems))}</div>
+        </div>`;
+
+        _bind();
+    }
+
+    function _bind() {
+        const h = _host;
+        const q = s => h.querySelector(s);
+
+        // 進階摺疊
+        const advBtn = q('#avs-mem-adv-btn'), adv = q('#avs-mem-adv');
+        if (advBtn && adv) advBtn.onclick = () => { _advOpen = !_advOpen; advBtn.classList.toggle('open', _advOpen); adv.classList.toggle('open', _advOpen); };
+
+        // 開關 = enabled
+        const toggle = q('#avs-mem-toggle');
+        if (toggle) toggle.onclick = function () {
+            const cfg = _cfg();
+            cfg.enabled = !this.classList.contains('on');
+            _saveCfg(cfg);
+            _build();
+        };
+
+        // 分類篩選 + 搜尋（只重渲染清單，不重抓 DB）
+        const filterSel = q('#avs-mem-filter');
+        if (filterSel) filterSel.onchange = () => { _memFilter = filterSel.value; _updateMemList(); };
+        const searchInp = q('#avs-mem-search');
+        if (searchInp) searchInp.oninput = () => { _memSearch = searchInp.value; _updateMemList(); };
+
+        // 刪單條記憶
+        _bindMemDelete();
+
+        // 儲存設定
+        const saveBtn = q('#avs-mem-save');
+        if (saveBtn) saveBtn.onclick = () => {
+            const cfg = _cfg();
+            // 這些 embeddings 欄位只在 PWA 顯示；酒館隱藏時欄位不存在 → 別覆蓋既有值(否則酒館存檔會把 PWA 設定清空)
+            const _u = q('#avs-mem-url'); if (_u) cfg.embeddingUrl = (_u.value || '').trim();
+            const _m = q('#avs-mem-model'); if (_m) cfg.embeddingModel = (_m.value || '').trim() || 'BAAI/bge-m3';
+            const _sy = q('#avs-mem-sync'); if (_sy) cfg.syncKeyWithPrimary = !!_sy.checked;
+            const _k = q('#avs-mem-key'); if (_k) cfg.embeddingKey = (_k.value || '').trim();
+            const _tk = q('#avs-mem-topk'); if (_tk) cfg.topK = parseInt(_tk.value) || 5;   // 此欄只在 PWA 顯示；酒館隱藏時別覆蓋既有值
+            const _lc = q('#avs-mem-local'); if (_lc) cfg.embeddingLocal = !!_lc.checked;   // 本地模型開關
+            const _lm = q('#avs-mem-localmodel'); if (_lm) cfg.localModel = _lm.value || 'Xenova/bge-small-zh-v1.5';   // 本地模型只在開本地時顯示
+            cfg.extractSource = q('#avs-mem-src')?.value || 'content';
+            const _mr = q('#avs-mem-main-recent'); if (_mr) cfg.mainRecentOnly = !!_mr.checked;   // 主模型只注入近期+角色記憶
+            if (!_saveCfg(cfg)) return;   // 沒存下來就不說「已儲存」
+            const b = saveBtn; const o = b.textContent; b.textContent = '✓ 已儲存'; setTimeout(() => { b.textContent = o; }, 1200);
+        };
+
+        // 本地模型開關：切換要重畫面板（換顯示雲端欄位 ↔ 本地模型選單）
+        const localChk = q('#avs-mem-local');
+        if (localChk) localChk.onchange = () => { const c = _cfg(); c.embeddingLocal = !!localChk.checked; _saveCfg(c); _build(); };
+
+        // 🔒 測試本地模型（spike）：第一次會下載模型，回報哪一階段掛掉 + 錯誤（無 F12 靠這診斷）
+        const localTestBtn = q('#avs-mem-local-test');
+        if (localTestBtn) localTestBtn.onclick = async () => {
+            const res = q('#avs-mem-test-result');
+            if (!win.OS_VECTOR_ENGINE?.testLocal) { if (res) { res.className = 'avs-mem-test-result err'; res.textContent = '記憶引擎未載入'; } return; }
+            if (saveBtn) saveBtn.onclick();   // 先存目前選的本地模型
+            localTestBtn.disabled = true; const _o = localTestBtn.textContent; localTestBtn.textContent = '測試中…';
+            if (res) { res.className = 'avs-mem-test-result'; res.textContent = '測試中…首次要下載模型(30–60MB)，可能 1–2 分鐘，請別關面板'; }
+            try {
+                const r = await win.OS_VECTOR_ENGINE.testLocal();
+                if (r.ok) { if (res) { res.className = 'avs-mem-test-result ok'; res.textContent = `本地模型可用！向量維度 ${r.dim}、耗時 ${r.ms}ms　→ 現在可以「建立記憶向量」`; } }
+                else { if (res) { res.className = 'avs-mem-test-result err'; res.textContent = `卡在「${r.stage}」：${r.error}`; } }
+            } catch (e) {
+                if (res) { res.className = 'avs-mem-test-result err'; res.textContent = String(e?.message || e); }
+            }
+            localTestBtn.textContent = _o; localTestBtn.disabled = false;
+        };
+
+        // 測試連線
+        const testBtn = q('#avs-mem-test');
+        if (testBtn) testBtn.onclick = async () => {
+            const res = q('#avs-mem-test-result');
+            if (!win.OS_VECTOR_ENGINE?.embed) { if (res) { res.className = 'avs-mem-test-result err'; res.textContent = '記憶引擎未載入'; } return; }
+            // 先把當前欄位存起來再測（避免測到舊值）
+            if (saveBtn) saveBtn.onclick();
+            if (res) { res.className = 'avs-mem-test-result'; res.textContent = '測試中…'; }
+            try {
+                const v = await win.OS_VECTOR_ENGINE.embed('測試文字');
+                if (res) { res.className = 'avs-mem-test-result ok'; res.textContent = `連線成功！向量維度：${v.length}`; }
+            } catch (e) {
+                if (res) { res.className = 'avs-mem-test-result err'; res.textContent = String(e?.message || e); }
+            }
+        };
+
+        // 轉入記憶：把其他世界的記憶複製到目前世界（換聊天/備份檔後搬家用）
+        const moveBtn = q('#avs-mem-move-btn');
+        if (moveBtn) moveBtn.onclick = async () => {
+            const src = q('#avs-mem-src-world')?.value;
+            if (!src) { AUI.alert('先選來源世界'); return; }
+            const target = _storyId();
+            if (!target) { AUI.alert('目前沒有有效的世界（先開著要轉入的那個聊天）'); return; }
+            if (src === target) { AUI.alert('來源和目前是同一個世界'); return; }
+            if (!await AUI.confirm(`把「${src}」的記憶複製到目前世界？\n（來源保留、不會刪）`)) return;
+            moveBtn.disabled = true; const _o = moveBtn.textContent; moveBtn.textContent = '轉入中…';
+            try {
+                const n = await win.OS_DB?.copyVnMemoriesToStory?.(src, target);
+                AUI.alert(`已轉入 ${n || 0} 條記憶到目前世界`);
+            } catch (e) { AUI.alert('轉入失敗：' + (e?.message || e)); moveBtn.textContent = _o; moveBtn.disabled = false; }
+            _build();
+        };
+
+        // 🗜️ 整理舊記憶（合併壓縮）：把舊的零碎記憶併成精簡版，治長線過載。預設副模型，通道「整理舊記憶」可換
+        const tidyBtn = q('#avs-mem-tidy');
+        if (tidyBtn) tidyBtn.onclick = async () => {
+            if (!win.OS_STATE_RUNTIME?.compressOldMemories) { AUI.alert('整理功能尚未載入，請重載擴展'); return; }
+            const sid = _storyId();
+            if (!sid) { AUI.alert('目前沒有有效的世界（先開著要整理的那個聊天）'); return; }
+            // 先算要叫幾次模型再問她（每批一次）；用哪個模型在通道的「整理舊記憶」那列選
+            let plan;
+            try { plan = await win.OS_STATE_RUNTIME.compressOldMemories({ storyId: sid, plan: true }); }
+            catch (e) { AUI.alert(e?.message || String(e)); return; }
+            if (!await AUI.confirm(`把 ${plan.targets} 條舊的零碎記憶併成精簡版？會呼叫模型 ${plan.calls} 次。\n\n• 用哪個模型：設置 → AI 模型 → 通道 的「整理舊記憶」\n• 重要角色、關係、代表台詞不會動\n• 最近的記憶保留原樣\n• 原始資料只隱藏不刪、可還原`)) return;
+            const res = q('#avs-mem-tidy-result');
+            tidyBtn.disabled = true; const _o = tidyBtn.textContent; tidyBtn.textContent = '整理中…';
+            try {
+                const r = await win.OS_STATE_RUNTIME.compressOldMemories({ storyId: sid, onProgress: (m) => { if (res) res.textContent = m; } });
+                AUI.alert(`整理完成\n把 ${r.mergedCount} 條舊記憶併成 ${r.madeCount} 條\n目前共 ${r.after} 條`);
+            } catch (e) {
+                AUI.alert('整理失敗：' + (e?.message || e));
+            }
+            tidyBtn.textContent = _o; tidyBtn.disabled = false;
+            _build();
+        };
+
+        // 🧹 對齊劇情：清掉「來源訊息已被刪掉」的孤兒記憶（刪劇情後 AI 還一直想起被刪內容時用）
+        const recBtn = q('#avs-mem-reconcile');
+        if (recBtn) recBtn.onclick = async () => {
+            if (!win.OS_VECTOR_INJECT?.reconcileToStory) { AUI.alert('記憶引擎未載入，請重載擴展'); return; }
+            if (!await AUI.confirm('清掉「已經不在目前劇情裡」的記憶？\n\n• 用在：刪掉劇情後，AI 還一直想起被刪內容\n• 只清「來源訊息已被刪除」的那幾條，現存劇情的記憶不動\n• 讀不到完整劇情會自動中止、不誤刪')) return;
+            recBtn.disabled = true; const _o = recBtn.textContent; recBtn.textContent = '對齊中…';
+            try {
+                const r = await win.OS_VECTOR_INJECT.reconcileToStory();
+                if (r.ok) AUI.alert(`對齊完成\n清掉 ${r.removed} 條已刪內容的記憶（目前劇情 ${r.total} 樓、共掃 ${r.scanned} 條）`);
+                else AUI.alert('未執行：' + (r.msg || '未知原因'));
+            } catch (e) { AUI.alert('對齊失敗：' + (e?.message || e)); }
+            recBtn.textContent = _o; recBtn.disabled = false;
+            _build();
+        };
+
+        // 🔢 建立記憶向量（回填）：把已存但沒向量的舊記憶批次補上 embedding —— 啟用向量召回的一次性遷移
+        const bfBtn = q('#avs-mem-backfill');
+        if (bfBtn) bfBtn.onclick = async () => {
+            if (!win.OS_VECTOR_ENGINE?.backfillVectors) { AUI.alert('記憶引擎未載入，請重載擴展'); return; }
+            const sid2 = _storyId();
+            if (!sid2) { AUI.alert('目前沒有有效的世界（先開著要建立向量的那個聊天）'); return; }
+            const res = q('#avs-mem-tidy-result');
+            if (!await AUI.confirm('把目前世界還沒建立向量的記憶批次補上？\n\n• 會分批呼叫記憶服務（免費 BGE 友善、有節流）\n• 一次性：完成後召回才改用向量、不再每輪背整份目錄\n• 條數多時需要一點時間，跑完前別關面板')) return;
+            bfBtn.disabled = true; const _o = bfBtn.textContent; bfBtn.textContent = '建立中…';
+            try {
+                const r = await win.OS_VECTOR_ENGINE.backfillVectors(sid2, (done, total) => {
+                    if (res) res.textContent = `建立記憶向量中… ${done}/${total}`;
+                    bfBtn.textContent = `建立中… ${done}/${total}`;
+                });
+                AUI.alert(`完成\n已建立 ${r.ok}/${r.total} 條記憶向量` + (r.ok < r.total ? '\n（部分沒成功，可再按一次補剩下的）' : ''));
+            } catch (e) {
+                AUI.alert('建立失敗：' + (e?.message || e));
+            }
+            bfBtn.textContent = _o; bfBtn.disabled = false;
+            _build();
+        };
+    }
+
+    async function renderInto(host) {
+        if (!host) return;
+        _host = host;
+        await _build();
+    }
+
+    win.OS_AVS_MEMORY = { renderInto };
+    window.OS_AVS_MEMORY = win.OS_AVS_MEMORY;
+})();
