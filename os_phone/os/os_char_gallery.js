@@ -597,18 +597,20 @@
     async function youngUrl(name) { return localUrl(name, YOUNG_EXP); }
     // 他的長相描述（裝扮頁「他的長相」那一份）；沒有＝畫不出他小時候
     async function lookPrompt(name) { try { return String((await dressLookOf(name)).prompt || '').trim(); } catch (e) { return ''; } }
-    // 長相描述 → 小時候版：拿掉只屬於大人的詞，前面接年紀。age 不知道＝當十歲上下
-    function youngPrompt(look, age) {
+    // 長相描述 → 小時候版：拿掉只屬於大人的詞，前面接年紀、那時候的外表（era.look：寫回憶那通給的英文標籤；沒有才帶身分 era.role）。
+    //   age 不知道＝當十歲上下
+    function youngPrompt(look, age, era) {
         const a = (age > 0 && age < 18) ? Math.round(age) : 10;
         const adult = /\b(?:mature(?:\s+(?:male|female|man|woman))?|adult|milf|dilf|old\s+man|elderly|middle[-\s]aged|beard(?:ed)?|stubble|mustache|moustache|goatee|facial\s+hair|muscular|muscle|abs|large\s+breasts|huge\s+breasts|medium\s+breasts|breasts|cleavage|sexy|seductive|wrinkles?|tall)\b/i;
         const kept = String(look || '').split(/[,，]/).map(t => t.trim()).filter(t => t && !adult.test(t.replace(/[()\[\]{}:\d.]/g, ' ')));
         const head = a <= 12 ? ['child', '(younger self:1.2)', 'about ' + a + ' years old', 'small child proportions']
                              : ['teenager', '(younger self:1.2)', 'about ' + a + ' years old', 'youthful face'];
-        return head.concat(kept).join(', ');
+        const then = (era && era.look) ? [String(era.look).trim()] : ((era && era.role) ? [String(era.role).trim()] : []);
+        return head.concat(then, kept).filter(Boolean).join(', ');
     }
     // 照長相畫一張小時候的立繪（用途「小時候立繪」）→ 去背 → 存進「小時候」那格。已經有就直接回那張，同一個人同時只畫一張
     const _youngJobs = new Map();
-    function youngMake(name, age) {
+    function youngMake(name, age, era) {
         const k = String(name || '');
         if (_youngJobs.has(k)) return _youngJobs.get(k);
         const job = (async () => {
@@ -618,7 +620,7 @@
             const VI = win.VN_Image || window.VN_Image;   // vn_config 只把 VN_Image 掛在 window
             if (!look || !VI || !VI.getSprite) return '';
             const M = win.OS_IMAGE_MANAGER;
-            const url = await VI.getSprite(youngPrompt(look, age), true, { use: (M && M.youngUse) ? M.youngUse() : 'sprite' });
+            const url = await VI.getSprite(youngPrompt(look, age, era), true, { use: (M && M.youngUse) ? M.youngUse() : 'sprite' });
             if (!url) return '';   // 沒接接口：OS_IMAGE_MANAGER 已經跳過提示
             let data = url;
             try {

@@ -562,10 +562,13 @@
         return s.length > 9000 ? '……（前面省略）\n' + s.slice(-9000) : s;
     }
 
-    // ── 小時候的立繪 ──
-    //   立繪只有現在的樣子：回憶演到他十幾歲，舞台不能放大人的臉。寫每一幕那通順便多寫一塊 <ages>（「名字｜幾歲」一行一個），
-    //   不多叫一通。未滿 18 歲＝小時候：舞台換成角色中心「小時候」那格（OS_CHAR_GALLERY 的 young），沒有那張就不放立繪。
-    //   年紀寫法容錯：阿拉伯數字、中文數字（十二、十幾）、只寫「小時候／國中／少年」這種詞都認；沒寫那塊＝照舊（大人的立繪）。
+    // ── 小時候的立繪、那時候的叫法 ──
+    //   立繪只有現在的樣子：回憶演到他小時候，舞台不能放大人的臉。寫每一幕那通先寫一塊設定 <memory_setup> 再寫劇本
+    //   （先推論再寫，同一通，不多叫）：when＝人生哪個節點、focus＝主軸、cast＝每個出場的人一行，
+    //   劇本標籤用的名字｜幾歲｜那時候怎麼被叫｜身分｜樣子跟現在差多少｜差很大的才寫英文外表標籤。
+    //   只有「差很大」的人才換角色中心「小時候」那格（OS_CHAR_GALLERY 的 young）、沒有那張就問／不放；
+    //   只看歲數不準（十幾歲跟現在差不多的照舊用現在那張）。這塊從劇本拿掉、不演出來；解析不到＝照舊播、沒有人換立繪。
+    //   行首標籤認不到也照長相認：cast 行＝用｜隔開三欄以上的那幾行。
     const YOUNG_USE = 'sprite_young';   // 生圖用途名冊那一列（os_image_manager.js 的 USES）
     function _cnAge(s) {
         const D = { 一: 1, 二: 2, 兩: 2, 三: 3, 四: 4, 五: 5, 六: 6, 七: 7, 八: 8, 九: 9 };
@@ -589,30 +592,41 @@
         if (/成年|大人|青年|中年|老年|大學|二十|三十|四十/.test(s)) return { age: null, young: false };
         return null;
     }
-    // 模型回的整段 → { 名字鑰匙: { name, age, young } }
-    function _agesOf(raw) {
-        const out = {};
-        const b = (String(raw || '').match(/<ages?>([\s\S]*?)(<\/ages?>|<\/?(?:content|choices)>|$)/i) || [])[1] || '';
-        b.split('\n').forEach(line => {
+    const _SETUP_CUT = /<memory_setup>[\s\S]*?(?:<\/memory_setup>|(?=<content>)|(?=<\/content>)|$)/gi;
+    function _stripSetup(s) { return String(s || '').replace(_SETUP_CUT, ''); }
+    // 樣子跟現在差多少那欄：只有「很大」這一類才算（一點、幾乎沒變、不大都不算）
+    function _bigChange(s) { s = String(s || ''); return /很大|差很多|完全(?:不同|不一樣|認不出)/.test(s) && !/不大|沒有很大|不算大/.test(s); }
+    // 模型回的整段 → { when, focus, cast: { 名字鑰匙: { name, age, call, role, change, big, look } }, text }；沒有那塊回 null
+    function _setupOf(raw) {
+        const m = String(raw || '').match(/<memory_setup>([\s\S]*?)(?:<\/memory_setup>|(?=<content>)|$)/i);
+        if (!m) return null;
+        const out = { when: '', focus: '', cast: {}, text: m[1].trim().slice(0, 1500) };
+        const row = (L) => {
+            const c = L.split(/\s*[｜|]\s*/).map(x => x.replace(/^[\u4e00-\u9fff]{1,6}[:：]\s*/, '').trim());   // 欄位前面自己加了中文欄名的拿掉
+            if (c.length < 3) return;
+            const name = c[0].replace(/^[【\[「（(]+|[】\]」）)]+$/g, '').trim();
+            if (!name || name.length > 20) return;
+            const a = _ageOf(c[1] || '', false);
+            const ci = c.findIndex((x, n) => n >= 2 && x.length <= 12 && /很大|差很多|一點|幾乎沒變|沒變|差不多|不大|完全/.test(x));
+            const change = ci >= 0 ? c[ci] : '';
+            const tags = ci >= 0 ? c.slice(ci + 1).filter(Boolean).join(', ') : '';
+            out.cast[_nameKey(name)] = { name, age: a ? a.age : null, call: c[2] || '', role: c[3] && c[3] !== change ? c[3] : '', change, big: _bigChange(change), look: /[a-z]/i.test(tags) ? tags.slice(0, 400) : '' };
+        };
+        m[1].split('\n').forEach(line => {
             const L = line.replace(/<[^>]+>/g, '').replace(/^\s*(?:[-*・•]|\d+[.、)）])\s+/, '').trim();
-            const m = L.match(/^([^｜|:：]{1,20}?)\s*[｜|:：]\s*(.+)$/);
-            if (!m) return;
-            const name = m[1].replace(/^[【\[「（(]|[】\]」）)]$/g, '').trim();
-            const a = name ? _ageOf(m[2], false) : null;
-            if (a) out[_nameKey(name)] = { name, age: a.age, young: a.young };
+            if (!L) return;
+            const lab = L.match(/^(when|focus|cast)\s*[:：]\s*(.*)$/i);
+            if (!lab) { row(L); return; }
+            const k = lab[1].toLowerCase();
+            if (k === 'cast') { if (lab[2].trim()) row(lab[2]); } else out[k] = lab[2].trim();
         });
-        return out;
+        return (Object.keys(out.cast).length || out.when || out.focus) ? out : null;
     }
-    // 演到第 k 幕時誰是小時候：前面幾幕標過的照最近那幕；這張牌的主角沒被標到，看記憶牌上「那時候的他」（舊牌也靠這個）
+    // 演到第 k 幕時誰要換小時候那張：前面幾幕的設定合起來（同一個人照最近那幕），只挑樣子差很大的
     function _youngList(rec, k) {
         const all = {};
-        for (let j = 0; j <= k; j++) { const a = rec.acts && rec.acts[j]; if (a && a.ages) Object.assign(all, a.ages); }
-        const p = rec.name || (rec._person && rec._person.name) || '';
-        if (p && !Object.keys(all).some(x => _sameKey(x, _nameKey(p)))) {
-            const w = _ageOf(rec.when, true);
-            if (w) all[_nameKey(p)] = { name: p, age: w.age, young: w.young };
-        }
-        return Object.keys(all).map(x => all[x]).filter(y => y.young);
+        for (let j = 0; j <= k; j++) { const a = rec.acts && rec.acts[j]; if (a && a.setup && a.setup.cast) Object.assign(all, a.setup.cast); }
+        return Object.keys(all).map(x => all[x]).filter(y => y && y.big);
     }
     // 同一個人：名字折過一樣，或一個是另一個前面那截（只寫名、沒寫姓），跟 _fold 同一套
     function _sameKey(a, b) { return a === b || (a.length >= 2 && b.length >= 2 && (a.startsWith(b) || b.startsWith(a))); }
@@ -664,7 +678,7 @@
             const key = _nameKey(y.name);
             if (onLabel) onLabel('正在畫' + y.name + '小時候的樣子…');
             let url = '';
-            try { url = await G.youngMake(y.name, y.age); } catch (e) { console.warn('[LobbyMemory] 小時候的立繪沒畫出來', e); }
+            try { url = await G.youngMake(y.name, y.age, { role: y.role, look: y.look }); } catch (e) { console.warn('[LobbyMemory] 小時候的立繪沒畫出來', e); }
             plan.map[key] = url || '';
             if (!url) failed.push(key);
         }
@@ -691,6 +705,7 @@
             _whereLine(w),
             '- 全程是他的視角，他只知道當時知道的事：可以誤會、可以記錯，也可以有說不出口的話；他不知道之後會發生什麼。',
             _mcLine(person),
+            '- 旁白和其他人怎麼叫在場的每個人，照這段回憶發生的那時候：那時候還沒有的姓、還沒當上的頭銜、還沒有的稱號都不用，照設定裡「那時候別人怎麼叫他」那一欄寫；不確定那時候怎麼叫，就用不帶姓的叫法。劇本標籤 [Char|名字|…] 裡的名字照舊寫現在的名字（程式靠它認人），換的只有台詞和旁白裡的叫法。',
             i > 0 ? '- 開頭直接接上一幕他選的那條路，不要重講前面演過的。' : '',
             '- 這一幕一到兩個場景，長度大約三十到四十五行。',
             last
@@ -699,12 +714,18 @@
             '- 這是一段私人的回憶，只用得到台詞、旁白、內心話、換背景、音樂和音效這幾種標籤；VN 指令裡其他的玩法這裡都用不上（不要寫選項標籤）。',
             '- 前面若有一份寫作預設：文風、筆法、描寫、對白怎麼寫照那份；但這次要輸出什麼照這裡——那份要求的摘要、狀態欄、選項、小劇場、其他區塊這次都不寫。',
             '',
-            last ? '輸出兩塊：' : '輸出三塊：',
+            '先想清楚再寫：先輸出設定，再輸出劇本。' + (last ? '輸出兩塊，照這個順序：' : '輸出三塊，照這個順序：'),
+            '<memory_setup>',
+            '（這一塊給程式看、不會演出來。行首的 when:、focus:、cast: 照原樣寫英文，程式靠它們認行）',
+            'when: 這段回憶發生在他人生的哪個時間點、那時候他走到人生的哪一步',
+            'focus: 這段回憶的主軸要講什麼',
+            'cast:',
+            '（這一幕出場的每個人一行，六欄用｜隔開：劇本標籤裡用的名字｜那時候幾歲，寫阿拉伯數字｜那時候別人怎麼叫他｜那時候的身分、在過什麼樣的日子｜樣子跟現在差多少，只寫「很大」「一點」「幾乎沒變」其中一個｜樣子差很大的才寫這欄：那時候的外表，用英文畫圖標籤寫年紀、身形、穿著，看得出那時候的身分；其他人這欄空著）',
+            '</memory_setup>',
             '<content>',
             '（VN 劇本，格式照下面的 VN 指令）',
             '</content>',
             last ? '' : '<choices>\n兩到三行，一行一個他接下來可能怎麼做，寫成「牌名｜做法」：\n- 做法從他的角度寫、一句話、十八個字以內；各自會走出不一樣的過程，但都還走得到牌上的「收」。\n- 牌名從這二十二張大阿爾克那挑一張寓意對得上這條路的（例：豁出去＝愚者、躲起來＝隱士、選了某個人＝戀人、硬撐＝力量、一切崩掉＝高塔），同一幕的牌不重複，照寫牌名、不加說明：' + ARCANA.join('、') + '\n</choices>',
-            '<ages>\n這一幕出場的每個角色一行，寫成「名字｜那時候幾歲」：名字照劇本裡 [Char|名字] 寫的，歲數寫阿拉伯數字（不確定就寫大約的，例：某某｜12）。\n</ages>',
             protocol ? '\n' + protocol : '\n台詞寫成 [Char|名字|表情|「台詞」]，旁白寫成 [Nar|旁白]，換場景寫 [Bg|季節|時段_地點|英文場景描述|]。',
         ].filter(s => s !== '').join('\n');
         const before = _actsSoFar(rec, i);
@@ -718,25 +739,26 @@
             rec.turn ? '轉：' + rec.turn : '',
             '收' + (last ? '（一定要演到）' : '') + '：' + (rec.close || rec.seed || ''),
             before ? '\n前面演過的：\n' + before : '',
+            (i > 0 && rec.acts[i - 1] && rec.acts[i - 1].setup && rec.acts[i - 1].setup.text) ? '\n上一幕的設定（照著寫；這一幕有新出場的人再補上）：\n' + rec.acts[i - 1].setup.text : '',
             '',
             '寫第' + (i + 1) + '幕（' + ACTS[i].name + '）。',
         ].filter(s => s !== '').join('\n');
-        const raw = await _ask([{ role: 'system', content: sys }, { role: 'user', content: user }], 'memory', false, true);
+        const out = await _ask([{ role: 'system', content: sys }, { role: 'user', content: user }], 'memory', false, true);
+        const raw = _stripSetup(out);   // 設定那塊先拿掉，下面照舊找劇本和選項
         let content = (raw.match(/<content>[\s\S]*?<\/content>/i) || [])[0] || '';
-        if (!content) { const open = raw.match(/<content>[\s\S]*?(?=<choices>|<ages?>|$)/i); if (open) content = open[0].trim() + '\n</content>'; }   // 收尾被截掉
-        if (!content && /\[(Char|Nar|Bg)\|/i.test(raw)) content = '<content>\n' + raw.replace(/<(?:choices|ages?)>[\s\S]*$/i, '') + '\n</content>';   // 忘了包 <content>
-        content = content.replace(/<ages?>[\s\S]*?(<\/ages?>|(?=<\/content>))/gi, '');   // 年紀那塊寫進劇本裡了：拿出來，別演出來
+        if (!content) { const open = raw.match(/<content>[\s\S]*?(?=<choices>|$)/i); if (open) content = open[0].trim() + '\n</content>'; }   // 收尾被截掉
+        if (!content && /\[(Char|Nar|Bg)\|/i.test(raw)) content = '<content>\n' + raw.replace(/<choices>[\s\S]*$/i, '') + '\n</content>';   // 忘了包 <content>
         if (!content) throw new Error('沒寫出劇本');
         let choices = [], cards = [];
         if (!last) {
-            const cb = (raw.match(/<choices>([\s\S]*?)(<\/choices>|<ages?>|$)/i) || [])[1] || '';
+            const cb = (raw.match(/<choices>([\s\S]*?)(<\/choices>|$)/i) || [])[1] || '';
             cb.split('\n').map(s => s.replace(/<[^>]+>/g, '').replace(/^\s*(?:[-*・•]|\d+[.、)）]|[A-Ca-c][.、)）])\s*/, '').trim()).forEach(s => {
                 if (!s || choices.length >= 3) return;
                 const c = _cardOf(s);
                 if (c.text && c.text.length <= 40) { choices.push(c.text); cards.push(cards.includes(c.n) ? -1 : c.n); }
             });
         }
-        return { content: _stripMainline(content), choices, cards, pick: '', ages: _agesOf(raw) };
+        return { content: _stripMainline(content), choices, cards, pick: '', setup: _setupOf(out) };
     }
 
     // ── 畫面 ──
@@ -1559,15 +1581,24 @@
             let sent = false;
             const pick = (t, card) => { t = String(t || '').trim(); if (!t || sent) return; sent = true; o.onPick(t, card); };
             const inp = el.querySelector('input');
-            // 三張牌背朝上發下來，一張一張翻開；點一張＝那張浮起來發光、另外兩張暗下去，停一下才寫下一幕
-            el.querySelectorAll('.lmem-tc').forEach((b, i) => setTimeout(() => b.classList.add('up'), 650 + i * 320));
+            // 三張牌背朝上發下來，選項寫在牌下面；點一張＝那張才翻開露出是哪張塔羅、另外兩張淡掉，
+            //   翻完鏡頭朝那張牌推進去、暗掉，接下一幕的幕布。翻牌、推進的時間和曲線照吧檯開頭那張真牌（.lmem-card.flipped、.lmem.zoom）
             el.addEventListener('click', (e) => {
                 const b = e.target.closest('.lmem-tc');
-                if (b && !sent) {
+                if (b && !sent && !el.classList.contains('chosen')) {
                     const i = +b.dataset.i;
-                    if (!b.classList.contains('up')) { el.querySelectorAll('.lmem-tc').forEach(x => x.classList.add('up')); return; }   // 還沒翻完就點：先全翻開
-                    el.classList.add('chosen'); b.classList.add('pick');
-                    setTimeout(() => pick(o.choices[i], (o.cards || [])[i]), 750);
+                    el.classList.add('chosen'); b.classList.add('pick', 'up');
+                    try { if (R && R.flip) _sfx(R.flip); } catch (x) {}   // 吧檯已經收了（演到幕間時 R＝null）就沒有翻牌聲
+                    setTimeout(() => {
+                        if (_actsEl !== el) return;
+                        const box = el.querySelector('.lmem-acts-box'), c = b.querySelector('.lmem-tc-in');
+                        if (box && c) {
+                            const rb = box.getBoundingClientRect(), rc = c.getBoundingClientRect();
+                            if (rb.width && rb.height) box.style.transformOrigin = ((rc.left + rc.width / 2 - rb.left) / rb.width * 100).toFixed(2) + '% ' + ((rc.top + rc.height / 2 - rb.top) / rb.height * 100).toFixed(2) + '%';
+                        }
+                        el.classList.add('zoom');
+                        setTimeout(() => { if (_actsEl === el) pick(o.choices[i], (o.cards || [])[i]); }, 1150);
+                    }, 950);
                     return;
                 }
                 if (e.target.closest('.lmem-acts-go')) { pick(inp.value); return; }
