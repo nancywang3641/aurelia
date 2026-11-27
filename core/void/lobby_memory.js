@@ -414,7 +414,10 @@
     //   11-26：第一次抽先用副模型抽主題，後面再寫劇本，不然翻牌那邊卡很久
     async function _drawCard(person, sid) {
         const w = await _worldFor(person);
-        const before = (await _loadDraws()).filter(d => d.name === person.name && (!d.story || !person.story || d.story === person.story)).map(d => '・' + d.title + (d.when ? '（' + d.when + '）' : ''));
+        // 看過的每段多帶一句牌上的「起」：只給名字和年紀，標題換個說法模型就認不出是同一件事。丟掉的牌已經從櫃子刪了，不算看過
+        const _cut = (t, n) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n) + '…' : t; };
+        const before = (await _loadDraws()).filter(d => d.name === person.name && (!d.story || !person.story || d.story === person.story))
+            .map(d => '・' + d.title + (d.when ? '（' + d.when + '）' : '') + (d.open ? '：' + _cut(d.open, 70) : ''));
         // 題目：從還沒抽過的往事線索挑一條（主線露過的那一點，這張牌把它背後的事寫出來）
         const fresh = person.fresh || [];
         const hint = fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : '';
@@ -432,6 +435,8 @@
             _whereLine(w),
             _mcLine(person),
             '- 這件事要有頭有尾：怎麼開始、中間在哪裡轉了、最後怎麼收（他做了什麼決定，或失去了、留下了什麼）。',
+            // 同一件事在主線被記成兩條說法不同的往事線索時，第二條會被當成新題目抽到：看過的是同一件事就換一段
+            before.length ? '- 資料最後列了「已經看過的回憶」，每段有名字、那時候的他、事情怎麼開始。這次的題目如果跟其中一段是同一件事（換了說法、換了角度也算），不要再講那一段：改挑這件事之前或之後的另一個轉捩點；<when> 寫的那時候也不要跟看過的那一段落在同一段年紀。' : '',
             '',
             '只輸出這一塊：',
             '<memory_card>',
