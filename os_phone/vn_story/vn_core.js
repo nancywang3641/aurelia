@@ -127,7 +127,8 @@
         _leaveTheater: function() {
             let prev = null;
             try { prev = JSON.parse(localStorage.getItem(THEATER_PREV) || 'null'); localStorage.removeItem(THEATER_PREV); } catch (e) { prev = null; }
-            if (prev && THEATER_ID.test(this._currentStoryId || '')) this._setStoryId(prev.id || '', prev.title || '');
+            // 還停在小劇場的編號、卻找不到原本那個（記號被清掉了）：也不能留著——留著的話之後播主線會被當成小劇場，演完直接回大廳
+            if (THEATER_ID.test(this._currentStoryId || '')) this._setStoryId(prev ? (prev.id || '') : '', prev ? (prev.title || '') : '');
             this._sideRecCache = null;
             try { if (window.VN_Theme) window.VN_Theme.apply(); } catch (e) {}
         },
@@ -2975,16 +2976,21 @@
                 if (panelWrapper) panelWrapper.style.display = 'none';
                 this._stageClear();   // 章節結束 → 清空兩格立繪
                 try { if (window.OS_FX) window.OS_FX.stopWeather(); } catch (e) {}   // ⚡ 章節結束 → 持續型特效(含循環音效)跟著收，別播到末尾畫面上
-                // 🍸 記憶迴廊的角色外傳（lobby_memory.js）：演完不出章末那排（「繼續」「重新生成」都是主線的），直接交回吧檯
-                const _sideEnd = win.__AURELIA_SIDE_STORY_END || window.__AURELIA_SIDE_STORY_END;
-                if (typeof _sideEnd === 'function') {
-                    win.__AURELIA_SIDE_STORY_END = null; window.__AURELIA_SIDE_STORY_END = null;
-                    try { _sideEnd(); } catch (e) { console.warn('[VN_Core] 外傳交回失敗', e); }
-                    return;
-                }
                 // 📋 借 VN 播的戲（SIDE_PLAYS）：演完照表走。'home'＝直接回大廳（以前會掉進主線的結束畫面：
                 //   「重新生成」重寫酒館主聊天最新那則、「繼續」把字打進主線、還會問世界門要不要撤離進門）
                 const _sp = this.sidePlay();
+                // 🍸 記憶迴廊的角色外傳（lobby_memory.js）：演完不出章末那排（「繼續」「重新生成」都是主線的），直接交回吧檯。
+                //   🚨 只有正在播的是 end:'own' 那種戲才交：外傳播到一半按「退出」離開時這個鉤子沒被收掉，
+                //   之後主線演到末尾會叫到它 → 吧檯那邊收場 → 整個劇情被關掉回大廳（11-28）。不是它的就丟掉、照主線走
+                const _sideEnd = win.__AURELIA_SIDE_STORY_END || window.__AURELIA_SIDE_STORY_END;
+                if (typeof _sideEnd === 'function') {
+                    win.__AURELIA_SIDE_STORY_END = null; window.__AURELIA_SIDE_STORY_END = null;
+                    if (_sp && _sp.end === 'own') {
+                        try { _sideEnd(); } catch (e) { console.warn('[VN_Core] 外傳交回失敗', e); }
+                        return;
+                    }
+                    console.warn('[VN_Core] 正在播的不是外傳，前一場外傳留下的交回鉤子丟掉');
+                }
                 //   'own' 卻沒人接手（例如記憶迴廊那邊已經收掉）也一樣回大廳，不掉進主線那套
                 if (_sp && (_sp.end === 'home' || _sp.end === 'own')) {
                     try { window.VN_PLAYER.stopGame(); } catch (e) { console.warn('[VN_Core] 小劇場演完回大廳失敗', e); }
@@ -4769,6 +4775,8 @@
     }
 
     function stopGame() {
+        // 退出＝這場戲結束：外傳留下的「演完交回來」鉤子一起收掉，不然下一場主線演到末尾會叫到它（11-28）
+        win.__AURELIA_SIDE_STORY_END = null; window.__AURELIA_SIDE_STORY_END = null;
         // 退出遊戲才真正清空頭像快取（跨章節期間保留）
         for (const url of Object.values(window.VN_Core._avatarMemCache || {})) {
             if (url && url.startsWith('blob:')) URL.revokeObjectURL(url);
