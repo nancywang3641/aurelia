@@ -741,35 +741,53 @@
             let cur = '';
             try { cur = await T.getLean(name); } catch (e) {}
             if (s === cur) return;
-            let gen = false, target = null;
+            // 想靠近：狀態裡有好感度＝生三條好感規則；另外替他排一份過去年表給記憶迴廊（LobbyMemory.life*）。
+            //   兩件事有要做的都塞同一通：有好感規則那通就把年表接在它後面，沒有才單獨叫一次排年表
+            let doRules = false, doLife = false, target = null;
             if (s === 'near') {
+                const LM = win.LobbyMemory || window.LobbyMemory;
+                const lifeOk = !!(LM && LM.lifeMake && LM.lifeAsk);
                 try { target = R && R.affinityTarget ? await R.affinityTarget(name) : null; } catch (e) { target = null; }
-                let ok;
-                if (!target) {
+                let hasLife = false;
+                try { hasLife = lifeOk && LM.lifeHas ? await LM.lifeHas(name) : false; } catch (e) {}
+                const what = (target ? '三條好感規則（存進這個故事的條件規則）' : '') + (target && lifeOk ? '，和' : '') + (lifeOk ? '一份他的過去年表（記憶迴廊照這份演他的回憶）' : '');
+                const have = [target && target.existing ? target.existing + ' 條好感規則' : '', hasLife ? '過去年表' : ''].filter(Boolean).join('和');
+                let ok, regen = false;
+                if (!what) {
                     ok = await A.confirm('把' + name + '當成可攻略角色？\n\n寫劇情的 AI 會知道你想攻略他。他在狀態面板裡沒有好感度，所以不會生好感規則。', { title: '想靠近' });
-                } else if (target.existing) {
-                    // 已經有好感規則：問要不要照新寫法重生；不要也照樣設成想靠近
-                    gen = await A.confirm('把' + name + '當成可攻略角色？\n\n他已經有 ' + target.existing + ' 條好感規則。要照新寫法重新生三條、換掉原本那幾條嗎？（叫一次模型）', { title: '想靠近', okText: '重新生成', cancelText: '照用原本的' });
+                } else if (have) {
+                    // 已經有了：問要不要重新生成；不要也照樣設成想靠近（缺的那份照樣補）
+                    regen = await A.confirm('把' + name + '當成可攻略角色？\n\n他已經有' + have + '。要重新生成、換掉原本的嗎？（叫一次模型）', { title: '想靠近', okText: '重新生成', cancelText: '照用原本的' });
                     ok = true;
                 } else {
-                    ok = gen = await A.confirm('把' + name + '當成可攻略角色？\n\n會替他生三條好感規則，存進這個故事的條件規則（叫一次模型）。', { title: '想靠近' });
+                    ok = regen = await A.confirm('把' + name + '當成可攻略角色？\n\n會替他生' + what + '（叫一次模型）。', { title: '想靠近' });
                 }
                 if (!ok) return;
+                doRules = !!target && (regen || !target.existing);
+                doLife = lifeOk && (regen || !hasLife);
             }
             const saved = await T.setLean(name, s);
             if (!saved) { A.toastr.error('沒存起來：找不到目前這個故事，或存檔失敗'); return; }
             this._paintLean(card, name);
-            if (!gen) return;
+            if (!doRules && !doLife) return;
+            const LM = win.LobbyMemory || window.LobbyMemory;
             const nearBtn = card.querySelector('.vn-cc-seg button[data-s="near"]');
             const orig = nearBtn ? nearBtn.innerHTML : '';
             btns.forEach(b => { b.disabled = true; });
             if (nearBtn) nearBtn.textContent = '生成中…';
-            let n = 0;
-            try { n = await R.generateAffinityFor(name, target); } catch (e) { console.warn('[CharCard] 生好感規則失敗', e); }
+            let n = 0, life = 0;
+            try {
+                if (doRules) {
+                    const ask = doLife ? await LM.lifeAsk(name) : null;
+                    n = await R.generateAffinityFor(name, target, ask ? { extra: ask.extra, onRaw: async (raw) => { life = await ask.take(raw); } } : null);
+                } else life = await LM.lifeMake(name);
+            } catch (e) { console.warn('[CharCard] 想靠近那通失敗', e); }
             btns.forEach(b => { b.disabled = false; });
             if (nearBtn) nearBtn.innerHTML = orig;
-            if (n > 0) A.toastr.success('已替' + name + '生好 ' + n + ' 條好感規則');
-            else A.toastr.warning('這次沒生出規則；想靠近已經設好了，可以到狀態面板的規則窗口再生一次');
+            const done = [doRules && n > 0 ? n + ' 條好感規則' : '', doLife && life > 0 ? '過去年表（' + life + ' 件事）' : ''].filter(Boolean);
+            const miss = [doRules && !(n > 0) ? '好感規則（可以到狀態面板的規則窗口再生一次）' : '', doLife && !(life > 0) ? '過去年表（設回普通再按一次想靠近可以重排）' : ''].filter(Boolean);
+            if (done.length) A.toastr.success('已替' + name + '生好' + done.join('和'));
+            if (miss.length) A.toastr.warning('這次沒生出' + miss.join('、') + '；想靠近已經設好了');
         },
         closeCharCard: function() {
             const card = document.getElementById('vn-char-card');

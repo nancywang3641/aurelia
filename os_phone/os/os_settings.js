@@ -224,7 +224,8 @@
         { group: '大廳與世界', id: 'theater',      name: '小劇場',                     def: 'main' },
         { group: '大廳與世界', id: 'memory_card',  name: '記憶迴廊・抽牌面',           def: 'sec'  },   // 紫薇抽一張：先定哪一段（名字、那時的他、發生什麼），抽卡影片演完前要有（lobby_memory.js _drawCard）
         { group: '大廳與世界', id: 'memory_pasts', name: '記憶迴廊・補舊故事的往事線索', def: 'sec'  },   // 舊故事一次補齊：從大總結、人物檔案挑出露過的往事（lobby_memory.js _backfill，好幾個故事併一通）
-        { group: '大廳與世界', id: 'memory',       name: '記憶迴廊・寫外傳',           def: 'main' },   // 照牌面寫成那段外傳的劇本（lobby_memory.js _writeScript）
+        { group: '大廳與世界', id: 'memory',       name: '記憶迴廊・寫外傳',           def: 'main' },
+        { group: '大廳與世界', id: 'memory_life',  name: '記憶迴廊・排過去年表',       def: 'main' },   // 角色卡按「想靠近」、他狀態裡沒有好感度時單獨叫這通（lobby_memory.js lifeMake）；有好感度時併進生好感規則那通   // 照牌面寫成那段外傳的劇本（lobby_memory.js _writeScript）
         { group: '大廳與世界', id: 'theater_note', name: '小劇場記事 / 角色記憶整理',  def: 'sec'  },
         { group: '大廳與世界', id: 'lobby_chat',   name: '大廳角色對話與小遊戲',       def: 'sec'  },
         { group: '大廳與世界', id: 'cafe',         name: '書咖',                       def: 'sec'  },

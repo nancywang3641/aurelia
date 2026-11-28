@@ -152,6 +152,7 @@
     // 每個人掛上 pasts（全部線索）、fresh（還沒抽過的）
     async function _attachPasts(groups) {
         const fill = await _loadFill();
+        const life = await _loadLife();
         const draws = (await _loadDraws()).map(_norm);
         for (const g of groups) {
             g._key = _normChat(_gChat(g));
@@ -164,7 +165,11 @@
                 Object.keys(st).forEach(n => { if (_same(n, p.name)) (st[n] || []).forEach(x => add(x && x.t)); });
                 Object.keys(bf).forEach(n => { if (_same(n, p.name)) (bf[n] || []).forEach(add); });
                 const used = new Set(draws.filter(d => d.hint && _same(d.name, p.name) && (!d.story || !p.story || d.story === p.story)).map(d => _pk(d.hint)));
-                p.pasts = all; p.fresh = all.filter(t => !used.has(_pk(t)));
+                p.pasts = all;
+                // 有過去年表的人：題目從年表挑（一行一個），往事線索照樣當資料給模型看；沒年表的照舊從線索挑
+                const L = _lifeOf(life, g._key, p.name);
+                p.life = (L && L.rows && L.rows.length) ? L.rows : null;
+                p.fresh = p.life ? p.life.map(r => r.what).filter(t => !used.has(_pk(t))) : all.filter(t => !used.has(_pk(t)));
             });
         }
     }
@@ -217,6 +222,125 @@
         _saveQ = job.catch(() => {});
         await job;
     }
+
+    // ── 過去年表（11-28）：劇情裡雙擊立繪、角色卡按「想靠近」時，替他排一份故事開始以前的經歷（5～7 個轉折點）──
+    //   記憶迴廊抽他時從年表挑一行還沒演過的當題目，抽牌、寫幕都帶整份年表，幾段回憶才是同一段人生；沒年表的人照舊用往事線索。
+    //   叫模型：他狀態裡有好感度＝接在「生三條好感規則」那通後面（lifeAsk → os_avs_rules.js 的 extra／onRaw），沒有＝單獨一通（lifeMake，task memory_life）。
+    //   存 app_data memory_bar::life＝{ 故事: { 名字鑰匙: { name, rows: [{ age, who, what, mark, src }], at } } }；src＝設定／劇情／補的
+    const LIFE_SRC = ['設定', '劇情', '補的'];
+    async function _loadLife() { try { const v = win.OS_DB ? await win.OS_DB.getAppData(APP, 'life') : null; return (v && typeof v === 'object') ? v : {}; } catch (e) { return {}; } }
+    function _lifeOf(all, key, name) {
+        const box = (all && key && all[key]) || {};
+        const k = Object.keys(box).find(x => box[x] && _same(box[x].name, name));
+        return k ? box[k] : null;
+    }
+    // 給模型看的年表（抽牌、寫幕）
+    function _lifeText(rows) {
+        return (rows || []).map((r, i) => (i + 1) + '. ' + r.age + '・' + r.who + '：' + r.what + (r.mark ? '（留到現在的：' + r.mark + '）' : '')).join('\n');
+    }
+    // 要模型排年表的字。merged＝接在別的那通後面（前面那件事有自己的輸出規定，這裡說明這兩塊另外寫）
+    function _lifePrompt(name, merged) {
+        return [
+            merged ? '【另外一件事：替「' + name + '」排過去年表】\n前面的事全部寫完以後，再照下面寫 <life_plan> 和 <past> 兩塊（前面說「以外不要任何文字」的規定不管這兩塊）。他的資料在最後面。\n' : '',
+            '你要替「' + name + '」排一份他在故事開始以前的經歷年表。之後別的功能會從這份年表挑一件事，把那段往事演出來；所以年表要前後一致、跟設定和劇情對得上，演出來的回憶才不會互相打架。',
+            '',
+            '【你手上有的】' + (merged ? '最後面' : '下面') + '那份「他的資料」：他是哪裡的人、人物檔案、角色表、世界書裡的他、他那個世界的設定、故事到目前為止的大總結、他現在的狀態、主線裡露出過的過去。有的人資料比較少，照有的寫。',
+            '',
+            '【先想再寫】先在 <life_plan></life_plan> 裡想清楚：',
+            '1. 哪些是確定的：設定寫明的、劇情露出的。逐條列出，後面不能改。',
+            '2. 他現在身上有哪些看得到的痕跡（傷、習慣、忌諱、對某種人的態度、手藝、口頭禪），各自是哪一段過去留下的？設定和劇情沒交代來處的，要在年表裡給它一個來處。',
+            '3. 從他現在的年紀往回推：各個年紀他大概在哪裡、是什麼身分？跟世界觀的時代、地點對得上嗎？',
+            '4. 哪幾件事一路影響到他現在的樣子？只挑轉折，平淡的日子不列。',
+            '<life_plan> 裡不要出現 | 符號。',
+            '',
+            '【年表規則】',
+            '・5～7 行，照年紀從小排到大；最後一行停在故事開始之前，劇情裡已經發生的事不寫。',
+            '・每一行是一個轉折點：這件事之前和之後，他不太一樣。',
+            '・確定的事照原樣放進去，不改、不加油添醋；只有沒交代的空白由你補。補的要能解釋第 2 題那些痕跡，不能跟確定的事打架。',
+            '・主角不出現在年表裡，除非設定或劇情寫明他們以前就認識。',
+            '・寫看得到的事實：在哪、跟誰、發生什麼、結果怎樣。不寫「他內心深處……」這類評語。',
+            '',
+            '【輸出格式】先 <life_plan>…</life_plan>，接著 <past> 裡每行一件事，嚴格 5 欄、以 | 分隔' + (merged ? '' : '，<past> 外面不要任何字') + '：',
+            '<past>',
+            '幾歲 | 那時候的身分與處境 | 發生的事 | 留到現在的痕跡 | 依據',
+            '</past>',
+            '・幾歲：寫數字，或「約十歲」這種寫法。',
+            '・依據只能填：設定／劇情／補的。',
+            '・每格單行、不可換行、不可出現 | 符號；「發生的事」60 字內，其他格 25 字內。',
+        ].filter(s => s !== '').join('\n');
+    }
+    function _parseLife(raw) {
+        const m = String(raw || '').match(/<past>([\s\S]*?)(?:<\/past>|$)/i);
+        if (!m) return null;
+        const rows = [];
+        m[1].split('\n').forEach(line => {
+            const ps = line.replace(/<[^>]+>/g, '').replace(/^\s*(?:[-*・•]|\d+[.、)）])\s*/, '').split(/[|｜]/).map(s => s.trim());
+            if (ps.length < 5) return;
+            const [age, who, what, mark, src] = ps;
+            if (!what || what === '發生的事' || age === '幾歲') return;   // 模型回述表頭
+            rows.push({ age: age.slice(0, 12), who: who.slice(0, 40), what: what.slice(0, 120), mark: mark.slice(0, 40), src: LIFE_SRC.find(s => src.indexOf(s) >= 0) || '補的' });
+        });
+        return rows.length >= 3 ? rows.slice(0, 8) : null;
+    }
+    // 他的資料：這個故事名單裡的他（人物檔案、角色表、大總結、往事線索）＋世界書＋狀態面板裡他那一格
+    async function _lifeData(name) {
+        let person = null;
+        try {
+            const g = (await _people()).find(x => x.here);
+            if (g) { await _attachPasts([g]); person = g.list.find(p => _same(p.name, name)) || null; }
+        } catch (e) { console.warn('[LobbyMemory] 排年表：名單沒讀到', e); }
+        person = Object.assign({ name, here: true, story: '' }, person || {}, { life: null });   // 重排：舊年表不給它看
+        const w = await _worldFor(person);
+        let st = '';
+        try {
+            const S = win.OS_AVS_ADAPTER || window.OS_AVS_ADAPTER;
+            const s = (S && S.readState && S.readState()) || {};
+            Object.keys(s).some(k => {
+                const box = s[k];
+                if (!box || typeof box !== 'object' || Array.isArray(box)) return false;
+                const kk = Object.keys(box).find(x => _same(x, name));
+                if (!kk || !box[kk] || typeof box[kk] !== 'object') return false;
+                st = JSON.stringify(box[kk]).slice(0, 800);
+                return true;
+            });
+        } catch (e) {}
+        return [_userBlock(person, w, []), st ? '他現在的狀態：' + st : ''].filter(Boolean).join('\n');
+    }
+    function _saveLife(name, rows) {
+        const key = _normChat(_storyId());
+        if (!key || !win.OS_DB) return Promise.resolve(false);
+        const job = _saveQ.then(async () => {
+            const all = await _loadLife();
+            const box = all[key] || (all[key] = {});
+            Object.keys(box).forEach(k => { if (box[k] && _same(box[k].name, name)) delete box[k]; });
+            box[_nameKey(name)] = { name, rows, at: Date.now() };
+            await win.OS_DB.saveAppData(APP, 'life', all);
+            return true;
+        });
+        _saveQ = job.catch(() => {});
+        return job;
+    }
+    // 這個故事裡他有沒有年表
+    async function lifeHas(name) {
+        const l = _lifeOf(await _loadLife(), _normChat(_storyId()), name);
+        return !!(l && l.rows && l.rows.length);
+    }
+    // 接在別的那通後面：{ extra（接在那通提示詞最後）, take(那通的回覆) → 存了幾行，0＝沒排出來 }
+    async function lifeAsk(name) {
+        const data = await _lifeData(name);
+        return {
+            extra: _lifePrompt(name, true) + '\n\n【' + name + '的資料】\n' + data,
+            take: async (raw) => { const rows = _parseLife(raw); return rows && await _saveLife(name, rows) ? rows.length : 0; },
+        };
+    }
+    // 單獨叫一通排年表 → 存了幾行，0＝沒排出來
+    async function lifeMake(name) {
+        const data = await _lifeData(name);
+        const raw = await _ask([{ role: 'system', content: _lifePrompt(name, false) }, { role: 'user', content: data + '\n\n替' + name + '排過去年表。' }], 'memory_life', false);
+        const rows = _parseLife(raw);
+        return rows && await _saveLife(name, rows) ? rows.length : 0;
+    }
+
     function _storyId() {
         try { const S = win.OS_AVS_ADAPTER || window.OS_AVS_ADAPTER; return (S && S.getStoryId && S.getStoryId()) || ''; } catch (e) { return ''; }
     }
@@ -367,6 +491,7 @@
             w.lore ? '世界書裡的他：\n' + w.lore : '',
             w.world ? '他那個世界的設定：\n' + w.world : '',
             person.pasts && person.pasts.length ? '主線裡他露出過的過去（寫的時候都要對得上）：\n' + person.pasts.map(t => '・' + t).join('\n') : '',
+            person.life && person.life.length ? '他已經定好的過去（年表，照年紀排；寫的時候都要對得上，不能演出跟它矛盾的事）：\n' + _lifeText(person.life) : '',
             !person.file && !w.lore && !person.profile && !person.summary ? '（沒有其他資料，照名字和這個故事的氣氛去想）' : '',
             before.length ? '已經看過的回憶（這次換一段不一樣的）：\n' + before.join('\n') : '',
         ].filter(Boolean).join('\n');
@@ -421,22 +546,25 @@
         // 題目：從還沒抽過的往事線索挑一條（主線露過的那一點，這張牌把它背後的事寫出來）
         const fresh = person.fresh || [];
         const hint = fresh.length ? fresh[Math.floor(Math.random() * fresh.length)] : '';
+        // 有年表的人：題目是年表裡的一行（年紀、身分都定了），挑法那幾條用不上
+        const row = (hint && person.life) ? person.life.find(r => _pk(r.what) === _pk(hint)) || null : null;
         const pr = _cardPicRule(person, w);
         const sys = [
             '你要替一個互動故事抽一張「記憶牌」：從角色「' + person.name + '」過去的人生裡挑一段，之後會照這張牌寫成一段從他眼睛看出去的短劇。',
-            hint ? '這張牌的題目已經定了：主線裡' + person.name + '露出過這一點過去——「' + hint + '」。挑的就是這件事背後的那段往事，把它的來龍去脈寫出來，不能跟這句、也不能跟資料裡其他露過的過去矛盾。' : '',
+            row ? '這張牌的題目已經定了：' + person.name + '過去年表裡的這一行——' + row.age + '，' + row.who + '：「' + row.what + '」' + (row.mark ? '（留到現在的：' + row.mark + '）' : '') + '。把這件事寫成一段有頭有尾的往事；整份年表在資料裡，不能跟其他行矛盾。<when> 照這一行的年紀和身分寫。'
+                : hint ? '這張牌的題目已經定了：主線裡' + person.name + '露出過這一點過去——「' + hint + '」。挑的就是這件事背後的那段往事，把它的來龍去脈寫出來，不能跟這句、也不能跟資料裡其他露過的過去矛盾。' : '',
             '',
             // 11-26：要抽核心過去（抽到一年前的小事看不懂）→ 挑轉捩點、離現在要有距離
-            '挑法：',
-            '- 先從資料讀出現在的他：幾歲、什麼身分；他身上有哪些東西是過去留下來的——性格、習慣、身上的傷、心結、跟誰的關係、守著的秘密、為什麼離開家或走上現在這條路、為什麼看重某些事。',
-            '- 挑「造成其中一樣的那一件事」：他人生的轉捩點，看完會明白「原來他是因為這樣才變成現在這樣」。不要挑日常小事、不要挑只是「很像他會做的事」的片段。',
-            '- 時間點要離現在有明顯距離：通常是好幾年前，少年、童年或剛踏進這條路的時候。只有資料寫明他最近一年發生了改變人生的大事，才挑最近的。',
-            '- 從手上的資料去推他從哪裡來、經歷過什麼；資料沒寫到的可以補，不能跟資料矛盾。',
+            row ? '寫法：' : '挑法：',
+            row ? '' : '- 先從資料讀出現在的他：幾歲、什麼身分；他身上有哪些東西是過去留下來的——性格、習慣、身上的傷、心結、跟誰的關係、守著的秘密、為什麼離開家或走上現在這條路、為什麼看重某些事。',
+            row ? '' : '- 挑「造成其中一樣的那一件事」：他人生的轉捩點，看完會明白「原來他是因為這樣才變成現在這樣」。不要挑日常小事、不要挑只是「很像他會做的事」的片段。',
+            row ? '' : '- 時間點要離現在有明顯距離：通常是好幾年前，少年、童年或剛踏進這條路的時候。只有資料寫明他最近一年發生了改變人生的大事，才挑最近的。',
+            row ? '- 年表那一行只寫了骨架：當時在場的人、地點、細節可以補，不能跟年表、資料矛盾。' : '- 從手上的資料去推他從哪裡來、經歷過什麼；資料沒寫到的可以補，不能跟資料矛盾。',
             _whereLine(w),
             _mcLine(person),
             '- 這件事要有頭有尾：怎麼開始、中間在哪裡轉了、最後怎麼收（他做了什麼決定，或失去了、留下了什麼）。',
             // 同一件事在主線被記成兩條說法不同的往事線索時，第二條會被當成新題目抽到：看過的是同一件事就換一段
-            before.length ? '- 資料最後列了「已經看過的回憶」，每段有名字、那時候的他、事情怎麼開始。這次的題目如果跟其中一段是同一件事（換了說法、換了角度也算），不要再講那一段：改挑這件事之前或之後的另一個轉捩點；<when> 寫的那時候也不要跟看過的那一段落在同一段年紀。' : '',
+            (before.length && !row) ? '- 資料最後列了「已經看過的回憶」，每段有名字、那時候的他、事情怎麼開始。這次的題目如果跟其中一段是同一件事（換了說法、換了角度也算），不要再講那一段：改挑這件事之前或之後的另一個轉捩點；<when> 寫的那時候也不要跟看過的那一段落在同一段年紀。' : '',
             '',
             '只輸出這一塊：',
             '<memory_card>',
@@ -458,7 +586,7 @@
         const sm = pr ? card.match(/<scene>([\s\S]*?)(<\/scene>|$)/i) : null;   // 生圖提示詞：標籤裡的逗號、括號照原樣留
         const scene = sm ? sm[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim().slice(0, 1500) : '';
         return { id: 'm' + Date.now().toString(36), name: person.name, story: person.story || '', chatId: person.chatId || '', hint, title: tag('title', 24) || person.name + '的回憶', when: tag('when', 24), open, turn, close: close || seed, after: tag('after', 40),
-            scene, acts: [], done: false, at: Date.now(), _w: w };
+            scene, acts: [], done: false, at: Date.now(), _w: w, life: row ? person.life : null };   // life：照年表抽的牌把整份年表跟著存，之後重看／接著演寫幕時還帶得到
     }
 
     // ── 牌面畫（11-26）──
@@ -760,7 +888,7 @@
         ].filter(s => s !== '').join('\n');
         const before = _actsSoFar(rec, i);
         const user = [
-            _userBlock(person, w, []),
+            _userBlock((person && person.life) || !rec.life ? person : Object.assign({}, person, { life: rec.life }), w, []),   // 從展示櫃接著演時名單上的他可能沒掛年表：用牌上存的那份
             '',
             '記憶牌：',
             '名字：' + rec.title,
@@ -1743,7 +1871,7 @@
         if (r.lobbyBgm && !(opt && opt.toVn)) try { r.lobbyBgm.play().catch(() => {}); } catch (e) {}
     }
 
-    const api = { open, close, isOpen: () => !!R, epilogue: _epilogue, youngSprite };   // youngSprite(名字)：舞台問這個人現在是不是小時候、放哪張   // epilogue(抽過的那筆)：之後回憶清單重看收尾也走這支
+    const api = { open, close, isOpen: () => !!R, epilogue: _epilogue, youngSprite, lifeHas, lifeAsk, lifeMake };   // life*：角色卡「想靠近」替他排過去年表（vn_core_stage.js 的 _pickLean）   // youngSprite(名字)：舞台問這個人現在是不是小時候、放哪張   // epilogue(抽過的那筆)：之後回憶清單重看收尾也走這支
     window.LobbyMemory = api;
     try { if (win !== window) win.LobbyMemory = api; } catch (e) {}
 })();

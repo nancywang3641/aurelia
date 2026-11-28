@@ -137,7 +137,8 @@
     }
 
     // only：{ name, path }＝只替這一個人生三條好感規則（角色卡設「想靠近」時用），生好就換掉這個檔案裡他原本那幾條同 path 的
-    async function generateRulesForWorld({ worldId, packId, worldTitle, worldDesc, variables, callApi, only }) {
+    // extra：接在提示詞最後的另一件事（角色卡「想靠近」順便排過去年表，lobby_memory.js 的 lifeAsk）；onRaw(回覆原文)：那件事自己從回覆裡拿
+    async function generateRulesForWorld({ worldId, packId, worldTitle, worldDesc, variables, callApi, only, extra, onRaw }) {
         if (!callApi || (!worldId && !packId) || !variables?.length) return 0;
         try {
             const varList = variables.map(v => `· ${v.name}${v.desc ? '：' + v.desc : (v.defaultValue !== undefined && v.defaultValue !== '' ? '（預設 ' + v.defaultValue + '）' : '')}`).join('\n');
@@ -182,12 +183,13 @@ ${varList}
 - 變數路徑：一般變數照原樣填；object 容器內屬性用點記法（容器名.角色名.屬性）。運算子只能用 >= <= > < = !=
 - 名稱與行為說明都用繁體中文純文字，禁止任何 Markdown 或裝飾符號
 - 行為說明約 40～90 字、單行、不可換行、其中不可出現 | 符號
-- 每個重要角色的好感度正好 3 條；其他變數各 2～4 條`;
+- 每個重要角色的好感度正好 3 條；其他變數各 2～4 條` + (extra ? '\n\n════════\n\n' + extra : '');
 
             const raw = await callApi('general_assistant', prompt) || '';
+            if (onRaw) { try { await onRaw(raw); } catch (e) { console.warn('[AVS Rules] 另外那件事沒收到', e); } }
             const newRules = [];
-            // 先拿掉 <plan> 那段思考：它只是寫規則前的草稿，不存
-            String(raw).replace(/<plan>[\s\S]*?<\/plan>/gi, '').split('\n').forEach(line => {
+            // 先拿掉 <plan> 那段思考：它只是寫規則前的草稿，不存；extra 那件事的兩塊（年表）也拿掉，那裡的 | 不是規則
+            String(raw).replace(/<plan>[\s\S]*?<\/plan>/gi, '').replace(/<life_plan>[\s\S]*?(?:<\/life_plan>|$)/gi, '').replace(/<past>[\s\S]*?(?:<\/past>|$)/gi, '').split('\n').forEach(line => {
                 const parts = line.split('|').map(s => s.trim());
                 if (parts.length < 5) return;
                 const [name, path, op, rawVal, content] = parts;
@@ -310,12 +312,14 @@ ${varList}
         const existing = _loadRules().filter(r => r.packId === pack.id && _fold(r.path) === want).length;
         return { pack, path, existing };
     }
-    async function generateAffinityFor(name, target) {
+    // opts：{ extra, onRaw }＝同一通順便做的另一件事（見 generateRulesForWorld）
+    async function generateAffinityFor(name, target, opts) {
         const t = target || await affinityTarget(name);
         if (!t || !win.OS_API_ENGINE?.generateText) return 0;
         return generateRulesForWorld({
             packId: t.pack.id, worldId: '', worldTitle: t.pack.name || '', worldDesc: t.pack.notes || t.pack.name || '',
             variables: t.pack.variables, only: { name: String(name).trim(), path: t.path },
+            extra: opts && opts.extra, onRaw: opts && opts.onRaw,
             callApi: (k, p) => win.OS_API_ENGINE.generateText(k, p, { task: 'avs_design' })   // 跟規則窗口那顆同一條路（主模型）
         });
     }
