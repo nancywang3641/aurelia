@@ -1612,6 +1612,11 @@
             let sent = false;
             const pick = (t, card) => { t = String(t || '').trim(); if (!t || sent) return; sent = true; o.onPick(t, card); };
             const inp = el.querySelector('input');
+            // 翻牌、推進的聲音同吧檯那兩個（音量也一樣）。演到幕間時吧檯已經收了（R＝null），不能借 R.flip／R.zoom：
+            //   這裡自己開一份；先拿快取好的那份（_aud），還沒好就直接用網址
+            const snd = {};
+            ['flip', 'zoom'].forEach(k => { _aud(A[k]).then(u => { snd[k] = u; }).catch(() => {}); });
+            const play = (k, vol) => { try { const a = new Audio(snd[k] || A[k]); a.volume = vol; a.play().catch(() => {}); } catch (x) {} };
             // 三張牌背朝上發下來，選項寫在牌下面；點一張＝那張才翻開露出是哪張塔羅、另外兩張淡掉，
             //   翻的同時那張牌移到畫面正中間、放大，翻完鏡頭從正中間推進去、暗掉，接下一幕的幕布。
             //   鏡頭不跟著跑去旁邊那張：牌自己走到中間，推進才是正對著它。翻牌、推進的曲線照吧檯開頭那張真牌（.lmem-card.flipped、.lmem.zoom）
@@ -1632,10 +1637,11 @@
                     b.style.transform = 'translate(' + (cx - ox).toFixed(1) + 'px,' + (cy - oy).toFixed(1) + 'px) scale(' + s.toFixed(3) + ')';
                     // 鏡頭的中心＝畫面正中間（牌已經走到那裡）
                     if (rb.width && rb.height) box.style.transformOrigin = ((cx - rb.left) / rb.width * 100).toFixed(2) + '% ' + ((cy - rb.top) / rb.height * 100).toFixed(2) + '%';
-                    try { if (R && R.flip) _sfx(R.flip); } catch (x) {}   // 吧檯已經收了（演到幕間時 R＝null）就沒有翻牌聲
+                    play('flip', .85);
                     setTimeout(() => {
                         if (_actsEl !== el) return;
                         el.classList.add('zoom');
+                        play('zoom', .8);
                         setTimeout(() => { if (_actsEl === el) pick(o.choices[i], (o.cards || [])[i]); }, 1150);
                     }, 1150);
                     return;
