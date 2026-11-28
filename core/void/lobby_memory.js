@@ -1570,17 +1570,27 @@
     // ── 幕和幕之間：選項（使用者替那時候的他選）／重看時的「那時候，他選了」──
     //   蓋在劇情頁上（#page-game，跟劇情的 loading 同一層），演完的那一幕背景還留著
     let _actsEl = null, _actsTimer = 0;
+    // 大阿爾克那第 n 張的牌面圖：問 OS_TAROT（占卜那支，兩邊同一套圖、同一個網址）；那支沒載到就直接拼同一個網址
+    const MAJOR_ART = 'https://raw.githubusercontent.com/nancywang3641/sound-files/eb7cb0d514bdcce82a8e4dcfcb16490091902c6d/zhiwei_tarot_v1/';
+    function _majorArt(n) {
+        const T = win.OS_TAROT;
+        if (T && T.majorArt) return T.majorArt(n);
+        return MAJOR_ART + String(n).padStart(2, '0') + '.webp';
+    }
     function _tarotHtml(n, text, i) {   // 一張塔羅牌：背面＝紫薇的牌背，正面＝大阿爾克那（沒對到牌名＝只畫框和那條路）
         const has = n >= 0 && n < ARCANA.length;
         const tag = i >= 0 ? 'button type="button"' : 'div';
         return '<' + tag + ' class="lmem-tc' + (i < 0 ? ' up solo' : '') + '"' + (i >= 0 ? ' data-i="' + i + '"' : '') + '>' +
             '<span class="lmem-tc-in">' +
                 '<span class="lmem-tc-face lmem-tc-back" style="background-image:url(' + A.back + ')"></span>' +
-                '<span class="lmem-tc-face lmem-tc-front' + (has ? '' : ' blank') + '">' +
-                    '<span class="lmem-tc-num">' + (has ? ROMAN[n] : '') + '</span>' +
-                    '<span class="lmem-tc-glyph">' + (has ? GLYPH[n] : '✦') + '︎</span>' +
-                    '<span class="lmem-tc-name">' + (has ? ARCANA[n] : '') + '</span>' +
-                '</span>' +
+                // 有牌＝紫薇那套彩繪玻璃牌面（OS_TAROT.majorArt，跟占卜同一套），底下一條牌名；沒對到牌名＝照舊只畫框和符號
+                (has
+                    ? '<span class="lmem-tc-face lmem-tc-front art" style="background-image:url(' + _majorArt(n) + ')">' +
+                          '<span class="lmem-tc-name">' + ARCANA[n] + '</span>' +
+                      '</span>'
+                    : '<span class="lmem-tc-face lmem-tc-front blank">' +
+                          '<span class="lmem-tc-num"></span><span class="lmem-tc-glyph">✦︎</span><span class="lmem-tc-name"></span>' +
+                      '</span>') +
             '</span>' +
             (text ? '<span class="lmem-tc-text">' + esc(text) + '</span>' : '') +
         '</' + tag.split(' ')[0] + '>';

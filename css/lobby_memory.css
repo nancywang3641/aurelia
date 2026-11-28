@@ -287,6 +287,17 @@
     font-size: calc(var(--tw) * .3); line-height: 1; color: #f3d9a0;
 }
 .lmem-tc-name { font-size: clamp(12px, calc(var(--tw) * .12), 17px); letter-spacing: .3em; text-indent: .3em; white-space: nowrap; min-height: 1.3em; }
+/* 有牌面圖的那種：圖鋪滿（圖自己有框），牌名一條壓在最下面；金色內框拿掉只留外緣一圈 */
+.lmem-tc-front.art {
+    justify-content: flex-end; padding: 0;
+    background: #140f18 center / cover no-repeat;
+    box-shadow: inset 0 0 0 1px rgba(230,200,138,.35);
+}
+.lmem-tc-front.art .lmem-tc-name {
+    width: 100%; min-height: 0; padding: 18% 0 7%; text-align: center;
+    font-size: clamp(11px, calc(var(--tw) * .1), 16px);
+    background: linear-gradient(180deg, rgba(14,9,14,0), rgba(14,9,14,.82) 55%);
+}
 .lmem-tc-text { font-size: 14px; line-height: 1.5; letter-spacing: .05em; color: #f1dfb8; max-width: calc(var(--tw) + 24px); opacity: 0; transition: opacity .5s ease .35s; }
 .lmem-acts.on .lmem-tc-text, .lmem-tc.up .lmem-tc-text { opacity: 1; }   /* 牌蓋著時選項就看得到 */
 @media (hover: hover) { .lmem-acts:not(.chosen) .lmem-tc:hover .lmem-tc-in { translate: 0 -8px; box-shadow: 0 16px 34px rgba(0,0,0,.6), 0 0 26px rgba(255,200,130,.35); } }

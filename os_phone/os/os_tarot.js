@@ -13,6 +13,9 @@
     // 牌圖：1909 萊德偉特（公版，Wikimedia Commons 取的 300 寬）放在 sound-files 鎖 commit。
     //   11-26 原本外連 sacred-texts 被擋（403）整副破圖，改成自己放；要換圖就傳新資料夾、改這行
     const BASE_URL = "https://raw.githubusercontent.com/nancywang3641/sound-files/9c871ca68f88687dbaebf0c21e852418f57e417a/tarot_rws_v1";
+    // 大阿爾克那 22 張換成紫薇那套彩繪玻璃牌（720 寬 webp，00～21），小牌照舊萊德偉特。記憶吧檯幕間的三張選項牌也用這套（lobby_memory.js 問 majorArt）
+    const MAJOR_ART = "https://raw.githubusercontent.com/nancywang3641/sound-files/eb7cb0d514bdcce82a8e4dcfcb16490091902c6d/zhiwei_tarot_v1";
+    const majorArt = (n) => `${MAJOR_ART}/${String(n).padStart(2, '0')}.webp`;
     
     // 大阿爾克那映射
     const MAJOR_ARCANA = [
@@ -214,7 +217,7 @@
     //   用法：s = session(問題, 牌陣) → read(s, 抽到的牌, 邊寫邊回呼) → ask(s, 追問) ／ 回覆說要補抽 → addCard(s, 一張)
     //   每次 read／ask／addCard 回 { text, more }：more＝紫薇提議補抽一張（[drew a card] 後面的字一律砍掉，不讓模型自己生牌）
     // =================================================================
-    const imgOf = (card) => `${BASE_URL}/${card.id}.jpg`;
+    const imgOf = (card) => { const m = /^ar(\d\d)$/.exec(card.id); return m ? majorArt(+m[1]) : `${BASE_URL}/${card.id}.jpg`; };
 
     // 牌名給畫面用：大牌取括號裡的中文，小牌＝花色＋點數（權杖三、聖杯王牌、寶劍騎士）
     const RANK_ZH = ['', '王牌', '二', '三', '四', '五', '六', '七', '八', '九', '十', '侍從', '騎士', '皇后', '國王'];
@@ -337,7 +340,7 @@ ${readingHint}牌義參考只是你的內部依據，禁止照抄條列，必須
         return _reply(s, s.history, onText);
     }
 
-    win.OS_TAROT = { SPREADS, newDeck, imgOf, zhName, pickSpread, session, read, ask, addCard };
+    win.OS_TAROT = { SPREADS, newDeck, imgOf, majorArt, zhName, pickSpread, session, read, ask, addCard };
     try { if (win !== window) window.OS_TAROT = win.OS_TAROT; } catch (e) {}
 
 })();
